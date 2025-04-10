@@ -1,10 +1,10 @@
 {
-  "name": "HereToTranslate-e2e",
+  "name": "@here-to-translate/web-e2e",
   "version": "0.0.1",
   "private": true,
   "nx": {
     "implicitDependencies": [
-      "HereToTranslate"
+      "@here-to-translate/web"
     ]
   }
 }

@@ -4,7 +4,7 @@ import vue from '@vitejs/plugin-vue';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../node_modules/.vite/apps/HereToTranslate',
+  cacheDir: '../../node_modules/.vite/apps/web',
   server: {
     port: 4200,
     host: 'localhost',

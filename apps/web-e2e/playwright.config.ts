@@ -24,7 +24,7 @@ export default defineConfig({
   },
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npx nx run HereToTranslate:preview',
+    command: 'npx nx run @here-to-translate/web:preview',
     url: 'http://localhost:4300',
     reuseExistingServer: !process.env.CI,
     cwd: workspaceRoot,

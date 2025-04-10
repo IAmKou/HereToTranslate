@@ -1,8 +1,0 @@
-{
-  "name": "@here-to-translate/HereToTranslate",
-  "version": "0.0.1",
-  "private": true,
-  "nx": {
-    "name": "HereToTranslate"
-  }
-}

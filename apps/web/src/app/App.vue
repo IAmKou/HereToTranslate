@@ -1,44 +1,37 @@
-<script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router';
-</script>
-
 <template>
-  <header>
-    <nav>
-      <RouterLink to="/">Home</RouterLink>
-      <RouterLink to="/about">About</RouterLink>
-    </nav>
-  </header>
-  <RouterView />
+  <div class="container">
+    <h1>Vue + NestJS Testing shit</h1>
+    <button @click="getMessage">Get Message from Nest</button>
+    <p v-if="message">📩 Message: {{ message }}</p>
+  </div>
 </template>
 
-<style scoped lang="scss">
-header {
-  line-height: 1.5;
-  max-width: 100vw;
-}
+<script setup>
+import { onMounted, ref } from 'vue';
 
-nav > a {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
+const message = ref('');
 
-@media (min-width: 768px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-    margin-left: auto;
-    margin-right: auto;
-    max-width: 768px;
+const getMessage = async () => {
+  try {
+    const res = await fetch('http://localhost:3000/api/test'); // <-- NestJS URL
+    const data = await res.json();
+    message.value = data.message;
+  } catch (err) {
+    console.error('Fetch error:', err);
   }
+};
+</script>
 
-  nav {
-    text-align: left;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
-  }
+<style>
+.container {
+  max-width: 600px;
+  margin: 2rem auto;
+  text-align: center;
+  font-family: Arial, sans-serif;
+}
+button {
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  cursor: pointer;
 }
 </style>

@@ -13,7 +13,7 @@ const message = ref('');
 
 const getMessage = async () => {
   try {
-    const res = await fetch('http://localhost:3000/api/test'); // <-- NestJS URL
+    const res = await fetch('http://localhost:3000/test'); // <-- NestJS URL
     const data = await res.json();
     message.value = data.message;
   } catch (err) {

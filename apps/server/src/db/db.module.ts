@@ -1,16 +1,39 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { MongoDbConnection } from './mongo/mongo.connection';
-import { MySqlConnection } from './mysql/mysql.connection';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DbContextService } from './dbcontext.service';
+import { MySqlConnection } from './mysql/mysql.connection';
+import { MongoDbConnection } from './mongo/mongo.connection';
+import { MysqlTest } from './mysql/entity/test.entity';
+import { MongooseModule } from '@nestjs/mongoose';
+import { MongoTest, MongoTestSchema } from './mongo/schema/mongo-test.schema';
+import { MongoService } from '../service/mongo.service';
 
 @Module({
-  imports: [ConfigModule], // Import ConfigModule for environment variables
-  providers: [
-    MongoDbConnection, // MongoDB connection provider
-    MySqlConnection,   // MySQL connection provider
-    DbContextService,  // Central service managing all DB connections
+  imports: [
+    ConfigModule, // Needed for ConfigService
+    // Configure TypeORM with a dynamic DataSource provider
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => {
+        const mysqlConnection = new MySqlConnection(configService);
+        await mysqlConnection.init(); // Initialize the DataSource
+        return mysqlConnection.getDataSource().options; // Return DataSource options
+      },
+    }),
+    // Register MysqlTest entity for repository injection
+    TypeOrmModule.forFeature([MysqlTest]),
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGO_URI', 'mongodb://127.0.0.1:27017/htt'),
+      }),
+    }),
+    MongooseModule.forFeature([{ name: MongoTest.name, schema: MongoTestSchema }]),
   ],
-  exports: [DbContextService], // Export DbContextService so it can be injected elsewhere
+  providers: [DbContextService, MySqlConnection, MongoDbConnection, MongoService],
+  exports: [DbContextService, TypeOrmModule, MongooseModule, MongoService],
 })
 export class DbContextModule {}

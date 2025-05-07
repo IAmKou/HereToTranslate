@@ -1,48 +1,29 @@
-// src/api.ts
+import axios from 'axios';
 
 export interface CrudItem {
   id?: number | string;
   name: string;
-  description: string;
 }
 
-const BASE_URL = 'http://localhost:3000'; // Update if needed
-
-async function fetchJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Error: ${res.status} ${res.statusText}`);
-  }
-
-  return res.json() as Promise<T>;
-}
+const BASE_URL = 'http://localhost:3000/api';
 
 export const api = {
-  async getAll(type: 'mysql' | 'mongo'): Promise<CrudItem[]> {
-    return fetchJSON<CrudItem[]>(`${BASE_URL}/${type}`);
+  async getAll(type: 'test' | 'mongo'): Promise<CrudItem[]> {
+    const res = await axios.get<CrudItem[]>(`${BASE_URL}/${type}`);
+    return res.data;
   },
 
-  async create(type: 'mysql' | 'mongo', data: CrudItem): Promise<CrudItem> {
-    return fetchJSON<CrudItem>(`${BASE_URL}/${type}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async create(type: 'test' | 'mongo', data: CrudItem): Promise<CrudItem> {
+    const res = await axios.post<CrudItem>(`${BASE_URL}/${type}`, data);
+    return res.data;
   },
 
-  async update(type: 'mysql' | 'mongo', id: string | number, data: CrudItem): Promise<CrudItem> {
-    return fetchJSON<CrudItem>(`${BASE_URL}/${type}/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async update(type: 'test' | 'mongo', id: string | number, data: CrudItem): Promise<CrudItem> {
+    const res = await axios.put<CrudItem>(`${BASE_URL}/${type}/${id}`, data);
+    return res.data;
   },
 
-  async remove(type: 'mysql' | 'mongo', id: string | number): Promise<void> {
-    await fetchJSON<void>(`${BASE_URL}/${type}/${id}`, {
-      method: 'DELETE',
-    });
+  async remove(type: 'test' | 'mongo', id: string | number): Promise<void> {
+    await axios.delete(`${BASE_URL}/${type}/${id}`);
   },
 };

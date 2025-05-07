@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MysqlTest } from '../entity/test.entity';
+import { MysqlTest } from '../db/mysql/entity/test.entity';
 import { Repository } from 'typeorm';
-import { CreateUpdateDTO } from '../dto/test.dto';
+import { CreateUpdateDTO } from '../db/dto/test.dto';
 
 @Injectable()
 export class TestService{
@@ -11,8 +11,9 @@ export class TestService{
     private readonly repo : Repository<MysqlTest>
   ) {}
 
-  create(dto : CreateUpdateDTO){
-    return this.repo.save(dto);
+ async create(dto : CreateUpdateDTO){
+    return await this.repo.save(dto);
+    // return this.repo.save(dto);
   }
 
   findAll(){
@@ -20,10 +21,10 @@ export class TestService{
   }
 
   update(id: number, dto : CreateUpdateDTO){
-    return this.repo.update(id,dto);
+    return this.repo.update(id, dto);
   }
 
   remove(id: number){
-    return this.repo.remove(id);
+    return this.repo.delete(id);
   }
 }

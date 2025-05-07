@@ -1,6 +1,6 @@
 import { TestService } from '../service/test.service';
 import { Controller, Post, Get, Put, Delete, Param, Body } from '@nestjs/common';
-import { CreateUpdateDTO } from '../dto/test.dto';
+import { CreateUpdateDTO } from '../db/dto/test.dto';
 
 @Controller('test')
 export class TestController{
@@ -18,14 +18,12 @@ export class TestController{
   }
 
   @Put(':id')
-    update(@Param('id') id : string, @Body() dto : CreateUpdateDTO) {
+    update(@Param('id') id : number, @Body() dto : CreateUpdateDTO) {
     return this.service.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id : string){
+  remove(@Param('id') id : number){
     return this.service.remove(id);
   }
-
-
 }

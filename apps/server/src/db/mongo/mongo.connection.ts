@@ -23,11 +23,9 @@ export class MongoDbConnection {
   async init() {
     const uri = this.config.get<string>('MONGODB_URI');
     if (typeof uri === 'string') {
-      this.client = new MongoClient(uri, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-      } as any);
+      this.client = new MongoClient(uri);
     }
+
 
     await this.client.connect();
     const dbName = this.config.get<string>('MONGODB_DB');

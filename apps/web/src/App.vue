@@ -1,7 +1,7 @@
 <template>
   <div class="p-4 container">
     <h1>CRUD App (MySQL & Mongo)</h1>
-    <CrudTable type="mysql" />
+    <CrudTable type="test" />
     <hr class="my-4" />
     <CrudTable type="mongo" />
   </div>

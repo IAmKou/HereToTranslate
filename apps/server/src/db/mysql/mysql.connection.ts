@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import { MysqlTest } from './entity/test.entity';
+
 
 @Injectable()
 export class MySqlConnection {
@@ -20,14 +22,14 @@ export class MySqlConnection {
   async init() {
     this.dataSource = new DataSource({
       type: 'mysql',
-      host: this.config.get<string>('localhost'),
-      port: this.config.get<number>('3306'),
-      username: this.config.get<string>('root'),
-      password: this.config.get<string>('123456'),
-      database: this.config.get<string>('htt'),
-      synchronize: true, // Auto create tables (turn off in production if needed)
-      logging: false,
-      entities: [], // Add entities here
+      host: this.config.get<string>('MYSQL_HOST'),
+      port: this.config.get<number>('MYSQL_PORT'),
+      username: this.config.get<string>('MYSQL_USER'),
+      password: this.config.get<string>('MYSQL_PASSWORD'),
+      database: this.config.get<string>('MYSQL_DATABASE'),
+      synchronize: false, // Auto create tables (turn off in production)
+      logging: true,
+      entities: [MysqlTest], // Add entities here
     });
 
     await this.dataSource.initialize();

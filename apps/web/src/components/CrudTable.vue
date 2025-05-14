@@ -7,7 +7,7 @@ const props = defineProps<{
 }>();
 
 const items = ref<CrudItem[]>([]);
-const form = ref({ _name: '' });
+const form = ref<{ _id?: string; _name: string }>({ _name: '' });
 const editId = ref<number | string | null>(null);
 
 const load = async () => {
@@ -18,7 +18,7 @@ const onSubmit = async () => {
   if (editId.value) {
     await api.update(props.type, editId.value, form.value);
   } else {
-    await api.create(props.type, form.value);
+    await api.create(props.type, { _name: form.value._name });
   }
   form.value = { _name: '' };
   editId.value = null;
@@ -26,7 +26,10 @@ const onSubmit = async () => {
 };
 
 const edit = (item: CrudItem) => {
-  form.value = { _name: item._name };
+  form.value = {
+    _id: item._id,      // Keep _id for Mongo
+    _name: item._name,
+  };
   editId.value = item.id ?? item._id!;
 };
 
@@ -42,6 +45,7 @@ const remove = async (id: number | string) => {
 
 onMounted(load);
 </script>
+
 
 <template>
   <div>

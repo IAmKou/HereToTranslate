@@ -1,6 +1,12 @@
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
 import { RoleEntity } from './role.entity';
 import { JwtTokenEntity} from './jwtTokens.entity';
+import { ProjectEntity } from './project.entity';
+import { ProjectRoleEntity } from './projectRole.entity';
+import { GroupMemberEntity } from './groupMember.entity';
+import { BranchEntity } from './branch.entity';
+import { CommitEntity } from './commit.entity';
+import {FileEntity} from './file.entity';
 
 @Entity('user')
   export class UserEntity{
@@ -8,29 +14,26 @@ import { JwtTokenEntity} from './jwtTokens.entity';
   @PrimaryGeneratedColumn()
   id: bigint;
 
-  @Column()
+  @Column({unique:true, length:50})
   username: string;
 
-  @Column()
+  @Column({unique:true, length:100})
   email: string;
 
-  @Column()
+  @Column({length:255})
   passwordHash: string;
 
-  @Column()
+  @Column({unique:true, length:50})
   phone: string;
 
-  @Column()
+  @Column({length:100})
   fullName: string;
-
-  @Column()
-  roleId: number;
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: RoleEntity;
 
-  @Column()
+  @Column({default : true})
   isActive: boolean;
 
   @CreateDateColumn()
@@ -38,4 +41,22 @@ import { JwtTokenEntity} from './jwtTokens.entity';
 
   @OneToMany(() => JwtTokenEntity, (token) => token.user)
   tokens: JwtTokenEntity[];
+
+  @OneToMany(() => ProjectEntity, project => project.createdBy)
+  createdProjects: ProjectEntity[];
+
+  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
+  projectRoles: ProjectRoleEntity[];
+
+  @OneToMany(() => GroupMemberEntity, groupMember => groupMember.user)
+  groupMemberships: GroupMemberEntity[];
+
+  @OneToMany(() => BranchEntity, branch => branch.user)
+  branch: BranchEntity[];
+
+  @OneToMany(() => CommitEntity, commit => commit.author)
+  commit: CommitEntity[];
+
+  @OneToMany(() => FileEntity, file => file.uploader)
+  file: FileEntity[];
 }

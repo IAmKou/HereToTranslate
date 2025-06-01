@@ -4,7 +4,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DbContextService } from './dbcontext.service';
 import { MySqlConnection } from './mysql/mysql.connection';
 import { MongoDbConnection } from './mongo/mongo.connection';
-import { MysqlTest } from './mysql/entity/test.entity';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MongoTest, MongoTestSchema } from './mongo/schema/mongo-test.schema';
 import { MongoService } from '../service/mongo.service';
@@ -22,8 +21,6 @@ import { MongoService } from '../service/mongo.service';
         return mysqlConnection.getDataSource().options; // Return DataSource options
       },
     }),
-    // Register MysqlTest entity for repository injection
-    TypeOrmModule.forFeature([MysqlTest]),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

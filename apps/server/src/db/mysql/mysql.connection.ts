@@ -1,6 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import { RoleEntity } from './entity/role.entity';
+import { UserEntity } from './entity/user.entity';
+import { BranchEntity } from './entity/branch.entity';
+import { PostEntity } from './entity/post.entity';
+import { ProjectEntity } from './entity/project.entity';
+import { Category } from './entity/category.entity';
+import { CommentEntity } from './entity/comment.entity';
+import { FileEntity } from './entity/file.entity';
+import { GroupMemberEntity } from './entity/groupMember.entity';
+import { ProjectGroupEntity } from './entity/projectGroup.entity';
+import { ProjectRoleEntity } from './entity/projectRole.entity';
+import { RateEntity } from './entity/rate.entity';
+import { Report } from './entity/report.entity';
+import { RequestEntity } from './entity/request.entity';
+import { TaskEntity } from './entity/task.entity';
+import { TransactionEntity } from './entity/transaction.entity';
+import { CommitEntity } from './entity/commit.entity';
 
 
 @Injectable()
@@ -28,7 +45,10 @@ export class MySqlConnection {
       database: this.config.get<string>('MYSQL_DATABASE'),
       synchronize: false, // Auto create tables (turn off in production)
       logging: true,
-      entities: [__dirname + '/../**/*.entity{.ts,.js}'], // Add entities here
+      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, Category, CommentEntity, FileEntity,
+      GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, Report, RequestEntity, TaskEntity,
+      TransactionEntity, CommitEntity], // Add entities here
+
     });
 
     await this.dataSource.initialize();

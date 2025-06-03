@@ -13,7 +13,7 @@ create table user(
                    email VARCHAR(100) NOT NULL UNIQUE,
                    passwordHash VARCHAR(255) NOT NULL,
                    phone varchar(50) not null unique,
-                   fullName varchar(100) NOT NULL UNIQUE,
+                   fullName varchar(100) NOT NULL,
                    roleId int,
                    isActive BOOLEAN NOT NULL DEFAULT 1,
                    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -23,19 +23,6 @@ create table user(
 CREATE INDEX idx_user_email ON user(email);
 CREATE INDEX idx_user_username ON user(username);
 CREATE INDEX idx_user_active ON user(isActive);
-
-CREATE TABLE jwtTokens (
-                         id CHAR(36) PRIMARY KEY,
-                         user_id CHAR(36),
-                         token TEXT NOT NULL,
-                         issued_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                         last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                         is_used BOOLEAN DEFAULT FALSE,
-                         expires_at DATETIME NOT NULL,
-                         CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                         UNIQUE KEY (token(255))
-);
-
 
 CREATE TABLE project (
                        id BIGINT PRIMARY KEY AUTO_INCREMENT,

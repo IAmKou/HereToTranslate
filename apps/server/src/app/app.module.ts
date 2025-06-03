@@ -2,15 +2,14 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DbContextModule } from '../db/db.module';
-import { TestController } from '../controller/test.controller';
-import { TestService } from '../service/test.service';
 import { MongoController } from '../controller/mongo.controller';
-
+import { SeederModule} from '../module/seeder.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [DbContextModule],
-  controllers: [AppController, TestController, MongoController],
-  providers: [AppService, TestService],
+  imports: [DbContextModule, SeederModule, AuthModule],
+  controllers: [AppController, MongoController],
+  providers: [AppService],
 })
 export class AppModule {
 }

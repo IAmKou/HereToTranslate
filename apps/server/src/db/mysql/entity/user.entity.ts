@@ -1,6 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
 import { RoleEntity } from './role.entity';
-import { JwtTokenEntity} from './jwtTokens.entity';
 import { ProjectEntity } from './project.entity';
 import { ProjectRoleEntity } from './projectRole.entity';
 import { GroupMemberEntity } from './groupMember.entity';
@@ -38,9 +37,6 @@ import {FileEntity} from './file.entity';
 
   @CreateDateColumn()
   createdAt: Date;
-
-  @OneToMany(() => JwtTokenEntity, (token) => token.user)
-  tokens: JwtTokenEntity[];
 
   @OneToMany(() => ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];

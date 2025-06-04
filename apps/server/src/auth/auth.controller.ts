@@ -36,7 +36,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('member')
-  @Get('student-home')
+  @Get('user-home')
   getStudentHome(@Req() req: AuthenticatedRequest) {
     return `Welcome, ${req.user.username} (MEMBER)`;
   }

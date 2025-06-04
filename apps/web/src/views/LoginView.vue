@@ -11,28 +11,43 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import axios from 'axios'
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 
-const username = ref('')
-const password = ref('')
-const errorMessage = ref('')
+const username = ref('');
+const password = ref('');
+const router = useRouter();
+const error = ref('');
 
 const login = async () => {
   try {
     const response = await axios.post('http://localhost:3000/api/auth/login', {
       username: username.value,
-      password: password.value
-    })
+      password: password.value,
+    });
 
-    const token = response.data.token
-    localStorage.setItem('jwt', token)
-    alert('Login successful!')
-    // redirect or emit event
-  } catch (error) {
-    errorMessage.value = error.response?.data?.message || 'Login failed'
+    const { token, role, username: returnedUsername } = response.data;
+
+    // Store in localStorage
+    localStorage.setItem('token', token);
+    localStorage.setItem('role', role);
+    localStorage.setItem('username', returnedUsername);
+
+    // Redirect based on role
+    if (role === 'admin') {
+      await router.push('/admin-home');
+    } else if (role === 'member') {
+      await router.push('/user-home');
+    } else {
+      await router.push('/');
+    }
+
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Login failed.';
+    alert('Login failed: ' + error.value);
   }
-}
+};
 </script>
 
 <style>

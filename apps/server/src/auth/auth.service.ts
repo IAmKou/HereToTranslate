@@ -24,6 +24,7 @@ export class AuthService {
       where: { username },
       relations: ['role'],
     });
+
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid credentials.');
     }
@@ -31,7 +32,11 @@ export class AuthService {
     const payload = { sub: user.id, role: user.role.name };
     const token = this.jwt.sign(payload);
 
-    return { token };
+    return {
+      token,
+      role: user.role.name,
+      username: user.username,
+    };
   }
 
   async validateToken(token: string | null): Promise<UserEntity> {

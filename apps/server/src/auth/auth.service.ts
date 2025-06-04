@@ -29,13 +29,11 @@ export class AuthService {
     }
 
     const payload = { sub: user.id, role: user.role.name };
-    // Sign the JWT token with the secret key defined in JWT module config
     const token = this.jwt.sign(payload);
 
     return { token };
   }
 
-  // Validate by verifying the token and fetching the user from DB
   async validateToken(token: string | null): Promise<UserEntity> {
     if (!token) {
       throw new UnauthorizedException('Token is missing');

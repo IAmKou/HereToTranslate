@@ -26,4 +26,4 @@ axios.interceptors.response.use(
 );
 
 app.use(router);
-app.mount('#app');
+app.mount('#root');

@@ -95,7 +95,7 @@ const submitForm = async () => {
   };
 
   try {
-    await axios.post('http://localhost:3000/register', payload);
+    await axios.post('http://localhost:3000/api/auth/register', payload);
     message.value = 'Registration successful!';
     Object.assign(form, {
       username: '',

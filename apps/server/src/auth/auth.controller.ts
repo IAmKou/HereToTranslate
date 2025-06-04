@@ -27,6 +27,11 @@ export class AuthController {
     return this.authService.login(body.username, body.password);
   }
 
+  @Post('google')
+  async loginWithGoogle(@Body('idToken') idToken: string) {
+    return this.authService.loginWithGoogle(idToken);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Get('admin-home')

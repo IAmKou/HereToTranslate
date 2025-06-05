@@ -11,7 +11,7 @@
     <div style="margin-top: 20px; text-align: center">
       <p>Or sign in with</p>
       <div id="g_id_onload"
-           data-client_id="YOUR_GOOGLE_CLIENT_ID"
+           data-client_id="580928535531-jmj6kfgfr6madkfbb7btjlb85h1sastj.apps.googleusercontent.com"
            data-callback="handleGoogleSignIn"
            data-auto_prompt="false">
       </div>

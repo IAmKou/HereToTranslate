@@ -2,27 +2,16 @@
   <div class="login-form">
     <h2>Login</h2>
     <form @submit.prevent="login">
-      <input v-model="username" placeholder="Username" required />
-      <input v-model="password" type="password" placeholder="Password" required />
+      <input v-model="username" placeholder="Username" required >
+      <input v-model="password" type="password" placeholder="Password" required >
       <button type="submit">Login</button>
       <p v-if="error" style="color:red">{{ error }}</p>
     </form>
 
     <div style="margin-top: 20px; text-align: center">
       <p>Or sign in with</p>
-      <div id="g_id_onload"
-           data-client_id="580928535531-jmj6kfgfr6madkfbb7btjlb85h1sastj.apps.googleusercontent.com"
-           data-callback="handleGoogleSignIn"
-           data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin"
-           data-type="standard"
-           data-size="large"
-           data-theme="outline"
-           data-text="signin_with"
-           data-shape="rectangular"
-           data-logo_alignment="left">
-      </div>
+      <div id="g_id_onload"></div>
+      <div id="g_id_signin"></div>
     </div>
   </div>
 </template>
@@ -63,8 +52,35 @@ const login = async () => {
   }
 };
 
-// Global callback for Google sign-in
-window.handleGoogleSignIn = async (response) => {
+onMounted(() => {
+  // Load Google Sign-In script
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.async = true;
+  script.defer = true;
+  script.onload = () => {
+    // Initialize Google Sign-In after script loads
+    window.google.accounts.id.initialize({
+      client_id: '580928535531-jmj6kfgfr6madkfbb7btjlb85h1sastj.apps.googleusercontent.com',
+      callback: handleGoogleSignIn
+    });
+    window.google.accounts.id.renderButton(
+      document.getElementById('g_id_signin'),
+      { 
+        type: 'standard',
+        size: 'large',
+        theme: 'outline',
+        text: 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left'
+      }
+    );
+  };
+  document.head.appendChild(script);
+});
+
+// Move handleGoogleSignIn outside of window object
+const handleGoogleSignIn = async (response) => {
   try {
     const res = await axios.post('http://localhost:3000/api/auth/google', {
       idToken: response.credential,
@@ -87,16 +103,6 @@ window.handleGoogleSignIn = async (response) => {
     alert('Google sign-in failed: ' + (err.response?.data?.message || err.message));
   }
 };
-
-onMounted(() => {
-  if (!window.google) {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-  }
-});
 </script>
 
 <style>

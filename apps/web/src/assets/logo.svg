@@ -1,0 +1,8 @@
+<svg width="160" height="40" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="40" height="40" rx="8" fill="#2563eb"/>
+  <g>
+    <text x="8" y="27" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#fff" font-weight="bold">HT</text>
+    <path d="M28 12 l6 6 l-6 6" stroke="#fff" stroke-width="2" fill="none"/>
+  </g>
+  <text x="50" y="27" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#2563eb" font-weight="bold">HereToTranslate</text>
+</svg>

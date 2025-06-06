@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './jwt.guard';
 import { Roles } from './role.decorator';
 import { RolesGuard } from './role.guard'
 import { Request } from 'express';
+import { Public } from './public.decorator';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -17,16 +18,19 @@ interface AuthenticatedRequest extends Request {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
+  @Public()
   @Post('login')
   login(@Body() body: any) {
     return this.authService.login(body.username, body.password);
   }
 
+  @Public()
   @Post('google')
   async loginWithGoogle(@Body('idToken') idToken: string) {
     return this.authService.loginWithGoogle(idToken);

@@ -19,7 +19,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
+import { authService } from '../services/auth.service';
 
 const username = ref('');
 const password = ref('');
@@ -28,27 +28,19 @@ const router = useRouter();
 
 const login = async () => {
   try {
-    const response = await axios.post('http://localhost:3000/api/auth/login', {
+    await authService.login({
       username: username.value,
       password: password.value,
     });
-
-    const { token, role, username: returnedUsername } = response.data;
-
-    localStorage.setItem('token', token);
-    localStorage.setItem('role', role);
-    localStorage.setItem('username', returnedUsername);
-
-    if (role === 'admin') {
-      await router.push('/admin-home');
-    } else if (role === 'member') {
-      await router.push('/user-home');
+    
+    const user = authService.getUser();
+    if (user?.role === 'admin') {
+      await router.push('/adminhome');
     } else {
-      await router.push('/');
+      await router.push('/userhome');
     }
   } catch (err) {
     error.value = err.response?.data?.message || err.message || 'Login failed.';
-    alert('Login failed: ' + error.value);
   }
 };
 
@@ -79,28 +71,18 @@ onMounted(() => {
   document.head.appendChild(script);
 });
 
-// Move handleGoogleSignIn outside of window object
 const handleGoogleSignIn = async (response) => {
   try {
-    const res = await axios.post('http://localhost:3000/api/auth/google', {
-      idToken: response.credential,
-    });
-
-    const { token, role, username: returnedUsername } = res.data;
-
-    localStorage.setItem('token', token);
-    localStorage.setItem('role', role);
-    localStorage.setItem('username', returnedUsername);
-
-    if (role === 'admin') {
-      await router.push('/admin-home');
-    } else if (role === 'member') {
-      await router.push('/user-home');
+    await authService.loginWithGoogle(response.credential);
+    
+    const user = authService.getUser();
+    if (user?.role === 'admin') {
+      await router.push('/adminhome');
     } else {
-      await router.push('/');
+      await router.push('/userhome');
     }
   } catch (err) {
-    alert('Google sign-in failed: ' + (err.response?.data?.message || err.message));
+    error.value = err.response?.data?.message || err.message || 'Google sign-in failed.';
   }
 };
 </script>

@@ -49,4 +49,12 @@ export class AuthController {
   getStudentHome(@Req() req: AuthenticatedRequest) {
     return `Welcome, ${req.user.username} (MEMBER)`;
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  async logout(@Req() req: AuthenticatedRequest) {
+    // The token will be invalidated by the client removing it
+    // Additional server-side invalidation can be implemented here if needed
+    return { message: 'Logged out successfully' };
+  }
 }

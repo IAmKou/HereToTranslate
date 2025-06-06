@@ -43,11 +43,19 @@ class AuthService {
     return response.data;
   }
 
-  logout(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    this.token = null;
-    this.user = null;
+  async logout(): Promise<void> {
+    try {
+      // Call the server to invalidate the token
+      await axios.post(`${BASE_URL}/auth/logout`);
+    } catch (error) {
+      console.error('Logout API call failed:', error);
+    } finally {
+      // Clear local storage and state regardless of API call success
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      this.token = null;
+      this.user = null;
+    }
   }
 
   isAuthenticated(): boolean {

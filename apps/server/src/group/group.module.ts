@@ -6,6 +6,7 @@ import { ProjectGroupEntity } from '../db/mysql/entity/projectGroup.entity';
 import { GroupMemberEntity } from '../db/mysql/entity/groupMember.entity';
 import { UserEntity } from '../db/mysql/entity/user.entity';
 import { ProjectEntity } from '../db/mysql/entity/project.entity';
+import { ProjectController } from '../project/project.controller';
 
 @Module({
   imports: [

@@ -3,7 +3,7 @@
     <AppHeader />
     <Navbar />
     <div class="main-container">
-      <Sidebar />
+      <!-- <Sidebar /> -->
       <div class="router-container">
         <router-view />
       </div>

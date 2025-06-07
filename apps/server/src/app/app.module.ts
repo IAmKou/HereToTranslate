@@ -7,6 +7,7 @@ import { SeederModule} from '../module/seeder.module';
 import { AuthModule } from '../auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { GroupModule } from '../group/group.module';
+import { ProjectModule } from '../project/project.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { GroupModule } from '../group/group.module';
     DbContextModule, 
     SeederModule, 
     AuthModule,
-    GroupModule
+    GroupModule,
+    ProjectModule,
   ],
   controllers: [AppController, MongoController],
   providers: [AppService],

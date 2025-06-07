@@ -45,6 +45,10 @@
         <span class="material-icons">shopping_cart</span>
         <span>Store</span>
       </router-link>
+      <router-link to="/profile" class="menu-item">
+        <span class="material-icons">account_circle</span>
+        <span class="menu-text">My Profile</span>
+      </router-link>
     </nav>
     <div class="sidebar-bottom">
       <router-link to="/whats-new" class="menu-item">

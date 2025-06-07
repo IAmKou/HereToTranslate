@@ -14,7 +14,7 @@ export class UserService {
   ) {}
 
   async updateProfile(userId: bigint | number, updateProfileDto: UpdateProfileDto) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({ where: { id: BigInt(userId) } });
     
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
@@ -57,7 +57,7 @@ export class UserService {
       throw new HttpException('Password confirmation does not match', HttpStatus.BAD_REQUEST);
     }
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({ where: { id: BigInt(userId) } });
     
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);

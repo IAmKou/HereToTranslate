@@ -21,21 +21,7 @@ import { UserModule } from '../users/user.module'; // Add this import
     AuthModule,
     GroupModule,
     ProjectModule,
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'mysql',
-        host: configService.get('DB_HOST'),
-        port: configService.get('DB_PORT'),
-        username: configService.get('DB_USERNAME'),
-        password: configService.get('DB_PASSWORD'),
-        database: configService.get('DB_DATABASE'),
-        entities: [__dirname + '/db/mysql/entity/*.entity{.ts,.js}'],
-        synchronize: configService.get('DB_SYNCHRONIZE') === 'true',
-      }),
-    }),
-    UserModule, // Add UserModule here
+    UserModule,
   ],
   controllers: [AppController, MongoController],
   providers: [AppService],

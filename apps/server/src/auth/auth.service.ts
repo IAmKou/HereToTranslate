@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from '../db/mysql/entity/user.entity';
@@ -164,5 +164,34 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    // Find user by email
+    const user = await this.userRepository.findOne({ where: { email } });
+    
+    if (!user) {
+      // Don't return specific errors for security reasons
+      return;
+    }
+    
+    // In a real application, you should send an email here
+    console.log(`User with email ${email} has requested a password reset`);
+  }
+
+  async resetPassword(email: string, newPassword: string): Promise<void> {
+    // Find user by email
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      throw new NotFoundException('User with this email not found');
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt();
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    
+    // Save the new password
+    await this.userRepository.save(user);
   }
 }

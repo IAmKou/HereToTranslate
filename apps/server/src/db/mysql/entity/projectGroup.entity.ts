@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { ProjectEntity } from './project.entity';
 import { GroupMemberEntity } from './groupMember.entity';
 
@@ -10,7 +10,11 @@ export class ProjectGroupEntity {
   @Column({ length: 255 })
   name: string;
 
+  @Column({ name: 'project_id' })
+  projectId: number;
+
   @ManyToOne(() => ProjectEntity, project => project.groups)
+  @JoinColumn({ name: 'project_id' })
   project: ProjectEntity;
 
   @OneToMany(() => GroupMemberEntity, member => member.group)

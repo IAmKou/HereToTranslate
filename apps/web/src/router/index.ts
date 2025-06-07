@@ -44,6 +44,12 @@ const router = createRouter({
       name: 'forgotpassword',
       component: () => import('../views/ForgotPasswordView.vue'),
       meta: { requiresAuth: false }
+    },
+    {
+      path: '/project-groups',
+      name: 'projectGroups',
+      component: () => import('../views/GroupManagementView.vue'),
+      meta: { requiresAuth: false }
     }
   ],
 });

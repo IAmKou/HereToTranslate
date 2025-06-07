@@ -49,7 +49,10 @@
         </div>
         
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary">{{ editMode ? 'Update' : 'Create' }}</button>
+          <button type="submit" class="btn btn-primary">
+            <span class="material-icons">{{ editMode ? 'update' : 'add_circle' }}</span>
+            {{ editMode ? 'Update' : 'Create' }}
+          </button>
           <button v-if="editMode" type="button" @click="cancelEdit" class="btn btn-secondary">Cancel</button>
         </div>
       </form>
@@ -59,7 +62,14 @@
     <div class="groups-section">
       <h2>Project Groups</h2>
       <div v-if="loading" class="loading">Loading...</div>
-      <div v-else-if="groups.length === 0" class="no-data">No project groups found</div>
+      <div v-else-if="groups.length === 0" class="no-data">
+        <span class="material-icons" style="font-size: 3rem; opacity: 0.5; display: block; margin-bottom: 1rem;">
+          groups
+        </span>
+        No project groups found
+        <p v-if="selectedProjectId">Try selecting a different project or create a new group.</p>
+        <p v-else>Create your first project group using the form above.</p>
+      </div>
       <div v-else class="groups-list">
         <div v-for="group in groups" :key="group.id" class="group-card">
           <div class="group-header">
@@ -94,15 +104,18 @@
               
               <!-- Add Member Form -->
               <div class="add-member-form">
-                <select v-model="newMemberId" class="select-input">
-                  <option value="" disabled>Select User</option>
+                <select 
+                  v-model="newMemberIds[group.id]" 
+                  class="select-input"
+                >
+                  <option :value="null" disabled>Select User</option>
                   <option v-for="user in availableUsers(group)" :key="user.id" :value="user.id">
                     {{ user.fullName }} ({{ user.email }})
                   </option>
                 </select>
                 <button 
                   @click="addMember(group.id)" 
-                  :disabled="!newMemberId" 
+                  :disabled="!newMemberIds[group.id]" 
                   class="btn btn-small"
                 >
                   Add Member
@@ -148,7 +161,8 @@ const groupForm = ref<CreateGroupRequest>({
   project_id: 0
 });
 
-const newMemberId = ref<number | null>(null);
+// Replace the single newMemberId ref
+const newMemberIds = ref<Record<number, number | null>>({});
 
 // Current editing group id
 const currentGroupId = ref<number | null>(null);
@@ -271,11 +285,13 @@ function confirmRemoveMember(groupId: number, userId: number) {
 }
 
 async function addMember(groupId: number) {
-  if (!newMemberId.value) return;
+  const selectedUserId = newMemberIds.value[groupId];
+  if (!selectedUserId) return;
   
   try {
-    await groupService.addMember(groupId, { userId: newMemberId.value });
-    newMemberId.value = null;
+    await groupService.addMember(groupId, { userId: selectedUserId });
+    // Reset only this group's selection
+    newMemberIds.value[groupId] = null;
     await loadGroups();
   } catch (error) {
     console.error('Failed to add member:', error);
@@ -306,33 +322,48 @@ function availableUsers(group: Group) {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
+  color: #333;
 }
 
 .page-title {
   font-size: 2rem;
   margin-bottom: 2rem;
-  color: #333;
+  color: #1e40af;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0.75rem;
 }
 
 .filter-section {
   margin-bottom: 2rem;
+  background-color: #f9fafb;
+  padding: 1rem;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .form-section {
-  background-color: #f9f9f9;
+  background-color: #f0f9ff;
   padding: 1.5rem;
   border-radius: 8px;
   margin-bottom: 2rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  border-left: 4px solid #3b82f6;
+}
+
+.form-section h2 {
+  margin-top: 0;
+  color: #1e40af;
+  font-size: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .group-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .form-group {
@@ -341,19 +372,32 @@ function availableUsers(group: Group) {
   gap: 0.5rem;
 }
 
+.form-group label {
+  font-weight: 600;
+  color: #4b5563;
+}
+
 .form-actions {
   display: flex;
   gap: 1rem;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
 }
 
 .groups-section {
   margin-top: 2rem;
 }
 
+.groups-section h2 {
+  color: #1e40af;
+  font-size: 1.5rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
 .groups-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 1.5rem;
   margin-top: 1rem;
 }
@@ -361,25 +405,40 @@ function availableUsers(group: Group) {
 .group-card {
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #e5e7eb;
+}
+
+.group-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.08);
 }
 
 .group-header {
   background-color: #f1f5f9;
-  padding: 1rem;
+  padding: 1.25rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .group-header h3 {
   margin: 0;
   font-size: 1.25rem;
+  color: #1e3a8a;
 }
 
 .group-details {
-  padding: 1rem;
+  padding: 1.25rem;
+}
+
+.group-details p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #4b5563;
 }
 
 .group-actions {
@@ -388,39 +447,62 @@ function availableUsers(group: Group) {
 }
 
 .members-section {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f3f4f6;
 }
 
 .members-section h4 {
-  margin-bottom: 0.5rem;
-  font-size: 1rem;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  color: #4b5563;
 }
 
 .members-section h4 span {
   font-size: 0.875rem;
   color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
 }
 
 .members-list {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 0 0 1rem 0;
+  border: 1px solid #f3f4f6;
+  border-radius: 6px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .member-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
+}
+
+.member-item:last-child {
+  border-bottom: none;
+}
+
+.member-item:hover {
+  background-color: #f9fafb;
 }
 
 .member-info {
   display: flex;
   flex-direction: column;
+}
+
+.member-info span {
+  font-weight: 500;
 }
 
 .member-info small {
@@ -430,29 +512,56 @@ function availableUsers(group: Group) {
 
 .add-member-form {
   margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f9fafb;
+  border-radius: 6px;
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 /* Inputs */
 .text-input, .select-input {
-  padding: 0.5rem;
+  padding: 0.625rem 0.75rem;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  flex: 1;
+}
+
+.text-input:focus, .select-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .select-input {
   min-width: 200px;
+  background-color: white;
 }
 
 /* Buttons */
 .btn {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 6px;
   font-weight: 500;
   cursor: pointer;
   border: none;
+  transition: background-color 0.2s, transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
 }
 
 .btn-primary {
@@ -460,9 +569,17 @@ function availableUsers(group: Group) {
   color: white;
 }
 
+.btn-primary:hover {
+  background-color: #2563eb;
+}
+
 .btn-secondary {
   background-color: #e5e7eb;
   color: #4b5563;
+}
+
+.btn-secondary:hover {
+  background-color: #d1d5db;
 }
 
 .btn-danger {
@@ -470,35 +587,43 @@ function availableUsers(group: Group) {
   color: white;
 }
 
+.btn-danger:hover {
+  background-color: #dc2626;
+}
+
 .btn-small {
-  padding: 0.25rem 0.5rem;
+  padding: 0.375rem 0.75rem;
   font-size: 0.875rem;
 }
 
 .btn-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 6px;
   border: none;
   cursor: pointer;
-  background-color: transparent;
+  background-color: #f9fafb;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .btn-icon:hover {
   background-color: #f3f4f6;
 }
 
-.btn-icon.btn-danger:hover {
-  background-color: #fee2e2;
+.btn-icon.btn-danger {
   color: #ef4444;
 }
 
+.btn-icon.btn-danger:hover {
+  background-color: #fee2e2;
+}
+
 .btn-icon.btn-small {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
 }
 
 /* States */
@@ -506,13 +631,17 @@ function availableUsers(group: Group) {
   text-align: center;
   padding: 2rem;
   color: #6b7280;
+  font-style: italic;
 }
 
 .no-data {
   text-align: center;
-  padding: 2rem;
+  padding: 3rem 2rem;
   color: #6b7280;
   font-style: italic;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px dashed #d1d5db;
 }
 
 /* Modal */
@@ -522,26 +651,61 @@ function availableUsers(group: Group) {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(2px);
 }
 
 .modal-dialog {
   background-color: white;
-  padding: 1.5rem;
+  padding: 1.75rem;
   border-radius: 8px;
-  max-width: 400px;
+  max-width: 450px;
   width: 100%;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+.modal-dialog h3 {
+  margin-top: 0;
+  color: #1e3a8a;
+  font-size: 1.5rem;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  margin-top: 1.5rem;
+  margin-top: 1.75rem;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .groups-list {
+    grid-template-columns: 1fr;
+  }
+  
+  .group-management {
+    padding: 1rem;
+  }
+  
+  .add-member-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

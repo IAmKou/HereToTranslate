@@ -13,6 +13,10 @@
         <span class="material-icons">check_circle</span>
         <span>To Do</span>
       </router-link>
+      <router-link to="/project-groups" class="menu-item">
+        <span class="material-icons">group_work</span>
+        <span>Groups</span>
+      </router-link>
       <router-link to="/managers" class="menu-item">
         <span class="material-icons">group</span>
         <span>Managers</span>

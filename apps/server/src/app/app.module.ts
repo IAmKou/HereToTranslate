@@ -10,6 +10,7 @@ import { GroupModule } from '../group/group.module';
 import { ProjectModule } from '../project/project.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from '../users/user.module'; // Add this import
+import { CategoryModule } from '../category/category.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UserModule } from '../users/user.module'; // Add this import
     GroupModule,
     ProjectModule,
     UserModule,
+    CategoryModule,
   ],
   controllers: [AppController, MongoController],
   providers: [AppService],

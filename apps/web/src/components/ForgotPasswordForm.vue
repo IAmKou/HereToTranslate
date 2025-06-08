@@ -1,13 +1,16 @@
 <template>
   <div class="forgot-password-form">
-    <h2 class="form-title">Khôi phục mật khẩu</h2>
+    <h2 class="form-title">Recover Password</h2>
     
-    <div v-if="!emailSent" class="form-container">
+    <!-- Step 1: Email Verification -->
+    <div v-if="!emailVerified" class="form-container">
       <p class="form-description">
-        Nhập địa chỉ email của bạn để nhận hướng dẫn đặt lại mật khẩu.
+        Enter your email address to reset your password.
       </p>
       
-      <form @submit.prevent="submitForm" class="form">
+      <p v-if="errors.server" class="server-error">{{ errors.server }}</p>
+      
+      <form @submit.prevent="verifyEmail" class="form">
         <div class="form-group">
           <label for="email">Email</label>
           <input 
@@ -26,101 +29,191 @@
           <button 
             type="submit" 
             class="submit-button"
-            :disabled="isSubmitting"
+            :disabled="isVerifying"
           >
-            {{ isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu' }}
+            {{ isVerifying ? 'Verifying...' : 'Continue' }}
           </button>
         </div>
         
         <div class="form-footer">
           <router-link to="/login" class="link">
-            Quay lại đăng nhập
+            Back to login
           </router-link>
         </div>
       </form>
     </div>
     
+    <!-- Step 2: Reset Password -->
+    <div v-else-if="!resetSuccess" class="form-container">
+      <p class="form-description">
+        Enter your new password.
+      </p>
+      
+      <p v-if="errors.server" class="server-error">{{ errors.server }}</p>
+      
+      <form @submit.prevent="resetPassword" class="form">
+        <div class="form-group">
+          <label for="newPassword">New password</label>
+          <input 
+            id="newPassword"
+            v-model="newPassword"
+            type="password" 
+            class="form-control"
+            :class="{ 'input-error': errors.password }"
+            placeholder="Enter new password"
+            required
+          />
+          <p v-if="errors.password" class="error-message">{{ errors.password }}</p>
+        </div>
+        
+        <div class="form-group">
+          <label for="confirmPassword">Confirm password</label>
+          <input 
+            id="confirmPassword"
+            v-model="confirmPassword"
+            type="password" 
+            class="form-control"
+            :class="{ 'input-error': errors.confirmPassword }"
+            placeholder="Re-enter new password"
+            required
+          />
+          <p v-if="errors.confirmPassword" class="error-message">{{ errors.confirmPassword }}</p>
+        </div>
+        
+        <div class="form-actions">
+          <button 
+            type="submit" 
+            class="submit-button"
+            :disabled="isResetting"
+          >
+            {{ isResetting ? 'Resetting...' : 'Reset password' }}
+          </button>
+        </div>
+      </form>
+    </div>
+    
+    <!-- Success Message -->
     <div v-else class="success-message">
       <div class="success-icon">✓</div>
-      <h3>Yêu cầu đã được gửi!</h3>
+      <h3>Password has been reset!</h3>
       <p>
-        Chúng tôi đã gửi email hướng dẫn đặt lại mật khẩu đến 
-        <strong>{{ email }}</strong>.
+        Your password has been successfully reset.
       </p>
-      <p>
-        Vui lòng kiểm tra hộp thư (và thư mục spam) để tiếp tục.
-      </p>
-      <button @click="resetForm" class="submit-button">
-        Gửi lại email
-      </button>
+      <div class="form-actions">
+        <router-link to="/login" class="submit-button" style="display: block; text-decoration: none;">
+          Login
+        </router-link>
+      </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, reactive, ref } from 'vue'
+import { authService } from '../services/auth.service'
 
 export default defineComponent({
   name: 'ForgotPasswordForm',
   
   setup() {
     const email = ref('')
-    const isSubmitting = ref(false)
-    const emailSent = ref(false)
+    const newPassword = ref('')
+    const confirmPassword = ref('')
+    const isVerifying = ref(false)
+    const isResetting = ref(false)
+    const emailVerified = ref(false)
+    const resetSuccess = ref(false)
     const errors = reactive({
-      email: ''
+      email: '',
+      password: '',
+      confirmPassword: '',
+      server: ''
     })
 
     const validateEmail = (): boolean => {
       errors.email = ''
+      errors.server = ''
       
       if (!email.value) {
-        errors.email = 'Email không được để trống'
+        errors.email = 'Email cannot be empty'
         return false
       }
       
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(email.value)) {
-        errors.email = 'Email không hợp lệ'
+        errors.email = 'Invalid email'
         return false
       }
       
       return true
     }
     
-    const submitForm = async () => {
+    const verifyEmail = async () => {
       if (!validateEmail()) return
       
-      isSubmitting.value = true
+      isVerifying.value = true
+      errors.server = ''
       
-      // Simulate API call
-      setTimeout(() => {
-        // Mock validation - reject non-existent email
-        if (email.value === 'nonexistent@example.com') {
-          errors.email = 'Email này chưa được đăng ký trong hệ thống'
-          isSubmitting.value = false
-          return
-        }
-        
-        // For all other emails, simulate success
-        emailSent.value = true
-        isSubmitting.value = false
-      }, 1500) // Simulate network delay
+      try {
+        await authService.forgotPassword(email.value)
+        emailVerified.value = true
+      } catch (error: any) {
+        errors.server = error.message || 'An error occurred, please try again later'
+      } finally {
+        isVerifying.value = false
+      }
     }
     
-    const resetForm = () => {
-      emailSent.value = false
-      email.value = ''
-      errors.email = ''
+    const validatePasswordForm = (): boolean => {
+      errors.password = ''
+      errors.confirmPassword = ''
+      errors.server = ''
+      
+      if (!newPassword.value) {
+        errors.password = 'New password cannot be empty'
+        return false
+      }
+      
+      if (newPassword.value.length < 8) {
+        errors.password = 'Password must be at least 8 characters'
+        return false
+      }
+      
+      if (newPassword.value !== confirmPassword.value) {
+        errors.confirmPassword = 'Password confirmation doesn\'t match'
+        return false
+      }
+      
+      return true
+    }
+    
+    const resetPassword = async () => {
+      if (!validatePasswordForm()) return
+      
+      isResetting.value = true
+      errors.server = ''
+      
+      try {
+        await authService.resetPassword(email.value, newPassword.value)
+        resetSuccess.value = true
+      } catch (error: any) {
+        errors.server = error.message || 'An error occurred, please try again later'
+      } finally {
+        isResetting.value = false
+      }
     }
     
     return {
       email,
+      newPassword,
+      confirmPassword,
       errors,
-      isSubmitting,
-      emailSent,
-      submitForm,
-      resetForm
+      isVerifying,
+      isResetting,
+      emailVerified,
+      resetSuccess,
+      verifyEmail,
+      resetPassword
     }
   }
 })
@@ -238,5 +331,15 @@ export default defineComponent({
   justify-content: center;
   font-size: 1.5rem;
   margin: 0 auto 1rem;
+}
+
+.server-error {
+  text-align: center;
+  color: #ef4444;
+  background-color: #fee2e2;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
 }
 </style>

@@ -13,6 +13,10 @@
         <span class="material-icons">check_circle</span>
         <span>To Do</span>
       </router-link>
+      <router-link to="/project-groups" class="menu-item">
+        <span class="material-icons">group_work</span>
+        <span>Groups</span>
+      </router-link>
       <router-link to="/managers" class="menu-item">
         <span class="material-icons">group</span>
         <span>Managers</span>
@@ -40,6 +44,14 @@
       <router-link to="/store" class="menu-item">
         <span class="material-icons">shopping_cart</span>
         <span>Store</span>
+      </router-link>
+      <router-link to="/profile" class="menu-item">
+        <span class="material-icons">account_circle</span>
+        <span class="menu-text">My Profile</span>
+      </router-link>
+      <router-link to="/categories" class="menu-item">
+        <span class="material-icons">category</span>
+        <span>Categories</span>
       </router-link>
     </nav>
     <div class="sidebar-bottom">

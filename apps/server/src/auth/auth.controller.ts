@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Req, } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from '../db/dto/register.dto';
 import { JwtAuthGuard } from './jwt.guard';
@@ -6,6 +6,8 @@ import { Roles } from './role.decorator';
 import { RolesGuard } from './role.guard'
 import { Request } from 'express';
 import { Public } from './public.decorator';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -56,5 +58,26 @@ export class AuthController {
     // The token will be invalidated by the client removing it
     // Additional server-side invalidation can be implemented here if needed
     return { message: 'Logged out successfully' };
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
+    await this.authService.forgotPassword(forgotPasswordDto.email);
+    return { 
+      message: 'Nếu email của bạn đã được đăng ký, bạn có thể tiến hành đặt lại mật khẩu.' 
+    };
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+    await this.authService.resetPassword(
+      resetPasswordDto.email,
+      resetPasswordDto.newPassword
+    );
+    return { message: 'Mật khẩu đã được đặt lại thành công' };
   }
 }

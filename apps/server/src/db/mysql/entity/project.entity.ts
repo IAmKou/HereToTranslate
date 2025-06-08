@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectRoleEntity } from './projectRole.entity';
 import { ProjectGroupEntity } from './projectGroup.entity';
@@ -16,8 +16,10 @@ export class ProjectEntity {
   @Column({type : 'text', nullable: true})
   description: string;
 
-  @ManyToOne(() => UserEntity, user => user.createdProjects)
-  createdBy: UserEntity;
+  // lỗi vì ManyToOne sẽ auto map 1 FK tên createdById
+  // @ManyToOne(() => UserEntity, user => user.createdProjects)
+  @Column({ name: 'createdBy' })
+  createdBy: string;
 
   @CreateDateColumn()
   createdAt: Date;

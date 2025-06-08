@@ -5,14 +5,26 @@ import { DbContextModule } from '../db/db.module';
 import { MongoController } from '../controller/mongo.controller';
 import { SeederModule} from '../module/seeder.module';
 import { AuthModule } from '../auth/auth.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { GroupModule } from '../group/group.module';
+import { ProjectModule } from '../project/project.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserModule } from '../users/user.module'; // Add this import
+import { CategoryModule } from '../category/category.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    DbContextModule, SeederModule, AuthModule],
+    DbContextModule, 
+    SeederModule, 
+    AuthModule,
+    GroupModule,
+    ProjectModule,
+    UserModule,
+    CategoryModule,
+  ],
   controllers: [AppController, MongoController],
   providers: [AppService],
 })

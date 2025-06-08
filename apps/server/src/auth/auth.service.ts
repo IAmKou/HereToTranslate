@@ -9,16 +9,24 @@ import { RoleEntity } from '../db/mysql/entity/role.entity';
 import { OAuth2Client } from 'google-auth-library';
 import * as dns from 'dns';
 import { promisify } from 'util';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
-  private googleClient = new OAuth2Client('580928535531-jmj6kfgfr6madkfbb7btjlb85h1sastj.apps.googleusercontent.com');
-  private resolveMx = promisify(dns.resolveMx);
+  private readonly googleClient: OAuth2Client;
+  private readonly resolveMx = promisify(dns.resolveMx);
 
   constructor(
-    private jwt: JwtService,
-    @InjectRepository(UserEntity) private userRepository: Repository<UserEntity>,
-  ) {}
+    private readonly jwt: JwtService,
+    private readonly configService: ConfigService,
+    @InjectRepository(UserEntity) private readonly userRepository: Repository<UserEntity>,
+  ) {
+    const googleClientId = this.configService.get<string>('GOOGLE_OAUTH2_CLIENT');
+    if (!googleClientId) {
+      throw new Error('GOOGLE_CLIENT_ID is not set in the environment variables');
+    }
+    this.googleClient = new OAuth2Client(googleClientId);
+  }
 
   private async validateEmail(email: string): Promise<boolean> {
     try {
@@ -65,7 +73,7 @@ export class AuthService {
     const user = this.userRepository.create({
       ...dto,
       passwordHash,
-      role: { id: dto.roleId } as RoleEntity,
+      // role: { id: dto.roleId } as RoleEntity,
     });
 
     return this.userRepository.save(user);
@@ -83,7 +91,7 @@ export class AuthService {
     const { email, name } = payload;
 
     // Check if email already exists
-    let user = await this.userRepository.findOne({ 
+    let user = await this.userRepository.findOne({
       where: { email },
       relations: ['role']
     });
@@ -91,7 +99,7 @@ export class AuthService {
       const baseUsername = email?.split('@')[0] ?? 'user';
       let username = baseUsername;
       let counter = 1;
-      
+
       while (await this.userRepository.findOne({ where: { username } })) {
         username = `${baseUsername}${counter}`;
         counter++;
@@ -149,20 +157,19 @@ export class AuthService {
       throw new UnauthorizedException('Token is missing');
     }
 
-    try {
-      const payload = this.jwt.verify(token);
-      const user = await this.userRepository.findOne({
-        where: { id: payload.sub },
-        relations: ['role'],
-      });
-
-      if (!user) {
-        throw new UnauthorizedException('User not found');
-      }
-
-      return user;
-    } catch (error) {
+    const payload = await this.jwt.verifyAsync(token);
+    if (!payload)
       throw new UnauthorizedException('Invalid or expired token');
+
+    const user = await this.userRepository.findOne({
+      where: { id: payload.sub },
+      relations: ['role'],
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
     }
+
+    return user;
   }
 }

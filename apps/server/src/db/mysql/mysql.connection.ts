@@ -25,17 +25,12 @@ export class MySqlConnection {
   private static instance: MySqlConnection;
 
   // TypeORM DataSource instance
-  private dataSource !: DataSource;
+  private readonly dataSource !: DataSource;
 
   private readonly logger = new Logger(MySqlConnection.name);
 
   constructor(private readonly config: ConfigService) {
     if (MySqlConnection.instance) return MySqlConnection.instance;
-    MySqlConnection.instance = this;
-  }
-
-  // Init MySQL connection
-  async init() {
     this.dataSource = new DataSource({
       type: 'mysql',
       host: this.config.get<string>('MYSQL_HOST'),
@@ -43,16 +38,23 @@ export class MySqlConnection {
       username: this.config.get<string>('MYSQL_USER'),
       password: this.config.get<string>('MYSQL_PASSWORD'),
       database: this.config.get<string>('MYSQL_DATABASE'),
-      synchronize: false, // Auto create tables (turn off in production)
+      synchronize: true, // Auto create tables (turn off in production)
       logging: true,
       entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, Category, CommentEntity, FileEntity,
-      GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, Report, RequestEntity, TaskEntity,
-      TransactionEntity, CommitEntity], // Add entities here
-
+        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, Report, RequestEntity, TaskEntity,
+        TransactionEntity, CommitEntity], // Add entities here
     });
+    MySqlConnection.instance = this;
+  }
 
-    await this.dataSource.initialize();
-    this.logger.log('Connected to MySQL database');
+  // Init MySQL connection
+  async init() {
+    try {
+      await this.dataSource.initialize();
+      this.logger.log('Connected to MySQL database');
+    } catch (error) {
+      this.logger.error('Error connecting to MySQL database', error);
+    }
   }
 
   // Get the MySQL DataSource instance

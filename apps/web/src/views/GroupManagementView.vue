@@ -285,18 +285,22 @@ function confirmRemoveMember(groupId: number, userId: number) {
 }
 
 async function addMember(groupId: number) {
-  const selectedUserId = newMemberIds.value[groupId];
-  if (!selectedUserId) return;
-  
-  try {
-    await groupService.addMember(groupId, { userId: selectedUserId });
-    // Reset only this group's selection
-    newMemberIds.value[groupId] = null;
-    await loadGroups();
-  } catch (error) {
-    console.error('Failed to add member:', error);
-    alert('Failed to add member');
-  }
+    const selectedUserId = newMemberIds.value[groupId];
+    if (!selectedUserId) return;
+    
+    try {
+        await groupService.addMember(groupId, { userId: selectedUserId });
+        // Reset only this group's selection
+        newMemberIds.value[groupId] = null;
+        await loadGroups();
+    } catch (error: any) {
+        console.error('Failed to add member:', error);
+        if (error.response && error.response.status === 409) {
+            alert('This member is already in the group');
+        } else {
+            alert('Failed to add member');
+        }
+    }
 }
 
 function confirmAction() {

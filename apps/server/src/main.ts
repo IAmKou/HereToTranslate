@@ -14,7 +14,7 @@ async function bootstrap() {
     console.log('NestJS application created'); // This should now show
     app.enableCors({
       origin: 'http://localhost:4200', // Vue dev server
-      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     })
     const globalPrefix = 'api';
     app.setGlobalPrefix(globalPrefix);

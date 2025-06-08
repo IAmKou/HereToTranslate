@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from '../db/mysql/entity/user.entity';
+import { RoleEntity } from '../db/mysql/entity/role.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcryptjs';
@@ -11,6 +12,8 @@ export class UserService {
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(RoleEntity)
+    private roleRepository: Repository<RoleEntity>,
   ) {}
 
   async updateProfile(userId: bigint | number, updateProfileDto: UpdateProfileDto) {
@@ -78,5 +81,34 @@ export class UserService {
     await this.userRepository.save(user);
 
     return { message: 'Password changed successfully' };
+  }
+
+  async updateRole(userId: string | bigint, roleId: number) {
+    // Find the user
+    const user = await this.userRepository.findOne({
+      where: { id: BigInt(userId) },
+      relations: ['role'],
+    });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Find the role
+    const role = await this.roleRepository.findOne({
+      where: { id: roleId },
+    });
+
+    if (!role) {
+      throw new HttpException('Role not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Update the user's role
+    user.role = role;
+    await this.userRepository.save(user);
+
+    // Remove sensitive information
+    const { passwordHash, ...result } = user;
+    return result;
   }
 }

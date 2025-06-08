@@ -3,7 +3,7 @@ import HomeView from '../views/HomeView.vue';
 import { authService } from '../services/auth.service';
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(),
   routes: [
     {
       path: '/',
@@ -62,11 +62,17 @@ const router = createRouter({
       name: 'categories',
       component: () => import('../views/CategoryManagementView.vue'),
       meta: { requiresAuth: false }
+    },
+    {
+      path: '/admin/users',
+      name: 'UserManagement',
+      component: () => import('../views/UserManagementView.vue'),
+      meta: { requiresAuth: false, requiresAdmin: false }
     }
   ],
 });
 
-// Navigation guard
+// Navigation guard to check authentication and role
 router.beforeEach((to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);

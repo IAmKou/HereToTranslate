@@ -53,6 +53,14 @@
         <span class="material-icons">category</span>
         <span>Categories</span>
       </router-link>
+      <!-- v-if="isAdmin"  -->
+      <router-link 
+        to="/admin/users" 
+        class="menu-item"
+      >
+        <span class="material-icons">manage_accounts</span>
+        <span>User Management</span>
+      </router-link>
     </nav>
     <div class="sidebar-bottom">
       <router-link to="/whats-new" class="menu-item">
@@ -68,7 +76,12 @@
 </template>
 
 <script setup>
-// Layout only
+import { computed } from 'vue';
+import { authService } from '../services/auth.service';
+
+const isAdmin = computed(() => {
+  return authService.getUser()?.role === 'admin';
+});
 </script>
 
 <style scoped>

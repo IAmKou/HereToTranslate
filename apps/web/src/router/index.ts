@@ -44,6 +44,18 @@ const router = createRouter({
       name: 'forgotpassword',
       component: () => import('../views/ForgotPasswordView.vue'),
       meta: { requiresAuth: false }
+    },
+    {
+      path: '/projects/create',
+      name: 'create-project',
+      component: () => import('../views/CreateProjectView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/projects',
+      name: 'projects',
+      component: () => import('../views/ProjectsView.vue'),
+      meta: { requiresAuth: true }
     }
   ],
 });

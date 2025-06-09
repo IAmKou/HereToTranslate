@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectRoleEntity } from './projectRole.entity';
 import { ProjectGroupEntity } from './projectGroup.entity';
@@ -17,6 +17,7 @@ export class ProjectEntity {
   description: string;
 
   @ManyToOne(() => UserEntity, user => user.createdProjects)
+  @JoinColumn({ name: 'createdBy' })
   createdBy: UserEntity;
 
   @CreateDateColumn()

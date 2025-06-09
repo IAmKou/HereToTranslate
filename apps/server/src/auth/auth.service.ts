@@ -76,13 +76,14 @@ export class AuthService {
       // role: { id: dto.roleId } as RoleEntity,
     });
 
-    return this.userRepository.save(user);
+    await this.userRepository.save(user);
+    return { message: 'Registration successful' };
   }
 
   async loginWithGoogle(idToken: string) {
     const ticket = await this.googleClient.verifyIdToken({
       idToken,
-      audience: '580928535531-jmj6kfgfr6madkfbb7btjlb85h1sastj.apps.googleusercontent.com',
+      audience: this.configService.get<string>('GOOGLE_OAUTH2_CLIENT'),
     });
 
     const payload = ticket.getPayload();

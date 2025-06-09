@@ -6,33 +6,34 @@ import { GroupMemberEntity } from './groupMember.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import {FileEntity} from './file.entity';
+import { RequestEntity } from './request.entity';
 
 @Entity('user')
-  export class UserEntity{
+  export class UserEntity {
 
   @PrimaryGeneratedColumn()
   id: bigint;
 
-  @Column({unique:true, length:50})
+  @Column({ unique: true, length: 50 })
   username: string;
 
-  @Column({unique:true, length:100})
+  @Column({ unique: true, length: 100 })
   email: string;
 
-  @Column({length:255})
+  @Column({ length: 255 })
   passwordHash: string;
 
-  @Column({unique:true, length:50})
+  @Column({ unique: true, length: 50 })
   phone: string;
 
-  @Column({length:100})
+  @Column({ length: 100 })
   fullName: string;
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: RoleEntity;
 
-  @Column({default : true})
+  @Column({ default: true })
   isActive: boolean;
 
   @CreateDateColumn()
@@ -55,4 +56,7 @@ import {FileEntity} from './file.entity';
 
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
+
+  @OneToMany(() => RequestEntity, request => request.requester)
+  requests: RequestEntity[];
 }

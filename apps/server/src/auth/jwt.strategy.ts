@@ -22,7 +22,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     const user = await this.authService.validateToken(token);
-    return user;
+
+    return {
+      id: user.id,
+      username: user.username,
+      role: user.role?.name,
+    }; // 🔥 return plain object
   }
 
 }

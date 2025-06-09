@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, JoinColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 
@@ -8,9 +8,11 @@ export class RequestEntity {
   id: number;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'requester_id' })
   requester: UserEntity;
 
   @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'project_id' })
   project: ProjectEntity;
 
   @Column({ nullable: true })
@@ -20,17 +22,17 @@ export class RequestEntity {
   description: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  dealAmount: number;
+  deal_amount: number;
 
   @Column({ type: 'date', nullable: true })
   deadline: Date;
 
   @Column({ type: 'text', nullable: true })
-  fileUrl: string;
+  file_url: string;
 
   @Column({ type: 'enum', enum: ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'], default: 'PENDING' })
   status: string;
 
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 }

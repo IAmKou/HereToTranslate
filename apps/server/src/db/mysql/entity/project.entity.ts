@@ -1,10 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectRoleEntity } from './projectRole.entity';
 import { ProjectGroupEntity } from './projectGroup.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
+import { RequestEntity } from './request.entity';
 @Entity('project')
 export class ProjectEntity {
   @PrimaryGeneratedColumn()
@@ -16,8 +17,10 @@ export class ProjectEntity {
   @Column({type : 'text', nullable: true})
   description: string;
 
-  @ManyToOne(() => UserEntity, user => user.createdProjects)
+  @ManyToOne(() => UserEntity, { nullable: true })
+  @JoinColumn({ name: 'createdBy' })
   createdBy: UserEntity;
+
 
   @CreateDateColumn()
   createdAt: Date;
@@ -37,4 +40,6 @@ export class ProjectEntity {
   @OneToMany(() => FileEntity, file => file.project)
   file: FileEntity[];
 
+  @OneToMany(() => RequestEntity, request => request.project)
+  request: RequestEntity[];
 }

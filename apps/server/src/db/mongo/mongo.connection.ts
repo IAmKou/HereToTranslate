@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MongoClient, Db } from 'mongodb';
+import { MongoClient, Db as MongoDatabase } from 'mongodb';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -9,7 +9,7 @@ export class MongoDbConnection {
 
   // ref client , db mongo
   private client !: MongoClient;
-  private db !: Db;
+  private db !: MongoDatabase;
 
   private readonly logger = new Logger(MongoDbConnection.name);
 
@@ -35,7 +35,7 @@ export class MongoDbConnection {
   }
 
   // Get the Mongo database instance
-  getDb(): Db {
+  getDb(): MongoDatabase {
     return this.db;
   }
 

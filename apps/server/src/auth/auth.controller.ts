@@ -6,6 +6,7 @@ import { Roles } from './role.decorator';
 import { RolesGuard } from './role.guard'
 import { Request } from 'express';
 import { Public } from './public.decorator';
+import { UserRole } from '../db/mysql/entity/user.entity';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -37,14 +38,14 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.Admin)
   @Get('admin-home')
   getAdminHome(@Req() req: AuthenticatedRequest) {
     return `Welcome, ${req.user.username} (ADMIN)`;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('member')
+  @Roles(UserRole.User)
   @Get('user-home')
   getStudentHome(@Req() req: AuthenticatedRequest) {
     return `Welcome, ${req.user.username} (MEMBER)`;

@@ -7,8 +7,13 @@ import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import {FileEntity} from './file.entity';
 
+export enum UserRole {
+  Admin = 1,
+  User
+}
+
 @Entity('user')
-  export class UserEntity{
+export class UserEntity {
 
   @PrimaryGeneratedColumn()
   id: bigint;
@@ -30,9 +35,10 @@ import {FileEntity} from './file.entity';
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
+  @Column({ name: 'roleId', default: UserRole.User })
   role: RoleEntity;
 
-  @Column({default : true})
+  @Column({ default : true })
   isActive: boolean;
 
   @CreateDateColumn()

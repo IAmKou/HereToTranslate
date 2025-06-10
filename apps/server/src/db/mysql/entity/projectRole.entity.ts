@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique } from 'typeo
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 
-@Entity('projectRole')
+@Entity('projectrole')
 @Unique(['project', 'user'])
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn()

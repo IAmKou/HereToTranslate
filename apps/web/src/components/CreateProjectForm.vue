@@ -1,10 +1,7 @@
 <template>
   <div class="create-project-form">
     <h2>Create New Project</h2>
-    <form 
-      class="form" 
-      @submit.prevent="handleSubmit"
-    >
+    <form @submit.prevent="handleSubmit" class="form">
       <div class="form-group">
         <label for="name">Project Name</label>
         <input
@@ -25,7 +22,7 @@
           class="form-control"
           rows="4"
           placeholder="Enter project description"
-        />
+        ></textarea>
       </div>
 
       <div class="form-actions">
@@ -37,50 +34,61 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { ProjectService, type CreateProjectDto } from '../services/project.service';
+<script lang="ts" setup>
+import { ref } from 'vue'
+import axios from 'axios'
 
-export default defineComponent({
-  name: 'CreateProjectForm',
-  setup() {
-    const router = useRouter();
-    const projectService = ProjectService.getInstance();
-    const isSubmitting = ref(false);
+// Environment variable
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
 
-    const form = ref<CreateProjectDto>({
-      name: '',
-      description: '',
-      createdBy: '1', 
-    });
+const form = ref({
+  name: '',
+  description: '',
+})
 
-    const handleSubmit = async () => {
-      try {
-        isSubmitting.value = true;
-        await projectService.createProject(form.value);
-        router.push('/projects');
-      } catch (error) {
-        console.error('Failed to create project:', error);
-      } finally {
-        isSubmitting.value = false;
-      }
-    };
+const isSubmitting = ref(false)
 
-    return {
-      form,
-      isSubmitting,
-      handleSubmit,
-    };
-  },
-});
+const createdBy = '1' // dummy user ID
+
+const handleSubmit = async () => {
+  if (!form.value.name) return alert('Project name is required')
+
+  isSubmitting.value = true
+
+  try {
+    await axios.post(`${API_BASE_URL}/projects`, {
+      ...form.value,
+      createdBy,
+    })
+
+    alert('Project created successfully!')
+    form.value.name = ''
+    form.value.description = ''
+  } catch (error: any) {
+    console.error(error)
+    alert('Failed to create project: ' + (error?.response?.data?.message || error.message))
+  } finally {
+    isSubmitting.value = false
+  }
+}
 </script>
 
 <style scoped>
 .create-project-form {
   max-width: 600px;
-  margin: 0 auto;
+  margin: 2rem auto;
   padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+h2 {
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  font-size: 1.8rem;
+  font-weight: 600;
+  text-align: center;
 }
 
 .form {
@@ -95,44 +103,78 @@ export default defineComponent({
   gap: 0.5rem;
 }
 
+label {
+  color: #4a5568;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
 .form-control {
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   font-size: 1rem;
+  transition: all 0.2s ease;
+  background-color: #f8fafc;
 }
 
 .form-control:focus {
   outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  background-color: white;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 100px;
 }
 
 .form-actions {
-  display: flex;
-  justify-content: flex-end;
+  margin-top: 1rem;
 }
 
 .btn {
+  width: 100%;
   padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 1rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .btn-primary {
-  background-color: #4a90e2;
+  background-color: #4299e1;
   color: white;
 }
 
-.btn-primary:hover {
-  background-color: #357abd;
+.btn-primary:hover:not(:disabled) {
+  background-color: #3182ce;
+  transform: translateY(-1px);
 }
 
 .btn-primary:disabled {
-  background-color: #ccc;
+  background-color: #a0aec0;
   cursor: not-allowed;
+  opacity: 0.7;
 }
-</style> 
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .create-project-form {
+    margin: 1rem;
+    padding: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  .form-control {
+    padding: 0.6rem 0.8rem;
+  }
+}
+</style>
+

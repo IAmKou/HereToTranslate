@@ -17,7 +17,7 @@ const axiosInstance = axios.create({
 // Add request interceptor
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = authService.getToken();
+    const token = authService.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,11 +31,24 @@ axiosInstance.interceptors.request.use(
 // Add response interceptor
 axiosInstance.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      authService.logout();
-      router.push('/login');
+  async (error) => {
+    const originalRequest = error.config;
+
+    // refresh token if 401
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        await authService.refreshTokens();
+        originalRequest.headers.Authorization = `Bearer ${authService.getAccessToken()}`;
+        return axiosInstance(originalRequest);
+      } catch (refreshError) {
+        await authService.logout();
+        router.push('/login');
+        return Promise.reject(refreshError);
+      }
     }
+
     return Promise.reject(error);
   }
 );
@@ -60,3 +73,5 @@ export const api = {
     await axiosInstance.delete(`/${type}/${id}`);
   },
 };
+
+export default axiosInstance;

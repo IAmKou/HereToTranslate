@@ -37,6 +37,12 @@ export class AuthController {
     return this.authService.loginWithGoogle(idToken);
   }
 
+  @Public()
+  @Post('refresh')
+  async refreshTokens(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refreshTokens(refreshToken);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.Admin)
   @Get('admin-home')
@@ -53,7 +59,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logout(@Req() req: AuthenticatedRequest) {
-    return { message: 'Logged out successfully' };
+  async logout(@Body('refreshToken') refreshToken: string) {
+    return this.authService.logout(refreshToken);
   }
 }

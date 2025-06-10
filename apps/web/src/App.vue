@@ -13,10 +13,10 @@
 </template>
 
 <script setup lang="ts">
-// import AppHeader from './components/Header.vue'
-// import Navbar from './components/Navbar.vue'
-// import Sidebar from './components/Sidebar.vue'
-// import AppFooter from './components/AppFooter.vue'
+import AppHeader from './components/Header.vue'
+import Navbar from './components/Navbar.vue'
+import Sidebar from './components/Sidebar.vue'
+import AppFooter from './components/AppFooter.vue'
 </script>
 
 <style scoped>

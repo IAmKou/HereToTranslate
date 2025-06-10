@@ -19,6 +19,8 @@ export class ProjectEntity {
 
   @ManyToOne(() => UserEntity, { nullable: true })
   @JoinColumn({ name: 'createdBy' })
+  @ManyToOne(() => UserEntity, user => user.createdProjects)
+  @JoinColumn({ name: 'createdBy' })
   createdBy: UserEntity;
 
 

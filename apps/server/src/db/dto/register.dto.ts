@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, Matches, IsPhoneNumber } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsPhoneNumber, IsStrongPassword } from 'class-validator';
 
 export class RegisterDto {
   @IsNotEmpty()
@@ -13,19 +13,22 @@ export class RegisterDto {
   @IsNotEmpty()
   @IsString()
   @MinLength(6)
-  @Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number or special character',
-  })
+  @IsStrongPassword({
+    minLength: 8,
+    minSymbols: 1,
+    minNumbers: 1,
+    minLowercase: 1,
+    minUppercase: 1
+  }, { message: 'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character' })
   password: string;
 
   @IsNotEmpty()
-  @IsPhoneNumber()
+  @IsPhoneNumber(undefined, {
+    message: 'Phone number must be a valid international format, e.g. +1234567890'
+  })
   phone: string;
 
   @IsNotEmpty()
   @IsString()
   fullName: string;
-
-  @IsNotEmpty()
-  roleId: number;
 }

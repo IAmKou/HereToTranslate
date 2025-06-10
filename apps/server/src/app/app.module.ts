@@ -8,13 +8,14 @@ import { AuthModule } from '../auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { PostModule } from '../post/post.module';
 import { RequestModule } from '../request/request.module';
+import { ProjectModule } from '../project/project.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    DbContextModule, SeederModule, AuthModule , PostModule, RequestModule],
+    DbContextModule, SeederModule, AuthModule , PostModule, RequestModule, ProjectModule],
   controllers: [AppController, MongoController],
   providers: [AppService],
 })

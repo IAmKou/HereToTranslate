@@ -5,7 +5,7 @@ import { ProjectEntity } from './project.entity';
 @Entity('requests')
 export class RequestEntity {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: bigint;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'requester_id' })

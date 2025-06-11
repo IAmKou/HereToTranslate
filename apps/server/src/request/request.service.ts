@@ -51,7 +51,7 @@ export class RequestService {
 
   async update(dto: UpdateRequestDto, userId: number): Promise<RequestEntity> {
     const request = await this.requestRepo.findOne({
-      where: { id: dto.id },
+      where: { id: BigInt(dto.id) },
       relations: ['requester'],
     });
     if (!request) {
@@ -72,8 +72,8 @@ export class RequestService {
     return this.requestRepo.save(request);
   }
 
-  async review(dto: ReviewRequestDto, userId: number): Promise<RequestEntity> {
-    const request = await this.requestRepo.findOne({ where: { id: dto.id } });
+  async review(dto: ReviewRequestDto, Id: number): Promise<RequestEntity> {
+    const request = await this.requestRepo.findOne({ where: { id: BigInt(dto.id) } });
     if (!request) {
       throw new NotFoundException('Request not found');
     }
@@ -87,7 +87,7 @@ export class RequestService {
 
   async findOne(id: number): Promise<RequestEntity> {
     const request = await this.requestRepo.findOne({
-      where: { id },
+      where: { id: BigInt(id) },
       relations: ['project', 'requester'],
     });
     if (!request) {
@@ -98,7 +98,7 @@ export class RequestService {
 
   async remove(id: number, userId: number): Promise<RequestEntity> {
     const request = await this.requestRepo.findOne({
-      where: { id },
+      where: { id: BigInt(id)},
       relations: ['requester'],
     });
     if (!request) {

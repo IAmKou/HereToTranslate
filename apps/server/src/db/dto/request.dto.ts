@@ -5,7 +5,7 @@ export class CreateRequestDto {
   dealAmount?: number;
   deadline?: string;
   fileUrl?: string;
-  targetUserId?: number;
+  targetUserId?: bigint;
 }
 export class UpdateRequestDto {
   id: number;

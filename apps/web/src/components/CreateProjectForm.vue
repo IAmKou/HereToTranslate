@@ -48,7 +48,7 @@ const form = ref({
 
 const isSubmitting = ref(false)
 
-const createdBy = '1' // dummy user ID
+const createdBy = localStorage.getItem('user_id');
 
 const handleSubmit = async () => {
   if (!form.value.name) return alert('Project name is required')

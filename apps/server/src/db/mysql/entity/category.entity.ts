@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, JoinColumn, ManyToOne } from 'typeorm';
+import { ProjectEntity } from './project.entity';
 
 @Entity('category')
 export class Category {
@@ -16,4 +17,8 @@ export class Category {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @ManyToOne(() => ProjectEntity, project => project.category)
+  @JoinColumn({ name: 'projectId' })
+  project: ProjectEntity;
 }

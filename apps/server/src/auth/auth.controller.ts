@@ -6,6 +6,7 @@ import { Roles } from './role.decorator';
 import { RolesGuard } from './role.guard'
 import { Request } from 'express';
 import { Public } from './public.decorator';
+import { LoginDto } from '../db/dto/login.dto';
 import { UserRole } from '../db/mysql/entity/user.entity';
 
 interface AuthenticatedRequest extends Request {
@@ -27,7 +28,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  login(@Body() body: any) {
+  login(@Body() body: LoginDto) {
     return this.authService.login(body.username, body.password);
   }
 

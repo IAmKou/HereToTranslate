@@ -17,21 +17,21 @@
       Loading projects...
     </div>
 
-    <div 
-      v-else-if="error" 
+    <div
+      v-else-if="error"
       class="error"
     >
       {{ error }}
     </div>
 
-    <div 
-      v-else-if="projects.length === 0" 
+    <div
+      v-else-if="projects.length === 0"
       class="empty-state"
     >
       No projects found. Create your first project!
     </div>
 
-    <div 
+    <div
       v-else
       class="projects-grid"
     >
@@ -42,7 +42,7 @@
       >
         <h3>{{ project.name }}</h3>
         <p
-          v-if="project.description" 
+          v-if="project.description"
           class="description"
         >
           {{ project.description }}
@@ -58,7 +58,6 @@
 
 <script lang="ts">
 import { defineComponent, ref, onMounted } from 'vue';
-import { ProjectService, type Project } from '../services/project.service';
 
 export default defineComponent({
   name: 'ProjectsView',
@@ -169,4 +168,4 @@ export default defineComponent({
 .btn-primary:hover {
   background-color: #357abd;
 }
-</style> 
+</style>

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from '../db/mysql/entity/user.entity';
@@ -11,10 +11,22 @@ import * as dns from 'dns';
 import { promisify } from 'util';
 import { ConfigService } from '@nestjs/config';
 
+type AccessToken = string;
+type RefreshToken = string;
+type TokenMeta = {
+  userId: string;
+  username: string;
+  role: string;
+};
+
 @Injectable()
 export class AuthService {
+  private readonly refreshTokenMap = new Map<RefreshToken, AccessToken>();
+  private readonly activeTokens = new Set<AccessToken>();
+  private readonly tokenMap = new Map<string, Set<RefreshToken | AccessToken>>();
   private readonly googleClient: OAuth2Client;
   private readonly resolveMx = promisify(dns.resolveMx);
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private readonly jwt: JwtService,
@@ -26,6 +38,7 @@ export class AuthService {
       throw new Error('GOOGLE_CLIENT_ID is not set in the environment variables');
     }
     this.googleClient = new OAuth2Client(googleClientId);
+    this.logger.log('AuthService initialized');
   }
 
   private async validateEmail(email: string): Promise<boolean> {
@@ -36,6 +49,45 @@ export class AuthService {
     } catch (error) {
       return false;
     }
+  }
+
+  private generateTokenPair(user: UserEntity) {
+    const tokenMeta: TokenMeta = {
+      userId: user.id.toString(),
+      username: user.username,
+      role: user.role.id === 1 ? 'admin' : 'member'
+    };
+
+    const jwtPayload = {
+      sub: Date.now().toString(2),
+      ...tokenMeta
+    };
+
+    const accessToken = this.jwt.sign(jwtPayload, {
+      expiresIn: '15m'
+    });
+    const refreshToken = this.jwt.sign(jwtPayload, {
+      expiresIn: '7d'
+    });
+
+    this.activeTokens.add(accessToken);
+    this.refreshTokenMap.set(refreshToken, accessToken);
+
+    const userId = user.id.toString();
+    const tokens = this.tokenMap.get(userId);
+    if (tokens) {
+      tokens.add(accessToken);
+      tokens.add(refreshToken);
+    } else {
+      this.tokenMap.set(userId, new Set([accessToken, refreshToken]));
+    }
+
+    return {
+      accessToken,
+      refreshToken,
+      role: tokenMeta.role,
+      username: user.username
+    };
   }
 
   async register(dto: RegisterDto) {
@@ -73,7 +125,7 @@ export class AuthService {
     const user = this.userRepository.create({
       ...dto,
       passwordHash,
-      // role: { id: dto.roleId } as RoleEntity,
+      role: { id: 2 } as RoleEntity,
     });
 
     await this.userRepository.save(user);
@@ -91,45 +143,30 @@ export class AuthService {
 
     const { email, name } = payload;
 
-    // Check if email already exists
     let user = await this.userRepository.findOne({
       where: { email },
       relations: ['role']
     });
-    if (!user) {
-      const baseUsername = email?.split('@')[0] ?? 'user';
-      let username = baseUsername;
-      let counter = 1;
 
-      while (await this.userRepository.findOne({ where: { username } })) {
-        username = `${baseUsername}${counter}`;
-        counter++;
+    if (!user) {
+      const username = email;
+      const existingUser = await this.userRepository.findOne({ where: { username } });
+      if (existingUser) {
+        throw new Error('User with this email already exists');
       }
 
       user = this.userRepository.create({
         username,
         email,
-        passwordHash: '', // Empty password for Google users
+        passwordHash: '',
         fullName: name,
-        phone: '', // Empty phone for Google users
-        role: { id: 2 } as RoleEntity, // Default to member role
+        phone: '',
+        role: { id: 2 } as RoleEntity,
       });
       await this.userRepository.save(user);
     }
 
-    const payloadToSign = {
-      sub: user.id,
-      username: user.username,
-      role: user.role.id === 1 ? 'admin' : 'member',
-    };
-
-    const token = this.jwt.sign(payloadToSign);
-
-    return {
-      token,
-      role: payloadToSign.role,
-      username: user.username,
-    };
+    return this.generateTokenPair(user);
   }
 
   async login(username: string, password: string) {
@@ -142,35 +179,111 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
-    const payload = { sub: user.id, role: user.role.name.toLowerCase() };
-    const token = this.jwt.sign(payload);
-
-    return {
-      token,
-      role: user.role.name.toLowerCase(),
-      username: user.username,
-    };
+    return this.generateTokenPair(user);
   }
 
-
-  async validateToken(token: string | null): Promise<UserEntity> {
-    if (!token) {
-      throw new UnauthorizedException('Token is missing');
+  async refreshTokens(refreshToken: string) {
+    const actualRToken = /^Bearer (.+)$/.exec(refreshToken)?.[1];
+    if (!actualRToken) {
+      throw new UnauthorizedException('Invalid token format');
     }
 
-    const payload = await this.jwt.verifyAsync(token);
-    if (!payload)
-      throw new UnauthorizedException('Invalid or expired token');
+    try {
+      if (!(await this.jwt.verifyAsync(actualRToken))) {
+        throw new UnauthorizedException('Invalid token');
+      }
+    } catch (e) {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    if (!this.refreshTokenMap.has(actualRToken)) {
+      throw new UnauthorizedException('Token expired');
+    }
+
+    const aToken = this.refreshTokenMap.get(actualRToken);
+    if (aToken) {
+      this.activeTokens.delete(aToken);
+    }
+
+    const tokenData = this.jwt.decode(actualRToken) as TokenMeta;
+    this.refreshTokenMap.delete(actualRToken);
+
+    const tokens = this.tokenMap.get(tokenData.userId);
+    tokens?.delete(actualRToken);
+    tokens?.delete(aToken!);
 
     const user = await this.userRepository.findOne({
-      where: { id: payload.sub },
-      relations: ['role'],
+      where: { id: BigInt(tokenData.userId) },
+      relations: ['role']
     });
 
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
-    return user;
+    return this.generateTokenPair(user);
+  }
+
+  async logout(refreshToken: string, allSessions = false) {
+    const actualRToken = /^Bearer (.+)$/.exec(refreshToken)?.[1];
+    if (!actualRToken) {
+      throw new UnauthorizedException('Invalid token format');
+    }
+
+    const tokenData = this.jwt.decode(actualRToken) as TokenMeta;
+    const userId = tokenData.userId;
+
+    this.activeTokens.delete(actualRToken);
+    this.refreshTokenMap.delete(actualRToken);
+    this.tokenMap.get(userId)?.delete(actualRToken);
+
+    if (allSessions) {
+      const tokens = this.tokenMap.get(userId);
+      if (tokens) {
+        for (const t of tokens) {
+          this.refreshTokenMap.delete(t);
+          this.activeTokens.delete(t);
+        }
+        this.tokenMap.delete(userId);
+      }
+    }
+
+    return { message: 'Logged out successfully' };
+  }
+
+  async validateToken(token: string | null): Promise<UserEntity> {
+    if (!token) {
+      throw new UnauthorizedException('Token is missing');
+    }
+
+    const actualToken = /^Bearer (.+)$/.exec(token)?.[1];
+    if (!actualToken) {
+      throw new UnauthorizedException('Invalid token format');
+    }
+
+    if (!this.activeTokens.has(actualToken)) {
+      throw new UnauthorizedException('Token expired');
+    }
+
+    try {
+      const payload = await this.jwt.verifyAsync(actualToken);
+      if (!payload) {
+        throw new UnauthorizedException('Invalid token');
+      }
+
+      const user = await this.userRepository.findOne({
+        where: { id: BigInt(payload.userId) },
+        relations: ['role'],
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      return user;
+    } catch (e) {
+      this.activeTokens.delete(actualToken);
+      throw new UnauthorizedException('Invalid token');
+    }
   }
 }

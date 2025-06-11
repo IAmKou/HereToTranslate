@@ -36,7 +36,6 @@ export enum UserRole {
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
-  @Column({ name: 'roleId', default: UserRole.User })
   role: RoleEntity;
 
   @Column({ default: true })

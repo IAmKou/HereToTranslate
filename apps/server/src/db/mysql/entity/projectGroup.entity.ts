@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'ty
 import { ProjectEntity } from './project.entity';
 import { GroupMemberEntity } from './groupMember.entity';
 
-@Entity('project_groups')
+@Entity('projectgroups')
 export class ProjectGroupEntity {
   @PrimaryGeneratedColumn()
   id: number;

@@ -1,57 +1,65 @@
 <template>
-  <aside :class="['sidebar', { collapsed: isCollapsed }]">
+  <aside class="sidebar">
     <div class="sidebar-logo">
-      <button class="collapse-btn" @click="toggleSidebar">
-        <span class="material-icons">
-          {{ isCollapsed ? 'chevron_right' : 'menu' }}
-        </span>
-      </button>
-      <img v-if="!isCollapsed" src="../assets/logo.png" alt="Logo" class="logo-img" />
+      <img src="../assets/logo.png" alt="Logo" class="logo-img" />
+
     </div>
     <nav class="sidebar-menu">
-      <router-link v-for="item in menuItems" :key="item.path" :to="item.path" class="menu-item" exact-active-class="active">
-        <span class="material-icons">{{ item.icon }}</span>
-        <span v-if="!isCollapsed">{{ item.label }}</span>
+      <router-link to="/" class="menu-item" exact-active-class="active">
+        <span class="material-icons">home</span>
+        <span>Home</span>
+      </router-link>
+      <router-link to="/todo" class="menu-item">
+        <span class="material-icons">check_circle</span>
+        <span>To Do</span>
+      </router-link>
+      <router-link to="/managers" class="menu-item">
+        <span class="material-icons">group</span>
+        <span>Managers</span>
+      </router-link>
+      <router-link to="/translation-memories" class="menu-item">
+        <span class="material-icons">history_edu</span>
+        <span>Translation Memories</span>
+      </router-link>
+      <router-link to="/glossaries" class="menu-item">
+        <span class="material-icons">menu_book</span>
+        <span>Glossaries</span>
+      </router-link>
+      <router-link to="/machine-translation" class="menu-item">
+        <span class="material-icons">smart_toy</span>
+        <span>Machine Translation</span>
+      </router-link>
+      <router-link to="/ai" class="menu-item">
+        <span class="material-icons">psychology</span>
+        <span>AI</span>
+      </router-link>
+      <router-link to="/vendors" class="menu-item">
+        <span class="material-icons">storefront</span>
+        <span>Vendors</span>
+      </router-link>
+      <router-link to="/store" class="menu-item">
+        <span class="material-icons">shopping_cart</span>
+        <span>Store</span>
       </router-link>
     </nav>
     <div class="sidebar-bottom">
       <router-link to="/whats-new" class="menu-item">
         <span class="material-icons">new_releases</span>
-        <span v-if="!isCollapsed">What's New</span>
+        <span>What's New</span>
       </router-link>
       <router-link to="/help" class="menu-item">
         <span class="material-icons">help_outline</span>
-        <span v-if="!isCollapsed">Help & Support</span>
+        <span>Help & Support</span>
       </router-link>
     </div>
-    <!-- Debug: -->
-    <!-- <div>{{ isCollapsed }}</div> -->
   </aside>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-
-const isCollapsed = ref(false);
-const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value;
-};
-
-const menuItems = [
-  { path: '/', icon: 'home', label: 'Home' },
-  { path: '/todo', icon: 'check_circle', label: 'To Do' },
-  { path: '/managers', icon: 'group', label: 'Managers' },
-  { path: '/translation-memories', icon: 'history_edu', label: 'Translation Memories' },
-  { path: '/glossaries', icon: 'menu_book', label: 'Glossaries' },
-  { path: '/machine-translation', icon: 'smart_toy', label: 'Machine Translation' },
-  { path: '/ai', icon: 'psychology', label: 'AI' },
-  { path: '/vendors', icon: 'storefront', label: 'Vendors' },
-  { path: '/store', icon: 'shopping_cart', label: 'Store' },
-];
+// Layout only
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css?family=Inter:400,500,600,700&display=swap');
 .sidebar {
   width: 240px;
   background: #fff;
@@ -62,17 +70,12 @@ const menuItems = [
   position: fixed;
   left: 0;
   top: 0;
-  font-family: 'Inter', 'Segoe UI', 'Roboto', Arial, sans-serif;
-  transition: width 0.2s;
-}
-.sidebar.collapsed {
-  width: 64px;
 }
 .sidebar-logo {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 8px 16px 8px;
+  padding: 24px 24px 16px 24px;
 }
 .logo-img {
   height: 80px;
@@ -80,22 +83,13 @@ const menuItems = [
   display: block;
   margin: 0 auto 12px auto;
 }
-.collapse-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  margin-right: 8px;
-  color: #2563eb;
+.logo-text {
   font-size: 28px;
-  padding: 4px;
-  border-radius: 50%;
-  transition: background 0.2s;
-}
-.collapse-btn:hover {
-  background: #f3f4f6;
-}
-.sidebar.collapsed .logo-img {
-  display: none;
+  font-weight: 800;
+  color: #2563eb;
+  text-align: center;
+  margin-bottom: 16px;
+  letter-spacing: 1px;
 }
 .sidebar-menu, .sidebar-bottom {
   display: flex;
@@ -135,11 +129,24 @@ const menuItems = [
 .menu-item:hover .material-icons {
   color: #2563eb;
 }
-.sidebar.collapsed .menu-item span:not(:first-child) {
-  display: none;
-}
 .sidebar-bottom {
   margin-top: auto;
   padding-bottom: 16px;
+}
+.logo-img {
+  height: 230px; /* hoặc lớn hơn */
+  width: auto;
+}
+@import url('https://fonts.googleapis.com/css?family=Inter:400,500,600,700&display=swap');
+.sidebar {
+  font-family: 'Inter', 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+.logo-text {
+  font-size: 22px;
+  font-weight: 700;
+}
+.menu-item {
+  font-size: 15px;
+  font-weight: 500;
 }
 </style>

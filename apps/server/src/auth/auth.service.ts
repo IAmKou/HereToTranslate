@@ -256,17 +256,12 @@ export class AuthService {
       throw new UnauthorizedException('Token is missing');
     }
 
-    const actualToken = /^Bearer (.+)$/.exec(token)?.[1];
-    if (!actualToken) {
-      throw new UnauthorizedException('Invalid token format');
-    }
-
-    if (!this.activeTokens.has(actualToken)) {
+    if (!this.activeTokens.has(token)) {
       throw new UnauthorizedException('Token expired');
     }
 
     try {
-      const payload = await this.jwt.verifyAsync(actualToken);
+      const payload = await this.jwt.verifyAsync(token);
       if (!payload) {
         throw new UnauthorizedException('Invalid token');
       }
@@ -282,7 +277,7 @@ export class AuthService {
 
       return user;
     } catch (e) {
-      this.activeTokens.delete(actualToken);
+      this.activeTokens.delete(token);
       throw new UnauthorizedException('Invalid token');
     }
   }

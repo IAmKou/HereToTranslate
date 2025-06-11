@@ -5,6 +5,7 @@ import { ProjectGroupEntity } from './projectGroup.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
+import { Category } from './category.entity';
 @Entity('project')
 export class ProjectEntity {
   @PrimaryGeneratedColumn()
@@ -37,5 +38,8 @@ export class ProjectEntity {
 
   @OneToMany(() => FileEntity, file => file.project)
   file: FileEntity[];
+
+  @OneToMany(() => Category, category => category.project)
+  category: Category[];
 
 }

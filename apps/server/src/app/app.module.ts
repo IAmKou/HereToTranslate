@@ -7,13 +7,14 @@ import { SeederModule} from '../module/seeder.module';
 import { AuthModule } from '../auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { ProjectModule } from '../project/project.module';
+import { CategoryModule } from '../category/category.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    DbContextModule, SeederModule, AuthModule, ProjectModule],
+    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule],
   controllers: [AppController, MongoController],
   providers: [AppService],
 })

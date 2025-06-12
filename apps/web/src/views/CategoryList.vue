@@ -1,154 +1,329 @@
 <template>
   <div class="category-list">
-    <div class="page-header">
-      <h2>Categories Management</h2>
-      <p class="page-description">Create and manage categories and their subcategories</p>
-    </div>
-
-    <!-- Add Category Form -->
-    <div class="add-category-form">
-      <div class="form-group">
-        <input 
-          v-model="newCategory.name" 
-          placeholder="Category Name" 
-          class="input" 
-        />
-        <input 
-          v-model="newCategory.description" 
-          placeholder="Description (optional)" 
-          class="input" 
-        />
-        <button @click="createCategory" class="button primary">
-          <span class="icon">+</span>
-          Add Category
-        </button>
+    <!-- Header Section -->
+    <div class="page-header mb-4">
+      <div class="header-content">
+        <div class="header-icon">
+          <i class="pi pi-folder"></i>
+        </div>
+        <div class="header-text">
+          <h2>Categories Management</h2>
+          <p class="page-description">Create and manage categories and their subcategories</p>
+        </div>
       </div>
     </div>
 
-    <!-- Categories Table -->
-    <div class="categories-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Description</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="category in categories" :key="category.id">
-            <tr>
-              <td>
-                <div class="category-header">
-                  <span 
-                    class="toggle-icon" 
-                    @click="toggleSubcategories(category.id)"
-                    :class="{ 'expanded': isExpanded(category.id) }"
-                  >
-                    {{ isExpanded(category.id) ? '▼' : '▶' }}
-                  </span>
-                  <input 
-                    v-if="editingId === category.id" 
-                    v-model="editingCategory.name" 
-                    class="input edit-input" 
-                  />
-                  <span v-else class="category-name">{{ category.name }}</span>
-                </div>
-              </td>
-              <td>
-                <input 
-                  v-if="editingId === category.id" 
-                  v-model="editingCategory.description" 
-                  class="input edit-input" 
-                />
-                <span v-else class="category-description">{{ category.description || 'No description' }}</span>
-              </td>
-              <td>
-                <div class="actions">
-                  <template v-if="editingId === category.id">
-                    <button @click="saveEdit(category.id)" class="button save">
-                      <span class="icon">✓</span>
-                      Save
-                    </button>
-                    <button @click="cancelEdit" class="button cancel">
-                      <span class="icon">×</span>
-                      Cancel
-                    </button>
-                  </template>
-                  <template v-else>
-                    <button @click="startEdit(category)" class="button edit">
-                      <span class="icon">✎</span>
-                      Edit
-                    </button>
-                    <button @click="deleteCategory(category.id)" class="button delete">
-                      <span class="icon">🗑</span>
-                      Delete
-                    </button>
-                    <button @click="showAddSubcategory(category)" class="button add-sub">
-                      <span class="icon">+</span>
-                      Add Sub
-                    </button>
-                  </template>
-                </div>
-              </td>
-            </tr>
-
-            <!-- Subcategories -->
-            <tr v-if="isExpanded(category.id)">
-              <td colspan="3">
-                <div class="subcategories-container">
-                  <!-- Add Subcategory Form -->
-                  <div v-if="addingSubcategoryTo === category.id" class="add-subcategory-form">
-                    <input 
-                      v-model="newSubcategory.name" 
-                      placeholder="Subcategory Name" 
-                      class="input" 
-                    />
-                    <div class="subcategory-actions">
-                      <button @click="createSubcategory(category.id)" class="button primary">
-                        <span class="icon">+</span>
-                        Add Subcategory
-                      </button>
-                      <button @click="cancelAddSubcategory" class="button cancel">
-                        <span class="icon">×</span>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Subcategory List -->
-                  <div v-if="category.subCategories?.length" class="subcategories-list">
-                    <div v-for="subcategory in category.subCategories" :key="subcategory.id" class="subcategory-item">
-                      <span class="subcategory-name">{{ subcategory.name }}</span>
-                      <div class="subcategory-actions">
-                        <button @click="editSubcategory(subcategory)" class="button edit">
-                          <span class="icon">✎</span>
-                          Edit
-                        </button>
-                        <button @click="deleteSubcategory(subcategory.id)" class="button delete">
-                          <span class="icon">🗑</span>
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="no-subcategories">
-                    <span class="icon">ℹ</span>
-                    No subcategories yet
-                  </div>
-                </div>
-              </td>
-            </tr>
+    <!-- Main Content -->
+    <Card class="mb-4">
+      <template #title>
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-2">
+            <i class="pi pi-list text-xl"></i>
+            <h2 class="text-xl font-semibold m-0">Categories</h2>
+          </div>
+          <Button
+            icon="pi pi-plus"
+            label="Add Category"
+            @click="openAddModal"
+            class="p-button-primary"
+          />
+        </div>
+      </template>
+      <template #content>
+        <DataTable
+          :value="categories"
+          :paginator="true"
+          :rows="10"
+          :loading="loading"
+          :filters="filters"
+          filterDisplay="menu"
+          :globalFilterFields="['name', 'description']"
+          class="p-datatable-sm"
+          v-model:filters1="filters"
+          stripedRows
+          showGridlines
+          responsiveLayout="scroll"
+          :rowHover="true"
+          paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+          :rowsPerPageOptions="[5,10,20,50]"
+          currentPageReportTemplate="Showing {first} to {last} of {totalRecords} categories"
+        >
+          <template #header>
+            <div class="flex justify-end mb-2">
+              <span class="p-input-icon-left">
+                <i class="pi pi-search" />
+                <InputText v-model="filters.global.value" placeholder="Search..." />
+              </span>
+            </div>
           </template>
-        </tbody>
-      </table>
-    </div>
+          <template #empty>
+            <div class="text-center p-4">
+              <i class="pi pi-folder text-4xl text-gray-400 mb-2"></i>
+              <p class="text-gray-500">No categories found.</p>
+            </div>
+          </template>
+          <template #loading>
+            <div class="text-center p-4">
+              <i class="pi pi-spin pi-spinner text-2xl"></i>
+              <p class="mt-2">Loading categories...</p>
+            </div>
+          </template>
+
+          <Column field="name" header="Name" sortable style="min-width: 200px">
+            <template #body="{ data }">
+              <div class="flex items-center gap-2">
+                <i class="pi pi-folder text-primary"></i>
+                <span>{{ data.name }}</span>
+              </div>
+            </template>
+            <template #filter="{ filterModel, filterCallback }">
+              <span class="p-input-icon-left">
+                <i class="pi pi-search" />
+                <InputText
+                  v-model="filterModel.value"
+                  @input="filterCallback()"
+                  placeholder="Search by name"
+                  class="p-column-filter"
+                />
+              </span>
+            </template>
+          </Column>
+          <Column field="description" header="Description" sortable style="min-width: 300px">
+            <template #body="{ data }">
+              <span class="text-gray-600">{{ data.description || 'No description' }}</span>
+            </template>
+            <template #filter="{ filterModel, filterCallback }">
+              <span class="p-input-icon-left">
+                <i class="pi pi-search" />
+                <InputText
+                  v-model="filterModel.value"
+                  @input="filterCallback()"
+                  placeholder="Search by description"
+                  class="p-column-filter"
+                />
+              </span>
+            </template>
+          </Column>
+          <Column field="createdAt" header="Created At" sortable style="min-width: 150px">
+            <template #body="slotProps">
+              <div class="flex items-center gap-2">
+                <i class="pi pi-calendar text-gray-400"></i>
+                <span>{{ formatDate(slotProps.data.createdAt) }}</span>
+              </div>
+            </template>
+          </Column>
+          <Column field="updatedAt" header="Updated At" sortable style="min-width: 150px">
+            <template #body="slotProps">
+              <div class="flex items-center gap-2">
+                <i class="pi pi-clock text-gray-400"></i>
+                <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
+              </div>
+            </template>
+          </Column>
+          <Column style="min-width: 150px">
+            <template #body="slotProps">
+              <div class="flex gap-2">
+                <Button
+                  icon="pi pi-pencil"
+                  class="p-button-rounded p-button-text p-button-sm"
+                  @click="editCategory(slotProps.data)"
+                  v-tooltip.top="'Edit Category'"
+                />
+                <Button
+                  icon="pi pi-trash"
+                  class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                  @click="confirmDelete(slotProps.data)"
+                  v-tooltip.top="'Delete Category'"
+                />
+                <Button
+                  icon="pi pi-plus"
+                  class="p-button-rounded p-button-text p-button-success p-button-sm"
+                  @click="showAddSubcategory(slotProps.data)"
+                  v-tooltip.top="'Add Subcategory'"
+                />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
+      </template>
+    </Card>
+
+    <!-- Add/Edit Category Dialog -->
+    <Dialog
+      v-model:visible="showDialog"
+      :header="isEditing ? 'Edit Category' : 'Add New Category'"
+      :style="{width: '600px'}"
+      :modal="true"
+      :closable="true"
+      :closeOnEscape="true"
+      class="category-dialog"
+    >
+      <div class="p-fluid">
+        <div class="dialog-content">
+          <div class="form-section">
+            <div class="section-header">
+              <i class="pi pi-folder text-primary"></i>
+              <h3>Category Information</h3>
+            </div>
+            <div class="field">
+              <label for="name" class="font-medium flex items-center gap-2">
+                <i class="pi pi-tag text-primary"></i>
+                Category Name
+                <span class="required-mark">*</span>
+              </label>
+              <InputText
+                id="name"
+                v-model="currentCategory.name"
+                required
+                autofocus
+                :class="{'p-invalid': submitted && !currentCategory.name}"
+                placeholder="Enter category name"
+                class="w-full"
+              />
+              <small class="p-error flex items-center gap-1 mt-1" v-if="submitted && !currentCategory.name">
+                <i class="pi pi-exclamation-circle"></i>
+                Name is required
+              </small>
+            </div>
+            <div class="field">
+              <label for="description" class="font-medium flex items-center gap-2">
+                <i class="pi pi-info-circle text-primary"></i>
+                Description
+                <span class="text-sm text-gray-500">(Optional)</span>
+              </label>
+              <Textarea
+                id="description"
+                v-model="currentCategory.description"
+                placeholder="Enter category description"
+                rows="4"
+                class="w-full"
+                autoResize
+              />
+              <small class="text-gray-500 mt-1">
+                <i class="pi pi-info-circle"></i>
+                Add a brief description to help identify this category
+              </small>
+            </div>
+          </div>
+
+          <div class="form-section" v-if="isEditing">
+            <div class="section-header">
+              <i class="pi pi-clock text-primary"></i>
+              <h3>Category Details</h3>
+            </div>
+            <div class="details-grid">
+              <div class="detail-item">
+                <span class="detail-label">Created At</span>
+                <span class="detail-value">{{ formatDate(currentCategory.createdAt) }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Last Updated</span>
+                <span class="detail-value">{{ formatDate(currentCategory.updatedAt) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <Button
+            label="Cancel"
+            icon="pi pi-times"
+            class="p-button-text p-button-rounded"
+            @click="closeDialog"
+            :disabled="saving"
+          />
+          <Button
+            :label="isEditing ? 'Update Category' : 'Create Category'"
+            :icon="isEditing ? 'pi pi-save' : 'pi pi-plus'"
+            class="p-button-primary p-button-rounded"
+            @click="saveCategory"
+            :loading="saving"
+          />
+        </div>
+      </template>
+    </Dialog>
+
+    <!-- Add Subcategory Dialog -->
+    <Dialog
+      v-model:visible="showSubcategoryDialog"
+      header="Add Subcategory"
+      :style="{width: '500px'}"
+      :modal="true"
+      :closable="true"
+      :closeOnEscape="true"
+      class="category-dialog"
+    >
+      <div class="p-fluid">
+        <div class="dialog-content">
+          <div class="form-section">
+            <div class="section-header">
+              <i class="pi pi-folder text-primary"></i>
+              <h3>Subcategory Information</h3>
+            </div>
+            <div class="field">
+              <label for="subcategoryName" class="font-medium flex items-center gap-2">
+                <i class="pi pi-tag text-primary"></i>
+                Subcategory Name
+                <span class="required-mark">*</span>
+              </label>
+              <InputText
+                id="subcategoryName"
+                v-model="newSubcategory.name"
+                required
+                autofocus
+                :class="{'p-invalid': submitted && !newSubcategory.name}"
+                placeholder="Enter subcategory name"
+                class="w-full"
+              />
+              <small class="p-error flex items-center gap-1 mt-1" v-if="submitted && !newSubcategory.name">
+                <i class="pi pi-exclamation-circle"></i>
+                Name is required
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <Button
+            label="Cancel"
+            icon="pi pi-times"
+            class="p-button-text p-button-rounded"
+            @click="closeSubcategoryDialog"
+            :disabled="saving"
+          />
+          <Button
+            label="Create Subcategory"
+            icon="pi pi-plus"
+            class="p-button-primary p-button-rounded"
+            @click="createSubcategory"
+            :loading="saving"
+          />
+        </div>
+      </template>
+    </Dialog>
+
+    <!-- Confirm Dialog for Delete -->
+    <ConfirmDialog></ConfirmDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import { useConfirm } from 'primevue/useconfirm';
+import { useToast } from 'primevue/usetoast';
+
+// PrimeVue Components
+import Button from 'primevue/button';
+import Card from 'primevue/card';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import InputText from 'primevue/inputtext';
+import Textarea from 'primevue/textarea';
+import Dialog from 'primevue/dialog';
+import ConfirmDialog from 'primevue/confirmdialog';
 
 interface Category {
   id?: number;
@@ -163,372 +338,797 @@ interface Category {
 const API_BASE_URL = 'http://localhost:3000/api';
 
 const categories = ref<Category[]>([]);
-const newCategory = ref<Category>({ name: '', description: '' });
-const newSubcategory = ref<Category>({ name: '' });
-const editingId = ref<number | null>(null);
-const editingCategory = ref<Category>({ name: '', description: '' });
-const expandedCategories = ref<Set<number>>(new Set());
-const addingSubcategoryTo = ref<number | null>(null);
+const loading = ref(false);
+const saving = ref(false);
+const showDialog = ref(false);
+const showSubcategoryDialog = ref(false);
+const isEditing = ref(false);
+const submitted = ref(false);
+const currentCategory = ref<Category>({
+  name: '',
+  description: ''
+});
+const newSubcategory = ref<Category>({
+  name: ''
+});
+const selectedParentCategory = ref<Category | null>(null);
 
-const isExpanded = (categoryId: number | undefined) => {
-  return categoryId !== undefined && expandedCategories.value.has(categoryId);
-};
+const confirm = useConfirm();
+const toast = useToast();
 
-const toggleSubcategories = (categoryId: number | undefined) => {
-  if (!categoryId) return;
-  expandedCategories.value.has(categoryId)
-    ? expandedCategories.value.delete(categoryId)
-    : expandedCategories.value.add(categoryId);
-};
+const filters = ref({
+  global: { value: null, matchMode: 'contains' },
+  name: { value: null, matchMode: 'contains' },
+  description: { value: null, matchMode: 'contains' }
+});
 
-const showAddSubcategory = (category: Category) => {
-  addingSubcategoryTo.value = category.id || null;
-  newSubcategory.value = { name: '' };
-};
-
-const cancelAddSubcategory = () => {
-  addingSubcategoryTo.value = null;
-  newSubcategory.value = { name: '' };
-};
-
-const createSubcategory = async (parentId: number) => {
-  if (!newSubcategory.value.name) return;
-  try {
-    const subcategoryData = {
-      name: newSubcategory.value.name,
-      categoryId: parentId
-    };
-    await axios.post(`${API_BASE_URL}/subcategory/create`, subcategoryData);
-    cancelAddSubcategory();
-    await loadCategories();
-  } catch (error) {
-    console.error('Error creating subcategory:', error);
-    alert('Failed to create subcategory.');
-  }
-};
-
-const editSubcategory = (subcategory: Category) => {
-  editingId.value = subcategory.id || null;
-  editingCategory.value = { ...subcategory };
-};
-
-const deleteSubcategory = async (id: number | undefined) => {
-  if (!id || !confirm('Are you sure you want to delete this subcategory?')) return;
-  try {
-    await axios.delete(`${API_BASE_URL}/subcategory/delete/${id}`);
-    await loadCategories();
-  } catch (error) {
-    console.error('Error deleting subcategory:', error);
-  }
-};
-
-const loadCategories = async () => {
+const fetchCategories = async () => {
+  loading.value = true;
   try {
     const response = await axios.get(`${API_BASE_URL}/category/all`);
     categories.value = response.data;
   } catch (error) {
-    console.error('Error loading categories:', error);
-    alert('Failed to load categories.');
+    console.error('Error fetching categories:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load categories',
+      life: 3000
+    });
+  } finally {
+    loading.value = false;
   }
 };
 
-const createCategory = async () => {
-  if (!newCategory.value.name) return;
+const openAddModal = () => {
+  isEditing.value = false;
+  currentCategory.value = {
+    name: '',
+    description: ''
+  };
+  showDialog.value = true;
+  submitted.value = false;
+};
+
+const editCategory = (category: Category) => {
+  isEditing.value = true;
+  currentCategory.value = { ...category };
+  showDialog.value = true;
+  submitted.value = false;
+};
+
+const closeDialog = () => {
+  if (saving.value) return;
+  showDialog.value = false;
+  submitted.value = false;
+};
+
+const saveCategory = async () => {
+  submitted.value = true;
+
+  if (!currentCategory.value.name) {
+    return;
+  }
+
+  saving.value = true;
   try {
-    await axios.post(`${API_BASE_URL}/category/create`, newCategory.value);
-    newCategory.value = { name: '', description: '' };
-    await loadCategories();
+    if (isEditing.value && currentCategory.value.id) {
+      await axios.put(`${API_BASE_URL}/category/update/${currentCategory.value.id}`, {
+        name: currentCategory.value.name,
+        description: currentCategory.value.description
+      });
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Category updated successfully',
+        life: 3000
+      });
+      await fetchCategories();
+      closeDialog();
+    } else {
+      await axios.post(`${API_BASE_URL}/category/create`, {
+        name: currentCategory.value.name,
+        description: currentCategory.value.description
+      });
+
+      // Show success toast
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Category created successfully',
+        life: 3000
+      });
+
+      // Close modal and reset form
+      showDialog.value = false;
+      submitted.value = false;
+      currentCategory.value = {
+        name: '',
+        description: ''
+      };
+
+      // Then refresh the categories list
+      await fetchCategories();
+    }
   } catch (error) {
-    console.error('Error creating category:', error);
+    console.error('Error saving category:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to save category',
+      life: 3000
+    });
+  } finally {
+    saving.value = false;
   }
 };
 
-const startEdit = (category: Category) => {
-  editingId.value = category.id || null;
-  editingCategory.value = { ...category };
+const confirmDelete = (category: Category) => {
+  confirm.require({
+    message: 'Are you sure you want to delete this category?',
+    header: 'Delete Confirmation',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: () => deleteCategory(category),
+    reject: () => {},
+    acceptLabel: 'Yes, Delete',
+    rejectLabel: 'Cancel',
+    acceptIcon: 'pi pi-trash',
+    rejectIcon: 'pi pi-times'
+  });
 };
 
-const saveEdit = async (id: number | undefined) => {
-  if (!id) return;
-  try {
-    await axios.put(`${API_BASE_URL}/category/update/${id}`, editingCategory.value);
-    editingId.value = null;
-    await loadCategories();
-  } catch (error) {
-    console.error('Error updating category:', error);
-  }
-};
+const deleteCategory = async (category: Category) => {
+  if (!category.id) return;
 
-const cancelEdit = () => {
-  editingId.value = null;
-};
-  
-const deleteCategory = async (id: number | undefined) => {
-  if (!id || !confirm('Are you sure you want to delete this category?')) return;
   try {
-    await axios.delete(`${API_BASE_URL}/category/delete/${id}`);
-    await loadCategories();
+    await axios.delete(`${API_BASE_URL}/category/delete/${category.id}`);
+    await fetchCategories();
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Category deleted successfully',
+      life: 3000
+    });
   } catch (error) {
     console.error('Error deleting category:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to delete category',
+      life: 3000
+    });
   }
 };
 
-onMounted(loadCategories);
+const showAddSubcategory = (category: Category) => {
+  selectedParentCategory.value = category;
+  newSubcategory.value = { name: '' };
+  showSubcategoryDialog.value = true;
+  submitted.value = false;
+};
+
+const closeSubcategoryDialog = () => {
+  if (saving.value) return;
+  showSubcategoryDialog.value = false;
+  selectedParentCategory.value = null;
+  submitted.value = false;
+};
+
+const createSubcategory = async () => {
+  if (!selectedParentCategory.value?.id || !newSubcategory.value.name) return;
+
+  saving.value = true;
+  try {
+    const subcategoryData = {
+      name: newSubcategory.value.name,
+      categoryId: selectedParentCategory.value.id
+    };
+    await axios.post(`${API_BASE_URL}/subcategory/create`, subcategoryData);
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Subcategory created successfully',
+      life: 3000
+    });
+    await fetchCategories();
+    closeSubcategoryDialog();
+  } catch (error) {
+    console.error('Error creating subcategory:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to create subcategory',
+      life: 3000
+    });
+  } finally {
+    saving.value = false;
+  }
+};
+
+const formatDate = (date: string | Date | undefined) => {
+  if (!date) return '';
+  return new Date(date).toLocaleString();
+};
+
+onMounted(() => {
+  fetchCategories();
+});
 </script>
 
 <style scoped>
 .category-list {
-  max-width: 1200px;
+  padding: 1.5rem;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
 }
 
 .page-header {
-  text-align: center;
-  margin-bottom: 2.5rem;
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  border-radius: 12px;
+  padding: 2rem;
+  color: white;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
 }
 
-h2 {
-  margin: 0;
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.header-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 2rem;
-  color: #1a202c;
+}
+
+.header-text h2 {
+  margin: 0;
+  font-size: 1.75rem;
   font-weight: 600;
 }
 
 .page-description {
   margin: 0.5rem 0 0;
-  color: #718096;
+  opacity: 0.9;
   font-size: 1rem;
 }
 
-.add-category-form {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  margin-bottom: 2rem;
-}
-
-.form-group {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-}
-
-.input {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid #e2e8f0;
+:deep(.p-datatable) {
+  font-size: 0.875rem;
   border-radius: 8px;
-  font-size: 1rem;
-  transition: all 0.2s ease;
-  background-color: #f8fafc;
-}
-
-.input:focus {
-  outline: none;
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-  background-color: white;
-}
-
-.edit-input {
-  background-color: white;
-  border-color: #4299e1;
-}
-
-.button {
-  padding: 0.75rem 1.25rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: white;
-}
-
-.button:hover {
-  transform: translateY(-1px);
-}
-
-.button.primary {
-  background-color: #4299e1;
-}
-
-.button.edit {
-  background-color: #3182ce;
-}
-
-.button.delete {
-  background-color: #e53e3e;
-}
-
-.button.save {
-  background-color: #38a169;
-}
-
-.button.cancel {
-  background-color: #718096;
-}
-
-.button.add-sub {
-  background-color: #805ad5;
-}
-
-.icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.categories-table {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th {
-  background-color: #f7fafc;
-  padding: 1rem;
-  text-align: left;
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  background: #f8f9fa;
+  color: #495057;
   font-weight: 600;
-  color: #4a5568;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-td {
   padding: 1rem;
-  border-bottom: 1px solid #e2e8f0;
-  color: #2d3748;
+  border-bottom: 2px solid #e9ecef;
 }
 
-.category-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  padding: 1rem;
+  border-bottom: 1px solid #e9ecef;
 }
 
-.toggle-icon {
-  cursor: pointer;
-  user-select: none;
-  font-size: 0.875rem;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+:deep(.p-datatable .p-datatable-tbody > tr:hover) {
+  background: #f8f9fa;
 }
 
-.toggle-icon:hover {
-  background-color: #f7fafc;
+:deep(.p-datatable .p-datatable-tbody > tr.p-highlight) {
+  background: #EFF6FF;
 }
 
-.toggle-icon.expanded {
-  color: #4299e1;
+:deep(.category-dialog) {
+  .p-dialog-header {
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    color: white;
+    padding: 1.5rem;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+
+    .p-dialog-title {
+      font-weight: 600;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .p-dialog-header-icon {
+      color: white;
+      opacity: 0.8;
+
+      &:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.1);
+      }
+    }
+  }
+
+  .p-dialog-content {
+    padding: 0;
+  }
+
+  .p-dialog-footer {
+    padding: 1.5rem;
+    border-top: 1px solid #e9ecef;
+    background: #f8f9fa;
+  }
 }
 
-.category-name {
-  font-weight: 500;
+.dialog-content {
+  padding: 2rem;
 }
 
-.category-description {
-  color: #718096;
-}
-
-.actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.subcategories-container {
+.form-section {
+  background: white;
+  border-radius: 12px;
   padding: 1.5rem;
-  background-color: #f8fafc;
-  border-radius: 8px;
-  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 }
 
-.add-subcategory-form {
+.section-header {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
   align-items: center;
-}
-
-.subcategories-list {
-  display: flex;
-  flex-direction: column;
   gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+
+  i {
+    font-size: 1.25rem;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #374151;
+  }
 }
 
-.subcategory-item {
+.field {
+  margin-bottom: 1.5rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.field label {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background-color: white;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.required-mark {
+  color: #EF4444;
+  font-weight: bold;
+}
+
+:deep(.p-inputtext),
+:deep(.p-textarea) {
+  width: 100%;
   padding: 0.75rem 1rem;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ced4da;
+  transition: all 0.2s;
+  font-size: 0.95rem;
+
+  &:hover {
+    border-color: #3B82F6;
+  }
+
+  &:focus {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+
+  &.p-invalid {
+    border-color: #EF4444;
+
+    &:focus {
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+    }
+  }
 }
 
-.subcategory-name {
+:deep(.p-textarea) {
+  resize: none;
+  min-height: 120px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.detail-item {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.detail-label {
+  display: block;
+  font-size: 0.875rem;
+  color: #6B7280;
+  margin-bottom: 0.25rem;
+}
+
+.detail-value {
   font-weight: 500;
-  color: #2d3748;
+  color: #374151;
 }
 
-.subcategory-actions {
+.dialog-footer {
   display: flex;
-  gap: 0.5rem;
+  justify-content: flex-end;
+  gap: 1rem;
 }
 
-.no-subcategories {
-  text-align: center;
-  padding: 2rem;
-  color: #718096;
-  font-style: italic;
+/* Button Styles */
+:deep(.p-button) {
+  font-weight: 600;
+  font-size: 1.05rem;
+  border: none;
+  border-radius: 32px;
+  height: 44px;
+  padding: 0 1.5rem;
+  box-shadow: 0 2px 8px 0 rgba(59,130,246,0.08);
+  transition: all 0.18s cubic-bezier(.4,0,.2,1);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  outline: none;
+}
+
+:deep(.p-button-primary) {
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  color: #fff;
+  box-shadow: 0 4px 16px 0 rgba(59,130,246,0.10);
+}
+:deep(.p-button-primary):hover,
+:deep(.p-button-primary):focus {
+  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+  box-shadow: 0 8px 24px 0 rgba(59,130,246,0.18);
+  transform: translateY(-2px) scale(1.03);
+}
+:deep(.p-button-primary):active {
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  box-shadow: 0 2px 8px 0 rgba(59,130,246,0.10);
+  transform: none;
+}
+:deep(.p-button-primary:disabled) {
+  background: #a5b4fc;
+  color: #e0e7ff;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+:deep(.p-button-success) {
+  background: linear-gradient(90deg, #10b981 0%, #22d3ee 100%);
+  color: #fff;
+}
+:deep(.p-button-success):hover,
+:deep(.p-button-success):focus {
+  background: linear-gradient(90deg, #059669 0%, #06b6d4 100%);
+  box-shadow: 0 8px 24px 0 rgba(16,185,129,0.18);
+  transform: translateY(-2px) scale(1.03);
+}
+:deep(.p-button-success):active {
+  background: linear-gradient(90deg, #10b981 0%, #22d3ee 100%);
+  box-shadow: 0 2px 8px 0 rgba(16,185,129,0.10);
+  transform: none;
+}
+:deep(.p-button-success:disabled) {
+  background: #6ee7b7;
+  color: #e0f2fe;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+:deep(.p-button-danger) {
+  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+  color: #fff;
+}
+:deep(.p-button-danger):hover,
+:deep(.p-button-danger):focus {
+  background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
+  box-shadow: 0 8px 24px 0 rgba(239,68,68,0.18);
+  transform: translateY(-2px) scale(1.03);
+}
+:deep(.p-button-danger):active {
+  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+  box-shadow: 0 2px 8px 0 rgba(239,68,68,0.10);
+  transform: none;
+}
+:deep(.p-button-danger:disabled) {
+  background: #fecaca;
+  color: #fee2e2;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+:deep(.p-button-text) {
+  background: transparent;
+  color: #2563eb;
+  box-shadow: none;
+  padding: 0 1rem;
+}
+:deep(.p-button-text):hover,
+:deep(.p-button-text):focus {
+  background: #e0e7ff;
+  color: #1d4ed8;
+  transform: translateY(-1px) scale(1.01);
+}
+:deep(.p-button-text):active {
+  background: #dbeafe;
+  color: #2563eb;
+  transform: none;
+}
+:deep(.p-button-text:disabled) {
+  color: #a5b4fc;
+  background: transparent;
+  opacity: 0.6;
+}
+
+:deep(.p-button-cancel) {
+  background: #f3f4f6;
+  color: #374151;
+}
+:deep(.p-button-cancel):hover,
+:deep(.p-button-cancel):focus {
+  background: #e5e7eb;
+  color: #111827;
+}
+:deep(.p-button-cancel):active {
+  background: #d1d5db;
+  color: #374151;
+}
+
+:deep(.p-button-sm) {
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
 }
 
-/* Responsive adjustments */
+:deep(.p-button .p-button-icon) {
+  font-size: 1.3rem;
+  margin-right: 0.5rem;
+}
+:deep(.p-button-sm .p-button-icon) {
+  margin-right: 0;
+}
+
+:deep(.p-button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dialog-footer .p-button {
+  min-width: 140px;
+  height: 44px;
+  font-size: 1.05rem;
+}
+
+.page-header .p-button-primary {
+  height: 48px;
+  padding: 0 2rem;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 16px 0 rgba(59,130,246,0.10);
+}
+
+/* Confirm Dialog Styles */
+:deep(.p-confirm-dialog) {
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  max-width: 800px;
+  width: 90% !important;
+}
+
+:deep(.p-confirm-dialog .p-dialog-header) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  padding: 2.5rem;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+}
+
+:deep(.p-confirm-dialog .p-dialog-title) {
+  font-size: 1.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  letter-spacing: -0.025em;
+}
+
+:deep(.p-confirm-dialog .p-dialog-content) {
+  padding: 3rem;
+  background: white;
+}
+
+:deep(.p-confirm-dialog .p-dialog-message) {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  font-size: 1.5rem;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+  letter-spacing: -0.025em;
+}
+
+:deep(.p-confirm-dialog .p-dialog-message i) {
+  font-size: 3rem;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+:deep(.p-confirm-dialog .p-dialog-footer) {
+  padding: 2.5rem;
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  justify-content: flex-end;
+  gap: 2rem;
+}
+
+:deep(.p-confirm-dialog .p-button) {
+  min-width: 180px;
+  height: 52px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  border-radius: 32px;
+  transition: all 0.2s ease;
+  letter-spacing: -0.025em;
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-danger) {
+  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-danger:hover) {
+  background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-text) {
+  background: transparent;
+  color: #6b7280;
+  box-shadow: none;
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-text:hover) {
+  background: #f3f4f6;
+  color: #374151;
+  transform: translateY(-1px);
+}
+
+:deep(.p-confirm-dialog .p-button .p-button-icon) {
+  font-size: 1.3rem;
+  margin-right: 1rem;
+}
+
 @media (max-width: 768px) {
   .category-list {
     padding: 1rem;
   }
 
-  .form-group {
+  .page-header {
+    padding: 1.5rem;
+  }
+
+  .header-content {
     flex-direction: column;
+    text-align: center;
   }
 
-  .actions {
-    flex-wrap: wrap;
+  .header-icon {
+    margin: 0 auto;
   }
 
-  .button {
+  :deep(.category-dialog) {
+    width: 95% !important;
+    max-width: 450px;
+  }
+
+  .dialog-content {
+    padding: 1rem;
+  }
+
+  .form-section {
+    padding: 1rem;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-footer {
+    flex-direction: column-reverse;
+  }
+
+  .dialog-footer .p-button {
     width: 100%;
+    height: 48px;
+    font-size: 1.1rem;
   }
 
-  .subcategory-item {
-    flex-direction: column;
+  .page-header .p-button-primary {
+    width: 100%;
+    margin-top: 1rem;
+  }
+
+  :deep(.p-confirm-dialog) {
+    width: 95% !important;
+    max-width: 600px;
+  }
+
+  :deep(.p-confirm-dialog .p-dialog-header) {
+    padding: 2rem;
+  }
+
+  :deep(.p-confirm-dialog .p-dialog-title) {
+    font-size: 1.5rem;
+  }
+
+  :deep(.p-confirm-dialog .p-dialog-content) {
+    padding: 2.5rem;
+  }
+
+  :deep(.p-confirm-dialog .p-dialog-message) {
+    font-size: 1.25rem;
+    gap: 1.5rem;
+  }
+
+  :deep(.p-confirm-dialog .p-dialog-message i) {
+    font-size: 2.5rem;
+  }
+
+  :deep(.p-confirm-dialog .p-dialog-footer) {
+    padding: 2rem;
+    flex-direction: column-reverse;
     gap: 1rem;
   }
 
-  .subcategory-actions {
+  :deep(.p-confirm-dialog .p-button) {
     width: 100%;
-    justify-content: flex-end;
+    height: 56px;
+    font-size: 1.2rem;
   }
 }
 </style>
-

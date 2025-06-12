@@ -58,8 +58,8 @@
             Subcategory
             <span class="required-mark">*</span>
           </label>
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="btn btn-secondary add-subcategory-btn"
             @click="showAddSubcategoryModal = true"
             :disabled="!form.categoryId"
@@ -211,10 +211,10 @@ const handleAddSubcategory = async () => {
 
     // Refresh subcategories list
     await fetchSubcategories(Number(form.value.categoryId))
-    
+
     // Set the newly created subcategory as selected
     form.value.subCategoryId = response.data.id.toString()
-    
+
     // Reset and close modal
     newSubcategory.value.name = ''
     showAddSubcategoryModal.value = false

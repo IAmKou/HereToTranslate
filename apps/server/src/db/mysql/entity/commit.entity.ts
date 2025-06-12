@@ -1,10 +1,10 @@
-import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne} from 'typeorm';
-import { BranchEntity} from './branch.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, Relation } from 'typeorm';
+import { BranchEntity } from './branch.entity';
 import { ProjectEntity } from './project.entity';
 import { UserEntity } from './user.entity';
 
 @Entity('commit')
-export class CommitEntity{
+export class CommitEntity {
 
   @PrimaryGeneratedColumn()
   id: number;

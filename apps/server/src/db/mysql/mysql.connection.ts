@@ -18,7 +18,8 @@ import {
   RequestEntity,
   TaskEntity,
   TransactionEntity,
-  CommitEntity
+  CommitEntity,
+  SubCategoryEntity
 } from '#LocalProject/Entities';
 
 
@@ -44,7 +45,7 @@ export class MySqlConnection {
       logging: true,
       entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity], // Add entities here
+        TransactionEntity, CommitEntity, SubCategoryEntity], // Add entities here
     });
     MySqlConnection.instance = this;
   }

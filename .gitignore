@@ -12,8 +12,10 @@ test-output
 .nx/workspace-data
 apps/*/dist
 apps/*/node_modules
+apps/*/out-tsc
 libs/*/dist
 libs/*/node_modules
+libs/*/out-tsc
 
 # Logs
 logs

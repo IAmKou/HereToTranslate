@@ -10,6 +10,8 @@ import { ProjectModule } from '../project/project.module';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { EnvConfigs } from './env.schema';
+import { CategoryModule } from '../category/category.module';
+import { SubCategoryModule } from '../subCategory/sub.module';
 
 @Module({
   imports: [
@@ -28,7 +30,7 @@ import { EnvConfigs } from './env.schema';
         return instance;
       },
     }),
-    DbContextModule, SeederModule, AuthModule, ProjectModule],
+    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule, SubCategoryModule],
   controllers: [AppController, MongoController],
   providers: [AppService],
 })

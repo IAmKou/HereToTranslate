@@ -9,4 +9,4 @@ import { RoleEntity, UserEntity } from '#LocalProject/Entities';
   ],
   providers: [SeederService],
 })
-export class SeederModule {}
+export class SeederModule { }

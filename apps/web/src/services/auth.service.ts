@@ -9,21 +9,22 @@ export interface LoginCredentials {
 
 export interface RegisterData {
   username: string;
-  email: string;
   password: string;
+  email: string;
   phone: string;
   fullName: string;
-  roleId: number;
 }
 
 export interface AuthResponse {
-  token: string;
+  accessToken: string;
+  refreshToken: string;
   role: string;
   username: string;
 }
 
 class AuthService {
-  private token: string | null = localStorage.getItem('token');
+  private accessToken: string | null = localStorage.getItem('accessToken');
+  private refreshToken: string | null = localStorage.getItem('refreshToken');
   private user: { username: string; role: string } | null = JSON.parse(localStorage.getItem('user') || 'null');
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
@@ -43,31 +44,51 @@ class AuthService {
     return response.data;
   }
 
+  async refreshTokens(): Promise<AuthResponse> {
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    try {
+      const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/refresh`, {
+        refreshToken: this.refreshToken,
+      });
+      this.setAuthData(response.data);
+      return response.data;
+    } catch (error) {
+      this.clearAuthData();
+      throw error;
+    }
+  }
+
   async logout(): Promise<void> {
     try {
-      // Call the server to invalidate the token
-      await axios.post(`${BASE_URL}/auth/logout`);
+      if (this.refreshToken) {
+        await axios.post(`${BASE_URL}/auth/logout`, {
+          refreshToken: this.refreshToken,
+        });
+      }
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
-      // Clear local storage and state regardless of API call success
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      this.token = null;
-      this.user = null;
+      this.clearAuthData();
     }
   }
 
   isAuthenticated(): boolean {
-    return !!this.token;
+    return !!this.accessToken;
   }
 
   isAdmin(): boolean {
     return this.user?.role === 'admin';
   }
 
-  getToken(): string | null {
-    return this.token;
+  getAccessToken(): string | null {
+    return this.accessToken;
+  }
+
+  getRefreshToken(): string | null {
+    return this.refreshToken;
   }
 
   getUser(): { username: string; role: string } | null {
@@ -75,13 +96,24 @@ class AuthService {
   }
 
   private setAuthData(data: AuthResponse): void {
-    this.token = data.token;
+    this.accessToken = data.accessToken;
+    this.refreshToken = data.refreshToken;
     this.user = {
       username: data.username,
       role: data.role
     };
-    localStorage.setItem('token', data.token);
+    localStorage.setItem('accessToken', data.accessToken);
+    localStorage.setItem('refreshToken', data.refreshToken);
     localStorage.setItem('user', JSON.stringify(this.user));
+  }
+
+  private clearAuthData(): void {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.user = null;
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
   }
 }
 

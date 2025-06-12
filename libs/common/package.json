@@ -19,6 +19,12 @@
       "types": "./dist/lib/interfaces/index.d.ts",
       "import": "./dist/lib/interfaces/index.js",
       "default": "./dist/lib/interfaces/index.js"
+    },
+    "./types": {
+      "development": "./src/lib/types/index.ts",
+      "types": "./dist/lib/types/index.d.ts",
+      "import": "./dist/lib/types/index.js",
+      "default": "./dist/lib/types/index.js"
     }
   },
   "nx": {

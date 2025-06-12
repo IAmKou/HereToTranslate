@@ -30,23 +30,28 @@ export class SeederService implements OnApplicationBootstrap {
   }
 
   private async seedAdminAccount() {
-    const existingAdmin = await this.accountRepo.findOne({ where: { username: 'admin' } });
-    if (!existingAdmin) {
-      const passwordHash = await bcrypt.hash('admin123', 10);
-      const adminAccount = this.accountRepo.create({
-        username: 'admin',
-        passwordHash,
-        email: 'admin@example.com',
-        phone: '0123456789',
-        fullName: 'System Admin',
-        role: {id : 1} as RoleEntity,
-        isActive: true,
-        createdAt: new Date(),
-      });
+      const existingAdmin = await this.accountRepo.findOne({ where: { username: 'admin' } });
+      if (!existingAdmin) {
+        const passwordHash = await bcrypt.hash('admin123', 10);
 
+        const role = await this.roleRepo.findOneBy({ id: 1 });
+        if (!role) {
+          throw new Error("Admin role not found in roles table!");
+        }
 
-      await this.accountRepo.save(adminAccount);
-      console.log(`✅ Admin account created: admin / admin123`);
+        const adminAccount = this.accountRepo.create({
+          username: 'admin',
+          passwordHash,
+          email: 'admin@example.com',
+          phone: '0123456789',
+          fullName: 'System Admin',
+          role,
+          isActive: true,
+          createdAt: new Date(),
+        });
+
+        await this.accountRepo.save(adminAccount);
+        console.log(`✅ Admin account created: admin / admin123`);
+      }
     }
-  }
 }

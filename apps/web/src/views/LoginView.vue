@@ -28,12 +28,12 @@ const router = useRouter();
 
 const login = async () => {
   try {
-    await authService.login({
+    const user = await authService.login({
       username: username.value,
       password: password.value,
     });
-    
-    const user = authService.getUser();
+
+    // const user = authService.getUser();
     if (user?.role === 'admin') {
       await router.push('/adminhome');
     } else {
@@ -58,7 +58,7 @@ onMounted(() => {
     });
     window.google.accounts.id.renderButton(
       document.getElementById('g_id_signin'),
-      { 
+      {
         type: 'standard',
         size: 'large',
         theme: 'outline',
@@ -74,7 +74,7 @@ onMounted(() => {
 const handleGoogleSignIn = async (response) => {
   try {
     await authService.loginWithGoogle(response.credential);
-    
+
     const user = authService.getUser();
     if (user?.role === 'admin') {
       await router.push('/adminhome');

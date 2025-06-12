@@ -2,6 +2,12 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } f
 import { UserEntity } from './user.entity';
 import { ProjectGroupEntity } from './projectGroup.entity';
 
+export enum TaskStatus {
+  Pending = 'PENDING',
+  InProgress = 'IN_PROGRESS',
+  Completed = 'COMPLETED',
+}
+
 @Entity('task')
 export class TaskEntity {
   @PrimaryGeneratedColumn()
@@ -13,8 +19,8 @@ export class TaskEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'enum', enum: ['pending', 'in_progress', 'completed'], default: 'pending' })
-  status: string;
+  @Column({ type: 'enum', enum: TaskStatus, default: TaskStatus.Pending })
+  status: TaskStatus;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   assignedTo: UserEntity;

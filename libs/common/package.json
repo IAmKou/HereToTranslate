@@ -1,8 +1,8 @@
 {
-  "name": "@here-to-translate/shared",
+  "name": "@here-to-translate/common",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,10 +13,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./interfaces": {
+      "development": "./src/lib/interfaces/index.ts",
+      "types": "./dist/lib/interfaces/index.d.ts",
+      "import": "./dist/lib/interfaces/index.js",
+      "default": "./dist/lib/interfaces/index.js"
     }
   },
   "nx": {
-    "sourceRoot": "apps/shared/src",
+    "sourceRoot": "libs/common/src",
     "targets": {
       "build": {
         "executor": "@nx/js:swc",
@@ -24,14 +30,16 @@
           "{options.outputPath}"
         ],
         "options": {
-          "outputPath": "apps/shared/dist",
-          "main": "apps/shared/src/index.ts",
-          "tsConfig": "apps/shared/tsconfig.lib.json",
+          "outputPath": "libs/common/dist",
+          "main": "libs/common/src/index.ts",
+          "tsConfig": "libs/common/tsconfig.lib.json",
           "skipTypeCheck": true,
-          "stripLeadingPaths": true
+          "stripLeadingPaths": true,
+          "swcrc": "libs/common/.swcrc"
         }
       }
-    }
+    },
+    "name": "@here-to-translate/common"
   },
   "dependencies": {
     "@swc/helpers": "~0.5.11"

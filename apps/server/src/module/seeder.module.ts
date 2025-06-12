@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { SeederService } from '../service/seeder.service';
-import { RoleEntity } from '../db/mysql/entity/role.entity';
-import { UserEntity } from '../db/mysql/entity/user.entity';
+import { SeederService } from '#LocalProject/Services/seeder.service';
+import { RoleEntity, UserEntity } from '#LocalProject/Entities';
 
 @Module({
   imports: [

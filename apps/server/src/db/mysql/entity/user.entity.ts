@@ -5,11 +5,11 @@ import { ProjectRoleEntity } from './projectRole.entity';
 import { GroupMemberEntity } from './groupMember.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
-import {FileEntity} from './file.entity';
+import { FileEntity } from './file.entity';
 
 export enum UserRole {
   Admin = 1,
-  User
+  Member
 }
 
 @Entity('user')
@@ -35,7 +35,7 @@ export class UserEntity {
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
-  @Column({ name: 'roleId', default: UserRole.User })
+  @Column({ name: 'roleId', default: UserRole.Member })
   role: RoleEntity;
 
   @Column({ default : true })

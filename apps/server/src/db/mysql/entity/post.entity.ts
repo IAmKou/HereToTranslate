@@ -3,6 +3,10 @@ import { UserEntity } from './user.entity';
 import { RateEntity } from './rate.entity';
 import { CommentEntity } from './comment.entity';
 
+export enum PostVisibility {
+  VISIBLE = 'VISIBLE',
+  HIDDEN = 'HIDDEN',
+}
 @Entity('posts')
 export class PostEntity {
   @PrimaryGeneratedColumn()
@@ -14,8 +18,8 @@ export class PostEntity {
   @Column({ type: 'text' })
   content: string;
 
-  @Column({ type: 'enum', enum: ['VISIBLE', 'HIDDEN'], default: 'VISIBLE' })
-  visibility: string;
+  @Column({ type: 'enum', enum: PostVisibility, default: PostVisibility.VISIBLE })
+  visibility: PostVisibility;
 
   @CreateDateColumn()
   createdAt: Date;

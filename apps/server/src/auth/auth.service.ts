@@ -1,15 +1,14 @@
 import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { UserEntity } from '../db/mysql/entity/user.entity';
-import { Repository } from 'typeorm';
-import { RegisterDto } from '../db/dto/register.dto';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
-import { RoleEntity } from '../db/mysql/entity/role.entity';
 import { OAuth2Client } from 'google-auth-library';
+import { Repository } from 'typeorm';
 import * as dns from 'dns';
 import { promisify } from 'util';
-import { ConfigService } from '@nestjs/config';
+import { UserEntity, UserRole } from '#LocalProject/Entities';
+import { RegisterDto } from '#LocalProject/Dtos';
 
 @Injectable()
 export class AuthService {
@@ -23,7 +22,7 @@ export class AuthService {
   ) {
     const googleClientId = this.configService.get<string>('GOOGLE_OAUTH2_CLIENT');
     if (!googleClientId) {
-      throw new Error('GOOGLE_CLIENT_ID is not set in the environment variables');
+      throw new Error('GOOGLE_OAUTH2_CLIENT is not set in the environment variables');
     }
     this.googleClient = new OAuth2Client(googleClientId);
   }
@@ -33,7 +32,7 @@ export class AuthService {
       const domain = email.split('@')[1];
       const mxRecords = await this.resolveMx(domain);
       return mxRecords.length > 0;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -73,7 +72,7 @@ export class AuthService {
     const user = this.userRepository.create({
       ...dto,
       passwordHash,
-      // role: { id: dto.roleId } as RoleEntity,
+      role: { id: UserRole.Member }
     });
 
     await this.userRepository.save(user);
@@ -112,7 +111,7 @@ export class AuthService {
         passwordHash: '', // Empty password for Google users
         fullName: name,
         phone: '', // Empty phone for Google users
-        role: { id: 2 } as RoleEntity, // Default to member role
+        role: { id: UserRole.Member }, // Default to member role
       });
       await this.userRepository.save(user);
     }
@@ -120,7 +119,7 @@ export class AuthService {
     const payloadToSign = {
       sub: user.id,
       username: user.username,
-      role: user.role.id === 1 ? 'admin' : 'member',
+      role: user.role.id
     };
 
     const token = this.jwt.sign(payloadToSign);

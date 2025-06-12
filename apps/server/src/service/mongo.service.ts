@@ -2,7 +2,7 @@ import { MongoTest } from '../db/mongo/schema/mongo-test.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { Injectable } from '@nestjs/common';
 import { Model } from 'mongoose';
-import { CreateUpdateDTO } from '../db/dto/test.dto';
+import { CreateUpdateDTO } from '#LocalProject/Dtos';
 
 @Injectable()
 export class MongoService{

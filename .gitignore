@@ -11,6 +11,9 @@ test-output
 .nx/cache
 .nx/workspace-data
 apps/*/dist
+apps/*/node_modules
+libs/*/dist
+libs/*/node_modules
 
 # Logs
 logs
@@ -77,4 +80,4 @@ testem.log
 .cursor\rules\nx-rules.mdc
 .github\instructions\nx.instructions.md
 .cursor/rules/nx-rules.mdc
-
+.github/instructions/nx.instructions.md

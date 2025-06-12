@@ -1,13 +1,13 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ProjectEntity } from '../db/mysql/entity/project.entity';
-import { CreateProjectDto } from '../db/dto/project.dto';
-import { UserEntity } from '../db/mysql/entity/user.entity';
-import { ProjectRoleEntity } from '../db/mysql/entity/projectRole.entity';
+import { ProjectEntity, UserEntity, ProjectRole, ProjectRoleEntity } from '#LocalProject/Entities';
+import { MaybeException } from '#LocalProject/Exceptions';
+import { CreateProjectDto } from '#LocalProject/Dtos';
 
 @Injectable()
 export class ProjectService {
+  private readonly logger = new Logger(ProjectService.name);
   constructor(
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
@@ -18,15 +18,7 @@ export class ProjectService {
   ) {}
 
   async create(createProjectDto: CreateProjectDto) {
-    console.log('Received project data:', createProjectDto);
-
-    if (!createProjectDto.name) {
-      throw new BadRequestException('Project name is required');
-    }
-
-    if (!createProjectDto.createdBy) {
-      throw new BadRequestException('createdBy is required');
-    }
+    this.logger.debug('Received project data:', createProjectDto);
 
     try {
       const creator = await this.userRepository.findOne({
@@ -48,18 +40,18 @@ export class ProjectService {
       const projectRole = this.projectRoleRepository.create({
         project: savedProject,
         user: creator,
-        role: 'OWNER'
+        role: ProjectRole.Owner
       });
 
       await this.projectRoleRepository.save(projectRole);
 
       return savedProject;
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
       console.error('Error creating project:', error);
-      throw new BadRequestException('Failed to create project: ' + (error?.message || 'Unknown error'));
+      throw new BadRequestException('Failed to create project: ' + ((error as MaybeException)?.message || 'Unknown error'));
     }
   }
 }

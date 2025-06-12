@@ -1,6 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { Category } from './category.entity';
-//wtf
+
 @Entity('subcategory')
 export class SubCategoryEntity {
   @PrimaryGeneratedColumn()
@@ -9,7 +9,8 @@ export class SubCategoryEntity {
   @Column({ unique: true })
   name: string;
 
-  @ManyToOne(() => Category, (category) => category.subCategories)
-  @JoinColumn({ name: 'category_id' })
+  @ManyToOne(() => Category, category => category.subCategories, { onDelete: 'CASCADE'})
+  @JoinColumn({ name: 'categoryId' })
   category: Category;
+
 }

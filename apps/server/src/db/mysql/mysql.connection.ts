@@ -18,6 +18,7 @@ import { RequestEntity } from './entity/request.entity';
 import { TaskEntity } from './entity/task.entity';
 import { TransactionEntity } from './entity/transaction.entity';
 import { CommitEntity } from './entity/commit.entity';
+import { SubCategoryEntity } from './entity/subCategory.entity';
 
 
 @Injectable()
@@ -42,7 +43,7 @@ export class MySqlConnection {
       logging: true,
       entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, Category, CommentEntity, FileEntity,
         GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, Report, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity], // Add entities here
+        TransactionEntity, CommitEntity, SubCategoryEntity], // Add entities here
     });
     MySqlConnection.instance = this;
   }

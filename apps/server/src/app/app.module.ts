@@ -8,13 +8,14 @@ import { AuthModule } from '../auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { ProjectModule } from '../project/project.module';
 import { CategoryModule } from '../category/category.module';
+import { SubCategoryModule } from '../subCategory/sub.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule],
+    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule, SubCategoryModule],
   controllers: [AppController, MongoController],
   providers: [AppService],
 })

@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, JoinColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany } from 'typeorm';
 import { ProjectEntity } from './project.entity';
+import { SubCategoryEntity } from './subCategory.entity';
 
 @Entity('category')
 export class Category {
@@ -18,7 +19,9 @@ export class Category {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => ProjectEntity, project => project.category)
-  @JoinColumn({ name: 'projectId' })
-  project: ProjectEntity;
+  @OneToMany(() => ProjectEntity, project => project.category)
+  project: ProjectEntity[];
+
+  @OneToMany(() => SubCategoryEntity, subCategory => subCategory.category, {cascade: true, eager: true})
+  subCategories: SubCategoryEntity[];
 }

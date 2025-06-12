@@ -1,19 +1,11 @@
 <template>
   <div class="category-list">
     <h2>Categories</h2>
-    
+
     <!-- Add Category Form -->
     <div class="add-category-form">
-      <input
-        v-model="newCategory.name"
-        placeholder="Category Name"
-        class="input"
-      />
-      <input
-        v-model="newCategory.description"
-        placeholder="Description (optional)"
-        class="input"
-      />
+      <input v-model="newCategory.name" placeholder="Category Name" class="input" />
+      <input v-model="newCategory.description" placeholder="Description (optional)" class="input" />
       <button @click="createCategory" class="button">Add Category</button>
     </div>
 
@@ -29,27 +21,18 @@
         </thead>
         <tbody>
           <template v-for="category in categories" :key="category.id">
-            <!-- Main Category Row -->
             <tr>
               <td>
                 <div class="category-header">
                   <span class="toggle-icon" @click="toggleSubcategories(category.id)">
                     {{ isExpanded(category.id) ? '▼' : '▶' }}
                   </span>
-                  <input
-                    v-if="editingId === category.id"
-                    v-model="editingCategory.name"
-                    class="input"
-                  />
+                  <input v-if="editingId === category.id" v-model="editingCategory.name" class="input" />
                   <span v-else>{{ category.name }}</span>
                 </div>
               </td>
               <td>
-                <input
-                  v-if="editingId === category.id"
-                  v-model="editingCategory.description"
-                  class="input"
-                />
+                <input v-if="editingId === category.id" v-model="editingCategory.description" class="input" />
                 <span v-else>{{ category.description }}</span>
               </td>
               <td>
@@ -66,41 +49,29 @@
                 </div>
               </td>
             </tr>
-            
-            <!-- Subcategories Section -->
+
+            <!-- Subcategories -->
             <tr v-if="isExpanded(category.id)">
               <td colspan="3">
                 <div class="subcategories-container">
                   <!-- Add Subcategory Form -->
                   <div v-if="addingSubcategoryTo === category.id" class="add-subcategory-form">
-                    <input
-                      v-model="newSubcategory.name"
-                      placeholder="Subcategory Name"
-                      class="input"
-                    />
-                    <input
-                      v-model="newSubcategory.description"
-                      placeholder="Description (optional)"
-                      class="input"
-                    />
+                    <input v-model="newSubcategory.name" placeholder="Subcategory Name" class="input" />
                     <button @click="createSubcategory(category.id)" class="button">Add Subcategory</button>
                     <button @click="cancelAddSubcategory" class="button cancel">Cancel</button>
                   </div>
-                  
-                  <!-- Subcategories List -->
-                  <div v-if="category.subcategories && category.subcategories.length > 0" class="subcategories-list">
-                    <div v-for="subcategory in category.subcategories" :key="subcategory.id" class="subcategory-item">
+
+                  <!-- Subcategory List -->
+                  <div v-if="category.subCategories?.length" class="subcategories-list">
+                    <div v-for="subcategory in category.subCategories" :key="subcategory.id" class="subcategory-item">
                       <span>{{ subcategory.name }}</span>
-                      <span class="subcategory-description">{{ subcategory.description }}</span>
                       <div class="subcategory-actions">
                         <button @click="editSubcategory(subcategory)" class="button edit">Edit</button>
                         <button @click="deleteSubcategory(subcategory.id)" class="button delete">Delete</button>
                       </div>
                     </div>
                   </div>
-                  <div v-else class="no-subcategories">
-                    No subcategories yet
-                  </div>
+                  <div v-else class="no-subcategories">No subcategories yet</div>
                 </div>
               </td>
             </tr>
@@ -122,58 +93,53 @@ interface Category {
   createdAt?: Date;
   updatedAt?: Date;
   projectId?: number;
-  subcategories?: Category[];
+  subCategories?: Category[];
 }
 
-const API_BASE_URL = 'http://localhost:3000/api'; 
+const API_BASE_URL = 'http://localhost:3000/api';
 
 const categories = ref<Category[]>([]);
 const newCategory = ref<Category>({ name: '', description: '' });
-const newSubcategory = ref<Category>({ name: '', description: '' });
+const newSubcategory = ref<Category>({ name: '' });
 const editingId = ref<number | null>(null);
 const editingCategory = ref<Category>({ name: '', description: '' });
 const expandedCategories = ref<Set<number>>(new Set());
 const addingSubcategoryTo = ref<number | null>(null);
 
 const isExpanded = (categoryId: number | undefined) => {
-  if (!categoryId) return false;
-  return expandedCategories.value.has(categoryId);
+  return categoryId !== undefined && expandedCategories.value.has(categoryId);
 };
 
 const toggleSubcategories = (categoryId: number | undefined) => {
   if (!categoryId) return;
-  if (expandedCategories.value.has(categoryId)) {
-    expandedCategories.value.delete(categoryId);
-  } else {
-    expandedCategories.value.add(categoryId);
-  }
+  expandedCategories.value.has(categoryId)
+    ? expandedCategories.value.delete(categoryId)
+    : expandedCategories.value.add(categoryId);
 };
 
 const showAddSubcategory = (category: Category) => {
-  if (!category.id) return;
-  addingSubcategoryTo.value = category.id;
-  newSubcategory.value = { name: '', description: '' };
+  addingSubcategoryTo.value = category.id || null;
+  newSubcategory.value = { name: '' };
 };
 
 const cancelAddSubcategory = () => {
   addingSubcategoryTo.value = null;
-  newSubcategory.value = { name: '', description: '' };
+  newSubcategory.value = { name: '' };
 };
 
 const createSubcategory = async (parentId: number) => {
   if (!newSubcategory.value.name) return;
-  
   try {
     const subcategoryData = {
-      ...newSubcategory.value,
-      parentId: parentId
+      name: newSubcategory.value.name,
+      categoryId: parentId
     };
-    await axios.post(`${API_BASE_URL}/category/create`, subcategoryData);
-    newSubcategory.value = { name: '', description: '' };
-    addingSubcategoryTo.value = null;
+    await axios.post(`${API_BASE_URL}/subcategory/create`, subcategoryData);
+    cancelAddSubcategory();
     await loadCategories();
   } catch (error) {
     console.error('Error creating subcategory:', error);
+    alert('Failed to create subcategory.');
   }
 };
 
@@ -183,11 +149,9 @@ const editSubcategory = (subcategory: Category) => {
 };
 
 const deleteSubcategory = async (id: number | undefined) => {
-  if (!id) return;
-  if (!confirm('Are you sure you want to delete this subcategory?')) return;
-  
+  if (!id || !confirm('Are you sure you want to delete this subcategory?')) return;
   try {
-    await axios.delete(`${API_BASE_URL}/category/delete/${id}`);
+    await axios.delete(`${API_BASE_URL}/subcategory/delete/${id}`);
     await loadCategories();
   } catch (error) {
     console.error('Error deleting subcategory:', error);
@@ -200,12 +164,12 @@ const loadCategories = async () => {
     categories.value = response.data;
   } catch (error) {
     console.error('Error loading categories:', error);
+    alert('Failed to load categories.');
   }
 };
 
 const createCategory = async () => {
   if (!newCategory.value.name) return;
-  
   try {
     await axios.post(`${API_BASE_URL}/category/create`, newCategory.value);
     newCategory.value = { name: '', description: '' };
@@ -234,11 +198,9 @@ const saveEdit = async (id: number | undefined) => {
 const cancelEdit = () => {
   editingId.value = null;
 };
-
-const deleteCategory = async (id: number | undefined) => {
-  if (!id) return;
-  if (!confirm('Are you sure you want to delete this category?')) return;
   
+const deleteCategory = async (id: number | undefined) => {
+  if (!id || !confirm('Are you sure you want to delete this category?')) return;
   try {
     await axios.delete(`${API_BASE_URL}/category/delete/${id}`);
     await loadCategories();
@@ -252,56 +214,61 @@ onMounted(loadCategories);
 
 <style scoped>
 .category-list {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 20px;
 }
 
-.add-category-form {
+h2 {
   margin-bottom: 20px;
+  font-size: 24px;
+  color: #333;
+}
+
+.add-category-form {
   display: flex;
   gap: 10px;
+  margin-bottom: 20px;
 }
 
 .input {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
   flex: 1;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
 
 .button {
-  padding: 8px 16px;
+  padding: 8px 14px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.2s;
+  color: white;
 }
 
 .button:hover {
   opacity: 0.9;
 }
 
-button {
-  background-color: #4CAF50;
-  color: white;
+.button.edit {
+  background-color: #2196f3;
 }
 
-button.edit {
-  background-color: #2196F3;
-}
-
-button.delete {
+.button.delete {
   background-color: #f44336;
 }
 
-button.save {
-  background-color: #4CAF50;
+.button.save {
+  background-color: #4caf50;
 }
 
-button.cancel {
+.button.cancel {
   background-color: #9e9e9e;
+}
+
+.button.add-sub {
+  background-color: #795548;
 }
 
 .categories-table {
@@ -312,28 +279,17 @@ button.cancel {
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px;
 }
 
-th, td {
+th,
+td {
   padding: 12px;
   text-align: left;
   border-bottom: 1px solid #ddd;
 }
 
 th {
-  background-color: #f5f5f5;
-  font-weight: 600;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-h2 {
-  color: #333;
-  margin-bottom: 20px;
+  background-color: #f2f2f2;
 }
 
 .category-header {
@@ -345,25 +301,22 @@ h2 {
 .toggle-icon {
   cursor: pointer;
   user-select: none;
+  font-size: 16px;
   width: 20px;
-  text-align: center;
 }
 
 .subcategories-container {
   padding: 16px;
   background-color: #f9f9f9;
-  border-radius: 4px;
-  margin: 8px 0;
+  border: 1px dashed #ccc;
+  border-radius: 6px;
+  margin-top: 8px;
 }
 
 .add-subcategory-form {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
-  padding: 12px;
-  background-color: #fff;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 12px;
 }
 
 .subcategories-list {
@@ -374,31 +327,20 @@ h2 {
 
 .subcategory-item {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 8px 12px;
+  justify-content: space-between;
   background-color: #fff;
+  border: 1px solid #e0e0e0;
+  padding: 8px;
   border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.subcategory-description {
-  color: #666;
-  flex: 1;
 }
 
 .subcategory-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .no-subcategories {
-  color: #666;
-  text-align: center;
-  padding: 16px;
+  font-style: italic;
+  color: #888;
 }
-
-button.add-sub {
-  background-color: #9c27b0;
-}
-</style> 
+</style>

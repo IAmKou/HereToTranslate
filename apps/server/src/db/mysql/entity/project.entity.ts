@@ -39,7 +39,8 @@ export class ProjectEntity {
   @OneToMany(() => FileEntity, file => file.project)
   file: FileEntity[];
 
-  @OneToMany(() => Category, category => category.project)
-  category: Category[];
+  @ManyToOne(() => Category, category => category.project)
+  @JoinColumn({ name: 'categoryId' })
+  category: Category;
 
 }

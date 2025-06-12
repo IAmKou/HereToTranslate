@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put } from "@nestjs/common";
 import { CategoryService } from "./category.service";
-import { Category } from "../db/mysql/entity/category.entity";
+import { CreateCategoryDto, UpdateCategoryDto } from "../db/dto/category.dto";
 
 @Controller('category')
 export class CategoryController {
@@ -12,12 +12,12 @@ export class CategoryController {
   }
 
   @Post('create')
-  createCategory(@Body() category: Category) {
+  createCategory(@Body() category: CreateCategoryDto) {
     return this.categoryService.createCategory(category);
   }
 
   @Put('update/:id')
-  updateCategory(@Param('id') id: string, @Body() category: Category) {
+  updateCategory(@Param('id') id: string, @Body() category: UpdateCategoryDto) {
     return this.categoryService.updateCategory(id, category);
   }
 

@@ -8,7 +8,7 @@ export enum ProjectRole {
   Observer = 'OBSERVER',
 }
 
-@Entity('projectRole')
+@Entity('projectrole')
 @Unique(['project', 'user'])
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn()

@@ -14,6 +14,5 @@ export * from './request.entity';
 export * from './role.entity';
 export * from './subCategory.entity';
 export * from './task.entity';
-export * from './test.entity';
 export * from './transaction.entity';
 export * from './user.entity';

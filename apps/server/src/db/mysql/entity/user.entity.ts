@@ -35,7 +35,6 @@ export class UserEntity {
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
-  @Column({ name: 'roleId', default: UserRole.Member })
   role: RoleEntity;
 
   @Column({ default : true })

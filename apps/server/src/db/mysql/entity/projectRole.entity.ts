@@ -2,7 +2,13 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique } from 'typeo
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 
-@Entity('projectrole')
+export enum ProjectRole {
+  Owner = 'OWNER',
+  Translator = 'TRANSLATOR',
+  Observer = 'OBSERVER',
+}
+
+@Entity('projectRole')
 @Unique(['project', 'user'])
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn()
@@ -14,6 +20,6 @@ export class ProjectRoleEntity {
   @ManyToOne(() => UserEntity, user => user.projectRoles)
   user: UserEntity;
 
-  @Column({ type: 'enum', enum: ['OWNER', 'TRANSLATOR', 'OBSERVER'] })
-  role: 'OWNER' | 'TRANSLATOR' | 'OBSERVER';
+  @Column({ type: 'enum', enum: ProjectRole })
+  role: ProjectRole;
 }

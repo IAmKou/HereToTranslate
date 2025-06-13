@@ -1,15 +1,22 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+  Logger,
+  InternalServerErrorException
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { UserEntity } from '../db/mysql/entity/user.entity';
-import { Repository } from 'typeorm';
-import { RegisterDto } from '../db/dto/register.dto';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
-import { RoleEntity } from '../db/mysql/entity/role.entity';
 import { OAuth2Client } from 'google-auth-library';
+import { Repository } from 'typeorm';
 import * as dns from 'dns';
 import { promisify } from 'util';
-import { ConfigService } from '@nestjs/config';
+import { UserEntity, UserRole } from '#LocalProject/Entities';
+import { RegisterDto } from '#LocalProject/Dtos';
+import { Nullable } from '@here-to-translate/common/types';
 
 type AccessToken = string;
 type RefreshToken = string;
@@ -31,11 +38,12 @@ export class AuthService {
   constructor(
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
-    @InjectRepository(UserEntity) private readonly userRepository: Repository<UserEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
   ) {
     const googleClientId = this.configService.get<string>('GOOGLE_OAUTH2_CLIENT');
     if (!googleClientId) {
-      throw new Error('GOOGLE_CLIENT_ID is not set in the environment variables');
+      throw new Error('GOOGLE_OAUTH2_CLIENT is not set in the environment variables');
     }
     this.googleClient = new OAuth2Client(googleClientId);
     this.logger.log('AuthService initialized');
@@ -46,7 +54,7 @@ export class AuthService {
       const domain = email.split('@')[1];
       const mxRecords = await this.resolveMx(domain);
       return mxRecords.length > 0;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -125,7 +133,7 @@ export class AuthService {
     const user = this.userRepository.create({
       ...dto,
       passwordHash,
-      role: { id: 2 } as RoleEntity,
+      role: { id: UserRole.Member }
     });
 
     await this.userRepository.save(user);
@@ -160,8 +168,8 @@ export class AuthService {
         email,
         passwordHash: '',
         fullName: name,
-        phone: '',
-        role: { id: 2 } as RoleEntity,
+        phone: '', // Empty phone for Google users
+        role: { id: UserRole.Member }, // Default to member role
       });
       await this.userRepository.save(user);
     }
@@ -183,33 +191,28 @@ export class AuthService {
   }
 
   async refreshTokens(refreshToken: string) {
-    const actualRToken = /^Bearer (.+)$/.exec(refreshToken)?.[1];
-    if (!actualRToken) {
+    if (!refreshToken) {
       throw new UnauthorizedException('Invalid token format');
     }
 
-    try {
-      if (!(await this.jwt.verifyAsync(actualRToken))) {
-        throw new UnauthorizedException('Invalid token');
-      }
-    } catch (e) {
+    if (!(await this.jwt.verifyAsync(refreshToken))) {
       throw new UnauthorizedException('Invalid token');
     }
 
-    if (!this.refreshTokenMap.has(actualRToken)) {
+    if (!this.refreshTokenMap.has(refreshToken)) {
       throw new UnauthorizedException('Token expired');
     }
 
-    const aToken = this.refreshTokenMap.get(actualRToken);
+    const aToken = this.refreshTokenMap.get(refreshToken);
     if (aToken) {
       this.activeTokens.delete(aToken);
     }
 
-    const tokenData = this.jwt.decode(actualRToken) as TokenMeta;
-    this.refreshTokenMap.delete(actualRToken);
+    const tokenData: TokenMeta = this.jwt.decode(refreshToken);
+    this.refreshTokenMap.delete(refreshToken);
 
     const tokens = this.tokenMap.get(tokenData.userId);
-    tokens?.delete(actualRToken);
+    tokens?.delete(refreshToken);
     tokens?.delete(aToken!);
 
     const user = await this.userRepository.findOne({
@@ -230,7 +233,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid token format');
     }
 
-    const tokenData = this.jwt.decode(actualRToken) as TokenMeta;
+    const tokenData: TokenMeta = this.jwt.decode(actualRToken);
     const userId = tokenData.userId;
 
     this.activeTokens.delete(actualRToken);
@@ -256,31 +259,29 @@ export class AuthService {
       throw new UnauthorizedException('Token is missing');
     }
 
- 
-
     if (!this.activeTokens.has(token)) {
       throw new UnauthorizedException('Token expired');
     }
 
-    try {
-      const payload = await this.jwt.verifyAsync(token);
-      if (!payload) {
-        throw new UnauthorizedException('Invalid token');
-      }
+    const payload = await this.jwt.verifyAsync(token);
+    if (!payload) {
+      throw new UnauthorizedException('Invalid token');
+    }
 
-      const user = await this.userRepository.findOne({
+    let user: Nullable<UserEntity>;
+    try {
+      user = await this.userRepository.findOne({
         where: { id: BigInt(payload.userId) },
         relations: ['role'],
       });
-
-      if (!user) {
-        throw new UnauthorizedException('User not found');
-      }
-
-      return user;
     } catch (e) {
-      this.activeTokens.delete(token);
-      throw new UnauthorizedException('Invalid token');
+      this.logger.error("Error fetching user from repository", e);
+      throw new InternalServerErrorException('Error fetching user from repository');
     }
+    if (!user) {
+      this.activeTokens.delete(token);
+      throw new UnauthorizedException('User not found');
+    }
+    return user;
   }
 }

@@ -1,8 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RoleEntity } from '../db/mysql/entity/role.entity';
-import { UserEntity } from '../db/mysql/entity/user.entity';
+import { RoleEntity, UserEntity } from '#LocalProject/Entities';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()

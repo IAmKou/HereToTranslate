@@ -1,6 +1,6 @@
 import { TestService } from '../service/test.service';
 import { Controller, Post, Get, Put, Delete, Param, Body } from '@nestjs/common';
-import { CreateUpdateDTO } from '../db/dto/test.dto';
+import { CreateUpdateDTO } from '#LocalProject/Dtos';
 
 @Controller('test')
 export class TestController{

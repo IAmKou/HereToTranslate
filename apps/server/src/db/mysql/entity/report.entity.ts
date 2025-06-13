@@ -2,8 +2,14 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } f
 import { UserEntity } from './user.entity';
 import { CommentEntity } from './comment.entity';
 
+export enum ReportStatus {
+  New = 'NEW',
+  Reviewed = 'REVIEWED',
+  Cancelled = 'CANCELLED',
+}
+
 @Entity('reports')
-export class Report {
+export class ReportEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -13,8 +19,8 @@ export class Report {
   @ManyToOne(() => CommentEntity, { onDelete: 'CASCADE' })
   comment: CommentEntity;
 
-  @Column({ type: 'enum', enum: ['NEW', 'REVIEWED', 'CANCELLED'], default: 'NEW' })
-  status: string;
+  @Column({ type: 'enum', enum: ReportStatus, default: ReportStatus.New })
+  status: ReportStatus;
 
   @CreateDateColumn()
   createdAt: Date;

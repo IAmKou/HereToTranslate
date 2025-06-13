@@ -5,15 +5,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Category } from '../db/mysql/entity/category.entity';
-import { CreateCategoryDto, UpdateCategoryDto } from '../db/dto/category.dto';
-import { validateName, sanitizeName } from '../util/validation.util';
+import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
+import { validateName, sanitizeName } from '#LocalProject/Utils/validation.util';
+import { CategoryEntity } from '#LocalProject/Entities';
 
 @Injectable()
 export class CategoryService {
   constructor(
-    @InjectRepository(Category)
-    private readonly categoryRepository: Repository<Category>
+    @InjectRepository(CategoryEntity)
+    private readonly categoryRepository: Repository<CategoryEntity>
   ) {}
 
   async createCategory(createCategoryDto: CreateCategoryDto) {

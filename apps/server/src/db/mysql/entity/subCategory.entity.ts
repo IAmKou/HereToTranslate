@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { Category } from './category.entity';
+import { CategoryEntity } from './category.entity';
 
 @Entity('subcategory')
 export class SubCategoryEntity {
@@ -9,8 +9,8 @@ export class SubCategoryEntity {
   @Column({ unique: true })
   name: string;
 
-  @ManyToOne(() => Category, category => category.subCategories, { onDelete: 'CASCADE'})
+  @ManyToOne(() => CategoryEntity, category => category.subCategories, { onDelete: 'CASCADE'})
   @JoinColumn({ name: 'categoryId' })
-  category: Category;
+  category: CategoryEntity;
 
 }

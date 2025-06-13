@@ -11,7 +11,15 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "target": "es2021",
-    "strictPropertyInitialization": false
+    "strictPropertyInitialization": false,
+    "baseUrl": "./",
+    "paths": {
+      "#LocalProject/Dtos": ["src/dto/index.ts"],
+      "#LocalProject/Services/*": ["src/service/*"],
+      "#LocalProject/Entities": ["src/db/mysql/entity/index.ts"],
+      "#LocalProject/Utils/*": ["src/util/*"],
+      "#LocalProject/Exceptions": ["src/util/exceptions/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": [
@@ -23,5 +31,10 @@
     "eslint.config.js",
     "eslint.config.cjs",
     "eslint.config.mjs"
+  ],
+  "references": [
+    {
+      "path": "../../libs/common/tsconfig.lib.json"
+    }
   ]
 }

@@ -1,13 +1,38 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # compiled output
-dist
-tmp
-out-tsc
-.env
+/out-tsc
+/dist
+/node_modules
+/build
+vite.config.*.timestamp*
+vitest.config.*.timestamp*
+test-output
+.nx/cache
+.nx/workspace-data
+apps/*/dist
+apps/*/node_modules
+apps/*/out-tsc
+libs/*/dist
+libs/*/node_modules
+libs/*/out-tsc
 
-# dependencies
-node_modules
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+/coverage
+/.nyc_output
 
 # IDEs and editors
 /.idea
@@ -25,27 +50,36 @@ node_modules
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# temp directory
+.temp
+.tmp
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
 # misc
 /.sass-cache
 /connect.lock
-/coverage
 /libpeerconnection.log
 npm-debug.log
 yarn-error.log
 testem.log
 /typings
 
-# System Files
-.DS_Store
-Thumbs.db
-
-.nx/cache
-.nx/workspace-data
-
-vite.config.*.timestamp*
-vitest.config.*.timestamp*
-test-output
-
 .cursor\rules\nx-rules.mdc
 .github\instructions\nx.instructions.md
 .cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md

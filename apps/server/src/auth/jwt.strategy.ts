@@ -17,13 +17,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  override async authenticate(req: Request, options?: any) {
+  override authenticate(req: Request, options?: any) {
     const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
-    try {
-      const user = await this.authService.validateToken(token);
-      this.success(user)
-    } catch (error) {
-      this.fail(error, 401);
-    }
+    this.authService.validateToken(token)
+      .then(user => this.success(user))
+      .catch(error => this.fail(error, 401));
   }
 }

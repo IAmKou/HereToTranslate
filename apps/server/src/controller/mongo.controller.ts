@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
 import { MongoService } from '../service/mongo.service';
-import { CreateUpdateDTO } from '../db/dto/test.dto';
+import { CreateUpdateDTO } from '#LocalProject/Dtos';
 
 @Controller('mongo')
 export class MongoController {

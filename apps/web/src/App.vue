@@ -1,12 +1,14 @@
 <template>
   <div class="app-layout">
-    <router-view />
+    <MainLayout>
+      <router-view />
+    </MainLayout>
   </div>
 </template>
 
-<script setup lang="ts">
-// No imports needed
-</script>
+<!--<script setup lang="ts">-->
+<!--import MainLayout from './components/MainLayout.vue';-->
+<!--</script>-->
 
 <style>
 /* Reset CSS */
@@ -50,90 +52,35 @@ body {
 }
 
 /* Utility classes */
-.text-center {
-  text-align: center;
-}
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
 
-.text-right {
-  text-align: right;
-}
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
 
-.text-left {
-  text-align: left;
-}
+.gap-2 { gap: 0.5rem; }
+.gap-4 { gap: 1rem; }
 
-.flex {
-  display: flex;
-}
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-4 { margin-bottom: 1rem; }
 
-.flex-col {
-  flex-direction: column;
-}
+.p-2 { padding: 0.5rem; }
+.p-4 { padding: 1rem; }
 
-.items-center {
-  align-items: center;
-}
+.rounded { border-radius: 0.25rem; }
+.rounded-lg { border-radius: 0.5rem; }
 
-.justify-center {
-  justify-content: center;
-}
-
-.justify-between {
-  justify-content: space-between;
-}
-
-.gap-2 {
-  gap: 0.5rem;
-}
-
-.gap-4 {
-  gap: 1rem;
-}
-
-.mt-2 {
-  margin-top: 0.5rem;
-}
-
-.mt-4 {
-  margin-top: 1rem;
-}
-
-.mb-2 {
-  margin-bottom: 0.5rem;
-}
-
-.mb-4 {
-  margin-bottom: 1rem;
-}
-
-.p-2 {
-  padding: 0.5rem;
-}
-
-.p-4 {
-  padding: 1rem;
-}
-
-.rounded {
-  border-radius: 0.25rem;
-}
-
-.rounded-lg {
-  border-radius: 0.5rem;
-}
-
-.shadow {
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-}
-
-.shadow-lg {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
+.shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .p-4 {
-    padding: 0.75rem;
-  }
+  .p-4 { padding: 0.75rem; }
 }
 </style>

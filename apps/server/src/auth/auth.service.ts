@@ -55,7 +55,7 @@ export class AuthService {
     const tokenMeta: TokenMeta = {
       userId: user.id.toString(),
       username: user.username,
-      role: user.role.id === 1 ? 'admin' : 'member'
+      role: user.role.name.toLowerCase()
     };
 
     const jwtPayload = {
@@ -254,10 +254,6 @@ export class AuthService {
   async validateToken(token: string | null): Promise<UserEntity> {
     if (!token) {
       throw new UnauthorizedException('Token is missing');
-    }
-
-    if (!token) {
-      throw new UnauthorizedException('Invalid token format');
     }
 
     if (!this.activeTokens.has(token)) {

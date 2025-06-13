@@ -5,6 +5,7 @@ import { ProjectGroupEntity } from './projectGroup.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
+import { Category } from './category.entity';
 import { RequestEntity } from './request.entity';
 @Entity('project')
 export class ProjectEntity {
@@ -17,7 +18,7 @@ export class ProjectEntity {
   @Column({type : 'text', nullable: true})
   description: string;
 
-  @ManyToOne(() => UserEntity, user => user.createdProjects, { nullable: true })
+  @ManyToOne(() => UserEntity, user => user.createdProjects)
   @JoinColumn({ name: 'createdBy' })
   createdBy: UserEntity;
 
@@ -38,6 +39,10 @@ export class ProjectEntity {
 
   @OneToMany(() => FileEntity, file => file.project)
   file: FileEntity[];
+
+  @ManyToOne(() => Category, category => category.project)
+  @JoinColumn({ name: 'categoryId' })
+  category: Category;
 
   @OneToMany(() => RequestEntity, request => request.project)
   request: RequestEntity[];

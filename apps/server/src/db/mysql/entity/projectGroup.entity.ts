@@ -5,7 +5,7 @@ import { GroupMemberEntity } from './groupMember.entity';
 @Entity('projectgroups')
 export class ProjectGroupEntity {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: bigint;
 
   @Column({ length: 255 })
   name: string;

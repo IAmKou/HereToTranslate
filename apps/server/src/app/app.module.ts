@@ -12,6 +12,7 @@ import { validateSync } from 'class-validator';
 import { EnvConfigs } from './env.schema';
 import { CategoryModule } from '../category/category.module';
 import { SubCategoryModule } from '../subCategory/sub.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { SubCategoryModule } from '../subCategory/sub.module';
         return instance;
       },
     }),
-    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule, SubCategoryModule],
+    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule, SubCategoryModule, UsersModule],
   controllers: [AppController, MongoController],
   providers: [AppService],
 })

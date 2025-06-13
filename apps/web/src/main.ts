@@ -5,8 +5,8 @@ import axios from 'axios';
 
 // PrimeVue
 import PrimeVue from 'primevue/config';
-import 'primevue/resources/themes/lara-light-blue/theme.css'; // theme
 import 'primevue/resources/primevue.min.css'; // core css
+import 'primevue/resources/themes/lara-light-indigo/theme.css';
 import 'primeicons/primeicons.css'; // icons
 
 // PrimeVue Components

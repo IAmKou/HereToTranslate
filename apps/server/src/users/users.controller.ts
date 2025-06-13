@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller,Req, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { UsersService } from './users.service';
 import { Request } from 'express';
@@ -20,4 +20,4 @@ export class UsersController {
   async getProfile(@Req() req: AuthenticatedRequest) {
     return this.usersService.getUserProfile(req.user.id);
   }
-} 
+}

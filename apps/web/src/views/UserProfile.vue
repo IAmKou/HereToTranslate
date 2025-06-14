@@ -24,14 +24,46 @@
               <p>{{ user.phone }}</p>
             </div>
             <div class="info-item">
-              <label>Role</label>
-              <p>{{ user.role?.name || 'Member' }}</p>
-            </div>
-            <div class="info-item">
               <label>Member Since</label>
               <p>{{ formatDate(user.createdAt) }}</p>
             </div>
           </div>
+          <button @click="showUpdateForm = !showUpdateForm" class="btn-secondary">
+            {{ showUpdateForm ? 'Cancel Update' : 'Update Profile' }}
+          </button>
+        </div>
+
+        <div v-if="showUpdateForm" class="profile-section">
+          <h3>Update Profile</h3>
+          <form @submit.prevent="updateProfile" class="update-form">
+            <div class="form-group">
+              <label for="fullName">Full Name</label>
+              <input type="text" id="fullName" v-model="updateForm.fullName" :placeholder="user.fullName" />
+            </div>
+            <div class="form-group">
+              <label for="phone">Phone</label>
+              <input type="tel" id="phone" v-model="updateForm.phone" :placeholder="user.phone" />
+            </div>
+            <button type="submit" class="btn-primary">Save Changes</button>
+          </form>
+        </div>
+
+        <div class="profile-section">
+          <h3>Change Password</h3>
+          <button @click="showPasswordForm = !showPasswordForm" class="btn-secondary">
+            {{ showPasswordForm ? 'Cancel' : 'Change Password' }}
+          </button>
+          <form v-if="showPasswordForm" @submit.prevent="changePassword" class="update-form">
+            <div class="form-group">
+              <label for="currentPassword">Current Password</label>
+              <input type="password" id="currentPassword" v-model="passwordForm.currentPassword" required />
+            </div>
+            <div class="form-group">
+              <label for="newPassword">New Password</label>
+              <input type="password" id="newPassword" v-model="passwordForm.newPassword" required />
+            </div>
+            <button type="submit" class="btn-primary">Change Password</button>
+          </form>
         </div>
       </div>
     </div>
@@ -40,7 +72,12 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted } from 'vue';
-import { userService, UserProfile } from '../services/user.service';
+import {
+  userService,
+  UserProfile,
+  UpdateProfileData,
+  ChangePasswordData,
+} from '../services/user.service';
 import { authService } from '../services/auth.service';
 
 export default defineComponent({
@@ -53,14 +90,27 @@ export default defineComponent({
       phone: '',
       fullName: '',
       role: null,
-      createdAt: new Date()
+      createdAt: new Date(),
+    });
+
+    const showUpdateForm = ref(false);
+    const showPasswordForm = ref(false);
+
+    const updateForm = ref<UpdateProfileData>({
+      fullName: '',
+      phone: '',
+    });
+
+    const passwordForm = ref<ChangePasswordData>({
+      currentPassword: '',
+      newPassword: '',
     });
 
     const userInitials = computed(() => {
       if (!user.value.fullName) return '';
       return user.value.fullName
         .split(' ')
-        .map(name => name[0])
+        .map((name) => name[0])
         .join('')
         .toUpperCase();
     });
@@ -69,7 +119,7 @@ export default defineComponent({
       return new Date(date).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
       });
     };
 
@@ -81,7 +131,39 @@ export default defineComponent({
         user.value = await userService.getUserProfile();
       } catch (error) {
         console.error('Error fetching user data:', error);
-        // TODO: Handle error appropriately (e.g., redirect to login)
+      }
+    };
+
+    const updateProfile = async () => {
+      try {
+        const updatedUser = await userService.updateProfile(updateForm.value);
+        user.value = updatedUser;
+        updateForm.value = {
+          fullName: '',
+          phone: '',
+        };
+        showUpdateForm.value = false;
+        alert('Profile updated successfully!');
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        alert('Failed to update profile. Please try again.');
+      }
+    };
+
+    const changePassword = async () => {
+      try {
+        await userService.changePassword(passwordForm.value);
+        passwordForm.value = {
+          currentPassword: '',
+          newPassword: '',
+        };
+        showPasswordForm.value = false;
+        alert('Password changed successfully!');
+      } catch (error) {
+        console.error('Error changing password:', error);
+        alert(
+          'Failed to change password. Please check your current password and try again.'
+        );
       }
     };
 
@@ -92,9 +174,15 @@ export default defineComponent({
     return {
       user,
       userInitials,
-      formatDate
+      formatDate,
+      updateForm,
+      passwordForm,
+      updateProfile,
+      changePassword,
+      showUpdateForm,
+      showPasswordForm,
     };
-  }
+  },
 });
 </script>
 
@@ -200,5 +288,78 @@ export default defineComponent({
   .info-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.update-form {
+  max-width: 500px;
+  margin-top: 1rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.btn-primary {
+  background: #4f46e5;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.btn-primary:hover {
+  background: #4338ca;
+}
+
+.btn-primary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #4b5563;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin-top: 1rem;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.btn-secondary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
 }
 </style>

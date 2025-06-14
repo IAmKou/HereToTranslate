@@ -25,6 +25,24 @@ export interface ChangePasswordData {
   newPassword: string;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  phone: string;
+  fullName: string;
+  isActive: boolean;
+  createdAt: string;
+  role: {
+    id: number;
+    name: string;
+  };
+}
+
+export interface UpdateUserRoleDto {
+  role: number;
+}
+
 class UserService {
   async getUserProfile(): Promise<UserProfile> {
     const token = authService.getAccessToken();
@@ -34,14 +52,14 @@ class UserService {
 
     const response = await axios.get<UserProfile>(`${BASE_URL}/users/profile`, {
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     return {
       ...response.data,
       id: BigInt(response.data.id),
-      createdAt: new Date(response.data.createdAt)
+      createdAt: new Date(response.data.createdAt),
     };
   }
 
@@ -51,16 +69,20 @@ class UserService {
       throw new Error('No access token available');
     }
 
-    const response = await axios.put<UserProfile>(`${BASE_URL}/users/profile`, data, {
-      headers: {
-        Authorization: `Bearer ${token}`
+    const response = await axios.put<UserProfile>(
+      `${BASE_URL}/users/profile`,
+      data,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       }
-    });
+    );
 
     return {
       ...response.data,
       id: BigInt(response.data.id),
-      createdAt: new Date(response.data.createdAt)
+      createdAt: new Date(response.data.createdAt),
     };
   }
 
@@ -72,10 +94,58 @@ class UserService {
 
     await axios.put(`${BASE_URL}/users/change-password`, data, {
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    const token = authService.getAccessToken();
+    if (!token) {
+      throw new Error('No access token available');
+    }
+
+    const response = await axios.get(`${BASE_URL}/users/admin/all`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  }
+
+  async updateUserRole(userId: string, role: number): Promise<User> {
+    const token = authService.getAccessToken();
+    if (!token) {
+      throw new Error('No access token available');
+    }
+    const response = await axios.put(
+      `${BASE_URL}/users/admin/${userId}/role`,
+      { role },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  }
+
+  async toggleUserStatus(userId: string): Promise<User> {
+    const token = authService.getAccessToken();
+    if (!token) {
+      throw new Error('No access token available');
+    }
+
+    const response = await axios.put(
+      `${BASE_URL}/users/admin/${userId}/toggle-status`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
   }
 }
 
-export const userService = new UserService(); 
+export const userService = new UserService();

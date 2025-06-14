@@ -1,7 +1,21 @@
-import { Controller, Get, Req, UseGuards, Put, Body } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards, Put, Body, Param, PipeTransform, ArgumentMetadata, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { UsersService } from './users.service';
 import { Request } from 'express';
+import { ForRoles } from '../auth/for-role.decorator';
+import { RolesGuard } from '../auth/role.guard';
+import { UserRole } from '../db/mysql/entity/user.entity';
+import { UpdateUserRoleDto } from '../dto/update-user-role.dto';
+
+class ParseBigIntPipe implements PipeTransform<string, bigint> {
+  transform(value: string, metadata: ArgumentMetadata): bigint {
+    try {
+      return BigInt(value);
+    } catch (error) {
+      throw new BadRequestException('Invalid bigint value');
+    }
+  }
+}
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -51,5 +65,28 @@ export class UsersController {
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword
     );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('admin/all')
+  async getAllUsers() {
+    return this.usersService.getAllUsers();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Put('admin/:id/role')
+  async updateUserRole(
+    @Param('id', ParseBigIntPipe) userId: bigint,
+    @Body() updateRoleDto: UpdateUserRoleDto
+  ) {
+    return this.usersService.updateUserRole(userId, updateRoleDto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Put('admin/:id/toggle-status')
+  async toggleUserStatus(
+    @Param('id', ParseBigIntPipe) userId: bigint
+  ) {
+    return this.usersService.toggleUserStatus(userId);
   }
 } 

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import { authService } from '../services/auth.service';
+import AdminUserManagement from '../views/AdminUserManagement.vue';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,12 +20,13 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
-      meta: { requiresAuth: false }
+      meta: { requiresAuth: false },
     },
     {
       path: '/adminhome',
       name: 'adminhome',
       component: () => import('../views/AdminHomeView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
       meta: { requiresAuth: true, requiresAdmin: true }},
     {
       path: '/signup',
@@ -40,18 +42,19 @@ const router = createRouter({
       path: '/userhome',
       name: 'userhome',
       component: () => import('../views/UserHomeView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true },
     },
     {
       path: '/register',
       name: 'register',
       component: () => import('../views/RegisterView.vue'),
-      meta: { requiresAuth: false }
+      meta: { requiresAuth: false },
     },
     {
       path: '/forgot-password',
       name: 'forgotpassword',
       component: () => import('../views/ForgotPasswordView.vue'),
+      meta: { requiresAuth: false },
       meta: { requiresAuth: false }
     },
     {
@@ -76,28 +79,42 @@ const router = createRouter({
       path: '/projects/create',
       name: 'create-project',
       component: () => import('../views/CreateProjectView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true },
     },
     {
       path: '/projects',
       name: 'projects',
       component: () => import('../views/ProjectsView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true },
     },
     {
       path: '/category',
       name: 'category',
       component: () => import('../views/CategoryList.vue'),
-      meta: { requiresAuth: true }
-    }
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/userprofile',
+      name: 'userprofile',
+      component: () => import('../views/UserProfile.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/users',
+      name: 'AdminUserManagement',
+      component: AdminUserManagement,
+      meta: {
+        requiresAuth: true,
+        requiresAdmin: true,
+      },
+    },
   ],
-
 });
 
 // Navigation guard
 router.beforeEach((to, from, next) => {
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
-  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
   const isAuthenticated = authService.isAuthenticated();
   const isAdmin = authService.isAdmin();
 

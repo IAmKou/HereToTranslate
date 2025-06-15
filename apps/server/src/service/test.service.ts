@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MysqlTest } from '../db/mysql/entity/test.entity';
+import { MysqlTest } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
-import { CreateUpdateDTO } from '../db/dto/test.dto';
+import { CreateUpdateDTO } from '#LocalProject/Dtos';
 
 @Injectable()
 export class TestService{

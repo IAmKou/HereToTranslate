@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthService } from './auth.service';
@@ -17,26 +17,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  override async authenticate(req: Request, options?: any) {
+  override authenticate(req: Request, options?: any) {
     const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
-    try {
-      const user = await this.authService.validateToken(token);
-      this.success(user)
-    } catch (error) {
-      this.fail(error, 401);
-    }
-
-    if (!token) {
-      throw new UnauthorizedException('Missing token');
-    }
-
-    const user = await this.authService.validateToken(token);
-
-    return {
-      id: user.id,
-      username: user.username,
-      role: user.role?.name,
-    };
+    this.authService.validateToken(token)
+      .then(user => this.success(user))
+      .catch(error => this.fail(error, 401));
   }
-
 }

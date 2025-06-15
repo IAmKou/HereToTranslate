@@ -2,6 +2,13 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, Jo
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 
+export enum RequestStatus {
+  Pending = 'PENDING',
+  Approved = 'APPROVED',
+  Rejected = 'REJECTED',
+  Completed = 'COMPLETED',
+}
+
 @Entity('requests')
 export class RequestEntity {
   @PrimaryGeneratedColumn()
@@ -30,8 +37,8 @@ export class RequestEntity {
   @Column({ type: 'text', nullable: true })
   file_url: string;
 
-  @Column({ type: 'enum', enum: ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'], default: 'PENDING' })
-  status: string;
+  @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.Pending })
+  status: RequestStatus;
 
   @CreateDateColumn()
   created_at: Date;

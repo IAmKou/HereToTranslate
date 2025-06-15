@@ -1,6 +1,7 @@
+import { IRegisterDto } from '@here-to-translate/common';
 import { IsEmail, IsNotEmpty, IsString, MinLength, IsPhoneNumber, IsStrongPassword } from 'class-validator';
 
-export class RegisterDto {
+export class RegisterDto implements IRegisterDto {
   @IsNotEmpty()
   @IsString()
   @MinLength(3)
@@ -32,3 +33,4 @@ export class RegisterDto {
   @IsString()
   fullName: string;
 }
+

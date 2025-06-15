@@ -6,14 +6,16 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
+import { shared } from '@here-to-translate/common';
 
 async function bootstrap() {
+  shared();
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe());
   app.enableCors({
     origin: 'http://localhost:4200', // Vue dev server
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTION'],
-  })
+  });
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT ?? 3000;

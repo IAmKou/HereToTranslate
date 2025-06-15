@@ -16,10 +16,7 @@
       "path": "./apps/web"
     },
     {
-      "path": "./apps/web-e2e"
-    },
-    {
-      "path": "./apps/shared"
+      "path": "./libs/common"
     }
   ]
 }

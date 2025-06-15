@@ -5,10 +5,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SubCategoryEntity } from '../db/mysql/entity/subCategory.entity';
-import { validateName, sanitizeName } from '../util/validation.util';
-import { CreateSubCategoryDto, UpdateSubCategoryDto } from '../db/dto/sub.dto';
-import { Category } from '../db/mysql/entity/category.entity';
+import { SubCategoryEntity, CategoryEntity } from '#LocalProject/Entities';
+import { validateName, sanitizeName } from '#LocalProject/Utils/validation.util';
+import { CreateSubCategoryDto, UpdateSubCategoryDto } from '#LocalProject/Dtos';
 
 @Injectable()
 export class SubCategoryService {
@@ -33,7 +32,7 @@ export class SubCategoryService {
     try {
       const newSubCategory = this.subCategoryRepository.create({
         name: sanitizeName(CreateSubCategoryDto.name),
-        category: { id: Number(CreateSubCategoryDto.categoryId) } as Category
+        category: { id: Number(CreateSubCategoryDto.categoryId) } as CategoryEntity
       });
       return this.subCategoryRepository.save(newSubCategory);
     } catch (error) {

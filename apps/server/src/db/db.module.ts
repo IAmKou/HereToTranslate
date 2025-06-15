@@ -6,20 +6,19 @@ import { MySqlConnection } from './mysql/mysql.connection';
 import { MongoDbConnection } from './mongo/mongo.connection';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MongoTest, MongoTestSchema } from './mongo/schema/mongo-test.schema';
-import { MongoService } from '../service/mongo.service';
+import { MongoService } from '#LocalProject/Services/mongo.service';
 import { Connection as MongooseConnection } from 'mongoose';
 
 @Module({
   imports: [
-    ConfigModule, // Needed for ConfigService
-    // Configure TypeORM with a dynamic DataSource provider
+    ConfigModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
         const mysqlConnection = new MySqlConnection(configService);
-        await mysqlConnection.init(); // Initialize the DataSource
-        return mysqlConnection.getDataSource().options; // Return DataSource options
+        await mysqlConnection.init();
+        return mysqlConnection.getDataSource().options;
       },
     }),
     MongooseModule.forRootAsync({
@@ -37,7 +36,7 @@ import { Connection as MongooseConnection } from 'mongoose';
             logger.error(`MongoDB connection error: ${error.message}`);
             return error;
           },
-          uri: configService.get<string>('MONGODB_URI', 'mongodb://127.0.0.1:27017/htt'),
+          uri: configService.get<string>('MONGODB_URI'),
         });
       },
     }),

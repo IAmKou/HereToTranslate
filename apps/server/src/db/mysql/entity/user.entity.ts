@@ -1,16 +1,17 @@
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
 import { RoleEntity } from './role.entity';
 import { ProjectEntity } from './project.entity';
-import { ProjectRoleEntity } from './projectRole.entity';
 import { GroupMemberEntity } from './groupMember.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
+import { FileEntity } from './file.entity';
+import { ProjectUserRoleEntity } from './projectUserRole.entity';
 import {FileEntity} from './file.entity';
 import { RequestEntity } from './request.entity';
 
 export enum UserRole {
   Admin = 1,
-  User
+  Member
 }
 
 @Entity('user')
@@ -19,26 +20,26 @@ export enum UserRole {
   @PrimaryGeneratedColumn()
   id: bigint;
 
-  @Column({ unique: true, length: 50 })
+  @Column({unique:true, length:50})
   username: string;
 
-  @Column({ unique: true, length: 100 })
+  @Column({unique:true, length:100})
   email: string;
 
-  @Column({ length: 255 })
+  @Column({length:255})
   passwordHash: string;
 
-  @Column({ unique: true, length: 50 })
+  @Column({unique:true, length:50})
   phone: string;
 
-  @Column({ length: 100 })
+  @Column({length:100})
   fullName: string;
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: RoleEntity;
 
-  @Column({ default: true })
+  @Column({ default : true })
   isActive: boolean;
 
   @CreateDateColumn()
@@ -46,9 +47,6 @@ export enum UserRole {
 
   @OneToMany(() => ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];
-
-  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
-  projectRoles: ProjectRoleEntity[];
 
   @OneToMany(() => GroupMemberEntity, groupMember => groupMember.user)
   groupMemberships: GroupMemberEntity[];
@@ -61,6 +59,9 @@ export enum UserRole {
 
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
+
+  @OneToMany(() => ProjectUserRoleEntity, projectRole => projectRole.user)
+  projectRoles: ProjectUserRoleEntity[];
 
   @OneToMany(() => RequestEntity, request => request.requester)
   requests: RequestEntity[];

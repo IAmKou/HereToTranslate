@@ -1,24 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import { RoleEntity } from './entity/role.entity';
-import { UserEntity } from './entity/user.entity';
-import { BranchEntity } from './entity/branch.entity';
-import { PostEntity } from './entity/post.entity';
-import { ProjectEntity } from './entity/project.entity';
-import { Category } from './entity/category.entity';
-import { CommentEntity } from './entity/comment.entity';
-import { FileEntity } from './entity/file.entity';
-import { GroupMemberEntity } from './entity/groupMember.entity';
-import { ProjectGroupEntity } from './entity/projectGroup.entity';
-import { ProjectRoleEntity } from './entity/projectRole.entity';
-import { RateEntity } from './entity/rate.entity';
-import { Report } from './entity/report.entity';
-import { RequestEntity } from './entity/request.entity';
-import { TaskEntity } from './entity/task.entity';
-import { TransactionEntity } from './entity/transaction.entity';
-import { CommitEntity } from './entity/commit.entity';
-import { SubCategoryEntity } from './entity/subCategory.entity';
+import {
+  RoleEntity,
+  UserEntity,
+  BranchEntity,
+  PostEntity,
+  ProjectEntity,
+  CategoryEntity,
+  CommentEntity,
+  FileEntity,
+  GroupMemberEntity,
+  ProjectGroupEntity,
+  ProjectRoleEntity,
+  RateEntity,
+  ReportEntity,
+  RequestEntity,
+  TaskEntity,
+  TransactionEntity,
+  CommitEntity,
+  SubCategoryEntity
+} from '#LocalProject/Entities';
 
 
 @Injectable()
@@ -26,7 +28,7 @@ export class MySqlConnection {
   private static instance: MySqlConnection;
 
   // TypeORM DataSource instance
-  private readonly dataSource !: DataSource;
+  private readonly dataSource: DataSource;
 
   private readonly logger = new Logger(MySqlConnection.name);
 
@@ -41,8 +43,8 @@ export class MySqlConnection {
       database: this.config.get<string>('MYSQL_DATABASE'),
       // synchronize: true, // Auto create tables (turn off in production)
       logging: true,
-      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, Category, CommentEntity, FileEntity,
-        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, Report, RequestEntity, TaskEntity,
+      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
+        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, SubCategoryEntity], // Add entities here
     });
     MySqlConnection.instance = this;

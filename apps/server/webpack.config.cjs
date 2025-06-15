@@ -16,7 +16,11 @@ module.exports = {
       assets: ['./src/assets'],
       optimization: false,
       outputHashing: 'none',
+      useTsconfigPaths: true,
       generatePackageJson: true,
     }),
   ],
+  resolve: {
+    alias: []
+  }
 };

@@ -6,6 +6,7 @@ import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { CategoryEntity } from './category.entity';
+import { ProjectUserRoleEntity } from './projectUserRole.entity';
 @Entity('project')
 export class ProjectEntity {
   @PrimaryGeneratedColumn()
@@ -16,6 +17,9 @@ export class ProjectEntity {
 
   @Column({type : 'text', nullable: true})
   description: string;
+
+  @Column({default: false})
+  isPublic: boolean;
 
   @ManyToOne(() => UserEntity, user => user.createdProjects)
   @JoinColumn({ name: 'createdBy' })
@@ -42,5 +46,8 @@ export class ProjectEntity {
   @ManyToOne(() => CategoryEntity, category => category.project)
   @JoinColumn({ name: 'categoryId' })
   category: CategoryEntity;
+
+  @OneToMany(() => ProjectUserRoleEntity, pur => pur.project)
+  pur: ProjectUserRoleEntity[];
 
 }

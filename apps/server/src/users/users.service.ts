@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity, UserRole } from '../db/mysql/entity/user.entity';
+import { UserEntity } from '../db/mysql/entity/user.entity';
 import * as bcrypt from 'bcryptjs';
 import { UpdateUserRoleDto } from '../dto/update-user-role.dto';
 
@@ -75,7 +75,7 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.passwordHash = hashedPassword;
-    
+
     return this.userRepository.save(user);
   }
 
@@ -124,4 +124,4 @@ export class UsersService {
     user.isActive = !user.isActive;
     return this.userRepository.save(user);
   }
-} 
+}

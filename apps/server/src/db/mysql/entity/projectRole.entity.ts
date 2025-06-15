@@ -1,25 +1,23 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique } from 'typeorm';
-import { UserEntity } from './user.entity';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
 import { ProjectEntity } from './project.entity';
+import { PermissionRoleEntity } from './permissionRole.entity';
 
-export enum ProjectRole {
-  Owner = 'OWNER',
-  Translator = 'TRANSLATOR',
-  Observer = 'OBSERVER',
-}
 
 @Entity('projectrole')
-@Unique(['project', 'user'])
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column()
+  name: string;
+
   @ManyToOne(() => ProjectEntity, project => project.projectRoles)
   project: ProjectEntity;
 
-  @ManyToOne(() => UserEntity, user => user.projectRoles)
-  user: UserEntity;
+  @Column({default: false})
+  isSystem: boolean;
 
-  @Column({ type: 'enum', enum: ProjectRole })
-  role: ProjectRole;
+  @OneToMany(() => PermissionRoleEntity, permissionRole => permissionRole.prole)
+  permissionRoles: PermissionRoleEntity[];
+
 }

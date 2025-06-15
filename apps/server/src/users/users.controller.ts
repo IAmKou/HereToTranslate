@@ -2,9 +2,7 @@ import { Controller, Get, Req, UseGuards, Put, Body, Param, PipeTransform, Argum
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { UsersService } from './users.service';
 import { Request } from 'express';
-import { ForRoles } from '../auth/for-role.decorator';
 import { RolesGuard } from '../auth/role.guard';
-import { UserRole } from '../db/mysql/entity/user.entity';
 import { UpdateUserRoleDto } from '../dto/update-user-role.dto';
 
 class ParseBigIntPipe implements PipeTransform<string, bigint> {

@@ -30,6 +30,13 @@ export class CategoryManagerService {
       );
     }
 
+    const sanitizedName = sanitizeName(createCategoryDto.name);
+    const existingCategory = await this.categoryRepository.exists({
+      where: { name: sanitizedName }
+    })
+    if (existingCategory) {
+      throw new BadRequestException(`Category with name "${sanitizedName}" already exists`);
+    }
     try {
       const newCategory = this.categoryRepository.create({
         name: sanitizeName(createCategoryDto.name),
@@ -65,49 +72,4 @@ export class CategoryManagerService {
     return this.categoryRepository.delete(id);
   }
 
-  async createSubCategory(data: CreateSubCategoryDto) {
-    if (!data.name) {
-      throw new BadRequestException('SubCategory name is required');
-    }
-
-    if (!validateName(data.name)) {
-      throw new BadRequestException('SubCategory name contains invalid characters or is empty after trimming');
-    }
-
-    if (!data.categoryId) {
-      throw new BadRequestException('Category reference is required');
-    }
-
-    try {
-      const newSubCategory = this.subCategoryRepository.create({
-        name: sanitizeName(data.name),
-        category: { id: Number(data.categoryId) } as CategoryEntity
-      });
-      return this.subCategoryRepository.save(newSubCategory);
-    } catch (error) {
-      console.error('Error creating subcategory:', error);
-      throw new InternalServerErrorException('Failed to create subcategory');
-    }
-  }
-
-  async getSubCategories() {
-    return this.subCategoryRepository.find({
-      relations: ['category']
-    });
-  }
-
-  async updateSubCategory(id: string, subCategory: Partial<UpdateSubCategoryDto>) {
-    if (subCategory.name && !validateName(subCategory.name)) {
-      throw new BadRequestException('SubCategory name contains invalid characters or is empty after trimming');
-    }
-
-    if (subCategory.name) {
-      subCategory.name = sanitizeName(subCategory.name);
-    }
-    return this.subCategoryRepository.update(id, subCategory);
-  }
-
-  async deleteSubCategory(id: string) {
-    return this.subCategoryRepository.delete(id);
-  }
 }

@@ -12,7 +12,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
 import { UserEntity, UserRole } from '#LocalProject/Entities';
 import { Nullable } from '@here-to-translate/common/types';
-import { IUserAuth } from '@here-to-translate/common/interfaces';
+import { IUserAuthMeta } from '@here-to-translate/common/interfaces';
 
 type AccessToken = string;
 type RefreshToken = string;
@@ -119,7 +119,7 @@ export class AuthService {
     return this.generateTokenPair(user);
   }
 
-  async validateToken(token: string | null): Promise<IUserAuth> {
+  async validateToken(token: string | null): Promise<IUserAuthMeta> {
     if (!token) {
       throw new UnauthorizedException('Token is missing');
     }
@@ -148,7 +148,7 @@ export class AuthService {
       this.activeTokens.delete(token);
       throw new UnauthorizedException('User not found');
     }
-    return user as IUserAuth;
+    return user as IUserAuthMeta;
   }
 
   async login(username: string, password: string) {

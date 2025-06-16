@@ -5,7 +5,7 @@ import { DbContextService } from './dbcontext.service';
 import { MySqlConnection } from './mysql/mysql.connection';
 import { MongoDbConnection } from './mongo/mongo.connection';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Connection as MongooseConnection, ConnectionStates } from 'mongoose';
+import { Connection, ConnectionStates } from 'mongoose';
 
 @Module({
   imports: [
@@ -25,6 +25,8 @@ import { Connection as MongooseConnection, ConnectionStates } from 'mongoose';
       useFactory: (configService: ConfigService) => {
         const logger = new Logger('MongooseModule');
         return ({
+          useBigInt64: true,
+
           onConnectionCreate(connection) {
             const { readyState } = connection;
             connection.on('connected', c => logger.log(c));

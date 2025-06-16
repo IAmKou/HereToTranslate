@@ -4,8 +4,8 @@ import { PostEntity } from './post.entity';
 
 @Entity('comments')
 export class CommentEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint' })
+  id: bigint;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   user: UserEntity;

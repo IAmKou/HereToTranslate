@@ -1,3 +1,1 @@
-import { Entity, EntityManager, EntitySchema, OneToMany } from "typeorm";
-
-
+export const DAY = 24 * 60 * 60 * 1000;

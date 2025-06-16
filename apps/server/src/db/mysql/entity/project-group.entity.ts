@@ -4,7 +4,7 @@ import { GroupMemberEntity } from './group-member.entity';
 
 @Entity('projectGroups')
 export class ProjectGroupEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'bigint' })
   id: bigint;
 
   @Column({ length: 255 })

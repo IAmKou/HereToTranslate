@@ -7,7 +7,7 @@ import { UserManagerService } from "./service/user-manager.service";
 import { ProjectManagerService } from "./service/project-manager.service";
 import { CategoryController } from "./controller/category.controller";
 import { ProjectController } from "./controller/project.controller";
-import { SubCategoryController } from "./controller/subCategory.controller";
+import { UserController } from "./controller/user.controller";
 
 @Global()
 @Module({
@@ -36,7 +36,7 @@ import { SubCategoryController } from "./controller/subCategory.controller";
   controllers: [
     CategoryController,
     ProjectController,
-    SubCategoryController
+    UserController
   ]
 })
 export class ManagersModule { }

@@ -9,8 +9,8 @@ export enum PostVisibility {
 }
 @Entity('posts')
 export class PostEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint' })
+  id: bigint;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   user: UserEntity;

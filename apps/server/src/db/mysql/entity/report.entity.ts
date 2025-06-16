@@ -10,8 +10,8 @@ export enum ReportStatus {
 
 @Entity('reports')
 export class ReportEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint' })
+  id: bigint;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   reportedBy: UserEntity;

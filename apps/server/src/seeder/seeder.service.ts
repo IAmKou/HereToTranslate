@@ -19,7 +19,7 @@ export class SeederService implements OnApplicationBootstrap {
   }
 
   private async seedRoles() {
-    const roles = ['ADMIN', 'MEMBER'];
+    const roles = ['SUPER_ADMIN', 'ADMIN', 'MEMBER'];
     for (const roleName of roles) {
       const exists = await this.roleRepo.findOne({ where: { name: roleName } });
       if (!exists) {

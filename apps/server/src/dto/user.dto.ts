@@ -34,3 +34,12 @@ export class RegisterDto implements IRegisterDto {
   fullName: string;
 }
 
+export class UpdateProfileDto {
+  @IsNotEmpty()
+  @IsString()
+  fullName: string;
+
+  @IsNotEmpty()
+  phone: string;
+}
+

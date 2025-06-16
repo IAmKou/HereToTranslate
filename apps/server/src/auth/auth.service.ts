@@ -48,7 +48,7 @@ export class AuthService {
     const tokenMeta: TokenMeta = {
       userId: user.id.toString(),
       username: user.username,
-      role: user.role.name.toLowerCase()
+      role: user.role?.name?.toLowerCase() ?? 'member'
     };
 
     const jwtPayload = {

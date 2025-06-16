@@ -50,7 +50,7 @@ class UserService {
       throw new Error('No access token available');
     }
 
-    const response = await axios.get<UserProfile>(`${BASE_URL}/users/profile`, {
+    const response = await axios.get<UserProfile>(`${BASE_URL}/user/profile`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -70,7 +70,7 @@ class UserService {
     }
 
     const response = await axios.put<UserProfile>(
-      `${BASE_URL}/users/profile`,
+      `${BASE_URL}/user/update`,
       data,
       {
         headers: {
@@ -92,7 +92,7 @@ class UserService {
       throw new Error('No access token available');
     }
 
-    await axios.put(`${BASE_URL}/users/change-password`, data, {
+    await axios.put(`${BASE_URL}/user/change-password`, data, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -105,7 +105,7 @@ class UserService {
       throw new Error('No access token available');
     }
 
-    const response = await axios.get(`${BASE_URL}/users/admin/all`, {
+    const response = await axios.get(`${BASE_URL}/user/admin/all`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -119,7 +119,7 @@ class UserService {
       throw new Error('No access token available');
     }
     const response = await axios.put(
-      `${BASE_URL}/users/admin/${userId}/role`,
+      `${BASE_URL}/user/admin/${userId}/role`,
       { role },
       {
         headers: {
@@ -137,7 +137,7 @@ class UserService {
     }
 
     const response = await axios.put(
-      `${BASE_URL}/users/admin/${userId}/toggle-status`,
+      `${BASE_URL}/user/admin/${userId}/toggle-status`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

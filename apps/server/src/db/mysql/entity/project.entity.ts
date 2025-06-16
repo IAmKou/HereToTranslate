@@ -7,7 +7,6 @@ import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { CategoryEntity } from './category.entity';
 import { ProjectTagEntity } from './project-tag.entity';
-import { ProjectUserRoleEntity } from './projectUserRole.entity';
 @Entity('project')
 export class ProjectEntity {
   @PrimaryGeneratedColumn()
@@ -51,7 +50,6 @@ export class ProjectEntity {
   @OneToMany(() => ProjectTagEntity, tag => tag.id)
   tags: ProjectTagEntity[];
 
-  @OneToMany(() => ProjectUserRoleEntity, pur => pur.project)
-  pur: ProjectUserRoleEntity[];
+
 
 }

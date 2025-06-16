@@ -19,7 +19,7 @@ import {
   TaskEntity,
   TransactionEntity,
   CommitEntity,
-  SubCategoryEntity, PermissionRoleEntity, ProjectUserRoleEntity
+  ProjectTagEntity
 } from '#LocalProject/Entities';
 
 
@@ -44,10 +44,8 @@ export class MySqlConnection {
       synchronize: true, // Auto create tables (turn off in production)
       logging: true,
       entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
-        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity, SubCategoryEntity, PermissionRoleEntity, ProjectUserRoleEntity], // Add entities here
         GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity, ProjectTagEntity], // Add entities here
+        TransactionEntity, CommitEntity, ProjectTagEntity] // Add entities here
     });
     MySqlConnection.instance = this;
   }

@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, Unique } f
 import { UserEntity } from './user.entity';
 import { ProjectGroupEntity } from './project-group.entity';
 
-@Entity('groupMember')
+@Entity('groupmember')
 @Unique(['group', 'user'])
 export class GroupMemberEntity {
   @PrimaryGeneratedColumn()

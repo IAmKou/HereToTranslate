@@ -16,5 +16,4 @@ export * from './project-tag.entity';
 export * from './task.entity';
 export * from './transaction.entity';
 export * from './user.entity';
-export * from './projectUserRole.entity';
-export * from './permissionRole.entity';
+

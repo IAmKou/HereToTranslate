@@ -5,109 +5,81 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateCategoryDto, CreateSubCategoryDto, UpdateCategoryDto, UpdateSubCategoryDto } from '#LocalProject/Dtos';
+import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
 import { validateName, sanitizeName } from '#LocalProject/Utils/validation';
-import { CategoryEntity, ProjectTagEntity } from '#LocalProject/Entities';
+import { CategoryEntity } from '#LocalProject/Entities';
+
+interface DatabaseError extends Error {
+  code?: string;
+}
 
 @Injectable()
 export class CategoryManagerService {
   constructor(
     @InjectRepository(CategoryEntity)
-    private readonly categoryRepository: Repository<CategoryEntity>,
-    @InjectRepository(ProjectTagEntity)
-    private readonly subCategoryRepository: Repository<ProjectTagEntity>
+    private readonly categoryRepository: Repository<CategoryEntity>
   ) {}
 
-  async createCategory(createCategoryDto: CreateCategoryDto) {
-    console.log('Received category data:', createCategoryDto);
-    if (!createCategoryDto.name) {
+  async getCategories() {
+    return this.categoryRepository.find();
+  }
+
+  async createCategory(data: CreateCategoryDto) {
+    if (!data.name) {
       throw new BadRequestException('Category name is required');
     }
 
-    if (!validateName(createCategoryDto.name)) {
-      throw new BadRequestException(
-        'Category name contains invalid characters or is empty after trimming'
-      );
+    if (!validateName(data.name)) {
+      throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
     }
 
     try {
       const newCategory = this.categoryRepository.create({
-        name: sanitizeName(createCategoryDto.name),
-        description: createCategoryDto.description,
+        name: sanitizeName(data.name),
+        description: data.description
       });
       return this.categoryRepository.save(newCategory);
     } catch (error) {
+      const dbError = error as DatabaseError;
+      if (dbError.code === 'ER_DUP_ENTRY') {
+        throw new BadRequestException('A category with this name already exists');
+      }
       console.error('Error creating category:', error);
       throw new InternalServerErrorException('Failed to create category');
     }
   }
 
-  async getCategories() {
-    return this.categoryRepository.find({
-      relations: ['subCategories']
-    });
-  }
-
-  async updateCategory(id: string, category: UpdateCategoryDto) {
-    if (category.name && !validateName(category.name)) {
-      throw new BadRequestException(
-        'Category name contains invalid characters or is empty after trimming'
-      );
-    }
-
-    if (category.name) {
-      category.name = sanitizeName(category.name);
-    }
-    return this.categoryRepository.update(id, category);
-  }
-
-  async deleteCategory(id: string) {
-    return this.categoryRepository.delete(id);
-  }
-
-  async createSubCategory(data: CreateSubCategoryDto) {
-    if (!data.name) {
-      throw new BadRequestException('SubCategory name is required');
-    }
-
-    if (!validateName(data.name)) {
-      throw new BadRequestException('SubCategory name contains invalid characters or is empty after trimming');
-    }
-
-    if (!data.categoryId) {
-      throw new BadRequestException('Category reference is required');
+  async updateCategory(id: string, data: UpdateCategoryDto) {
+    if (data.name && !validateName(data.name)) {
+      throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
     }
 
     try {
-      const newSubCategory = this.subCategoryRepository.create({
-        name: sanitizeName(data.name),
-        category: { id: Number(data.categoryId) } as CategoryEntity
-      });
-      return this.subCategoryRepository.save(newSubCategory);
+      const updateData: Partial<CategoryEntity> = {};
+      if (data.name) {
+        updateData.name = sanitizeName(data.name);
+      }
+      if (data.description !== undefined) {
+        updateData.description = data.description;
+      }
+      await this.categoryRepository.update(id, updateData);
+      return this.categoryRepository.findOne({ where: { id: Number(id) } });
     } catch (error) {
-      console.error('Error creating subcategory:', error);
-      throw new InternalServerErrorException('Failed to create subcategory');
+      const dbError = error as DatabaseError;
+      if (dbError.code === 'ER_DUP_ENTRY') {
+        throw new BadRequestException('A category with this name already exists');
+      }
+      console.error('Error updating category:', error);
+      throw new InternalServerErrorException('Failed to update category');
     }
   }
 
-  async getSubCategories() {
-    return this.subCategoryRepository.find({
-      relations: ['category']
-    });
-  }
-
-  async updateSubCategory(id: string, subCategory: Partial<UpdateSubCategoryDto>) {
-    if (subCategory.name && !validateName(subCategory.name)) {
-      throw new BadRequestException('SubCategory name contains invalid characters or is empty after trimming');
+  async deleteCategory(id: string) {
+    try {
+      return this.categoryRepository.delete(id);
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      throw new InternalServerErrorException('Failed to delete category');
     }
-
-    if (subCategory.name) {
-      subCategory.name = sanitizeName(subCategory.name);
-    }
-    return this.subCategoryRepository.update(id, subCategory);
-  }
-
-  async deleteSubCategory(id: string) {
-    return this.subCategoryRepository.delete(id);
   }
 }

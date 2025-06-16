@@ -1,12 +1,23 @@
-import { Controller, Post, Body, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, UseGuards, Query } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { WebSocketGateway, SubscribeMessage, ConnectedSocket, MessageBody } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
+import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import { UserManagerService } from '../manager/service/user-manager.service';
 
 @Controller('chat')
 @WebSocketGateway()
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly userManagerService: UserManagerService
+  ) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('users')
+  async getUsers(@Query('search') search?: string) {
+    return this.userManagerService.searchUsers(search);
+  }
 
   @Post('rooms')
   async createChatRoom(

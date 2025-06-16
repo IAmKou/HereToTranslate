@@ -1,20 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique } from 'typeorm';
 import { ProjectEntity } from './project.entity';
-import { PermissionRoleEntity } from './permissionRole.entity';
+import { UserEntity } from './user.entity';
 
-@Entity('projectRole')
+@Entity('projectrole')
 @Unique(['project', 'user'])
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  name: string;
-
   @ManyToOne(() => ProjectEntity, project => project.projectRoles)
   project: ProjectEntity;
 
-  @ManyToOne(() => UserEntity, user => user.projectRoles)
+  @ManyToOne(() => UserEntity)
   user: UserEntity;
 
   @Column({ type: 'varchar', length: 32 })

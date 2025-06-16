@@ -1,12 +1,10 @@
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
 import { RoleEntity } from './role.entity';
 import { ProjectEntity } from './project.entity';
-import { ProjectRoleEntity } from './project-role.entity';
 import { GroupMemberEntity } from './group-member.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
-import { ProjectUserRoleEntity } from './projectUserRole.entity';
 
 export enum UserRole {
   Admin = 1,
@@ -59,6 +57,5 @@ export class UserEntity {
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
 
-  @OneToMany(() => ProjectUserRoleEntity, projectRole => projectRole.user)
-  projectRoles: ProjectUserRoleEntity[];
+
 }

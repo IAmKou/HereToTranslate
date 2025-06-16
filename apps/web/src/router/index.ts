@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue';
 import { authService } from '../services/auth.service';
 import AdminUserManagement from '../views/AdminUserManagement.vue';
 
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -78,6 +79,19 @@ const router = createRouter({
         requiresAuth: true,
         requiresAdmin: true,
       },
+    },
+    {
+      path: '/chat',
+      name: 'chat',
+      component: () => import('../views/ChatListView.vue'),
+      meta: { requiresAuth: true},
+      children: [
+        {
+          path: ':id',
+          name: 'chat-room',
+          component: () => import('../views/ChatRoomView.vue'),
+        },
+      ],
     },
   ],
 });

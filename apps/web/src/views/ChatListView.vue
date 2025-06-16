@@ -54,7 +54,7 @@
               v-model="isGroupChat"
               label="Group Chat"
             ></v-switch>
-            
+
             <v-text-field
               v-if="isGroupChat"
               v-model="chatName"
@@ -190,4 +190,4 @@ export default defineComponent({
 .chat-list {
   height: 100%;
 }
-</style> 
+</style>

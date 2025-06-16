@@ -5,12 +5,12 @@
 
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app/app.module';
+import { MainModule } from './main.module';
 import { shared } from '@here-to-translate/common';
 
 async function bootstrap() {
   shared();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(MainModule);
   app.useGlobalPipes(new ValidationPipe());
   app.enableCors({
     origin: 'http://localhost:4200', // Vue dev server

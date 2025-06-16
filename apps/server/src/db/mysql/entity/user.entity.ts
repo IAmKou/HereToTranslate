@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
 import { RoleEntity } from './role.entity';
 import { ProjectEntity } from './project.entity';
-import { ProjectRoleEntity } from './projectRole.entity';
-import { GroupMemberEntity } from './groupMember.entity';
+import { ProjectRoleEntity } from './project-role.entity';
+import { GroupMemberEntity } from './group-member.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
@@ -18,27 +18,26 @@ export class UserEntity {
   @PrimaryGeneratedColumn()
   id: bigint;
 
-  @Column({unique:true, length:50})
+  @Column({ unique: true, length: 50 })
   username: string;
 
-  @Column({unique:true, length:100})
+  @Column({ unique: true, length: 100 })
   email: string;
 
-  @Column({length:255})
+  @Column({ length: 255 })
   passwordHash: string;
 
-  @Column({unique:true, length:50})
+  @Column({ unique: true, length: 50 })
   phone: string;
 
-  @Column({length:100})
+  @Column({ length: 100 })
   fullName: string;
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
-  @Column({ name: 'roleId', default: UserRole.Member })
   role: RoleEntity;
 
-  @Column({ default : true })
+  @Column({ default: true })
   isActive: boolean;
 
   @CreateDateColumn()

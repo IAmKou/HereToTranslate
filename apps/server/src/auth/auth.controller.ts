@@ -1,29 +1,16 @@
 import { Controller, Post, Body, UseGuards, Get, Req, } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './jwt.guard';
-import { ForRoles } from './for-role.decorator';
-import { RolesGuard } from './role.guard'
-import { Request } from 'express';
-import { IsPublicEndpoint } from './is-public-endpoint.decorator';
-import { LoginDto, RegisterDto } from '#LocalProject/Dtos';
+import { JwtAuthGuard } from './guards/jwt.guard';
+import { ForRoles } from './decorators/for-role.decorator';
+import { RolesGuard } from './guards/role.guard'
+import { IsPublicEndpoint } from './decorators/is-public-endpoint.decorator';
+import { LoginDto } from '#LocalProject/Dtos';
 import { UserRole } from '#LocalProject/Entities';
-
-interface AuthenticatedRequest extends Request {
-  user: {
-    username: string;
-    role: string;
-  };
-}
+import type { AuthenticatedRequest } from './types';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
-  @IsPublicEndpoint()
-  @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
-  }
 
   @IsPublicEndpoint()
   @Post('login')

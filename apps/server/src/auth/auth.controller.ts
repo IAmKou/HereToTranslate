@@ -1,49 +1,44 @@
 import { Controller, Post, Body, UseGuards, Get, Req, } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './jwt.guard';
-import { RolesGuard } from './role.guard'
-import { Request } from 'express';
-import { LoginDto, RegisterDto } from '#LocalProject/Dtos';
-
-interface AuthenticatedRequest extends Request {
-  user: {
-    username: string;
-    role: string;
-  };
-}
+import { JwtAuthGuard } from './guards/jwt.guard';
+import { ForRoles } from './decorators/for-role.decorator';
+import { RolesGuard } from './guards/role.guard'
+import { IsPublicEndpoint } from './decorators/is-public-endpoint.decorator';
+import { LoginDto } from '#LocalProject/Dtos';
+import { UserRole } from '#LocalProject/Entities';
+import type { AuthenticatedRequest } from './types';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
-  }
-
+  @IsPublicEndpoint()
   @Post('login')
   login(@Body() body: LoginDto) {
     return this.authService.login(body.username, body.password);
   }
 
-
+  @IsPublicEndpoint()
   @Post('google')
   async loginWithGoogle(@Body('idToken') idToken: string) {
     return this.authService.loginWithGoogle(idToken);
   }
 
+  @IsPublicEndpoint()
   @Post('refresh')
   async refreshTokens(@Body('refreshToken') refreshToken: string) {
     return this.authService.refreshTokens(refreshToken);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @ForRoles(UserRole.Admin)
   @Get('admin-home')
   getAdminHome(@Req() req: AuthenticatedRequest) {
     return `Welcome, ${req.user.username} (ADMIN)`;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @ForRoles(UserRole.Member)
   @Get('user-home')
   getStudentHome(@Req() req: AuthenticatedRequest) {
     return `Welcome, ${req.user.username} (MEMBER)`;

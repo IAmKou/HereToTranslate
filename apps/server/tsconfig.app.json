@@ -18,7 +18,9 @@
       "#LocalProject/Services/*": ["src/service/*"],
       "#LocalProject/Entities": ["src/db/mysql/entity/index.ts"],
       "#LocalProject/Utils/*": ["src/util/*"],
-      "#LocalProject/Exceptions": ["src/util/exceptions/index.ts"]
+      "#LocalProject/Exceptions": ["src/util/exceptions/index.ts"],
+      "#LocalProject/Managers/*": ["src/manager/*"],
+      "#LocalProject/Auth/*": ["src/auth/*"],
     }
   },
   "include": ["src/**/*.ts"],

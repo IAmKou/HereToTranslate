@@ -13,7 +13,7 @@ import {
   GroupMemberEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
-  RateEntity,
+  RatingEntity,
   ReportEntity,
   RequestEntity,
   TaskEntity,
@@ -46,6 +46,8 @@ export class MySqlConnection {
       entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, SubCategoryEntity, PermissionRoleEntity, ProjectUserRoleEntity], // Add entities here
+        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
+        TransactionEntity, CommitEntity, ProjectTagEntity], // Add entities here
     });
     MySqlConnection.instance = this;
   }

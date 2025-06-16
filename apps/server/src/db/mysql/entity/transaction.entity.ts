@@ -2,15 +2,15 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, Up
 import { UserEntity } from './user.entity';
 
 export enum TransactionType {
-  Hold = 'hold',
-  Transfer = 'transfer',
-  Withdraw = 'withdraw',
+  Hold = 'HOLD',
+  Transfer = 'TRANSFER',
+  Withdraw = 'WITHDRAW',
 }
 export enum TransactionStatus {
-  Pending = 'pending',
-  Approved = 'approved',
-  Disputed = 'disputed',
-  Completed = 'completed',
+  Pending = 'PENDING',
+  Approved = 'APPROVED',
+  Disputed = 'DISPUTED',
+  Completed = 'COMPLETED',
 }
 
 @Entity('transaction')

@@ -1,14 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
+import { AuthenticatedRequest } from './types';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  override validate(...args: any[]): unknown {
-    throw new Error('Method not implemented.');
+
+  private readonly logger = new Logger('JwtStrategy');
+
+  override validate(): never {
+    throw new Error('Unxpected call to JwtStrategy#validate()');
   }
+
   constructor(private readonly authService: AuthService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -17,10 +22,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  override authenticate(req: Request, options?: any) {
+  override authenticate(req: Request) {
     const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
     this.authService.validateToken(token)
-      .then(user => this.success(user))
+      .then(user => {
+        if (!user) {
+          this.logger.warn(`Unauthorized access attempt with token: ${token}`);
+          /* unreachable */ return this.fail('Unauthorized', 401);
+        }
+        (req as AuthenticatedRequest).user = user;
+        return this.success(user);
+      })
       .catch(error => this.fail(error, 401));
   }
 }

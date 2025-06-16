@@ -1,8 +1,6 @@
 import {
   Injectable,
   UnauthorizedException,
-  ConflictException,
-  BadRequestException,
   Logger,
   InternalServerErrorException
 } from '@nestjs/common';
@@ -12,11 +10,9 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
-import * as dns from 'dns';
-import { promisify } from 'util';
 import { UserEntity, UserRole } from '#LocalProject/Entities';
-import { RegisterDto } from '#LocalProject/Dtos';
 import { Nullable } from '@here-to-translate/common/types';
+import { IUserAuth } from '@here-to-translate/common/interfaces';
 
 type AccessToken = string;
 type RefreshToken = string;
@@ -32,7 +28,6 @@ export class AuthService {
   private readonly activeTokens = new Set<AccessToken>();
   private readonly tokenMap = new Map<string, Set<RefreshToken | AccessToken>>();
   private readonly googleClient: OAuth2Client;
-  private readonly resolveMx = promisify(dns.resolveMx);
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
@@ -47,16 +42,6 @@ export class AuthService {
     }
     this.googleClient = new OAuth2Client(googleClientId);
     this.logger.log('AuthService initialized');
-  }
-
-  private async validateEmail(email: string): Promise<boolean> {
-    try {
-      const domain = email.split('@')[1];
-      const mxRecords = await this.resolveMx(domain);
-      return mxRecords.length > 0;
-    } catch {
-      return false;
-    }
   }
 
   private generateTokenPair(user: UserEntity) {
@@ -98,46 +83,85 @@ export class AuthService {
     };
   }
 
-  async register(dto: RegisterDto) {
-    // Check for duplicate username
-    const existingUsername = await this.userRepository.findOne({
-      where: { username: dto.username }
-    });
-    if (existingUsername) {
-      throw new ConflictException('Username already exists');
+  async refreshTokens(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid token format');
     }
 
-    // Check for duplicate email
-    const existingEmail = await this.userRepository.findOne({
-      where: { email: dto.email }
-    });
-    if (existingEmail) {
-      throw new ConflictException('Email already exists');
+    if (!(await this.jwt.verifyAsync(refreshToken))) {
+      throw new UnauthorizedException('Invalid token');
     }
 
-    // Check for duplicate phone
-    const existingPhone = await this.userRepository.findOne({
-      where: { phone: dto.phone }
-    });
-    if (existingPhone) {
-      throw new ConflictException('Phone number already exists');
+    if (!this.refreshTokenMap.has(refreshToken)) {
+      throw new UnauthorizedException('Token expired');
     }
 
-    // Validate email domain
-    const isEmailValid = await this.validateEmail(dto.email);
-    if (!isEmailValid) {
-      throw new BadRequestException('Invalid email domain');
+    const accessToken = this.refreshTokenMap.get(refreshToken);
+    this.refreshTokenMap.delete(refreshToken);
+    const tokenData: TokenMeta = this.jwt.decode(refreshToken);
+    const tokens = this.tokenMap.get(tokenData.userId);
+
+    tokens?.delete(refreshToken);
+    if (accessToken) {
+      this.activeTokens.delete(accessToken);
+      tokens?.delete(accessToken);
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = this.userRepository.create({
-      ...dto,
-      passwordHash,
-      role: { id: UserRole.Member }
+    const user = await this.userRepository.findOne({
+      where: { id: BigInt(tokenData.userId) },
+      relations: ['role']
     });
 
-    await this.userRepository.save(user);
-    return { message: 'Registration successful' };
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    return this.generateTokenPair(user);
+  }
+
+  async validateToken(token: string | null): Promise<IUserAuth> {
+    if (!token) {
+      throw new UnauthorizedException('Token is missing');
+    }
+
+    if (!this.activeTokens.has(token)) {
+      throw new UnauthorizedException('Token expired');
+    }
+
+    const payload = await this.jwt.verifyAsync(token);
+    if (!payload) {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    let user: Nullable<UserEntity>;
+    try {
+      user = await this.userRepository.findOne({
+        where: { id: BigInt(payload.userId) },
+        relations: ['role'],
+        select: ['id', 'username']
+      });
+    } catch (e) {
+      this.logger.error("Error fetching user from repository", e);
+      throw new InternalServerErrorException('Error fetching user from repository');
+    }
+    if (!user) {
+      this.activeTokens.delete(token);
+      throw new UnauthorizedException('User not found');
+    }
+    return user as IUserAuth;
+  }
+
+  async login(username: string, password: string) {
+    const user = await this.userRepository.findOne({
+      where: { username },
+      relations: ['role'],
+    });
+
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
+    return this.generateTokenPair(user);
   }
 
   async loginWithGoogle(idToken: string) {
@@ -173,63 +197,9 @@ export class AuthService {
         passwordHash: '',
         fullName: name,
         phone: '',
-        role: { id: UserRole.Member }, 
+        role: { id: UserRole.Member },
       });
       await this.userRepository.save(user);
-    }
-
-    return this.generateTokenPair(user);
-  }
-
-  async login(username: string, password: string) {
-    const user = await this.userRepository.findOne({
-      where: { username },
-      relations: ['role'],
-    });
-
-    if (user?.isActive === false) {
-      throw new UnauthorizedException('Your account have been deactivated');
-    }
-
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      throw new UnauthorizedException('Invalid credentials.');
-    }
-
-    return this.generateTokenPair(user);
-  }
-
-  async refreshTokens(refreshToken: string) {
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid token format');
-    }
-
-    if (!(await this.jwt.verifyAsync(refreshToken))) {
-      throw new UnauthorizedException('Invalid token');
-    }
-
-    if (!this.refreshTokenMap.has(refreshToken)) {
-      throw new UnauthorizedException('Token expired');
-    }
-
-    const aToken = this.refreshTokenMap.get(refreshToken);
-    if (aToken) {
-      this.activeTokens.delete(aToken);
-    }
-
-    const tokenData: TokenMeta = this.jwt.decode(refreshToken);
-    this.refreshTokenMap.delete(refreshToken);
-
-    const tokens = this.tokenMap.get(tokenData.userId);
-    tokens?.delete(refreshToken);
-    tokens?.delete(aToken!);
-
-    const user = await this.userRepository.findOne({
-      where: { id: BigInt(tokenData.userId) },
-      relations: ['role']
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('User not found');
     }
 
     return this.generateTokenPair(user);
@@ -260,36 +230,5 @@ export class AuthService {
     }
 
     return { message: 'Logged out successfully' };
-  }
-
-  async validateToken(token: string | null): Promise<UserEntity> {
-    if (!token) {
-      throw new UnauthorizedException('Token is missing');
-    }
-
-    if (!this.activeTokens.has(token)) {
-      throw new UnauthorizedException('Token expired');
-    }
-
-    const payload = await this.jwt.verifyAsync(token);
-    if (!payload) {
-      throw new UnauthorizedException('Invalid token');
-    }
-
-    let user: Nullable<UserEntity>;
-    try {
-      user = await this.userRepository.findOne({
-        where: { id: BigInt(payload.userId) },
-        relations: ['role'],
-      });
-    } catch (e) {
-      this.logger.error("Error fetching user from repository", e);
-      throw new InternalServerErrorException('Error fetching user from repository');
-    }
-    if (!user) {
-      this.activeTokens.delete(token);
-      throw new UnauthorizedException('User not found');
-    }
-    return user;
   }
 }

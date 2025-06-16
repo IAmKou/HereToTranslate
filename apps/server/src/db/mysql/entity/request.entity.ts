@@ -12,7 +12,7 @@ export enum RequestStatus {
 @Entity('requests')
 export class RequestEntity {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: bigint;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   requester: UserEntity;

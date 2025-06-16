@@ -18,5 +18,19 @@
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/apps/server"
     },
+    {
+      "name": "Launch Web",
+      "request": "launch",
+      "type": "node",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "nx",
+        "serve",
+        "web",
+        "--configuration=development",
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/apps/web"
+    }
 	]
 }

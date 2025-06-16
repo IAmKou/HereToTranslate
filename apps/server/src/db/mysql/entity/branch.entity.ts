@@ -1,10 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, OneToMany, Relation } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
 import { ProjectEntity } from './project.entity';
 import { UserEntity } from './user.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 
-@Entity('branch')
+@Entity('branches')
 export class BranchEntity {
   @PrimaryGeneratedColumn()
   id: bigint;

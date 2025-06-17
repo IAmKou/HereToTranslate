@@ -1,68 +1,66 @@
 <template>
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <img src="../assets/logo.png" alt="Logo" class="logo-img" />
-
+  <aside class="sidebar" :class="{ 'sidebar-collapsed': isCollapsed }">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="../assets/logo.png" alt="Logo" class="logo-img" />
+      </div>
+      <button class="collapse-btn" @click="toggleSidebar">
+        <span class="material-icons">{{ isCollapsed ? 'chevron_right' : 'chevron_left' }}</span>
+      </button>
     </div>
+
     <nav class="sidebar-menu">
-      <router-link to="/" class="menu-item" exact-active-class="active">
-        <span class="material-icons">home</span>
-        <span>Home</span>
+      <router-link to="/userhome" class="menu-item" exact-active-class="active">
+        <span class="material-icons">dashboard</span>
+        <span class="menu-text">Dashboard</span>
+        <span class="tooltip">Dashboard</span>
       </router-link>
-      <router-link to="/todo" class="menu-item">
-        <span class="material-icons">check_circle</span>
-        <span>To Do</span>
+
+      <router-link to="/project" class="menu-item">
+        <span class="material-icons">work</span>
+        <span class="menu-text">Project</span>
+        <span class="tooltip">Project</span>
       </router-link>
-      <router-link to="/managers" class="menu-item">
-        <span class="material-icons">group</span>
-        <span>Managers</span>
-      </router-link>
-      <router-link to="/translation-memories" class="menu-item">
-        <span class="material-icons">history_edu</span>
-        <span>Translation Memories</span>
-      </router-link>
-      <router-link to="/glossaries" class="menu-item">
-        <span class="material-icons">menu_book</span>
-        <span>Glossaries</span>
-      </router-link>
-      <router-link to="/machine-translation" class="menu-item">
-        <span class="material-icons">smart_toy</span>
-        <span>Machine Translation</span>
-      </router-link>
-      <router-link to="/ai" class="menu-item">
-        <span class="material-icons">psychology</span>
-        <span>AI</span>
-      </router-link>
-      <router-link to="/vendors" class="menu-item">
-        <span class="material-icons">storefront</span>
-        <span>Vendors</span>
-      </router-link>
-      <router-link to="/store" class="menu-item">
-        <span class="material-icons">shopping_cart</span>
-        <span>Store</span>
+
+      <router-link to="/user-home/settings" class="menu-item">
+        <span class="material-icons">settings</span>
+        <span class="menu-text">Settings</span>
+        <span class="tooltip">Settings</span>
       </router-link>
     </nav>
-    <div class="sidebar-bottom">
-      <router-link to="/whats-new" class="menu-item">
-        <span class="material-icons">new_releases</span>
-        <span>What's New</span>
+
+    <div class="sidebar-footer">
+      <router-link to="/userprofile" class="menu-item profile-link">
+        <div class="profile-avatar">
+          <span class="material-icons">person</span>
+        </div>
+        <span class="menu-text">Profile</span>
+        <span class="tooltip">Profile</span>
       </router-link>
+
       <router-link to="/help" class="menu-item">
         <span class="material-icons">help_outline</span>
-        <span>Help & Support</span>
+        <span class="menu-text">Help & Support</span>
+        <span class="tooltip">Help & Support</span>
       </router-link>
     </div>
   </aside>
 </template>
 
-<script setup>
-// Layout only
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const isCollapsed = ref(false);
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value;
+};
 </script>
 
 <style scoped>
 .sidebar {
-  width: 240px;
-  background: #fff;
+  width: 260px;
+  background: #ffffff;
   border-right: 1px solid #e5e7eb;
   height: 100vh;
   display: flex;
@@ -70,83 +68,160 @@
   position: fixed;
   left: 0;
   top: 0;
+  transition: all 0.3s ease;
+  z-index: 1000;
 }
+
+.sidebar-collapsed {
+  width: 70px;
+}
+
+.sidebar-header {
+  padding: 1.5rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e5e7eb;
+}
+
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 24px 24px 16px 24px;
+  justify-content: center;
+  width: 100%;
 }
+
 .logo-img {
-  height: 80px;
+  height: 100px;
   width: auto;
-  display: block;
-  margin: 0 auto 12px auto;
+  transition: all 0.3s ease;
 }
-.logo-text {
-  font-size: 28px;
-  font-weight: 800;
-  color: #2563eb;
-  text-align: center;
-  margin-bottom: 16px;
-  letter-spacing: 1px;
+
+.sidebar-collapsed .logo-img {
+  height: 32px;
 }
-.sidebar-menu, .sidebar-bottom {
+
+.collapse-btn {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.collapse-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.sidebar-menu {
+  flex: 1;
+  padding: 1rem 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 0 8px;
+  gap: 0.5rem;
 }
+
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
+  padding: 0.75rem 1rem;
   border-radius: 8px;
-  color: #374151;
+  color: #6b7280;
   text-decoration: none;
-  font-size: 16px;
-  font-weight: 600;
-  transition: background 0.2s, color 0.2s;
-  letter-spacing: 0.01em;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
 }
+
 .menu-item .material-icons {
-  font-size: 22px;
-  color: #9ca3af;
+  font-size: 1.25rem;
+  min-width: 24px;
+  margin-right: 1rem;
 }
-.menu-item.active, .menu-item.router-link-exact-active {
-  background: #f3f4f6;
-  color: #2563eb;
-  font-weight: 700;
+
+.menu-text {
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 0.3s ease;
 }
-.menu-item.active .material-icons, .menu-item.router-link-exact-active .material-icons {
-  color: #2563eb;
+
+.sidebar-collapsed .menu-text {
+  opacity: 0;
 }
+
 .menu-item:hover {
   background: #f3f4f6;
-  color: #2563eb;
+  color: #374151;
 }
-.menu-item:hover .material-icons {
-  color: #2563eb;
+
+.menu-item.active {
+  background: #2563eb;
+  color: #ffffff;
 }
-.sidebar-bottom {
-  margin-top: auto;
-  padding-bottom: 16px;
+
+.tooltip {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #ffffff;
+  color: #374151;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 1000;
 }
-.logo-img {
-  height: 230px; /* hoặc lớn hơn */
-  width: auto;
+
+.sidebar-collapsed .menu-item:hover .tooltip {
+  opacity: 1;
+  visibility: visible;
+  left: calc(100% + 10px);
 }
-@import url('https://fonts.googleapis.com/css?family=Inter:400,500,600,700&display=swap');
-.sidebar {
-  font-family: 'Inter', 'Segoe UI', 'Roboto', Arial, sans-serif;
+
+.sidebar-footer {
+  padding: 1rem 0.5rem;
+  border-top: 1px solid #e5e7eb;
 }
-.logo-text {
-  font-size: 22px;
-  font-weight: 700;
+
+.profile-link {
+  margin-bottom: 0.5rem;
 }
-.menu-item {
-  font-size: 15px;
-  font-weight: 500;
+
+.profile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 1rem;
+}
+
+.profile-avatar .material-icons {
+  font-size: 1.25rem;
+  color: #6b7280;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar-collapsed {
+    transform: translateX(0);
+  }
 }
 </style>

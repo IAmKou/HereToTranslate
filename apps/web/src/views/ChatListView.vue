@@ -27,7 +27,7 @@
               <!-- Search Results -->
               <div v-if="userSearchQuery" class="search-results mt-2">
                 <div v-if="searchResults.length > 0" class="flex flex-column gap-2">
-                  <div v-for="user in searchResults" :key="user.id" 
+                  <div v-for="user in searchResults" :key="user.id"
                        class="p-2 surface-100 border-round cursor-pointer hover:surface-200"
                        @click="startChatWithUser(user)">
                     <div class="flex align-items-center">
@@ -165,7 +165,7 @@ export default defineComponent({
 
     const fetchChatRooms = async () => {
       try {
-        const response = await fetch(`/api/chat/rooms/${currentUserId}`); 
+        const response = await fetch(`/api/chat/rooms/${currentUserId}`);
         const data = await response.json();
         chatRooms.value = data;
       } catch (error) {
@@ -179,7 +179,7 @@ export default defineComponent({
         if (search) {
           url.searchParams.append('search', search);
         }
-        
+
         const response = await fetch(url.toString(), {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -308,4 +308,4 @@ export default defineComponent({
 .hover\:surface-200:hover {
   background-color: var(--surface-200);
 }
-</style> 
+</style>

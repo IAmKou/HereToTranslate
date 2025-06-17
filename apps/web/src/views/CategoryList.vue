@@ -21,12 +21,20 @@
             <i class="pi pi-list text-xl"></i>
             <h2 class="text-xl font-semibold m-0">Categories</h2>
           </div>
-          <Button
-            icon="pi pi-plus"
-            label="Add Category"
-            @click="openAddModal"
-            class="p-button-primary"
-          />
+          <div class="flex gap-2">
+            <Button
+              icon="pi pi-tags"
+              label="Manage Tags"
+              class="p-button-secondary"
+              @click="showTagDialog = true"
+            />
+            <Button
+              icon="pi pi-plus"
+              label="Add Category"
+              @click="openAddModal"
+              class="p-button-primary"
+            />
+          </div>
         </div>
       </template>
       <template #content>
@@ -120,6 +128,22 @@
               </div>
             </template>
           </Column>
+          <Column field="tags" header="Tags" style="min-width: 200px">
+            <template #body="{ data }">
+              <div class="flex flex-wrap gap-2">
+                <template v-if="data.tags && data.tags.length > 0">
+                  <Tag
+                    v-for="tag in data.tags"
+                    :key="tag"
+                    :value="tag"
+                    severity="info"
+                    class="category-tag"
+                  />
+                </template>
+                <span v-else class="text-gray-400 italic">No tags</span>
+              </div>
+            </template>
+          </Column>
           <Column style="min-width: 150px">
             <template #body="slotProps">
               <div class="flex gap-2">
@@ -134,12 +158,6 @@
                   class="p-button-rounded p-button-text p-button-danger p-button-sm"
                   @click="confirmDelete(slotProps.data)"
                   v-tooltip.top="'Delete Category'"
-                />
-                <Button
-                  icon="pi pi-plus"
-                  class="p-button-rounded p-button-text p-button-success p-button-sm"
-                  @click="showAddSubcategory(slotProps.data)"
-                  v-tooltip.top="'Add Subcategory'"
                 />
               </div>
             </template>
@@ -204,6 +222,28 @@
                 Add a brief description to help identify this category
               </small>
             </div>
+            <div class="field">
+              <label for="tags" class="font-medium flex items-center gap-2">
+                <i class="pi pi-tags text-primary"></i>
+                Tags
+                <span class="text-sm text-gray-500">(Select from existing tags)</span>
+              </label>
+              <MultiSelect
+                id="tags"
+                v-model="currentCategory.tags"
+                :options="tags"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Select tags for this category"
+                class="w-full"
+                display="chip"
+                :maxSelectedLabels="5"
+              />
+              <small class="text-gray-500 mt-1">
+                <i class="pi pi-info-circle"></i>
+                Only select tags from the list. You cannot add new tags here.
+              </small>
+            </div>
           </div>
 
           <div class="form-section" v-if="isEditing">
@@ -244,68 +284,52 @@
       </template>
     </Dialog>
 
-    <!-- Add Subcategory Dialog -->
-    <Dialog
-      v-model:visible="showSubcategoryDialog"
-      header="Add Subcategory"
-      :style="{width: '500px'}"
-      :modal="true"
-      :closable="true"
-      :closeOnEscape="true"
-      class="category-dialog"
-    >
+    <!-- Confirm Dialog for Delete -->
+    <ConfirmDialog></ConfirmDialog>
+
+    <!-- Tag Dialog -->
+    <Dialog v-model:visible="showTagDialog" header="Tag Management" :modal="true" :style="{width: '500px'}" class="category-dialog">
       <div class="p-fluid">
         <div class="dialog-content">
           <div class="form-section">
             <div class="section-header">
-              <i class="pi pi-folder text-primary"></i>
-              <h3>Subcategory Information</h3>
+              <i class="pi pi-tags text-primary"></i>
+              <h3>Tag Information</h3>
             </div>
-            <div class="field">
-              <label for="subcategoryName" class="font-medium flex items-center gap-2">
-                <i class="pi pi-tag text-primary"></i>
-                Subcategory Name
-                <span class="required-mark">*</span>
-              </label>
-              <InputText
-                id="subcategoryName"
-                v-model="newSubcategory.name"
-                required
-                autofocus
-                :class="{'p-invalid': submitted && !newSubcategory.name}"
-                placeholder="Enter subcategory name"
-                class="w-full"
-              />
-              <small class="p-error flex items-center gap-1 mt-1" v-if="submitted && !newSubcategory.name">
-                <i class="pi pi-exclamation-circle"></i>
-                Name is required
-              </small>
+            <div class="field flex items-center gap-2 mb-4">
+              <InputText v-model="newTag" placeholder="Enter new tag name" class="w-full" @keyup.enter="addTag" />
+              <Button icon="pi pi-plus" label="Add" @click="addTag" />
+            </div>
+            <DataTable :value="tags" :rows="5" scrollable scrollHeight="200px" class="mb-2">
+              <Column field="name" header="Tag Name" />
+              <Column header="Actions">
+                <template #body="{ data }">
+                  <Button icon="pi pi-pencil" class="p-button-text" @click="editTag(data)" v-tooltip.top="'Edit Tag'" />
+                  <Button icon="pi pi-trash" class="p-button-text p-button-danger" @click="deleteTag(data)" v-tooltip.top="'Delete Tag'" />
+                </template>
+              </Column>
+            </DataTable>
+            <div v-if="editingTag" class="mt-4">
+              <div class="section-header">
+                <i class="pi pi-pencil text-primary"></i>
+                <h3>Edit Tag</h3>
+              </div>
+              <div class="field">
+                <label for="editTagName" class="font-medium flex items-center gap-2">
+                  <i class="pi pi-tag text-primary"></i>
+                  Tag Name
+                </label>
+                <InputText id="editTagName" v-model="editTagName" class="w-full mb-2" />
+              </div>
+              <div class="dialog-footer flex gap-2 justify-end">
+                <Button label="Save" icon="pi pi-check" @click="updateTag" />
+                <Button label="Cancel" icon="pi pi-times" class="p-button-secondary" @click="() => { editingTag = null; editTagName = '' }" />
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <template #footer>
-        <div class="dialog-footer">
-          <Button
-            label="Cancel"
-            icon="pi pi-times"
-            class="p-button-text p-button-rounded"
-            @click="closeSubcategoryDialog"
-            :disabled="saving"
-          />
-          <Button
-            label="Create Subcategory"
-            icon="pi pi-plus"
-            class="p-button-primary p-button-rounded"
-            @click="createSubcategory"
-            :loading="saving"
-          />
-        </div>
-      </template>
     </Dialog>
-
-    <!-- Confirm Dialog for Delete -->
-    <ConfirmDialog></ConfirmDialog>
   </div>
 </template>
 
@@ -324,6 +348,9 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Dialog from 'primevue/dialog';
 import ConfirmDialog from 'primevue/confirmdialog';
+import Chips from 'primevue/chips';
+import Tag from 'primevue/tag';
+import MultiSelect from 'primevue/multiselect';
 
 interface Category {
   id?: number;
@@ -332,7 +359,7 @@ interface Category {
   createdAt?: Date;
   updatedAt?: Date;
   projectId?: number;
-  subCategories?: Category[];
+  tags?: string[];
 }
 
 const API_BASE_URL = 'http://localhost:3000/api';
@@ -346,12 +373,18 @@ const isEditing = ref(false);
 const submitted = ref(false);
 const currentCategory = ref<Category>({
   name: '',
-  description: ''
+  description: '',
+  tags: []
 });
 const newSubcategory = ref<Category>({
   name: ''
 });
 const selectedParentCategory = ref<Category | null>(null);
+const tags = ref([]);
+const showTagDialog = ref(false);
+const newTag = ref('');
+const editingTag = ref(null);
+const editTagName = ref('');
 
 const confirm = useConfirm();
 const toast = useToast();
@@ -366,7 +399,9 @@ const fetchCategories = async () => {
   loading.value = true;
   try {
     const response = await axios.get(`${API_BASE_URL}/category/all`);
+    console.log('API Response:', response.data); // Debug log
     categories.value = response.data;
+    console.log('Categories after update:', categories.value); // Debug log
   } catch (error) {
     console.error('Error fetching categories:', error);
     toast.add({
@@ -380,11 +415,17 @@ const fetchCategories = async () => {
   }
 };
 
+const fetchTags = async () => {
+  const res = await axios.get(`${API_BASE_URL}/tag/all`);
+  tags.value = res.data;
+};
+
 const openAddModal = () => {
   isEditing.value = false;
   currentCategory.value = {
     name: '',
-    description: ''
+    description: '',
+    tags: []
   };
   showDialog.value = true;
   submitted.value = false;
@@ -415,7 +456,8 @@ const saveCategory = async () => {
     if (isEditing.value && currentCategory.value.id) {
       await axios.put(`${API_BASE_URL}/category/update/${currentCategory.value.id}`, {
         name: currentCategory.value.name,
-        description: currentCategory.value.description
+        description: currentCategory.value.description,
+        tags: currentCategory.value.tags
       });
       toast.add({
         severity: 'success',
@@ -428,7 +470,8 @@ const saveCategory = async () => {
     } else {
       await axios.post(`${API_BASE_URL}/category/create`, {
         name: currentCategory.value.name,
-        description: currentCategory.value.description
+        description: currentCategory.value.description,
+        tags: currentCategory.value.tags
       });
 
       // Show success toast
@@ -444,7 +487,8 @@ const saveCategory = async () => {
       submitted.value = false;
       currentCategory.value = {
         name: '',
-        description: ''
+        description: '',
+        tags: []
       };
 
       // Then refresh the categories list
@@ -501,49 +545,29 @@ const deleteCategory = async (category: Category) => {
   }
 };
 
-const showAddSubcategory = (category: Category) => {
-  selectedParentCategory.value = category;
-  newSubcategory.value = { name: '' };
-  showSubcategoryDialog.value = true;
-  submitted.value = false;
+const addTag = async () => {
+  if (!newTag.value.trim()) return;
+  await axios.post(`${API_BASE_URL}/tag/create`, { name: newTag.value.trim() });
+  newTag.value = '';
+  fetchTags();
 };
 
-const closeSubcategoryDialog = () => {
-  if (saving.value) return;
-  showSubcategoryDialog.value = false;
-  selectedParentCategory.value = null;
-  submitted.value = false;
+const editTag = (tag) => {
+  editingTag.value = tag;
+  editTagName.value = tag.name;
 };
 
-const createSubcategory = async () => {
-  if (!selectedParentCategory.value?.id || !newSubcategory.value.name) return;
+const updateTag = async () => {
+  if (!editTagName.value.trim()) return;
+  await axios.put(`${API_BASE_URL}/tag/update/${editingTag.value.id}`, { name: editTagName.value.trim() });
+  editingTag.value = null;
+  editTagName.value = '';
+  fetchTags();
+};
 
-  saving.value = true;
-  try {
-    const subcategoryData = {
-      name: newSubcategory.value.name,
-      categoryId: selectedParentCategory.value.id
-    };
-    await axios.post(`${API_BASE_URL}/subcategory/create`, subcategoryData);
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Subcategory created successfully',
-      life: 3000
-    });
-    await fetchCategories();
-    closeSubcategoryDialog();
-  } catch (error) {
-    console.error('Error creating subcategory:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: 'Failed to create subcategory',
-      life: 3000
-    });
-  } finally {
-    saving.value = false;
-  }
+const deleteTag = async (tag) => {
+  await axios.delete(`${API_BASE_URL}/tag/delete/${tag.id}`);
+  fetchTags();
 };
 
 const formatDate = (date: string | Date | undefined) => {
@@ -553,6 +577,7 @@ const formatDate = (date: string | Date | undefined) => {
 
 onMounted(() => {
   fetchCategories();
+  fetchTags();
 });
 </script>
 
@@ -1130,5 +1155,21 @@ onMounted(() => {
     height: 56px;
     font-size: 1.2rem;
   }
+}
+
+:deep(.category-tag) {
+  background: #FEF9C3;
+  color: #CA8A04;
+  border: 1px solid #FDE68A;
+  padding: 0.5rem 1rem;
+  border-radius: 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+:deep(.category-tag:hover) {
+  background: #FDE68A;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(202, 138, 4, 0.1);
 }
 </style>

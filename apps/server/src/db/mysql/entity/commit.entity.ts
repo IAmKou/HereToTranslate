@@ -5,9 +5,8 @@ import { UserEntity } from './user.entity';
 
 @Entity('commits')
 export class CommitEntity {
-
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @ManyToOne(() => BranchEntity, branch => branch.commits, { nullable: false, onDelete: 'CASCADE' })
   branch: BranchEntity;

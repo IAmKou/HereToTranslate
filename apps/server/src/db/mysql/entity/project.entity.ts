@@ -7,9 +7,10 @@ import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { CategoryEntity } from './category.entity';
 import { ProjectTagEntity } from './project-tag.entity';
+
 @Entity('project')
 export class ProjectEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @Column()
@@ -18,11 +19,10 @@ export class ProjectEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({default: false})
+  @Column({ type: 'boolean', default: false })
   isPublic: boolean;
 
   @ManyToOne(() => UserEntity, user => user.createdProjects)
-  @JoinColumn({ name: 'createdBy' })
   createdBy: UserEntity;
 
   @CreateDateColumn()
@@ -44,12 +44,8 @@ export class ProjectEntity {
   file: FileEntity[];
 
   @ManyToOne(() => CategoryEntity, category => category.id)
-  @JoinColumn({ name: 'categoryId' })
   category: CategoryEntity;
 
   @OneToMany(() => ProjectTagEntity, tag => tag.id)
   tags: ProjectTagEntity[];
-
-
-
 }

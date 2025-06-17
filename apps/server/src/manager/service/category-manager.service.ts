@@ -7,17 +7,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
 import { validateName, sanitizeName } from '#LocalProject/Utils/validation';
-import { CategoryEntity } from '#LocalProject/Entities';
-
-interface DatabaseError extends Error {
-  code?: string;
-}
+import { CategoryEntity, ProjectTagEntity } from '#LocalProject/Entities';
 
 @Injectable()
 export class CategoryManagerService {
   constructor(
     @InjectRepository(CategoryEntity)
-    private readonly categoryRepository: Repository<CategoryEntity>
+    private readonly categoryRepository: Repository<CategoryEntity>,
+    @InjectRepository(ProjectTagEntity)
+    private readonly subCategoryRepository: Repository<ProjectTagEntity>
   ) {}
 
   async getCategories() {
@@ -33,6 +31,13 @@ export class CategoryManagerService {
       throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
     }
 
+    const sanitizedName = sanitizeName(createCategoryDto.name);
+    const existingCategory = await this.categoryRepository.exists({
+      where: { name: sanitizedName }
+    })
+    if (existingCategory) {
+      throw new BadRequestException(`Category with name "${sanitizedName}" already exists`);
+    }
     try {
       const newCategory = this.categoryRepository.create({
         name: sanitizeName(data.name),

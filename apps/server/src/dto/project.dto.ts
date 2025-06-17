@@ -1,5 +1,5 @@
 import { ICreateProjectDto, IUpdateProjectDto } from "@here-to-translate/common/interfaces";
-import { IsNotEmpty, IsNumberString, IsString } from "class-validator";
+import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsString } from "class-validator";
 
 export class CreateProjectDto implements ICreateProjectDto {
   @IsString()
@@ -7,10 +7,14 @@ export class CreateProjectDto implements ICreateProjectDto {
   name: string;
   @IsString()
   description?: string;
-  @IsString()
+  @IsArray()
+  tags?: string[];
+  @IsBoolean()
+  isPublic?: boolean;
   @IsNotEmpty()
+  @IsString()
   @IsNumberString()
-  createdBy: string;
+  categoryId: string;
 }
 
 export class UpdateProjectDto implements IUpdateProjectDto {

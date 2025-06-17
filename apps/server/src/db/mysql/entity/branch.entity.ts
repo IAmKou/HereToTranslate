@@ -6,7 +6,7 @@ import { FileEntity } from './file.entity';
 
 @Entity('branches')
 export class BranchEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @ManyToOne(() => ProjectEntity, project => project.id, { nullable: false, onDelete: 'CASCADE' })

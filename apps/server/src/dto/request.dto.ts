@@ -1,9 +1,7 @@
-import { IsDate, IsNotEmpty, IsNumber, IsNumberString, IsString, Min } from "class-validator";
+import { RequestStatus } from "#LocalProject/Entities";
+import { IsDate, IsEnum, IsNotEmpty, IsNumber, IsNumberString, IsString, Min } from "class-validator";
 
 export class CreateRequestDto {
-  @IsNotEmpty()
-  @IsNumberString()
-  requesterId: string;
   @IsNotEmpty()
   @IsNumberString()
   projectId: string;
@@ -31,4 +29,10 @@ export class UpdateRequestDto {
   dealAmount?: number;
   @IsDate()
   deadline?: Date;
+}
+
+export class ReviewRequestDto {
+  @IsString()
+  @IsEnum(RequestStatus)
+  status: RequestStatus;
 }

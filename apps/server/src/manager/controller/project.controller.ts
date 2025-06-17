@@ -1,30 +1,42 @@
-import { Controller, Post, Body, Get, Patch, Delete } from '@nestjs/common';
+import { Controller, Post, Body, Get, Patch, Delete, UseGuards, Req, UseInterceptors, ClassSerializerInterceptor, Param } from '@nestjs/common';
 import { ProjectManagerService } from '../service/project-manager.service';
 import { CreateProjectDto, UpdateProjectDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from '../../auth/decorators/is-public-endpoint.decorator';
+import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
+import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
+import { JwtFallthroughGuard } from '#LocalProject/Auth/guards/jwt-fallthrough.guard';
 
+// @UseInterceptors(ClassSerializerInterceptor)
 @Controller('projects')
 export class ProjectController {
   constructor(private readonly projects: ProjectManagerService) {}
 
-  @IsPublicEndpoint()
+  @UseInterceptors(JsonSerializerInterceptor)
+  @UseGuards(JwtAuthGuard)
   @Post('create')
-  create(@Body() projectData: CreateProjectDto) {
-    return this.projects.create(projectData);
+  async create(@Body() projectData: CreateProjectDto, @Req() req: AuthenticatedRequest) {
+    return this.projects.create(req.user.id, projectData);
   }
 
+  @UseInterceptors(JsonSerializerInterceptor)
+  @UseGuards(JwtFallthroughGuard)
+  @IsPublicEndpoint()
   @Get(':projectId')
-  project(@Body('projectId') projectId: bigint) {
+  async fetchProject(@Param('projectId') projectId: bigint, @Req() req: AuthenticatedRequest) {
     return this.projects.fetchProject(projectId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':projectId')
-  update(@Body('projectId') projectId: bigint, @Body() projectUpdateData: UpdateProjectDto) {
+  async update(@Param('projectId') projectId: bigint, @Body() projectUpdateData: UpdateProjectDto) {
     return this.projects.updateProject(projectId, projectUpdateData);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Delete(':projectId')
-  delete(@Body('projectId') projectId: bigint) {
-    return this.projects.deleteProject(projectId);
+  async delete(@Body('projectId') projectId: bigint) {
+    await this.projects.deleteProject(projectId);
+    return { message: `Project with ID ${projectId} deleted successfully` };
   }
 }

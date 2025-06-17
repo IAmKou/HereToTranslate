@@ -10,10 +10,12 @@ import { CategoryController } from "./controller/category.controller";
 import { ProjectController } from "./controller/project.controller";
 import { ProjectTagController } from "./controller/project-tag.controller";
 import { UserController } from "./controller/user.controller";
+import { AuthModule } from "#LocalProject/Auth/auth.module";
 
 @Global()
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       CategoryEntity,
       ProjectTagEntity,

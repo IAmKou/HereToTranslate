@@ -15,8 +15,8 @@ export enum TransactionStatus {
 
 @Entity('transaction')
 export class TransactionEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   fromUser: UserEntity;

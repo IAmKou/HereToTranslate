@@ -10,8 +10,8 @@ export enum TaskStatus {
 
 @Entity('task')
 export class TaskEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @Column()
   title: string;

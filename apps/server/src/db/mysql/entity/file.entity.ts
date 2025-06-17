@@ -5,8 +5,8 @@ import { UserEntity } from './user.entity';
 
 @Entity('file')
 export class FileEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'SET NULL' })
   project: ProjectEntity;

@@ -5,8 +5,8 @@ import { ProjectGroupEntity } from './project-group.entity';
 @Entity('groupmember')
 @Unique(['group', 'user'])
 export class GroupMemberEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @ManyToOne(() => ProjectGroupEntity, group => group.members)
   group: ProjectGroupEntity;

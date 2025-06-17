@@ -3,6 +3,7 @@ import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 
 export enum RequestStatus {
+  Cancelled = 'CANCELLED',
   Pending = 'PENDING',
   Approved = 'APPROVED',
   Rejected = 'REJECTED',
@@ -11,7 +12,7 @@ export enum RequestStatus {
 
 @Entity('requests')
 export class RequestEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
@@ -31,9 +32,6 @@ export class RequestEntity {
 
   @Column({ type: 'date', nullable: true })
   deadline: Date;
-
-  @Column({ type: 'text', nullable: true })
-  fileUrl: string;
 
   @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.Pending })
   status: RequestStatus;

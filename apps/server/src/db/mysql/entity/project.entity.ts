@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectRoleEntity } from './project-role.entity';
 import { ProjectGroupEntity } from './project-group.entity';

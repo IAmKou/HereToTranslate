@@ -48,7 +48,7 @@ export class UserManagerService {
     const user = this.userRepository.create({
       ...data,
       passwordHash,
-      role: { id: UserRole.Member }
+      role: { id: BigInt(UserRole.Member) }
     });
 
     await this.userRepository.save(user);
@@ -168,17 +168,22 @@ export class UserManagerService {
       throw new BadRequestException('You cannot change your own role');
     }
 
-    // Prevent admins from assigning admin role
-    if (currentUser.role.id === UserRole.Admin && updateRoleDto.role === UserRole.Admin) {
-      throw new BadRequestException('Admins cannot assign admin role to other users');
+    // Only super admins can assign admin roles
+    if (updateRoleDto.role === UserRole.Admin && currentUser.role.id !== BigInt(UserRole.SuperAdmin)) {
+      throw new BadRequestException('Only super admins can assign admin roles');
     }
 
-    // Prevent non-super admins from modifying admin roles
-    if (currentUser.role.id === UserRole.Admin && user.role.id === UserRole.Admin) {
-      throw new BadRequestException('Admins cannot modify other admin roles');
+    // Only super admins can modify admin roles
+    if (user.role.id === BigInt(UserRole.Admin) && currentUser.role.id !== BigInt(UserRole.SuperAdmin)) {
+      throw new BadRequestException('Only super admins can modify admin roles');
     }
 
-    user.role = { id: updateRoleDto.role } as any;
+    // Prevent assigning super admin role
+    if (updateRoleDto.role === UserRole.SuperAdmin) {
+      throw new BadRequestException('Super admin role cannot be assigned');
+    }
+
+    user.role = { id: BigInt(updateRoleDto.role) } as any;
     return this.userRepository.save(user);
   }
 
@@ -199,7 +204,7 @@ export class UserManagerService {
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.role', 'role')
-      .where('role.id != :adminRoleId', { adminRoleId: 1 })
+      .where('role.id != :superAdminRoleId', { superAdminRoleId: UserRole.SuperAdmin })
       .andWhere('user.isActive = :isActive', { isActive: true });
   
     if (search) {

@@ -7,6 +7,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MainModule } from './main.module';
 import { shared } from '@here-to-translate/common';
+import { BigIntSerializerInterceptor } from './common/interceptors/bigint-serializer.interceptor';
 
 async function bootstrap() {
   shared();
@@ -17,6 +18,7 @@ async function bootstrap() {
 
     }
   ));
+  app.useGlobalInterceptors(new BigIntSerializerInterceptor());
   app.enableCors({
     origin: 'http://localhost:4200', // Vue dev server
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTION'],
@@ -29,5 +31,4 @@ async function bootstrap() {
     `🚀 Application is running on: http://localhost:${port}`
   );
 }
-
 bootstrap();

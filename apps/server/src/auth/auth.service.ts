@@ -156,6 +156,9 @@ export class AuthService {
       where: { username },
       relations: ['role'],
     });
+    if(user?.isActive === false) {
+      throw new UnauthorizedException('Your account have been deactivated');
+    }
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid credentials.');
@@ -197,7 +200,8 @@ export class AuthService {
         passwordHash: '',
         fullName: name,
         phone: '',
-        role: { id: UserRole.Member },
+        role: { id: BigInt(UserRole.Member) },
+        isActive: true,
       });
       await this.userRepository.save(user);
     }

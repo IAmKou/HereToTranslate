@@ -3,7 +3,7 @@ import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 import { UserPermission } from '@here-to-translate/common';
 
-@Entity('projectRole')
+@Entity('projectrole')
 @Unique(['project', 'user'])
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })

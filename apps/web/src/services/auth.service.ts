@@ -80,7 +80,11 @@ class AuthService {
   }
 
   isAdmin(): boolean {
-    return this.user?.role === 'admin';
+    return this.user?.role === 'admin' || this.user?.role === 'super_admin';
+  }
+
+  isSuperAdmin(): boolean {
+    return this.user?.role === 'super_admin';
   }
 
   getAccessToken(): string | null {

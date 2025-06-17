@@ -5,10 +5,12 @@ import { GroupMemberEntity } from './group-member.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
+import { ProjectRoleEntity } from './project-role.entity';
 
 export enum UserRole {
-  Admin = 1,
-  Member
+  SuperAdmin = 1,
+  Admin = 2,
+  Member = 3
 }
 
 @Entity('user')
@@ -55,6 +57,9 @@ export class UserEntity {
 
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
+
+  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
+  projectRoles: ProjectRoleEntity[];
 
 
 }

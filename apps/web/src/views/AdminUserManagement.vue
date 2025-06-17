@@ -199,15 +199,18 @@
 
           <Column field="role" header="Role" sortable>
             <template #body="{ data }">
-              <Dropdown
-                v-model="data.role.id"
-                :options="roleOptions"
-                optionLabel="name"
-                optionValue="id"
-                class="p-inputtext-sm"
-                @change="updateUserRole(data.id, data.role.id)"
-                :disabled="loading"
-              />
+              <div class="role-cell">
+                <i :class="getRoleIcon(data.role.id)" class="mr-2"></i>
+                <Dropdown
+                  v-model="data.role.id"
+                  :options="roleOptions.filter(role => role.id !== null)"
+                  optionLabel="name"
+                  optionValue="id"
+                  class="p-inputtext-sm"
+                  @change="updateUserRole(data.id, data.role.id)"
+                  :disabled="loading || !isSuperAdmin"
+                />
+              </div>
             </template>
           </Column>
 
@@ -230,17 +233,16 @@
             </template>
           </Column>
 
-          <Column header="Actions" :exportable="false" style="min-width: 8rem">
-            <template #body="{ data }">
-              <div class="action-buttons">
-                <Button
-                  icon="pi pi-power-off"
-                  class="p-button-rounded p-button-text p-button-sm"
-                  :class="{ 'p-button-danger': data.isActive, 'p-button-success': !data.isActive }"
-                  @click="toggleUserStatus(data.id)"
-                  :loading="loading"
-                  v-tooltip.top="data.isActive ? 'Deactivate User' : 'Activate User'"
-                  style="margin-right: 5rem"
+          <Column :exportable="false" style="min-width: 8rem">
+            <template #body="slotProps">
+              <div class="flex gap-2">
+                <Button 
+                  :icon="slotProps.data.isActive ? 'pi pi-ban' : 'pi pi-check'" 
+                  text 
+                  rounded 
+                  :severity="slotProps.data.isActive ? 'warning' : 'success'"
+                  @click="confirmStatusChange(slotProps.data)"
+                  v-if="isSuperAdmin"
                 />
               </div>
             </template>
@@ -272,6 +274,7 @@ import ConfirmDialog from 'primevue/confirmdialog';
 import Tooltip from 'primevue/tooltip';
 import { userService, type User } from '../services/user.service';
 import { DataTableFilterMetaData } from 'primevue/datatable';
+import { authService } from '../services/auth.service';
 
 // Register directives
 const vTooltip = Tooltip;
@@ -286,6 +289,7 @@ const loading = ref(false);
 const toast = useToast();
 const confirm = useConfirm();
 const selectedUsers = ref<User[]>([]);
+const isSuperAdmin = computed(() => authService.isSuperAdmin());
 
 const statusOptions = [
   { label: 'All', value: null },
@@ -295,8 +299,9 @@ const statusOptions = [
 
 const roleOptions: Role[] = [
   { id: null, name: 'All' },
-  { id: 1, name: 'Admin' },
-  { id: 2, name: 'Member' }
+  { id: 1, name: 'Super Admin' },
+  { id: 2, name: 'Admin' },
+  { id: 3, name: 'Member' }
 ];
 
 interface CustomFilterMeta {
@@ -412,7 +417,7 @@ const toggleUserStatus = async (userId: string) => {
     accept: async () => {
       try {
         loading.value = true;
-        await userService.toggleUserStatus(userId);
+        await userService.updateUserStatus(userId, true);
         toast.add({
           severity: 'success',
           summary: 'Success',
@@ -465,12 +470,70 @@ const getStatusLabel = (value: boolean | null) => {
 
 const getRoleIcon = (roleId: number | null) => {
   if (roleId === null) return 'pi pi-filter';
-  return roleId === 1 ? 'pi pi-shield' : 'pi pi-user';
+  switch (roleId) {
+    case 1:
+      return 'pi pi-shield-plus';
+    case 2:
+      return 'pi pi-shield';
+    default:
+      return 'pi pi-user';
+  }
 };
 
 const getRoleLabel = (roleId: number | null) => {
   if (roleId === null) return 'All Roles';
-  return roleId === 1 ? 'Admin' : 'Member';
+  switch (roleId) {
+    case 1:
+      return 'Super Admin';
+    case 2:
+      return 'Admin';
+    default:
+      return 'Member';
+  }
+};
+
+const updateUserStatus = async (userId: string, isActive: boolean) => {
+  if (!isSuperAdmin.value) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Only super admins can update user status',
+      life: 3000
+    });
+    return;
+  }
+
+  try {
+    loading.value = true;
+    await userService.updateUserStatus(userId, isActive);
+    await loadUsers();
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
+      life: 3000
+    });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to update user status',
+      life: 3000
+    });
+  } finally {
+    loading.value = false;
+  }
+};
+
+const confirmStatusChange = (user: User) => {
+  confirm.require({
+    message: `Are you sure you want to ${user.isActive ? 'deactivate' : 'activate'} this user?`,
+    header: 'Confirmation',
+    icon: 'pi pi-exclamation-triangle',
+    accept: () => updateUserStatus(user.id, !user.isActive),
+    reject: () => {}
+  });
 };
 
 onMounted(loadUsers);
@@ -941,5 +1004,24 @@ onMounted(loadUsers);
       }
     }
   }
+  .role-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #64748b;
+
+  i {
+    font-size: 1rem;
+    &.pi-shield-plus {
+      color: #8b5cf6; // Purple for Super Admin
+    }
+    &.pi-shield {
+      color: #3b82f6; // Blue for Admin
+    }
+    &.pi-user {
+      color: #10b981; // Green for Member
+    }
+  }
+}
 }
 </style>

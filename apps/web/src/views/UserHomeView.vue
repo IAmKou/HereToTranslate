@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { authService } from '../services/auth.service';
 import { useRouter } from 'vue-router';
+import Sidebar from '../components/Sidebar.vue';
+import TopNavbar from '../components/Navbar.vue';
+import Footer from '../components/AppFooter.vue';
 
 const router = useRouter();
 
@@ -17,13 +20,38 @@ const handleLogout = async () => {
 </script>
 
 <template>
-  <div class="user-home">
-    <h1>Welcome to User Home</h1>
-    <button @click="handleLogout" class="logout-btn">Logout</button>
+  <div class="layout-wrapper">
+    <TopNavbar />
+    <div class="main-content">
+      <Sidebar />
+      <div class="content">
+        <div class="user-home">
+          <h1>Welcome to User Home</h1>
+          <button @click="handleLogout" class="logout-btn">Logout</button>
+        </div>
+      </div>
+    </div>
+    <Footer />
   </div>
 </template>
 
 <style scoped>
+.layout-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+}
+
 .user-home {
   padding: 20px;
   text-align: center;

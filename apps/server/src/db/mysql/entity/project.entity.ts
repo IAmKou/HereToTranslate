@@ -7,9 +7,10 @@ import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { CategoryEntity } from './category.entity';
 import { ProjectTagEntity } from './project-tag.entity';
+
 @Entity('project')
 export class ProjectEntity {
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @Column()

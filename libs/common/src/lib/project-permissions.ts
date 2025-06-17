@@ -1,5 +1,6 @@
 export class ProjectPermissions {
-  static readonly All = 0xFFFFFFFFFFFFFFFFn;
+  // 1 unused bit, since MySql is quirky and implicitly treats bigint as signed
+  static readonly All = BigInt.asUintN(64, -1n) >> 1n;
   static readonly ProjectAdmin = 1n << 63n;
   static readonly ManageMembers = 1n << 62n;
   static readonly ManageBranches = 1n << 61n;
@@ -16,20 +17,21 @@ export class ProjectPermissions {
   static readonly ManageWorkspaceMetadata = 1n << 27n;
   static readonly ViewWorkspace = 1n << 26n;
 
-  static readonly ManageComments = 1n << 13n;
-  static readonly PostComment = 1n << 3n;
-  static readonly ViewDiscussion = 1n << 2n;
+  static readonly ManageComments = 1n << 15n;
+  static readonly PostComment = 1n << 14n;
+  static readonly ViewDiscussion = 1n << 13n;
   static readonly ViewProject = 1n;
 }
 
 export class UserPermission {
   private _value: bigint;
   constructor(value: bigint | boolean | string | number) {
-    this._value = BigInt(value);
+    this._value = BigInt.asUintN(64, BigInt(value));
   }
 
+  /** Returns the permission value as a 64-bit unsigned bigint. */
   get value(): bigint {
-    return this._value;
+    return  BigInt.asUintN(64, this._value);
   }
 
   resolvePermission(perm: ProjectPermissionsTypes | bigint | string | number): bigint {

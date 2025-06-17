@@ -1,9 +1,9 @@
-import { Injectable, ExecutionContext } from "@nestjs/common";
+import { Injectable, ExecutionContext, CanActivate } from "@nestjs/common";
 import { AuthService } from "../auth.service";
 import { ExtractJwt } from "passport-jwt";
 
 @Injectable()
-export class JwtFallthroughGuard {
+export class JwtFallthroughGuard implements CanActivate {
   constructor(
     private readonly authService: AuthService
   ) {}

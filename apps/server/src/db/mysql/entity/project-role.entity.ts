@@ -6,7 +6,7 @@ import { UserPermission } from '@here-to-translate/common';
 @Entity('projectRole')
 @Unique(['project', 'user'])
 export class ProjectRoleEntity {
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @ManyToOne(() => ProjectEntity, project => project.projectRoles)
@@ -20,9 +20,14 @@ export class ProjectRoleEntity {
 
   @Column({
     type: 'bigint',
-    default: 0,
+    default: 0n,
     transformer: {
-      from(value: bigint) { return new UserPermission(value); },
+      from(value: bigint | UserPermission) {
+        if (value instanceof UserPermission) {
+          return value;
+        }
+        return new UserPermission(value);
+      },
       to(permission: UserPermission) { return permission.value; }
     }
   })

@@ -10,7 +10,7 @@ export enum TaskStatus {
 
 @Entity('task')
 export class TaskEntity {
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @Column()

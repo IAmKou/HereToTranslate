@@ -14,7 +14,7 @@ export enum UserRole {
 
 @Entity('user')
 export class UserEntity {
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @Column({ unique: true, length: 50 })

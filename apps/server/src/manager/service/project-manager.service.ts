@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, InternalServerErrorException, SerializeOptions } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { ProjectEntity, UserEntity, ProjectRoleEntity, ProjectTagEntity } from '#LocalProject/Entities';
@@ -49,41 +49,37 @@ export class ProjectManagerService {
     await queryRunner.startTransaction();
 
     try {
-      const projectTags: ProjectTagEntity[] = [];
-      for (const tag of tags) {
-        const existingTag = await queryRunner.manager.findOne(ProjectTagEntity, {
-          where: { name: tag }
-        });
-        if (existingTag) {
-          projectTags.push(existingTag);
-        }
-        else {
-          const newTag = queryRunner.manager.create(ProjectTagEntity, { name: tag });
-          const savedTag = await queryRunner.manager.save(newTag);
-          projectTags.push(savedTag);
-        }
-      }
-
       const project = this.projectRepository.create({
         name,
         description,
         createdBy: { id: BigInt(uid) },
         isPublic,
-        tags: projectTags,
+        tags: tags.map(tag => ({ name: tag })),
         createdAt: new Date(),
         category: { id: BigInt(categoryId) }
       });
 
       const savedProject = await queryRunner.manager.save(project);
 
-      const projectRole = this.projectRoleRepository.create({
+      for (const tag of tags) {
+        const existingTag = await queryRunner.manager.exists(ProjectTagEntity, {
+          where: { name: tag }
+        });
+        if (!existingTag) {
+          const newTag = queryRunner.manager.create(ProjectTagEntity, { name: tag });
+          await queryRunner.manager.save(newTag);
+        }
+      }
+
+      const projectRole = queryRunner.manager.create(ProjectRoleEntity,{
         project: savedProject,
         user: { id: BigInt(uid) },
         permissions: new UserPermission(ProjectPermissions.All),
         name: 'Project Owner'
       });
 
-      await this.projectRoleRepository.save(projectRole);
+
+      await queryRunner.manager.save(projectRole);
       await queryRunner.commitTransaction();
 
       this.logger.debug(`Project created successfully with ID: ${savedProject.id}`);

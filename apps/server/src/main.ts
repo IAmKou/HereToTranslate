@@ -11,12 +11,11 @@ import { shared } from '@here-to-translate/common';
 async function bootstrap() {
   shared();
   const app = await NestFactory.create(MainModule);
-  app.useGlobalPipes(new ValidationPipe(
-    {
-      enableDebugMessages: true,
-
-    }
-  ));
+  // app.useGlobalPipes(new ValidationPipe(
+  //   {
+  //     enableDebugMessages: true,
+  //   }
+  // ));
   app.enableCors({
     origin: 'http://localhost:4200', // Vue dev server
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTION'],

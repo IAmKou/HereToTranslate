@@ -1,8 +1,9 @@
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { CreateRequestDto, ReviewRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseGuards, ValidationPipe } from "@nestjs/common";
 import { RequestManagerService } from "../service/request-manager.service";
+import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
 
 @Controller('requests')
 export class RequestController {
@@ -11,7 +12,10 @@ export class RequestController {
   ) {}
   @UseGuards(JwtAuthGuard)
   @Post('create')
-  async createRequest(@Body() body: CreateRequestDto, @Req() req: AuthenticatedRequest) {
+  async createRequest(
+    @Body(ValidationPipe) body: CreateRequestDto,
+    @Req() req: AuthenticatedRequest
+  ) {
     const { user } = req;
     return this.requests.createRequest(user.id, body);
   }
@@ -19,28 +23,35 @@ export class RequestController {
   @UseGuards(JwtAuthGuard)
   @Get('myRequests')
   async getMyRequests(@Req() req: AuthenticatedRequest) {
-    const { user } = req;
-    return this.requests.getMyRequests(user.id);
+    return this.requests.getMyRequests(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':id/update')
-  async updateRequest(@Param('id') requestId: string, @Body() body: UpdateRequestDto, @Req() req: AuthenticatedRequest) {
-    const { user } = req;
-    return this.requests.updateRequest(user.id, BigInt(requestId), body);
+  @Post(':requestId/update')
+  async updateRequest(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Body(ValidationPipe) body: UpdateRequestDto,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.requests.updateRequest(req.user.id, requestId, body);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':id/review')
-  async reviewRequest(@Param('id') requestId: string, @Body() body: ReviewRequestDto, @Req() req: AuthenticatedRequest) {
-    const { user } = req;
-    return this.requests.reviewRequest(user.id, BigInt(requestId), body.status);
+  @Post(':requestId/review')
+  async reviewRequest(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Body(ValidationPipe) body: ReviewRequestDto,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.requests.reviewRequest(req.user.id, requestId, body.status);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/cancel')
-  async cancelRequest(@Param('id') requestId: string, @Req() req: AuthenticatedRequest) {
-    const { user } = req;
-    return this.requests.cancelRequest(user.id, BigInt(requestId));
+  async cancelRequest(
+    @Param('id', BigIntTransformPipe) requestId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.requests.cancelRequest(req.user.id, requestId);
   }
 }

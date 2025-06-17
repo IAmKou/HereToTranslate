@@ -1,4 +1,4 @@
-export class ProjectPermissions {
+export class PermissionFlags {
   // 1 unused bit, since MySql is quirky and implicitly treats bigint as signed
   static readonly All = BigInt.asUintN(64, -1n) >> 1n;
   static readonly ProjectAdmin = 1n << 63n;
@@ -23,7 +23,7 @@ export class ProjectPermissions {
   static readonly ViewProject = 1n;
 }
 
-export class UserPermission {
+export class Permission {
   private _value: bigint;
   constructor(value: bigint | boolean | string | number) {
     this._value = BigInt.asUintN(64, BigInt(value));
@@ -36,10 +36,10 @@ export class UserPermission {
 
   resolvePermission(perm: ProjectPermissionsTypes | bigint | string | number): bigint {
     if (typeof perm === 'string') {
-      if (!(perm in ProjectPermissions)) {
+      if (!(perm in PermissionFlags)) {
         throw new Error(`Unknown permission string: ${perm}`);
       }
-      return ProjectPermissions[perm as ProjectPermissionsTypes] as bigint;
+      return PermissionFlags[perm as ProjectPermissionsTypes] as bigint;
     } else if (typeof perm === 'bigint' || typeof perm === 'number') {
       return BigInt(perm);
     } else {
@@ -47,21 +47,21 @@ export class UserPermission {
     }
   }
 
-  from(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): UserPermission {
+  from(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): Permission {
     for (const perm of permissions) {
       this._value |= this.resolvePermission(perm);
     }
     return this;
   }
 
-  add(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): UserPermission {
+  add(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): Permission {
     for (const perm of permissions) {
       this._value |= this.resolvePermission(perm);
     }
     return this;
   }
 
-  remove(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): UserPermission {
+  remove(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): Permission {
     for (const perm of permissions) {
       this._value &= ~this.resolvePermission(perm);
     }
@@ -89,7 +89,7 @@ export class UserPermission {
   }
 }
 
-export type ProjectPermissionsTypes = keyof typeof ProjectPermissions;
+export type ProjectPermissionsTypes = keyof typeof PermissionFlags;
 
 export function hasPermission(
   value: bigint,
@@ -98,10 +98,10 @@ export function hasPermission(
   for (const perm of against) {
     let resolvedPerm: bigint;
     if (typeof perm === 'string') {
-      if (!(perm in ProjectPermissions)) {
+      if (!(perm in PermissionFlags)) {
         throw new Error(`Unknown permission string: ${perm}`);
       }
-      resolvedPerm = ProjectPermissions[perm as ProjectPermissionsTypes] as bigint;
+      resolvedPerm = PermissionFlags[perm as ProjectPermissionsTypes] as bigint;
     }
     else {
       resolvedPerm = BigInt(perm)

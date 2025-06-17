@@ -3,14 +3,13 @@ import { map, Observable } from "rxjs";
 import { JsonStringifyWithBigInt } from "./bigint-utils";
 
 @Injectable()
-export class JsonSerializerInterceptor implements NestInterceptor<unknown, string> {
-  intercept(context: ExecutionContext, next: CallHandler<string>): Observable<string> | Promise<Observable<string>> {
+export class JsonSerializerInterceptor<T = unknown> implements NestInterceptor<T, string> {
+  intercept(context: ExecutionContext, next: CallHandler<T>): Observable<string> {
     return next.handle()
       .pipe(map(data => {
         if (data === null || data === undefined) {
-          return data;
+          return JSON.stringify(data);
         }
-
         return JsonStringifyWithBigInt(data)
       }))
   }

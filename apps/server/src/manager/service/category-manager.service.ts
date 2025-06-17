@@ -5,17 +5,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateCategoryDto, CreateSubCategoryDto, UpdateCategoryDto, UpdateSubCategoryDto } from '#LocalProject/Dtos';
+import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
 import { validateName, sanitizeName } from '#LocalProject/Utils/validation';
-import { CategoryEntity, ProjectTagEntity } from '#LocalProject/Entities';
+import { CategoryEntity } from '#LocalProject/Entities';
 
 @Injectable()
 export class CategoryManagerService {
   constructor(
     @InjectRepository(CategoryEntity)
     private readonly categoryRepository: Repository<CategoryEntity>,
-    @InjectRepository(ProjectTagEntity)
-    private readonly subCategoryRepository: Repository<ProjectTagEntity>
   ) {}
 
   async createCategory(createCategoryDto: CreateCategoryDto) {
@@ -55,7 +53,7 @@ export class CategoryManagerService {
     });
   }
 
-  async updateCategory(id: string, category: UpdateCategoryDto) {
+  async updateCategory(id: bigint, category: UpdateCategoryDto) {
     if (category.name && !validateName(category.name)) {
       throw new BadRequestException(
         'Category name contains invalid characters or is empty after trimming'
@@ -65,11 +63,11 @@ export class CategoryManagerService {
     if (category.name) {
       category.name = sanitizeName(category.name);
     }
-    return this.categoryRepository.update(id, category);
+    return this.categoryRepository.update({ id }, category);
   }
 
-  async deleteCategory(id: string) {
-    return this.categoryRepository.delete(id);
+  async deleteCategory(id: bigint) {
+    return this.categoryRepository.delete({ id});
   }
 
 }

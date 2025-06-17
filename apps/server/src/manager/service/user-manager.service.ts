@@ -47,7 +47,7 @@ export class UserManagerService {
     const user = this.userRepository.create({
       ...data,
       passwordHash,
-      role: { id: UserRole.Member }
+      role: { id: BigInt(UserRole.Member) }
     });
 
     await this.userRepository.save(user);
@@ -104,7 +104,8 @@ export class UserManagerService {
   async getUser(uid: bigint) {
     const user = await this.userRepository.findOne({
       where: { id: uid },
-      relations: ['role']
+      relations: ['role'],
+      select: ['id', 'username', 'email', 'phone', 'fullName', 'role', 'createdProjects']
     });
     if (!user) {
       throw new BadRequestException('User not found');

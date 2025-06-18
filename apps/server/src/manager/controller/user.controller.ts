@@ -1,12 +1,14 @@
-import { BadRequestException, Body, Controller, Get, Post, Put, Req, UseGuards, ValidationPipe } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Put, Req, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
 import { RegisterDto } from "#LocalProject/Dtos";
 import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { UserManagerService } from "../service/user-manager.service";
 import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
+import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
 
 @Controller('user')
+@UseInterceptors(JsonSerializerInterceptor)
 export class UserController {
   constructor(private readonly users: UserManagerService) {}
   @IsPublicEndpoint()

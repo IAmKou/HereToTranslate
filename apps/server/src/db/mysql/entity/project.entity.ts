@@ -7,6 +7,7 @@ import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { CategoryEntity } from './category.entity';
 import { ProjectTagEntity } from './project-tag.entity';
+import { ProjectDiscussionThreadEntity } from './project-discussion.entity';
 
 @Entity('project')
 export class ProjectEntity {
@@ -35,16 +36,26 @@ export class ProjectEntity {
   groups: ProjectGroupEntity[];
 
   @OneToMany(() => BranchEntity, branch => branch.project)
-  branch: BranchEntity[];
+  branches: BranchEntity[];
 
   @OneToMany(() => CommitEntity, commit => commit.project)
-  commit: CommitEntity[];
+  commits: CommitEntity[];
+
+  @OneToMany(() => ProjectDiscussionThreadEntity, project => project.id)
+  discussions: ProjectDiscussionThreadEntity[];
 
   @OneToMany(() => FileEntity, file => file.project)
   file: FileEntity[];
 
   @ManyToOne(() => CategoryEntity, category => category.id)
   category: CategoryEntity;
+
+  @ManyToMany(() => UserEntity, user => user.projects)
+  @JoinTable({
+    joinColumn: { name: 'projectId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'userId', referencedColumnName: 'id' }
+  })
+  members: UserEntity[];
 
   @ManyToMany(() => ProjectTagEntity, { cascade: true })
   @JoinTable({

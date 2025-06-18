@@ -156,6 +156,10 @@ export class AuthService {
       relations: ['role']
     });
 
+    if (user?.isActive === false) {
+      throw new UnauthorizedException('Your account have been deactivated');
+    }
+
     if (!user) {
       const username = email;
       const existingUser = await this.userRepository.findOne({ where: { username } });
@@ -168,8 +172,8 @@ export class AuthService {
         email,
         passwordHash: '',
         fullName: name,
-        phone: '', // Empty phone for Google users
-        role: { id: UserRole.Member }, // Default to member role
+        phone: '',
+        role: { id: UserRole.Member }, 
       });
       await this.userRepository.save(user);
     }
@@ -182,6 +186,10 @@ export class AuthService {
       where: { username },
       relations: ['role'],
     });
+
+    if (user?.isActive === false) {
+      throw new UnauthorizedException('Your account have been deactivated');
+    }
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid credentials.');

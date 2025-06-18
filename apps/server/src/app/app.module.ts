@@ -13,6 +13,7 @@ import { EnvConfigs } from './env.schema';
 import { CategoryModule } from '../category/category.module';
 import { SubCategoryModule } from '../subCategory/sub.module';
 import { UsersModule } from '../users/users.module';
+import { ChatModule } from 'src/chat/chat.module';
 import { PostModule } from '../post/post.module';
 import { RequestModule } from '../request/request.module';
 @Module({
@@ -32,7 +33,7 @@ import { RequestModule } from '../request/request.module';
         return instance;
       },
     }),
-    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule, SubCategoryModule, UsersModule,  PostModule, RequestModule],
+    DbContextModule, SeederModule, AuthModule, ProjectModule, CategoryModule, SubCategoryModule, UsersModule, ChatModule],
   controllers: [AppController, MongoController],
   providers: [AppService],
 })

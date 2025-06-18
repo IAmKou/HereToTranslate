@@ -27,7 +27,7 @@ export const isBigInt = (value: unknown): value is bigint =>
   (typeof value === "number" && Number.isSafeInteger(value) && value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER));
 
 
-/** Decorator extension for checking whether value is a `BigInt`. */
+/** Decorator extension for checking whether the given value is a `BigInt`. */
 export function IsBigInt(validationOptions?: ValidationOptions): PropertyDecorator {
   return ValidateBy(
     {

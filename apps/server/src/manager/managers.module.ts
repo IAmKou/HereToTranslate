@@ -1,5 +1,5 @@
-import { ProjectEntity, UserEntity, ProjectRoleEntity, CategoryEntity, ProjectTagEntity, RequestEntity } from "#LocalProject/Entities";
-import { ClassSerializerInterceptor, Global, Module } from "@nestjs/common";
+import { ProjectEntity, UserEntity, ProjectRoleEntity, CategoryEntity, ProjectTagEntity, RequestEntity, ProjectGroupEntity } from "#LocalProject/Entities";
+import { Global, Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CategoryManagerService } from "./service/category-manager.service";
 import { RequestManagerService } from "./service/request-manager.service";
@@ -20,6 +20,7 @@ import { AuthModule } from "#LocalProject/Auth/auth.module";
       UserEntity,
       ProjectEntity,
       ProjectRoleEntity,
+      ProjectGroupEntity,
       RequestEntity
     ])
   ],

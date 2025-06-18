@@ -27,7 +27,6 @@ const router = createRouter({
       path: '/adminhome',
       name: 'adminhome',
       component: () => import('../views/AdminHomeView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true },
       meta: { requiresAuth: true, requiresAdmin: true }},
     {
       path: '/signup',
@@ -55,7 +54,6 @@ const router = createRouter({
       path: '/forgot-password',
       name: 'forgotpassword',
       component: () => import('../views/ForgotPasswordView.vue'),
-      meta: { requiresAuth: false },
       meta: { requiresAuth: false }
     },
     {

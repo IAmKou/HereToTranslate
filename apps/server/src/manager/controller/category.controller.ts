@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Put, ValidationPipe } from "@nestjs/common";
 import { CategoryManagerService } from "#LocalProject/Managers/service/category-manager.service";
 import { CreateCategoryDto, UpdateCategoryDto } from "#LocalProject/Dtos";
+import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
 
 @Controller('categories')
 export class CategoryController {
@@ -12,17 +13,20 @@ export class CategoryController {
   }
 
   @Post('create')
-  createCategory(@Body() newCategoryData: CreateCategoryDto) {
+  createCategory(@Body(ValidationPipe) newCategoryData: CreateCategoryDto) {
     return this.categories.createCategory(newCategoryData);
   }
 
   @Put(':id/update')
-  updateCategory(@Param('id') id: string, @Body() categoryUpdateData: UpdateCategoryDto) {
-    return this.categories.updateCategory(id, categoryUpdateData);
+  updateCategory(
+    @Param('id', BigIntTransformPipe) categoryId: bigint,
+    @Body(ValidationPipe) categoryUpdateData: UpdateCategoryDto
+  ) {
+    return this.categories.updateCategory(categoryId, categoryUpdateData);
   }
 
   @Delete(':id/delete')
-  deleteCategory(@Param('id') id: string) {
-    return this.categories.deleteCategory(id);
+  deleteCategory(@Param('id', BigIntTransformPipe) categoryId: bigint) {
+    return this.categories.deleteCategory(categoryId);
   }
 }

@@ -11,7 +11,7 @@ export class GroupMemberEntity {
   @ManyToOne(() => ProjectGroupEntity, group => group.members)
   group: ProjectGroupEntity;
 
-  @ManyToOne(() => UserEntity, user => user.groupMemberships)
+  @ManyToOne(() => UserEntity, user => user.groupMembers)
   user: UserEntity;
 
   @CreateDateColumn()

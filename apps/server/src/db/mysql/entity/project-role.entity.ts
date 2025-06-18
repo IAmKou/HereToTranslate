@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
-import { UserPermission } from '@here-to-translate/common';
+import { Permission } from '@here-to-translate/common';
 
 @Entity('projectrole')
 @Unique(['project', 'user'])
@@ -22,15 +22,15 @@ export class ProjectRoleEntity {
     type: 'bigint',
     default: 0n,
     transformer: {
-      from(value: bigint | UserPermission) {
-        if (value instanceof UserPermission) {
+      from(value: bigint | Permission) {
+        if (value instanceof Permission) {
           return value;
         }
-        return new UserPermission(value);
+        return new Permission(value);
       },
-      to(permission: UserPermission) { return permission.value; }
+      to(permission: Permission) { return permission.value; }
     }
   })
-  permissions: UserPermission;
+  permissionFlags: Permission;
 }
 

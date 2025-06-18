@@ -47,7 +47,7 @@ export class UserEntity {
   createdProjects: ProjectEntity[];
 
   @OneToMany(() => GroupMemberEntity, groupMember => groupMember.user)
-  groupMemberships: GroupMemberEntity[];
+  groupMembers: GroupMemberEntity[];
 
   @OneToMany(() => BranchEntity, branch => branch.user)
   branch: BranchEntity[];

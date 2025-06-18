@@ -2,7 +2,8 @@ import {
   Injectable,
   UnauthorizedException,
   Logger,
-  InternalServerErrorException
+  InternalServerErrorException,
+  BadRequestException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -191,7 +192,7 @@ export class AuthService {
       const username = email;
       const existingUser = await this.userRepository.findOne({ where: { username } });
       if (existingUser) {
-        throw new Error('User with this email already exists');
+        throw new BadRequestException('User with this email already exists');
       }
 
       user = this.userRepository.create({

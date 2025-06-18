@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectRoleEntity } from './project-role.entity';
 import { ProjectGroupEntity } from './project-group.entity';
@@ -46,6 +46,10 @@ export class ProjectEntity {
   @ManyToOne(() => CategoryEntity, category => category.id)
   category: CategoryEntity;
 
-  @OneToMany(() => ProjectTagEntity, tag => tag.id)
+  @ManyToMany(() => ProjectTagEntity, { cascade: true })
+  @JoinTable({
+    joinColumn: { name: 'projectId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'tagId', referencedColumnName: 'id' }
+  })
   tags: ProjectTagEntity[];
 }

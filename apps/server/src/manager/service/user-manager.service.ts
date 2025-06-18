@@ -79,20 +79,9 @@ export class UserManagerService {
 
   async getUserProfile(userId: bigint) {
     const user = await this.userRepository.findOne({
-      where: { id: userId },
+      where: { id: uid },
       relations: ['role'],
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        phone: true,
-        fullName: true,
-        createdAt: true,
-        role: {
-          id: true,
-          name: true
-        }
-      }
+      select: ['id', 'username', 'email', 'phone', 'fullName', 'role', 'createdProjects']
     });
 
     if (!user) {
@@ -206,14 +195,14 @@ export class UserManagerService {
       .leftJoinAndSelect('user.role', 'role')
       .where('role.id != :superAdminRoleId', { superAdminRoleId: UserRole.SuperAdmin })
       .andWhere('user.isActive = :isActive', { isActive: true });
-  
+
     if (search) {
       queryBuilder.andWhere(
         '(LOWER(user.fullName) LIKE :search OR LOWER(user.username) LIKE :search OR LOWER(user.email) LIKE :search)',
         { search: `%${search.toLowerCase()}%` }
       );
     }
-  
+
     return queryBuilder
       .select([
         'user.id',
@@ -226,5 +215,5 @@ export class UserManagerService {
       .orderBy('user.fullName', 'ASC')
       .getMany();
   }
-  
+
 }

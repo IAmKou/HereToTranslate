@@ -3,7 +3,7 @@ import { Repository } from "typeorm";
 import { CreateRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
 import { BadGatewayException, BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { ProjectPermissions } from "@here-to-translate/common";
+import { PermissionFlags } from "@here-to-translate/common";
 import { DAY } from "#LocalProject/Utils/common";
 
 @Injectable()
@@ -43,7 +43,7 @@ export class RequestManagerService {
 
     if (!userRolesInProject.length
       && !userRolesInProject.some(role =>
-        role.permissions.has(ProjectPermissions.ViewProject)
+        role.permissionFlags.has(PermissionFlags.ViewProject)
       )) {
       throw new BadRequestException(`You cannot create a request in this project`);
     }
@@ -112,9 +112,9 @@ export class RequestManagerService {
     if (request.requester.id !== uid
       && !userRolesInProject.length
       && !userRolesInProject.some(role =>
-        role.permissions.hasAny(
-          ProjectPermissions.ReviewRequests,
-          ProjectPermissions.ViewRequest
+        role.permissionFlags.hasAny(
+          PermissionFlags.ReviewRequests,
+          PermissionFlags.ViewRequest
         )
       )
     ) {
@@ -183,7 +183,7 @@ export class RequestManagerService {
     if (!user) {
       throw new BadRequestException(`User with ID ${uid} not found`);
     }
-    if (!user.projectRoles.every(role => role.permissions.has(ProjectPermissions.ReviewRequests))) {
+    if (!user.projectRoles.every(role => role.permissionFlags.has(PermissionFlags.ReviewRequests))) {
       throw new BadRequestException(`You do not have permission to review requests`);
     }
     if (status === RequestStatus.Completed && request.status !== RequestStatus.Approved) {

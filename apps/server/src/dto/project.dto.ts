@@ -1,9 +1,10 @@
 import { ICreateProjectDto, IUpdateProjectDto } from "@here-to-translate/common/interfaces";
-import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsString } from "class-validator";
+import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsOptional, IsString, MinLength } from "class-validator";
 
 export class CreateProjectDto implements ICreateProjectDto {
   @IsString()
   @IsNotEmpty()
+  @MinLength(3)
   name: string;
   @IsString()
   description?: string;
@@ -11,16 +12,28 @@ export class CreateProjectDto implements ICreateProjectDto {
   tags?: string[];
   @IsBoolean()
   isPublic?: boolean;
-  @IsNotEmpty()
-  @IsString()
   @IsNumberString()
   categoryId: string;
 }
 
 export class UpdateProjectDto implements IUpdateProjectDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @MinLength(3)
+  name?: string;
+  @IsOptional()
   @IsString()
   description?: string;
+  @IsOptional()
+  @IsArray()
+  addTags?: string[];
+  @IsOptional()
+  @IsArray()
+  removeTags?: string[];
+  @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean;
+  @IsOptional()
+  @IsNumberString()
+  categoryId?: string;
 }

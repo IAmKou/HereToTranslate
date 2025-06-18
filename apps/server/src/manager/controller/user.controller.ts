@@ -1,4 +1,4 @@
-import { ArgumentMetadata, BadRequestException, Body, Controller, Get, Param, PipeTransform, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { ArgumentMetadata, BadRequestException, Body, Controller, Get, Param, PipeTransform, Post, Put, Req, UseGuards, ValidationPipe } from "@nestjs/common";
 import { RegisterDto, UpdateProfileDto } from "#LocalProject/Dtos";
 import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
@@ -28,7 +28,7 @@ export class UserController {
   constructor(private readonly users: UserManagerService) {}
   @IsPublicEndpoint()
   @Post('register')
-  register(@Body() dto: RegisterDto) {
+  register(@Body(ValidationPipe) dto: RegisterDto) {
     return this.users.register(dto);
   }
 

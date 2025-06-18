@@ -1,11 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany, ManyToMany } from 'typeorm';
 import { RoleEntity } from './role.entity';
 import { ProjectEntity } from './project.entity';
-import { GroupMemberEntity } from './group-member.entity';
+import { ProjectRoleEntity } from './project-role.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
-import { ProjectRoleEntity } from './project-role.entity';
+import { ProjectGroupEntity } from './project-group.entity';
 
 export enum UserRole {
   SuperAdmin = 1,
@@ -46,8 +46,11 @@ export class UserEntity {
   @OneToMany(() => ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];
 
-  @OneToMany(() => GroupMemberEntity, groupMember => groupMember.user)
-  groupMembers: GroupMemberEntity[];
+  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
+  projectRoles: ProjectRoleEntity[];
+
+  @ManyToMany(() => ProjectGroupEntity, group => group.members, { cascade: true })
+  groups: ProjectGroupEntity[];
 
   @OneToMany(() => BranchEntity, branch => branch.user)
   branch: BranchEntity[];

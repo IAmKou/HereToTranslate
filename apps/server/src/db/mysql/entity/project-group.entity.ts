@@ -1,7 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, ManyToMany, JoinTable } from 'typeorm';
 import { ProjectEntity } from './project.entity';
-import { GroupMemberEntity } from './group-member.entity';
 import { Permission } from '@here-to-translate/common';
+import { UserEntity } from './user.entity';
 
 @Entity('projectgroup')
 export class ProjectGroupEntity {
@@ -14,8 +14,12 @@ export class ProjectGroupEntity {
   @ManyToOne(() => ProjectEntity, project => project.groups)
   project: ProjectEntity;
 
-  @OneToMany(() => GroupMemberEntity, member => member.group)
-  members: GroupMemberEntity[];
+  @ManyToMany(() => UserEntity, user => user.groups)
+  @JoinTable({
+    joinColumn: { name: 'groupId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'userId', referencedColumnName: 'id' }
+  })
+  members: UserEntity[];
 
   @Column({
     type: 'bigint',
@@ -30,5 +34,5 @@ export class ProjectGroupEntity {
       to(permission: Permission) { return permission.value; }
     }
   })
-  permissionFlag: Permission;
+  permissionFlags: Permission;
 }

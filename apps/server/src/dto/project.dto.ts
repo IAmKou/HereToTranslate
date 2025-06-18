@@ -1,3 +1,4 @@
+import { IsBigInt } from "#LocalProject/Utils/bigint-utils";
 import { ICreateProjectDto, IUpdateProjectDto } from "@here-to-translate/common/interfaces";
 import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsOptional, IsString, MinLength } from "class-validator";
 
@@ -16,7 +17,7 @@ export class CreateProjectDto implements ICreateProjectDto {
   categoryId: string;
 }
 
-export class UpdateProjectDto implements IUpdateProjectDto {
+export class UpdateProjectMetadataDto implements IUpdateProjectDto {
   @IsOptional()
   @IsString()
   @MinLength(3)
@@ -36,4 +37,47 @@ export class UpdateProjectDto implements IUpdateProjectDto {
   @IsOptional()
   @IsNumberString()
   categoryId?: string;
+}
+
+export class CreateProjectRoleDto {
+  @IsString()
+  @MinLength(3)
+  name: string;
+  @IsBigInt()
+  permissions: bigint;
+}
+
+export class UpdateProjectRoleDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  name?: string;
+  @IsOptional()
+  @IsBigInt()
+  permissions?: bigint;
+}
+
+export class UserIdsArray {
+  @IsArray()
+  @IsBigInt({ each: true })
+  userIds: bigint[];
+}
+
+export class CreateProjectGroupDto {
+  @IsString()
+  @MinLength(3)
+  name: string;
+  @IsBigInt()
+  permissionFlags: bigint;
+}
+
+
+export class UpdateProjectGroupDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  name?: string;
+  @IsOptional()
+  @IsBigInt()
+  permissionFlags?: bigint;
 }

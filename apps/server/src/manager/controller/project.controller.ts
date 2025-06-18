@@ -182,6 +182,7 @@ export class ProjectController {
     return this.projects.addUsersToGroup(req.user.id, projectId, groupId, userIds.userIds);
   }
 
+
   @UseGuards(JwtAuthGuard)
   @Post(':projectId/groups/:groupId/users/remove')
   async removeUsersFromGroup(

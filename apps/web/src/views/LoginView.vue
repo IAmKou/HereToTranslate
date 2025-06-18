@@ -71,6 +71,14 @@
             <div id="g_id_onload"></div>
             <div id="g_id_signin"></div>
           </div>
+
+          <div class="register-section">
+            <p>Don't have an account?</p>
+            <button type="button" class="register-button" @click="goToRegister">
+              <i class="pi pi-user-plus"></i>
+              Register Now
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -112,6 +120,10 @@ const login = async () => {
   } finally {
     isSubmitting.value = false;
   }
+};
+
+const goToRegister = () => {
+  router.push('/register');
 };
 
 onMounted(() => {
@@ -385,6 +397,46 @@ input:focus {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.register-section {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e1e1e1;
+}
+
+.register-section p {
+  color: #666;
+  margin-bottom: 0.75rem;
+}
+
+.register-button {
+  background: white;
+  color: #4CAF50;
+  border: 2px solid #4CAF50;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.register-button:hover {
+  background: #4CAF50;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(76, 175, 80, 0.2);
+}
+
+.register-button i {
+  font-size: 1.1rem;
 }
 
 @media (max-width: 1024px) {

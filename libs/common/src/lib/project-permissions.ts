@@ -6,7 +6,8 @@ export class PermissionFlags {
   static readonly ManageBranches = 1n << 61n;
   static readonly ManageRoles = 1n << 60n;
   static readonly ManageWorkspaces = 1n << 59n;
-  static readonly ViewAudit = 1n << 58n;
+  static readonly ManageGroups = 1n << 58n;
+  static readonly ViewAudit = 1n << 55n;
 
   static readonly ReviewCommit = 1n << 53n;
   static readonly PushCommit = 1n << 52n;

@@ -169,6 +169,7 @@ export class RequestManagerService {
     request.status = RequestStatus.Cancelled;
     return this.requestRepository.save(request);
   }
+
   async reviewRequest(uid: bigint, requestId: bigint, status: RequestStatus) {
     const request = await this.requestRepository.findOne({
       where: { id: BigInt(requestId) },

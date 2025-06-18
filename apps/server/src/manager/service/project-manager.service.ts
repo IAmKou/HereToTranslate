@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, Logger, InternalServerErrorException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { ProjectEntity, UserEntity, ProjectRoleEntity, ProjectTagEntity, ProjectGroupEntity } from '#LocalProject/Entities';
+import { ProjectEntity, UserEntity, ProjectRoleEntity, ProjectTagEntity, ProjectGroupEntity, CategoryEntity } from '#LocalProject/Entities';
 import { MaybeException } from '#LocalProject/Exceptions';
 import { CreateProjectDto, CreateProjectGroupDto, CreateProjectRoleDto, UpdateProjectGroupDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { PermissionFlags, Permission } from '@here-to-translate/common';
@@ -11,6 +11,8 @@ import { Maybe } from '@here-to-translate/common/types';
 export class ProjectManagerService {
   private readonly logger = new Logger(ProjectManagerService.name);
   constructor(
+    @InjectRepository(CategoryEntity)
+    private readonly categoryRepository: Repository<CategoryEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
     @InjectRepository(UserEntity)
@@ -76,6 +78,14 @@ export class ProjectManagerService {
 
     if (!userExists) {
       throw new BadRequestException(`Unknown user`);
+    }
+
+    const categoryExists = await this.categoryRepository.exists({
+      where: { id: BigInt(categoryId) }
+    });
+
+    if (!categoryExists) {
+      throw new BadRequestException(`Unknown category`);
     }
 
     const queryRunner = this.dataSource.createQueryRunner();

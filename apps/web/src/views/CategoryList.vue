@@ -8,7 +8,7 @@
         </div>
         <div class="header-text">
           <h2>Categories Management</h2>
-          <p class="page-description">Create and manage categories and their subcategories</p>
+          <p class="page-description">Create and manage categories and their project tags</p>
         </div>
       </div>
     </div>
@@ -24,7 +24,7 @@
           <div class="flex gap-2">
             <Button
               icon="pi pi-tags"
-              label="Manage Tags"
+              label="Manage Project Tags"
               class="p-button-secondary"
               @click="showTagDialog = true"
             />
@@ -128,7 +128,7 @@
               </div>
             </template>
           </Column>
-          <Column field="tags" header="Tags" style="min-width: 200px">
+          <Column field="tags" header="Project Tags" style="min-width: 200px">
             <template #body="{ data }">
               <div class="flex flex-wrap gap-2">
                 <template v-if="data.tags && data.tags.length > 0">
@@ -225,16 +225,16 @@
             <div class="field">
               <label for="tags" class="font-medium flex items-center gap-2">
                 <i class="pi pi-tags text-primary"></i>
-                Tags
+                Project Tags
                 <span class="text-sm text-gray-500">(Select from existing tags)</span>
               </label>
               <MultiSelect
                 id="tags"
                 v-model="currentCategory.tags"
-                :options="tags"
+                :options="projectTags"
                 optionLabel="name"
                 optionValue="id"
-                placeholder="Select tags for this category"
+                placeholder="Select project tags for this category"
                 class="w-full"
                 display="chip"
                 :maxSelectedLabels="5"
@@ -287,20 +287,20 @@
     <!-- Confirm Dialog for Delete -->
     <ConfirmDialog></ConfirmDialog>
 
-    <!-- Tag Dialog -->
-    <Dialog v-model:visible="showTagDialog" header="Tag Management" :modal="true" :style="{width: '500px'}" class="category-dialog">
+    <!-- Project Tag Dialog -->
+    <Dialog v-model:visible="showTagDialog" header="Project Tag Management" :modal="true" :style="{width: '500px'}" class="category-dialog">
       <div class="p-fluid">
         <div class="dialog-content">
           <div class="form-section">
             <div class="section-header">
               <i class="pi pi-tags text-primary"></i>
-              <h3>Tag Information</h3>
+              <h3>Project Tag Information</h3>
             </div>
             <div class="field flex items-center gap-2 mb-4">
-              <InputText v-model="newTag" placeholder="Enter new tag name" class="w-full" @keyup.enter="addTag" />
+              <InputText v-model="newTag" placeholder="Enter new project tag name" class="w-full" @keyup.enter="addTag" />
               <Button icon="pi pi-plus" label="Add" @click="addTag" />
             </div>
-            <DataTable :value="tags" :rows="5" scrollable scrollHeight="200px" class="mb-2">
+            <DataTable :value="projectTags" :rows="5" scrollable scrollHeight="200px" class="mb-2">
               <Column field="name" header="Tag Name" />
               <Column header="Actions">
                 <template #body="{ data }">
@@ -312,7 +312,7 @@
             <div v-if="editingTag" class="mt-4">
               <div class="section-header">
                 <i class="pi pi-pencil text-primary"></i>
-                <h3>Edit Tag</h3>
+                <h3>Edit Project Tag</h3>
               </div>
               <div class="field">
                 <label for="editTagName" class="font-medium flex items-center gap-2">
@@ -348,7 +348,6 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Dialog from 'primevue/dialog';
 import ConfirmDialog from 'primevue/confirmdialog';
-import Chips from 'primevue/chips';
 import Tag from 'primevue/tag';
 import MultiSelect from 'primevue/multiselect';
 
@@ -362,13 +361,17 @@ interface Category {
   tags?: string[];
 }
 
+interface ProjectTag {
+  id: number;
+  name: string;
+}
+
 const API_BASE_URL = 'http://localhost:3000/api';
 
 const categories = ref<Category[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const showDialog = ref(false);
-const showSubcategoryDialog = ref(false);
 const isEditing = ref(false);
 const submitted = ref(false);
 const currentCategory = ref<Category>({
@@ -376,14 +379,10 @@ const currentCategory = ref<Category>({
   description: '',
   tags: []
 });
-const newSubcategory = ref<Category>({
-  name: ''
-});
-const selectedParentCategory = ref<Category | null>(null);
-const tags = ref([]);
+const projectTags = ref<ProjectTag[]>([]);
 const showTagDialog = ref(false);
 const newTag = ref('');
-const editingTag = ref(null);
+const editingTag = ref<ProjectTag | null>(null);
 const editTagName = ref('');
 
 const confirm = useConfirm();
@@ -398,7 +397,7 @@ const filters = ref({
 const fetchCategories = async () => {
   loading.value = true;
   try {
-    const response = await axios.get(`${API_BASE_URL}/category/all`);
+    const response = await axios.get(`${API_BASE_URL}/categories/all`);
     console.log('API Response:', response.data); // Debug log
     categories.value = response.data;
     console.log('Categories after update:', categories.value); // Debug log
@@ -415,9 +414,19 @@ const fetchCategories = async () => {
   }
 };
 
-const fetchTags = async () => {
-  const res = await axios.get(`${API_BASE_URL}/tag/all`);
-  tags.value = res.data;
+const fetchProjectTags = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/project-tag/all`);
+    projectTags.value = res.data;
+  } catch (error) {
+    console.error('Error fetching project tags:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load project tags',
+      life: 3000
+    });
+  }
 };
 
 const openAddModal = () => {
@@ -454,7 +463,7 @@ const saveCategory = async () => {
   saving.value = true;
   try {
     if (isEditing.value && currentCategory.value.id) {
-      await axios.put(`${API_BASE_URL}/category/update/${currentCategory.value.id}`, {
+      await axios.put(`${API_BASE_URL}/categories/${currentCategory.value.id}/update`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description,
         tags: currentCategory.value.tags
@@ -468,7 +477,7 @@ const saveCategory = async () => {
       await fetchCategories();
       closeDialog();
     } else {
-      await axios.post(`${API_BASE_URL}/category/create`, {
+      await axios.post(`${API_BASE_URL}/categories/create`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description,
         tags: currentCategory.value.tags
@@ -526,7 +535,7 @@ const deleteCategory = async (category: Category) => {
   if (!category.id) return;
 
   try {
-    await axios.delete(`${API_BASE_URL}/category/delete/${category.id}`);
+    await axios.delete(`${API_BASE_URL}/categories/${category.id}/delete`);
     await fetchCategories();
     toast.add({
       severity: 'success',
@@ -547,27 +556,75 @@ const deleteCategory = async (category: Category) => {
 
 const addTag = async () => {
   if (!newTag.value.trim()) return;
-  await axios.post(`${API_BASE_URL}/tag/create`, { name: newTag.value.trim() });
-  newTag.value = '';
-  fetchTags();
+  try {
+    await axios.post(`${API_BASE_URL}/project-tag/create`, { name: newTag.value.trim() });
+    newTag.value = '';
+    await fetchProjectTags();
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Project tag created successfully',
+      life: 3000
+    });
+  } catch (error) {
+    console.error('Error creating project tag:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to create project tag',
+      life: 3000
+    });
+  }
 };
 
-const editTag = (tag) => {
+const editTag = (tag: ProjectTag) => {
   editingTag.value = tag;
   editTagName.value = tag.name;
 };
 
 const updateTag = async () => {
-  if (!editTagName.value.trim()) return;
-  await axios.put(`${API_BASE_URL}/tag/update/${editingTag.value.id}`, { name: editTagName.value.trim() });
-  editingTag.value = null;
-  editTagName.value = '';
-  fetchTags();
+  if (!editTagName.value.trim() || !editingTag.value) return;
+  try {
+    await axios.put(`${API_BASE_URL}/project-tag/update/${editingTag.value.id}`, { name: editTagName.value.trim() });
+    editingTag.value = null;
+    editTagName.value = '';
+    await fetchProjectTags();
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Project tag updated successfully',
+      life: 3000
+    });
+  } catch (error) {
+    console.error('Error updating project tag:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to update project tag',
+      life: 3000
+    });
+  }
 };
 
-const deleteTag = async (tag) => {
-  await axios.delete(`${API_BASE_URL}/tag/delete/${tag.id}`);
-  fetchTags();
+const deleteTag = async (tag: ProjectTag) => {
+  try {
+    await axios.delete(`${API_BASE_URL}/project-tag/delete/${tag.id}`);
+    await fetchProjectTags();
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Project tag deleted successfully',
+      life: 3000
+    });
+  } catch (error) {
+    console.error('Error deleting project tag:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to delete project tag',
+      life: 3000
+    });
+  }
 };
 
 const formatDate = (date: string | Date | undefined) => {
@@ -577,7 +634,7 @@ const formatDate = (date: string | Date | undefined) => {
 
 onMounted(() => {
   fetchCategories();
-  fetchTags();
+  fetchProjectTags();
 });
 </script>
 

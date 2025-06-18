@@ -251,16 +251,16 @@ export class ProjectManagerService {
     await this.projectRepository.remove(project);
   }
 
-  addRoles;
-  fetchRoles;
-  updateRoles;
-  deleteRoles;
-
-  groupRoles;
-  group
-
-  assignRoles
-
-  join
+  // addRoles;
+  // fetchRoles;
+  // updateRoles;
+  // deleteRoles;
+  //
+  // groupRoles;
+  // group
+  //
+  // assignRoles
+  //
+  // join
 
 }

@@ -77,7 +77,7 @@ export class UserManagerService {
     return this.userRepository.save(user);
   }
 
-  async getUserProfile(userId: bigint) {
+  async getUserProfile(uid: bigint) {
     const user = await this.userRepository.findOne({
       where: { id: uid },
       relations: ['role'],

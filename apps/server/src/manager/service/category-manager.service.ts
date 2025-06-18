@@ -9,13 +9,15 @@ import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
 import { validateName, sanitizeName } from '#LocalProject/Utils/validation';
 import { CategoryEntity, ProjectTagEntity } from '#LocalProject/Entities';
 
+interface DatabaseError extends Error {
+  code?: string;
+}
+
 @Injectable()
 export class CategoryManagerService {
   constructor(
     @InjectRepository(CategoryEntity)
     private readonly categoryRepository: Repository<CategoryEntity>,
-    @InjectRepository(ProjectTagEntity)
-    private readonly subCategoryRepository: Repository<ProjectTagEntity>
   ) {}
 
   async getCategories() {
@@ -31,7 +33,7 @@ export class CategoryManagerService {
       throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
     }
 
-    const sanitizedName = sanitizeName(createCategoryDto.name);
+    const sanitizedName = sanitizeName(data.name);
     const existingCategory = await this.categoryRepository.exists({
       where: { name: sanitizedName }
     })
@@ -54,7 +56,7 @@ export class CategoryManagerService {
     }
   }
 
-  async updateCategory(id: string, data: UpdateCategoryDto) {
+  async updateCategory(id: bigint, data: UpdateCategoryDto) {
     if (data.name && !validateName(data.name)) {
       throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
     }
@@ -67,8 +69,8 @@ export class CategoryManagerService {
       if (data.description !== undefined) {
         updateData.description = data.description;
       }
-      await this.categoryRepository.update(id, updateData);
-      return this.categoryRepository.findOne({ where: { id: Number(id) } });
+      await this.categoryRepository.update({ id }, updateData);
+      return this.categoryRepository.findOne({ where: { id } });
     } catch (error) {
       const dbError = error as DatabaseError;
       if (dbError.code === 'ER_DUP_ENTRY') {
@@ -79,9 +81,9 @@ export class CategoryManagerService {
     }
   }
 
-  async deleteCategory(id: string) {
+  async deleteCategory(id: bigint) {
     try {
-      return this.categoryRepository.delete(id);
+      return this.categoryRepository.delete({ id });
     } catch (error) {
       console.error('Error deleting category:', error);
       throw new InternalServerErrorException('Failed to delete category');

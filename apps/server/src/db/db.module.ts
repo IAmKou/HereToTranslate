@@ -5,9 +5,7 @@ import { DbContextService } from './dbcontext.service';
 import { MySqlConnection } from './mysql/mysql.connection';
 import { MongoDbConnection } from './mongo/mongo.connection';
 import { MongooseModule } from '@nestjs/mongoose';
-import { MongoTest, MongoTestSchema } from './mongo/schema/mongo-test.schema';
-import { MongoService } from '#LocalProject/Services/mongo.service';
-import { Connection as MongooseConnection } from 'mongoose';
+import { Connection, ConnectionStates } from 'mongoose';
 
 @Module({
   imports: [
@@ -27,9 +25,12 @@ import { Connection as MongooseConnection } from 'mongoose';
       useFactory: (configService: ConfigService) => {
         const logger = new Logger('MongooseModule');
         return ({
-          onConnectionCreate(connection: MongooseConnection) {
+          useBigInt64: true,
+
+          onConnectionCreate(connection) {
+            const { readyState } = connection;
             connection.on('connected', c => logger.log(c));
-            logger.log(`MongoDB connection created: ${connection.user}:${connection.host} on ${connection.db?.databaseName}`);
+            logger.log(`Connection created: [${ConnectionStates[readyState]}`);
             return connection;
           },
           connectionErrorFactory(error) {
@@ -40,9 +41,8 @@ import { Connection as MongooseConnection } from 'mongoose';
         });
       },
     }),
-    MongooseModule.forFeature([{ name: MongoTest.name, schema: MongoTestSchema }]),
   ],
-  providers: [DbContextService, MySqlConnection, MongoDbConnection, MongoService],
-  exports: [DbContextService, TypeOrmModule, MongooseModule, MongoService],
+  providers: [DbContextService, MySqlConnection, MongoDbConnection],
+  exports: [DbContextService, TypeOrmModule, MongooseModule],
 })
 export class DbContextModule {}

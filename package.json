@@ -117,8 +117,6 @@
     "apps/*",
     "libs",
     "shared/*",
-    "libs/*",
-    "server2",
-    "server2-e2e"
+    "libs/*"
   ]
 }

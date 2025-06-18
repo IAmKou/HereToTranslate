@@ -7,15 +7,12 @@
           <h1>User Management</h1>
           <p class="subtitle">Manage and monitor user accounts</p>
         </div>
-        <div class="header-actions">
-          <!-- Removed buttons -->
-        </div>
       </div>
 
       <!-- Stats Cards -->
       <div class="stats-container">
         <div class="stat-card">
-          <div class="stat-icon">
+          <div class="stat-icon users">
             <i class="pi pi-users"></i>
           </div>
           <div class="stat-info">
@@ -24,7 +21,7 @@
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">
+          <div class="stat-icon active">
             <i class="pi pi-check-circle"></i>
           </div>
           <div class="stat-info">
@@ -33,7 +30,7 @@
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">
+          <div class="stat-icon admin">
             <i class="pi pi-shield"></i>
           </div>
           <div class="stat-info">
@@ -54,71 +51,64 @@
               <i class="pi pi-search" />
               <InputText
                 v-model="filters.global.value"
-                placeholder="Search by username, name, email or phone..."
+                placeholder="Search users..."
                 class="p-inputtext-lg"
               />
             </span>
           </div>
 
           <div class="filter-section">
-            <div class="filter-group">
-              <span class="filter-label">&nbsp;</span>
-              <Dropdown
-                v-model="filters.isActive.value"
-                :options="statusOptions"
-                optionLabel="label"
-                optionValue="value"
-                placeholder="All Status"
-                class="p-inputtext-lg"
-              >
-                <template #value="slotProps">
-                  <div class="status-dropdown-value">
-                    <i :class="getStatusIcon(slotProps.value)"></i>
-                    <span>{{ getStatusLabel(slotProps.value) }}</span>
-                  </div>
-                </template>
-                <template #option="slotProps">
-                  <div class="status-dropdown-option">
-                    <i :class="getStatusIcon(slotProps.option.value)"></i>
-                    <span>{{ slotProps.option.label }}</span>
-                  </div>
-                </template>
-              </Dropdown>
-            </div>
+            <Dropdown
+              v-model="filters.isActive.value"
+              :options="statusOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="All Status"
+              class="p-inputtext-lg status-dropdown"
+            >
+              <template #value="slotProps">
+                <div class="status-option">
+                  <i :class="getStatusIcon(slotProps.value)"></i>
+                  <span>{{ getStatusLabel(slotProps.value) }}</span>
+                </div>
+              </template>
+              <template #option="slotProps">
+                <div class="status-option">
+                  <i :class="getStatusIcon(slotProps.option.value)"></i>
+                  <span>{{ slotProps.option.label }}</span>
+                </div>
+              </template>
+            </Dropdown>
 
-            <div class="filter-group">
-              <span class="filter-label">&nbsp;</span>
+            <div class="role-filter-group">
               <Dropdown
-                v-model="filters['role.id'].value"
+                :modelValue="filters['role.id'].value"
                 :options="roleOptions"
                 optionLabel="name"
                 optionValue="id"
                 placeholder="All Roles"
-                class="p-inputtext-lg"
+                class="p-inputtext-lg role-dropdown"
+                @change="onRoleFilterChange"
               >
                 <template #value="slotProps">
-                  <div class="role-dropdown-value">
+                  <div class="role-option">
                     <i :class="getRoleIcon(slotProps.value)"></i>
                     <span>{{ getRoleLabel(slotProps.value) }}</span>
                   </div>
                 </template>
                 <template #option="slotProps">
-                  <div class="role-dropdown-option">
+                  <div class="role-option">
                     <i :class="getRoleIcon(slotProps.option.id)"></i>
                     <span>{{ slotProps.option.name }}</span>
                   </div>
                 </template>
               </Dropdown>
-            </div>
 
-            <div class="filter-group">
               <Button
                 icon="pi pi-filter-slash"
-                label="Clear All"
-                class="p-button-outlined p-button-lg"
+                class="p-button-outlined p-button-lg clear-btn"
                 @click="clearFilters"
                 v-tooltip.top="'Clear All Filters'"
-                style="margin-top: 2rem"
               />
             </div>
           </div>
@@ -128,29 +118,27 @@
       <!-- Data Table Section -->
       <div class="table-section">
         <DataTable
-          :value="users"
+          :value="filteredUsers"
           :paginator="true"
           :rows="10"
           :rowsPerPageOptions="[5, 10, 20, 50]"
           :loading="loading"
-          :filters="filters"
           filterDisplay="menu"
           :globalFilterFields="['username', 'fullName', 'email', 'phone']"
           responsiveLayout="scroll"
-          class="p-datatable-sm"
-          v-model:filters1="filters"
+          class="p-datatable-lg"
+          v-model:filters="filters"
           dataKey="id"
           :scrollable="true"
           scrollHeight="calc(100vh - 400px)"
-          :virtualScrollerOptions="{ itemSize: 50 }"
+          :virtualScrollerOptions="{ itemSize: 60 }"
           showGridlines
           stripedRows
           removableSort
           sortMode="multiple"
-          :selection="selectedUsers"
           @row-select="onRowSelect"
           @row-unselect="onRowUnselect"
-          v-model:selection1="selectedUsers"
+          v-model:selection="selectedUsers"
         >
           <template #empty>
             <div class="empty-state">
@@ -162,7 +150,7 @@
 
           <template #loading>
             <div class="loading-state">
-              <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+              <i class="pi pi-spin pi-spinner"></i>
               <span>Loading users...</span>
             </div>
           </template>
@@ -174,8 +162,9 @@
               <div class="user-info">
                 <Avatar
                   :label="getInitials(data.fullName)"
-                  size="normal"
-                  class="mr-2"
+                  size="large"
+                  shape="circle"
+                  class="user-avatar"
                   :style="{ backgroundColor: getRandomColor(data.username) }"
                 />
                 <div class="user-details">
@@ -186,28 +175,65 @@
             </template>
           </Column>
 
-          <Column field="fullName" header="Full Name" sortable></Column>
+          <Column field="fullName" header="Full Name" sortable>
+            <template #body="{ data }">
+              <div class="fullname-cell">{{ data.fullName }}</div>
+            </template>
+          </Column>
 
           <Column field="phone" header="Phone" sortable>
             <template #body="{ data }">
               <div class="phone-cell">
-                <i class="pi pi-phone mr-2"></i>
-                {{ data.phone }}
+                <i class="pi pi-phone"></i>
+                <span>{{ data.phone || 'Not provided' }}</span>
               </div>
             </template>
           </Column>
 
           <Column field="role" header="Role" sortable>
-            <template #body="{ data }">
+            <template #filter="{ filterModel, filterCallback }">
               <Dropdown
-                v-model="data.role.id"
-                :options="roleOptions"
+                v-model="filterModel.value"
+                :options="roleOptions.filter(role => role.id !== null)"
                 optionLabel="name"
                 optionValue="id"
-                class="p-inputtext-sm"
-                @change="updateUserRole(data.id, data.role.id)"
-                :disabled="loading"
-              />
+                placeholder="Select Role"
+                class="p-column-filter"
+                @change="filterCallback()"
+              >
+                <template #option="slotProps">
+                  <div class="role-option">
+                    <i :class="getRoleIcon(slotProps.option.id)"></i>
+                    <span>{{ slotProps.option.name }}</span>
+                  </div>
+                </template>
+              </Dropdown>
+            </template>
+            <template #body="{ data }">
+              <div class="role-cell">
+                <Dropdown
+                  v-model="data.role.id"
+                  :options="roleOptions.filter(role => role.id !== null)"
+                  optionLabel="name"
+                  optionValue="id"
+                  class="p-inputtext-sm"
+                  @change="updateUserRole(data.id, data.role.id)"
+                  :disabled="loading || !isSuperAdmin"
+                >
+                  <template #value>
+                    <div class="role-option">
+                      <i :class="getRoleIcon(data.role?.id)"></i>
+                      <span>{{ data.role?.name }}</span>
+                    </div>
+                  </template>
+                  <template #option="slotProps">
+                    <div class="role-option">
+                      <i :class="getRoleIcon(slotProps.option.id)"></i>
+                      <span>{{ slotProps.option.name }}</span>
+                    </div>
+                  </template>
+                </Dropdown>
+              </div>
             </template>
           </Column>
 
@@ -224,23 +250,22 @@
           <Column field="createdAt" header="Created At" sortable>
             <template #body="{ data }">
               <div class="date-cell">
-                <i class="pi pi-calendar mr-2"></i>
-                {{ formatDate(data.createdAt) }}
+                <i class="pi pi-calendar"></i>
+                <span>{{ formatDate(data.createdAt) }}</span>
               </div>
             </template>
           </Column>
 
-          <Column header="Actions" :exportable="false" style="min-width: 8rem">
-            <template #body="{ data }">
+          <Column :exportable="false">
+            <template #body="slotProps">
               <div class="action-buttons">
                 <Button
-                  icon="pi pi-power-off"
-                  class="p-button-rounded p-button-text p-button-sm"
-                  :class="{ 'p-button-danger': data.isActive, 'p-button-success': !data.isActive }"
-                  @click="toggleUserStatus(data.id)"
-                  :loading="loading"
-                  v-tooltip.top="data.isActive ? 'Deactivate User' : 'Activate User'"
-                  style="margin-right: 5rem"
+                  :icon="slotProps.data.isActive ? 'pi pi-ban' : 'pi pi-check'"
+                  :class="['p-button-rounded p-button-text',
+                    slotProps.data.isActive ? 'p-button-danger' : 'p-button-success']"
+                  v-tooltip.top="slotProps.data.isActive ? 'Deactivate User' : 'Activate User'"
+                  @click="confirmStatusChange(slotProps.data)"
+                  :disabled="!isSuperAdmin"
                 />
               </div>
             </template>
@@ -253,12 +278,19 @@
     <Toast position="top-right" />
 
     <!-- Confirmation Dialog -->
-    <ConfirmDialog></ConfirmDialog>
+    <ConfirmDialog>
+      <template #message="slotProps">
+        <div class="confirm-dialog-content">
+          <i :class="['pi', slotProps.message.icon]"></i>
+          <span>{{ slotProps.message.message }}</span>
+        </div>
+      </template>
+    </ConfirmDialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import Column from 'primevue/column';
@@ -286,6 +318,7 @@ const loading = ref(false);
 const toast = useToast();
 const confirm = useConfirm();
 const selectedUsers = ref<User[]>([]);
+const isSuperAdmin = ref(false);
 
 const statusOptions = [
   { label: 'All', value: null },
@@ -319,6 +352,37 @@ const adminUsers = computed(() => {
   return users.value.filter(user => user.role.id === 1).length;
 });
 
+ref(null);
+
+const filteredUsers = computed(() => {
+  let result = users.value;
+
+  // Apply global search filter
+  if (filters.value.global.value) {
+    const searchTerm = filters.value.global.value.toLowerCase();
+    result = result.filter(user =>
+      user.username.toLowerCase().includes(searchTerm) ||
+      user.fullName.toLowerCase().includes(searchTerm) ||
+      user.email.toLowerCase().includes(searchTerm) ||
+      (user.phone && user.phone.toLowerCase().includes(searchTerm))
+    );
+  }
+
+  // Apply status filter
+  if (filters.value.isActive.value !== null) {
+    result = result.filter(user => user.isActive === filters.value.isActive.value);
+  }
+
+  // Apply role filter
+  if (filters.value['role.id'].value !== null) {
+    result = result.filter(user => {
+      return user.role && user.role.id === filters.value['role.id'].value;
+    });
+  }
+
+  return result;
+});
+
 const getRandomColor = (seed: string) => {
   const colors = [
     '#3b82f6', // blue
@@ -342,11 +406,35 @@ const getInitials = (name: string) => {
 };
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  console.log('Formatting date:', dateString);
+  if (!dateString) {
+    console.log('Date string is empty');
+    return 'N/A';
+  }
+  try {
+    // Parse the date string from database format
+    const date = new Date(dateString);
+    console.log('Parsed date:', date);
+    if (isNaN(date.getTime())) {
+      console.log('Invalid date');
+      return 'N/A';
+    }
+
+    // Format the date to Vietnamese locale
+    const formattedDate = date.toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    console.log('Formatted date:', formattedDate);
+    return formattedDate;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'N/A';
+  }
 };
 
 const clearFilters = () => {
@@ -360,7 +448,24 @@ const clearFilters = () => {
 const loadUsers = async () => {
   try {
     loading.value = true;
-    users.value = await userService.getAllUsers();
+    const response = await userService.getAllUsers();
+    console.log('Raw response from API:', response);
+
+    // Log each user's createdAt field
+    response.forEach(user => {
+      console.log(`User ${user.id} createdAt:`, {
+        raw: user.createdAt,
+        type: typeof user.createdAt,
+        parsed: new Date(user.createdAt)
+      });
+    });
+
+    users.value = response;
+
+    // Check if current user is super admin
+    const currentUser = await userService.getCurrentUser();
+    isSuperAdmin.value = currentUser?.role?.id === 1;
+
     toast.add({
       severity: 'success',
       summary: 'Success',
@@ -368,19 +473,29 @@ const loadUsers = async () => {
       life: 3000
     });
   } catch (err) {
+    console.error('Error loading users:', err);
     toast.add({
       severity: 'error',
       summary: 'Error',
       detail: 'Failed to load users',
       life: 3000
     });
-    console.error('Error loading users:', err);
   } finally {
     loading.value = false;
   }
 };
 
 const updateUserRole = async (userId: string, roleId: number) => {
+  if (!isSuperAdmin.value) {
+    toast.add({
+      severity: 'error',
+      summary: 'Permission Denied',
+      detail: 'Only super admins can change user roles',
+      life: 3000
+    });
+    return;
+  }
+
   try {
     loading.value = true;
     await userService.updateUserRole(userId, roleId);
@@ -402,37 +517,6 @@ const updateUserRole = async (userId: string, roleId: number) => {
   } finally {
     loading.value = false;
   }
-};
-
-const toggleUserStatus = async (userId: string) => {
-  confirm.require({
-    message: 'Are you sure you want to change this user\'s status?',
-    header: 'Confirmation',
-    icon: 'pi pi-exclamation-triangle',
-    accept: async () => {
-      try {
-        loading.value = true;
-        await userService.toggleUserStatus(userId);
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'User status updated successfully',
-          life: 3000
-        });
-        await loadUsers();
-      } catch (err) {
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to update user status',
-          life: 3000
-        });
-        console.error('Error toggling user status:', err);
-      } finally {
-        loading.value = false;
-      }
-    }
-  });
 };
 
 const onRowSelect = (event: any) => {
@@ -473,10 +557,51 @@ const getRoleLabel = (roleId: number | null) => {
   return roleId === 1 ? 'Admin' : 'Member';
 };
 
+const confirmStatusChange = (user: User) => {
+  confirm.require({
+    message: `Are you sure you want to ${user.isActive ? 'deactivate' : 'activate'} this user?`,
+    header: 'Confirmation',
+    icon: 'pi pi-exclamation-triangle',
+    accept: async () => {
+      try {
+        loading.value = true;
+        await (userService as any).toggleUserStatus(user.id);
+        toast.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: `User status updated successfully`,
+          life: 3000
+        });
+        await loadUsers();
+      } catch (err) {
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to update user status',
+          life: 3000
+        });
+        console.error('Error toggling user status:', err);
+      } finally {
+        loading.value = false;
+      }
+    }
+  });
+};
+
+const onRoleFilterChange = (event: any) => {
+  console.log('Role filter changed:', event.value);
+  filters.value['role.id'].value = event.value;
+};
+
+// Add a watch to debug filter changes
+watch(filters, (newValue) => {
+  console.log('Filters changed:', newValue);
+}, { deep: true });
+
 onMounted(loadUsers);
 </script>
 
-<style scoped lang="scss">
+<style lang="scss" scoped>
 .admin-user-management {
   min-height: 100vh;
   background-color: #f8fafc;
@@ -486,44 +611,38 @@ onMounted(loadUsers);
     margin-bottom: 2rem;
 
     .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 1.5rem;
+      margin-bottom: 2rem;
 
       .header-left {
         h1 {
-          margin: 0;
-          color: #1e293b;
-          font-size: 1.875rem;
+          font-size: 2rem;
           font-weight: 600;
+          color: #0f172a;
+          margin: 0;
+          line-height: 1.2;
         }
 
         .subtitle {
-          margin: 0.5rem 0 0;
           color: #64748b;
-          font-size: 0.875rem;
+          font-size: 1rem;
+          margin-top: 0.5rem;
         }
-      }
-
-      .header-actions {
-        display: flex;
-        gap: 0.5rem;
       }
     }
 
     .stats-container {
-      display: flex;
-      gap: 1rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
 
       .stat-card {
-        flex: 1;
         background: white;
-        border-radius: 12px;
+        border-radius: 1rem;
         padding: 1.5rem;
         display: flex;
         align-items: center;
-        gap: 1rem;
+        gap: 1.25rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         transition: all 0.3s ease;
 
@@ -533,10 +652,9 @@ onMounted(loadUsers);
         }
 
         .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          background: #eff6ff;
+          width: 3rem;
+          height: 3rem;
+          border-radius: 0.75rem;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -544,8 +662,19 @@ onMounted(loadUsers);
 
           i {
             font-size: 1.5rem;
-            color: #3b82f6;
-            transition: all 0.3s ease;
+            color: white;
+          }
+
+          &.users {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+          }
+
+          &.active {
+            background: linear-gradient(135deg, #10b981, #059669);
+          }
+
+          &.admin {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
           }
         }
 
@@ -561,16 +690,9 @@ onMounted(loadUsers);
           }
 
           .stat-label {
-            font-size: 0.875rem;
             color: #64748b;
+            font-size: 0.875rem;
             margin-top: 0.25rem;
-          }
-        }
-
-        &:hover .stat-icon {
-          background: #3b82f6;
-          i {
-            color: white;
           }
         }
       }
@@ -580,15 +702,10 @@ onMounted(loadUsers);
   .main-content {
     .search-filter-section {
       background: white;
-      border-radius: 12px;
+      border-radius: 1rem;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s ease;
-
-      &:hover {
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      }
 
       .search-filter-container {
         display: flex;
@@ -596,125 +713,101 @@ onMounted(loadUsers);
         gap: 1.5rem;
 
         .search-box {
-          flex: 0 0 400px;
+          min-width: 300px;
+          max-width: 400px;
 
-          .p-input-icon-left {
+          :deep(.p-input-icon-left) {
             width: 100%;
-
-            .p-inputtext {
-              width: 100%;
-              border-radius: 8px;
-              border: 2px solid #e2e8f0;
-              transition: all 0.3s ease;
-              padding: 0.75rem 1rem 0.75rem 2.5rem;
-              font-size: 1rem;
-              background-color: #f8fafc;
-
-              &:hover {
-                border-color: #cbd5e1;
-                background-color: white;
-              }
-
-              &:focus {
-                border-color: #3b82f6;
-                background-color: white;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-              }
-            }
 
             i {
               color: #64748b;
               left: 1rem;
-              font-size: 1rem;
-              transition: all 0.3s ease;
             }
 
-            &:hover i {
-              color: #3b82f6;
+            input {
+              width: 100%;
+              padding: 0.75rem 1rem 0.75rem 2.5rem;
+              border-radius: 0.5rem;
+              border: 1px solid #e2e8f0;
+              background: #f8fafc;
+              transition: all 0.3s ease;
+
+              &:hover {
+                border-color: #cbd5e1;
+                background: white;
+              }
+
+              &:focus {
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+                background: white;
+              }
             }
           }
         }
 
         .filter-section {
           display: flex;
-          gap: 1.5rem;
+          align-items: center;
+          gap: 1rem;
           flex: 1;
 
-          .filter-group {
+          :deep(.p-dropdown) {
+            min-width: 180px;
+            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            transition: all 0.3s ease;
+
+            &:hover {
+              border-color: #cbd5e1;
+              background: white;
+            }
+
+            &:focus {
+              border-color: #3b82f6;
+              box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+              background: white;
+            }
+
+            .p-dropdown-label {
+              padding: 0.75rem 1rem;
+            }
+          }
+
+          .status-option, .role-option {
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+
+            i {
+              font-size: 1rem;
+            }
+          }
+
+          .role-filter-group {
+            display: flex;
+            align-items: center;
             gap: 0.5rem;
 
-            .filter-label {
-              color: #64748b;
-              font-size: 0.875rem;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-            }
-
-            :deep(.p-dropdown) {
-              min-width: 180px;
-              border-radius: 8px;
-              border: 2px solid #e2e8f0;
-              transition: all 0.3s ease;
-              background-color: #f8fafc;
-
-              &:hover {
-                border-color: #cbd5e1;
-                background-color: white;
-              }
-
-              &:focus {
-                border-color: #3b82f6;
-                background-color: white;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-              }
-
-              .p-dropdown-label {
-                padding: 0.75rem 1rem;
-                font-size: 1rem;
-              }
-
-              .p-dropdown-trigger {
-                width: 3rem;
-              }
-            }
-
-            .status-dropdown-value,
-            .status-dropdown-option,
-            .role-dropdown-value,
-            .role-dropdown-option {
+            .clear-btn {
+              width: 42px;
+              height: 42px;
+              padding: 0;
               display: flex;
               align-items: center;
-              gap: 0.5rem;
-              padding: 0.25rem 0;
-
-              i {
-                font-size: 1rem;
-                color: #64748b;
-              }
-
-              span {
-                font-size: 1rem;
-              }
-            }
-
-            .status-dropdown-value i,
-            .role-dropdown-value i {
-              color: #3b82f6;
-            }
-
-            .p-button {
-              height: 42px;
-              border-width: 2px;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-              font-size: 0.875rem;
+              justify-content: center;
+              border-width: 1px;
+              transition: all 0.3s ease;
 
               &:hover {
                 transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+              }
+
+              i {
+                font-size: 1rem;
               }
             }
           }
@@ -724,29 +817,23 @@ onMounted(loadUsers);
 
     .table-section {
       background: white;
-      border-radius: 12px;
+      border-radius: 1rem;
       padding: 1.5rem;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s ease;
-
-      &:hover {
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      }
 
       :deep(.p-datatable) {
         .p-datatable-header {
           background: transparent;
           border: none;
-          padding: 0;
-          margin-bottom: 1rem;
+          padding: 0 0 1rem 0;
         }
 
         .p-datatable-thead > tr > th {
           background: #f8fafc;
-          color: #64748b;
+          color: #475569;
           font-weight: 600;
           padding: 1rem;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 2px solid #e2e8f0;
           transition: all 0.3s ease;
 
           &:hover {
@@ -754,14 +841,13 @@ onMounted(loadUsers);
           }
         }
 
-        .p-datatable-tbody > tr > td {
-          padding: 1rem;
-          border-bottom: 1px solid #e2e8f0;
-          transition: all 0.3s ease;
-        }
-
         .p-datatable-tbody > tr {
           transition: all 0.3s ease;
+
+          > td {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+          }
 
           &:hover {
             background: #f8fafc;
@@ -777,22 +863,34 @@ onMounted(loadUsers);
       .user-info {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
+        gap: 1rem;
+
+        .user-avatar {
+          width: 2.5rem;
+          height: 2.5rem;
+          font-size: 1rem;
+          font-weight: 600;
+        }
 
         .user-details {
           display: flex;
           flex-direction: column;
 
           .username {
-            font-weight: 500;
             color: #1e293b;
+            font-weight: 500;
           }
 
           .email {
-            font-size: 0.875rem;
             color: #64748b;
+            font-size: 0.875rem;
           }
         }
+      }
+
+      .fullname-cell {
+        color: #1e293b;
+        font-weight: 500;
       }
 
       .phone-cell, .date-cell {
@@ -800,86 +898,165 @@ onMounted(loadUsers);
         align-items: center;
         gap: 0.5rem;
         color: #64748b;
+
+        i {
+          font-size: 1rem;
+          color: #94a3b8;
+        }
       }
 
-      :deep(.p-dropdown) {
-        min-width: 120px;
-        border-radius: 6px;
+      .role-cell {
+        :deep(.p-dropdown) {
+          min-width: 140px;
+          border-radius: 0.5rem;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          transition: all 0.3s ease;
+
+          &:hover:not(:disabled) {
+            border-color: #cbd5e1;
+            background: white;
+          }
+
+          &:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+        }
+
+        .role-option {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.25rem;
+
+          i {
+            font-size: 1rem;
+            &.pi-shield-plus {
+              color: #8b5cf6;
+            }
+            &.pi-shield {
+              color: #3b82f6;
+            }
+            &.pi-user {
+              color: #10b981;
+            }
+          }
+
+          span {
+            color: #1e293b;
+            font-weight: 500;
+          }
+        }
       }
 
-      :deep(.p-tag) {
-        min-width: 80px;
-        text-align: center;
-        border-radius: 6px;
+      :deep(.status-tag) {
+        border-radius: 0.375rem;
+        padding: 0.25rem 0.75rem;
         font-weight: 500;
-        transition: all 0.3s ease;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
 
-        &:hover {
-          transform: translateY(-1px);
+        &.p-tag-success {
+          background: #dcfce7;
+          color: #166534;
+        }
+
+        &.p-tag-danger {
+          background: #fee2e2;
+          color: #991b1b;
         }
       }
 
       .action-buttons {
         display: flex;
-        justify-content: flex-start;
-        align-items: center;
-        width: 100%;
-        height: 100%;
-        padding-left: 1rem;
+        justify-content: center;
+        gap: 0.5rem;
 
-        .p-button {
+        :deep(.p-button) {
+          width: 2.5rem;
+          height: 2.5rem;
           transition: all 0.3s ease;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-width: 2.5rem;
-          min-height: 2.5rem;
 
-          &:hover {
+          &:hover:not(:disabled) {
             transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+
+          &:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
           }
         }
       }
 
-      .empty-state {
+      .empty-state, .loading-state {
         padding: 3rem;
         text-align: center;
         color: #64748b;
 
-        .empty-icon {
+        i {
           font-size: 3rem;
           margin-bottom: 1rem;
-          color: #cbd5e1;
-          transition: all 0.3s ease;
+          color: #94a3b8;
         }
 
         h3 {
-          margin: 0 0 0.5rem;
           color: #1e293b;
+          font-weight: 600;
+          margin: 0 0 0.5rem;
         }
 
         p {
           margin: 0;
           font-size: 0.875rem;
         }
+      }
+    }
+  }
+}
 
-        &:hover .empty-icon {
-          transform: scale(1.1);
-          color: #3b82f6;
-        }
+// Responsive Design
+@media (max-width: 1024px) {
+  .admin-user-management {
+    padding: 1rem;
+
+    .stats-container {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+
+    .search-filter-container {
+      flex-direction: column;
+      gap: 1rem;
+
+      .search-box {
+        width: 100%;
+        max-width: 100%;
       }
 
-      .loading-state {
-        padding: 2rem;
-        text-align: center;
-        color: #64748b;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+      .filter-section {
+        width: 100%;
+        flex-wrap: wrap;
         gap: 1rem;
 
-        i {
-          transition: all 0.3s ease;
+        :deep(.p-dropdown) {
+          flex: 1;
+          min-width: 160px;
+        }
+
+        .role-filter-group {
+          flex: 1;
+          display: flex;
+          gap: 0.5rem;
+
+          .role-dropdown {
+            flex: 1;
+          }
+
+          .clear-btn {
+            width: 42px;
+          }
         }
       }
     }
@@ -888,58 +1065,68 @@ onMounted(loadUsers);
 
 @media (max-width: 768px) {
   .admin-user-management {
-    padding: 1rem;
-
     .page-header {
       .header-content {
         flex-direction: column;
         gap: 1rem;
+      }
+    }
 
-        .header-actions {
-          width: 100%;
-          justify-content: flex-end;
+    .table-section {
+      :deep(.p-datatable) {
+        .p-datatable-tbody > tr > td {
+          padding: 0.75rem;
         }
       }
 
-      .stats-container {
+      .user-info {
         flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
 
-        .stat-card {
-          width: 100%;
-        }
-      }
-    }
-
-    .main-content {
-      .search-filter-section {
-        .search-filter-container {
-          flex-direction: column;
-          gap: 1rem;
-
-          .search-box {
-            flex: 0 0 auto;
-            width: 100%;
-          }
-
-          .filter-section {
-            flex-direction: column;
-            width: 100%;
-            gap: 1rem;
-
-            .filter-group {
-              width: 100%;
-              flex-direction: column;
-              align-items: flex-start;
-              gap: 0.5rem;
-
-              :deep(.p-dropdown) {
-                width: 100%;
-              }
-            }
+        .user-details {
+          .email {
+            display: none;
           }
         }
       }
+
+      .action-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
     }
+  }
+}
+
+// Animation Keyframes
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Confirmation Dialog Styling
+.confirm-dialog-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+
+  i {
+    font-size: 1.5rem;
+    color: #f59e0b;
+  }
+
+  span {
+    color: #1e293b;
+    font-size: 1rem;
+    line-height: 1.5;
   }
 }
 </style>

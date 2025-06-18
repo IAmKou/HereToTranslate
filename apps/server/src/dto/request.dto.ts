@@ -1,22 +1,38 @@
+import { RequestStatus } from "#LocalProject/Entities";
+import { IsDate, IsEnum, IsNotEmpty, IsNumber, IsNumberString, IsString, Min } from "class-validator";
+
 export class CreateRequestDto {
-  projectId?: number;
-  title?: string;
-  description?: string;
-  dealAmount?: number;
-  deadline?: string;
-  fileUrl?: string;
-  targetUserId?: bigint;
+  @IsNotEmpty()
+  @IsNumberString()
+  projectId: string;
+  @IsNotEmpty()
+  @IsString()
+  title: string;
+  @IsNotEmpty()
+  @IsString()
+  description: string;
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  dealAmount: number;
+  @IsNotEmpty()
+  @IsDate()
+  deadline: Date;
 }
+
 export class UpdateRequestDto {
-  id: number;
+  @IsString()
   title?: string;
+  @IsString()
   description?: string;
+  @IsNumber()
   dealAmount?: number;
-  deadline?: string;
-  fileUrl?: string;
+  @IsDate()
+  deadline?: Date;
 }
 
 export class ReviewRequestDto {
-  id: number;
-  status: 'APPROVED' | 'REJECTED';
+  @IsString()
+  @IsEnum(RequestStatus)
+  status: RequestStatus;
 }

@@ -1,92 +1,130 @@
 <template>
   <div class="chat-list">
-    <v-container>
-      <v-row>
-        <v-col cols="12" md="4">
-          <v-card>
-            <v-card-title class="d-flex justify-space-between align-center">
+    <div class="grid">
+      <div class="col-12 md:col-4">
+        <Card>
+          <template #title>
+            <div class="flex justify-content-between align-items-center">
               <span>Chats</span>
-              <v-btn
-                color="primary"
-                icon
-                @click="showNewChatDialog = true"
-              >
-                <v-icon>mdi-plus</v-icon>
-              </v-btn>
-            </v-card-title>
-            <v-list>
-              <v-list-item
-                v-for="room in chatRooms"
-                :key="room._id"
-                :to="`/chat/${room._id}`"
-                link
-              >
-                <v-list-item-avatar>
-                  <v-avatar color="primary">
-                    <span class="white--text">
-                      {{ room.isGroupChat ? 'G' : 'D' }}
-                    </span>
-                  </v-avatar>
-                </v-list-item-avatar>
-                <v-list-item-content>
-                  <v-list-item-title>{{ room.name }}</v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ room.isGroupChat ? 'Group Chat' : 'Direct Message' }}
-                  </v-list-item-subtitle>
-                </v-list-item-content>
-              </v-list-item>
-            </v-list>
-          </v-card>
-        </v-col>
-        <v-col cols="12" md="8">
-          <router-view></router-view>
-        </v-col>
-      </v-row>
-    </v-container>
+              <Button icon="pi pi-plus" @click="showNewChatDialog = true" />
+            </div>
+          </template>
+          <template #content>
+            <!-- User Search Area -->
+            <div class="mb-3">
+              <div class="p-inputgroup">
+                <InputText
+                  v-model="userSearchQuery"
+                  placeholder="Search by name..."
+                  class="w-full"
+                  @input="onUserSearch"
+                />
+                <Button
+                  icon="pi pi-search"
+                  class="p-button-text"
+                />
+              </div>
+              <!-- Search Results -->
+              <div v-if="userSearchQuery" class="search-results mt-2">
+                <div v-if="searchResults.length > 0" class="flex flex-column gap-2">
+                  <div v-for="user in searchResults" :key="user.id"
+                       class="p-2 surface-100 border-round cursor-pointer hover:surface-200"
+                       @click="startChatWithUser(user)">
+                    <div class="flex align-items-center">
+                      <Avatar :label="user.fullName.charAt(0).toUpperCase()" class="mr-2" />
+                      <div>
+                        <div class="font-bold">{{ user.fullName }}</div>
+                        <small class="text-500">@{{ user.username }}</small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="p-2 text-500">
+                  No users found
+                </div>
+              </div>
+            </div>
+
+            <Divider />
+
+            <Listbox
+              v-model="selectedRoom"
+              :options="chatRooms"
+              optionLabel="name"
+              class="w-full"
+              @change="onRoomSelect"
+            >
+              <template #option="slotProps">
+                <div class="flex align-items-center">
+                  <Avatar
+                    :label="slotProps.option.isGroupChat ? 'G' : 'D'"
+                    class="mr-2"
+                    style="background-color: var(--primary-color)"
+                  />
+                  <div>
+                    <div>{{ slotProps.option.name }}</div>
+                    <small class="text-500">
+                      {{ slotProps.option.isGroupChat ? 'Group Chat' : 'Direct Message' }}
+                    </small>
+                  </div>
+                </div>
+              </template>
+            </Listbox>
+          </template>
+        </Card>
+      </div>
+      <div class="col-12 md:col-8">
+        <router-view></router-view>
+      </div>
+    </div>
 
     <!-- New Chat Dialog -->
-    <v-dialog v-model="showNewChatDialog" max-width="500px">
-      <v-card>
-        <v-card-title>New Chat</v-card-title>
-        <v-card-text>
-          <v-form ref="form" v-model="valid">
-            <v-switch
-              v-model="isGroupChat"
-              label="Group Chat"
-            ></v-switch>
+    <Dialog
+      v-model:visible="showNewChatDialog"
+      modal
+      header="New Chat"
+      :style="{ width: '500px' }"
+    >
+      <div class="p-fluid">
+        <div class="field-checkbox mb-3">
+          <Checkbox v-model="isGroupChat" :binary="true" />
+          <label class="ml-2">Group Chat</label>
+        </div>
 
-            <v-text-field
-              v-if="isGroupChat"
-              v-model="chatName"
-              label="Chat Name"
-              :rules="[(v: string) => !!v || 'Name is required']"
-              required
-            ></v-text-field>
+        <div v-if="isGroupChat" class="field mb-3">
+          <label for="chatName">Chat Name</label>
+          <InputText
+            id="chatName"
+            v-model="chatName"
+            :class="{ 'p-invalid': submitted && !chatName }"
+            required
+          />
+          <small class="p-error" v-if="submitted && !chatName">Name is required</small>
+        </div>
 
-            <v-autocomplete
-              v-model="selectedParticipants"
-              :items="users"
-              label="Participants"
-              multiple
-              chips
-              :rules="[(v: number[]) => v.length >= (isGroupChat ? 1 : 2) || 'Select at least 2 participants']"
-              required
-            ></v-autocomplete>
-          </v-form>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn color="error" text @click="showNewChatDialog = false">Cancel</v-btn>
-          <v-btn
-            color="primary"
-            :disabled="!valid"
-            @click="createChatRoom"
-          >
-            Create
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+        <div class="field mb-3">
+          <label for="participants">Participants</label>
+          <MultiSelect
+            id="participants"
+            v-model="selectedParticipants"
+            :options="users"
+            optionLabel="username"
+            optionValue="id"
+            :class="{ 'p-invalid': submitted && !selectedParticipants.length }"
+            placeholder="Search users..."
+            :filter="false"
+            @search="onSearch"
+          />
+          <small class="p-error" v-if="submitted && !selectedParticipants.length">
+            Select at least {{ isGroupChat ? '1' : '2' }} participants
+          </small>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="showNewChatDialog = false" />
+        <Button label="Create" icon="pi pi-check" @click="createChatRoom" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -104,7 +142,9 @@ interface ChatRoom {
 
 interface User {
   id: number;
-  name: string;
+  username: string;
+  fullName: string;
+  email: string;
 }
 
 export default defineComponent({
@@ -117,12 +157,15 @@ export default defineComponent({
     const isGroupChat = ref(false);
     const chatName = ref('');
     const selectedParticipants = ref<number[]>([]);
-    const valid = ref(false);
-    const form = ref();
+    const selectedRoom = ref<ChatRoom | null>(null);
+    const submitted = ref(false);
+    const currentUserId = Number(localStorage.getItem('userId')) || 0;
+    const userSearchQuery = ref('');
+    const searchResults = ref<User[]>([]);
 
     const fetchChatRooms = async () => {
       try {
-        const response = await fetch('/api/chat/rooms/1'); // TODO: Get current user ID from auth
+        const response = await fetch(`/api/chat/rooms/${currentUserId}`);
         const data = await response.json();
         chatRooms.value = data;
       } catch (error) {
@@ -130,9 +173,18 @@ export default defineComponent({
       }
     };
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (search?: string) => {
       try {
-        const response = await fetch('/api/users'); // TODO: Implement user list endpoint
+        const url = new URL('/api/chat/users', window.location.origin);
+        if (search) {
+          url.searchParams.append('search', search);
+        }
+
+        const response = await fetch(url.toString(), {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          }
+        });
         const data = await response.json();
         users.value = data;
       } catch (error) {
@@ -141,7 +193,11 @@ export default defineComponent({
     };
 
     const createChatRoom = async () => {
-      if (!form.value.validate()) return;
+      submitted.value = true;
+
+      if (!chatName.value || !selectedParticipants.value.length) {
+        return;
+      }
 
       try {
         const response = await fetch('/api/chat/rooms', {
@@ -166,6 +222,51 @@ export default defineComponent({
       }
     };
 
+    const onRoomSelect = (event: any) => {
+      if (event.value) {
+        router.push(`/chat/${event.value._id}`);
+      }
+    };
+
+    const onSearch = (event: { query: string }) => {
+      fetchUsers(event.query);
+    };
+
+    const onUserSearch = async () => {
+      if (!userSearchQuery.value.trim()) {
+        searchResults.value = [];
+        return;
+      }
+      await fetchUsers(userSearchQuery.value);
+      searchResults.value = users.value;
+    };
+
+    const startChatWithUser = async (user: User) => {
+      try {
+        const response = await fetch('/api/chat/rooms', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: JSON.stringify({
+            name: `DM-${[currentUserId, user.id].sort().join('-')}`,
+            participants: [currentUserId, user.id],
+            createdBy: currentUserId,
+            isGroupChat: false,
+          }),
+        });
+
+        const newRoom = await response.json();
+        chatRooms.value.push(newRoom);
+        userSearchQuery.value = '';
+        searchResults.value = [];
+        router.push(`/chat/${newRoom._id}`);
+      } catch (error) {
+        console.error('Error creating chat room:', error);
+      }
+    };
+
     onMounted(() => {
       fetchChatRooms();
       fetchUsers();
@@ -178,9 +279,15 @@ export default defineComponent({
       isGroupChat,
       chatName,
       selectedParticipants,
-      valid,
-      form,
+      selectedRoom,
+      submitted,
+      userSearchQuery,
+      searchResults,
       createChatRoom,
+      onRoomSelect,
+      onSearch,
+      onUserSearch,
+      startChatWithUser,
     };
   },
 });
@@ -189,5 +296,16 @@ export default defineComponent({
 <style scoped>
 .chat-list {
   height: 100%;
+}
+
+.search-results {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+}
+
+.hover\:surface-200:hover {
+  background-color: var(--surface-200);
 }
 </style>

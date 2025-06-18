@@ -1,13 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, Relation } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
 import { BranchEntity } from './branch.entity';
 import { ProjectEntity } from './project.entity';
 import { UserEntity } from './user.entity';
 
-@Entity('commit')
+@Entity('commits')
 export class CommitEntity {
-
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @ManyToOne(() => BranchEntity, branch => branch.commits, { nullable: false, onDelete: 'CASCADE' })
   branch: BranchEntity;

@@ -108,7 +108,9 @@ const login = async () => {
     });
 
     const user = authService.getUser();
-    if (user?.role === 'admin') {
+    if (user?.role === 'superadmin') {
+      await router.push('/adminhome');
+    } else if (user?.role === 'admin') {
       await router.push('/adminhome');
     } else {
       await router.push('/userhome');
@@ -158,7 +160,9 @@ const handleGoogleSignIn = async (response) => {
     await authService.loginWithGoogle(response.credential);
 
     const user = authService.getUser();
-    if (user?.role === 'admin') {
+    if (user?.role === 'superadmin') {
+      await router.push('/superadmin');
+    } else if (user?.role === 'admin') {
       await router.push('/adminhome');
     } else {
       await router.push('/userhome');

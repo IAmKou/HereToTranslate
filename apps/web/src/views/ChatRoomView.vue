@@ -1,110 +1,103 @@
 <template>
   <div class="chat-room">
-    <v-card class="chat-container">
+    <Card class="chat-container">
       <!-- Chat Header -->
-      <v-card-title class="d-flex justify-space-between align-center">
-        <div>
-          <span>{{ chatRoom?.name }}</span>
-          <v-chip
+      <template #title>
+        <div class="flex justify-content-between align-items-center">
+          <div class="flex align-items-center">
+            <span>{{ chatRoom?.name }}</span>
+            <Chip
+              v-if="chatRoom?.isGroupChat"
+              label="Group Chat"
+              class="ml-2"
+            />
+          </div>
+          <Menu v-if="chatRoom?.isGroupChat" ref="menu" :model="menuItems" :popup="true" />
+          <Button
             v-if="chatRoom?.isGroupChat"
-            small
-            class="ml-2"
-            color="primary"
-          >
-            Group Chat
-          </v-chip>
+            icon="pi pi-ellipsis-v"
+            @click="menu.toggle($event)"
+            class="p-button-text"
+          />
         </div>
-        <v-menu v-if="chatRoom?.isGroupChat">
-          <template v-slot:activator="{ on, attrs }">
-            <v-btn
-              icon
-              v-bind="attrs"
-              v-on="on"
-            >
-              <v-icon>mdi-dots-vertical</v-icon>
-            </v-btn>
-          </template>
-          <v-list>
-            <v-list-item @click="showAddParticipantsDialog = true">
-              <v-list-item-title>Add Participants</v-list-item-title>
-            </v-list-item>
-          </v-list>
-        </v-menu>
-      </v-card-title>
+      </template>
 
       <!-- Messages Area -->
-      <v-card-text class="messages-container">
-        <div
-          v-for="message in messages"
-          :key="message._id"
-          :class="['message', message.senderId === currentUserId ? 'message-sent' : 'message-received']"
-        >
-          <div class="message-content">
-            {{ message.message }}
-          </div>
-          <div class="message-time">
-            {{ formatTime(message.createdAt) }}
+      <template #content>
+        <div class="messages-container">
+          <div
+            v-for="message in messages"
+            :key="message._id"
+            :class="['message', message.senderId === currentUserId ? 'message-sent' : 'message-received']"
+          >
+            <div class="message-content">
+              {{ message.message }}
+            </div>
+            <div class="message-time">
+              {{ formatTime(message.createdAt) }}
+            </div>
           </div>
         </div>
-      </v-card-text>
+      </template>
 
       <!-- Message Input -->
-      <v-card-actions class="message-input">
-        <v-text-field
-          v-model="newMessage"
-          placeholder="Type a message..."
-          @keyup.enter="sendMessage"
-          :rules="[(v: string) => !!v.trim() || 'Message cannot be empty']"
-          hide-details
-          outlined
-          dense
-        >
-          <template v-slot:append>
-            <v-btn
-              icon
+      <template #footer>
+        <div class="message-input">
+          <div class="p-inputgroup">
+            <InputText
+              v-model="newMessage"
+              placeholder="Type a message..."
+              @keyup.enter="sendMessage"
+              :class="{ 'p-invalid': submitted && !newMessage.trim() }"
+            />
+            <Button
+              icon="pi pi-send"
               @click="sendMessage"
               :disabled="!newMessage.trim()"
-            >
-              <v-icon>mdi-send</v-icon>
-            </v-btn>
-          </template>
-        </v-text-field>
-      </v-card-actions>
-    </v-card>
+            />
+          </div>
+          <small class="p-error" v-if="submitted && !newMessage.trim()">Message cannot be empty</small>
+        </div>
+      </template>
+    </Card>
 
     <!-- Add Participants Dialog -->
-    <v-dialog v-model="showAddParticipantsDialog" max-width="500px">
-      <v-card>
-        <v-card-title>Add Participants</v-card-title>
-        <v-card-text>
-          <v-autocomplete
+    <Dialog
+      v-model:visible="showAddParticipantsDialog"
+      modal
+      header="Add Participants"
+      :style="{ width: '500px' }"
+    >
+      <div class="p-fluid">
+        <div class="field">
+          <label for="participants">Select Users</label>
+          <MultiSelect
+            id="participants"
             v-model="selectedNewParticipants"
-            :items="availableUsers"
-            label="Select Users"
-            multiple
-            chips
-          ></v-autocomplete>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn color="error" text @click="showAddParticipantsDialog = false">
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            @click="addParticipants"
-            :disabled="!selectedNewParticipants.length"
-          >
-            Add
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+            :options="availableUsers"
+            optionLabel="name"
+            optionValue="id"
+            placeholder="Select users"
+            :filter="true"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="showAddParticipantsDialog = false" />
+        <Button
+          label="Add"
+          icon="pi pi-check"
+          @click="addParticipants"
+          :disabled="!selectedNewParticipants.length"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { io } from 'socket.io-client';
 import { format } from 'date-fns';
 
@@ -130,70 +123,73 @@ interface User {
 
 export default defineComponent({
   name: 'ChatRoomView',
-  data() {
-    return {
-      socket: null as any,
-      chatRoom: null as ChatRoom | null,
-      messages: [] as ChatMessage[],
-      newMessage: '',
-      currentUserId: Number(localStorage.getItem('userId')) || 0,
-      showAddParticipantsDialog: false,
-      selectedNewParticipants: [] as number[],
-      availableUsers: [] as User[],
-    };
-  },
-  created() {
-    if (!this.currentUserId) {
-      this.$router.push('/login');
-      return;
-    }
-    this.connectSocket();
-    this.fetchChatRoom();
-    this.fetchMessages();
-    this.fetchAvailableUsers();
-  },
-  beforeUnmount() {
-    this.socket?.disconnect();
-  },
-  methods: {
-    connectSocket() {
-      this.socket = io('http://localhost:3000');
+  setup() {
+    const router = useRouter();
+    const route = useRoute();
+    const socket = ref<any>(null);
+    const chatRoom = ref<ChatRoom | null>(null);
+    const messages = ref<ChatMessage[]>([]);
+    const newMessage = ref('');
+    const currentUserId = Number(localStorage.getItem('userId')) || 0;
+    const showAddParticipantsDialog = ref(false);
+    const selectedNewParticipants = ref<number[]>([]);
+    const availableUsers = ref<User[]>([]);
+    const submitted = ref(false);
+    const menu = ref();
+
+    const menuItems = [
+      {
+        label: 'Add Participants',
+        icon: 'pi pi-users',
+        command: () => {
+          showAddParticipantsDialog.value = true;
+        }
+      }
+    ];
+
+    const connectSocket = () => {
+      socket.value = io('http://localhost:3000');
       
-      this.socket.on('connect', () => {
+      socket.value.on('connect', () => {
         console.log('Connected to WebSocket');
-        this.socket?.emit('joinRoom', this.$route.params.id);
+        socket.value?.emit('joinRoom', route.params.id);
       });
 
-      this.socket.on('newMessage', (message: ChatMessage) => {
-        this.messages.push(message);
+      socket.value.on('newMessage', (message: ChatMessage) => {
+        messages.value.push(message);
       });
-    },
-    async fetchChatRoom() {
+    };
+
+    const fetchChatRoom = async () => {
       try {
-        const response = await fetch(`/api/chat/rooms/${this.$route.params.id}`);
-        this.chatRoom = await response.json();
+        const response = await fetch(`/api/chat/rooms/${route.params.id}`);
+        chatRoom.value = await response.json();
       } catch (error) {
         console.error('Error fetching chat room:', error);
       }
-    },
-    async fetchMessages() {
+    };
+
+    const fetchMessages = async () => {
       try {
-        const response = await fetch(`/api/chat/messages/${this.$route.params.id}`);
-        this.messages = await response.json();
+        const response = await fetch(`/api/chat/messages/${route.params.id}`);
+        messages.value = await response.json();
       } catch (error) {
         console.error('Error fetching messages:', error);
       }
-    },
-    async fetchAvailableUsers() {
+    };
+
+    const fetchAvailableUsers = async () => {
       try {
         const response = await fetch('/api/users');
-        this.availableUsers = await response.json();
+        availableUsers.value = await response.json();
       } catch (error) {
         console.error('Error fetching users:', error);
       }
-    },
-    async sendMessage() {
-      if (!this.newMessage.trim()) return;
+    };
+
+    const sendMessage = async () => {
+      submitted.value = true;
+      if (!newMessage.value.trim()) return;
 
       try {
         const response = await fetch('/api/chat/messages', {
@@ -202,41 +198,80 @@ export default defineComponent({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            roomId: this.$route.params.id,
-            senderId: this.currentUserId,
-            message: this.newMessage,
+            roomId: route.params.id,
+            senderId: currentUserId,
+            message: newMessage.value,
           }),
         });
 
         const message = await response.json();
-        this.messages.push(message);
-        this.newMessage = '';
+        messages.value.push(message);
+        newMessage.value = '';
+        submitted.value = false;
       } catch (error) {
         console.error('Error sending message:', error);
       }
-    },
-    async addParticipants() {
+    };
+
+    const addParticipants = async () => {
       try {
-        await fetch(`/api/chat/rooms/${this.$route.params.id}/participants`, {
+        await fetch(`/api/chat/rooms/${route.params.id}/participants`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            participants: this.selectedNewParticipants,
+            participants: selectedNewParticipants.value,
           }),
         });
 
-        this.showAddParticipantsDialog = false;
-        this.selectedNewParticipants = [];
-        await this.fetchChatRoom();
+        showAddParticipantsDialog.value = false;
+        selectedNewParticipants.value = [];
+        await fetchChatRoom();
       } catch (error) {
         console.error('Error adding participants:', error);
       }
-    },
-    formatTime(date: string) {
+    };
+
+    const formatTime = (date: string) => {
       return format(new Date(date), 'HH:mm');
-    },
+    };
+
+    onMounted(() => {
+      if (!currentUserId) {
+        router.push('/login');
+        return;
+      }
+      connectSocket();
+      fetchChatRoom();
+      fetchMessages();
+      fetchAvailableUsers();
+    });
+
+    onBeforeUnmount(() => {
+      socket.value?.disconnect();
+    });
+
+    return {
+      socket,
+      chatRoom,
+      messages,
+      newMessage,
+      currentUserId,
+      showAddParticipantsDialog,
+      selectedNewParticipants,
+      availableUsers,
+      submitted,
+      menu,
+      menuItems,
+      connectSocket,
+      fetchChatRoom,
+      fetchMessages,
+      fetchAvailableUsers,
+      sendMessage,
+      addParticipants,
+      formatTime,
+    };
   },
 });
 </script>
@@ -257,38 +292,38 @@ export default defineComponent({
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .message {
   max-width: 70%;
-  padding: 8px 12px;
-  border-radius: 12px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
   position: relative;
 }
 
 .message-sent {
   align-self: flex-end;
-  background-color: #1976d2;
-  color: white;
+  background-color: var(--primary-color);
+  color: var(--primary-color-text);
 }
 
 .message-received {
   align-self: flex-start;
-  background-color: #f5f5f5;
+  background-color: var(--surface-200);
 }
 
 .message-time {
   font-size: 0.75rem;
   opacity: 0.7;
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 
 .message-input {
-  padding: 16px;
-  border-top: 1px solid #e0e0e0;
+  padding: 1rem;
+  border-top: 1px solid var(--surface-border);
 }
 </style> 

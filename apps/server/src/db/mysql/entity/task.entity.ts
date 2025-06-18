@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { ProjectGroupEntity } from './projectGroup.entity';
+import { ProjectGroupEntity } from './project-group.entity';
 
 export enum TaskStatus {
   Pending = 'PENDING',
@@ -10,8 +10,8 @@ export enum TaskStatus {
 
 @Entity('task')
 export class TaskEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @Column()
   title: string;

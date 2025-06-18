@@ -1,11 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { ProjectEntity } from './project.entity';
-import { SubCategoryEntity } from './subCategory.entity';
+import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn } from 'typeorm';
 
 @Entity('category')
 export class CategoryEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @Column({ unique: true })
   name: string;
@@ -13,15 +11,6 @@ export class CategoryEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @CreateDateColumn()
-  createdAt: Date;
-
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @OneToMany(() => ProjectEntity, project => project.category)
-  project: ProjectEntity[];
-
-  @OneToMany(() => SubCategoryEntity, subCategory => subCategory.category, {cascade: true, eager: true})
-  subCategories: SubCategoryEntity[];
 }

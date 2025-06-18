@@ -1,45 +1,43 @@
-import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany, ManyToMany } from 'typeorm';
 import { RoleEntity } from './role.entity';
 import { ProjectEntity } from './project.entity';
-import { GroupMemberEntity } from './groupMember.entity';
+import { ProjectRoleEntity } from './project-role.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
-import { ProjectUserRoleEntity } from './projectUserRole.entity';
-import {FileEntity} from './file.entity';
-import { RequestEntity } from './request.entity';
+import { ProjectGroupEntity } from './project-group.entity';
 
 export enum UserRole {
-  Admin = 1,
-  Member
+  SuperAdmin = 1,
+  Admin = 2,
+  Member = 3
 }
 
 @Entity('user')
-  export class UserEntity {
-
-  @PrimaryGeneratedColumn()
+export class UserEntity {
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @Column({unique:true, length:50})
+  @Column({ unique: true, length: 50 })
   username: string;
 
-  @Column({unique:true, length:100})
+  @Column({ unique: true, length: 100 })
   email: string;
 
-  @Column({length:255})
+  @Column({ length: 255 })
   passwordHash: string;
 
-  @Column({unique:true, length:50})
+  @Column({ unique: true, length: 50 })
   phone: string;
 
-  @Column({length:100})
+  @Column({ length: 100 })
   fullName: string;
 
   @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: RoleEntity;
 
-  @Column({ default : true })
+  @Column({ default: true })
   isActive: boolean;
 
   @CreateDateColumn()
@@ -48,8 +46,11 @@ export enum UserRole {
   @OneToMany(() => ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];
 
-  @OneToMany(() => GroupMemberEntity, groupMember => groupMember.user)
-  groupMemberships: GroupMemberEntity[];
+  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
+  projectRoles: ProjectRoleEntity[];
+
+  @ManyToMany(() => ProjectGroupEntity, group => group.members, { cascade: true })
+  groups: ProjectGroupEntity[];
 
   @OneToMany(() => BranchEntity, branch => branch.user)
   branch: BranchEntity[];
@@ -60,9 +61,8 @@ export enum UserRole {
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
 
-  @OneToMany(() => ProjectUserRoleEntity, projectRole => projectRole.user)
-  projectRoles: ProjectUserRoleEntity[];
+  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
+  projectRoles: ProjectRoleEntity[];
 
-  @OneToMany(() => RequestEntity, request => request.requester)
-  requests: RequestEntity[];
+
 }

@@ -1,29 +1,28 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { ProjectRoleEntity } from './projectRole.entity';
-import { ProjectGroupEntity } from './projectGroup.entity';
+import { ProjectRoleEntity } from './project-role.entity';
+import { ProjectGroupEntity } from './project-group.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
-import { RequestEntity } from './request.entity';
 import { CategoryEntity } from './category.entity';
-import { ProjectUserRoleEntity } from './projectUserRole.entity';
+import { ProjectTagEntity } from './project-tag.entity';
+
 @Entity('project')
 export class ProjectEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @Column()
   name: string;
 
-  @Column({type : 'text', nullable: true})
+  @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({default: false})
+  @Column({ type: 'boolean', default: false })
   isPublic: boolean;
 
   @ManyToOne(() => UserEntity, user => user.createdProjects)
-  @JoinColumn({ name: 'createdBy' })
   createdBy: UserEntity;
 
   @CreateDateColumn()
@@ -44,13 +43,13 @@ export class ProjectEntity {
   @OneToMany(() => FileEntity, file => file.project)
   file: FileEntity[];
 
-  @ManyToOne(() => CategoryEntity, category => category.project)
-  @JoinColumn({ name: 'categoryId' })
+  @ManyToOne(() => CategoryEntity, category => category.id)
   category: CategoryEntity;
 
-  @OneToMany(() => ProjectUserRoleEntity, pur => pur.project)
-  pur: ProjectUserRoleEntity[];
-
-  @OneToMany(() => RequestEntity, request => request.project)
-  request: RequestEntity[];
+  @ManyToMany(() => ProjectTagEntity, { cascade: true })
+  @JoinTable({
+    joinColumn: { name: 'projectId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'tagId', referencedColumnName: 'id' }
+  })
+  tags: ProjectTagEntity[];
 }

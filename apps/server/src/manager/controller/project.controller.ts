@@ -181,6 +181,7 @@ export class ProjectController {
   ) {
     return this.projects.addUsersToGroup(req.user.id, projectId, groupId, userIds.userIds);
   }
+
   @UseGuards(JwtAuthGuard)
   @Post(':projectId/groups/:groupId/users/remove')
   async removeUsersFromGroup(
@@ -191,4 +192,15 @@ export class ProjectController {
   ) {
     return this.projects.removeUsersFromGroup(req.user.id, projectId, groupId, userIds.userIds);
   }
+
+  @UseGuards(JwtFallthroughGuard)
+  @IsPublicEndpoint()
+  @Get(':projectId/discussions')
+  async fetchProjectDiscussions(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: Partial<AuthenticatedRequest>
+  ) {
+    return this.projects.fetchProjectDiscussions(req.user?.id, projectId);
+  }
+
 }

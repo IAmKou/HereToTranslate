@@ -46,9 +46,6 @@ export class UserEntity {
   @OneToMany(() => ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];
 
-  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
-  projectRoles: ProjectRoleEntity[];
-
   @ManyToMany(() => ProjectGroupEntity, group => group.members, { cascade: true })
   groups: ProjectGroupEntity[];
 

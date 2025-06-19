@@ -60,6 +60,24 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/projects/:projectId',
+      name: 'project-detail',
+      component: () => import('../views/ProjectDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:projectId/edit',
+      name: 'project-edit',
+      component: () => import('../views/ProjectEditView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:projectId/manage',
+      name: 'project-manage',
+      component: () => import('../views/ProjectManageView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/category',
       name: 'category',
       component: () => import('../views/CategoryList.vue'),

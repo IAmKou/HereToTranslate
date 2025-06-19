@@ -9,6 +9,7 @@
       <div class="navbar-menu">
         <div class="navbar-start">
           <router-link to="/" class="navbar-item">Home</router-link>
+          <router-link to="/projects" class="navbar-item">Projects</router-link>
           <router-link to="/translate" class="navbar-item">Translate</router-link>
           <router-link to="/history" class="navbar-item">History</router-link>
         </div>

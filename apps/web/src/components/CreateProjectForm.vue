@@ -43,44 +43,12 @@
           v-model="form.categoryId"
           class="form-control"
           required
-          @change="handleCategoryChange"
         >
           <option value="">Select a category</option>
           <option v-for="category in categories" :key="category.id" :value="category.id">
             {{ category.name }}
           </option>
         </select>
-      </div>
-
-      <div class="form-group">
-        <div class="subcategory-container">
-          <label for="subcategory">
-            Subcategory
-            <span class="required-mark">*</span>
-          </label>
-          <button
-            type="button"
-            class="btn btn-secondary add-subcategory-btn"
-            @click="showAddSubcategoryModal = true"
-            :disabled="!form.categoryId"
-          >
-            <span class="icon">+</span>
-            Add New
-          </button>
-        </div>
-        <select
-          id="subcategory"
-          v-model="form.subCategoryId"
-          class="form-control"
-          required
-          :disabled="!form.categoryId"
-        >
-          <option value="">Select a subcategory</option>
-          <option v-for="subcategory in subcategories" :key="subcategory.id" :value="subcategory.id">
-            {{ subcategory.name }}
-          </option>
-        </select>
-        <span v-if="!form.categoryId" class="help-text">Please select a category first</span>
       </div>
 
       <div class="form-actions">
@@ -90,165 +58,103 @@
         </button>
       </div>
     </form>
-
-    <!-- Add Subcategory Modal -->
-    <div v-if="showAddSubcategoryModal" class="modal-overlay" @click.self="showAddSubcategoryModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Add New Subcategory</h3>
-          <button class="close-button" @click="showAddSubcategoryModal = false">&times;</button>
-        </div>
-        <form @submit.prevent="handleAddSubcategory">
-          <div class="form-group">
-            <label for="newSubcategoryName">
-              Subcategory Name
-              <span class="required-mark">*</span>
-            </label>
-            <input
-              id="newSubcategoryName"
-              v-model="newSubcategory.name"
-              type="text"
-              required
-              class="form-control"
-              placeholder="Enter subcategory name"
-              autofocus
-            >
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" @click="showAddSubcategoryModal = false">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary" :disabled="isAddingSubcategory">
-              <span v-if="isAddingSubcategory" class="loading-spinner"></span>
-              {{ isAddingSubcategory ? 'Adding...' : 'Add Subcategory' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { useRouter } from 'vue-router'
+import { authService } from '../services/auth.service'
 
 interface Category {
-  id: number;
+  id: string;
   name: string;
   description?: string;
 }
 
-interface SubCategory {
-  id: number;
+interface CreateProjectData {
   name: string;
-  category: {
-    id: number;
-  };
+  description?: string;
+  isPublic?: boolean;
+  tags?: string[];
+  categoryId: string;
 }
 
-// Environment variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+const router = useRouter()
 
-const form = ref({
+const form = ref<CreateProjectData>({
   name: '',
   description: '',
   categoryId: '',
-  subCategoryId: ''
+  tags: [],
+  isPublic: false
 })
 
+const newTag = ref('')
 const isSubmitting = ref(false)
-const isAddingSubcategory = ref(false)
-const showAddSubcategoryModal = ref(false)
 const categories = ref<Category[]>([])
-const subcategories = ref<SubCategory[]>([])
-const createdBy = localStorage.getItem('user_id')
 
-const newSubcategory = ref({
-  name: ''
-})
+// API helper function
+const apiCall = async (endpoint: string, options: RequestInit = {}) => {
+  const token = authService.getAccessToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+    ...options.headers
+  }
+
+  const response = await fetch(`/api${endpoint}`, {
+    ...options,
+    headers
+  })
+
+  if (!response.ok) {
+    throw new Error(`API call failed: ${response.statusText}`)
+  }
+
+  return response.json()
+}
 
 const fetchCategories = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/category/all`)
-    categories.value = response.data
+    const response = await fetch('/api/categories/all')
+    categories.value = await response.json()
   } catch (error) {
     console.error('Error fetching categories:', error)
     alert('Failed to load categories')
   }
 }
 
-const fetchSubcategories = async (categoryId: number) => {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/subcategory/all`)
-    subcategories.value = response.data.filter((sub: SubCategory) => sub.category.id === categoryId)
-  } catch (error) {
-    console.error('Error fetching subcategories:', error)
-    alert('Failed to load subcategories')
+const addTag = () => {
+  const tag = newTag.value.trim()
+  if (tag && form.value.tags && !form.value.tags.includes(tag)) {
+    form.value.tags.push(tag)
   }
+  newTag.value = ''
 }
 
-const handleCategoryChange = () => {
-  form.value.subCategoryId = ''
-  if (form.value.categoryId) {
-    fetchSubcategories(Number(form.value.categoryId))
-  } else {
-    subcategories.value = []
-  }
-}
-
-const handleAddSubcategory = async () => {
-  if (!newSubcategory.value.name) return
-  if (!form.value.categoryId) return
-
-  isAddingSubcategory.value = true
-
-  try {
-    const response = await axios.post(`${API_BASE_URL}/subcategory/create`, {
-      name: newSubcategory.value.name,
-      categoryId: Number(form.value.categoryId)
-    })
-
-    // Refresh subcategories list
-    await fetchSubcategories(Number(form.value.categoryId))
-
-    // Set the newly created subcategory as selected
-    form.value.subCategoryId = response.data.id.toString()
-
-    // Reset and close modal
-    newSubcategory.value.name = ''
-    showAddSubcategoryModal.value = false
-  } catch (error: any) {
-    console.error('Error creating subcategory:', error)
-    alert('Failed to create subcategory: ' + (error?.response?.data?.message || error.message))
-  } finally {
-    isAddingSubcategory.value = false
+const removeTag = (index: number) => {
+  if (form.value.tags) {
+    form.value.tags.splice(index, 1)
   }
 }
 
 const handleSubmit = async () => {
   if (!form.value.name) return alert('Project name is required')
   if (!form.value.categoryId) return alert('Category is required')
-  if (!form.value.subCategoryId) return alert('Subcategory is required')
 
   isSubmitting.value = true
 
   try {
-    await axios.post(`${API_BASE_URL}/projects`, {
-      ...form.value,
-      createdBy,
+    const result = await apiCall('/projects/create', {
+      method: 'POST',
+      body: JSON.stringify(form.value)
     })
-
     alert('Project created successfully!')
-    form.value = {
-      name: '',
-      description: '',
-      categoryId: '',
-      subCategoryId: ''
-    }
+    router.push(`/projects/${result.projectId}`)
   } catch (error: any) {
     console.error(error)
-    alert('Failed to create project: ' + (error?.response?.data?.message || error.message))
+    alert('Failed to create project: ' + error.message)
   } finally {
     isSubmitting.value = false
   }

@@ -1,4 +1,4 @@
-import { IsBigInt } from "#LocalProject/Utils/bigint-utils";
+import { IsBigInt } from "#LocalProject/Utils/extensions/class-validator.extensions";
 import { ICreateProjectDto, IUpdateProjectDto } from "@here-to-translate/common/interfaces";
 import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsOptional, IsString, MinLength } from "class-validator";
 
@@ -67,8 +67,6 @@ export class CreateProjectGroupDto {
   @IsString()
   @MinLength(3)
   name: string;
-  @IsBigInt()
-  permissionFlags: bigint;
 }
 
 
@@ -77,7 +75,4 @@ export class UpdateProjectGroupDto {
   @IsString()
   @MinLength(3)
   name?: string;
-  @IsOptional()
-  @IsBigInt()
-  permissionFlags?: bigint;
 }

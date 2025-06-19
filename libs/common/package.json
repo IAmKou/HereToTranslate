@@ -25,6 +25,12 @@
       "types": "./dist/lib/types/index.d.ts",
       "import": "./dist/lib/types/index.js",
       "default": "./dist/lib/types/index.js"
+    },
+    "./bigint-utils": {
+      "development": "./src/lib/bigint-utils.ts",
+      "types": "./dist/lib/bigint-utils.d.ts",
+      "import": "./dist/lib/bigint-utils.js",
+      "default": "./dist/lib/bigint-utils.js"
     }
   },
   "nx": {

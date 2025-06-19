@@ -1,18 +1,22 @@
 import { Controller, Post, Body, Get, Patch, Delete, UseGuards, Req, UseInterceptors, Param, ValidationPipe } from '@nestjs/common';
-import { ProjectManagerService } from '../service/project-manager.service';
-import { CreateProjectDto, CreateProjectGroupDto, CreateProjectRoleDto, UpdateProjectMetadataDto, UpdateProjectRoleDto, UserIdsArray } from '#LocalProject/Dtos';
+import { CreateDiscussionDto, CreateProjectDto, CreateProjectGroupDto, CreateProjectRoleDto, UpdateDiscussionDto, UpdateProjectMetadataDto, UpdateProjectRoleDto, UserIdsArray } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
-import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { JwtFallthroughGuard } from '#LocalProject/Auth/guards/jwt-fallthrough.guard';
+import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
+import { ProjectManagerService } from '../service/project-manager.service';
+import { DiscussionManagerService } from '../service/discussion-manager.service';
 
 // @UseInterceptors(ClassSerializerInterceptor)
 @Controller('projects')
 @UseInterceptors(JsonSerializerInterceptor)
 export class ProjectController {
-  constructor(private readonly projects: ProjectManagerService) {}
+  constructor(
+    private readonly projects: ProjectManagerService,
+    private readonly discussions: DiscussionManagerService
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('create')
@@ -37,9 +41,10 @@ export class ProjectController {
   @Patch(':projectId')
   async update(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body(ValidationPipe) projectUpdateData: UpdateProjectMetadataDto
+    @Body(ValidationPipe) projectUpdateData: UpdateProjectMetadataDto,
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.projects.updateProject(projectId, projectUpdateData);
+    return this.projects.updateProjectMetadata(req.user.id, projectId, projectUpdateData);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -86,7 +91,7 @@ export class ProjectController {
     @Body(ValidationPipe) roleUpdateData: UpdateProjectRoleDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.projects.updateProjectRoleMetadata(req.user.id, projectId, roleId, roleUpdateData);
+    return this.projects.updateProjectRole(req.user.id, projectId, roleId, roleUpdateData);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -201,7 +206,104 @@ export class ProjectController {
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @Req() req: Partial<AuthenticatedRequest>
   ) {
-    throw new Error('Method not implemented. Discussions are not yet supported.');
-    // return this.projects.fetchProjectDiscussions(req.user?.id, projectId);
+    return this.discussions.fetchDiscussions(req.user?.id, projectId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/discussions/create')
+  async createDiscussion(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Body(ValidationPipe) discussionData: CreateDiscussionDto,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.projects.createDiscussion(req.user.id, projectId, discussionData);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':projectId/discussions/:threadId')
+  async updateDiscussionMetadata(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Body(ValidationPipe) discussionUpdateData: UpdateDiscussionDto, // Replace with actual DTO
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.projects.updateDiscussionMetadata(req.user.id, projectId, threadId, discussionUpdateData);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/discussions/:threadId/archive')
+  async archiveDiscussion(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.projects.archiveDiscussion(req.user.id, projectId, threadId);
+  }
+
+  @UseGuards(JwtFallthroughGuard)
+  @IsPublicEndpoint()
+  @Get(':projectId/discussions/:threadId')
+  async fetchDiscussionThread(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Req() req: Partial<AuthenticatedRequest>
+  ) {
+    return this.discussions.fetchDiscussion(req.user?.id, projectId, threadId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/discussions/:threadId/post')
+  async createDiscussionComment(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Body(ValidationPipe) commentData: any, // Replace with actual DTO
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.discussions.postComment(req.user.id, projectId, threadId, commentData);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':projectId/discussions/:threadId/:commentId')
+  async updateDiscussionComment(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Param('commentId', BigIntTransformPipe) commentId: bigint,
+    @Body(ValidationPipe) commentUpdateData: any, // Replace with actual DTO
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.discussions.updateDiscussionComment(req.user.id, projectId, threadId, commentId, commentUpdateData);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':projectId/discussions/:threadId/:commentId')
+  async deleteDiscussionComment(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Param('commentId', BigIntTransformPipe) commentId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.discussions.deleteDiscussionComment(req.user.id, projectId, threadId, commentId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/discussions/:threadId/:commentId/upvote')
+  async upvoteDiscussionComment(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Param('commentId', BigIntTransformPipe) commentId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.discussions.upvoteDiscussionComment(req.user.id, projectId, threadId, commentId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/discussions/:threadId/:commentId/downvote')
+  async downvoteDiscussionComment(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Param('commentId', BigIntTransformPipe) commentId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.discussions.downvoteDiscussionComment(req.user.id, projectId, threadId, commentId);
   }
 }

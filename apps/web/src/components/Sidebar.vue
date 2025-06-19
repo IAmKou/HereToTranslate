@@ -16,7 +16,7 @@
         <span class="tooltip">Dashboard</span>
       </router-link>
 
-      <router-link to="/project" class="menu-item">
+      <router-link to="/projects/create" class="menu-item">
         <span class="material-icons">work</span>
         <span class="menu-text">Project</span>
         <span class="tooltip">Project</span>

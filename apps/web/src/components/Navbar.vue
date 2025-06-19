@@ -176,7 +176,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  margin-left: 1150px; /* Đẩy phần menu sang sát phải */
+  margin-left: 1100px; /* Đẩy phần menu sang sát phải */
 }
 
 .navbar-item {

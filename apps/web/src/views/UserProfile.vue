@@ -8,30 +8,40 @@
           <div class="profile-card">
             <!-- Tab Navigation -->
             <div class="profile-tabs">
-              <button :class="['tab-btn', {active: activeTab==='profile'}]" @click="activeTab='profile'">Profile</button>
-              <button :class="['tab-btn', {active: activeTab==='account'}]" @click="activeTab='account'">Account</button>
+              <button :class="['tab-btn', {active: activeTab==='profile'}]" @click="activeTab='profile'">
+                <i class="pi pi-user"></i> Profile
+              </button>
+              <button :class="['tab-btn', {active: activeTab==='account'}]" @click="activeTab='account'">
+                <i class="pi pi-lock"></i> Account
+              </button>
             </div>
 
             <!-- Profile Tab -->
             <div v-if="activeTab==='profile'">
               <div class="avatar-upload-row">
-                <div class="avatar-preview">
+                <div class="avatar-preview" @click="triggerAvatarUpload">
                   <img v-if="avatarUrl" :src="avatarUrl" alt="Avatar" class="avatar-img" />
                   <div v-else class="avatar-fallback">{{ userInitials }}</div>
+                  <div class="avatar-edit-btn"><i class="pi pi-camera"></i></div>
+                  <input type="file" ref="avatarInput" @change="onAvatarChange" style="display:none" />
                 </div>
               </div>
               <form class="profile-form" @submit.prevent="updateProfile">
                 <div class="form-title">General Information</div>
                 <div class="form-group">
-                  <label for="fullName">Full Name</label>
+                  <label for="fullName"><i class="pi pi-id-card"></i> Full Name</label>
                   <input type="text" id="fullName" v-model="updateForm.fullName" :placeholder="user.fullName" required />
                 </div>
                 <div class="form-group">
-                  <label for="username">Username</label>
+                  <label for="phone"><i class="pi pi-phone"></i> Phone Number</label>
+                  <input type="text" id="phone" v-model="updateForm.phone" :placeholder="user.phone" />
+                </div>
+                <div class="form-group">
+                  <label for="username"><i class="pi pi-user"></i> Username</label>
                   <input type="text" id="username" :value="user.username" disabled />
                 </div>
                 <div class="form-group">
-                  <label for="email">Email</label>
+                  <label for="email"><i class="pi pi-envelope"></i> Email</label>
                   <input type="email" id="email" :value="user.email" disabled />
                   <div class="form-note">
                     Not publicly visible. Email will be used for account-related notifications.
@@ -42,7 +52,7 @@
                   <span v-else class="loading-spinner"></span>
                 </button>
                 <div v-if="updateSuccess" class="success-message">
-                  Profile updated successfully!
+                  <i class="pi pi-check-circle"></i> Profile updated successfully!
                 </div>
               </form>
             </div>
@@ -51,12 +61,12 @@
             <div v-if="activeTab==='account'" class="account-tab">
               <div class="account-section">
                 <div class="section-header">
-                  <h3>Change Password</h3>
+                  <h3><i class="pi pi-key"></i> Change Password</h3>
                   <p class="section-description">Update your password to keep your account secure</p>
                 </div>
                 <form @submit.prevent="changePassword" class="password-form">
                   <div class="form-group">
-                    <label for="currentPassword">Current Password</label>
+                    <label for="currentPassword"><i class="pi pi-lock"></i> Current Password</label>
                     <div class="password-input-wrapper">
                       <input
                         :type="showCurrentPassword ? 'text' : 'password'"
@@ -74,7 +84,7 @@
                     </div>
                   </div>
                   <div class="form-group">
-                    <label for="newPassword">New Password</label>
+                    <label for="newPassword"><i class="pi pi-lock"></i> New Password</label>
                     <div class="password-input-wrapper">
                       <input
                         :type="showNewPassword ? 'text' : 'password'"
@@ -109,6 +119,9 @@
                           One special character
                         </li>
                       </ul>
+                      <div class="password-strength-bar">
+                        <div :style="{width: passwordStrength + '%', background: passwordStrengthColor}" class="strength-bar"></div>
+                      </div>
                     </div>
                   </div>
                   <button type="submit" class="btn-primary" :disabled="isLoading || !isPasswordValid">
@@ -116,32 +129,9 @@
                     <span v-else class="loading-spinner"></span>
                   </button>
                   <div v-if="passwordSuccess" class="success-message">
-                    Password changed successfully!
+                    <i class="pi pi-check-circle"></i> Password changed successfully!
                   </div>
                 </form>
-              </div>
-
-              <div class="account-section">
-                <div class="section-header">
-                  <h3>Account Security</h3>
-                  <p class="section-description">Manage your account security settings</p>
-                </div>
-                <div class="security-options">
-                  <div class="security-option">
-                    <div class="option-info">
-                      <h4>Two-Factor Authentication</h4>
-                      <p>Add an extra layer of security to your account</p>
-                    </div>
-                    <button class="btn-secondary">Enable</button>
-                  </div>
-                  <div class="security-option">
-                    <div class="option-info">
-                      <h4>Login History</h4>
-                      <p>View your recent login activity</p>
-                    </div>
-                    <button class="btn-secondary">View History</button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -180,12 +170,12 @@ const updateSuccess = ref(false);
 const passwordSuccess = ref(false);
 const activeTab = ref<'profile'|'account'>('profile');
 const avatarUrl = ref<string | null>(null);
+const avatarInput = ref<HTMLInputElement | null>(null);
 
 const updateForm = ref<UpdateProfileData>({
   fullName: '',
   phone: '',
-  company: '',
-  jobTitle: '',
+
 });
 
 const passwordForm = ref<ChangePasswordData>({
@@ -203,6 +193,36 @@ const userInitials = computed(() => {
     .map((name) => name[0])
     .join('')
     .toUpperCase();
+});
+
+const triggerAvatarUpload = () => {
+  avatarInput.value?.click();
+};
+const onAvatarChange = (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      avatarUrl.value = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+const passwordStrength = computed(() => {
+  const pwd = passwordForm.value.newPassword;
+  let score = 0;
+  if (pwd.length >= 8) score += 20;
+  if (/[A-Z]/.test(pwd)) score += 20;
+  if (/[a-z]/.test(pwd)) score += 20;
+  if (/[0-9]/.test(pwd)) score += 20;
+  if (/[^A-Za-z0-9]/.test(pwd)) score += 20;
+  return score;
+});
+const passwordStrengthColor = computed(() => {
+  if (passwordStrength.value < 40) return '#ef4444';
+  if (passwordStrength.value < 80) return '#f59e42';
+  return '#10b981';
 });
 
 const formatDate = (date: Date) => {
@@ -307,8 +327,8 @@ onMounted(() => {
 
 .profile-card {
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  border-radius: 20px;
+  box-shadow: 0 6px 32px rgba(99,102,241,0.10);
   padding: 2.5rem 2rem;
   max-width: 600px;
   width: 100%;
@@ -320,24 +340,32 @@ onMounted(() => {
 .profile-tabs {
   display: flex;
   gap: 2rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2.5px solid #e5e7eb;
   margin-bottom: 2.5rem;
 }
 .tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: none;
   border: none;
   outline: none;
   font-size: 1.1rem;
   font-weight: 500;
   color: #6b7280;
-  padding: 0.5rem 0;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.2s, border-color 0.2s;
+  padding: 0.7rem 1.5rem;
+  border-radius: 12px 12px 0 0;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
 }
 .tab-btn.active {
   color: #4f46e5;
-  border-bottom: 2px solid #4f46e5;
+  background: #f3f4f6;
+  border-bottom: 3px solid #4f46e5;
+  font-weight: 600;
+}
+.tab-btn i {
+  font-size: 1.2rem;
 }
 
 .avatar-upload-row {
@@ -348,12 +376,13 @@ onMounted(() => {
 }
 
 .avatar-preview {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
-
 .avatar-img {
   width: 110px;
   height: 110px;
@@ -362,7 +391,6 @@ onMounted(() => {
   border: 3px solid #e5e7eb;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
 }
-
 .avatar-fallback {
   width: 110px;
   height: 110px;
@@ -375,13 +403,28 @@ onMounted(() => {
   font-size: 2.5rem;
   font-weight: 700;
 }
+.avatar-edit-btn {
+  position: absolute;
+  bottom: 0; right: 0;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px #0001;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  color: #6366f1; border: 2px solid #fff;
+  font-size: 1.3rem;
+  transition: background 0.2s, color 0.2s;
+}
+.avatar-preview:hover .avatar-edit-btn {
+  background: #6366f1; color: #fff;
+}
 
 .profile-form {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 2rem 0 0 0;
 }
 .form-title {
@@ -399,18 +442,25 @@ onMounted(() => {
   font-weight: 500;
   color: #374151;
   margin-bottom: 0.2rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.form-group label i {
+  color: #6366f1;
+  font-size: 1.1rem;
 }
 .form-group input {
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1.5px solid #e5e7eb;
   padding: 0.85rem 1rem;
   font-size: 1rem;
   background: #f9fafb;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .form-group input:focus {
   border-color: #6366f1;
-  outline: none;
+  box-shadow: 0 0 0 2px #6366f133;
   background: #fff;
 }
 .form-row {
@@ -426,27 +476,29 @@ onMounted(() => {
   margin-top: 0.2rem;
 }
 .btn-primary {
-  background: #6366f1;
+  background: linear-gradient(90deg, #6366f1 0%, #4f46e5 100%);
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.85rem 1.5rem;
   font-weight: 600;
   font-size: 1rem;
   margin-top: 1.2rem;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.18s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  box-shadow: 0 2px 8px #6366f122;
 }
 .btn-primary:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #4f46e5;
+  background: linear-gradient(90deg, #4f46e5 0%, #6366f1 100%);
+  transform: translateY(-2px) scale(1.03);
 }
 .btn-secondary {
   background: #fff;
@@ -471,6 +523,9 @@ onMounted(() => {
   border-radius: 8px;
   font-weight: 500;
   animation: slideIn 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .loading-spinner {
   width: 20px;
@@ -523,22 +578,30 @@ onMounted(() => {
 
 .account-section {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(99,102,241,0.10);
 }
 
 .section-header {
   margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-
 .section-header h3 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #1f2937;
+  color: #4f46e5;
   margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-
+.section-header i {
+  color: #6366f1;
+  font-size: 1.2rem;
+}
 .section-description {
   color: #6b7280;
   font-size: 0.95rem;
@@ -569,8 +632,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.2rem;
 }
-
 .toggle-password:hover {
   color: #4b5563;
 }
@@ -619,31 +682,18 @@ onMounted(() => {
   color: #059669;
 }
 
-.security-options {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.password-strength-bar {
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  margin-top: 10px;
+  overflow: hidden;
 }
-
-.security-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 8px;
-}
-
-.option-info h4 {
-  font-size: 1rem;
-  font-weight: 500;
-  color: #1f2937;
-  margin-bottom: 0.25rem;
-}
-
-.option-info p {
-  color: #6b7280;
-  font-size: 0.9rem;
+.strength-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s, background 0.3s;
 }
 
 @media (max-width: 768px) {
@@ -652,7 +702,6 @@ onMounted(() => {
     align-items: flex-start;
     gap: 1rem;
   }
-
   .security-option .btn-secondary {
     width: 100%;
   }

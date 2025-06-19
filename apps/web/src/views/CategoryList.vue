@@ -19,150 +19,315 @@
         <div class="flex justify-between items-center">
           <div class="flex items-center gap-2">
             <i class="pi pi-list text-xl"></i>
-            <h2 class="text-xl font-semibold m-0">Categories</h2>
+            <h2 class="text-xl font-semibold m-0">
+              {{ activeTab === 'categories' ? 'Categories' : 'Tags' }}
+            </h2>
           </div>
           <div class="flex gap-2">
             <Button
+              v-if="activeTab === 'categories'"
               icon="pi pi-tags"
               label="Manage Tags"
               class="p-button-secondary"
-              @click="showTagDialog = true"
+              @click="activeTab = 'tags'"
             />
             <Button
-              icon="pi pi-plus"
-              label="Add Category"
-              @click="openAddModal"
-              class="p-button-primary"
+              v-if="activeTab === 'tags'"
+              icon="pi pi-list"
+              label="Manage Categories"
+              class="p-button-secondary"
+              @click="activeTab = 'categories'"
             />
           </div>
         </div>
       </template>
       <template #content>
-        <DataTable
-          :value="categories"
-          :paginator="true"
-          :rows="10"
-          :loading="loading"
-          :filters="filters"
-          filterDisplay="menu"
-          :globalFilterFields="['name', 'description']"
-          class="p-datatable-sm"
-          v-model:filters1="filters"
-          stripedRows
-          showGridlines
-          responsiveLayout="scroll"
-          :rowHover="true"
-          paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-          :rowsPerPageOptions="[5,10,20,50]"
-          currentPageReportTemplate="Showing {first} to {last} of {totalRecords} categories"
-        >
-          <template #header>
-            <div class="flex justify-end mb-2">
-              <span class="p-input-icon-left">
-                <i class="pi pi-search" />
-                <InputText v-model="filters.global.value" placeholder="Search..." />
-              </span>
-            </div>
-          </template>
-          <template #empty>
-            <div class="text-center p-4">
-              <i class="pi pi-folder text-4xl text-gray-400 mb-2"></i>
-              <p class="text-gray-500">No categories found.</p>
-            </div>
-          </template>
-          <template #loading>
-            <div class="text-center p-4">
-              <i class="pi pi-spin pi-spinner text-2xl"></i>
-              <p class="mt-2">Loading categories...</p>
-            </div>
-          </template>
+        <div v-if="activeTab === 'categories'">
+          <DataTable
+            :value="categories"
+            :paginator="true"
+            :rows="10"
+            :loading="loading"
+            :filters="filters"
+            filterDisplay="menu"
+            :globalFilterFields="['name', 'description']"
+            class="p-datatable-sm"
+            v-model:filters1="filters"
+            stripedRows
+            showGridlines
+            responsiveLayout="scroll"
+            :rowHover="true"
+            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+            :rowsPerPageOptions="[5,10,20,50]"
+            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} categories"
+          >
+            <template #header>
+              <div class="flex justify-between items-center mb-2">
+                <span class="p-input-icon-left">
+                  <i class="pi pi-search" />
+                  <InputText v-model="filters.global.value" placeholder="Search..." />
+                </span>
+                <Button
+                  icon="pi pi-plus"
+                  label="Add Category"
+                  @click="openAddModal"
+                  class="p-button-primary"
+                />
+              </div>
+            </template>
+            <template #empty>
+              <div class="text-center p-4">
+                <i class="pi pi-folder text-4xl text-gray-400 mb-2"></i>
+                <p class="text-gray-500">No categories found.</p>
+              </div>
+            </template>
+            <template #loading>
+              <div class="text-center p-4">
+                <i class="pi pi-spin pi-spinner text-2xl"></i>
+                <p class="mt-2">Loading categories...</p>
+              </div>
+            </template>
 
-          <Column field="name" header="Name" sortable style="min-width: 200px">
-            <template #body="{ data }">
-              <div class="flex items-center gap-2">
-                <i class="pi pi-folder text-primary"></i>
-                <span>{{ data.name }}</span>
-              </div>
-            </template>
-            <template #filter="{ filterModel, filterCallback }">
-              <span class="p-input-icon-left">
-                <i class="pi pi-search" />
-                <InputText
-                  v-model="filterModel.value"
-                  @input="filterCallback()"
-                  placeholder="Search by name"
-                  class="p-column-filter"
-                />
-              </span>
-            </template>
-          </Column>
-          <Column field="description" header="Description" sortable style="min-width: 300px">
-            <template #body="{ data }">
-              <span class="text-gray-600">{{ data.description || 'No description' }}</span>
-            </template>
-            <template #filter="{ filterModel, filterCallback }">
-              <span class="p-input-icon-left">
-                <i class="pi pi-search" />
-                <InputText
-                  v-model="filterModel.value"
-                  @input="filterCallback()"
-                  placeholder="Search by description"
-                  class="p-column-filter"
-                />
-              </span>
-            </template>
-          </Column>
-          <Column field="createdAt" header="Created At" sortable style="min-width: 150px">
-            <template #body="slotProps">
-              <div class="flex items-center gap-2">
-                <i class="pi pi-calendar text-gray-400"></i>
-                <span>{{ formatDate(slotProps.data.createdAt) }}</span>
-              </div>
-            </template>
-          </Column>
-          <Column field="updatedAt" header="Updated At" sortable style="min-width: 150px">
-            <template #body="slotProps">
-              <div class="flex items-center gap-2">
-                <i class="pi pi-clock text-gray-400"></i>
-                <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
-              </div>
-            </template>
-          </Column>
-          <Column field="tags" header="Tags" style="min-width: 200px">
-            <template #body="{ data }">
-              <div class="flex flex-wrap gap-2">
-                <template v-if="data.tags && data.tags.length > 0">
-                  <Tag
-                    v-for="tag in data.tags"
-                    :key="tag"
-                    :value="tag"
-                    severity="info"
-                    class="category-tag"
+            <Column field="name" header="Name" sortable style="min-width: 200px">
+              <template #body="{ data }">
+                <div class="flex items-center gap-2">
+                  <i class="pi pi-folder text-primary"></i>
+                  <span>{{ data.name }}</span>
+                </div>
+              </template>
+              <template #filter="{ filterModel, filterCallback }">
+                <span class="p-input-icon-left">
+                  <i class="pi pi-search" />
+                  <InputText
+                    v-model="filterModel.value"
+                    @input="filterCallback()"
+                    placeholder="Search by name"
+                    class="p-column-filter"
                   />
-                </template>
-                <span v-else class="text-gray-400 italic">No tags</span>
+                </span>
+              </template>
+            </Column>
+            <Column field="description" header="Description" sortable style="min-width: 300px">
+              <template #body="{ data }">
+                <span class="text-gray-600">{{ data.description || 'No description' }}</span>
+              </template>
+              <template #filter="{ filterModel, filterCallback }">
+                <span class="p-input-icon-left">
+                  <i class="pi pi-search" />
+                  <InputText
+                    v-model="filterModel.value"
+                    @input="filterCallback()"
+                    placeholder="Search by description"
+                    class="p-column-filter"
+                  />
+                </span>
+              </template>
+            </Column>
+            <Column field="createdAt" header="Created At" sortable style="min-width: 150px">
+              <template #body="slotProps">
+                <div class="flex items-center gap-2">
+                  <i class="pi pi-calendar text-gray-400"></i>
+                  <span>{{ formatDate(slotProps.data.createdAt) }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column field="updatedAt" header="Updated At" sortable style="min-width: 150px">
+              <template #body="slotProps">
+                <div class="flex items-center gap-2">
+                  <i class="pi pi-clock text-gray-400"></i>
+                  <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column field="tags" header="Tags" style="min-width: 200px">
+              <template #body="{ data }">
+                <div class="flex flex-wrap gap-2">
+                  <template v-if="data.tags && data.tags.length > 0">
+                    <Tag
+                      v-for="tag in data.tags"
+                      :key="tag"
+                      :value="tag"
+                      severity="info"
+                      class="category-tag"
+                    />
+                  </template>
+                  <span v-else class="text-gray-400 italic">No tags</span>
+                </div>
+              </template>
+            </Column>
+            <Column style="min-width: 150px">
+              <template #body="slotProps">
+                <div class="flex gap-2">
+                  <Button
+                    icon="pi pi-pencil"
+                    class="p-button-rounded p-button-text p-button-sm"
+                    @click="editCategory(slotProps.data)"
+                    v-tooltip.top="'Edit Category'"
+                  />
+                  <Button
+                    icon="pi pi-trash"
+                    class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                    @click="confirmDelete(slotProps.data)"
+                    v-tooltip.top="'Delete Category'"
+                  />
+                </div>
+              </template>
+            </Column>
+          </DataTable>
+        </div>
+        <div v-else>
+          <!-- Tag Management Table -->
+          <DataTable
+            :value="tags"
+            :paginator="true"
+            :rows="10"
+            :loading="tagLoading"
+            :filters="tagFilters"
+            filterDisplay="menu"
+            :globalFilterFields="['name']"
+            class="p-datatable-sm"
+            stripedRows
+            showGridlines
+            responsiveLayout="scroll"
+            :rowHover="true"
+            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+            :rowsPerPageOptions="[5,10,20,50]"
+            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} tags"
+          >
+            <template #header>
+              <div class="flex justify-between items-center mb-2">
+                <span class="p-input-icon-left">
+                  <i class="pi pi-search" />
+                  <InputText v-model="tagFilters.global.value" placeholder="Search..." />
+                </span>
+                <Button icon="pi pi-plus" label="Add Tag" @click="openAddTagDialog" class="p-button-primary" />
               </div>
             </template>
-          </Column>
-          <Column style="min-width: 150px">
-            <template #body="slotProps">
-              <div class="flex gap-2">
+            <template #empty>
+              <div class="text-center p-4">
+                <i class="pi pi-tags text-4xl text-gray-400 mb-2"></i>
+                <p class="text-gray-500">No tags found.</p>
+              </div>
+            </template>
+            <template #loading>
+              <div class="text-center p-4">
+                <i class="pi pi-spin pi-spinner text-2xl"></i>
+                <p class="mt-2">Loading tags...</p>
+              </div>
+            </template>
+            <Column field="name" header="Tag Name" sortable style="min-width: 200px">
+              <template #body="{ data }">
+                <span>{{ data.name }}</span>
+              </template>
+              <template #filter="{ filterModel, filterCallback }">
+                <span class="p-input-icon-left">
+                  <i class="pi pi-search" />
+                  <InputText
+                    v-model="filterModel.value"
+                    @input="filterCallback()"
+                    placeholder="Search by tag name"
+                    class="p-column-filter"
+                  />
+                </span>
+              </template>
+            </Column>
+            <Column field="createdAt" header="Created At" sortable style="min-width: 150px">
+              <template #body="slotProps">
+                <div class="flex items-center gap-2">
+                  <i class="pi pi-calendar text-gray-400"></i>
+                  <span>{{ formatDate(slotProps.data.createdAt) }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column field="updatedAt" header="Updated At" sortable style="min-width: 150px">
+              <template #body="slotProps">
+                <div class="flex items-center gap-2">
+                  <i class="pi pi-clock text-gray-400"></i>
+                  <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column style="min-width: 150px">
+              <template #body="slotProps">
+                <div class="flex gap-2">
+                  <Button
+                    icon="pi pi-pencil"
+                    class="p-button-rounded p-button-text p-button-sm"
+                    @click="editTag(slotProps.data)"
+                    v-tooltip.top="'Edit Tag'"
+                  />
+                  <Button
+                    icon="pi pi-trash"
+                    class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                    @click="confirmDeleteTag(slotProps.data)"
+                    v-tooltip.top="'Delete Tag'"
+                  />
+                </div>
+              </template>
+            </Column>
+          </DataTable>
+          <!-- Add/Edit Tag Dialog -->
+          <Dialog
+            v-model:visible="showTagDialog"
+            :header="isEditingTag ? 'Edit Tag' : 'Add New Tag'"
+            :style="{width: '400px'}"
+            :modal="true"
+            :closable="true"
+            :closeOnEscape="true"
+            class="category-dialog"
+          >
+            <div class="p-fluid">
+              <div class="dialog-content">
+                <div class="form-section">
+                  <div class="section-header">
+                    <i class="pi pi-tag text-primary"></i>
+                    <h3>Tag Information</h3>
+                  </div>
+                  <div class="field">
+                    <label for="tagName" class="font-medium flex items-center gap-2">
+                      <i class="pi pi-tag text-primary"></i>
+                      Tag Name
+                      <span class="required-mark">*</span>
+                    </label>
+                    <InputText
+                      id="tagName"
+                      v-model="currentTag.name"
+                      required
+                      autofocus
+                      :class="{'p-invalid': tagSubmitted && !currentTag.name}"
+                      placeholder="Enter tag name"
+                      class="w-full"
+                    />
+                    <small class="p-error flex items-center gap-1 mt-1" v-if="tagSubmitted && !currentTag.name">
+                      <i class="pi pi-exclamation-circle"></i>
+                      Name is required
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <template #footer>
+              <div class="dialog-footer">
                 <Button
-                  icon="pi pi-pencil"
-                  class="p-button-rounded p-button-text p-button-sm"
-                  @click="editCategory(slotProps.data)"
-                  v-tooltip.top="'Edit Category'"
+                  label="Cancel"
+                  icon="pi pi-times"
+                  class="p-button-text p-button-rounded"
+                  @click="closeTagDialog"
+                  :disabled="tagSaving"
                 />
                 <Button
-                  icon="pi pi-trash"
-                  class="p-button-rounded p-button-text p-button-danger p-button-sm"
-                  @click="confirmDelete(slotProps.data)"
-                  v-tooltip.top="'Delete Category'"
+                  :label="isEditingTag ? 'Update Tag' : 'Create Tag'"
+                  :icon="isEditingTag ? 'pi pi-save' : 'pi pi-plus'"
+                  class="p-button-primary p-button-rounded"
+                  @click="saveTag"
+                  :loading="tagSaving"
                 />
               </div>
             </template>
-          </Column>
-        </DataTable>
+          </Dialog>
+          <!-- Confirm Dialog for Delete -->
+          <ConfirmDialog></ConfirmDialog>
+        </div>
       </template>
     </Card>
 
@@ -286,50 +451,6 @@
 
     <!-- Confirm Dialog for Delete -->
     <ConfirmDialog></ConfirmDialog>
-
-    <!-- Tag Dialog -->
-    <Dialog v-model:visible="showTagDialog" header="Tag Management" :modal="true" :style="{width: '500px'}" class="category-dialog">
-      <div class="p-fluid">
-        <div class="dialog-content">
-          <div class="form-section">
-            <div class="section-header">
-              <i class="pi pi-tags text-primary"></i>
-              <h3>Tag Information</h3>
-            </div>
-            <div class="field flex items-center gap-2 mb-4">
-              <InputText v-model="newTag" placeholder="Enter new tag name" class="w-full" @keyup.enter="addTag" />
-              <Button icon="pi pi-plus" label="Add" @click="addTag" />
-            </div>
-            <DataTable :value="tags" :rows="5" scrollable scrollHeight="200px" class="mb-2">
-              <Column field="name" header="Tag Name" />
-              <Column header="Actions">
-                <template #body="{ data }">
-                  <Button icon="pi pi-pencil" class="p-button-text" @click="editTag(data)" v-tooltip.top="'Edit Tag'" />
-                  <Button icon="pi pi-trash" class="p-button-text p-button-danger" @click="deleteTag(data)" v-tooltip.top="'Delete Tag'" />
-                </template>
-              </Column>
-            </DataTable>
-            <div v-if="editingTag" class="mt-4">
-              <div class="section-header">
-                <i class="pi pi-pencil text-primary"></i>
-                <h3>Edit Tag</h3>
-              </div>
-              <div class="field">
-                <label for="editTagName" class="font-medium flex items-center gap-2">
-                  <i class="pi pi-tag text-primary"></i>
-                  Tag Name
-                </label>
-                <InputText id="editTagName" v-model="editTagName" class="w-full mb-2" />
-              </div>
-              <div class="dialog-footer flex gap-2 justify-end">
-                <Button label="Save" icon="pi pi-check" @click="updateTag" />
-                <Button label="Cancel" icon="pi pi-times" class="p-button-secondary" @click="() => { editingTag = null; editTagName = '' }" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Dialog>
   </div>
 </template>
 
@@ -351,6 +472,8 @@ import ConfirmDialog from 'primevue/confirmdialog';
 import Chips from 'primevue/chips';
 import Tag from 'primevue/tag';
 import MultiSelect from 'primevue/multiselect';
+import Avatar from 'primevue/avatar';
+import Menu from 'primevue/menu';
 
 interface Category {
   id?: number;
@@ -360,6 +483,13 @@ interface Category {
   updatedAt?: Date;
   projectId?: number;
   tags?: string[];
+}
+
+interface Tag {
+  id?: number;
+  name: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const API_BASE_URL = 'http://localhost:3000/api';
@@ -385,6 +515,7 @@ const showTagDialog = ref(false);
 const newTag = ref('');
 const editingTag = ref(null);
 const editTagName = ref('');
+const activeTab = ref<'categories' | 'tags'>('categories');
 
 const confirm = useConfirm();
 const toast = useToast();
@@ -393,6 +524,13 @@ const filters = ref({
   global: { value: null, matchMode: 'contains' },
   name: { value: null, matchMode: 'contains' },
   description: { value: null, matchMode: 'contains' }
+});
+
+const tagLoading = ref(false);
+const tagSaving = ref(false);
+const tagFilters = ref({
+  global: { value: null, matchMode: 'contains' },
+  name: { value: null, matchMode: 'contains' }
 });
 
 const fetchCategories = async () => {
@@ -416,8 +554,15 @@ const fetchCategories = async () => {
 };
 
 const fetchTags = async () => {
-  const res = await axios.get(`${API_BASE_URL}/tag/all`);
-  tags.value = res.data;
+  tagLoading.value = true;
+  try {
+    const res = await axios.get(`${API_BASE_URL}/tag/all`);
+    tags.value = res.data;
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load tags', life: 3000 });
+  } finally {
+    tagLoading.value = false;
+  }
 };
 
 const openAddModal = () => {
@@ -545,29 +690,75 @@ const deleteCategory = async (category: Category) => {
   }
 };
 
-const addTag = async () => {
-  if (!newTag.value.trim()) return;
-  await axios.post(`${API_BASE_URL}/tag/create`, { name: newTag.value.trim() });
-  newTag.value = '';
-  fetchTags();
+const openAddTagDialog = () => {
+  isEditingTag.value = false;
+  currentTag.value = { name: '' };
+  showTagDialog.value = true;
+  tagSubmitted.value = false;
 };
 
-const editTag = (tag) => {
-  editingTag.value = tag;
-  editTagName.value = tag.name;
+const editTag = (tag: Tag) => {
+  isEditingTag.value = true;
+  currentTag.value = { ...tag };
+  showTagDialog.value = true;
+  tagSubmitted.value = false;
 };
 
-const updateTag = async () => {
-  if (!editTagName.value.trim()) return;
-  await axios.put(`${API_BASE_URL}/tag/update/${editingTag.value.id}`, { name: editTagName.value.trim() });
-  editingTag.value = null;
-  editTagName.value = '';
-  fetchTags();
+const closeTagDialog = () => {
+  if (tagSaving.value) return;
+  showTagDialog.value = false;
+  tagSubmitted.value = false;
 };
 
-const deleteTag = async (tag) => {
-  await axios.delete(`${API_BASE_URL}/tag/delete/${tag.id}`);
-  fetchTags();
+const saveTag = async () => {
+  tagSubmitted.value = true;
+  if (!currentTag.value.name) return;
+  tagSaving.value = true;
+  try {
+    if (isEditingTag.value && currentTag.value.id) {
+      await axios.put(`${API_BASE_URL}/tag/update/${currentTag.value.id}`, { name: currentTag.value.name });
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Tag updated successfully', life: 3000 });
+      await fetchTags();
+      closeTagDialog();
+    } else {
+      await axios.post(`${API_BASE_URL}/tag/create`, { name: currentTag.value.name });
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Tag created successfully', life: 3000 });
+      showTagDialog.value = false;
+      tagSubmitted.value = false;
+      currentTag.value = { name: '' };
+      await fetchTags();
+    }
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save tag', life: 3000 });
+  } finally {
+    tagSaving.value = false;
+  }
+};
+
+const confirmDeleteTag = (tag: Tag) => {
+  confirm.require({
+    message: 'Are you sure you want to delete this tag?',
+    header: 'Delete Confirmation',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: () => deleteTag(tag),
+    reject: () => {},
+    acceptLabel: 'Yes, Delete',
+    rejectLabel: 'Cancel',
+    acceptIcon: 'pi pi-trash',
+    rejectIcon: 'pi pi-times'
+  });
+};
+
+const deleteTag = async (tag: Tag) => {
+  if (!tag.id) return;
+  try {
+    await axios.delete(`${API_BASE_URL}/tag/delete/${tag.id}`);
+    await fetchTags();
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Tag deleted successfully', life: 3000 });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete tag', life: 3000 });
+  }
 };
 
 const formatDate = (date: string | Date | undefined) => {
@@ -1171,5 +1362,105 @@ onMounted(() => {
   background: #FDE68A;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(202, 138, 4, 0.1);
+}
+
+.navbar {
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(59,130,246,0.08);
+  border-radius: 0 0 24px 24px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  padding: 0;
+}
+
+.navbar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 64px;
+}
+
+.username {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #3b82f6;
+  letter-spacing: 0.01em;
+}
+
+.navbar-menu {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+}
+
+.navbar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: #374151;
+  font-size: 1.1rem;
+  font-weight: 500;
+  padding: 0.5rem 1.2rem;
+  border-radius: 8px;
+  transition: background 0.18s, color 0.18s;
+}
+
+.navbar-item:hover {
+  background: #f3f4f6;
+  color: #3b82f6;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.avatar-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.avatar-button:hover {
+  background: #f3f4f6;
+}
+
+.menu-items {
+  padding: 1rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(59,130,246,0.08);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  transition: background 0.18s;
+}
+
+.menu-item:hover {
+  background: #f3f4f6;
+}
+
+.menu-item:last-child {
+  margin-top: 0.75rem;
+}
+
+.menu-item:last-child .menu-item {
+  padding-left: 1.5rem;
+}
+
+.menu-item:last-child .menu-item:hover {
+  background: #f3f4f6;
 }
 </style>

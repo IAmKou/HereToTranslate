@@ -25,6 +25,27 @@ export class DiscussionManagerService extends ManagerService {
     super();
   }
 
+  /**
+   * Applies access policy overrides to a base permission set.
+   * Deny overrides are applied first (removing permissions), then allow overrides (adding permissions).
+   * @param base The base Permission instance
+   * @param overrides The DiscussionAccessPolicyEntity containing allow/deny overrides
+   * @returns The resulting Permission instance
+   */
+  applyAccessPolicyOverrides(
+    base: Permission,
+    overrides: DiscussionAccessPolicyEntity
+  ): Permission {
+    let result = new Permission(base.value);
+    if (overrides.denyOverrides instanceof Permission) {
+      result = result.remove(overrides.denyOverrides);
+    }
+    if (overrides.allowOverrides instanceof Permission) {
+      result = result.add(overrides.allowOverrides);
+    }
+    return result;
+  }
+
   async getUserPermissionForThread(uid: Maybe<bigint>, threadId: bigint) {
     const userRoles = await this.projectRoleRepository.findBy({
       user: { id: uid },

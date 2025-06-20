@@ -396,21 +396,24 @@ onMounted(() => {
 <style scoped>
 .create-project-container {
   min-height: 100vh;
-  padding: 2rem 1rem;
+  padding: 2rem 0 2rem 0;
+  padding-left: 0 !important;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   background: #f8fafc;
+  width: 100vw;
+  max-width: 100vw;
 }
 
 .create-project-form {
-  width: 100%;
-  max-width: 900px;
+  width: 100vw;
+  max-width: 100vw;
   background: white;
   border-radius: 24px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  margin-left: 6rem;
+  margin-left: -8rem;
 }
 
 .form {
@@ -418,6 +421,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  width: 100%;
+  max-width: none;
 }
 
 .form-section {
@@ -497,10 +502,13 @@ label {
 
 .form-control {
   width: 100%;
-  padding: 1rem 1rem 1rem 3rem;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 1rem 1rem 1rem 3.5rem;
   border: 2px solid #e5e7eb;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 1.1rem;
   transition: all 0.3s ease;
   background-color: #f9fafb;
   color: #374151;

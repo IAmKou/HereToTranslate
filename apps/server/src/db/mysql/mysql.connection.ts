@@ -42,6 +42,7 @@ export class MySqlConnection {
       database: this.config.get<string>('MYSQL_DATABASE'),
       synchronize: true, // Auto create tables (turn off in production)
       logging: true,
+      supportBigNumbers: true,
       entities: [UserTypeEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionThreadEntity, ProjectDiscussionCommentEntity,

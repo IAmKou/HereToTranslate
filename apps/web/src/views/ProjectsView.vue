@@ -1,7 +1,7 @@
 <template>
   <div class="layout-wrapper">
     <TopNavbar />
-    <div class="main-content">
+    <div class="main-content" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <Sidebar />
       <div class="content">
         <div class="projects-container">
@@ -250,6 +250,7 @@ import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
 import { authService } from '../services/auth.service';
+import { isSidebarCollapsed } from '../store/sidebar';
 
 // Interfaces
 interface Project {
@@ -408,6 +409,7 @@ export default defineComponent({
       isHeaderVisible,
       isFiltersVisible,
       isGridVisible,
+      isSidebarCollapsed,
     };
   },
 });
@@ -424,6 +426,12 @@ export default defineComponent({
 .main-content {
   display: flex;
   flex: 1;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-left: 260px;
+}
+
+.main-content.sidebar-collapsed {
+  margin-left: 70px;
 }
 
 .content {
@@ -431,6 +439,7 @@ export default defineComponent({
   padding: 2rem;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   min-height: calc(100vh - 80px);
+  transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .projects-container {
@@ -905,6 +914,12 @@ export default defineComponent({
 
 /* Responsive Design */
 @media (max-width: 1024px) {
+  .main-content {
+    margin-left: 70px;
+  }
+  .main-content.sidebar-collapsed {
+    margin-left: 70px;
+  }
   .content {
     padding: 1.5rem;
   }

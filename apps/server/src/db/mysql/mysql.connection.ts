@@ -10,7 +10,6 @@ import {
   CategoryEntity,
   CommentEntity,
   FileEntity,
-  GroupMemberEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
   RatingEntity,
@@ -19,7 +18,7 @@ import {
   TaskEntity,
   TransactionEntity,
   CommitEntity,
-  ProjectTagEntity
+  ProjectTagEntity,
 } from '#LocalProject/Entities';
 
 

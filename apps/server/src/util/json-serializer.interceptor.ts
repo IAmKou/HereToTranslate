@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from "@nestjs/common";
 import { map, Observable } from "rxjs";
-import { JsonStringifyWithBigInt } from "./bigint-utils";
+import { JsonStringifyWithBigInt } from "@here-to-translate/common/bigint-utils";
 
 @Injectable()
 export class JsonSerializerInterceptor<T = unknown> implements NestInterceptor<T, string> {

@@ -46,6 +46,12 @@ export class UserEntity {
   @OneToMany(() => ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];
 
+  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
+  projectRoles: ProjectRoleEntity[];
+
+  @ManyToMany(() => ProjectEntity, project => project.members, { cascade: true })
+  projects: ProjectEntity[];
+
   @ManyToMany(() => ProjectGroupEntity, group => group.members, { cascade: true })
   groups: ProjectGroupEntity[];
 
@@ -57,9 +63,6 @@ export class UserEntity {
 
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
-
-  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
-  projectRoles: ProjectRoleEntity[];
 
 
 }

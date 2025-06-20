@@ -1,12 +1,4 @@
-import {
-  ProjectEntity,
-  UserEntity,
-  ProjectRoleEntity,
-  CategoryEntity,
-  ProjectTagEntity,
-  RequestEntity,
-  ProjectGroupEntity, UserTypeEntity
-} from '#LocalProject/Entities';
+import { ProjectEntity, UserEntity, ProjectRoleEntity, CategoryEntity, ProjectTagEntity, RequestEntity, ProjectGroupEntity } from "#LocalProject/Entities";
 import { Global, Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CategoryManagerService } from "./service/category-manager.service";

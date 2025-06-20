@@ -1,11 +1,13 @@
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { CreateRequestDto, ReviewRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
-import { Body, Controller, Get, Param, Post, Req, UseGuards, ValidationPipe } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
 import { RequestManagerService } from "../service/request-manager.service";
 import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
+import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
 
 @Controller('requests')
+@UseInterceptors(JsonSerializerInterceptor)
 export class RequestController {
   constructor(
     private readonly requests: RequestManagerService
@@ -27,9 +29,9 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':requestId/update')
+  @Post(':id/update')
   async updateRequest(
-    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Param('id', BigIntTransformPipe) requestId: bigint,
     @Body(ValidationPipe) body: UpdateRequestDto,
     @Req() req: AuthenticatedRequest
   ) {
@@ -37,9 +39,9 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':requestId/review')
+  @Post(':id/review')
   async reviewRequest(
-    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Param('id', BigIntTransformPipe) requestId: bigint,
     @Body(ValidationPipe) body: ReviewRequestDto,
     @Req() req: AuthenticatedRequest
   ) {

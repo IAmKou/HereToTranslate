@@ -1,4 +1,12 @@
-import { ProjectEntity, UserEntity, ProjectRoleEntity, CategoryEntity, ProjectTagEntity, RequestEntity, ProjectGroupEntity } from "#LocalProject/Entities";
+import {
+  ProjectEntity,
+  ProjectRoleEntity,
+  CategoryEntity,
+  ProjectTagEntity,
+  RequestEntity,
+  ProjectGroupEntity,
+  UserTypeEntity
+} from '#LocalProject/Entities';
 import { Global, Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CategoryManagerService } from "./service/category-manager.service";
@@ -19,12 +27,11 @@ import { AuthModule } from "#LocalProject/Auth/auth.module";
     TypeOrmModule.forFeature([
       CategoryEntity,
       ProjectTagEntity,
-      UserEntity,
       ProjectEntity,
       ProjectRoleEntity,
       RequestEntity,
       ProjectGroupEntity,
-      UserTypeEntity
+      UserTypeEntity,
     ])
   ],
   providers: [

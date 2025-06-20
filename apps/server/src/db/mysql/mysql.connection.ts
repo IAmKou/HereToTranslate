@@ -43,7 +43,7 @@ export class MySqlConnection {
       synchronize: true, // Auto create tables (turn off in production)
       logging: true,
       entities: [UserTypeEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
-        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
+        ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity] // Add entities here
     });
     MySqlConnection.instance = this;

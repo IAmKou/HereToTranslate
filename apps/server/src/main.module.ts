@@ -1,4 +1,4 @@
-import { ClassSerializerInterceptor, Module } from '@nestjs/common';
+import {  Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
@@ -7,8 +7,9 @@ import { DbContextModule } from './db/db.module';
 import { AuthModule } from './auth/auth.module';
 import { SeederModule } from './seeder/seeder.module';
 import { ManagersModule } from './manager/managers.module';
-import { APP_INTERCEPTOR, Reflector } from '@nestjs/core';
 import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
+import { MailerModule } from '@nestjs-modules/mailer';
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 
 @Module({
   imports: [
@@ -25,6 +26,27 @@ import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
           throw new Error(errors.toString());
         }
         return instance;
+      },
+    }),
+    MailerModule.forRoot({
+      transport: {
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: '',
+          pass: '',
+        },
+      },
+      defaults: {
+        from: '"Support" <support@example.com>',
+      },
+      template: {
+        dir: path.join(__dirname, 'mailer', 'templates'),
+        adapter: new HandlebarsAdapter(),
+        options: {
+          strict: true,
+        },
       },
     }),
     DbContextModule,

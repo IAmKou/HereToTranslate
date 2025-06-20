@@ -176,7 +176,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  margin-left: 1100px; /* Đẩy phần menu sang sát phải */
+  margin-left: auto; /* Đẩy menu sang phải tự nhiên */
 }
 
 .navbar-item {
@@ -191,6 +191,7 @@ onUnmounted(() => {
   color: #2563eb;
 }
 
+
 .button.is-primary {
   height: 32px;
   padding: 0 16px;
@@ -202,8 +203,8 @@ onUnmounted(() => {
   border: none;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  white-space: nowrap; /* Thêm dòng này để không bị xuống dòng */
 }
-
 .button.is-primary:hover {
   background-color: #0056b3;
 }

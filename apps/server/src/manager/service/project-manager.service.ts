@@ -173,6 +173,36 @@ export class ProjectManagerService extends ManagerService {
     }
   }
 
+  async fetchAllUserProjects(userId: bigint): Promise<ProjectEntity[]> {
+    const qb = this.projectRepository
+      .createQueryBuilder('project')
+      .leftJoin('project.createdBy', 'createdBy')
+      .leftJoin('project.members', 'member')
+      .leftJoin('project.tags', 'tags')
+      .where('createdBy.id = :userId', { userId })
+      .orWhere('member.id = :userId', { userId })
+      .select([
+        'project.id',
+        'project.name',
+        'project.description',
+        'project.isPublic',
+        'project.createdAt',
+        'createdBy.id',
+        'createdBy.fullName',
+        'member.id',
+        'member.fullName',
+        'tags.id',
+        'tags.name',
+      ])
+      .addSelect('project.createdBy')
+      .addSelect('project.members')
+      .addSelect('project.tags');
+
+    const projects = await qb.getMany();
+    return projects;
+  }
+
+
   async fetchProject(uid: Maybe<bigint>, projectId: bigint) {
     this.logger.debug(`Fetching project with ID: ${projectId}`);
 

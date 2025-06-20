@@ -27,6 +27,13 @@ export class ProjectController {
     return this.projects.createProject(req.user.id, projectData);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('me/projects')
+  async getMyProjects(@Req() req: AuthenticatedRequest) {
+    const userId = req.user.id;
+    return this.projects.fetchAllUserProjects(userId);
+  }
+
   @UseGuards(JwtFallthroughGuard)
   @IsPublicEndpoint()
   @Get(':projectId')

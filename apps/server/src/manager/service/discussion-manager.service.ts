@@ -25,7 +25,7 @@ export class DiscussionManagerService extends ManagerService {
     super();
   }
 
-  async getUserPermissionForThread(uid: bigint, threadId: bigint) {
+  async getUserPermissionForThread(uid: Maybe<bigint>, threadId: bigint) {
     const userRoles = await this.projectRoleRepository.findBy({
       user: { id: uid },
       project: { discussions: { id: threadId } }
@@ -45,7 +45,7 @@ export class DiscussionManagerService extends ManagerService {
     return resultPermission;
   }
 
-  async fetchDiscussion(uid: bigint, projectId: bigint, threadId: bigint) {
+  async fetchDiscussion(uid: Maybe<bigint>, projectId: bigint, threadId: bigint) {
     const threadAccessPolicy = await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       select: ['accessPolicy'],

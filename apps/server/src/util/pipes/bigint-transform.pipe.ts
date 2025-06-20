@@ -1,11 +1,12 @@
-import { ArgumentMetadata, PipeTransform } from "@nestjs/common";
-import { isBigInt } from "../bigint-utils";
+import { ArgumentMetadata, BadRequestException, PipeTransform } from '@nestjs/common';
+// import { isBigInt } from "../bigint-utils";
 
 export class BigIntTransformPipe implements PipeTransform<string, bigint> {
   transform(value: string, metadata: ArgumentMetadata): bigint {
-    if (!isBigInt(value)) {
-      throw new Error(`Invalid BigInt value: ${value}`);
+    try {
+      return BigInt(value);
+    } catch (error) {
+      throw new BadRequestException('Invalid bigint value');
     }
-    return BigInt(value);
   }
 }

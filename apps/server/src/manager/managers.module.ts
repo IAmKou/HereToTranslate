@@ -5,7 +5,11 @@ import {
   ProjectTagEntity,
   RequestEntity,
   ProjectGroupEntity,
-  UserTypeEntity
+  UserTypeEntity,
+  UserEntity,
+  ProjectDiscussionCommentEntity,
+  ProjectDiscussionThreadEntity,
+  DiscussionAccessPolicyEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
@@ -19,6 +23,9 @@ import { ProjectController } from "./controller/project.controller";
 import { ProjectTagController } from "./controller/project-tag.controller";
 import { UserController } from "./controller/user.controller";
 import { AuthModule } from "#LocalProject/Auth/auth.module";
+import { GroupManagerService } from '#LocalProject/Managers/service/group-manager.service';
+import { RoleManagerService } from '#LocalProject/Managers/service/role-manager.service';
+import { DiscussionManagerService } from '#LocalProject/Managers/service/discussion-manager.service';
 
 @Global()
 @Module({
@@ -32,6 +39,10 @@ import { AuthModule } from "#LocalProject/Auth/auth.module";
       RequestEntity,
       ProjectGroupEntity,
       UserTypeEntity,
+      UserEntity,
+      ProjectDiscussionThreadEntity,
+      ProjectDiscussionCommentEntity,
+      DiscussionAccessPolicyEntity,
     ])
   ],
   providers: [
@@ -39,14 +50,20 @@ import { AuthModule } from "#LocalProject/Auth/auth.module";
     RequestManagerService,
     UserManagerService,
     ProjectManagerService,
-    ProjectTagManagerService
+    ProjectTagManagerService,
+    GroupManagerService,
+    RoleManagerService,
+    DiscussionManagerService,
   ],
   exports: [
     CategoryManagerService,
     RequestManagerService,
     UserManagerService,
     ProjectManagerService,
-    ProjectTagManagerService
+    ProjectTagManagerService,
+    GroupManagerService,
+    RoleManagerService,
+    DiscussionManagerService,
   ],
   controllers: [
     CategoryController,

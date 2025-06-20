@@ -83,14 +83,14 @@
             <span v-else class="badge badge-private">Private</span>
           </div>
         </div>
-        
+
         <p
           v-if="project.description"
           class="description"
         >
           {{ project.description }}
         </p>
-        
+
         <div v-if="project.tags && project.tags.length > 0" class="tags">
           <span
             v-for="tag in project.tags.slice(0, 3)"
@@ -183,13 +183,13 @@ export default defineComponent({
       try {
         loading.value = true;
         error.value = null;
-        // For now, we'll need to implement a method to get all projects
-        // This might need to be added to the backend or we can fetch individual projects
-        // For demonstration, we'll create some mock data
-        projects.value = [];
+
+        const data = await apiCall(`/me/projects`);
+        projects.value = data;
+
       } catch (err: any) {
-        error.value = 'Failed to load projects. Please try again later.';
-        console.error('Error loading projects:', err);
+        error.value = 'Failed to load your projects.';
+        console.error(err);
       } finally {
         loading.value = false;
       }

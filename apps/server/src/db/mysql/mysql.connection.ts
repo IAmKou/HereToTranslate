@@ -18,7 +18,7 @@ import {
   TaskEntity,
   TransactionEntity,
   CommitEntity,
-  ProjectTagEntity,
+  ProjectTagEntity, ProjectDiscussionThreadEntity, ProjectDiscussionCommentEntity, DiscussionAccessPolicyEntity
 } from '#LocalProject/Entities';
 
 
@@ -44,7 +44,8 @@ export class MySqlConnection {
       logging: true,
       entities: [UserTypeEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity, ProjectTagEntity] // Add entities here
+        TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionThreadEntity, ProjectDiscussionCommentEntity,
+      DiscussionAccessPolicyEntity] // Add entities here
     });
     MySqlConnection.instance = this;
   }

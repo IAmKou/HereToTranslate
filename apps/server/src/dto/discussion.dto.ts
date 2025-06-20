@@ -47,4 +47,8 @@ export class PostCommentDto {
   content: string;
 }
 
-export class UpdateCommentDto extends PostCommentDto {}
+export class UpdateCommentDto {
+  @IsOptional()
+  @IsString()
+  content?: string;
+}

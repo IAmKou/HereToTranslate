@@ -1,4 +1,4 @@
-import { CreateDiscussionDto, PostCommentDto, UpdateDiscussionDto } from "#LocalProject/Dtos";
+import { CreateDiscussionDto, PostCommentDto, UpdateCommentDto, UpdateDiscussionDto } from "#LocalProject/Dtos";
 import { DiscussionAccessPolicyEntity, ProjectDiscussionCommentEntity, ProjectDiscussionThreadEntity, ProjectRoleEntity } from "#LocalProject/Entities";
 import { Maybe } from "@here-to-translate/common/types";
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
@@ -25,11 +25,28 @@ export class DiscussionManagerService extends ManagerService {
     super();
   }
 
-  async getUserPermissionForThread(uid: bigint, threadId: bigint) {
+  /**
+   * Get the user's permissions for a specific discussion thread.
+   * This method aggregates permissions from all roles the user has in the project,
+   * including the 'Everyone' role, and applies any access policy overrides defined for the thread.
+   * @param uid The user's ID. If empty it's equivalent to an anonymous user.
+   * @param threadId The ID of the discussion thread to check permissions for.
+   * @returns A `Permission` object representing the user's permissions for the thread.
+   */
+  async getUserPermissionForThread(uid: Maybe<bigint>, threadId: bigint) {
     const userRoles = await this.projectRoleRepository.findBy({
       user: { id: uid },
       project: { discussions: { id: threadId } }
     });
+    const everyoneRole = await this.projectRoleRepository.findOne({
+      where: { name: 'Everyone', project: { discussions: { id: threadId } } },
+      select: ['id']
+    });
+    // TODO: Guarantee that the Everyone role exists for every project
+    if (/* unreachable */ !everyoneRole) {
+      throw new NotFoundException('Everyone role not found for this discussion thread');
+    }
+    userRoles.unshift(everyoneRole);
     let resultPermission = new Permission(PermissionFlags.None);
     for (const role of userRoles) {
       const overrides = await this.discussionAccessPolicyRepository.findOne({
@@ -39,13 +56,15 @@ export class DiscussionManagerService extends ManagerService {
         }
       });
       if (overrides) {
-        resultPermission = this.applyAccessPolicyOverrides(resultPermission, overrides);
+        resultPermission = resultPermission
+          .add(overrides.allowOverrides || PermissionFlags.None)
+          .remove(overrides.denyOverrides || PermissionFlags.None);
       }
     }
     return resultPermission;
   }
 
-  async fetchDiscussion(uid: bigint, projectId: bigint, threadId: bigint) {
+  async fetchDiscussion(uid: Maybe<bigint>, projectId: bigint, threadId: bigint) {
     const threadAccessPolicy = await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       select: ['accessPolicy'],
@@ -69,8 +88,24 @@ export class DiscussionManagerService extends ManagerService {
 
     return thread;
   }
-  fetchDiscussions(uid: Maybe<bigint>, projectId: bigint) {
-    throw new Error('Method not implemented.');
+  async fetchDiscussions(uid: Maybe<bigint>, projectId: bigint) {
+    const threads = await this.discussionThreadRepository.find({
+      where: { project: { id: projectId } },
+      select: ['id', 'title', 'description', 'isArchived']
+    });
+    if (!threads || threads.length === 0) {
+      return [];
+    }
+    try {
+      return await Promise.all(
+        threads.filter(async thread => {
+          const resultPermission = await this.getUserPermissionForThread(uid, thread.id);
+          return resultPermission.has(PermissionFlags.ViewThread);
+        })
+      )
+    } catch (error) {
+      this.unknownErrorHanlder(error, 'Failed to fetch discussions');
+    }
   }
   async createDiscussion(projectId: bigint, discussionData: CreateDiscussionDto) {
     const { title, description } = discussionData;
@@ -119,7 +154,20 @@ export class DiscussionManagerService extends ManagerService {
 
   }
   async archiveDiscussion(threadId: bigint) {
+    const discussionExists = await this.discussionThreadRepository.exists({
+      where: { id: threadId }
+    });
+    if (!discussionExists) {
+      throw new NotFoundException('Unknown discussion thread');
+    }
+    const isArchived = await this.discussionThreadRepository.exists({
+      where: { id: threadId, isArchived: true }
+    });
+    if (isArchived) {
+      throw new BadRequestException('Discussion is already archived');
+    }
     try {
+
       const updatedDiscussion = await this.discussionThreadRepository.save({
         id: threadId,
         isArchived: true
@@ -152,7 +200,7 @@ export class DiscussionManagerService extends ManagerService {
       this.unknownErrorHanlder(error, 'Failed to post comment');
     }
   }
-  async updateDiscussionComment(uid: bigint, threadId: bigint, commentId: bigint, commentUpdateData: any) {
+  async updateDiscussionComment(uid: bigint, threadId: bigint, commentId: bigint, commentUpdateData: UpdateCommentDto) {
     const comment = await this.discussionCommentRepository.findOne({
       where: { id: commentId, thread: { id: threadId } },
       select: ['author']

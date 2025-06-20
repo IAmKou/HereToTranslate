@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { ProjectEntity, UserEntity, ProjectRoleEntity, ProjectTagEntity, CategoryEntity } from '#LocalProject/Entities';
 import { MaybeException } from '#LocalProject/Exceptions';
-import { CreateDiscussionDto, CreateProjectDto, CreateProjectGroupDto, CreateProjectRoleDto, UpdateProjectGroupDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
+import { CreateDiscussionDto, CreateProjectDto, CreateProjectGroupDto, CreateProjectRoleDto, UpdateDiscussionDto, UpdateProjectGroupDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { PermissionFlags, Permission, IntoPermission } from '@here-to-translate/common';
 import { Maybe } from '@here-to-translate/common/types';
 import { GroupManagerService } from './group-manager.service';
@@ -146,7 +146,6 @@ export class ProjectManagerService extends ManagerService {
 
       const everyoneRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
-        user: { id: BigInt(0) },
         permissionFlags: new Permission(PermissionFlags.ViewProject),
         name: 'Everyone'
       });
@@ -416,7 +415,7 @@ export class ProjectManagerService extends ManagerService {
     return this.discussionManager.createDiscussion(projectId, data);
   }
 
-  async updateDiscussionMetadata(uid: bigint, projectId: bigint, threadId: bigint, discussionUpdateData: any) {
+  async updateDiscussionMetadata(uid: bigint, projectId: bigint, threadId: bigint, discussionUpdateData: UpdateDiscussionDto) {
     await this.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
     return this.discussionManager.updateDiscussionMetadata(threadId, discussionUpdateData);
   }

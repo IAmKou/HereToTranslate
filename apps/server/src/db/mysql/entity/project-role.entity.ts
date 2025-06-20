@@ -21,6 +21,7 @@ export class ProjectRoleEntity {
 
   @Column({
     type: 'bigint',
+    unsigned: true,
     default: 0n,
     transformer: BigIntColumnTransformer(Permission)
   })

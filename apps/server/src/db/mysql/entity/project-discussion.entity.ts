@@ -81,6 +81,7 @@ export class DiscussionAccessPolicyEntity {
 
   @Column({
     type: 'bigint',
+    unsigned: true,
     nullable: true,
     default: null,
     transformer: BigIntColumnTransformer(Permission)
@@ -90,6 +91,7 @@ export class DiscussionAccessPolicyEntity {
   @Column({
     type: 'bigint',
     nullable: true,
+    unsigned: true,
     default: null,
     transformer: BigIntColumnTransformer(Permission)
   })

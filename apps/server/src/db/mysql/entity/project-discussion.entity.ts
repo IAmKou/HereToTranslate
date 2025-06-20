@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
 import { ProjectRoleEntity } from "./project-role.entity";
 import { BigIntColumnTransformer } from "#LocalProject/Utils/extensions/typeorm.extensions";
 import { Permission } from "@here-to-translate/common";
@@ -64,18 +64,23 @@ export class ProjectDiscussionCommentEntity {
 }
 
 
-@Entity('project_discussion_access')
+@Entity('thread_access_policies')
 @Unique(['thread', 'role'])
 export class DiscussionAccessPolicyEntity {
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
+  @JoinColumn({ name: 'threadId', referencedColumnName: 'id' })
   @OneToOne(() => ProjectDiscussionThreadEntity, { onDelete: 'CASCADE' })
   thread: ProjectDiscussionThreadEntity;
 
+  @JoinColumn({ name: 'roleId', referencedColumnName: 'id' })
   @OneToOne(() => ProjectRoleEntity, { onDelete: 'CASCADE' })
   role: ProjectRoleEntity;
 
   @Column({
     type: 'bigint',
+    unsigned: true,
     nullable: true,
     default: null,
     transformer: BigIntColumnTransformer(Permission)
@@ -85,6 +90,7 @@ export class DiscussionAccessPolicyEntity {
   @Column({
     type: 'bigint',
     nullable: true,
+    unsigned: true,
     default: null,
     transformer: BigIntColumnTransformer(Permission)
   })

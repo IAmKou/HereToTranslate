@@ -41,7 +41,7 @@ export class ProjectEntity {
   @OneToMany(() => CommitEntity, commit => commit.project)
   commits: CommitEntity[];
 
-  @OneToMany(() => ProjectDiscussionThreadEntity, project => project.id)
+  @OneToMany(() => ProjectDiscussionThreadEntity, thread => thread.project)
   discussions: ProjectDiscussionThreadEntity[];
 
   @OneToMany(() => FileEntity, file => file.project)

@@ -1,5 +1,5 @@
+import { isBigInt } from "@here-to-translate/common/bigint-utils";
 import { ArgumentMetadata, PipeTransform } from "@nestjs/common";
-import { isBigInt } from "../bigint-utils";
 
 export class BigIntTransformPipe implements PipeTransform<string, bigint> {
   transform(value: string, metadata: ArgumentMetadata): bigint {

@@ -1,4 +1,4 @@
-import { ProjectEntity, UserEntity, ProjectRoleEntity, CategoryEntity, ProjectTagEntity, RequestEntity, ProjectGroupEntity } from "#LocalProject/Entities";
+import { ProjectEntity, UserEntity, ProjectRoleEntity, CategoryEntity, ProjectTagEntity, RequestEntity, ProjectGroupEntity, ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, ProjectDiscussionCommentEntity } from "#LocalProject/Entities";
 import { Global, Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CategoryManagerService } from "./service/category-manager.service";
@@ -9,6 +9,10 @@ import { CategoryController } from "./controller/category.controller";
 import { ProjectController } from "./controller/project.controller";
 import { UserController } from "./controller/user.controller";
 import { AuthModule } from "#LocalProject/Auth/auth.module";
+import { GroupManagerService } from "./service/group-manager.service";
+import { DiscussionManagerService } from "./service/discussion-manager.service";
+import { RoleManagerService } from "./service/role-manager.service";
+import { RequestController } from "./controller/request.controller";
 
 @Global()
 @Module({
@@ -16,29 +20,39 @@ import { AuthModule } from "#LocalProject/Auth/auth.module";
     AuthModule,
     TypeOrmModule.forFeature([
       CategoryEntity,
-      ProjectTagEntity,
-      UserEntity,
+      DiscussionAccessPolicyEntity,
       ProjectEntity,
-      ProjectRoleEntity,
+      ProjectDiscussionThreadEntity,
+      ProjectDiscussionCommentEntity,
       ProjectGroupEntity,
-      RequestEntity
+      ProjectRoleEntity,
+      ProjectTagEntity,
+      RequestEntity,
+      UserEntity
     ])
   ],
   providers: [
     CategoryManagerService,
     RequestManagerService,
     UserManagerService,
+    GroupManagerService,
+    RoleManagerService,
+    DiscussionManagerService,
     ProjectManagerService
   ],
   exports: [
     CategoryManagerService,
     RequestManagerService,
     UserManagerService,
+    GroupManagerService,
+    RoleManagerService,
+    DiscussionManagerService,
     ProjectManagerService
   ],
   controllers: [
     CategoryController,
     ProjectController,
+    RequestController,
     UserController
   ]
 })

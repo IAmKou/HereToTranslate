@@ -328,9 +328,8 @@ const statusOptions = [
 ];
 
 const roleOptions: Role[] = [
-  { id: null, name: 'All' },
-  { id: 1, name: 'Admin' },
-  { id: 2, name: 'Member' }
+  { id: 2, name: 'Admin' },
+  { id: 3, name: 'Member' }
 ];
 
 interface CustomFilterMeta {
@@ -415,7 +414,7 @@ const formatDate = (dateValue: Date) => {
   try {
     // Ensure we have a valid Date object
     const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-    
+
     console.log('Parsed date:', date);
     if (isNaN(date.getTime())) {
       console.log('Invalid date');
@@ -468,6 +467,7 @@ const loadUsers = async () => {
     // Check if current user is super admin
     const currentUser = authService.getUser();
     isSuperAdmin.value = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+    console.log('isSuperAdmin:', isSuperAdmin.value, 'currentUser:', currentUser);
 
     toast.add({
       severity: 'success',

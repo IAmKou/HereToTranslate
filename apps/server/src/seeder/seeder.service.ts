@@ -1,14 +1,14 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RoleEntity, UserEntity } from '#LocalProject/Entities';
+import { UserTypeEntity, UserEntity } from '#LocalProject/Entities';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class SeederService implements OnApplicationBootstrap {
   constructor(
-    @InjectRepository(RoleEntity)
-    private readonly roleRepo: Repository<RoleEntity>,
+    @InjectRepository(UserTypeEntity)
+    private readonly roleRepo: Repository<UserTypeEntity>,
     @InjectRepository(UserEntity)
     private readonly accountRepo: Repository<UserEntity>,
   ) {}

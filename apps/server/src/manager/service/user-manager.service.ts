@@ -1,17 +1,18 @@
 import { RegisterDto } from "#LocalProject/Dtos";
-import { UserEntity, UserRole } from "#LocalProject/Entities";
+import { UserTypeEntity, UserEntity, UserRole } from '#LocalProject/Entities';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Repository } from "typeorm";
 import * as bcrypt from "bcryptjs";
 import { validateEmail } from "#LocalProject/Utils/validation";
 import { InjectRepository } from "@nestjs/typeorm";
-import { UpdateUserRoleDto } from "src/dto/update-user-role.dto";
 
 @Injectable()
 export class UserManagerService {
     constructor(
       @InjectRepository(UserEntity)
-      private readonly userRepository: Repository<UserEntity>
+      private readonly userRepository: Repository<UserEntity>,
+      @InjectRepository(UserTypeEntity)
+      private readonly roleRepository: Repository<UserTypeEntity>,
     ) {}
 
   async register(data: RegisterDto) {
@@ -142,10 +143,10 @@ export class UserManagerService {
     });
   }
 
-  async updateUserRole(userId: bigint, updateRoleDto: UpdateUserRoleDto, currentUser: UserEntity) {
+  async updateUserRole(userId: bigint, roleId: number, currentUser: UserEntity) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['role']
+      relations: ['role'],
     });
 
     if (!user) {
@@ -158,7 +159,7 @@ export class UserManagerService {
     }
 
     // Only super admins can assign admin roles
-    if (updateRoleDto.role === UserRole.Admin && currentUser.role.id !== BigInt(UserRole.SuperAdmin)) {
+    if (roleId === UserRole.Admin && currentUser.role.id !== BigInt(UserRole.SuperAdmin)) {
       throw new BadRequestException('Only super admins can assign admin roles');
     }
 
@@ -168,13 +169,26 @@ export class UserManagerService {
     }
 
     // Prevent assigning super admin role
-    if (updateRoleDto.role === UserRole.SuperAdmin) {
+    if (roleId === UserRole.SuperAdmin) {
       throw new BadRequestException('Super admin role cannot be assigned');
     }
 
-    user.role = { id: BigInt(updateRoleDto.role) } as any;
-    return this.userRepository.save(user);
+    // Fetch the role entity (recommended instead of casting)
+    const newRole = await this.roleRepository.findOneBy({ id: BigInt(roleId) });
+    if (!newRole) {
+      throw new NotFoundException('Role not found');
+    }
+
+    user.role = newRole;
+    await this.userRepository.save(user);
+
+    // Return updated user with populated role
+    return this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['role'],
+    });
   }
+
 
   async toggleUserStatus(userId: bigint) {
     const user = await this.userRepository.findOne({

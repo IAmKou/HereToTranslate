@@ -5,7 +5,7 @@ import {
   CategoryEntity,
   ProjectTagEntity,
   RequestEntity,
-  ProjectGroupEntity
+  ProjectGroupEntity, UserTypeEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
@@ -31,7 +31,8 @@ import { AuthModule } from "#LocalProject/Auth/auth.module";
       ProjectEntity,
       ProjectRoleEntity,
       RequestEntity,
-      ProjectGroupEntity
+      ProjectGroupEntity,
+      UserTypeEntity
     ])
   ],
   providers: [

@@ -108,7 +108,8 @@ export class UserService {
   }
 
   async updateUserRole(userId: string, role: number): Promise<User> {
-    const response = await this.api.put(`/user/admin/${userId}/role`, { role });
+    const response = await this.api.put(`/user/admin/${userId}/role/${role}`);
+    console.log('Updated user role response:', response.data);
     return response.data;
   }
 

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import {
-  RoleEntity,
+  UserTypeEntity,
   UserEntity,
   BranchEntity,
   PostEntity,
@@ -43,7 +43,7 @@ export class MySqlConnection {
       database: this.config.get<string>('MYSQL_DATABASE'),
       synchronize: true, // Auto create tables (turn off in production)
       logging: true,
-      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
+      entities: [UserTypeEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity] // Add entities here
     });

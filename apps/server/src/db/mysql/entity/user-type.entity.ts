@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { UserEntity } from './user.entity';
 
-@Entity('role')
-export class RoleEntity {
+@Entity('usertype')
+export class UserTypeEntity {
 
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;

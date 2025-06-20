@@ -29,7 +29,7 @@ export interface User {
   phone: string;
   fullName: string;
   isActive: boolean;
-  createdAt: string;
+  createdAt: Date;
   role: {
     id: number;
     name: string;
@@ -61,6 +61,19 @@ export class UserService {
     });
   }
 
+  private normalizeDate(dateValue: any): Date {
+    if (dateValue instanceof Date) {
+      return dateValue;
+    }
+    if (typeof dateValue === 'number') {
+      return new Date(dateValue);
+    }
+    if (typeof dateValue === 'string') {
+      return new Date(dateValue);
+    }
+    return new Date();
+  }
+
   async getUserProfile(): Promise<UserProfile> {
     const response = await this.api.get<UserProfile>('/user/profile');
 
@@ -87,15 +100,25 @@ export class UserService {
 
   async getAllUsers(): Promise<User[]> {
     const response = await this.api.get('/user/admin/all');
-    return response.data;
+    // Normalize dates in the response
+    return response.data.map((user: any) => ({
+      ...user,
+      createdAt: this.normalizeDate(user.createdAt)
+    }));
   }
 
   async updateUserRole(userId: string, role: number): Promise<User> {
-    const response = await this.api.put(`/user/admin/${userId}/role`, { role });
+    const response = await this.api.put(`/user/admin/${userId}/role/${role}`);
+    console.log('Updated user role response:', response.data);
     return response.data;
   }
 
   async updateUserStatus(userId: string, isActive: boolean): Promise<User> {
+    const response = await this.api.put(`/user/admin/${userId}/toggle-status`);
+    return response.data;
+  }
+
+  async toggleUserStatus(userId: string): Promise<User> {
     const response = await this.api.put(`/user/admin/${userId}/toggle-status`);
     return response.data;
   }

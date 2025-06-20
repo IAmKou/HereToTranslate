@@ -303,6 +303,7 @@ import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Tooltip from 'primevue/tooltip';
 import { userService, type User } from '../services/user.service';
+import { authService } from '../services/auth.service';
 import { DataTableFilterMetaData } from 'primevue/datatable';
 
 // Register directives
@@ -327,9 +328,8 @@ const statusOptions = [
 ];
 
 const roleOptions: Role[] = [
-  { id: null, name: 'All' },
-  { id: 1, name: 'Admin' },
-  { id: 2, name: 'Member' }
+  { id: 2, name: 'Admin' },
+  { id: 3, name: 'Member' }
 ];
 
 interface CustomFilterMeta {
@@ -405,15 +405,16 @@ const getInitials = (name: string) => {
     .toUpperCase();
 };
 
-const formatDate = (dateString: string) => {
-  console.log('Formatting date:', dateString);
-  if (!dateString) {
-    console.log('Date string is empty');
+const formatDate = (dateValue: Date) => {
+  console.log('Formatting date:', dateValue, 'Type:', typeof dateValue);
+  if (!dateValue) {
+    console.log('Date value is empty');
     return 'N/A';
   }
   try {
-    // Parse the date string from database format
-    const date = new Date(dateString);
+    // Ensure we have a valid Date object
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+
     console.log('Parsed date:', date);
     if (isNaN(date.getTime())) {
       console.log('Invalid date');
@@ -456,6 +457,7 @@ const loadUsers = async () => {
       console.log(`User ${user.id} createdAt:`, {
         raw: user.createdAt,
         type: typeof user.createdAt,
+        isDate: user.createdAt instanceof Date,
         parsed: new Date(user.createdAt)
       });
     });
@@ -463,8 +465,9 @@ const loadUsers = async () => {
     users.value = response;
 
     // Check if current user is super admin
-    const currentUser = await userService.getCurrentUser();
-    isSuperAdmin.value = currentUser?.role?.id === 1;
+    const currentUser = authService.getUser();
+    isSuperAdmin.value = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+    console.log('isSuperAdmin:', isSuperAdmin.value, 'currentUser:', currentUser);
 
     toast.add({
       severity: 'success',
@@ -565,7 +568,7 @@ const confirmStatusChange = (user: User) => {
     accept: async () => {
       try {
         loading.value = true;
-        await (userService as any).toggleUserStatus(user.id);
+        await userService.toggleUserStatus(user.id);
         toast.add({
           severity: 'success',
           summary: 'Success',

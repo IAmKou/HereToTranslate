@@ -27,16 +27,7 @@ const router = createRouter({
       path: '/adminhome',
       name: 'adminhome',
       component: () => import('../views/AdminHomeView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true }},
-    {
-      path: '/signup',
-      name: 'signup',
-      component: () => import('../views/SignUpView.vue'),
-    },
-    {
-      path: '/rate',
-      name: 'rate',
-      component: () => import('../views/RateView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
       path: '/userhome',
@@ -87,6 +78,24 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/projects/:projectId',
+      name: 'project-detail',
+      component: () => import('../views/ProjectDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:projectId/edit',
+      name: 'project-edit',
+      component: () => import('../views/ProjectEditView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:projectId/manage',
+      name: 'project-manage',
+      component: () => import('../views/ProjectManageView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/category',
       name: 'category',
       component: () => import('../views/CategoryList.vue'),
@@ -124,21 +133,22 @@ const router = createRouter({
 });
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
-  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
-  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
-  const isAuthenticated = authService.isAuthenticated();
-  const isAdmin = authService.isAdmin();
-
-  if (requiresAuth && !isAuthenticated) {
-    next('/login');
-  } else if (requiresAdmin && !isAdmin) {
-    next('/userhome');
-  } else if (to.path === '/login' && isAuthenticated) {
-    next(isAdmin ? '/adminhome' : '/userhome');
-  } else {
-    next();
-  }
-});
+// router.beforeEach((to, from, next) => {
+//   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+//   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
+//   const isAuthenticated = authService.isAuthenticated();
+//   const isAdmin = authService.isAdmin();
+//   const isSuperAdmin = authService.isSuperAdmin();
+//
+//   if (requiresAuth && !isAuthenticated) {
+//     next('/login');
+//   } else if (requiresAdmin && !isAdmin) {
+//     next('/userhome');
+//   } else if (to.path === '/login' && isAuthenticated) {
+//     next(isSuperAdmin ? '/adminhome' : isAdmin ? '/adminhome' : '/userhome');
+//   } else {
+//     next();
+//   }
+// });
 
 export default router;

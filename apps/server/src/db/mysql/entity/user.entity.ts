@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany, ManyToMany } from 'typeorm';
-import { RoleEntity } from './role.entity';
+import { UserTypeEntity } from './user-type.entity';
 import { ProjectEntity } from './project.entity';
 import { ProjectRoleEntity } from './project-role.entity';
 import { BranchEntity } from './branch.entity';
@@ -33,9 +33,9 @@ export class UserEntity {
   @Column({ length: 100 })
   fullName: string;
 
-  @ManyToOne(() => RoleEntity, role => role.users)
+  @ManyToOne(() => UserTypeEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
-  role: RoleEntity;
+  role: UserTypeEntity;
 
   @Column({ default: true })
   isActive: boolean;
@@ -49,6 +49,9 @@ export class UserEntity {
   @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
   projectRoles: ProjectRoleEntity[];
 
+  @ManyToMany(() => ProjectEntity, project => project.members, { cascade: true })
+  projects: ProjectEntity[];
+
   @ManyToMany(() => ProjectGroupEntity, group => group.members, { cascade: true })
   groups: ProjectGroupEntity[];
 
@@ -60,9 +63,6 @@ export class UserEntity {
 
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
-
-  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
-  projectRoles: ProjectRoleEntity[];
 
 
 }

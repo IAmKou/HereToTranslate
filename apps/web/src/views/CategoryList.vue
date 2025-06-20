@@ -123,15 +123,8 @@
                 </span>
               </template>
             </Column>
-            <Column field="createdAt" header="Created At" sortable style="min-width: 150px">
-              <template #body="slotProps">
-                <div class="flex items-center gap-2">
-                  <i class="pi pi-calendar text-gray-400"></i>
-                  <span>{{ formatDate(slotProps.data.createdAt) }}</span>
-                </div>
-              </template>
-            </Column>
-            <Column field="updatedAt" header="Updated At" sortable style="min-width: 150px">
+
+            <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
               <template #body="slotProps">
                 <div class="flex items-center gap-2">
                   <i class="pi pi-clock text-gray-400"></i>
@@ -231,15 +224,8 @@
                 </span>
               </template>
             </Column>
-            <Column field="createdAt" header="Created At" sortable style="min-width: 150px">
-              <template #body="slotProps">
-                <div class="flex items-center gap-2">
-                  <i class="pi pi-calendar text-gray-400"></i>
-                  <span>{{ formatDate(slotProps.data.createdAt) }}</span>
-                </div>
-              </template>
-            </Column>
-            <Column field="updatedAt" header="Updated At" sortable style="min-width: 150px">
+
+            <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
               <template #body="slotProps">
                 <div class="flex items-center gap-2">
                   <i class="pi pi-clock text-gray-400"></i>
@@ -419,10 +405,6 @@
             <div class="details-grid">
               <div class="detail-item">
                 <span class="detail-label">Created At</span>
-                <span class="detail-value">{{ formatDate(currentCategory.createdAt) }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Last Updated</span>
                 <span class="detail-value">{{ formatDate(currentCategory.updatedAt) }}</span>
               </div>
             </div>
@@ -533,6 +515,10 @@ const tagFilters = ref({
   name: { value: null, matchMode: 'contains' }
 });
 
+const isEditingTag = ref(false);
+const currentTag = ref<Tag>({ name: '' });
+const tagSubmitted = ref(false);
+
 const fetchCategories = async () => {
   loading.value = true;
   try {
@@ -593,6 +579,22 @@ const saveCategory = async () => {
   submitted.value = true;
 
   if (!currentCategory.value.name) {
+    return;
+  }
+
+  // Kiểm tra trùng tên Category
+  const nameExists = categories.value.some(cat =>
+    cat.name.trim().toLowerCase() === currentCategory.value.name.trim().toLowerCase() &&
+    (!isEditing.value || cat.id !== currentCategory.value.id)
+  );
+  if (nameExists) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Category name already exists',
+      life: 3000
+    });
+    saving.value = false;
     return;
   }
 
@@ -713,6 +715,23 @@ const closeTagDialog = () => {
 const saveTag = async () => {
   tagSubmitted.value = true;
   if (!currentTag.value.name) return;
+
+  // Kiểm tra trùng tên Tag
+  const tagNameExists = tags.value.some(tag =>
+    tag.name.trim().toLowerCase() === currentTag.value.name.trim().toLowerCase() &&
+    (!isEditingTag.value || tag.id !== currentTag.value.id)
+  );
+  if (tagNameExists) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Tag name already exists',
+      life: 3000
+    });
+    tagSaving.value = false;
+    return;
+  }
+
   tagSaving.value = true;
   try {
     if (isEditingTag.value && currentTag.value.id) {

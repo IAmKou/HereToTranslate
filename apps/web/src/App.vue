@@ -1,5 +1,6 @@
 <template>
   <div class="app-layout">
+    <Toast position="top-right" />
     <router-view />
   </div>
 </template>

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import {
-  RoleEntity,
+  UserTypeEntity,
   UserEntity,
   BranchEntity,
   PostEntity,
@@ -10,7 +10,6 @@ import {
   CategoryEntity,
   CommentEntity,
   FileEntity,
-  GroupMemberEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
   RatingEntity,
@@ -19,7 +18,7 @@ import {
   TaskEntity,
   TransactionEntity,
   CommitEntity,
-  ProjectTagEntity
+  ProjectTagEntity, ProjectDiscussionThreadEntity, ProjectDiscussionCommentEntity, DiscussionAccessPolicyEntity
 } from '#LocalProject/Entities';
 
 
@@ -43,9 +42,11 @@ export class MySqlConnection {
       database: this.config.get<string>('MYSQL_DATABASE'),
       synchronize: true,
       logging: true,
-      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
-        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity, ProjectTagEntity] // Add entities here
+      supportBigNumbers: true,
+      entities: [UserTypeEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
+        ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
+        TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionThreadEntity, ProjectDiscussionCommentEntity,
+      DiscussionAccessPolicyEntity] // Add entities here
     });
     MySqlConnection.instance = this;
   }

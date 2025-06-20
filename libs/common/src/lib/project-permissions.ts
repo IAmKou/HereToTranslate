@@ -1,46 +1,139 @@
-export class PermissionFlags {
-  // 1 unused bit, since MySql is quirky and implicitly treats bigint as signed
-  static readonly All = BigInt.asUintN(64, -1n) >> 1n;
-  static readonly ProjectAdmin = 1n << 63n;
-  static readonly ManageMembers = 1n << 62n;
-  static readonly ManageBranches = 1n << 61n;
-  static readonly ManageRoles = 1n << 60n;
-  static readonly ManageWorkspaces = 1n << 59n;
-  static readonly ManageGroups = 1n << 58n;
-  static readonly ViewAudit = 1n << 55n;
+import { IntoBigInt } from "./types";
 
-  static readonly ReviewCommit = 1n << 53n;
-  static readonly PushCommit = 1n << 52n;
 
-  static readonly ReviewRequests = 1n << 40n;
-  static readonly ViewRequest = 1n << 39n;
+/**
+ * Bit flags representing project and workspace permissions.
+ */
+export const PermissionFlags = Object.freeze({
+  /** Project owner. No one else can have this permission. */
+  Owner: -1n,
 
-  static readonly ManageWorkspaceMetadata = 1n << 27n;
-  static readonly ViewWorkspace = 1n << 26n;
+  /** Project administrator permission, equivalent to all permissions. */
+  ProjectAdmin: 1n << 63n,
 
-  static readonly ManageComments = 1n << 15n;
-  static readonly PostComment = 1n << 14n;
-  static readonly ViewDiscussion = 1n << 13n;
-  static readonly ViewProject = 1n;
-}
+  /** Permission to manage project members. */
+  ManageMembers: 1n << 62n,
 
-export class Permission {
+  /** Permission to manage project branches. */
+  ManageBranches: 1n << 61n,
+
+  /** Permission to manage project roles. */
+  ManageRoles: 1n << 60n,
+
+  /** Permission to manage workspaces within the project. */
+  ManageWorkspaces: 1n << 59n,
+
+  /** Permission to manage project groups. */
+  ManageGroups: 1n << 58n,
+
+  /** Permission to manage project metadata. */
+  ManageProjectMetadata: 1n << 57n,
+
+  /** Permission to manage threads in the project. */
+  ManageDiscussions: 1n << 56n,
+
+  /** Permission to view the audit log. */
+  ViewAudit: 1n << 55n,
+
+  // Workspace permissions
+  /** Permission to review commits in a workspace. */
+  ReviewCommit: 1n << 53n,
+
+  /** Permission to push commits to a workspace. */
+  PushCommit: 1n << 52n,
+
+  /** Permission to review requests in a workspace. */
+  ReviewRequests: 1n << 40n,
+
+  /** Permission to view requests in a workspace. */
+  ViewRequest: 1n << 39n,
+
+  /** Permission to manage workspace metadata. */
+  ManageWorkspaceMetadata: 1n << 27n,
+
+  /** Permission to view a workspace. */
+  ViewWorkspace: 1n << 26n,
+
+  // Thread posting permissions
+  /** Permission to manage comments in threads. */
+  ManageComments: 1n << 15n,
+
+  /** Permission to post comments in threads. */
+  PostComment: 1n << 14n,
+
+  /** Permission to vote in threads. */
+  Vote: 1n << 10n,
+
+  /** Permission to attach files in threads. */
+  AttachFiles: 1n << 9n,
+
+  /** Permission to view threads. */
+  ViewThread: 1n << 8n,
+
+  /** Permission to view the project's metadata. */
+  ViewProject: 1n,
+
+  /** Default value. */
+  None: 0n,
+});
+
+export const ThreadPermissionsMask = BigInt(
+  PermissionFlags.ManageComments |
+  PermissionFlags.PostComment |
+  PermissionFlags.Vote |
+  PermissionFlags.AttachFiles |
+  PermissionFlags.ViewThread
+);
+
+export type PermissionStrings = keyof typeof PermissionFlags;
+
+export type IntoPermission = bigint | Permission | PermissionStrings | number;
+
+/**
+ * Represents a set of permissions for a project or workspace.
+ */
+export class Permission implements IntoBigInt {
   private _value: bigint;
-  constructor(value: bigint | boolean | string | number) {
-    this._value = BigInt.asUintN(64, BigInt(value));
+  constructor(value: IntoPermission) {
+    this._value = this.resolvePermission(value);
   }
 
   /** Returns the permission value as a 64-bit unsigned bigint. */
   get value(): bigint {
-    return  BigInt.asUintN(64, this._value);
+    return BigInt.asUintN(64, this._value);
   }
 
-  resolvePermission(perm: ProjectPermissionsTypes | bigint | string | number): bigint {
-    if (typeof perm === 'string') {
+  /** Returns the permission value as a bigint. */
+  toBigInt(): bigint {
+    return this.value;
+  }
+
+  resolveNames(): PermissionStrings[] {
+    return (Object.keys(PermissionFlags) as PermissionStrings[])
+      .filter(key =>
+        typeof PermissionFlags[key] === 'bigint'
+        && (this._value & PermissionFlags[key]) === PermissionFlags[key]
+      );
+  }
+
+  [Symbol.toStringTag](): string {
+    return `Permission(${this._value.toString()})`;
+  }
+
+  /**
+   * Resolves a permission identifier to its bigint value.
+   * @param perm - The permission to resolve (string, number, or bigint).
+   * @returns The resolved permission as a bigint.
+   * @throws If the permission string is unknown or the type is invalid.
+   */
+  resolvePermission(perm: IntoPermission): bigint {
+    if (perm instanceof Permission) {
+      return perm.value;
+    } else if (typeof perm === 'string') {
       if (!(perm in PermissionFlags)) {
         throw new Error(`Unknown permission string: ${perm}`);
       }
-      return PermissionFlags[perm as ProjectPermissionsTypes] as bigint;
+      return PermissionFlags[perm as PermissionStrings] as bigint;
     } else if (typeof perm === 'bigint' || typeof perm === 'number') {
       return BigInt(perm);
     } else {
@@ -48,28 +141,48 @@ export class Permission {
     }
   }
 
-  from(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): Permission {
+  /**
+  * Creates a new `Permission` instance from the specified permissions.
+  * @param permissions - Permissions to include, can be strings, numbers, or bigint.
+  * @return A new `Permission` instance with the specified permissions added.
+  */
+  static from(...permissions: Array<IntoPermission>): Permission {
+    const perms = new Permission(0n);
+    for (const perm of permissions) {
+      perms.add(perm);
+    }
+    return perms;
+  }
+
+  /** Adds permissions to the current permission set.
+   * @param permissions - Permissions to add, can be strings, numbers, or bigint.
+   * @return The updated `Permission` instance.
+   */
+  add(...permissions: Array<IntoPermission>): Permission {
     for (const perm of permissions) {
       this._value |= this.resolvePermission(perm);
     }
     return this;
   }
 
-  add(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): Permission {
-    for (const perm of permissions) {
-      this._value |= this.resolvePermission(perm);
-    }
-    return this;
-  }
-
-  remove(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): Permission {
+  /**
+   * Removes the specified permissions from the current permission set.
+   * @param permissions - Permissions to remove, can be strings, numbers, or bigint.
+   * @returns The updated `Permission` instance.
+   */
+  remove(...permissions: Array<IntoPermission>): Permission {
     for (const perm of permissions) {
       this._value &= ~this.resolvePermission(perm);
     }
     return this;
   }
 
-  has(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): boolean {
+  /**
+   * Checks if all specified permissions are present in the current permission set.
+   * @param permissions - Permissions to check, can be strings, numbers, or bigint.
+   * @returns `true` if all permissions are present, otherwise `false`.
+   */
+  has(...permissions: Array<IntoPermission>): boolean {
     for (const perm of permissions) {
       const resolvedPerm = this.resolvePermission(perm);
       if ((this._value & resolvedPerm) !== resolvedPerm) {
@@ -79,7 +192,12 @@ export class Permission {
     return true;
   }
 
-  hasAny(...permissions: Array<ProjectPermissionsTypes | bigint | string | number>): boolean {
+  /**
+   * Checks if any of the specified permissions are present in the current permission set.
+   * @param permissions - Permissions to check, can be strings, numbers, or bigint.
+   * @returns `true` if any permission is present, otherwise `false`.
+   */
+  hasAny(...permissions: Array<IntoPermission>): boolean {
     for (const perm of permissions) {
       const resolvedPerm = this.resolvePermission(perm);
       if ((this._value & resolvedPerm) === resolvedPerm) {
@@ -88,28 +206,16 @@ export class Permission {
     }
     return false;
   }
-}
 
-export type ProjectPermissionsTypes = keyof typeof PermissionFlags;
-
-export function hasPermission(
-  value: bigint,
-  against: Array<ProjectPermissionsTypes | bigint | string | number>
-): boolean {
-  for (const perm of against) {
-    let resolvedPerm: bigint;
-    if (typeof perm === 'string') {
-      if (!(perm in PermissionFlags)) {
-        throw new Error(`Unknown permission string: ${perm}`);
-      }
-      resolvedPerm = PermissionFlags[perm as ProjectPermissionsTypes] as bigint;
-    }
-    else {
-      resolvedPerm = BigInt(perm)
-    }
-    if ((value & resolvedPerm) !== resolvedPerm) {
-      return false;
-    }
+  /**
+   * Applies a mask to the current permission set, keeping only the bits present in the mask.
+   * @param mask - The mask to apply, as a bigint or `Permission` instance.
+   * @returns The updated `Permission` instance.
+   */
+  applyMask(mask: bigint | Permission): Permission {
+    const maskValue = mask instanceof Permission ? mask.value : BigInt(mask);
+    this._value &= maskValue;
+    return this;
   }
-  return true;
 }
+

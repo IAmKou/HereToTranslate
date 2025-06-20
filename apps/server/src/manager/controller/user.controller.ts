@@ -4,7 +4,6 @@ import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { UserManagerService } from "../service/user-manager.service";
-import { UpdateUserRoleDto } from "src/dto/update-user-role.dto";
 import { RolesGuard } from "#LocalProject/Auth/guards/role.guard";
 import { UserEntity } from "#LocalProject/Entities";
 
@@ -67,14 +66,15 @@ export class UserController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Put('admin/:id/role')
+  @Put('admin/:id/role/:rid')
   async updateUserRole(
     @Param('id', ParseBigIntPipe) userId: bigint,
-    @Body() updateRoleDto: UpdateUserRoleDto,
+    @Param('rid') roleId: number,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.users.updateUserRole(userId, updateRoleDto, req.user as UserEntity);
+    return this.users.updateUserRole(userId, roleId, req.user as UserEntity);
   }
+
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Put('admin/:id/toggle-status')

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique, ManyToMany, JoinTable } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 import { Permission } from '@here-to-translate/common';
@@ -13,8 +13,12 @@ export class ProjectRoleEntity {
   @ManyToOne(() => ProjectEntity, project => project.projectRoles)
   project: ProjectEntity;
 
-  @ManyToOne(() => UserEntity, user => user.projectRoles)
-  user: UserEntity;
+  @ManyToMany(() => UserEntity, user => user.projectRoles, { cascade: true })
+  @JoinTable({
+    joinColumn: { name: 'projectRoleId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'userId', referencedColumnName: 'id' }
+  })
+  users: UserEntity[];
 
   @Column({ type: 'varchar', length: 32 })
   name: string;

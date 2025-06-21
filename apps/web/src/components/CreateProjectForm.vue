@@ -175,7 +175,7 @@ const form = ref<CreateProjectData>({
   description: '',
   categoryId: '',
   tags: [],
-  isPublic: false
+  isPublic: false,
 })
 
 const errors = ref<FormErrors>({})

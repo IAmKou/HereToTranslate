@@ -7,7 +7,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MainModule } from './main.module';
 import { shared } from '@here-to-translate/common';
-import { BigIntSerializerInterceptor } from './common/interceptors/bigint-serializer.interceptor';
+import { BigIntSerializerInterceptor } from './util/bigint-serializer.interceptor';
 
 async function bootstrap() {
   shared();

@@ -178,7 +178,7 @@ const form = reactive({
   confirmPassword: '',
   phone: '',
   fullName: '',
-  roleId: 2,
+  roleId: 3,
 });
 
 const message = ref('');

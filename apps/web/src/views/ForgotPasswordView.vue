@@ -45,7 +45,7 @@ const isPasswordValid = computed(() => {
 
 async function sendCode() {
   try {
-    await axios.post('/auth/forgot-password', { email: email.value })
+    await axios.post(`${baseUrl}/auth/forgot-password`, { email: email.value })
     codeSent.value = true
     alert('Code sent to your email')
   } catch (e) {
@@ -55,7 +55,7 @@ async function sendCode() {
 
 async function verifyCode() {
   try {
-    await axios.post('/auth/verify-code', {
+    await axios.post(`${baseUrl}/auth/verify-code`, {
       email: email.value,
       code: code.value,
     })
@@ -72,7 +72,7 @@ async function resetPassword() {
     return
   }
   try {
-    await axios.post('/auth/reset-password', {
+    await axios.post(`${baseUrl}/auth/reset-password`, {
       email: email.value,
       code: code.value,
       newPassword: newPassword.value,

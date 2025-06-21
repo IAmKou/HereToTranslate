@@ -148,6 +148,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
 
+
 interface Category {
   id: string;
   name: string;
@@ -156,6 +157,7 @@ interface Category {
 
 interface CreateProjectData {
   name: string;
+  // uid: number;
   description?: string;
   isPublic?: boolean;
   tags?: string[];
@@ -172,6 +174,7 @@ const router = useRouter()
 
 const form = ref<CreateProjectData>({
   name: '',
+  // uid: localStorage,
   description: '',
   categoryId: '',
   tags: [],
@@ -181,6 +184,7 @@ const form = ref<CreateProjectData>({
 const errors = ref<FormErrors>({})
 const isSubmitting = ref(false)
 const categories = ref<Category[]>([])
+
 
 // Validation functions
 const validateName = () => {
@@ -332,17 +336,18 @@ const fetchCategories = async () => {
 }
 
 const handleSubmit = async () => {
-  // Validate form before submission
   if (!validateForm()) {
     return
   }
-
   isSubmitting.value = true
-
   try {
+    const payload = {
+      ...form.value,
+      createdBy: userProfile.value?.id?.toString()
+    }
     const result = await apiCall('/projects/create', {
       method: 'POST',
-      body: JSON.stringify(form.value)
+      body: JSON.stringify(payload)
     })
 
     // Show success message
@@ -383,12 +388,12 @@ const handleSubmit = async () => {
   }
 }
 
-onMounted(() => {
-  // Check if user is authenticated before fetching data
+onMounted(async () => {
   if (!authService.isAuthenticated()) {
     router.push('/login')
     return
   }
+  userProfile.value = await userService.getUserProfile()
   fetchCategories()
 })
 </script>

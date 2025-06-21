@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
 import { ProjectEntity } from './project.entity';
 
-@Entity('projectTags')
+@Entity('projecttag')
 export class ProjectTagEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;

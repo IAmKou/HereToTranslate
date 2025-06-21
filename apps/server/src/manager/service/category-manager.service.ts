@@ -7,7 +7,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
 import { validateName, sanitizeName } from '#LocalProject/Utils/validation';
-import { CategoryEntity } from '#LocalProject/Entities';
+import { CategoryEntity, ProjectTagEntity } from '#LocalProject/Entities';
+
+interface DatabaseError extends Error {
+  code?: string;
+}
 
 @Injectable()
 export class CategoryManagerService {
@@ -16,19 +20,20 @@ export class CategoryManagerService {
     private readonly categoryRepository: Repository<CategoryEntity>,
   ) {}
 
-  async createCategory(createCategoryDto: CreateCategoryDto) {
-    console.log('Received category data:', createCategoryDto);
-    if (!createCategoryDto.name) {
+  async getCategories() {
+    return this.categoryRepository.find();
+  }
+
+  async createCategory(data: CreateCategoryDto) {
+    if (!data.name) {
       throw new BadRequestException('Category name is required');
     }
 
-    if (!validateName(createCategoryDto.name)) {
-      throw new BadRequestException(
-        'Category name contains invalid characters or is empty after trimming'
-      );
+    if (!validateName(data.name)) {
+      throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
     }
 
-    const sanitizedName = sanitizeName(createCategoryDto.name);
+    const sanitizedName = sanitizeName(data.name);
     const existingCategory = await this.categoryRepository.exists({
       where: { name: sanitizedName }
     })
@@ -37,37 +42,51 @@ export class CategoryManagerService {
     }
     try {
       const newCategory = this.categoryRepository.create({
-        name: sanitizeName(createCategoryDto.name),
-        description: createCategoryDto.description,
+        name: sanitizeName(data.name),
+        description: data.description
       });
       return this.categoryRepository.save(newCategory);
     } catch (error) {
+      const dbError = error as DatabaseError;
+      if (dbError.code === 'ER_DUP_ENTRY') {
+        throw new BadRequestException('A category with this name already exists');
+      }
       console.error('Error creating category:', error);
       throw new InternalServerErrorException('Failed to create category');
     }
   }
 
-  async getCategories() {
-    return this.categoryRepository.find({
-      relations: ['subCategories']
-    });
-  }
-
-  async updateCategory(id: bigint, category: UpdateCategoryDto) {
-    if (category.name && !validateName(category.name)) {
-      throw new BadRequestException(
-        'Category name contains invalid characters or is empty after trimming'
-      );
+  async updateCategory(id: bigint, data: UpdateCategoryDto) {
+    if (data.name && !validateName(data.name)) {
+      throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
     }
 
-    if (category.name) {
-      category.name = sanitizeName(category.name);
+    try {
+      const updateData: Partial<CategoryEntity> = {};
+      if (data.name) {
+        updateData.name = sanitizeName(data.name);
+      }
+      if (data.description !== undefined) {
+        updateData.description = data.description;
+      }
+      await this.categoryRepository.update({ id }, updateData);
+      return this.categoryRepository.findOne({ where: { id } });
+    } catch (error) {
+      const dbError = error as DatabaseError;
+      if (dbError.code === 'ER_DUP_ENTRY') {
+        throw new BadRequestException('A category with this name already exists');
+      }
+      console.error('Error updating category:', error);
+      throw new InternalServerErrorException('Failed to update category');
     }
-    return this.categoryRepository.update({ id }, category);
   }
 
   async deleteCategory(id: bigint) {
-    return this.categoryRepository.delete({ id});
+    try {
+      return this.categoryRepository.delete({ id });
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      throw new InternalServerErrorException('Failed to delete category');
+    }
   }
-
 }

@@ -1,7 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, ManyToMany, JoinTable } from 'typeorm';
 import { ProjectEntity } from './project.entity';
 import { UserEntity } from './user.entity';
-@Entity('projectGroups')
+
+@Entity('projectgroup')
 export class ProjectGroupEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;

@@ -118,6 +118,9 @@ export class AuthService {
       where: { username },
       relations: ['role']
     });
+    if(!user?.isActive) {
+      throw new UnauthorizedException('Your account have been deactivated');
+    }
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid credentials.');
@@ -142,6 +145,10 @@ export class AuthService {
       relations: ['role']
     });
 
+    if (!user?.isActive) {
+      throw new UnauthorizedException('Your account have been deactivated');
+    }
+
     if (!user) {
       const username = email;
       const existingUser = await this.userRepository.findOne({ where: { username } });
@@ -164,17 +171,16 @@ export class AuthService {
   }
 
   async logout(refreshToken: string, allSessions = false) {
-    const actualRToken = /^Bearer (.+)$/.exec(refreshToken)?.[1];
-    if (!actualRToken) {
+    if (!refreshToken) {
       throw new UnauthorizedException('Invalid token format');
     }
 
-    const tokenData: TokenMeta = this.jwt.decode(actualRToken);
+    const tokenData: TokenMeta = this.jwt.decode(refreshToken);
     const userId = tokenData.userId;
 
-    this.activeTokens.delete(actualRToken);
-    this.refreshTokenMap.delete(actualRToken);
-    this.tokenMap.get(userId)?.delete(actualRToken);
+    this.activeTokens.delete(refreshToken);
+    this.refreshTokenMap.delete(refreshToken);
+    this.tokenMap.get(userId)?.delete(refreshToken);
 
     if (allSessions) {
       const tokens = this.tokenMap.get(userId);

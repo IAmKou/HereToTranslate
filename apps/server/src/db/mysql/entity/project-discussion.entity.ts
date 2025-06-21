@@ -70,17 +70,17 @@ export class DiscussionAccessPolicyEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @JoinColumn({ name: 'threadId', referencedColumnName: 'id' })
   @OneToOne(() => ProjectDiscussionThreadEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'threadId', referencedColumnName: 'id' })
   thread: ProjectDiscussionThreadEntity;
 
-  @JoinColumn({ name: 'roleId', referencedColumnName: 'id' })
   @OneToOne(() => ProjectRoleEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'roleId', referencedColumnName: 'id' })
   role: ProjectRoleEntity;
 
   @Column({
     type: 'bigint',
-    nullable: true,
+    unsigned: true,
     default: PermissionFlags.None,
     transformer: BigIntColumnTransformer(Permission)
   })

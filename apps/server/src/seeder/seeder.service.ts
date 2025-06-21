@@ -1,14 +1,14 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RoleEntity, UserEntity } from '#LocalProject/Entities';
+import { UserTypeEntity, UserEntity } from '#LocalProject/Entities';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class SeederService implements OnApplicationBootstrap {
   constructor(
-    @InjectRepository(RoleEntity)
-    private readonly roleRepo: Repository<RoleEntity>,
+    @InjectRepository(UserTypeEntity)
+    private readonly roleRepo: Repository<UserTypeEntity>,
     @InjectRepository(UserEntity)
     private readonly accountRepo: Repository<UserEntity>,
   ) {}
@@ -19,7 +19,7 @@ export class SeederService implements OnApplicationBootstrap {
   }
 
   private async seedRoles() {
-    const roles = ['ADMIN', 'MEMBER'];
+    const roles = ['SUPER_ADMIN', 'ADMIN', 'MEMBER'];
     for (const roleName of roles) {
       const exists = await this.roleRepo.findOne({ where: { name: roleName } });
       if (!exists) {

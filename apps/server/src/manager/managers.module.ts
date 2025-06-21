@@ -1,31 +1,33 @@
 import {
-  ProjectEntity,
-  ProjectRoleEntity,
   CategoryEntity,
-  ProjectTagEntity,
-  RequestEntity,
-  ProjectGroupEntity,
-  UserTypeEntity,
-  UserEntity,
+  DiscussionAccessPolicyEntity,
   ProjectDiscussionCommentEntity,
   ProjectDiscussionThreadEntity,
-  DiscussionAccessPolicyEntity
+  ProjectEntity,
+  ProjectGroupEntity,
+  ProjectRoleEntity,
+  ProjectTagEntity,
+  RequestEntity,
+  UserEntity
 } from '#LocalProject/Entities';
-import { Global, Module } from "@nestjs/common";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import { CategoryManagerService } from "./service/category-manager.service";
-import { RequestManagerService } from "./service/request-manager.service";
-import { UserManagerService } from "./service/user-manager.service";
-import { ProjectManagerService } from "./service/project-manager.service";
-import { ProjectTagManagerService } from "./service/project-tag-manager.service";
-import { CategoryController } from "./controller/category.controller";
-import { ProjectController } from "./controller/project.controller";
-import { ProjectTagController } from "./controller/project-tag.controller";
-import { UserController } from "./controller/user.controller";
-import { AuthModule } from "#LocalProject/Auth/auth.module";
-import { GroupManagerService } from '#LocalProject/Managers/service/group-manager.service';
-import { RoleManagerService } from '#LocalProject/Managers/service/role-manager.service';
-import { DiscussionManagerService } from '#LocalProject/Managers/service/discussion-manager.service';
+import { Global, Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from '#LocalProject/Auth/auth.module';
+
+import { CategoryManagerService } from './service/category-manager.service';
+import { RequestManagerService } from './service/request-manager.service';
+import { UserManagerService } from './service/user-manager.service';
+import { ProjectManagerService } from './service/project-manager.service';
+import { CategoryController } from './controller/category.controller';
+import { ProjectController } from './controller/project.controller';
+import { UserController } from './controller/user.controller';
+import { GroupManagerService } from './service/group-manager.service';
+import { DiscussionManagerService } from './service/discussion-manager.service';
+import { RoleManagerService } from './service/role-manager.service';
+import { RequestController } from './controller/request.controller';
+import { RoleController } from '#LocalProject/Managers/controller/role.controller';
+import { DiscussionController } from '#LocalProject/Managers/controller/discussion.controller';
+import { GroupController } from '#LocalProject/Managers/controller/group.controller';
 
 @Global()
 @Module({
@@ -33,43 +35,44 @@ import { DiscussionManagerService } from '#LocalProject/Managers/service/discuss
     AuthModule,
     TypeOrmModule.forFeature([
       CategoryEntity,
-      ProjectTagEntity,
+      DiscussionAccessPolicyEntity,
       ProjectEntity,
-      ProjectRoleEntity,
-      RequestEntity,
-      ProjectGroupEntity,
-      UserTypeEntity,
-      UserEntity,
       ProjectDiscussionThreadEntity,
       ProjectDiscussionCommentEntity,
-      DiscussionAccessPolicyEntity,
+      ProjectGroupEntity,
+      ProjectRoleEntity,
+      ProjectTagEntity,
+      RequestEntity,
+      UserEntity
     ])
   ],
   providers: [
     CategoryManagerService,
     RequestManagerService,
     UserManagerService,
-    ProjectManagerService,
-    ProjectTagManagerService,
     GroupManagerService,
     RoleManagerService,
     DiscussionManagerService,
+    ProjectManagerService
   ],
   exports: [
     CategoryManagerService,
     RequestManagerService,
     UserManagerService,
-    ProjectManagerService,
-    ProjectTagManagerService,
     GroupManagerService,
     RoleManagerService,
     DiscussionManagerService,
+    ProjectManagerService
   ],
   controllers: [
     CategoryController,
     ProjectController,
-    ProjectTagController,
-    UserController
+    RequestController,
+    UserController,
+    RoleController,
+    DiscussionController,
+    GroupController
   ]
 })
-export class ManagersModule { }
+export class ManagersModule {
+}

@@ -1,19 +1,23 @@
-import { Injectable, BadRequestException, Logger, InternalServerErrorException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { ProjectEntity, UserEntity, ProjectRoleEntity, ProjectTagEntity, CategoryEntity } from '#LocalProject/Entities';
-import { MaybeException } from '#LocalProject/Exceptions';
-import { CreateDiscussionDto, CreateProjectDto, CreateProjectGroupDto, CreateProjectRoleDto, UpdateProjectGroupDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
-import { PermissionFlags, Permission, IntoPermission } from '@here-to-translate/common';
+import { CategoryEntity, ProjectEntity, ProjectRoleEntity, ProjectTagEntity, UserEntity } from '#LocalProject/Entities';
+import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
+import { IntoPermission, Permission, PermissionFlags } from '@here-to-translate/common';
 import { Maybe } from '@here-to-translate/common/types';
-import { GroupManagerService } from './group-manager.service';
-import { RoleManagerService } from './role-manager.service';
-import { ManagerService } from './manager-service.base';
-import { DiscussionManagerService } from './discussion-manager.service';
+import { ManagerServiceImpl } from './manager-service.impl';
 
 @Injectable()
-export class ProjectManagerService extends ManagerService {
+export class ProjectManagerService extends ManagerServiceImpl {
   protected override readonly logger = new Logger(ProjectManagerService.name);
+
   constructor(
     @InjectRepository(CategoryEntity)
     private readonly categoryRepository: Repository<CategoryEntity>,
@@ -23,10 +27,7 @@ export class ProjectManagerService extends ManagerService {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(ProjectRoleEntity)
     private readonly projectRoleRepository: Repository<ProjectRoleEntity>,
-    private dataSource: DataSource,
-    private readonly groupManager: GroupManagerService,
-    private readonly roleManager: RoleManagerService,
-    private readonly discussionManager: DiscussionManagerService
+    private readonly dataSource: DataSource
   ) {
     super();
   }
@@ -34,7 +35,7 @@ export class ProjectManagerService extends ManagerService {
   /** Ensures the user exists and has the required permission for the project.
    * @param projectId  - Project ID
    * @param uid        - User ID
-   * @param permission - Permission to check
+   * @param against - Permission to check
    * @returns {Permission} - `Permission` instance corresponding to the user's permissions.
    * @throws {NotFoundException} - If the project or user does not exist.
    * @throws {ForbiddenException} - If the user does not have the required permission.
@@ -59,16 +60,16 @@ export class ProjectManagerService extends ManagerService {
     }
 
     const userPermissionFlags = await this.projectRoleRepository.createQueryBuilder('role')
-      .innerJoin('role.user', 'user')
+      .innerJoin('role.users', 'user')
       .where('role.project = :projectId', { projectId })
       .andWhere('user.id = :userId', { userId: uid })
       .select([
-        `BIT_OR(role.permissionFlags) as userPermissionFlags`,
+        `BIT_OR(role.permissionFlags) as userPermissionFlags`
       ])
       .getRawOne<{ userPermissionFlags: bigint }>()
-      .then(result => BigInt(result?.userPermissionFlags || 0));
+      .then(result => new Permission(result?.userPermissionFlags ?? PermissionFlags.None));
 
-    if ((userPermissionFlags & permissionAgainst.value) !== permissionAgainst.value) {
+    if (permissionAgainst.applyMask(userPermissionFlags).value !== permissionAgainst.value) {
       this.logger.debug(`User [${uid}] does not have permission [${permissionAgainst}] for project [${projectId}]`);
       throw new ForbiddenException(`You do not have permission to perform this action`);
     }
@@ -80,7 +81,7 @@ export class ProjectManagerService extends ManagerService {
     const {
       name,
       description,
-      isPublic,
+      isPrivate,
       tags = [],
       categoryId
     } = data;
@@ -129,7 +130,7 @@ export class ProjectManagerService extends ManagerService {
         name,
         description,
         createdBy: { id: uid },
-        isPublic,
+        isPrivate,
         tags: projectTags,
         createdAt: new Date(),
         category: { id: BigInt(categoryId) }
@@ -137,28 +138,29 @@ export class ProjectManagerService extends ManagerService {
 
       const savedProject = await queryRunner.manager.save(project);
 
-      const projectRole = queryRunner.manager.create(ProjectRoleEntity, {
+      const ownerRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
-        user: { id: uid },
         permissionFlags: new Permission(PermissionFlags.Owner),
         name: 'Project Owner'
       });
 
       const everyoneRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
-        user: { id: BigInt(0) },
         permissionFlags: new Permission(PermissionFlags.ViewProject),
         name: 'Everyone'
       });
 
-      await queryRunner.manager.save(projectRole);
+      const savedOwnerRole = await queryRunner.manager.save(ownerRole);
       await queryRunner.manager.save(everyoneRole);
+
+      savedOwnerRole.users = [<UserEntity>{ id: uid }];
+      await queryRunner.manager.save(savedOwnerRole);
       await queryRunner.commitTransaction();
 
       this.logger.debug(`Project created successfully with ID: ${savedProject.id}`);
       return {
         message: 'Project created successfully',
-        projectId: savedProject.id,
+        projectId: savedProject.id
       };
     } catch (error) {
       this.logger.debug('Rolling back transaction');
@@ -208,7 +210,7 @@ export class ProjectManagerService extends ManagerService {
 
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
-      select: ['isPublic']
+      select: ['isPrivate']
     });
 
     if (!project) {
@@ -218,28 +220,20 @@ export class ProjectManagerService extends ManagerService {
 
     const userCanViewProject =
       (typeof uid !== 'undefined')
-      && await this.projectRoleRepository.createQueryBuilder('role')
-        .innerJoin('role.user', 'user')
-        .where('role.project = :projectId', { projectId })
-        .andWhere('user.id = :userId', { userId: uid })
-        .select([
-          `MAX((role.permissionFlags & ${PermissionFlags.ViewProject}) = ${PermissionFlags.ViewProject}) as canViewProject`,
-        ])
-        .getRawOne<{ canViewProject: boolean }>()
-        .then(result => Boolean(Number(result?.canViewProject)));
+      && await this.testPermissions(projectId, uid, PermissionFlags.ViewProject).catch(() => false);
 
-    if (!userCanViewProject && !project.isPublic) {
+    if (project.isPrivate && !userCanViewProject) {
       this.logger.debug(`User with ID ${uid} does not have access to project with ID ${projectId}`);
       throw new ForbiddenException(`You do not have access to this project`);
     }
 
-    const projectQueryBuilder = this.projectRepository.createQueryBuilder('project')
-    const projectMetadataQuery = projectQueryBuilder
+    const queryBuilder = this.projectRepository.createQueryBuilder('project');
+    const projectMetadataQuery = queryBuilder
       .select([
         'project.id',
         'project.name',
         'project.description',
-        'project.isPublic',
+        'project.isPrivate',
         'project.createdAt',
         'createdBy.id',
         'createdBy.username',
@@ -248,7 +242,7 @@ export class ProjectManagerService extends ManagerService {
       ])
       .where('project.id = :projectId', { projectId })
       .leftJoin('project.createdBy', 'createdBy')
-      .leftJoin('project.tags', 'tags')
+      .leftJoin('project.tags', 'tags');
 
     if (!userCanViewProject) {
       this.logger.debug(`Project with ID ${projectId} is public, allowing metadata access`);
@@ -257,20 +251,17 @@ export class ProjectManagerService extends ManagerService {
 
     this.logger.debug(`User with ID ${uid} has access to project with ID ${projectId}, fetching full project data`);
     try {
-      const fullProject = await projectMetadataQuery
+      return await projectMetadataQuery
         .leftJoinAndSelect('project.projectRoles', 'projectRoles')
         .getOne();
-
-      return fullProject;
     } catch (error) {
-      this.logger.error(`Failed to fetch project with ID ${projectId}: ` + ((error as MaybeException)?.message || 'Unknown error'));
-      throw new InternalServerErrorException('Failed to fetch project');
+      this.unknownErrorHanlder(error, 'Failed to fetch project metadata');
     }
   }
 
-  async updateProjectMetadata(uid: bigint, projectId: bigint, updateData: Partial<UpdateProjectMetadataDto>) {
+  async updateProjectMetadata(uid: bigint, projectId: bigint, updateData: UpdateProjectMetadataDto) {
     this.logger.debug(`Updating project with ID: ${projectId}`, updateData);
-    this.testPermissions(projectId, uid, PermissionFlags.ManageProjectMetadata);
+    await this.testPermissions(projectId, uid, PermissionFlags.ManageProjectMetadata);
 
     const queryRunner = this.dataSource.createQueryRunner();
     if (!queryRunner) {
@@ -330,8 +321,7 @@ export class ProjectManagerService extends ManagerService {
       await queryRunner.commitTransaction();
       this.logger.debug(`Project updated successfully with ID: ${updatedProject.id}`);
       return updatedProject;
-    }
-    catch (error) {
+    } catch (error) {
       this.logger.debug('Rolling back transaction');
       await queryRunner.rollbackTransaction();
       if (error instanceof BadRequestException) {
@@ -361,98 +351,5 @@ export class ProjectManagerService extends ManagerService {
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to delete project');
     }
-  }
-
-  async addProjectRole(uid: bigint, projectId: bigint, roleData: CreateProjectRoleDto) {
-    this.logger.debug(`Adding role to project [${projectId}] for user [${uid}]`, roleData);
-    const userPermissionFlags = await this.testPermissions(projectId, uid, Permission.from(PermissionFlags.ManageRoles));
-    return this.roleManager.createProjectRole(projectId, roleData, userPermissionFlags);
-  };
-
-  async fetchProjectRoles(uid: bigint, projectId: bigint, roleId?: Maybe<bigint>) {
-    this.logger.debug(`Fetching roles [${roleId ?? 'All'}] for project [${projectId}]`);
-    await this.testPermissions(projectId, uid, PermissionFlags.ViewProject);
-
-    return this.roleManager.fetchProjectRoles(projectId, roleId);
-  }
-
-  async updateProjectRole(uid: bigint, projectId: bigint, roleId: bigint, updateData: Partial<CreateProjectRoleDto>) {
-    const userPermissionFlags = await this.testPermissions(projectId, uid, PermissionFlags.ManageRoles);
-
-    this.logger.debug(`Updating role [${roleId}] for project [${projectId}]`, updateData);
-    return this.roleManager.updateProjectRole(projectId, roleId, updateData, userPermissionFlags);
-  }
-
-  async deleteProjectRole(uid: bigint, projectId: bigint, roleId: bigint) {
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageRoles);
-    return this.roleManager.deleteProjectRole(projectId, roleId);
-  }
-
-  async addUsersToRole(uid: bigint, projectId: bigint, roleId: bigint, userIds: bigint[]) {
-    this.logger.debug(`Adding users to role [${roleId}] in project [${projectId}]`, { userIds });
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageMembers);
-
-    return this.roleManager.addUsersToRole(projectId, roleId, userIds);
-  }
-
-  async removeUsersFromRole(uid: bigint, projectId: bigint, roleId: bigint, userIds: bigint[]) {
-    this.logger.debug(`Removing users from role [${roleId}] in project [${projectId}]`, { userIds });
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageMembers);
-
-    return this.roleManager.removeUsersFromRole(projectId, roleId, userIds);
-  }
-
-  // @RequirePermissions(PermissionFlags.ManageGroups)
-  async createProjectGroup(uid: bigint, projectId: bigint, data: CreateProjectGroupDto) {
-    this.logger.debug(`Creating project group for project [${projectId}]`, data);
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageGroups);
-    return this.groupManager.createProjectGroup(projectId, data);
-  }
-
-  async fetchProjectGroups(uid: bigint, projectId: bigint, groupId?: Maybe<bigint>) {
-    this.logger.debug(`Fetching project groups for project [${projectId}]`, { groupId: groupId ?? 'All' });
-    await this.testPermissions(projectId, uid, PermissionFlags.ViewProject);
-    return this.groupManager.fetchProjectGroup(projectId, groupId);
-  }
-
-  async updateProjectGroupMetadata(uid: bigint, projectId: bigint, groupId: bigint, updateData: UpdateProjectGroupDto) {
-    this.logger.debug(`Updating project group [${groupId}] for project [${projectId}]`, updateData);
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageGroups);
-    return this.groupManager.updateProjectGroupMetadata(projectId, groupId, updateData);
-  }
-
-  async deleteProjectGroup(uid: bigint, projectId: bigint, groupId: bigint) {
-    this.logger.debug(`Deleting project group [${groupId}] for project [${projectId}]`);
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageGroups);
-    return this.groupManager.deleteProjectGroup(projectId, groupId);
-  }
-
-  async addUsersToGroup(uid: bigint, projectId: bigint, groupId: bigint, userIds: bigint[]) {
-    this.logger.debug(`Adding users to group [${groupId}] in project [${projectId}]`, { userIds });
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageGroups);
-
-    return this.groupManager.addUsersToGroup(projectId, groupId, userIds);
-  }
-
-  async removeUsersFromGroup(uid: bigint, projectId: bigint, groupId: bigint, userIds: bigint[]) {
-    this.logger.debug(`Removing users from group [${groupId}] in project [${projectId}]`, { userIds });
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageGroups);
-
-    return this.groupManager.removeUsersFromGroup(projectId, groupId, userIds);
-  }
-
-  async createDiscussion(uid: bigint, projectId: bigint, data: CreateDiscussionDto) {
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
-    return this.discussionManager.createDiscussion(projectId, data);
-  }
-
-  async updateDiscussionMetadata(uid: bigint, projectId: bigint, threadId: bigint, discussionUpdateData: any) {
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
-    return this.discussionManager.updateDiscussionMetadata(threadId, discussionUpdateData);
-  }
-
-  async archiveDiscussion(uid: bigint, projectId: bigint, threadId: bigint) {
-    await this.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
-    return this.discussionManager.archiveDiscussion(threadId);
   }
 }

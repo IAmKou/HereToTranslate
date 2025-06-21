@@ -1,7 +1,7 @@
 import { ValidationOptions, ValidateBy, buildMessage } from "class-validator";
 import { isBigInt } from "@here-to-translate/common/bigint-utils";
 
-/** Decorator extension for checking whether the given value is a `BigInt`. */
+/** Decorator extension for checking whether the given value can be coerced into a `BigInt`. */
 export function IsBigInt(validationOptions?: ValidationOptions): PropertyDecorator {
   return ValidateBy(
     {

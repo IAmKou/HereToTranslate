@@ -1,11 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Unique, ManyToMany, JoinTable } from 'typeorm';
+import { Column, Entity, JoinTable, ManyToMany, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
-import { Permission } from '@here-to-translate/common';
+import { Permission, PermissionFlags } from '@here-to-translate/common';
 import { BigIntColumnTransformer } from '#LocalProject/Utils/extensions/typeorm.extensions';
 
-@Entity('projectrole')
-@Unique(['project', 'user'])
+@Entity('projectRole')
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
@@ -15,7 +14,8 @@ export class ProjectRoleEntity {
 
   @ManyToMany(() => UserEntity, user => user.projectRoles, { cascade: true })
   @JoinTable({
-    joinColumn: { name: 'projectRoleId', referencedColumnName: 'id' },
+    name: 'user_project_roles',
+    joinColumn: { name: 'roleId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'userId', referencedColumnName: 'id' }
   })
   users: UserEntity[];
@@ -26,7 +26,7 @@ export class ProjectRoleEntity {
   @Column({
     type: 'bigint',
     unsigned: true,
-    default: 0n,
+    default: PermissionFlags.None,
     transformer: BigIntColumnTransformer(Permission)
   })
   permissionFlags: Permission;

@@ -6,7 +6,7 @@ import { RequestManagerService } from "../service/request-manager.service";
 import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
 import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
 
-@Controller('requests')
+@Controller('projects/:projectId/requests')
 @UseInterceptors(JsonSerializerInterceptor)
 export class RequestController {
   constructor(
@@ -15,11 +15,11 @@ export class RequestController {
   @UseGuards(JwtAuthGuard)
   @Post('create')
   async createRequest(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @Body(ValidationPipe) body: CreateRequestDto,
     @Req() req: AuthenticatedRequest
   ) {
-    const { user } = req;
-    return this.requests.createRequest(user.id, body);
+    return this.requests.createRequest(req.user.id, projectId, body);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -29,9 +29,9 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':id/update')
+  @Post(':requestId/update')
   async updateRequest(
-    @Param('id', BigIntTransformPipe) requestId: bigint,
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
     @Body(ValidationPipe) body: UpdateRequestDto,
     @Req() req: AuthenticatedRequest
   ) {
@@ -39,19 +39,20 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':id/review')
+  @Post(':requestId/review')
   async reviewRequest(
-    @Param('id', BigIntTransformPipe) requestId: bigint,
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @Body(ValidationPipe) body: ReviewRequestDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.requests.reviewRequest(req.user.id, requestId, body.status);
+    return this.requests.reviewRequest(req.user.id, projectId, requestId, body.status);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':id/cancel')
+  @Post(':requestId/cancel')
   async cancelRequest(
-    @Param('id', BigIntTransformPipe) requestId: bigint,
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
     @Req() req: AuthenticatedRequest
   ) {
     return this.requests.cancelRequest(req.user.id, requestId);

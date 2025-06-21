@@ -12,6 +12,9 @@ import {
   FileEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
+  ProjectDiscussionCommentEntity,
+  ProjectDiscussionThreadEntity,
+  DiscussionAccessPolicyEntity,
   RatingEntity,
   ReportEntity,
   RequestEntity,
@@ -40,13 +43,13 @@ export class MySqlConnection {
       username: this.config.get<string>('MYSQL_USER'),
       password: this.config.get<string>('MYSQL_PASSWORD'),
       database: this.config.get<string>('MYSQL_DATABASE'),
-      synchronize: true, // Auto create tables (turn off in production)
+      // synchronize: true, // Auto create tables (turn off in production)
       logging: true,
       supportBigNumbers: true,
-      entities: [UserTypeEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
+      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionThreadEntity, ProjectDiscussionCommentEntity,
-      DiscussionAccessPolicyEntity] // Add entities here
+        TransactionEntity, CommitEntity, ProjectTagEntity,
+        ProjectDiscussionCommentEntity, ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity],
     });
     MySqlConnection.instance = this;
   }

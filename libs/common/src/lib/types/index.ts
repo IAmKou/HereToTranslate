@@ -7,7 +7,3 @@ export type Constructor<T, A extends unknown[] = unknown[]> = new (...args: A) =
 export interface IntoBigInt {
   toBigInt(): bigint;
 }
-
-export type BigIntCompatiblePrimitives = bigint | number | string | boolean;
-
-export type Into<T extends new(...args: unknown[]) => T> = ConstructorParameters<T>

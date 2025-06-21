@@ -3,16 +3,22 @@ import { ICreateProjectDto, IUpdateProjectDto } from "@here-to-translate/common/
 import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsOptional, IsString, MinLength } from "class-validator";
 
 export class CreateProjectDto implements ICreateProjectDto {
-  @IsString()
   @IsNotEmpty()
+  @IsString()
   @MinLength(3)
   name: string;
+  @IsOptional()
   @IsString()
   description?: string;
+  @IsOptional()
   @IsArray()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
   tags?: string[];
+  @IsOptional()
   @IsBoolean()
-  isPublic?: boolean;
+  isPrivate?: boolean;
+  @IsNotEmpty()
   @IsNumberString()
   categoryId: string;
 }
@@ -27,13 +33,17 @@ export class UpdateProjectMetadataDto implements IUpdateProjectDto {
   description?: string;
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
   addTags?: string[];
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
   removeTags?: string[];
   @IsOptional()
   @IsBoolean()
-  isPublic?: boolean;
+  isPrivate?: boolean;
   @IsOptional()
   @IsNumberString()
   categoryId?: string;
@@ -43,8 +53,9 @@ export class CreateProjectRoleDto {
   @IsString()
   @MinLength(3)
   name: string;
+  @IsOptional()
   @IsBigInt()
-  permissions: bigint;
+  permissionFlags?: bigint;
 }
 
 export class UpdateProjectRoleDto {
@@ -54,7 +65,7 @@ export class UpdateProjectRoleDto {
   name?: string;
   @IsOptional()
   @IsBigInt()
-  permissions?: bigint;
+  permissionFlags?: bigint;
 }
 
 export class UserIdsArray {

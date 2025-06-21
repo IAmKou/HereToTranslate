@@ -1,7 +1,7 @@
 export interface ICreateProjectDto {
   name: string;
   description?: string;
-  isPublic?: boolean;
+  isPrivate?: boolean;
 }
 
 export type IUpdateProjectDto = Partial<Omit<ICreateProjectDto, 'createdBy'>>;

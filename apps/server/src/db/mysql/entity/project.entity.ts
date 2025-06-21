@@ -20,8 +20,8 @@ export class ProjectEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'boolean', default: false })
-  isPublic: boolean;
+  @Column({ type: 'boolean', default: true })
+  isPrivate: boolean;
 
   @ManyToOne(() => UserEntity, user => user.createdProjects)
   createdBy: UserEntity;
@@ -41,7 +41,7 @@ export class ProjectEntity {
   @OneToMany(() => CommitEntity, commit => commit.project)
   commits: CommitEntity[];
 
-  @OneToMany(() => ProjectDiscussionThreadEntity, project => project.id)
+  @OneToMany(() => ProjectDiscussionThreadEntity, thread => thread.project)
   discussions: ProjectDiscussionThreadEntity[];
 
   @OneToMany(() => FileEntity, file => file.project)

@@ -1,7 +1,7 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
 import { ProjectRoleEntity } from "./project-role.entity";
 import { BigIntColumnTransformer } from "#LocalProject/Utils/extensions/typeorm.extensions";
-import { Permission } from "@here-to-translate/common";
+import { Permission, PermissionFlags } from "@here-to-translate/common";
 import { ProjectEntity } from "./project.entity";
 import { UserEntity } from "./user.entity";
 
@@ -64,35 +64,32 @@ export class ProjectDiscussionCommentEntity {
 }
 
 
-@Entity('project_discussion_access')
+@Entity('thread_access_policies')
 @Unique(['thread', 'role'])
 export class DiscussionAccessPolicyEntity {
-
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
+  @JoinColumn({ name: 'threadId', referencedColumnName: 'id' })
   @OneToOne(() => ProjectDiscussionThreadEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'threadId' })
   thread: ProjectDiscussionThreadEntity;
 
+  @JoinColumn({ name: 'roleId', referencedColumnName: 'id' })
   @OneToOne(() => ProjectRoleEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'roleId' })
   role: ProjectRoleEntity;
 
   @Column({
     type: 'bigint',
-    unsigned: true,
     nullable: true,
-    default: null,
+    default: PermissionFlags.None,
     transformer: BigIntColumnTransformer(Permission)
   })
   denyOverrides: Permission;
 
   @Column({
     type: 'bigint',
-    nullable: true,
     unsigned: true,
-    default: null,
+    default: PermissionFlags.None,
     transformer: BigIntColumnTransformer(Permission)
   })
   allowOverrides: Permission;

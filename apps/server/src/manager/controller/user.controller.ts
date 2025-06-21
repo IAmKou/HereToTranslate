@@ -1,28 +1,26 @@
-import { ArgumentMetadata, BadRequestException, Body, Controller, Get, Param, PipeTransform, Post, Put, Req, UseGuards, ValidationPipe } from "@nestjs/common";
-import { RegisterDto, UpdateProfileDto } from "#LocalProject/Dtos";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe
+} from '@nestjs/common';
+import { RegisterDto, UpdateUserDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { UserManagerService } from "../service/user-manager.service";
-import { RolesGuard } from "#LocalProject/Auth/guards/role.guard";
-import { UserEntity } from "#LocalProject/Entities";
-
-class ParseBigIntPipe implements PipeTransform<string, bigint> {
-  transform(value: string, metadata: ArgumentMetadata): bigint {
-    try {
-      return BigInt(value);
-    } catch (error) {
-      throw new BadRequestException('Invalid bigint value');
-    }
-  }
-}
-
-interface ChangePasswordDto {
-  currentPassword: string;
-  newPassword: string;
-}
+import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
+import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
 
 @Controller('user')
+@UseInterceptors(JsonSerializerInterceptor)
 export class UserController {
   constructor(private readonly users: UserManagerService) {}
   @IsPublicEndpoint()
@@ -31,13 +29,21 @@ export class UserController {
     return this.users.register(dto);
   }
 
+  @Get(':id')
   @UseGuards(JwtAuthGuard)
-  @Get('profile')
-  async getProfile(@Req() req: AuthenticatedRequest) {
-    return this.users.getUserProfile(req.user.id);
+  getUser(
+    @Param('id', BigIntTransformPipe) id: bigint,
+    @Req() request: AuthenticatedRequest
+  ) {
+    return this.users.getUser(id);
   }
 
+  @Put(':id')
   @UseGuards(JwtAuthGuard)
+  updateUser(
+    @Body('id', BigIntTransformPipe) id: bigint,
+    @Body(ValidationPipe) userUpdateData: UpdateUserDto,
+    @Req() request: AuthenticatedRequest
   @Put('update')
   async updateProfile(
     @Req() req: AuthenticatedRequest,
@@ -83,6 +89,4 @@ export class UserController {
   ) {
     return this.users.toggleUserStatus(userId);
   }
-
-
 }

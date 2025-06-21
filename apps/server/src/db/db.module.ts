@@ -5,7 +5,7 @@ import { DbContextService } from './dbcontext.service';
 import { MySqlConnection } from './mysql/mysql.connection';
 import { MongoDbConnection } from './mongo/mongo.connection';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Connection, ConnectionStates } from 'mongoose';
+import { ConnectionStates } from 'mongoose';
 
 @Module({
   imports: [

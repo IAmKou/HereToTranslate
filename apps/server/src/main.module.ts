@@ -35,8 +35,8 @@ import * as path from 'path';
         port: 587,
         secure: false,
         auth: {
-          user: '',
-          pass: '',
+          user: 'csgit47@gmail.com',
+          pass: 'svvuwvdjrbiucehn',
         },
       },
       defaults: {

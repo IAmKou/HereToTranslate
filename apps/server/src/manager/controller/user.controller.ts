@@ -36,6 +36,12 @@ export class UserController {
     return this.users.register(dto);
   }
 
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  getProfile(@Req() request: AuthenticatedRequest) {
+    return this.users.getUser(request.user.id);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   getUser(

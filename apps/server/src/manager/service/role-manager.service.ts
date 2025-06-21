@@ -1,30 +1,56 @@
-import { CreateProjectRoleDto } from "#LocalProject/Dtos";
-import { ProjectRoleEntity, UserEntity } from "#LocalProject/Entities";
-import { Permission } from "@here-to-translate/common";
-import { Maybe } from "@here-to-translate/common/types";
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { In, Repository } from "typeorm";
-import { ManagerService } from "./manager-service.base";
-import { InjectRepository } from "@nestjs/typeorm";
+import { CreateProjectRoleDto } from '#LocalProject/Dtos';
+import { ProjectRoleEntity, UserEntity } from '#LocalProject/Entities';
+import { Permission, PermissionFlags } from '@here-to-translate/common';
+import { Maybe } from '@here-to-translate/common/types';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { In, Repository } from 'typeorm';
+import { ManagerServiceImpl } from './manager-service.impl';
+import { InjectRepository } from '@nestjs/typeorm';
+import { ProjectManagerService } from './project-manager.service';
 
 @Injectable()
-export class RoleManagerService extends ManagerService {
+export class RoleManagerService extends ManagerServiceImpl {
   protected override readonly logger = new Logger(RoleManagerService.name);
 
   constructor(
     @InjectRepository(ProjectRoleEntity)
     private readonly projectRoleRepository: Repository<ProjectRoleEntity>,
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>
+    private readonly userRepository: Repository<UserEntity>,
+    private readonly projectManager: ProjectManagerService
   ) {
     super();
   }
 
-  async createProjectRole(projectId: bigint, roleData: CreateProjectRoleDto, permissionMask: Permission) {
+  async fetchUsersInRole(uid: bigint, projectId: bigint, roleId: bigint) {
+    this.logger.debug(`Fetching users for role [${roleId}] in project [${projectId}]`);
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ViewProject);
+
+    const roleExists = await this.projectRoleRepository.exists({ where: { id: roleId } });
+    if (!roleExists) {
+      this.logger.debug(`Role [${roleId}] does not exist in project [${projectId}]`);
+      throw new NotFoundException(`Unknown role`);
+    }
+
+    return await this.projectRoleRepository.createQueryBuilder('role')
+      .where('role.id = :roleId', { roleId })
+      .andWhere('role.project = :projectId', { projectId })
+      .innerJoin('role.users', 'users')
+      .select([
+        'users.id AS id',
+        'users.username AS username',
+        'users.fullName AS fullName',
+      ])
+      .getRawMany<UserEntity>();
+  }
+
+  async createProjectRole(uid: bigint, projectId: bigint, roleData: CreateProjectRoleDto) {
+    this.logger.debug(`Adding role to project [${projectId}] for user [${uid}]`, roleData);
+    const permissionMask = await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageMembers);
     const newRole = this.projectRoleRepository.create({
       project: { id: BigInt(projectId) },
       name: roleData.name,
-      permissionFlags: new Permission(roleData.permissions).applyMask(permissionMask),
+      permissionFlags: new Permission(roleData.permissionFlags ?? PermissionFlags.None).applyMask(permissionMask)
     });
 
     try {
@@ -36,15 +62,16 @@ export class RoleManagerService extends ManagerService {
     }
   }
 
-  async fetchProjectRoles(projectId: bigint, roleId?: Maybe<bigint>) {
+  async fetchProjectRoles(uid: bigint, projectId: bigint, roleId?: Maybe<bigint>) {
     this.logger.debug(`Fetching roles [${roleId ?? 'All'}] for project [${projectId}]`);
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ViewProject);
     const query = this.projectRoleRepository.createQueryBuilder('role')
       .where('role.project = :projectId', { projectId })
       .select([
         'role.id',
         'role.name',
-        'role.permissionFlags',
-      ])
+        'role.permissionFlags'
+      ]);
 
     if (roleId) {
       this.logger.debug(`Fetching role with ID [${roleId}] for project [${projectId}]`);
@@ -56,8 +83,10 @@ export class RoleManagerService extends ManagerService {
     return await query.getMany();
   }
 
-  async updateProjectRole(projectId: bigint, roleId: bigint, updateData: Partial<CreateProjectRoleDto>, permissionMask: Permission) {
+  async updateProjectRole(uid: bigint, projectId: bigint, roleId: bigint, updateData: Partial<CreateProjectRoleDto>) {
     this.logger.debug(`Updating role [${roleId}] for project [${projectId}]`, updateData);
+
+    const userPermissionFlags = await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageRoles);
 
     const role = await this.projectRoleRepository.findOne({
       where: { id: BigInt(roleId), project: { id: BigInt(projectId) } }
@@ -69,8 +98,8 @@ export class RoleManagerService extends ManagerService {
     if (updateData.name) {
       role.name = updateData.name;
     }
-    if (updateData.permissions) {
-      role.permissionFlags = new Permission(updateData.permissions).applyMask(permissionMask);
+    if (updateData.permissionFlags) {
+      role.permissionFlags = new Permission(updateData.permissionFlags).applyMask(userPermissionFlags);
     }
     try {
       const updatedRole = await this.projectRoleRepository.save(role);
@@ -81,7 +110,9 @@ export class RoleManagerService extends ManagerService {
     }
   }
 
-  async deleteProjectRole(projectId: bigint, roleId: bigint) {
+  async deleteProjectRole(uid: bigint, projectId: bigint, roleId: bigint) {
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageRoles);
+
     this.logger.debug(`Deleting role [${roleId}] for project [${projectId}]`);
 
     const role = await this.projectRoleRepository.findOne({
@@ -96,7 +127,9 @@ export class RoleManagerService extends ManagerService {
     return { message: `Role deleted successfully` };
   }
 
-  async addUsersToRole(projectId: bigint, roleId: bigint, userIds: bigint[]) {
+  async addUsersToRole(uid: bigint, projectId: bigint, roleId: bigint, userIds: bigint[]) {
+    const userPermissionFlags = await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageMembers);
+
     this.logger.debug(`Adding users to role [${roleId}] in project [${projectId}]`, { userIds });
 
     const role = await this.projectRoleRepository.findOne({
@@ -105,6 +138,13 @@ export class RoleManagerService extends ManagerService {
     if (!role) {
       this.logger.debug(`Role [${roleId}] does not exist in project [${projectId}]`);
       throw new NotFoundException(`Unknown role`);
+    }
+
+    const rolePermissionDoesOverlap = role.permissionFlags.value & userPermissionFlags.value;
+
+    if (rolePermissionDoesOverlap !== role.permissionFlags.value) {
+      const missingPermissionNames = role.permissionFlags.remove(userPermissionFlags).resolveNames();
+      this.logger.debug(`User [${uid}] does not have some permissions in role [${roleId}]: \n${missingPermissionNames.join(', ')}`);
     }
 
     const toAddSet = new Set(userIds.map(id => BigInt(id)));
@@ -122,18 +162,15 @@ export class RoleManagerService extends ManagerService {
       });
     }
 
-    const rolesToAdd = usersToAdd.map(user => {
-      const newRole = this.projectRoleRepository.create({
-        project: { id: BigInt(projectId) },
-        user,
-        name: role.name,
-        permissionFlags: role.permissionFlags
-      });
-      return newRole;
+    const updatedRole = this.projectRoleRepository.create({
+      project: { id: BigInt(projectId) },
+      users: usersToAdd,
+      name: role.name,
+      permissionFlags: role.permissionFlags
     });
 
     try {
-      const savedRoles = await this.projectRoleRepository.save(rolesToAdd);
+      const savedRoles = await this.projectRoleRepository.save(updatedRole);
       this.logger.debug(`Users added to role successfully`, { savedRoles });
       return savedRoles;
     } catch (error) {
@@ -141,20 +178,36 @@ export class RoleManagerService extends ManagerService {
     }
   }
 
-  async removeUsersFromRole(projectId: bigint, roleId: bigint, userIds: bigint[]) {
+  async removeUsersFromRole(uid: bigint, projectId: bigint, roleId: bigint, userIds: bigint[]) {
+    const userPermissionFlags = await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageMembers);
     this.logger.debug(`Removing users from role [${roleId}] in project [${projectId}]`, { userIds });
+
+    const role = await this.projectRoleRepository.findOne({
+      where: { id: BigInt(roleId), project: { id: BigInt(projectId) } },
+      select: ['permissionFlags']
+    });
+    if (!role) {
+      this.logger.debug(`Role [${roleId}] does not exist in project [${projectId}]`);
+      throw new NotFoundException(`Unknown role`);
+    }
+    const rolePermissionDoesOverlap = role.permissionFlags.value & userPermissionFlags.value;
+
+    if (rolePermissionDoesOverlap !== role.permissionFlags.value) {
+      const missingPermissionNames = role.permissionFlags.remove(userPermissionFlags).resolveNames();
+      this.logger.debug(`User [${uid}] does not have some permissions in role [${roleId}]: \n${missingPermissionNames.join(', ')}`);
+    }
 
     const toRemoveSet = new Set(userIds.map(id => BigInt(id)));
     const searchIds = Array.from(toRemoveSet);
 
-    const rolesToRemove = await this.projectRoleRepository.find({
+    const usersToRemove = await this.projectRoleRepository.find({
       where: {
-        id: In(searchIds),
+        id: roleId,
         project: { id: BigInt(projectId) },
-        user: { id: In(searchIds) }
+        users: { id: In(searchIds) }
       }
     });
-    if (rolesToRemove.length !== toRemoveSet.size) {
+    if (usersToRemove.length !== toRemoveSet.size) {
       const missingIds = searchIds.filter(id => !toRemoveSet.has(id));
       throw new BadRequestException({
         message: `Some users do not exist in the project role`,
@@ -163,8 +216,8 @@ export class RoleManagerService extends ManagerService {
     }
 
     try {
-      await this.projectRoleRepository.remove(rolesToRemove);
-      this.logger.debug(`Users removed from role successfully`, { rolesToRemove });
+      await this.projectRoleRepository.remove(usersToRemove);
+      this.logger.debug(`Users removed from role successfully`, { rolesToRemove: usersToRemove });
       return { message: `Users removed from role successfully` };
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to remove users from project role');

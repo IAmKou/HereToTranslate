@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany, ManyToMany } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToMany,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn
+} from 'typeorm';
 import { RoleEntity } from './role.entity';
 import { ProjectEntity } from './project.entity';
 import { ProjectRoleEntity } from './project-role.entity';
@@ -45,7 +54,7 @@ export class UserEntity {
   @OneToMany(() => ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];
 
-  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.user)
+  @ManyToMany(() => ProjectRoleEntity, projectRole => projectRole.users)
   projectRoles: ProjectRoleEntity[];
 
   @ManyToMany(() => ProjectEntity, project => project.members, { cascade: true })

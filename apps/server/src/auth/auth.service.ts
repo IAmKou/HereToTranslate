@@ -1,9 +1,9 @@
 import {
+  BadRequestException,
   Injectable,
-  UnauthorizedException,
-  Logger,
   InternalServerErrorException,
-  BadRequestException
+  Logger,
+  UnauthorizedException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -35,7 +35,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
+    private readonly userRepository: Repository<UserEntity>
   ) {
     const googleClientId = this.configService.get<string>('GOOGLE_OAUTH2_CLIENT');
     if (!googleClientId) {
@@ -43,45 +43,6 @@ export class AuthService {
     }
     this.googleClient = new OAuth2Client(googleClientId);
     this.logger.log('AuthService initialized');
-  }
-
-  private generateTokenPair(user: UserEntity) {
-    const tokenMeta: TokenMeta = {
-      userId: user.id.toString(),
-      username: user.username,
-      role: user.role.name.toLowerCase()
-    };
-
-    const jwtPayload = {
-      sub: Date.now().toString(2),
-      ...tokenMeta
-    };
-
-    const accessToken = this.jwt.sign(jwtPayload, {
-      expiresIn: '15m'
-    });
-    const refreshToken = this.jwt.sign(jwtPayload, {
-      expiresIn: '7d'
-    });
-
-    this.activeTokens.add(accessToken);
-    this.refreshTokenMap.set(refreshToken, accessToken);
-
-    const userId = user.id.toString();
-    const tokens = this.tokenMap.get(userId);
-    if (tokens) {
-      tokens.add(accessToken);
-      tokens.add(refreshToken);
-    } else {
-      this.tokenMap.set(userId, new Set([accessToken, refreshToken]));
-    }
-
-    return {
-      accessToken,
-      refreshToken,
-      role: tokenMeta.role,
-      username: user.username
-    };
   }
 
   async refreshTokens(refreshToken: string) {
@@ -142,7 +103,7 @@ export class AuthService {
         select: ['id', 'username']
       });
     } catch (e) {
-      this.logger.error("Error fetching user from repository", e);
+      this.logger.error('Error fetching user from repository', e);
       throw new InternalServerErrorException('Error fetching user from repository');
     }
     if (!user) {
@@ -155,7 +116,7 @@ export class AuthService {
   async login(username: string, password: string) {
     const user = await this.userRepository.findOne({
       where: { username },
-      relations: ['role'],
+      relations: ['role']
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -168,7 +129,7 @@ export class AuthService {
   async loginWithGoogle(idToken: string) {
     const ticket = await this.googleClient.verifyIdToken({
       idToken,
-      audience: this.configService.get<string>('GOOGLE_OAUTH2_CLIENT'),
+      audience: this.configService.get<string>('GOOGLE_OAUTH2_CLIENT')
     });
 
     const payload = ticket.getPayload();
@@ -194,7 +155,7 @@ export class AuthService {
         passwordHash: '',
         fullName: name,
         phone: '', // Empty phone for Google users
-        role: { id: BigInt(UserRole.Member) }, // Default to member role
+        role: { id: BigInt(UserRole.Member) } // Default to member role
       });
       await this.userRepository.save(user);
     }
@@ -227,5 +188,44 @@ export class AuthService {
     }
 
     return { message: 'Logged out successfully' };
+  }
+
+  private generateTokenPair(user: UserEntity) {
+    const tokenMeta: TokenMeta = {
+      userId: user.id.toString(),
+      username: user.username,
+      role: user.role.name.toLowerCase()
+    };
+
+    const jwtPayload = {
+      sub: Date.now().toString(2),
+      ...tokenMeta
+    };
+
+    const accessToken = this.jwt.sign(jwtPayload, {
+      expiresIn: '15m'
+    });
+    const refreshToken = this.jwt.sign(jwtPayload, {
+      expiresIn: '7d'
+    });
+
+    this.activeTokens.add(accessToken);
+    this.refreshTokenMap.set(refreshToken, accessToken);
+
+    const userId = user.id.toString();
+    const tokens = this.tokenMap.get(userId);
+    if (tokens) {
+      tokens.add(accessToken);
+      tokens.add(refreshToken);
+    } else {
+      this.tokenMap.set(userId, new Set([accessToken, refreshToken]));
+    }
+
+    return {
+      accessToken,
+      refreshToken,
+      role: tokenMeta.role,
+      username: user.username
+    };
   }
 }

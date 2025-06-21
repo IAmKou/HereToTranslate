@@ -1,5 +1,5 @@
-import { Constructor, IntoBigInt } from "@here-to-translate/common/types";
-import { ValueTransformer } from "typeorm";
+import { Constructor, IntoBigInt } from '@here-to-translate/common/types';
+import { ValueTransformer } from 'typeorm';
 
 export function BigIntColumnTransformer<T extends IntoBigInt>(cls: Constructor<T, [bigint]>): ValueTransformer {
   return {
@@ -17,11 +17,7 @@ export function BigIntColumnTransformer<T extends IntoBigInt>(cls: Constructor<T
     },
     to: (value: T): bigint => {
       if (value instanceof cls) {
-        const result = value.toBigInt();
-        if (typeof result === "bigint") {
-          return result;
-        }
-        /* unreachable */ throw new TypeError(`${cls.name}#toBigInt() must return a BigInt.`);
+        return value.toBigInt();
       }
       throw new TypeError("Value must be an instance of the specified class.");
     }

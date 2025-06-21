@@ -1,4 +1,4 @@
-import { ClassSerializerInterceptor, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
@@ -7,7 +7,6 @@ import { DbContextModule } from './db/db.module';
 import { AuthModule } from './auth/auth.module';
 import { SeederModule } from './seeder/seeder.module';
 import { ManagersModule } from './manager/managers.module';
-import { APP_INTERCEPTOR, Reflector } from '@nestjs/core';
 import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
 
 @Module({

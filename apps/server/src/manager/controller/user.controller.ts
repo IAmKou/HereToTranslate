@@ -1,5 +1,17 @@
-import { BadRequestException, Body, Controller, Get, Post, Put, Req, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
-import { RegisterDto } from "#LocalProject/Dtos";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe
+} from '@nestjs/common';
+import { RegisterDto, UpdateUserDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
@@ -20,7 +32,7 @@ export class UserController {
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   getUser(
-    @Body('id', BigIntTransformPipe) id: bigint,
+    @Param('id', BigIntTransformPipe) id: bigint,
     @Req() request: AuthenticatedRequest
   ) {
     return this.users.getUser(id);
@@ -30,7 +42,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   updateUser(
     @Body('id', BigIntTransformPipe) id: bigint,
-    @Body() userUpdateData: RegisterDto,
+    @Body(ValidationPipe) userUpdateData: UpdateUserDto,
     @Req() request: AuthenticatedRequest
   ) {
     if (request.user.id !== id) {

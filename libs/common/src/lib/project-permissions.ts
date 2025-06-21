@@ -1,23 +1,22 @@
 import { IntoBigInt } from "./types";
 
-
 /**
  * Bit flags representing project and workspace permissions.
  */
 export const PermissionFlags = Object.freeze({
-  /** Project owner. No one else can have this permission. */
+  /** Project owner. No one else in the project can have this permission. */
   Owner: -1n,
 
   /** Project administrator permission, equivalent to all permissions. */
   ProjectAdmin: 1n << 63n,
 
-  /** Permission to manage project members. */
+  /** Can manage members (add/remove users) in the project, as well as assign roles to them. */
   ManageMembers: 1n << 62n,
 
-  /** Permission to manage project branches. */
+  /** Can manage project branches, including creating, deleting, and modifying branches' metadata. */
   ManageBranches: 1n << 61n,
 
-  /** Permission to manage project roles. */
+  /** Can manage roles in the project, including creating, deleting, and modifying roles' metadata. */
   ManageRoles: 1n << 60n,
 
   /** Permission to manage workspaces within the project. */
@@ -124,21 +123,21 @@ export class Permission implements IntoBigInt {
    * Resolves a permission identifier to its bigint value.
    * @param perm - The permission to resolve (string, number, or bigint).
    * @returns The resolved permission as a bigint.
-   * @throws If the permission string is unknown or the type is invalid.
+   * @throws {Error} If the permission string is unknown or the type is invalid.
    */
   resolvePermission(perm: IntoPermission): bigint {
     if (perm instanceof Permission) {
       return perm.value;
     } else if (typeof perm === 'string') {
-      if (!(perm in PermissionFlags)) {
-        throw new Error(`Unknown permission string: ${perm}`);
+      if (perm in PermissionFlags) {
+        return PermissionFlags[perm];
       }
-      return PermissionFlags[perm as PermissionStrings] as bigint;
-    } else if (typeof perm === 'bigint' || typeof perm === 'number') {
-      return BigInt(perm);
-    } else {
-      throw new Error(`Invalid permission type: ${typeof perm}`);
+      if (/\d+n?/.test(perm)) {
+        return BigInt(perm);
+      }
+      throw new Error(`Unknown permission string: ${perm}`);
     }
+    return BigInt(perm);
   }
 
   /**
@@ -147,7 +146,7 @@ export class Permission implements IntoBigInt {
   * @return A new `Permission` instance with the specified permissions added.
   */
   static from(...permissions: Array<IntoPermission>): Permission {
-    const perms = new Permission(0n);
+    const perms = new Permission(PermissionFlags.None);
     for (const perm of permissions) {
       perms.add(perm);
     }
@@ -158,7 +157,7 @@ export class Permission implements IntoBigInt {
    * @param permissions - Permissions to add, can be strings, numbers, or bigint.
    * @return The updated `Permission` instance.
    */
-  add(...permissions: Array<IntoPermission>): Permission {
+  add(...permissions: Array<IntoPermission>): this {
     for (const perm of permissions) {
       this._value |= this.resolvePermission(perm);
     }
@@ -170,7 +169,7 @@ export class Permission implements IntoBigInt {
    * @param permissions - Permissions to remove, can be strings, numbers, or bigint.
    * @returns The updated `Permission` instance.
    */
-  remove(...permissions: Array<IntoPermission>): Permission {
+  remove(...permissions: Array<IntoPermission>): this {
     for (const perm of permissions) {
       this._value &= ~this.resolvePermission(perm);
     }
@@ -212,7 +211,7 @@ export class Permission implements IntoBigInt {
    * @param mask - The mask to apply, as a bigint or `Permission` instance.
    * @returns The updated `Permission` instance.
    */
-  applyMask(mask: bigint | Permission): Permission {
+  applyMask(mask: bigint | Permission): this {
     const maskValue = mask instanceof Permission ? mask.value : BigInt(mask);
     this._value &= maskValue;
     return this;

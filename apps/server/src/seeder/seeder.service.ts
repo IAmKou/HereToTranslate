@@ -34,7 +34,7 @@ export class SeederService implements OnApplicationBootstrap {
       if (!existingAdmin) {
         const passwordHash = await bcrypt.hash('admin123', 10);
 
-        const role = await this.roleRepo.findOneBy({ id: 1 });
+        const role = await this.roleRepo.findOneBy({ id: 1n });
         if (!role) {
           throw new Error("Admin role not found in roles table!");
         }

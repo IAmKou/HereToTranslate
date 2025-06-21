@@ -1,14 +1,20 @@
-import { CreateDiscussionDto, PostCommentDto, UpdateCommentDto, UpdateDiscussionDto } from "#LocalProject/Dtos";
-import { DiscussionAccessPolicyEntity, ProjectDiscussionCommentEntity, ProjectDiscussionThreadEntity, ProjectRoleEntity } from "#LocalProject/Entities";
-import { Maybe } from "@here-to-translate/common/types";
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, DeepPartial, Repository } from "typeorm";
-import { ManagerService } from "./manager-service.base";
-import { Permission, PermissionFlags } from "@here-to-translate/common";
+import { CreateDiscussionDto, PostCommentDto, UpdateCommentDto, UpdateDiscussionDto } from '#LocalProject/Dtos';
+import {
+  DiscussionAccessPolicyEntity,
+  ProjectDiscussionCommentEntity,
+  ProjectDiscussionThreadEntity,
+  ProjectRoleEntity
+} from '#LocalProject/Entities';
+import { Maybe } from '@here-to-translate/common/types';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, DeepPartial, Repository } from 'typeorm';
+import { ManagerServiceImpl } from './manager-service.impl';
+import { Permission, PermissionFlags } from '@here-to-translate/common';
+import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 
 @Injectable()
-export class DiscussionManagerService extends ManagerService {
+export class DiscussionManagerService extends ManagerServiceImpl {
   protected override readonly logger = new Logger(DiscussionManagerService.name);
 
   constructor(
@@ -20,7 +26,8 @@ export class DiscussionManagerService extends ManagerService {
     private readonly discussionCommentRepository: Repository<ProjectDiscussionCommentEntity>,
     @InjectRepository(DiscussionAccessPolicyEntity)
     private readonly discussionAccessPolicyRepository: Repository<DiscussionAccessPolicyEntity>,
-    private readonly dataSource: DataSource
+    private readonly dataSource: DataSource,
+    private readonly projectManager: ProjectManagerService
   ) {
     super();
   }
@@ -35,7 +42,7 @@ export class DiscussionManagerService extends ManagerService {
    */
   async getUserPermissionForThread(uid: Maybe<bigint>, threadId: bigint) {
     const userRoles = await this.projectRoleRepository.findBy({
-      user: { id: uid },
+      users: { id: uid },
       project: { discussions: { id: threadId } }
     });
     const everyoneRole = await this.projectRoleRepository.findOne({
@@ -57,8 +64,8 @@ export class DiscussionManagerService extends ManagerService {
       });
       if (overrides) {
         resultPermission = resultPermission
-          .add(overrides.allowOverrides || PermissionFlags.None)
-          .remove(overrides.denyOverrides || PermissionFlags.None);
+          .add(overrides.allowOverrides ?? PermissionFlags.None)
+          .remove(overrides.denyOverrides ?? PermissionFlags.None);
       }
     }
     return resultPermission;
@@ -80,13 +87,11 @@ export class DiscussionManagerService extends ManagerService {
       throw new ForbiddenException('You do not have permission to view this discussion');
     }
 
-    const thread = await this.discussionThreadRepository.findOne({
+    return await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       relations: ['comments', 'comments.author', 'comments.upvotes', 'comments.downvotes'],
       select: ['id', 'title', 'description', 'comments', 'isArchived']
     });
-
-    return thread;
   }
   async fetchDiscussions(uid: Maybe<bigint>, projectId: bigint) {
     const threads = await this.discussionThreadRepository.find({
@@ -97,33 +102,39 @@ export class DiscussionManagerService extends ManagerService {
       return [];
     }
     try {
-      return await Promise.all(
-        threads.filter(async thread => {
-          const resultPermission = await this.getUserPermissionForThread(uid, thread.id);
-          return resultPermission.has(PermissionFlags.ViewThread);
-        })
-      )
+      return (await Promise.all(
+        threads.map(async thread =>
+          Object.assign(
+            thread,
+            {
+              userPermission: await this.getUserPermissionForThread(uid, thread.id)
+            }))
+        )).filter(thread => thread.userPermission.has(PermissionFlags.ViewThread));
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to fetch discussions');
     }
   }
-  async createDiscussion(projectId: bigint, discussionData: CreateDiscussionDto) {
+  async createDiscussion(uid: bigint, projectId: bigint, discussionData: CreateDiscussionDto) {
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
     const { title, description } = discussionData;
     const discussion = this.discussionThreadRepository.create({
       project: { id: projectId },
       title,
-      description
+      description,
+      accessPolicy: [{
+        role: { name: 'Everyone', project: { id: projectId } },
+      }]
     });
 
     try {
-      const savedDiscussion = await this.discussionThreadRepository.save(discussion);
-      return savedDiscussion;
+      return await this.discussionThreadRepository.save(discussion);
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to create discussion');
     }
 
   }
-  async updateDiscussionMetadata(threadId: bigint, discussionUpdateData: UpdateDiscussionDto) {
+  async updateDiscussionMetadata(uid: bigint, projectId: bigint, threadId: bigint, discussionUpdateData: UpdateDiscussionDto) {
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
     const { title, description, accessPolicyOverrides: accessPolicy } = discussionUpdateData;
 
     const updateData: DeepPartial<ProjectDiscussionThreadEntity> = {};
@@ -143,23 +154,24 @@ export class DiscussionManagerService extends ManagerService {
     });
 
     try {
-      const updatedDiscussion = await this.discussionThreadRepository.save({
+      return await this.discussionThreadRepository.save({
         id: threadId,
         ...updateData
       });
-      return updatedDiscussion;
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to update discussion metadata');
     }
 
   }
-  async archiveDiscussion(threadId: bigint) {
+  async archiveDiscussion(uid: bigint, projectId: bigint, threadId: bigint) {
     const discussionExists = await this.discussionThreadRepository.exists({
       where: { id: threadId }
     });
     if (!discussionExists) {
       throw new NotFoundException('Unknown discussion thread');
     }
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
+
     const isArchived = await this.discussionThreadRepository.exists({
       where: { id: threadId, isArchived: true }
     });
@@ -168,11 +180,10 @@ export class DiscussionManagerService extends ManagerService {
     }
     try {
 
-      const updatedDiscussion = await this.discussionThreadRepository.save({
+      return await this.discussionThreadRepository.save({
         id: threadId,
         isArchived: true
       });
-      return updatedDiscussion;
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to archive discussion');
     }
@@ -194,8 +205,7 @@ export class DiscussionManagerService extends ManagerService {
       content
     });
     try {
-      const savedComment = await this.discussionCommentRepository.save(comment);
-      return savedComment;
+      return await this.discussionCommentRepository.save(comment);
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to post comment');
     }

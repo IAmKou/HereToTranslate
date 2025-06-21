@@ -20,8 +20,8 @@ export class ProjectEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'boolean', default: false })
-  isPublic: boolean;
+  @Column({ type: 'boolean', default: true })
+  isPrivate: boolean;
 
   @ManyToOne(() => UserEntity, user => user.createdProjects)
   createdBy: UserEntity;

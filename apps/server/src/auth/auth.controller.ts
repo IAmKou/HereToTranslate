@@ -1,9 +1,8 @@
 import { Controller, Post, Body, UseGuards, Get, Req, } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt.guard';
-import { ForRoles } from './decorators/for-role.decorator';
+import { ForRoles, IsPublicEndpoint } from '#LocalProject/Auth/decorators';
 import { RolesGuard } from './guards/role.guard'
-import { IsPublicEndpoint } from './decorators/is-public-endpoint.decorator';
 import { LoginDto } from '#LocalProject/Dtos';
 import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from './types';

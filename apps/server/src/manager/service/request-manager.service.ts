@@ -1,10 +1,11 @@
-import { ProjectEntity, ProjectRoleEntity, RequestEntity, RequestStatus, UserEntity } from "#LocalProject/Entities";
-import { Repository } from "typeorm";
-import { CreateRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
-import { BadGatewayException, BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { PermissionFlags } from "@here-to-translate/common";
-import { DAY } from "#LocalProject/Utils/common";
+import { RequestEntity, RequestStatus } from '#LocalProject/Entities';
+import { Repository } from 'typeorm';
+import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { PermissionFlags } from '@here-to-translate/common';
+import { DAY } from '#LocalProject/Utils/common';
+import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -12,48 +13,20 @@ export class RequestManagerService {
   constructor(
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
-    @InjectRepository(ProjectEntity)
-    private readonly projectRepository: Repository<ProjectEntity>,
-    @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
-    @InjectRepository(ProjectRoleEntity)
-    private readonly projectRoleRepository: Repository<ProjectRoleEntity>
+    private readonly projectManager: ProjectManagerService
   ) { }
 
-  async createRequest(uid: bigint, data: CreateRequestDto) {
+  async createRequest(uid: bigint, projectId: bigint, data: CreateRequestDto) {
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ViewProject);
+
     const {
-      projectId,
       title,
       description,
       dealAmount,
-      deadline,
+      deadline: deadlineRaw,
     } = data;
 
-    const requester = await this.userRepository.exists({
-      where: { id: BigInt(uid) }
-    });
-    if (!requester) {
-      throw new BadRequestException(`User does not exist`);
-    }
-
-    const userRolesInProject = await this.projectRoleRepository.find({
-      where: { user: { id: BigInt(uid) }, project: { id: BigInt(projectId) } },
-      relations: ['permissions']
-    });
-
-    if (!userRolesInProject.length
-      && !userRolesInProject.some(role =>
-        role.permissionFlags.has(PermissionFlags.ViewProject)
-      )) {
-      throw new BadRequestException(`You cannot create a request in this project`);
-    }
-
-    const project = await this.projectRepository.exists({
-      where: { id: BigInt(projectId) }
-    });
-    if (!project) {
-      throw new BadGatewayException(`Project does not exist`);
-    }
+    const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
       throw new BadRequestException(`Deadline has to be at least 7 days from the current date`);
@@ -74,52 +47,53 @@ export class RequestManagerService {
   }
 
   async getMyRequests(uid: bigint) {
-    const user = await this.userRepository.findOne({
-      where: { id: BigInt(uid) },
-      relations: ['projectRoles']
-    });
-    if (!user) {
-      throw new BadRequestException(`User with ID ${uid} not found`);
-    }
+    const queryBuilder = this.requestRepository.createQueryBuilder('requests')
+      .select([
+        'requests.id',
+        'requests.title',
+        'requests.description',
+        'requests.dealAmount',
+        'requests.deadline',
+        'requests.status',
+        'requests.createdAt',
+        'requester.id',
+        'requester.username',
+        'project.id',
+        'project.name'
+      ])
+      .where('requester.id = :uid', { uid: BigInt(uid) })
+      .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.project', 'project');
 
-    const requests = await this.requestRepository.find({
-      where: { requester: { id: BigInt(uid) } },
-      relations: ['requester', 'project']
-    });
-
-    return requests;
+    return await queryBuilder.getMany();
   }
 
-  async fetchRequest(uid: bigint, requestId: bigint) {
-    const request = await this.requestRepository.findOne({
-      where: { id: BigInt(requestId) },
-      relations: ['requester', 'project']
-    });
-    if (!request) {
-      throw new BadRequestException(`Request with ID ${requestId} not found`);
-    }
-    const user = await this.userRepository.exists({
-      where: { id: BigInt(uid) }
-    });
-    if (!user) {
-      throw new BadRequestException(`User with ID ${uid} not found`);
-    }
-    const userRolesInProject = await this.projectRoleRepository.find({
-      where: { user: { id: BigInt(uid) }, project: { id: request.project.id } },
-      relations: ['permissions']
-    });
+  async fetchRequest(uid: bigint, projectId: bigint, requestId: bigint) {
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ViewProject);
+    const query = this.requestRepository.createQueryBuilder('requests')
+      .select([
+        'requests.id',
+        'requests.title',
+        'requests.description',
+        'requests.dealAmount',
+        'requests.deadline',
+        'requests.status',
+        'requests.createdAt',
+        'requester.id',
+        'requester.username',
+        'project.id',
+        'project.name'
+      ])
+      .where('requests.id = :requestId', { requestId: BigInt(requestId) })
+      .andWhere('project.id = :projectId', { projectId: BigInt(projectId) })
+      .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.project', 'project');
 
-    if (request.requester.id !== uid
-      && !userRolesInProject.length
-      && !userRolesInProject.some(role =>
-        role.permissionFlags.hasAny(
-          PermissionFlags.ReviewRequests,
-          PermissionFlags.ViewRequest
-        )
-      )
-    ) {
-      throw new BadRequestException(`You do not have permission to view this request`);
+    const result = await query.getOne();
+    if (!result) {
+      throw new NotFoundException("Unknown request");
     }
+    return result;
   }
 
   async updateRequest(uid: bigint, requestId: bigint, data: Partial<UpdateRequestDto>) {
@@ -127,7 +101,7 @@ export class RequestManagerService {
       title,
       description,
       dealAmount,
-      deadline,
+      deadline
     } = data;
     if (!title && !description && !dealAmount && !deadline) {
       throw new BadRequestException(`No fields to update`);
@@ -137,18 +111,20 @@ export class RequestManagerService {
       relations: ['requester', 'project']
     });
     if (!request) {
-      throw new NotFoundException(`Request with ID ${requestId} not found`);
+      throw new NotFoundException(`Unknown request`);
     }
     if (request.requester.id !== uid) {
       throw new BadRequestException(`You are not the creator of this request`);
     }
-    if (deadline && (deadline.getTime() - Date.now() < 7 * DAY)) {
-      throw new BadRequestException(`Deadline has to be at least 7 days from the current date`);
+    if (deadline) {
+      const datelineValue = new Date(deadline);
+      if (datelineValue.getTime() - Date.now() < 7 * DAY)
+        throw new BadRequestException(`Deadline has to be at least 7 days from the current date`);
+      request.deadline = datelineValue;
     }
     if (title) request.title = title;
     if (description) request.description = description;
     if (dealAmount) request.dealAmount = dealAmount;
-    if (deadline) request.deadline = deadline;
     return this.requestRepository.save(request);
   }
 
@@ -158,7 +134,7 @@ export class RequestManagerService {
       relations: ['requester', 'project']
     });
     if (!request) {
-      throw new NotFoundException(`Request with ID ${requestId} not found`);
+      throw new NotFoundException(`Unknown request`);
     }
     if (request.requester.id !== uid) {
       throw new BadRequestException(`You are not the requester of this request`);
@@ -170,23 +146,19 @@ export class RequestManagerService {
     return this.requestRepository.save(request);
   }
 
-  async reviewRequest(uid: bigint, requestId: bigint, status: RequestStatus) {
+  async reviewRequest(uid: bigint, projectId: bigint, requestId: bigint, status: RequestStatus) {
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ReviewRequests);
     const request = await this.requestRepository.findOne({
-      where: { id: BigInt(requestId) },
+      where: {
+        id: BigInt(requestId),
+        project: { id: BigInt(projectId) }
+      },
       relations: ['requester', 'project']
     });
     if (!request) {
-      throw new NotFoundException(`Request with ID ${requestId} not found`);
+      throw new NotFoundException(`Unknown request`);
     }
-    const user = await this.userRepository.findOne({
-      where: { id: BigInt(uid) }
-    });
-    if (!user) {
-      throw new BadRequestException(`User with ID ${uid} not found`);
-    }
-    if (!user.projectRoles.every(role => role.permissionFlags.has(PermissionFlags.ReviewRequests))) {
-      throw new BadRequestException(`You do not have permission to review requests`);
-    }
+    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ReviewRequests);
     if (status === RequestStatus.Completed && request.status !== RequestStatus.Approved) {
       throw new BadRequestException(`Request is not approved (currently ${request.status})`);
     }

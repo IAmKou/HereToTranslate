@@ -1,14 +1,10 @@
 import { RequestStatus } from "#LocalProject/Entities";
-import { IsBigInt } from "#LocalProject/Utils/extensions/class-validator.extensions";
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsString, MaxLength, Min } from "class-validator";
+import { IsDateString, IsEnum, IsNumber, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateRequestDto {
-  @IsBigInt()
-  projectId: string;
-  @IsNotEmpty()
   @IsString()
+  @MinLength(3)
   title: string;
-  @IsNotEmpty()
   @IsString()
   description: string;
   @IsNumber()

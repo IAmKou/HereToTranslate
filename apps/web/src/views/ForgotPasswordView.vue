@@ -1,80 +1,85 @@
 <template>
-  <div class="forgot-password-view">
-    <div class="view-container">
-      <div class="logo-container">
-        <!-- <img src="/assets/logo.png" alt="Logo" class="logo" /> -->
-      </div>
-      
-      <ForgotPasswordForm />
-      
-      <div class="additional-help">
-        <h3>Bạn cần trợ giúp thêm?</h3>
-        <p>Nếu bạn vẫn gặp vấn đề với việc đặt lại mật khẩu, vui lòng liên hệ đội hỗ trợ của chúng tôi tại <a href="mailto:support@example.com">support@example.com</a></p>
-      </div>
+  <div>
+    <h2>Reset Password</h2>
+
+    <!-- STEP 1: Enter email -->
+    <div v-if="!codeSent">
+      <input v-model="email" placeholder="Enter your email" />
+      <button @click="sendCode">Send Reset Code</button>
+    </div>
+
+    <!-- STEP 2: Enter verification code -->
+    <div v-else-if="!codeVerified">
+      <input v-model="code" placeholder="Enter the code from email" />
+      <button @click="verifyCode">Verify Code</button>
+    </div>
+
+    <!-- STEP 3: Enter new password & confirm -->
+    <div v-else>
+      <input v-model="newPassword" type="password" placeholder="New Password" />
+      <input v-model="confirmPassword" type="password" placeholder="Re-Enter New Password" />
+      <button :disabled="!isPasswordValid" @click="resetPassword">Reset Password</button>
+      <p v-if="newPassword && confirmPassword && !isPasswordValid" style="color: red;">
+        Passwords do not match
+      </p>
     </div>
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue'
-import ForgotPasswordForm from '../components/ForgotPasswordForm.vue'
+<script setup>
+import { ref, computed } from 'vue'
+import axios from 'axios'
 
-export default defineComponent({
-  name: 'ForgotPasswordView',
-  components: {
-    ForgotPasswordForm
-  }
+const email = ref('')
+const code = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+
+const codeSent = ref(false)
+const codeVerified = ref(false)
+
+const isPasswordValid = computed(() => {
+  return newPassword.value && confirmPassword.value && newPassword.value === confirmPassword.value
 })
+
+async function sendCode() {
+  try {
+    await axios.post('/auth/forgot-password', { email: email.value })
+    codeSent.value = true
+    alert('Code sent to your email')
+  } catch (e) {
+    alert(e.response?.data?.message || 'Error sending reset code')
+  }
+}
+
+async function verifyCode() {
+  try {
+    await axios.post('/auth/verify-code', {
+      email: email.value,
+      code: code.value,
+    })
+    codeVerified.value = true
+    alert('Code verified! Now set a new password.')
+  } catch (e) {
+    alert(e.response?.data?.message || 'Invalid or expired code')
+  }
+}
+
+async function resetPassword() {
+  if (!isPasswordValid.value) {
+    alert('Passwords do not match')
+    return
+  }
+  try {
+    await axios.post('/auth/reset-password', {
+      email: email.value,
+      code: code.value,
+      newPassword: newPassword.value,
+    })
+    alert('Password reset successful!')
+    // Optionally redirect to login page
+  } catch (e) {
+    alert(e.response?.data?.message || 'Failed to reset password')
+  }
+}
 </script>
-
-<style scoped>
-.forgot-password-view {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #f9fafb;
-  padding: 2rem 1rem;
-}
-
-.view-container {
-  width: 100%;
-  max-width: 500px;
-}
-
-.logo-container {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.logo {
-  height: 50px;
-}
-
-.additional-help {
-  margin-top: 3rem;
-  text-align: center;
-  padding: 1.5rem;
-  background-color: #f3f4f6;
-  border-radius: 8px;
-}
-
-.additional-help h3 {
-  margin-bottom: 0.75rem;
-  color: #333;
-}
-
-.additional-help p {
-  color: #666;
-  font-size: 0.875rem;
-}
-
-.additional-help a {
-  color: #4f46e5;
-  text-decoration: none;
-}
-
-.additional-help a:hover {
-  text-decoration: underline;
-}
-</style>

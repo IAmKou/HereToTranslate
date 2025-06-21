@@ -55,7 +55,7 @@ export class RequestManagerService {
       throw new BadGatewayException(`Project does not exist`);
     }
 
-    if (deadline.getTime() - Date.now() < 7 * DAY) {
+    if (new Date(deadline).getTime() - Date.now() < 7 * DAY) {
       throw new BadRequestException(`Deadline has to be at least 7 days from the current date`);
     }
 
@@ -142,13 +142,13 @@ export class RequestManagerService {
     if (request.requester.id !== uid) {
       throw new BadRequestException(`You are not the creator of this request`);
     }
-    if (deadline && (deadline.getTime() - Date.now() < 7 * DAY)) {
+    if (deadline && (new Date(deadline).getTime() - Date.now() < 7 * DAY)) {
       throw new BadRequestException(`Deadline has to be at least 7 days from the current date`);
     }
     if (title) request.title = title;
     if (description) request.description = description;
     if (dealAmount) request.dealAmount = dealAmount;
-    if (deadline) request.deadline = deadline;
+    if (deadline) request.deadline = new Date(deadline);
     return this.requestRepository.save(request);
   }
 

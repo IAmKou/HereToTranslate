@@ -8,13 +8,13 @@ import {
   OneToMany,
   PrimaryGeneratedColumn
 } from 'typeorm';
-import { RoleEntity } from './role.entity';
 import { ProjectEntity } from './project.entity';
 import { ProjectRoleEntity } from './project-role.entity';
 import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { ProjectGroupEntity } from './project-group.entity';
+import { UserTypeEntity } from './user-type.entity';
 
 export enum UserRole {
   SuperAdmin = 1,

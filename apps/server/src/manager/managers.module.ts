@@ -8,7 +8,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   RequestEntity,
-  UserEntity
+  UserEntity, UserTypeEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -43,7 +43,8 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
       ProjectRoleEntity,
       ProjectTagEntity,
       RequestEntity,
-      UserEntity
+      UserEntity,
+      UserTypeEntity
     ])
   ],
   providers: [

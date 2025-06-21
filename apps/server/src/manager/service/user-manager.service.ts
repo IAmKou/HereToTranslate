@@ -56,39 +56,62 @@ export class UserManagerService {
     return { message: 'Registration successful' };
   }
 
-  async updateProfile(userId: bigint, updateData: { fullName?: string; phone?: string; email?: string }) {
+  async update(uid: bigint, data: Partial<RegisterDto>) {
+    const { username, email, phone } = data;
     const user = await this.userRepository.findOne({
-      where: { id: userId }
+      where: { id: uid }
     });
-
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new BadRequestException('User not found');
     }
-
-    if (updateData.phone && updateData.phone !== user.phone) {
-      const existingUser = await this.userRepository.findOne({
-        where: { phone: updateData.phone }
+    if (username) {
+      const existingUsername = await this.userRepository.exists({
+        where: { username }
       });
-      if (existingUser) {
-        throw new BadRequestException('Phone number already in use');
+      if (existingUsername) {
+        throw new ConflictException('Username already exists');
       }
+      user.username = username;
     }
-
-    Object.assign(user, updateData);
-    return this.userRepository.save(user);
+    if (email) {
+      const existingEmail = await this.userRepository.exists({
+        where: { email }
+      });
+      if (existingEmail) {
+        throw new ConflictException('Email already exists');
+      }
+      // Validate email domain
+      const isEmailValid = await validateEmail(email);
+      if (!isEmailValid) {
+        throw new BadRequestException('Invalid email domain');
+      }
+      user.email = email;
+    }
+    if (phone) {
+      const existingPhone = await this.userRepository.findOne({
+        where: { phone }
+      });
+      if (existingPhone) {
+        throw new ConflictException('Phone number already exists');
+      }
+      user.phone = phone;
+    }
+    if (data.password) {
+      user.passwordHash = await bcrypt.hash(data.password, 10);
+    }
+    await this.userRepository.save(user);
+    return { message: 'User updated successfully' };
   }
 
-  async getUserProfile(uid: bigint) {
+  async getUser(uid: bigint) {
     const user = await this.userRepository.findOne({
       where: { id: uid },
       relations: ['role'],
       select: ['id', 'username', 'email', 'phone', 'fullName', 'role', 'createdProjects']
     });
-
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new BadRequestException('User not found');
     }
-
     return user;
   }
 

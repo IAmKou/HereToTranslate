@@ -12,9 +12,6 @@ import {
   FileEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
-  ProjectDiscussionCommentEntity,
-  ProjectDiscussionThreadEntity,
-  DiscussionAccessPolicyEntity,
   RatingEntity,
   ReportEntity,
   RequestEntity,
@@ -46,10 +43,10 @@ export class MySqlConnection {
       // synchronize: true, // Auto create tables (turn off in production)
       logging: true,
       supportBigNumbers: true,
-      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
+      entities: [UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity, ProjectTagEntity,
-        ProjectDiscussionCommentEntity, ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity],
+        TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,
+        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity],
     });
     MySqlConnection.instance = this;
   }

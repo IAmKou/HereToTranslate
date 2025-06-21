@@ -18,6 +18,13 @@ import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { UserManagerService } from "../service/user-manager.service";
 import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
 import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
+import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
+import { UserEntity } from '#LocalProject/Entities';
+
+interface ChangePasswordDto {
+  currentPassword: string;
+  newPassword: string;
+}
 
 @Controller('user')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -44,12 +51,11 @@ export class UserController {
     @Body('id', BigIntTransformPipe) id: bigint,
     @Body(ValidationPipe) userUpdateData: UpdateUserDto,
     @Req() request: AuthenticatedRequest
-  @Put('update')
-  async updateProfile(
-    @Req() req: AuthenticatedRequest,
-    @Body() updateProfileDto: UpdateProfileDto
   ) {
-    return this.users.updateProfile(req.user.id, updateProfileDto);
+    if (request.user.id !== id) {
+      throw new BadRequestException("You can only update your own user data.");
+    }
+    return this.users.update(id, userUpdateData);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -74,7 +80,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Put('admin/:id/role/:rid')
   async updateUserRole(
-    @Param('id', ParseBigIntPipe) userId: bigint,
+    @Param('id', BigIntTransformPipe) userId: bigint,
     @Param('rid') roleId: number,
     @Req() req: AuthenticatedRequest
   ) {
@@ -85,7 +91,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Put('admin/:id/toggle-status')
   async toggleUserStatus(
-    @Param('id', ParseBigIntPipe) userId: bigint
+    @Param('id', BigIntTransformPipe) userId: bigint
   ) {
     return this.users.toggleUserStatus(userId);
   }

@@ -40,7 +40,7 @@ import * as path from 'path';
         },
       },
       defaults: {
-        from: '"Support" <support@example.com>',
+        from: '"Here To Translate Support" <csgit47@gmail.com>',
       },
       template: {
         dir: path.join(__dirname, 'mailer', 'templates'),

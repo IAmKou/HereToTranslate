@@ -28,6 +28,8 @@ import { RequestController } from './controller/request.controller';
 import { RoleController } from '#LocalProject/Managers/controller/role.controller';
 import { DiscussionController } from '#LocalProject/Managers/controller/discussion.controller';
 import { GroupController } from '#LocalProject/Managers/controller/group.controller';
+import { ProjectTagManagerService } from '#LocalProject/Managers/service/project-tag-manager.service';
+import { ProjectTagController } from '#LocalProject/Managers/controller/project-tag.controller';
 
 @Global()
 @Module({
@@ -44,7 +46,8 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
       ProjectTagEntity,
       RequestEntity,
       UserEntity,
-      UserTypeEntity
+      UserTypeEntity,
+
     ])
   ],
   providers: [
@@ -54,7 +57,8 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
     GroupManagerService,
     RoleManagerService,
     DiscussionManagerService,
-    ProjectManagerService
+    ProjectManagerService,
+    ProjectTagManagerService,
   ],
   exports: [
     CategoryManagerService,
@@ -63,7 +67,8 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
     GroupManagerService,
     RoleManagerService,
     DiscussionManagerService,
-    ProjectManagerService
+    ProjectManagerService,
+    ProjectTagManagerService,
   ],
   controllers: [
     CategoryController,
@@ -72,7 +77,8 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
     UserController,
     RoleController,
     DiscussionController,
-    GroupController
+    GroupController,
+    ProjectTagController,
   ]
 })
 export class ManagersModule {

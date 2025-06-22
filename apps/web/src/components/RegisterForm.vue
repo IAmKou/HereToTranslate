@@ -345,6 +345,7 @@ const submitForm = async () => {
     messageType.value = 'error';
   } finally {
     isSubmitting.value = false;
+    await this.router.push('/login');
   }
 };
 </script>

@@ -157,9 +157,9 @@ interface Category {
 
 interface CreateProjectData {
   name: string;
-  // uid: number;
+
   description?: string;
-  isPublic?: boolean;
+  isPrivate?: boolean;
   tags?: string[];
   categoryId: string;
 }
@@ -174,11 +174,11 @@ const router = useRouter()
 
 const form = ref<CreateProjectData>({
   name: '',
-  // uid: localStorage,
+
   description: '',
   categoryId: '',
   tags: [],
-  isPublic: false,
+  isPrivate: false,
 })
 
 const errors = ref<FormErrors>({})
@@ -336,18 +336,21 @@ const fetchCategories = async () => {
 }
 
 const handleSubmit = async () => {
+  // Validate form before submission
   if (!validateForm()) {
     return
   }
+
   isSubmitting.value = true
+
   try {
-    const payload = {
-      ...form.value,
-      createdBy: userProfile.value?.id?.toString()
-    }
+
+
+
+
     const result = await apiCall('/projects/create', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(form.value)
     })
 
     // Show success message
@@ -388,16 +391,16 @@ const handleSubmit = async () => {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
+  // Check if user is authenticated before fetching data
   if (!authService.isAuthenticated()) {
     router.push('/login')
     return
   }
-  userProfile.value = await userService.getUserProfile()
+
   fetchCategories()
 })
 </script>
-
 <style scoped>
 .create-project-container {
   min-height: 100vh;

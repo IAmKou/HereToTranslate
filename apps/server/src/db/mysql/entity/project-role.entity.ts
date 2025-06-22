@@ -4,7 +4,7 @@ import { ProjectEntity } from './project.entity';
 import { Permission, PermissionFlags } from '@here-to-translate/common';
 import { BigIntColumnTransformer } from '#LocalProject/Utils/extensions/typeorm.extensions';
 
-@Entity('projectRole')
+@Entity('projectrole')
 export class ProjectRoleEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;

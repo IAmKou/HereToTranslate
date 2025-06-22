@@ -451,11 +451,9 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Dialog from 'primevue/dialog';
 import ConfirmDialog from 'primevue/confirmdialog';
-import Chips from 'primevue/chips';
-import Tag from 'primevue/tag';
+import PrimeTag from 'primevue/tag';
 import MultiSelect from 'primevue/multiselect';
-import Avatar from 'primevue/avatar';
-import Menu from 'primevue/menu';
+
 
 interface Category {
   id?: number;
@@ -542,7 +540,7 @@ const fetchCategories = async () => {
 const fetchTags = async () => {
   tagLoading.value = true;
   try {
-    const res = await axios.get(`${API_BASE_URL}/tag/all`);
+    const res = await axios.get(`${API_BASE_URL}/project-tag/all`);
     tags.value = res.data;
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load tags', life: 3000 });
@@ -735,12 +733,12 @@ const saveTag = async () => {
   tagSaving.value = true;
   try {
     if (isEditingTag.value && currentTag.value.id) {
-      await axios.put(`${API_BASE_URL}/tag/update/${currentTag.value.id}`, { name: currentTag.value.name });
+      await axios.put(`${API_BASE_URL}/project-tag/update/${currentTag.value.id}`, { name: currentTag.value.name });
       toast.add({ severity: 'success', summary: 'Success', detail: 'Tag updated successfully', life: 3000 });
       await fetchTags();
       closeTagDialog();
     } else {
-      await axios.post(`${API_BASE_URL}/tag/create`, { name: currentTag.value.name });
+      await axios.post(`${API_BASE_URL}/project-tag/create`, { name: currentTag.value.name });
       toast.add({ severity: 'success', summary: 'Success', detail: 'Tag created successfully', life: 3000 });
       showTagDialog.value = false;
       tagSubmitted.value = false;
@@ -772,7 +770,7 @@ const confirmDeleteTag = (tag: Tag) => {
 const deleteTag = async (tag: Tag) => {
   if (!tag.id) return;
   try {
-    await axios.delete(`${API_BASE_URL}/tag/delete/${tag.id}`);
+    await axios.delete(`${API_BASE_URL}/project-tag/delete/${tag.id}`);
     await fetchTags();
     toast.add({ severity: 'success', summary: 'Success', detail: 'Tag deleted successfully', life: 3000 });
   } catch (error) {

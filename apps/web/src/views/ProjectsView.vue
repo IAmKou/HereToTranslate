@@ -383,9 +383,9 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); */
+  background: #fff; /* hoặc bỏ dòng này */
 }
-
 .main-content {
   display: flex;
   flex: 1;

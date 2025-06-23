@@ -152,11 +152,10 @@ onUnmounted(() => {
 }
 
 .navbar-container {
-  max-width: 1200px;
+  max-width: 1500px;
   margin: 0 auto;
   padding: 0 24px;
   display: flex;
-  //justify-content: space-between;
   align-items: center;
   height: 56px;
 }

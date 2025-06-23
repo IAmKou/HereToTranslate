@@ -7,7 +7,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Like, Not, Repository } from 'typeorm';
 import { CategoryEntity, ProjectEntity, ProjectRoleEntity, ProjectTagEntity, UserEntity } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { IntoPermission, Permission, PermissionFlags } from '@here-to-translate/common';
@@ -348,5 +348,59 @@ export class ProjectManagerService extends ManagerServiceImpl {
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to delete project');
     }
+  }
+
+  async findUserToProject(projectId: bigint, identifier : string) : Promise<UserEntity | null>{
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: ['members'],
+    });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const existingMemberIds = project.members.map((m) => m.id);
+
+    const user = await this.userRepository.findOne({
+      where: [
+        {
+          email: identifier,
+          id: existingMemberIds.length
+            ? Not(In(existingMemberIds))
+            : undefined,
+        },
+        {
+          fullName: Like(`%${identifier}%`),
+          id: existingMemberIds.length
+            ? Not(In(existingMemberIds))
+            : undefined,
+        },
+      ],
+    });
+
+    return user || null;
+  }
+
+  async addUserToProject(
+    projectId: bigint,
+    identifier: string,
+  ): Promise<ProjectEntity> {
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: ['members'],
+    });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const user = await this.findUserToProject(projectId, identifier);
+    if (!user) {
+      throw new BadRequestException(
+        `User "${identifier}" not found or already a member of the project`,
+      );
+    }
+
+    project.members.push(user);
+    return this.projectRepository.save(project);
   }
 }

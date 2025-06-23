@@ -81,6 +81,41 @@
 
       <!-- Management Sections -->
       <div class="management-sections">
+        <!-- Add User to Project Section -->
+        <div class="management-section">
+          <div class="section-header">
+            <h2>Add User to Project</h2>
+          </div>
+          <form @submit.prevent="searchUser" class="add-user-form">
+            <div class="form-group">
+              <label for="userIdentifier">Search by Email or Name</label>
+              <input
+                id="userIdentifier"
+                v-model="userSearch.identifier"
+                type="text"
+                required
+                class="form-control"
+                placeholder="Enter email or full name"
+              />
+            </div>
+            <div class="modal-actions">
+              <button type="submit" class="btn btn-primary" :disabled="userSearch.loading">
+                {{ userSearch.loading ? 'Searching...' : 'Search User' }}
+              </button>
+            </div>
+          </form>
+          <div v-if="userSearch.error" class="error" style="margin-top: 1rem;">
+            <p>{{ userSearch.error }}</p>
+          </div>
+          <div v-if="userSearch.result" class="found-user" style="margin-top: 1rem;">
+            <div class="user-info">
+              <span><b>{{ userSearch.result.fullName || userSearch.result.username }}</b> ({{ userSearch.result.email }})</span>
+              <button class="btn btn-primary btn-sm" @click="addUserToProject" :disabled="userSearch.adding">
+                {{ userSearch.adding ? 'Adding...' : 'Add to Project' }}
+              </button>
+            </div>
+          </div>
+        </div>
         <!-- Roles Management -->
         <div class="management-section">
           <div class="section-header">
@@ -165,30 +200,46 @@
               required
               class="form-control"
               placeholder="Enter role name"
-            >
+            />
           </div>
           <div class="form-group">
-            <label for="rolePermissions">Permissions</label>
-            <input
-              id="rolePermissions"
-              v-model="newRole.permissions"
-              type="text"
-              required
-              class="form-control"
-              placeholder="Enter permission flags"
-            >
+            <label>Permissions</label>
+            <div class="permissions-list">
+              <div
+                v-for="perm in availablePermissions"
+                :key="perm"
+                class="checkbox-item"
+              >
+                <input
+                  type="checkbox"
+                  :id="perm"
+                  :value="perm"
+                  v-model="selectedPermissions"
+                />
+                <label :for="perm">{{ perm }}</label>
+              </div>
+            </div>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" @click="showCreateRoleModal = false">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="showCreateRoleModal = false"
+            >
               Cancel
             </button>
-            <button type="submit" class="btn btn-primary" :disabled="isCreatingRole">
-              {{ isCreatingRole ? 'Creating...' : 'Create Role' }}
+            <button
+              type="submit"
+              class="btn btn-primary"
+              :disabled="isCreatingRole"
+            >
+              {{ isCreatingRole ? "Creating..." : "Create Role" }}
             </button>
           </div>
         </form>
       </div>
     </div>
+
 
     <!-- Create Group Modal -->
     <div v-if="showCreateGroupModal" class="modal-overlay" @click.self="showCreateGroupModal = false">
@@ -209,17 +260,6 @@
               placeholder="Enter group name"
             >
           </div>
-          <div class="form-group">
-            <label for="groupPermissions">Permissions</label>
-            <input
-              id="groupPermissions"
-              v-model="newGroup.permissionFlags"
-              type="text"
-              required
-              class="form-control"
-              placeholder="Enter permission flags"
-            >
-          </div>
           <div class="modal-actions">
             <button type="button" class="btn btn-secondary" @click="showCreateGroupModal = false">
               Cancel
@@ -238,6 +278,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
+import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
 
 const route = useRoute()
 const router = useRouter()
@@ -279,12 +320,16 @@ interface CreateRoleData {
 
 interface CreateGroupData {
   name: string;
-  permissionFlags: string;
 }
 
 const project = ref<Project | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const selectedPermissions = ref<PermissionStrings[]>([]);
+const availablePermissions = Object.keys(PermissionFlags).filter(
+  (key) =>
+    typeof PermissionFlags[key as PermissionStrings] === "bigint" && key !== "None"
+) as PermissionStrings[];
 
 // Modal states
 const showCreateRoleModal = ref(false)
@@ -300,7 +345,15 @@ const newRole = ref<CreateRoleData>({
 
 const newGroup = ref<CreateGroupData>({
   name: '',
-  permissionFlags: ''
+})
+
+// User search/add state
+const userSearch = ref({
+  identifier: '',
+  loading: false,
+  error: '',
+  result: null as null | { id: string; username: string; fullName?: string; email: string },
+  adding: false
 })
 
 // API helper function
@@ -370,23 +423,33 @@ const deleteProject = async () => {
 }
 
 const createRole = async () => {
-  if (!project.value) return
+  if (!project.value) return;
 
-  isCreatingRole.value = true
+  isCreatingRole.value = true;
+
   try {
+    const permissionValue = selectedPermissions.value.reduce((acc, key) => {
+      return acc | PermissionFlags[key as PermissionStrings];
+    }, 0n);
+
     await apiCall(`/projects/${project.value.id}/roles/create`, {
-      method: 'POST',
-      body: JSON.stringify(newRole.value)
-    })
-    await loadProject() // Reload project to get updated roles
-    showCreateRoleModal.value = false
-    newRole.value = { name: '', permissions: '' }
+      method: "POST",
+      body: JSON.stringify({
+        name: newRole.value.name,
+        permissionFlags: permissionValue.toString()
+      })
+    });
+    await loadProject();
+    showCreateRoleModal.value = false;
+    newRole.value = { name: '', permissions: '' };
+    selectedPermissions.value = []; // Reset
   } catch (err: any) {
-    alert('Failed to create role: ' + err.message)
+    alert("Failed to create role: " + err.message);
   } finally {
-    isCreatingRole.value = false
+    isCreatingRole.value = false;
   }
-}
+};
+
 
 const createGroup = async () => {
   if (!project.value) return
@@ -399,7 +462,7 @@ const createGroup = async () => {
     })
     await loadProject() // Reload project to get updated groups
     showCreateGroupModal.value = false
-    newGroup.value = { name: '', permissionFlags: '' }
+    newGroup.value = { name: ''}
   } catch (err: any) {
     alert('Failed to create group: ' + err.message)
   } finally {
@@ -440,6 +503,47 @@ const deleteGroup = async (groupId: string) => {
     await loadProject() // Reload project to get updated groups
   } catch (err: any) {
     alert('Failed to delete group: ' + err.message)
+  }
+}
+
+const searchUser = async () => {
+  if (!project.value) return;
+  userSearch.value.loading = true;
+  userSearch.value.error = '';
+  userSearch.value.result = null;
+  try {
+    const res = await apiCall(`/projects/${project.value.id}/search-user`, {
+      method: 'POST',
+      body: JSON.stringify({ identifier: userSearch.value.identifier })
+    });
+    if (res.user) {
+      userSearch.value.result = res.user;
+    } else {
+      userSearch.value.error = 'No user found.';
+    }
+  } catch (err: any) {
+    userSearch.value.error = err.message || 'Failed to search user.';
+  } finally {
+    userSearch.value.loading = false;
+  }
+}
+
+const addUserToProject = async () => {
+  if (!project.value || !userSearch.value.result) return;
+  userSearch.value.adding = true;
+  try {
+    await apiCall(`/projects/${project.value.id}/add-user`, {
+      method: 'POST',
+      body: JSON.stringify({ identifier: userSearch.value.result.email })
+    });
+    await loadProject();
+    alert('User added to project!');
+    userSearch.value.result = null;
+    userSearch.value.identifier = '';
+  } catch (err: any) {
+    alert('Failed to add user: ' + err.message);
+  } finally {
+    userSearch.value.adding = false;
   }
 }
 
@@ -864,4 +968,34 @@ onMounted(() => {
     justify-content: center;
   }
 }
-</style> 
+
+.permissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-user-form {
+  margin-bottom: 1rem;
+}
+.found-user {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+</style>

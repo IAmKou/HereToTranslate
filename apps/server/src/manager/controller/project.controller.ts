@@ -1,8 +1,9 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
-  Get,
+  Get, NotFoundException,
   Param,
   Patch,
   Post,
@@ -19,6 +20,7 @@ import { JwtFallthroughGuard } from '#LocalProject/Auth/guards/jwt-fallthrough.g
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { ProjectManagerService } from '../service/project-manager.service';
+import { UserEntity } from '#LocalProject/Entities';
 
 @Controller('projects')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -69,5 +71,51 @@ export class ProjectController {
   async delete(@Body('projectId', BigIntTransformPipe) projectId: bigint) {
     await this.projects.deleteProject(projectId);
     return { message: `Project with ID ${projectId} deleted successfully` };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/search-user')
+  async searchUserToAdd(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Body('identifier') identifier: string,
+  ): Promise<{ user: UserEntity | null }> {
+    if (!identifier?.trim()) {
+      throw new BadRequestException('Identifier is required');
+    }
+
+    const user = await this.projects.findUserToProject(
+      projectId,
+      identifier.trim(),
+    );
+    return {
+      user,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/add-user')
+  async addUserToProject(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Body('identifier') identifier: string,
+  ) {
+    if (!identifier?.trim()) {
+      throw new BadRequestException('Identifier is required');
+    }
+
+    try {
+      const updatedProject = await this.projects.addUserToProject(
+        projectId,
+        identifier.trim(),
+      );
+      return {
+        message: 'User added successfully',
+        project: updatedProject,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(error);
+    }
   }
 }

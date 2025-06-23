@@ -4,12 +4,12 @@
       <div class="logo-container">
         <!-- <img src="/assets/logo.png" alt="Logo" class="logo" /> -->
       </div>
-      
+
       <ForgotPasswordForm />
-      
+
       <div class="additional-help">
-        <h3>Bạn cần trợ giúp thêm?</h3>
-        <p>Nếu bạn vẫn gặp vấn đề với việc đặt lại mật khẩu, vui lòng liên hệ đội hỗ trợ của chúng tôi tại <a href="mailto:support@example.com">support@example.com</a></p>
+        <h3>Need more help?</h3>
+        <p>If you're still having trouble resetting your password, please contact our support team at <a href="mailto:support@example.com">support@example.com</a></p>
       </div>
     </div>
   </div>

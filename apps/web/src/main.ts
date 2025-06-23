@@ -11,7 +11,6 @@ import 'primevue/resources/themes/lara-light-indigo/theme.css';
 import 'primeicons/primeicons.css'; // icons
 
 // PrimeVue Components
-
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -30,14 +29,12 @@ app.use(ConfirmationService);
 app.use(ToastService);
 
 // Register PrimeVue Components
-
 app.component('Card', Card);
 app.component('DataTable', DataTable);
 app.component('Column', Column);
 app.component('InputText', InputText);
 app.component('ConfirmDialog', ConfirmDialog);
 app.component('Toast', Toast);
-
 
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');

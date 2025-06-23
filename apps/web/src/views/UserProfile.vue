@@ -1,142 +1,127 @@
 <template>
-  <div class="layout-wrapper">
+  <div class="profile-page">
     <TopNavbar />
-    <div class="main-content">
-      <Sidebar />
-      <div class="content">
-        <div class="user-profile">
-          <div class="profile-card">
-            <!-- Tab Navigation -->
-            <div class="profile-tabs">
-              <button :class="['tab-btn', {active: activeTab==='profile'}]" @click="activeTab='profile'">
-                <i class="pi pi-user"></i> Profile
-              </button>
-              <button :class="['tab-btn', {active: activeTab==='account'}]" @click="activeTab='account'">
-                <i class="pi pi-lock"></i> Account
-              </button>
-            </div>
+    <div class="profile-container">
+      <aside class="sidebar">
+        <Sidebar />
+      </aside>
+      <main class="profile-main">
+        <section class="profile-header">
+          <div class="avatar-section" @click="triggerAvatarUpload">
+            <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img" />
+            <div v-else class="avatar-fallback">{{ userInitials }}</div>
+            <input type="file" ref="avatarInput" @change="onAvatarChange" style="display:none" />
+            <span class="avatar-edit"><i class="pi pi-camera"></i></span>
+          </div>
+          <div class="user-info">
+            <h2>{{ user.fullName || user.username }}</h2>
+           
+            <p class="user-joined">Joined: {{ formatDate(user.createdAt) }}</p>
+          </div>
+        </section>
 
-            <!-- Profile Tab -->
-            <div v-if="activeTab==='profile'">
-              <div class="avatar-upload-row">
-                <div class="avatar-preview" @click="triggerAvatarUpload">
-                  <img v-if="avatarUrl" :src="avatarUrl" alt="Avatar" class="avatar-img" />
-                  <div v-else class="avatar-fallback">{{ userInitials }}</div>
-                  <div class="avatar-edit-btn"><i class="pi pi-camera"></i></div>
-                  <input type="file" ref="avatarInput" @change="onAvatarChange" style="display:none" />
-                </div>
-              </div>
-              <form class="profile-form" @submit.prevent="updateProfile">
-                <div class="form-title">General Information</div>
+        <nav class="profile-tabs">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            :class="['tab-btn', {active: activeTab === tab.key}]"
+            @click="activeTab = tab.key"
+          >
+            <i :class="tab.icon"></i> {{ tab.label }}
+          </button>
+        </nav>
+
+        <section class="profile-content">
+          <!-- Profile Tab -->
+          <div v-if="activeTab === 'profile'" class="tab-panel">
+            <form class="profile-form" @submit.prevent="updateProfile">
+              <h3>General Information</h3>
+              <div class="form-row">
                 <div class="form-group">
-                  <label for="fullName"><i class="pi pi-id-card"></i> Full Name</label>
+                  <label for="fullName">Full Name</label>
                   <input type="text" id="fullName" v-model="updateForm.fullName" :placeholder="user.fullName" required />
                 </div>
                 <div class="form-group">
-                  <label for="phone"><i class="pi pi-phone"></i> Phone Number</label>
+                  <label for="phone">Phone Number</label>
                   <input type="text" id="phone" v-model="updateForm.phone" :placeholder="user.phone" />
                 </div>
+              </div>
+              <div class="form-row">
                 <div class="form-group">
-                  <label for="username"><i class="pi pi-user"></i> Username</label>
+                  <label for="username">Username</label>
                   <input type="text" id="username" :value="user.username" disabled />
                 </div>
                 <div class="form-group">
-                  <label for="email"><i class="pi pi-envelope"></i> Email</label>
+                  <label for="email">Email</label>
                   <input type="email" id="email" :value="user.email" disabled />
-                  <div class="form-note">
-                    Not publicly visible. Email will be used for account-related notifications.
-                  </div>
+                  <small class="form-note">Not public. Used for notifications.</small>
                 </div>
-                <button type="submit" class="btn-primary" :disabled="isLoading">
-                  <span v-if="!isLoading">Save Changes</span>
-                  <span v-else class="loading-spinner"></span>
-                </button>
-                <div v-if="updateSuccess" class="success-message">
-                  <i class="pi pi-check-circle"></i> Profile updated successfully!
-                </div>
-              </form>
-            </div>
-
-            <!-- Account Tab -->
-            <div v-if="activeTab==='account'" class="account-tab">
-              <div class="account-section">
-                <div class="section-header">
-                  <h3><i class="pi pi-key"></i> Change Password</h3>
-                  <p class="section-description">Update your password to keep your account secure</p>
-                </div>
-                <form @submit.prevent="changePassword" class="password-form">
-                  <div class="form-group">
-                    <label for="currentPassword"><i class="pi pi-lock"></i> Current Password</label>
-                    <div class="password-input-wrapper">
-                      <input
-                        :type="showCurrentPassword ? 'text' : 'password'"
-                        id="currentPassword"
-                        v-model="passwordForm.currentPassword"
-                        required
-                      />
-                      <button
-                        type="button"
-                        class="toggle-password"
-                        @click="showCurrentPassword = !showCurrentPassword"
-                      >
-                        <i :class="showCurrentPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
-                      </button>
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label for="newPassword"><i class="pi pi-lock"></i> New Password</label>
-                    <div class="password-input-wrapper">
-                      <input
-                        :type="showNewPassword ? 'text' : 'password'"
-                        id="newPassword"
-                        v-model="passwordForm.newPassword"
-                        required
-                      />
-                      <button
-                        type="button"
-                        class="toggle-password"
-                        @click="showNewPassword = !showNewPassword"
-                      >
-                        <i :class="showNewPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
-                      </button>
-                    </div>
-                    <div class="password-requirements">
-                      <p>Password must contain:</p>
-                      <ul>
-                        <li :class="{ met: passwordForm.newPassword.length >= 8 }">
-                          At least 8 characters
-                        </li>
-                        <li :class="{ met: /[A-Z]/.test(passwordForm.newPassword) }">
-                          One uppercase letter
-                        </li>
-                        <li :class="{ met: /[a-z]/.test(passwordForm.newPassword) }">
-                          One lowercase letter
-                        </li>
-                        <li :class="{ met: /[0-9]/.test(passwordForm.newPassword) }">
-                          One number
-                        </li>
-                        <li :class="{ met: /[^A-Za-z0-9]/.test(passwordForm.newPassword) }">
-                          One special character
-                        </li>
-                      </ul>
-                      <div class="password-strength-bar">
-                        <div :style="{width: passwordStrength + '%', background: passwordStrengthColor}" class="strength-bar"></div>
-                      </div>
-                    </div>
-                  </div>
-                  <button type="submit" class="btn-primary" :disabled="isLoading || !isPasswordValid">
-                    <span v-if="!isLoading">Update Password</span>
-                    <span v-else class="loading-spinner"></span>
-                  </button>
-                  <div v-if="passwordSuccess" class="success-message">
-                    <i class="pi pi-check-circle"></i> Password changed successfully!
-                  </div>
-                </form>
               </div>
-            </div>
+              <button type="submit" class="btn-primary" :disabled="isLoading">
+                <span v-if="!isLoading">Save Changes</span>
+                <span v-else class="loading-spinner"></span>
+              </button>
+              <div v-if="updateSuccess" class="success-message">
+                <i class="pi pi-check-circle"></i> Profile updated!
+              </div>
+            </form>
           </div>
-        </div>
-      </div>
+
+          <!-- Account Tab -->
+          <div v-if="activeTab === 'account'" class="tab-panel">
+            <form @submit.prevent="changePassword" class="password-form">
+              <h3>Change Password</h3>
+              <div class="form-group">
+                <label for="currentPassword">Current Password</label>
+                <div class="password-input-wrapper">
+                  <input
+                    :type="showCurrentPassword ? 'text' : 'password'"
+                    id="currentPassword"
+                    v-model="passwordForm.currentPassword"
+                    required
+                  />
+                  <button type="button" class="toggle-password" @click="showCurrentPassword = !showCurrentPassword">
+                    <i :class="showCurrentPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="newPassword">New Password</label>
+                <div class="password-input-wrapper">
+                  <input
+                    :type="showNewPassword ? 'text' : 'password'"
+                    id="newPassword"
+                    v-model="passwordForm.newPassword"
+                    required
+                  />
+                  <button type="button" class="toggle-password" @click="showNewPassword = !showNewPassword">
+                    <i :class="showNewPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+                  </button>
+                </div>
+                <div class="password-requirements">
+                  <ul>
+                    <li :class="{ met: passwordForm.newPassword.length >= 8 }">8+ characters</li>
+                    <li :class="{ met: /[A-Z]/.test(passwordForm.newPassword) }">Uppercase letter</li>
+                    <li :class="{ met: /[a-z]/.test(passwordForm.newPassword) }">Lowercase letter</li>
+                    <li :class="{ met: /[0-9]/.test(passwordForm.newPassword) }">Number</li>
+                    <li :class="{ met: /[^A-Za-z0-9]/.test(passwordForm.newPassword) }">Special character</li>
+                  </ul>
+                  <div class="password-strength-bar">
+                    <div :style="{width: passwordStrength + '%', background: passwordStrengthColor}" class="strength-bar"></div>
+                  </div>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" :disabled="isLoading || !isPasswordValid">
+                <span v-if="!isLoading">Update Password</span>
+                <span v-else class="loading-spinner"></span>
+              </button>
+              <div v-if="passwordSuccess" class="success-message">
+                <i class="pi pi-check-circle"></i> Password changed!
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
     </div>
     <Footer />
   </div>
@@ -154,6 +139,11 @@ import { authService } from '../services/auth.service';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
+
+const tabs = [
+  { key: 'profile', label: 'Profile', icon: 'pi pi-user' },
+  { key: 'account', label: 'Account', icon: 'pi pi-lock' }
+];
 
 const user = ref<UserProfile>({
   id: BigInt(0),
@@ -175,7 +165,6 @@ const avatarInput = ref<HTMLInputElement | null>(null);
 const updateForm = ref<UpdateProfileData>({
   fullName: '',
   phone: '',
-
 });
 
 const passwordForm = ref<ChangePasswordData>({
@@ -303,107 +292,61 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.layout-wrapper {
-  display: flex;
-  flex-direction: column;
+.profile-page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f4f6fb;
 }
-
-.main-content {
+.profile-container {
   display: flex;
   flex: 1;
+  min-height: 0;
 }
-
-.content {
-  flex: 1;
-  padding: 20px;
-}
-
-.user-profile {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 1rem;
-}
-
-.profile-card {
+.sidebar {
+  min-width: 220px;
   background: #fff;
-  border-radius: 20px;
-  box-shadow: 0 6px 32px rgba(99,102,241,0.10);
-  padding: 2.5rem 2rem;
-  max-width: 600px;
-  width: 100%;
+  border-right: 1px solid #e5e7eb;
+}
+.profile-main {
+  flex: 1;
+  padding: 32px 0;
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
+  align-items: center;
 }
-
-.profile-tabs {
+.profile-header {
   display: flex;
+  align-items: center;
   gap: 2rem;
-  border-bottom: 2.5px solid #e5e7eb;
   margin-bottom: 2.5rem;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 2px 12px #6366f11a;
+  padding: 2rem 2.5rem;
+  width: 100%;
+  max-width: 700px;
 }
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: none;
-  border: none;
-  outline: none;
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #6b7280;
-  padding: 0.7rem 1.5rem;
-  border-radius: 12px 12px 0 0;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s;
-}
-.tab-btn.active {
-  color: #4f46e5;
-  background: #f3f4f6;
-  border-bottom: 3px solid #4f46e5;
-  font-weight: 600;
-}
-.tab-btn i {
-  font-size: 1.2rem;
-}
-
-.avatar-upload-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 2rem;
-}
-
-.avatar-preview {
+.avatar-section {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
 }
-.avatar-img {
+.avatar-img, .avatar-fallback {
   width: 110px;
   height: 110px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-}
-.avatar-fallback {
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
   background: #e5e7eb;
-  color: #6366f1;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2.5rem;
   font-weight: 700;
+  color: #6366f1;
+  border: 3px solid #e5e7eb;
+  box-shadow: 0 2px 8px #0001;
 }
-.avatar-edit-btn {
+.avatar-edit {
   position: absolute;
   bottom: 0; right: 0;
   background: #fff;
@@ -415,25 +358,77 @@ onMounted(() => {
   font-size: 1.3rem;
   transition: background 0.2s, color 0.2s;
 }
-.avatar-preview:hover .avatar-edit-btn {
+.avatar-section:hover .avatar-edit {
   background: #6366f1; color: #fff;
 }
-
-.profile-form {
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.user-info h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+.user-role {
+  color: #6366f1;
+  font-weight: 500;
+}
+.user-joined {
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+.profile-tabs {
+  display: flex;
+  gap: 1.5rem;
+  margin: 2rem 0 1.5rem 0;
+  width: 100%;
+  max-width: 700px;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #6b7280;
+  padding: 0.7rem 1.5rem;
+  border-radius: 12px;
+  transition: all 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tab-btn.active {
+  color: #fff;
+  background: linear-gradient(90deg, #6366f1 0%, #4f46e5 100%);
+  font-weight: 600;
+  box-shadow: 0 2px 8px #6366f122;
+}
+.profile-content {
+  width: 100%;
+  max-width: 700px;
+}
+.tab-panel {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px #6366f11a;
+  padding: 2rem 2.5rem;
+  margin-bottom: 2rem;
+}
+.profile-form, .password-form {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  background: #fff;
-  border-radius: 16px;
-  padding: 2rem 0 0 0;
 }
-.form-title {
-  font-size: 1.15rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #1f2937;
+.form-row {
+  display: flex;
+  gap: 1.5rem;
 }
 .form-group {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -441,14 +436,6 @@ onMounted(() => {
 .form-group label {
   font-weight: 500;
   color: #374151;
-  margin-bottom: 0.2rem;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.form-group label i {
-  color: #6366f1;
-  font-size: 1.1rem;
 }
 .form-group input {
   border-radius: 10px;
@@ -462,13 +449,6 @@ onMounted(() => {
   border-color: #6366f1;
   box-shadow: 0 0 0 2px #6366f133;
   background: #fff;
-}
-.form-row {
-  display: flex;
-  gap: 1rem;
-}
-.form-row .form-group {
-  flex: 1;
 }
 .form-note {
   font-size: 0.92rem;
@@ -500,21 +480,6 @@ onMounted(() => {
   background: linear-gradient(90deg, #4f46e5 0%, #6366f1 100%);
   transform: translateY(-2px) scale(1.03);
 }
-.btn-secondary {
-  background: #fff;
-  color: #6366f1;
-  border: 1.5px solid #d1d5db;
-  border-radius: 8px;
-  padding: 0.6rem 1.1rem;
-  font-weight: 500;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-.btn-secondary:hover {
-  border-color: #6366f1;
-  color: #4f46e5;
-}
 .success-message {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
@@ -522,7 +487,6 @@ onMounted(() => {
   color: #166534;
   border-radius: 8px;
   font-weight: 500;
-  animation: slideIn 0.3s ease-out;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -539,88 +503,14 @@ onMounted(() => {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-@keyframes slideIn {
-  from { transform: translateY(-10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-.password-section {
-  border-top: 1.5px solid #e5e7eb;
-  margin-top: 2.5rem;
-  padding-top: 2.5rem;
-}
-@media (max-width: 600px) {
-  .profile-card {
-    padding: 1.2rem 0.5rem;
-  }
-  .avatar-upload-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 1.2rem;
-  }
-  .profile-form {
-    padding: 1rem 0 0 0;
-  }
-  .password-section {
-    padding-top: 1.2rem;
-    margin-top: 1.2rem;
-  }
-  .form-row {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-}
-
-.account-tab {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.account-section {
-  background: #fff;
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(99,102,241,0.10);
-}
-
-.section-header {
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.section-header h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #4f46e5;
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.section-header i {
-  color: #6366f1;
-  font-size: 1.2rem;
-}
-.section-description {
-  color: #6b7280;
-  font-size: 0.95rem;
-}
-
-.password-form {
-  max-width: 500px;
-}
-
 .password-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
 }
-
 .password-input-wrapper input {
   padding-right: 2.5rem;
 }
-
 .toggle-password {
   position: absolute;
   right: 0.75rem;
@@ -637,29 +527,21 @@ onMounted(() => {
 .toggle-password:hover {
   color: #4b5563;
 }
-
 .password-requirements {
   margin-top: 1rem;
   padding: 1rem;
   background: #f9fafb;
   border-radius: 8px;
 }
-
-.password-requirements p {
-  color: #4b5563;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-}
-
 .password-requirements ul {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-direction: row;
+  gap: 1.2rem;
+  flex-wrap: wrap;
 }
-
 .password-requirements li {
   color: #6b7280;
   font-size: 0.9rem;
@@ -667,21 +549,10 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
 }
-
-.password-requirements li::before {
-  content: '○';
-  color: #d1d5db;
-}
-
 .password-requirements li.met {
   color: #059669;
+  font-weight: 600;
 }
-
-.password-requirements li.met::before {
-  content: '●';
-  color: #059669;
-}
-
 .password-strength-bar {
   width: 100%;
   height: 8px;
@@ -695,15 +566,29 @@ onMounted(() => {
   border-radius: 6px;
   transition: width 0.3s, background 0.3s;
 }
-
-@media (max-width: 768px) {
-  .security-option {
+@media (max-width: 900px) {
+  .profile-header, .profile-content, .profile-tabs {
+    max-width: 100%;
+    padding: 1.2rem;
+  }
+  .profile-main {
+    padding: 16px 0;
+  }
+}
+@media (max-width: 600px) {
+  .profile-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
+    padding: 1rem;
   }
-  .security-option .btn-secondary {
-    width: 100%;
+  .form-row {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .profile-tabs {
+    flex-direction: column;
+    gap: 0.5rem;
   }
 }
 </style>

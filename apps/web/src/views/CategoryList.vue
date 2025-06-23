@@ -132,22 +132,6 @@
                 </div>
               </template>
             </Column>
-            <Column field="tags" header="Tags" style="min-width: 200px">
-              <template #body="{ data }">
-                <div class="flex flex-wrap gap-2">
-                  <template v-if="data.tags && data.tags.length > 0">
-                    <Tag
-                      v-for="tag in data.tags"
-                      :key="tag"
-                      :value="tag"
-                      severity="info"
-                      class="category-tag"
-                    />
-                  </template>
-                  <span v-else class="text-gray-400 italic">No tags</span>
-                </div>
-              </template>
-            </Column>
             <Column style="min-width: 150px">
               <template #body="slotProps">
                 <div class="flex gap-2">
@@ -373,28 +357,6 @@
                 Add a brief description to help identify this category
               </small>
             </div>
-            <div class="field">
-              <label for="tags" class="font-medium flex items-center gap-2">
-                <i class="pi pi-tags text-primary"></i>
-                Tags
-                <span class="text-sm text-gray-500">(Select from existing tags)</span>
-              </label>
-              <MultiSelect
-                id="tags"
-                v-model="currentCategory.tags"
-                :options="tags"
-                optionLabel="name"
-                optionValue="id"
-                placeholder="Select tags for this category"
-                class="w-full"
-                display="chip"
-                :maxSelectedLabels="5"
-              />
-              <small class="text-gray-500 mt-1">
-                <i class="pi pi-info-circle"></i>
-                Only select tags from the list. You cannot add new tags here.
-              </small>
-            </div>
           </div>
 
           <div class="form-section" v-if="isEditing">
@@ -451,9 +413,11 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Dialog from 'primevue/dialog';
 import ConfirmDialog from 'primevue/confirmdialog';
-import PrimeTag from 'primevue/tag';
+import Chips from 'primevue/chips';
+import Tag from 'primevue/tag';
 import MultiSelect from 'primevue/multiselect';
-
+import Avatar from 'primevue/avatar';
+import Menu from 'primevue/menu';
 
 interface Category {
   id?: number;
@@ -462,7 +426,6 @@ interface Category {
   createdAt?: Date;
   updatedAt?: Date;
   projectId?: number;
-  tags?: string[];
 }
 
 interface Tag {
@@ -483,8 +446,7 @@ const isEditing = ref(false);
 const submitted = ref(false);
 const currentCategory = ref<Category>({
   name: '',
-  description: '',
-  tags: []
+  description: ''
 });
 const newSubcategory = ref<Category>({
   name: ''
@@ -540,7 +502,7 @@ const fetchCategories = async () => {
 const fetchTags = async () => {
   tagLoading.value = true;
   try {
-    const res = await axios.get(`${API_BASE_URL}/project-tag/all`);
+    const res = await axios.get(`${API_BASE_URL}/tag/all`);
     tags.value = res.data;
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load tags', life: 3000 });
@@ -553,8 +515,7 @@ const openAddModal = () => {
   isEditing.value = false;
   currentCategory.value = {
     name: '',
-    description: '',
-    tags: []
+    description: ''
   };
   showDialog.value = true;
   submitted.value = false;
@@ -562,7 +523,8 @@ const openAddModal = () => {
 
 const editCategory = (category: Category) => {
   isEditing.value = true;
-  currentCategory.value = { ...category };
+  const { tags, ...rest } = category as any;
+  currentCategory.value = { ...rest };
   showDialog.value = true;
   submitted.value = false;
 };
@@ -601,8 +563,7 @@ const saveCategory = async () => {
     if (isEditing.value && currentCategory.value.id) {
       await axios.put(`${API_BASE_URL}/categories/${currentCategory.value.id}/update`, {
         name: currentCategory.value.name,
-        description: currentCategory.value.description,
-        tags: currentCategory.value.tags
+        description: currentCategory.value.description
       });
       toast.add({
         severity: 'success',
@@ -615,8 +576,7 @@ const saveCategory = async () => {
     } else {
       await axios.post(`${API_BASE_URL}/categories/create`, {
         name: currentCategory.value.name,
-        description: currentCategory.value.description,
-        tags: currentCategory.value.tags
+        description: currentCategory.value.description
       });
 
       // Show success toast
@@ -632,8 +592,7 @@ const saveCategory = async () => {
       submitted.value = false;
       currentCategory.value = {
         name: '',
-        description: '',
-        tags: []
+        description: ''
       };
 
       // Then refresh the categories list
@@ -733,12 +692,12 @@ const saveTag = async () => {
   tagSaving.value = true;
   try {
     if (isEditingTag.value && currentTag.value.id) {
-      await axios.put(`${API_BASE_URL}/project-tag/update/${currentTag.value.id}`, { name: currentTag.value.name });
+      await axios.put(`${API_BASE_URL}/tag/update/${currentTag.value.id}`, { name: currentTag.value.name });
       toast.add({ severity: 'success', summary: 'Success', detail: 'Tag updated successfully', life: 3000 });
       await fetchTags();
       closeTagDialog();
     } else {
-      await axios.post(`${API_BASE_URL}/project-tag/create`, { name: currentTag.value.name });
+      await axios.post(`${API_BASE_URL}/tag/create`, { name: currentTag.value.name });
       toast.add({ severity: 'success', summary: 'Success', detail: 'Tag created successfully', life: 3000 });
       showTagDialog.value = false;
       tagSubmitted.value = false;
@@ -770,7 +729,7 @@ const confirmDeleteTag = (tag: Tag) => {
 const deleteTag = async (tag: Tag) => {
   if (!tag.id) return;
   try {
-    await axios.delete(`${API_BASE_URL}/project-tag/delete/${tag.id}`);
+    await axios.delete(`${API_BASE_URL}/tag/delete/${tag.id}`);
     await fetchTags();
     toast.add({ severity: 'success', summary: 'Success', detail: 'Tag deleted successfully', life: 3000 });
   } catch (error) {

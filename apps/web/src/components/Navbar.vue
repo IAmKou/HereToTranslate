@@ -1,26 +1,28 @@
 <template>
   <nav class="navbar">
     <div class="navbar-container">
+      <!-- LEFT -->
       <div class="navbar-brand">
         <span v-if="currentUser" class="username">{{ currentUser.username }}</span>
         <span v-else class="username">Guest</span>
       </div>
 
+      <!-- RIGHT -->
       <div class="navbar-menu">
-        <div class="navbar-start">
-          <router-link to="/userhome" class="navbar-item">Home</router-link>
+        <router-link to="/userhome" class="navbar-item">Home</router-link>
 
+        <div v-if="!currentUser">
+          <router-link to="/login" class="button is-primary">Sign In</router-link>
         </div>
 
-        <div class="navbar-end">
-          <div class="navbar-item" v-if="!currentUser">
-            <router-link to="/login" class="button is-primary">Sign In</router-link>
-          </div>
-          <div v-else class="user-menu relative">
+        <div v-else class="user-menu">
+          <div class="avatar-wrapper relative">
             <button
               @click.stop="toggleDropdown"
-              class="avatar-button focus:outline-none inline-block"
+              class="avatar-button"
               type="button"
+              aria-haspopup="true"
+              :aria-expanded="dropdownOpen"
             >
               <Avatar
                 :label="getInitials(currentUser.fullName)"
@@ -29,13 +31,12 @@
                 :style="{ backgroundColor: getRandomColor(currentUser.username) }"
               />
             </button>
-            <!-- Dropdown -->
+
             <transition name="fade">
               <div
                 v-if="dropdownOpen"
                 ref="dropdown"
-                class="absolute right-0 top-full w-64 bg-white rounded-xl shadow-xl z-50 border border-gray-100"
-                style="margin-top: 8px;"
+                class="dropdown-panel"
                 @click.stop
               >
                 <div class="px-5 py-4 border-b">
@@ -66,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import Avatar from 'primevue/avatar';
@@ -81,7 +82,6 @@ interface User {
 
 const router = useRouter();
 const currentUser = ref<User | null>(null);
-
 const dropdownOpen = ref(false);
 const dropdown = ref<HTMLElement | null>(null);
 
@@ -110,14 +110,7 @@ const getInitials = (name: string): string => {
 };
 
 const getRandomColor = (seed: string): string => {
-  const colors = [
-    '#3b82f6', // blue
-    '#10b981', // green
-    '#f59e0b', // yellow
-    '#ef4444', // red
-    '#8b5cf6', // purple
-    '#ec4899', // pink
-  ];
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
   const index = seed.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
   return colors[index % colors.length];
 };
@@ -133,8 +126,19 @@ const loadUserInfo = async (): Promise<void> => {
   }
 };
 
+const handleClickOutside = (event: MouseEvent) => {
+  if (dropdown.value && !dropdown.value.contains(event.target as Node)) {
+    dropdownOpen.value = false;
+  }
+};
+
 onMounted(() => {
   loadUserInfo();
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
 });
 </script>
 
@@ -148,11 +152,10 @@ onMounted(() => {
 }
 
 .navbar-container {
-  max-width: 1200px;
+  max-width: 1500px;
   margin: 0 auto;
   padding: 0 24px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   height: 56px;
 }
@@ -162,33 +165,17 @@ onMounted(() => {
   align-items: center;
 }
 
-.brand-link {
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.logo {
-  height: 32px;
-  width: auto;
-}
-
-.brand-name {
-  font-size: 1.25rem;
-  font-weight: 600;
+.username {
+  font-size: 20px;
+  font-weight: 500;
   color: #333;
 }
 
 .navbar-menu {
   display: flex;
   align-items: center;
-  gap: 2rem;
-}
-
-.navbar-start {
-  display: flex;
-  gap: 8px;
+  gap: 1.5rem;
+  margin-left: auto; /* Đẩy menu sang phải tự nhiên */
 }
 
 .navbar-item {
@@ -203,6 +190,7 @@ onMounted(() => {
   color: #2563eb;
 }
 
+
 .button.is-primary {
   height: 32px;
   padding: 0 16px;
@@ -214,39 +202,49 @@ onMounted(() => {
   border: none;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  white-space: nowrap; /* Thêm dòng này để không bị xuống dòng */
 }
-
 .button.is-primary:hover {
   background-color: #0056b3;
 }
 
-.username {
-  font-size: 20px;
-  font-weight: 500;
-  color: #333;
+.user-menu {
+  display: flex;
+  align-items: center;
 }
 
-.user-menu {
+.avatar-wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .avatar-button {
-  padding: 2px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
-  border: 2px solid #e0e7ff; /* border xám nhạt */
-  background: #f3f4f6;
-  transition: box-shadow 0.18s, border 0.18s;
-}
-.user-menu .avatar-button:hover {
-  /* XÓA 2 dòng dưới nếu không muốn border xanh và shadow xanh khi hover */
-  /* box-shadow: 0 4px 16px #3b82f622; */
-  /* border: 2px solid #3b82f6; */
+  cursor: pointer;
 }
 
-.user-menu .avatar-button {
-  /* XÓA 2 dòng dưới nếu không muốn border xanh và shadow xanh */
-  /* box-shadow: 0 4px 16px #3b82f622; */
-  /* border: 2px solid #3b82f6; */
+.dropdown-panel {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  width: 260px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  border: 1px solid #eee;
+  transform-origin: top center;
 }
 
 .dropdown-item {
@@ -261,19 +259,23 @@ onMounted(() => {
   outline: none;
   width: 100%;
   text-align: left;
-  border-radius: 0;
   transition: background 0.15s, color 0.15s;
   cursor: pointer;
 }
+
 .dropdown-item:hover {
   background: #f3f4f6;
   color: #2563eb;
 }
 
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.15s;
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.15s ease;
 }
-.fade-enter-from, .fade-leave-to {
+
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
+  transform: scale(0.95);
 }
 </style>

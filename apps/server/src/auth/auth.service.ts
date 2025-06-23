@@ -119,7 +119,7 @@ export class AuthService {
       this.activeTokens.delete(token);
       throw new UnauthorizedException('User not found');
     }
-    return user as IUserAuthMeta;
+    return user as unknown as IUserAuthMeta;
   }
 
   async login(username: string, password: string) {

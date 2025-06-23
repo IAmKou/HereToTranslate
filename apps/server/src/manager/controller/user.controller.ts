@@ -7,11 +7,12 @@ import {
   Post,
   Put,
   Req,
+  Patch,
   UseGuards,
   UseInterceptors,
   ValidationPipe
 } from '@nestjs/common';
-import { RegisterDto, UpdateUserDto } from '#LocalProject/Dtos';
+import { ChangePasswordDto, RegisterDto, UpdateUserDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
@@ -20,11 +21,7 @@ import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.
 import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
 import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
 import { UserEntity } from '#LocalProject/Entities';
-
-interface ChangePasswordDto {
-  currentPassword: string;
-  newPassword: string;
-}
+import { logger } from 'nx/src/utils/logger';
 
 @Controller('user')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -51,31 +48,31 @@ export class UserController {
     return this.users.getUser(id);
   }
 
-  @Put(':id')
+  @Put('/:id/update')
   @UseGuards(JwtAuthGuard)
   updateUser(
-    @Body('id', BigIntTransformPipe) id: bigint,
+    @Param('id', BigIntTransformPipe) id: bigint,
     @Body(ValidationPipe) userUpdateData: UpdateUserDto,
     @Req() request: AuthenticatedRequest
   ) {
-    if (request.user.id !== id) {
+    const  uid = request.user.id;
+    logger.log(uid.toString());
+    logger.log(id.toString());
+    if (uid.toString() !== id.toString()) {
       throw new BadRequestException("You can only update your own user data.");
     }
     return this.users.update(id, userUpdateData);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Put('change-password')
+  @Patch('/:id/change-password')
   async changePassword(
-    @Req() req: AuthenticatedRequest,
-    @Body() changePasswordDto: ChangePasswordDto
+    @Param('id', BigIntTransformPipe) id: bigint,
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: ChangePasswordDto
   ) {
-    return this.users.changePassword(
-      req.user.id,
-      changePasswordDto.currentPassword,
-      changePasswordDto.newPassword
-    );
+    await this.users.changePassword(id, dto.currentPassword, dto.newPassword);
   }
+
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get('admin/all')

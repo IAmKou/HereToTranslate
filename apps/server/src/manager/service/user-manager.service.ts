@@ -1,10 +1,15 @@
-import { RegisterDto } from "#LocalProject/Dtos";
-import { UserTypeEntity, UserEntity, UserRole } from '#LocalProject/Entities';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Repository } from "typeorm";
-import * as bcrypt from "bcryptjs";
-import { validateEmail } from "#LocalProject/Utils/validation";
-import { InjectRepository } from "@nestjs/typeorm";
+import { RegisterDto, UpdateUserDto } from '#LocalProject/Dtos';
+import { UserEntity, UserRole, UserTypeEntity } from '#LocalProject/Entities';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Repository } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
+import { validateEmail } from '#LocalProject/Utils/validation';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class UserManagerService {
@@ -56,52 +61,32 @@ export class UserManagerService {
     return { message: 'Registration successful' };
   }
 
-  async update(uid: bigint, data: Partial<RegisterDto>) {
-    const { username, email, phone } = data;
-    const user = await this.userRepository.findOne({
-      where: { id: uid }
-    });
+  async update(uid: bigint, data: Partial<UpdateUserDto>) {
+    const { fullName, phone } = data;
+
+    const user = await this.userRepository.findOne({ where: { id: uid } });
     if (!user) {
       throw new BadRequestException('User not found');
     }
-    if (username) {
-      const existingUsername = await this.userRepository.exists({
-        where: { username }
-      });
-      if (existingUsername) {
-        throw new ConflictException('Username already exists');
-      }
-      user.username = username;
-    }
-    if (email) {
-      const existingEmail = await this.userRepository.exists({
-        where: { email }
-      });
-      if (existingEmail) {
-        throw new ConflictException('Email already exists');
-      }
-      // Validate email domain
-      const isEmailValid = await validateEmail(email);
-      if (!isEmailValid) {
-        throw new BadRequestException('Invalid email domain');
-      }
-      user.email = email;
-    }
+
     if (phone) {
       const existingPhone = await this.userRepository.findOne({
-        where: { phone }
+        where: { phone },
       });
-      if (existingPhone) {
+      if (existingPhone && existingPhone.id !== uid) {
         throw new ConflictException('Phone number already exists');
       }
       user.phone = phone;
     }
-    if (data.password) {
-      user.passwordHash = await bcrypt.hash(data.password, 10);
+
+    if (fullName) {
+      user.fullName = fullName;
     }
+
     await this.userRepository.save(user);
     return { message: 'User updated successfully' };
   }
+
 
   async getUser(uid: bigint) {
     const user = await this.userRepository.findOne({
@@ -141,8 +126,7 @@ export class UserManagerService {
       throw new BadRequestException('Current password is incorrect');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.passwordHash = hashedPassword;
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
 
     return this.userRepository.save(user);
   }

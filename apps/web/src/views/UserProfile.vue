@@ -151,6 +151,7 @@ import {
   ChangePasswordData,
 } from '../services/user.service';
 import { authService } from '../services/auth.service';
+import { useToast } from 'primevue/usetoast';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
@@ -171,7 +172,7 @@ const passwordSuccess = ref(false);
 const activeTab = ref<'profile'|'account'>('profile');
 const avatarUrl = ref<string | null>(null);
 const avatarInput = ref<HTMLInputElement | null>(null);
-
+const toast = useToast();
 const updateForm = ref<UpdateProfileData>({
   fullName: '',
   phone: '',
@@ -225,14 +226,6 @@ const passwordStrengthColor = computed(() => {
   return '#10b981';
 });
 
-const formatDate = (date: Date) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-};
-
 const fetchUserData = async () => {
   try {
     isLoading.value = true;
@@ -250,24 +243,39 @@ const fetchUserData = async () => {
 const updateProfile = async () => {
   try {
     isLoading.value = true;
-    const updatedUser = await userService.updateProfile(updateForm.value);
+
+    const updatedUser = await userService.updateProfile(updateForm.value, user.value.id.toString());
     user.value = updatedUser;
-    updateSuccess.value = true;
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Update profile success',
+      life: 3000
+    });
+
     setTimeout(() => {
-      updateSuccess.value = false;
+      window.location.reload();
     }, 3000);
   } catch (error) {
     console.error('Error updating profile:', error);
-    alert('Failed to update profile. Please try again.');
+
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to update profile',
+      life: 3000
+    });
   } finally {
     isLoading.value = false;
   }
 };
 
+
 const changePassword = async () => {
   try {
     isLoading.value = true;
-    await userService.changePassword(passwordForm.value);
+    await userService.changePassword(passwordForm.value, user.value.id.toString());
     passwordForm.value = {
       currentPassword: '',
       newPassword: '',

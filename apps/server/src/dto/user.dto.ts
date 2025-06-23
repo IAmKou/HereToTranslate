@@ -63,3 +63,4 @@ export class UpdateUserDto {
   @MinLength(1)
   fullName?: string;
 }
+

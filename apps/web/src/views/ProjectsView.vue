@@ -142,7 +142,7 @@
                 <div class="project-header">
                   <h3>{{ project.name }}</h3>
                   <div class="project-badges">
-                    <span v-if="project.isPublic" class="badge badge-public">
+                    <span v-if="project.isPrivate" class="badge badge-public">
                       <i class="pi pi-globe"></i>
                       Public
                     </span>
@@ -185,7 +185,7 @@
         <div class="project-header">
           <h3>{{ project.name }}</h3>
           <div class="project-badges">
-            <span v-if="project.isPublic" class="badge badge-public">Public</span>
+            <span v-if="project.isPrivate" class="badge badge-public">Public</span>
             <span v-else class="badge badge-private">Private</span>
           </div>
         </div>
@@ -237,7 +237,7 @@
         </div>
       </div>
     </div>
-    <Footer />
+    <AppFooter />
   </div>
     </div>
   </div>
@@ -248,7 +248,7 @@ import { defineComponent, ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
-import Footer from '../components/AppFooter.vue';
+import AppFooter from '../components/AppFooter.vue';
 import { authService } from '../services/auth.service';
 import { isSidebarCollapsed } from '../store/sidebar';
 
@@ -257,7 +257,7 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  isPublic: boolean;
+  isPrivate: boolean;
   createdAt: string;
   createdBy: {
     id: string;
@@ -272,7 +272,7 @@ export default defineComponent({
   components: {
     Sidebar,
     TopNavbar,
-    Footer,
+    AppFooter,
   },
   setup() {
     const router = useRouter();
@@ -308,7 +308,7 @@ export default defineComponent({
         ...options.headers
       }
 
-      const response = await fetch(`/api${endpoint}`, {
+      const response = await fetch(`http://localhost:3000/api/projects${endpoint}`, {
         ...options,
         headers
       })
@@ -351,9 +351,9 @@ export default defineComponent({
 
       // Apply visibility filter
       if (visibilityFilter.value === 'public') {
-        filtered = filtered.filter(project => project.isPublic);
+        filtered = filtered.filter(project => project.isPrivate);
       } else if (visibilityFilter.value === 'private') {
-        filtered = filtered.filter(project => !project.isPublic);
+        filtered = filtered.filter(project => !project.isPrivate);
       }
 
       // Apply sorting

@@ -15,7 +15,6 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe(
     {
       enableDebugMessages: true,
-
     }
   ));
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());

@@ -11,7 +11,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   private readonly logger = new Logger('JwtStrategy');
 
   override validate(): never {
-    throw new Error('Unxpected call to JwtStrategy#validate()');
+    throw new Error('Unexpected call to JwtStrategy#validate()');
   }
 
   constructor(private readonly authService: AuthService) {

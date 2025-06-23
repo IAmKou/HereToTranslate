@@ -187,7 +187,7 @@ export class ProjectManagerService extends ManagerServiceImpl {
         'project.id',
         'project.name',
         'project.description',
-        'project.isPublic',
+        'project.isPrivate',
         'project.createdAt',
         'createdBy.id',
         'createdBy.fullName',
@@ -195,10 +195,7 @@ export class ProjectManagerService extends ManagerServiceImpl {
         'member.fullName',
         'tags.id',
         'tags.name',
-      ])
-      .addSelect('project.createdBy')
-      .addSelect('project.members')
-      .addSelect('project.tags');
+      ]);
 
     const projects = await qb.getMany();
     return projects;

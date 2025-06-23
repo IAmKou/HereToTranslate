@@ -6,3 +6,4 @@ export * from './category.dto';
 export * from './request.dto';
 export * from './project-tag.dto';
 export * from './create-message.dto';
+export * from './change-password.dto';

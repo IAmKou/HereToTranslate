@@ -142,7 +142,7 @@
                 <div class="project-header">
                   <h3>{{ project.name }}</h3>
                   <div class="project-badges">
-                    <span v-if="project.isPrivate" class="badge badge-public">
+                    <span v-if="project.isPublic" class="badge badge-public">
                       <i class="pi pi-globe"></i>
                       Public
                     </span>
@@ -172,43 +172,6 @@
                     +{{ project.tags.length - 3 }} more
                   </span>
                 </div>
-    <div
-      v-else
-      class="projects-grid"
-    >
-      <div
-        v-for="project in filteredProjects"
-        :key="String(project.id)"
-        class="project-card"
-        @click="viewProject(project.id)"
-      >
-        <div class="project-header">
-          <h3>{{ project.name }}</h3>
-          <div class="project-badges">
-            <span v-if="project.isPrivate" class="badge badge-public">Public</span>
-            <span v-else class="badge badge-private">Private</span>
-          </div>
-        </div>
-
-        <p
-          v-if="project.description"
-          class="description"
-        >
-          {{ project.description }}
-        </p>
-
-        <div v-if="project.tags && project.tags.length > 0" class="tags">
-          <span
-            v-for="tag in project.tags.slice(0, 3)"
-            :key="tag.id"
-            class="tag"
-          >
-            {{ tag.name }}
-          </span>
-          <span v-if="project.tags.length > 3" class="tag-more">
-            +{{ project.tags.length - 3 }} more
-          </span>
-        </div>
 
                 <div class="project-meta">
                   <div class="meta-item">
@@ -239,9 +202,9 @@
     </div>
     <AppFooter />
   </div>
-    </div>
-  </div>
 </template>
+
+<!-- ... phần script và style giữ nguyên như file của bạn ... -->
 
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted } from 'vue';

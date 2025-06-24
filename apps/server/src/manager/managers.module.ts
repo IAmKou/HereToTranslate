@@ -23,9 +23,9 @@ import { ProjectController } from './controller/project.controller';
 import { UserController } from './controller/user.controller';
 import { GroupManagerService } from './service/group-manager.service';
 import { DiscussionManagerService } from './service/discussion-manager.service';
-import { RoleManagerService } from './service/role-manager.service';
+import { ProjectRoleManagerService } from './service/project-role-manager.service';
 import { RequestController } from './controller/request.controller';
-import { RoleController } from '#LocalProject/Managers/controller/role.controller';
+import { ProjectRoleController } from '#LocalProject/Managers/controller/projectRoleController';
 import { DiscussionController } from '#LocalProject/Managers/controller/discussion.controller';
 import { GroupController } from '#LocalProject/Managers/controller/group.controller';
 
@@ -51,7 +51,7 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
     RequestManagerService,
     UserManagerService,
     GroupManagerService,
-    RoleManagerService,
+    ProjectRoleManagerService,
     DiscussionManagerService,
     ProjectManagerService
   ],
@@ -60,7 +60,7 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
     RequestManagerService,
     UserManagerService,
     GroupManagerService,
-    RoleManagerService,
+    ProjectRoleManagerService,
     DiscussionManagerService,
     ProjectManagerService
   ],
@@ -69,7 +69,7 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
     ProjectController,
     RequestController,
     UserController,
-    RoleController,
+    ProjectRoleController,
     DiscussionController,
     GroupController
   ]

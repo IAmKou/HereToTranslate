@@ -9,12 +9,12 @@ import { Maybe } from '@here-to-translate/common/types';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, DeepPartial, Repository } from 'typeorm';
-import { ManagerServiceImpl } from './manager-service.impl';
+import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { Permission, PermissionFlags } from '@here-to-translate/common';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 
 @Injectable()
-export class DiscussionManagerService extends ManagerServiceImpl {
+export class DiscussionManagerService extends CommonHttpServiceImpl {
   protected override readonly logger = new Logger(DiscussionManagerService.name);
 
   constructor(

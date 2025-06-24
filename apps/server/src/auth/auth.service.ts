@@ -14,67 +14,60 @@ import { Repository } from 'typeorm';
 import { UserEntity, UserRole } from '#LocalProject/Entities';
 import { Nullable } from '@here-to-translate/common/types';
 import { IUserAuthMeta } from '@here-to-translate/common/interfaces';
+import { AuthEntity } from '#LocalProject/SqliteEntities';
+import { v4 } from 'uuid';
 
-type AccessToken = string;
-type RefreshToken = string;
 type TokenMeta = {
   userId: string;
   username: string;
-  role: string;
 };
 
 @Injectable()
 export class AuthService {
-  private readonly refreshTokenMap = new Map<RefreshToken, AccessToken>();
-  private readonly activeTokens = new Set<AccessToken>();
-  private readonly tokenMap = new Map<string, Set<RefreshToken | AccessToken>>();
+
   private readonly googleClient: OAuth2Client;
   private readonly logger = new Logger(AuthService.name);
+
+  private readonly refreshExpiry: string;
+  private readonly accessExpiry: string;
 
   constructor(
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>
+    private readonly userRepository: Repository<UserEntity>,
+    @InjectRepository(AuthEntity)
+    private readonly authRepository: Repository<AuthEntity>
   ) {
     const googleClientId = this.configService.get<string>('GOOGLE_OAUTH2_CLIENT');
     if (!googleClientId) {
       throw new Error('GOOGLE_OAUTH2_CLIENT is not set in the environment variables');
     }
     this.googleClient = new OAuth2Client(googleClientId);
+    this.refreshExpiry = this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ?? '7d';
+    this.accessExpiry = this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '15m';
     this.logger.log('AuthService initialized');
   }
 
   async refreshTokens(refreshToken: string) {
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid token format');
-    }
-
     if (!(await this.jwt.verifyAsync(refreshToken))) {
       throw new UnauthorizedException('Invalid token');
     }
 
-    if (!this.refreshTokenMap.has(refreshToken)) {
+    if (!await this.authRepository.exists({ where: { refreshToken }})) {
       throw new UnauthorizedException('Token expired');
     }
 
-    const accessToken = this.refreshTokenMap.get(refreshToken);
-    this.refreshTokenMap.delete(refreshToken);
-    const tokenData: TokenMeta = this.jwt.decode(refreshToken);
-    const tokens = this.tokenMap.get(tokenData.userId);
+    const meta: TokenMeta = this.jwt.decode(refreshToken);
 
-    tokens?.delete(refreshToken);
-    if (accessToken) {
-      this.activeTokens.delete(accessToken);
-      tokens?.delete(accessToken);
-    }
-
-    const user = await this.userRepository.findOne({
-      where: { id: BigInt(tokenData.userId) },
+    const user: Nullable<UserEntity> = await this.userRepository.findOne({
+      where: { id: BigInt(meta.userId) },
       relations: ['role']
     });
 
     if (!user) {
+      this.logger.warn(`User with ID ${meta.userId} not found during token refresh`);
+      await this.authRepository.delete({ refreshToken });
       throw new UnauthorizedException('User not found');
     }
 
@@ -86,7 +79,10 @@ export class AuthService {
       throw new UnauthorizedException('Token is missing');
     }
 
-    if (!this.activeTokens.has(token)) {
+    const tokenExists = await this.authRepository.exists({ where: {
+      accessToken: token
+    }})
+    if (!tokenExists) {
       throw new UnauthorizedException('Token expired');
     }
 
@@ -99,7 +95,6 @@ export class AuthService {
     try {
       user = await this.userRepository.findOne({
         where: { id: BigInt(payload.userId) },
-        relations: ['role'],
         select: ['id', 'username']
       });
     } catch (e) {
@@ -107,7 +102,7 @@ export class AuthService {
       throw new InternalServerErrorException('Error fetching user from repository');
     }
     if (!user) {
-      this.activeTokens.delete(token);
+      await this.authRepository.delete({ accessToken: token });
       throw new UnauthorizedException('User not found');
     }
     return user as IUserAuthMeta;
@@ -118,7 +113,7 @@ export class AuthService {
       where: { username },
       relations: ['role']
     });
-    if(!user?.isActive) {
+    if (!user?.isActive) {
       throw new UnauthorizedException('Your account have been deactivated');
     }
 
@@ -170,68 +165,46 @@ export class AuthService {
     return this.generateTokenPair(user);
   }
 
-  async logout(refreshToken: string, allSessions = false) {
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid token format');
+  async logout(token: string, allSessions = false) {
+    const meta = await this.authRepository.findOne({
+      where: { accessToken: token }
+    });
+
+    if (!meta) {
+      throw new UnauthorizedException('Invalid token');
     }
-
-    const tokenData: TokenMeta = this.jwt.decode(refreshToken);
-    const userId = tokenData.userId;
-
-    this.activeTokens.delete(refreshToken);
-    this.refreshTokenMap.delete(refreshToken);
-    this.tokenMap.get(userId)?.delete(refreshToken);
 
     if (allSessions) {
-      const tokens = this.tokenMap.get(userId);
-      if (tokens) {
-        for (const t of tokens) {
-          this.refreshTokenMap.delete(t);
-          this.activeTokens.delete(t);
-        }
-        this.tokenMap.delete(userId);
-      }
+      await this.authRepository.delete({ userId: meta.userId });
+      this.logger.log(`User ${meta.userId} logged out from all sessions`);
+    } else {
+      await this.authRepository.delete({ accessToken: token });
+      this.logger.log(`User ${meta.userId} logged out from session ${meta.sessionId}`);
     }
-
     return { message: 'Logged out successfully' };
   }
 
-  private generateTokenPair(user: UserEntity) {
-    const tokenMeta: TokenMeta = {
-      userId: user.id.toString(),
-      username: user.username,
-      role: user.role.name.toLowerCase()
-    };
-
+  private async generateTokenPair(user: UserEntity) {
     const jwtPayload = {
       sub: Date.now().toString(2),
-      ...tokenMeta
+      userId: user.id.toString(),
+      username: user.username
     };
 
     const accessToken = this.jwt.sign(jwtPayload, {
-      expiresIn: '15m'
+      expiresIn: this.accessExpiry
     });
     const refreshToken = this.jwt.sign(jwtPayload, {
-      expiresIn: '7d'
+      expiresIn: this.refreshExpiry
     });
 
-    this.activeTokens.add(accessToken);
-    this.refreshTokenMap.set(refreshToken, accessToken);
+    const meta = this.authRepository.create({
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      userId: user.id,
+      sessionId: v4()
+    });
 
-    const userId = user.id.toString();
-    const tokens = this.tokenMap.get(userId);
-    if (tokens) {
-      tokens.add(accessToken);
-      tokens.add(refreshToken);
-    } else {
-      this.tokenMap.set(userId, new Set([accessToken, refreshToken]));
-    }
-
-    return {
-      accessToken,
-      refreshToken,
-      role: tokenMeta.role,
-      username: user.username
-    };
+    return await this.authRepository.save(meta);
   }
 }

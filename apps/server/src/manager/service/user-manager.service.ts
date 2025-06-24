@@ -1,10 +1,10 @@
-import { RegisterDto } from "#LocalProject/Dtos";
-import { UserTypeEntity, UserEntity, UserRole } from '#LocalProject/Entities';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Repository } from "typeorm";
-import * as bcrypt from "bcryptjs";
-import { validateEmail } from "#LocalProject/Utils/validation";
-import { InjectRepository } from "@nestjs/typeorm";
+import { RegisterDto, UpdateUserPasswordDto, UpdateUserProfileDto } from '#LocalProject/Dtos';
+import { UserEntity, UserRole, UserTypeEntity } from '#LocalProject/Entities';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
+import { validateEmail } from '#LocalProject/Utils/validation';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class UserManagerService {
@@ -56,13 +56,13 @@ export class UserManagerService {
     return { message: 'Registration successful' };
   }
 
-  async updateProfile(userId: bigint, updateData: { fullName?: string; phone?: string; email?: string }) {
+  async updateProfile(userId: bigint, updateData: UpdateUserProfileDto) {
     const user = await this.userRepository.findOne({
       where: { id: userId }
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Unknown user');
     }
 
     if (updateData.phone && updateData.phone !== user.phone) {
@@ -86,7 +86,7 @@ export class UserManagerService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Unknown user');
     }
 
     return user;
@@ -97,29 +97,30 @@ export class UserManagerService {
       where: { id: uid }
     });
     if (!user) {
-      throw new BadRequestException('User not found');
+      throw new BadRequestException('Unknown user');
     }
     await this.userRepository.remove(user);
     return { message: 'User deleted successfully' };
   }
 
 
-  async changePassword(userId: bigint, currentPassword: string, newPassword: string) {
+  async changePassword(userId: bigint, data: UpdateUserPasswordDto) {
     const user = await this.userRepository.findOne({
       where: { id: userId }
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Unknown user');
     }
+
+    const { currentPassword, newPassword } = data;
 
     const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isPasswordValid) {
       throw new BadRequestException('Current password is incorrect');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.passwordHash = hashedPassword;
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
 
     return this.userRepository.save(user);
   }
@@ -150,7 +151,7 @@ export class UserManagerService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Unknown user');
     }
 
     // Prevent users from changing their own role
@@ -196,7 +197,7 @@ export class UserManagerService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Unknown user');
     }
 
     user.isActive = !user.isActive;

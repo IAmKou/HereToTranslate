@@ -1,14 +1,3 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  JoinColumn,
-  ManyToMany,
-  ManyToOne,
-  OneToMany,
-  PrimaryGeneratedColumn
-} from 'typeorm';
-import { RoleEntity } from './role.entity';
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne, CreateDateColumn, OneToMany, ManyToMany } from 'typeorm';
 import { UserTypeEntity } from './user-type.entity';
 import { ProjectEntity } from './project.entity';

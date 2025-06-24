@@ -32,7 +32,7 @@ export class RegisterDto implements IRegisterDto {
   fullName: string;
 }
 
-export class UpdateUserDto {
+export class UpdateUserProfileDto {
   @IsOptional()
   @IsString()
   @MinLength(3)
@@ -41,16 +41,6 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEmail()
   email?: string;
-
-  @IsOptional()
-  @IsStrongPassword({
-    minLength: 8,
-    minSymbols: 1,
-    minNumbers: 1,
-    minLowercase: 1,
-    minUppercase: 1
-  }, { message: 'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character' })
-  password?: string;
 
   @IsOptional()
   @IsPhoneNumber(undefined, {
@@ -62,4 +52,21 @@ export class UpdateUserDto {
   @IsString()
   @MinLength(1)
   fullName?: string;
+}
+
+export class UpdateUserPasswordDto {
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(8)
+  currentPassword: string;
+
+  @IsNotEmpty()
+  @IsStrongPassword({
+    minLength: 8,
+    minSymbols: 1,
+    minNumbers: 1,
+    minLowercase: 1,
+    minUppercase: 1
+  }, { message: 'New password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character' })
+  newPassword: string;
 }

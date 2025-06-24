@@ -8,7 +8,7 @@
       <Sidebar />
 
       <!-- Main Content -->
-      <div class="content-wrapper" @click="closeDropdowns">
+      <div class="content-wrapper">
         <div class="project-detail-view">
           <!-- Loading State -->
           <div v-if="loading" class="loading-container">
@@ -233,7 +233,7 @@
                             Actions
                             <span class="dropdown-arrow">▼</span>
                           </button>
-                          <div v-if="activeRoleDropdown === role.id" class="dropdown-menu" @click.stop>
+                          <div v-if="activeRoleDropdown === role.id" class="dropdown-menu">
                             <button @click="editRole(role)" class="dropdown-item">
                               <span class="icon">✏️</span>
                               Edit Role
@@ -295,7 +295,7 @@
                             Actions
                             <span class="dropdown-arrow">▼</span>
                           </button>
-                          <div v-if="activeGroupDropdown === group.id" class="dropdown-menu" @click.stop>
+                          <div v-if="activeGroupDropdown === group.id" class="dropdown-menu">
                             <button @click="editGroup(group)" class="dropdown-item">
                               <span class="icon">✏️</span>
                               Edit Group
@@ -863,7 +863,7 @@ const toggleGroupDropdown = (groupId: string) => {
 }
 
 // Close dropdowns when clicking outside
-function closeDropdowns() {
+const closeDropdowns = () => {
   activeRoleDropdown.value = null;
   activeGroupDropdown.value = null;
 }
@@ -871,8 +871,6 @@ function closeDropdowns() {
 onMounted(() => {
   loadProject()
 })
-
-defineExpose({ closeDropdowns })
 </script>
 
 <style scoped>
@@ -882,7 +880,6 @@ defineExpose({ closeDropdowns })
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  font-size: 15px;
 }
 
 .main-container {
@@ -987,7 +984,7 @@ defineExpose({ closeDropdowns })
 .project-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 1.5rem 1rem;
+  padding: 3rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1004,7 +1001,7 @@ defineExpose({ closeDropdowns })
 .project-title {
   margin: 0;
   color: white;
-  font-size: 1.7rem;
+  font-size: 2.5rem;
   font-weight: 700;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -1090,7 +1087,7 @@ defineExpose({ closeDropdowns })
 
 /* Project Sections */
 .project-section {
-  padding: 1rem;
+  padding: 2rem;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -1119,7 +1116,7 @@ defineExpose({ closeDropdowns })
   gap: 1rem;
   margin: 0;
   color: #2d3748;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
   font-weight: 600;
 }
 
@@ -1196,7 +1193,7 @@ defineExpose({ closeDropdowns })
 
 .stat-card {
   background: white;
-  padding: 1rem;
+  padding: 2rem;
   border-radius: 16px;
   text-align: center;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
@@ -1222,13 +1219,13 @@ defineExpose({ closeDropdowns })
 }
 
 .stat-icon {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   margin-bottom: 1rem;
   display: block;
 }
 
 .stat-number {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: #4299e1;
   margin-bottom: 0.5rem;
@@ -1253,7 +1250,7 @@ defineExpose({ closeDropdowns })
 
 .management-section {
   background: white;
-  padding: 1rem;
+  padding: 2rem;
   border-radius: 16px;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
   border: 1px solid #e2e8f0;
@@ -1408,7 +1405,7 @@ defineExpose({ closeDropdowns })
 .user-details h4 {
   margin: 0 0 0.25rem 0;
   color: #2d3748;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
@@ -1463,7 +1460,7 @@ defineExpose({ closeDropdowns })
 .group-name {
   margin: 0;
   color: #2d3748;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
@@ -1537,7 +1534,7 @@ defineExpose({ closeDropdowns })
   border: 2px solid #e2e8f0;
   border-radius: 8px;
   color: #4a5568;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1613,7 +1610,7 @@ defineExpose({ closeDropdowns })
   background: none;
   border: none;
   color: #4a5568;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1676,10 +1673,10 @@ defineExpose({ closeDropdowns })
 
 /* Enhanced Buttons */
 .btn {
-  padding: 0.5rem 1rem;
+  padding: 0.875rem 1.75rem;
   border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  border-radius: 12px;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1753,7 +1750,7 @@ defineExpose({ closeDropdowns })
 
 .btn-sm {
   padding: 0.625rem 1.25rem;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
 }
 
 .btn-add {
@@ -1797,7 +1794,7 @@ defineExpose({ closeDropdowns })
   background: white;
   border-radius: 20px;
   width: 90%;
-  max-width: 400px;
+  max-width: 500px;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
   animation: slideUp 0.3s ease;
   position: relative;
@@ -1828,7 +1825,7 @@ defineExpose({ closeDropdowns })
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: 2rem 2.5rem 1.5rem;
   border-bottom: 2px solid #e2e8f0;
   flex-shrink: 0;
 }
@@ -1855,7 +1852,7 @@ defineExpose({ closeDropdowns })
 .modal-header h3 {
   margin: 0;
   color: #1a202c;
-  font-size: 1.2rem;
+  font-size: 1.75rem;
   font-weight: 700;
 }
 
@@ -1883,7 +1880,7 @@ defineExpose({ closeDropdowns })
 }
 
 .modal-body {
-  padding: 1rem;
+  padding: 2rem 2.5rem;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -1893,7 +1890,7 @@ defineExpose({ closeDropdowns })
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  padding: 1rem;
+  padding: 1.5rem 2.5rem 2rem;
   border-top: 2px solid #e2e8f0;
   background: #f8fafc;
   flex-shrink: 0;

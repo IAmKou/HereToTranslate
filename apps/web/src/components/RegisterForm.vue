@@ -15,6 +15,10 @@
           <h2>Create Account</h2>
           <p class="subtitle">Join our community today</p>
         </div>
+        <div v-if="message" :class="['message', messageType]" style="margin-bottom: 1.5rem;">
+          <i :class="messageType === 'success' ? 'pi pi-check-circle' : 'pi pi-times-circle'"></i>
+          {{ message }}
+        </div>
         <form @submit.prevent="submitForm" class="form-content">
           <div class="form-group">
             <label for="username">
@@ -157,10 +161,6 @@
             {{ isSubmitting ? 'Creating Account...' : 'Create Account' }}
           </button>
         </form>
-        <div v-if="message" :class="['message', messageType]">
-          <i :class="messageType === 'success' ? 'pi pi-check-circle' : 'pi pi-times-circle'"></i>
-          {{ message }}
-        </div>
       </div>
     </div>
   </div>
@@ -168,6 +168,7 @@
 
 <script setup>
 import { reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import axios from 'axios';
 import logo from '../assets/logo.png';
 
@@ -178,7 +179,7 @@ const form = reactive({
   confirmPassword: '',
   phone: '',
   fullName: '',
-  roleId: 3,
+  roleId: 2,
 });
 
 const message = ref('');
@@ -187,6 +188,7 @@ const errors = reactive({});
 const isSubmitting = ref(false);
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
+const router = useRouter();
 
 const validateForm = () => {
   // Clear all previous errors
@@ -329,8 +331,8 @@ const submitForm = async () => {
     roleId: form.roleId,
   };
   try {
-    await axios.post('http://localhost:3000/api/user/register', payload);
-    message.value = 'Registration successful! Welcome aboard!';
+    await axios.post('http://localhost:3000/api/auth/register', payload);
+    message.value = 'Register sucess! You will be redirected to login page.';
     messageType.value = 'success';
     Object.assign(form, {
       username: '',
@@ -340,12 +342,14 @@ const submitForm = async () => {
       phone: '',
       fullName: '',
     });
+    setTimeout(() => {
+      router.push('/login');
+    }, 3000);
   } catch (err) {
-    message.value = err.response?.data?.message || 'Registration failed. Please try again.';
+    message.value = err.response?.data?.message || 'Register failed. Please try again.';
     messageType.value = 'error';
   } finally {
     isSubmitting.value = false;
-    await this.router.push('/login');
   }
 };
 </script>

@@ -5,13 +5,52 @@ import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
 import Button from 'primevue/button';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { userService, UserProfile } from '../services/user.service';
+
+// Interfaces
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  isPrivate: boolean;
+  createdAt: string;
+  createdBy: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+  tags?: Array<{ id: string; name: string }>;
+}
 
 const router = useRouter();
 
 const user = ref<UserProfile | null>(null);
 const isLoadingUser = ref(false);
+const projects = ref<Project[]>([]);
+const isLoadingProjects = ref(false);
+const projectsError = ref<string | null>(null);
+
+// API helper function
+const apiCall = async (endpoint: string, options: RequestInit = {}) => {
+  const token = authService.getAccessToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+    ...options.headers
+  }
+
+  const response = await fetch(`http://localhost:3000/api/projects${endpoint}`, {
+    ...options,
+    headers
+  })
+
+  if (!response.ok) {
+    throw new Error(`API call failed: ${response.statusText}`)
+  }
+
+  return response.json()
+}
 
 const fetchUserData = async () => {
   try {
@@ -24,108 +63,64 @@ const fetchUserData = async () => {
   }
 };
 
-onMounted(() => {
-  fetchUserData();
+const fetchProjects = async () => {
+  try {
+    isLoadingProjects.value = true;
+    projectsError.value = null;
+    const data = await apiCall(`/me/projects`);
+    projects.value = data;
+  } catch (err: any) {
+    projectsError.value = 'Failed to load your projects.';
+    console.error('Error fetching projects:', err);
+  } finally {
+    isLoadingProjects.value = false;
+  }
+};
+
+// Computed properties for stats
+const inProgressProjects = computed(() => {
+  // For now, we'll assume projects are in progress if they have recent activity
+  // You might want to add a status field to your project model
+  return projects.value.length;
 });
 
-const projects = ref([
-  {
-    id: 1,
-    name: 'cryo',
-    private: true,
-    updated: '1 day ago',
-    members: 1,
-    words: '6,000',
-    languages: 1,
-    issues: 4,
-    timers: 1,
-  },
-  {
-    id: 2,
-    name: 'maop',
-    private: false,
-    updated: '3 days ago',
-    members: 2,
-    words: null,
-    languages: null,
-    issues: null,
-    timers: null,
-  },
-  {
-    id: 3,
-    name: 'notion-clone',
-    private: false,
-    updated: '5 days ago',
-    members: 5,
-    words: '12,500',
-    languages: 3,
-    issues: 2,
-    timers: 2,
-  },
-  {
-    id: 4,
-    name: 'translateX',
-    private: true,
-    updated: '2 hours ago',
-    members: 3,
-    words: '2,000',
-    languages: 2,
-    issues: 0,
-    timers: 1,
-  },
-  {
-    id: 5,
-    name: 'amharic-viet',
-    private: false,
-    updated: '10 days ago',
-    members: 4,
-    words: '8,000',
-    languages: 2,
-    issues: 1,
-    timers: 0,
-  },
-]);
+const completedProjects = computed(() => {
+  // For now, return 0 as we don't have completion status
+  // You might want to add a status field to your project model
+  return 0;
+});
 
-const recentProjects = ref([
-  {
-    id: 1,
-    name: 'cryo',
-    startDate: '01/06/2024',
-    status: 'Đang dịch',
-  },
-  {
-    id: 2,
-    name: 'maop',
-    startDate: '28/05/2024',
-    status: 'Đã hoàn thành',
-  },
-  {
-    id: 3,
-    name: 'notion-clone',
-    startDate: '20/05/2024',
-    status: 'Đang dịch',
-  },
-  {
-    id: 4,
-    name: 'translateX',
-    startDate: '15/05/2024',
-    status: 'Đã hoàn thành',
-  },
-  {
-    id: 5,
-    name: 'amharic-viet',
-    startDate: '10/05/2024',
-    status: 'Đang dịch',
-  },
-]);
+const totalProjects = computed(() => {
+  return projects.value.length;
+});
 
-const lastUpdated = '14:30 - 01/06/2024';
+// Format date helper
+const formatDate = (date: string) => {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
 
-function getStatusColor(status: string) {
-  if (status === 'Đang dịch') return '#2563eb'; // xanh dương
-  if (status === 'Đã hoàn thành') return '#22c55e'; // xanh lá
-  return '#6b7280'; // xám
-}
+// Get time ago helper
+const getTimeAgo = (date: string) => {
+  const now = new Date();
+  const projectDate = new Date(date);
+  const diffInMs = now.getTime() - projectDate.getTime();
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+  if (diffInDays === 0) return 'Today';
+  if (diffInDays === 1) return '1 day ago';
+  if (diffInDays < 7) return `${diffInDays} days ago`;
+  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
+  return `${Math.floor(diffInDays / 30)} months ago`;
+};
+
+onMounted(() => {
+  fetchUserData();
+  fetchProjects();
+});
 
 const handleLogout = async () => {
   try {
@@ -158,71 +153,97 @@ const handleLogout = async () => {
             <div class="stat-card stat-blue">
               <div class="stat-icon"><i class="pi pi-refresh"></i></div>
               <div>
-                <div class="stat-number">3</div>
+                <div class="stat-number">{{ inProgressProjects }}</div>
                 <div class="stat-label">In Progress</div>
               </div>
             </div>
             <div class="stat-card stat-green">
               <div class="stat-icon"><i class="pi pi-check"></i></div>
               <div>
-                <div class="stat-number">7</div>
+                <div class="stat-number">{{ completedProjects }}</div>
                 <div class="stat-label">Completed</div>
               </div>
             </div>
             <div class="stat-card stat-yellow">
               <div class="stat-icon"><i class="pi pi-box"></i></div>
               <div>
-                <div class="stat-number">10</div>
+                <div class="stat-number">{{ totalProjects }}</div>
                 <div class="stat-label">Total Projects</div>
               </div>
             </div>
           </div>
           <!-- Project Table -->
           <div class="project-table-wrap">
-            <table class="project-table">
+            <!-- Loading State -->
+            <div v-if="isLoadingProjects" class="loading-container">
+              <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <p>Loading projects...</p>
+              </div>
+            </div>
+
+            <!-- Error State -->
+            <div v-else-if="projectsError" class="error-container">
+              <div class="error-content">
+                <div class="error-icon">
+                  <i class="pi pi-exclamation-triangle"></i>
+                </div>
+                <h3>Oops! Something went wrong</h3>
+                <p>{{ projectsError }}</p>
+                <button @click="fetchProjects" class="btn btn-secondary">Try Again</button>
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else-if="projects.length === 0" class="empty-container">
+              <div class="empty-content">
+                <div class="empty-icon">
+                  <i class="pi pi-folder-open"></i>
+                </div>
+                <h3>No projects found</h3>
+                <p>Get started by creating your first project!</p>
+                <router-link to="/projects/create" class="btn btn-primary">
+                  <i class="pi pi-plus"></i>
+                  Create Your First Project
+                </router-link>
+              </div>
+            </div>
+
+            <!-- Projects Table -->
+            <table v-else class="project-table">
               <thead>
               <tr>
                 <th>Project</th>
                 <th>Source Words</th>
                 <th>Language</th>
                 <th>Issues</th>
-                <th>Timers</th>
+                <th>Created</th>
                 <th>Star</th>
                 <th>More</th>
               </tr>
               </thead>
               <tbody>
-              <tr v-for="project in [
-                  { id: 1, name: 'cryo', private: true, updated: '1 day ago', members: 1, words: '6,000', languages: 1, issues: 4, timers: 1 },
-                  { id: 2, name: 'maop', private: false, updated: '3 days ago', members: 2, words: null, languages: null, issues: null, timers: null },
-                  { id: 3, name: 'notion-clone', private: false, updated: '5 days ago', members: 5, words: '12,500', languages: 3, issues: 2, timers: 2 },
-                  { id: 4, name: 'translateX', private: true, updated: '2 hours ago', members: 3, words: '2,000', languages: 2, issues: 0, timers: 1 },
-                  { id: 5, name: 'amharic-viet', private: false, updated: '10 days ago', members: 4, words: '8,000', languages: 2, issues: 1, timers: 0 }
-                ]" :key="project.id">
+              <tr v-for="project in projects" :key="project.id">
                 <td>
                   <div class="project-name">
-                    <a :href="`/projects/${project.id}`" class="project-link">{{ project.name }}</a>
-                    <i v-if="project.private" class="pi pi-lock project-lock"></i>
+                    <router-link :to="`/projects/${project.id}`" class="project-link">{{ project.name }}</router-link>
+                    <i v-if="!project.isPrivate" class="pi pi-lock project-lock"></i>
                   </div>
                   <div class="project-meta">
-                    Updated {{ project.updated }} • {{ project.members }} member{{ project.members > 1 ? 's' : '' }}
+                    Updated {{ getTimeAgo(project.createdAt) }} • {{ project.createdBy.fullName || project.createdBy.username }}
                   </div>
                 </td>
                 <td class="text-center">
-                  <span v-if="project.words" class="project-value">{{ project.words }}</span>
-                  <span v-else class="project-empty">No source words</span>
+                  <span class="project-empty">No source words</span>
                 </td>
                 <td class="text-center">
-                  <span v-if="project.languages" class="project-value">{{ project.languages }}</span>
-                  <span v-else class="project-empty">No languages</span>
+                  <span class="project-empty">No languages</span>
                 </td>
                 <td class="text-center">
-                  <i v-if="project.issues" class="pi pi-exclamation-triangle text-yellow-400"></i>
-                  <span v-if="project.issues" class="project-value ml-1">{{ project.issues }}</span>
+                  <span class="project-empty">-</span>
                 </td>
                 <td class="text-center">
-                  <i v-if="project.timers" class="pi pi-clock text-blue-400"></i>
-                  <span v-if="project.timers" class="project-value ml-1">{{ project.timers }}</span>
+                  <span class="project-value">{{ formatDate(project.createdAt) }}</span>
                 </td>
                 <td class="text-center">
                   <i class="pi pi-star text-gray-400"></i>
@@ -251,11 +272,13 @@ const handleLogout = async () => {
 .main-content {
   display: flex;
   flex: 1;
+  margin-left: 12rem;
 }
 
 .content {
   flex: 1;
   padding: 20px;
+  margin-left: 0;
 }
 
 .user-home {
@@ -283,7 +306,7 @@ const handleLogout = async () => {
   background: #fff;
   border-radius: 18px;
   box-shadow: 0 2px 16px 0 rgba(60,60,60,0.08);
-  max-width: 1100px;
+  max-width: 1700px;
   margin: 32px auto 0 auto;
   padding: 32px 32px 40px 32px;
 }
@@ -538,5 +561,100 @@ tr:last-child td {
 }
 .text-center {
   text-align: center;
+}
+
+/* Loading, Error, and Empty States */
+.loading-container,
+.error-container,
+.empty-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  padding: 40px 20px;
+}
+
+.loading-content,
+.error-content,
+.empty-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-icon,
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 20px;
+}
+
+.error-icon {
+  color: #ef4444;
+}
+
+.empty-icon {
+  color: #6b7280;
+}
+
+.loading-content p,
+.error-content h3,
+.error-content p,
+.empty-content h3,
+.empty-content p {
+  margin: 10px 0;
+  color: #6b7280;
+}
+
+.error-content h3,
+.empty-content h3 {
+  color: #23272f;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1rem;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
 }
 </style>

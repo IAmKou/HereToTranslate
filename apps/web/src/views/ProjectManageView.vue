@@ -1,142 +1,158 @@
 <template>
-  <div class="project-manage-view">
-    <div v-if="loading" class="loading">
-      <div class="loading-spinner"></div>
-      <p>Loading project...</p>
-    </div>
+  <div class="project-manage-page">
+    <!-- Navbar -->
+    <Navbar />
 
-    <div v-else-if="error" class="error">
-      <p>{{ error }}</p>
-      <button @click="loadProject" class="btn btn-secondary">Try Again</button>
-    </div>
+    <div class="main-container">
+      <!-- Sidebar -->
+      <Sidebar />
 
-    <div v-else-if="project" class="manage-content">
-      <div class="manage-header">
-        <div class="header-info">
-          <h1>Manage Project</h1>
-          <p class="subtitle">{{ project.name }}</p>
+      <!-- Main Content -->
+      <div class="content-wrapper">
+        <div class="project-manage-view">
+          <div v-if="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Loading project...</p>
+          </div>
+
+          <div v-else-if="error" class="error">
+            <p>{{ error }}</p>
+            <button @click="loadProject" class="btn btn-secondary">Try Again</button>
+          </div>
+
+          <div v-else-if="project" class="manage-content">
+            <div class="manage-header">
+              <div class="header-info">
+                <h1>Manage Project</h1>
+                <p class="subtitle">{{ project.name }}</p>
+              </div>
+              <router-link :to="`/projects/${project.id}`" class="btn btn-outline">
+                ← Back to Project
+              </router-link>
+            </div>
+
+            <div class="manage-sections">
+              <!-- Project Overview -->
+              <div class="manage-section">
+                <h2>Project Overview</h2>
+                <div class="overview-grid">
+                  <div class="overview-item">
+                    <div class="overview-label">Status</div>
+                    <div class="overview-value">
+                      <span v-if="project.isPublic" class="badge badge-public">Public</span>
+                      <span v-else class="badge badge-private">Private</span>
+                    </div>
+                  </div>
+                  <div class="overview-item">
+                    <div class="overview-label">Created</div>
+                    <div class="overview-value">{{ formatDate(project.createdAt) }}</div>
+                  </div>
+                  <div class="overview-item">
+                    <div class="overview-label">Owner</div>
+                    <div class="overview-value">{{ project.createdBy.username }}</div>
+                  </div>
+                  <div class="overview-item">
+                    <div class="overview-label">Tags</div>
+                    <div class="overview-value">
+                      <span v-if="project.tags && project.tags.length > 0">
+                        {{ project.tags.length }} tag{{ project.tags.length !== 1 ? 's' : '' }}
+                      </span>
+                      <span v-else class="no-tags">No tags</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Actions -->
+              <div class="manage-section">
+                <h2>Quick Actions</h2>
+                <div class="actions-grid">
+                  <button @click="editProject" class="action-card">
+                    <div class="action-icon">✏️</div>
+                    <div class="action-title">Edit Project</div>
+                    <div class="action-description">Update project details and settings</div>
+                  </button>
+                  <button @click="manageRoles" class="action-card">
+                    <div class="action-icon">👥</div>
+                    <div class="action-title">Manage Roles</div>
+                    <div class="action-description">Configure user roles and permissions</div>
+                  </button>
+                  <button @click="manageGroups" class="action-card">
+                    <div class="action-icon">🏷️</div>
+                    <div class="action-title">Manage Groups</div>
+                    <div class="action-description">Organize users into groups</div>
+                  </button>
+                  <button @click="manageFiles" class="action-card">
+                    <div class="action-icon">📁</div>
+                    <div class="action-title">Manage Files</div>
+                    <div class="action-description">Upload and organize project files</div>
+                  </button>
+                  <button @click="viewAnalytics" class="action-card">
+                    <div class="action-icon">📊</div>
+                    <div class="action-title">View Analytics</div>
+                    <div class="action-description">Project statistics and insights</div>
+                  </button>
+                  <button @click="exportProject" class="action-card">
+                    <div class="action-icon">📤</div>
+                    <div class="action-title">Export Project</div>
+                    <div class="action-description">Download project data</div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Recent Activity -->
+              <div class="manage-section">
+                <h2>Recent Activity</h2>
+                <div class="activity-list">
+                  <div class="activity-item">
+                    <div class="activity-icon">📝</div>
+                    <div class="activity-content">
+                      <div class="activity-title">Project created</div>
+                      <div class="activity-meta">{{ formatDate(project.createdAt) }} by {{ project.createdBy.username }}</div>
+                    </div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-icon">⚙️</div>
+                    <div class="activity-content">
+                      <div class="activity-title">Project settings updated</div>
+                      <div class="activity-meta">Last modified: {{ formatDate(project.createdAt) }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Danger Zone -->
+              <div class="manage-section danger-zone">
+                <h2>Danger Zone</h2>
+                <div class="danger-actions">
+                  <div class="danger-item">
+                    <div class="danger-info">
+                      <h3>Delete Project</h3>
+                      <p>Permanently delete this project and all its data. This action cannot be undone.</p>
+                    </div>
+                    <button @click="deleteProject" class="btn btn-danger">
+                      Delete Project
+                    </button>
+                  </div>
+                  <div class="danger-item">
+                    <div class="danger-info">
+                      <h3>Transfer Ownership</h3>
+                      <p>Transfer project ownership to another user. You will lose admin privileges.</p>
+                    </div>
+                    <button @click="transferOwnership" class="btn btn-warning">
+                      Transfer Ownership
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <router-link :to="`/projects/${project.id}`" class="btn btn-outline">
-          ← Back to Project
-        </router-link>
       </div>
-
-      <div class="manage-sections">
-        <!-- Project Overview -->
-        <div class="manage-section">
-          <h2>Project Overview</h2>
-          <div class="overview-grid">
-            <div class="overview-item">
-              <div class="overview-label">Status</div>
-              <div class="overview-value">
-                <span v-if="project.isPublic" class="badge badge-public">Public</span>
-                <span v-else class="badge badge-private">Private</span>
-              </div>
-            </div>
-            <div class="overview-item">
-              <div class="overview-label">Created</div>
-              <div class="overview-value">{{ formatDate(project.createdAt) }}</div>
-            </div>
-            <div class="overview-item">
-              <div class="overview-label">Owner</div>
-              <div class="overview-value">{{ project.createdBy.username }}</div>
-            </div>
-            <div class="overview-item">
-              <div class="overview-label">Tags</div>
-              <div class="overview-value">
-                <span v-if="project.tags && project.tags.length > 0">
-                  {{ project.tags.length }} tag{{ project.tags.length !== 1 ? 's' : '' }}
-                </span>
-                <span v-else class="no-tags">No tags</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="manage-section">
-          <h2>Quick Actions</h2>
-          <div class="actions-grid">
-            <button @click="editProject" class="action-card">
-              <div class="action-icon">✏️</div>
-              <div class="action-title">Edit Project</div>
-              <div class="action-description">Update project details and settings</div>
-            </button>
-            <button @click="manageRoles" class="action-card">
-              <div class="action-icon">👥</div>
-              <div class="action-title">Manage Roles</div>
-              <div class="action-description">Configure user roles and permissions</div>
-            </button>
-            <button @click="manageGroups" class="action-card">
-              <div class="action-icon">🏷️</div>
-              <div class="action-title">Manage Groups</div>
-              <div class="action-description">Organize users into groups</div>
-            </button>
-            <button @click="manageFiles" class="action-card">
-              <div class="action-icon">📁</div>
-              <div class="action-title">Manage Files</div>
-              <div class="action-description">Upload and organize project files</div>
-            </button>
-            <button @click="viewAnalytics" class="action-card">
-              <div class="action-icon">📊</div>
-              <div class="action-title">View Analytics</div>
-              <div class="action-description">Project statistics and insights</div>
-            </button>
-            <button @click="exportProject" class="action-card">
-              <div class="action-icon">📤</div>
-              <div class="action-title">Export Project</div>
-              <div class="action-description">Download project data</div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Recent Activity -->
-        <div class="manage-section">
-          <h2>Recent Activity</h2>
-          <div class="activity-list">
-            <div class="activity-item">
-              <div class="activity-icon">📝</div>
-              <div class="activity-content">
-                <div class="activity-title">Project created</div>
-                <div class="activity-meta">{{ formatDate(project.createdAt) }} by {{ project.createdBy.username }}</div>
-              </div>
-            </div>
-            <div class="activity-item">
-              <div class="activity-icon">⚙️</div>
-              <div class="activity-content">
-                <div class="activity-title">Project settings updated</div>
-                <div class="activity-meta">Last modified: {{ formatDate(project.createdAt) }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Danger Zone -->
-        <div class="manage-section danger-zone">
-          <h2>Danger Zone</h2>
-          <div class="danger-actions">
-            <div class="danger-item">
-              <div class="danger-info">
-                <h3>Delete Project</h3>
-                <p>Permanently delete this project and all its data. This action cannot be undone.</p>
-              </div>
-              <button @click="deleteProject" class="btn btn-danger">
-                Delete Project
-              </button>
-            </div>
-            <div class="danger-item">
-              <div class="danger-info">
-                <h3>Transfer Ownership</h3>
-                <p>Transfer project ownership to another user. You will lose admin privileges.</p>
-              </div>
-              <button @click="transferOwnership" class="btn btn-warning">
-                Transfer Ownership
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
+
+    <!-- Footer -->
+    <AppFooter />
   </div>
 </template>
 
@@ -144,6 +160,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
+import Navbar from '../components/Navbar.vue'
+import Sidebar from '../components/Sidebar.vue'
+import AppFooter from '../components/AppFooter.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -281,12 +300,39 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.project-manage-view {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
+/* Page Layout */
+.project-manage-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
+.main-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.content-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem 2rem 2rem 6rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  margin-left: 11rem;
+}
+
+.project-manage-view {
+  max-width: none;
+  margin: 0 auto;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+/* Loading and Error States */
 .loading,
 .error {
   text-align: center;
@@ -315,6 +361,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 2rem;
   gap: 2rem;
+  padding: 2rem;
 }
 
 .header-info h1 {
@@ -333,6 +380,7 @@ onMounted(() => {
 .manage-sections {
   display: grid;
   gap: 2rem;
+  padding: 0 2rem 2rem 2rem;
 }
 
 .manage-section {
@@ -560,7 +608,7 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .project-manage-view {
+  .content-wrapper {
     padding: 1rem;
   }
 
@@ -568,6 +616,11 @@ onMounted(() => {
     flex-direction: column;
     align-items: stretch;
     gap: 1rem;
+    padding: 1rem;
+  }
+
+  .manage-sections {
+    padding: 0 1rem 1rem 1rem;
   }
 
   .header-info h1 {
@@ -593,4 +646,4 @@ onMounted(() => {
     justify-content: center;
   }
 }
-</style> 
+</style>

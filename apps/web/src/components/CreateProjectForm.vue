@@ -78,6 +78,22 @@
               <span v-else class="help-text">A good description helps others understand your project better</span>
             </div>
           </div>
+
+          <!-- Project Visibility Toggle -->
+          <div class="form-group">
+            <label for="isPublic">
+              Project Visibility
+            </label>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <InputSwitch
+                id="isPublic"
+                v-model="form.isPublic"
+                :true-value="true"
+                :false-value="false"
+              />
+              <span>{{ form.isPublic ? 'Public (ai cũng xem được)' : 'Private (chỉ thành viên xem được)' }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="form-section">
@@ -127,7 +143,12 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary" :disabled="isSubmitting || !isFormValid">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            :disabled="isSubmitting || !isFormValid || hasSubmitted"
+            @click="handleSubmitClick"
+          >
             <span v-if="isSubmitting" class="loading-spinner"></span>
             <span v-else class="btn-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -147,7 +168,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
-
+import InputSwitch from 'primevue/inputswitch'
 
 interface Category {
   id: string;
@@ -157,9 +178,8 @@ interface Category {
 
 interface CreateProjectData {
   name: string;
-
   description?: string;
-  isPrivate?: boolean;
+  isPublic?: boolean;
   tags?: string[];
   categoryId: string;
 }
@@ -174,17 +194,16 @@ const router = useRouter()
 
 const form = ref<CreateProjectData>({
   name: '',
-
   description: '',
   categoryId: '',
   tags: [],
-  isPrivate: false,
+  isPublic: false
 })
 
 const errors = ref<FormErrors>({})
 const isSubmitting = ref(false)
+const hasSubmitted = ref(false)
 const categories = ref<Category[]>([])
-
 
 // Validation functions
 const validateName = () => {
@@ -335,23 +354,44 @@ const fetchCategories = async () => {
   }
 }
 
+// Prevent double submission
+const handleSubmitClick = (event: Event) => {
+  event.preventDefault()
+
+  // Prevent multiple submissions
+  if (isSubmitting.value || hasSubmitted.value) {
+    console.log('Form submission already in progress or completed')
+    return
+  }
+
+  handleSubmit()
+}
+
 const handleSubmit = async () => {
+  // Additional guard to prevent double submission
+  if (isSubmitting.value || hasSubmitted.value) {
+    console.log('Form submission already in progress or completed')
+    return
+  }
+
   // Validate form before submission
   if (!validateForm()) {
     return
   }
 
+  // Set submission flags
   isSubmitting.value = true
+  hasSubmitted.value = true
 
   try {
-
-
-
+    console.log('Submitting project creation request...')
 
     const result = await apiCall('/projects/create', {
       method: 'POST',
       body: JSON.stringify(form.value)
     })
+
+    console.log('Project created successfully:', result)
 
     // Show success message
     const successMessage = document.createElement('div')
@@ -380,6 +420,9 @@ const handleSubmit = async () => {
   } catch (error: any) {
     console.error('Project creation error:', error)
 
+    // Reset submission flags on error
+    hasSubmitted.value = false
+
     if (error.message.includes('Authentication required') || error.message.includes('Session expired')) {
       alert('Please log in to create a project')
       router.push('/login')
@@ -401,6 +444,7 @@ onMounted(() => {
   fetchCategories()
 })
 </script>
+
 <style scoped>
 .create-project-container {
   min-height: 100vh;

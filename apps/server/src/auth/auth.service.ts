@@ -141,17 +141,18 @@ export class AuthService {
   async loginWithGoogle(idToken: string) {
     const ticket = await this.googleClient.verifyIdToken({
       idToken,
-      audience: this.configService.get<string>('GOOGLE_OAUTH2_CLIENT')
+      audience: this.configService.get<string>('GOOGLE_OAUTH2_CLIENT'),
     });
-
     const payload = ticket.getPayload();
-    if (!payload) throw new UnauthorizedException('Invalid Google token');
+    if (!payload) {
+      throw new UnauthorizedException('Invalid Google token');
+    }
 
     const { email, name } = payload;
 
     let user = await this.userRepository.findOne({
       where: { email },
-      relations: ['role']
+      relations: ['role'],
     });
 
     if (user?.isActive === false) {
@@ -170,15 +171,21 @@ export class AuthService {
         email,
         passwordHash: '',
         fullName: name,
-        phone: '', // Empty phone for Google users
-        role: { id: BigInt(UserRole.Member) }, // Default to member role
+        phone: '',
+        role: { id: BigInt(UserRole.Member) },
         isActive: true,
       });
       await this.userRepository.save(user);
     }
 
+    if (!user.role) {
+      user.role = { id: BigInt(UserRole.Member) } as any;
+      await this.userRepository.save(user);
+    }
+
     return this.generateTokenPair(user);
   }
+
 
   async logout(refreshToken: string, allSessions = false) {
     const actualRToken = /^Bearer (.+)$/.exec(refreshToken)?.[1];

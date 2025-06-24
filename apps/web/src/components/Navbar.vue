@@ -152,47 +152,30 @@ onUnmounted(() => {
 }
 
 .navbar-container {
-  width: 100%;
   max-width: 1500px;
   margin: 0 auto;
   padding: 0 24px;
   display: flex;
   align-items: center;
   height: 56px;
-  min-width: 0;
-}
-
-.navbar-brand,
-.navbar-menu {
-  min-width: 0;
 }
 
 .navbar-brand {
   display: flex;
   align-items: center;
-  min-width: 0;
-  flex-shrink: 0;
 }
 
 .username {
   font-size: 20px;
   font-weight: 500;
   color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
-  margin-left: 14rem;
 }
 
 .navbar-menu {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  margin-left: auto;
-  min-width: 0;
-  flex: 1;
-  justify-content: flex-end;
+  margin-left: auto; /* Đẩy menu sang phải tự nhiên */
 }
 
 .navbar-item {

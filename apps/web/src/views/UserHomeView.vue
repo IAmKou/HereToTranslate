@@ -272,14 +272,13 @@ const handleLogout = async () => {
 .main-content {
   display: flex;
   flex: 1;
-  min-width: 0;
-  padding-left: 16rem;
+  margin-left: 12rem;
 }
 
 .content {
   flex: 1;
   padding: 20px;
-  min-width: 0;
+  margin-left: 0;
 }
 
 .user-home {
@@ -657,13 +656,5 @@ tr:last-child td {
 
 .btn-secondary:hover {
   background: #4b5563;
-}
-
-/* Đảm bảo Sidebar luôn width cố định, không bị co lại khi thu nhỏ màn hình */
-.main-content > *:first-child {
-  width: 16rem;
-  min-width: 16rem;
-  max-width: 16rem;
-  flex-shrink: 0;
 }
 </style>

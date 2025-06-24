@@ -110,13 +110,7 @@ const router = createRouter({
       name: 'forgot-password',
       component: () => import('../views/ForgotPasswordView.vue'),
       meta: { requiresAuth: false},
-    },
-    {
-      path: '/requests/create',
-      name: 'create-request',
-      component: () => import('../views/CreateRequestView.vue'),
-      meta: { requiresAuth: true },
-    },
+    }
   ],
 });
 

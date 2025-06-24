@@ -1,7 +1,7 @@
 <template>
   <div class="forgot-password-container">
     <div class="logo-container">
-      <img src="/src/assets/logo.svg" alt="Logo" class="logo" />
+      <img src="/src/assets/logo.png" alt="Logo" class="logo" />
     </div>
     <transition name="fade-step" mode="out-in">
       <Card class="forgot-password-card" :key="step">
@@ -259,8 +259,8 @@ function goBack(targetStep) {
   justify-content: center;
 }
 .logo {
-  width: 60px;
-  height: 60px;
+  width: 250px;
+  height: 250px;
   border-radius: 16px;
   box-shadow: 0 2px 12px #1976d23a;
   background: #fff;

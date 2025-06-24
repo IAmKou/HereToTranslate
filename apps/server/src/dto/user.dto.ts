@@ -43,6 +43,16 @@ export class UpdateUserProfileDto {
   email?: string;
 
   @IsOptional()
+  @IsStrongPassword({
+    minLength: 8,
+    minSymbols: 1,
+    minNumbers: 1,
+    minLowercase: 1,
+    minUppercase: 1
+  }, { message: 'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character' })
+  password?: string;
+
+  @IsOptional()
   @IsPhoneNumber(undefined, {
     message: 'Phone number must be a valid international format, e.g. +1234567890'
   })

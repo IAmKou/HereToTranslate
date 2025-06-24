@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   Logger,
   UnauthorizedException
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import { Repository } from 'typeorm';
 import { UserEntity, UserRole } from '#LocalProject/Entities';
 import { Nullable } from '@here-to-translate/common/types';
 import { IUserAuthMeta } from '@here-to-translate/common/interfaces';
+import { MailerService } from '@nestjs-modules/mailer';
+import * as crypto from 'crypto';
 import { AuthEntity } from '#LocalProject/SqliteEntities';
 import { v4 } from 'uuid';
 
@@ -21,17 +24,23 @@ type TokenMeta = {
   userId: string;
   username: string;
 };
+type ResetSession = {
+  code: string;
+  expiresAt: Date;
+};
 
 @Injectable()
 export class AuthService {
 
   private readonly googleClient: OAuth2Client;
   private readonly logger = new Logger(AuthService.name);
+  private resetSessions = new Map<string, ResetSession>();
 
   private readonly refreshExpiry: string;
   private readonly accessExpiry: string;
 
   constructor(
+    private readonly mailerService: MailerService,
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
     @InjectRepository(UserEntity)
@@ -157,7 +166,8 @@ export class AuthService {
         passwordHash: '',
         fullName: name,
         phone: '', // Empty phone for Google users
-        role: { id: BigInt(UserRole.Member) } // Default to member role
+        role: { id: BigInt(UserRole.Member) }, // Default to member role
+        isActive: true,
       });
       await this.userRepository.save(user);
     }
@@ -184,7 +194,70 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
+  async sendResetCode(email: string) {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const code = crypto.randomBytes(3).toString('hex');
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    this.resetSessions.set(email, { code, expiresAt });
+
+    await this.mailerService.sendMail({
+      to: email,
+      subject: 'Password Reset Code',
+      template: './reset-code',
+      context: { code },
+    });
+
+    return { message: 'Reset code sent' };
+  }
+
+  async verifyResetCode(email: string, code: string) {
+    const session = this.resetSessions.get(email);
+    if (
+      !session ||
+      session.code !== code ||
+      new Date() > session.expiresAt
+    ) {
+      throw new NotFoundException('Invalid or expired reset code');
+    }
+
+    return { message: 'Code verified' };
+  }
+
+  async resetPassword(email: string, code: string, newPassword: string) {
+    const session = this.resetSessions.get(email);
+    if (
+      !session ||
+      session.code !== code ||
+      new Date() > session.expiresAt
+    ) {
+      throw new NotFoundException('Invalid or expired reset code');
+    }
+
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.save(user);
+
+    this.resetSessions.delete(email); // clear session
+
+    return { message: 'Password reset successful' };
+  }
+
   private async generateTokenPair(user: UserEntity) {
+    const jwtPayload = {
+      sub: Date.now().toString(2),
+      userId: user.id.toString(),
+      username: user.username
+    };
+
     const jwtPayload = {
       sub: Date.now().toString(2),
       userId: user.id.toString(),

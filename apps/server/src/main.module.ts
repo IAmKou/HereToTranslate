@@ -8,6 +8,9 @@ import { AuthModule } from './auth/auth.module';
 import { SeederModule } from './seeder/seeder.module';
 import { ManagersModule } from './manager/managers.module';
 import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
+import { MailerModule } from '@nestjs-modules/mailer';
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import * as path from 'path';
 
 @Module({
   imports: [
@@ -24,6 +27,27 @@ import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
           throw new Error(errors.toString());
         }
         return instance;
+      },
+    }),
+    MailerModule.forRoot({
+      transport: {
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: 'csgit47@gmail.com',
+          pass: 'svvuwvdjrbiucehn',
+        },
+      },
+      defaults: {
+        from: '"Here To Translate Support" <csgit47@gmail.com>',
+      },
+      template: {
+        dir: path.join(__dirname, 'mailer', 'templates'),
+        adapter: new HandlebarsAdapter(),
+        options: {
+          strict: true,
+        },
       },
     }),
     DbContextModule,

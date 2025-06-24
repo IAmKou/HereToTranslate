@@ -6,6 +6,7 @@ import { BranchEntity } from './branch.entity';
 import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { ProjectGroupEntity } from './project-group.entity';
+import { UserTypeEntity } from './user-type.entity';
 
 export enum UserRole {
   SuperAdmin = 1,
@@ -33,7 +34,7 @@ export class UserEntity {
   @Column({ length: 100 })
   fullName: string;
 
-  @ManyToOne(() => UserTypeEntity, role => role.users)
+  @ManyToOne(() => RoleEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: UserTypeEntity;
 

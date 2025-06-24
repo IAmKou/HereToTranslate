@@ -48,4 +48,22 @@ export class AuthController {
   async logout(@Body('refreshToken') refreshToken: string) {
     return this.authService.logout(refreshToken);
   }
+
+  @Post('forgot-password')
+  @IsPublicEndpoint()
+  forgotPassword(@Body('email') email: string) {
+    return this.authService.sendResetCode(email);
+  }
+
+  @Post('verify-code')
+  @IsPublicEndpoint()
+  verifyCode(@Body() body: { email: string; code: string }) {
+    return this.authService.verifyResetCode(body.email, body.code);
+  }
+
+  @Post('reset-password')
+  @IsPublicEndpoint()
+  resetPassword(@Body() body: { email: string; code: string; newPassword: string }) {
+    return this.authService.resetPassword(body.email, body.code, body.newPassword);
+  }
 }

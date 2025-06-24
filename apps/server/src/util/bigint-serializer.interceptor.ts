@@ -4,13 +4,13 @@ import { map } from 'rxjs/operators';
 
 @Injectable()
 export class BigIntSerializerInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       map(data => this.transformBigInt(data))
     );
   }
 
-  private transformBigInt(data: any): any {
+  private transformBigInt(data: unknown): unknown {
     if (data === null || data === undefined) {
       return data;
     }
@@ -24,7 +24,7 @@ export class BigIntSerializerInterceptor implements NestInterceptor {
     }
 
     if (typeof data === 'object') {
-      const transformed: Record<string, any> = {};
+      const transformed: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(data)) {
         transformed[key] = this.transformBigInt(value);
       }

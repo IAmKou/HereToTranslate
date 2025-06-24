@@ -18,6 +18,13 @@ import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { UserManagerService } from "../service/user-manager.service";
 import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
 import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
+import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
+import { UserEntity } from '#LocalProject/Entities';
+
+interface ChangePasswordDto {
+  currentPassword: string;
+  newPassword: string;
+}
 
 @Controller('users')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -55,5 +62,43 @@ export class UserController {
       throw new BadRequestException("You can only update your own user data.");
     }
     return this.users.updateProfile(id, userUpdateData);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('change-password')
+  async changePassword(
+    @Req() req: AuthenticatedRequest,
+    @Body() changePasswordDto: ChangePasswordDto
+  ) {
+    return this.users.changePassword(
+      req.user.id,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('admin/all')
+  async getAllUsers() {
+    return this.users.getAllUsers();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Put('admin/:id/role/:rid')
+  async updateUserRole(
+    @Param('id', BigIntTransformPipe) userId: bigint,
+    @Param('rid') roleId: number,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.users.updateUserRole(userId, roleId, req.user as UserEntity);
+  }
+
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Put('admin/:id/toggle-status')
+  async toggleUserStatus(
+    @Param('id', BigIntTransformPipe) userId: bigint
+  ) {
+    return this.users.toggleUserStatus(userId);
   }
 }

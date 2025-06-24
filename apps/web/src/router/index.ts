@@ -42,12 +42,6 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
-      path: '/forgot-password',
-      name: 'forgotpassword',
-      component: () => import('../views/ForgotPasswordView.vue'),
-      meta: { requiresAuth: false },
-    },
-    {
       path: '/projects/create',
       name: 'create-project',
       component: () => import('../views/CreateProjectView.vue'),
@@ -111,26 +105,32 @@ const router = createRouter({
         },
       ],
     },
+    {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: () => import('../views/ForgotPasswordView.vue'),
+      meta: { requiresAuth: false},
+    }
   ],
 });
 
 // Navigation guard
-// router.beforeEach((to, from, next) => {
-//   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
-//   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
-//   const isAuthenticated = authService.isAuthenticated();
-//   const isAdmin = authService.isAdmin();
-//   const isSuperAdmin = authService.isSuperAdmin();
-//
-//   if (requiresAuth && !isAuthenticated) {
-//     next('/login');
-//   } else if (requiresAdmin && !isAdmin) {
-//     next('/userhome');
-//   } else if (to.path === '/login' && isAuthenticated) {
-//     next(isSuperAdmin ? '/adminhome' : isAdmin ? '/adminhome' : '/userhome');
-//   } else {
-//     next();
-//   }
-// });
+router.beforeEach((to, from, next) => {
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
+  const isAuthenticated = authService.isAuthenticated();
+  const isAdmin = authService.isAdmin();
+  const isSuperAdmin = authService.isSuperAdmin();
+
+  if (requiresAuth && !isAuthenticated) {
+    next('/login');
+  } else if (requiresAdmin && !isAdmin) {
+    next('/userhome');
+  } else if (to.path === '/login' && isAuthenticated) {
+    next(isSuperAdmin ? '/adminhome' : isAdmin ? '/adminhome' : '/userhome');
+  } else {
+    next();
+  }
+});
 
 export default router;

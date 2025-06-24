@@ -50,6 +50,9 @@
                 <i :class="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
               </button>
             </div>
+            <div style="text-align: right; margin-top: 0.25rem;">
+              <router-link to="/forgot-password" style="font-size: 0.95em; color: #4CAF50; text-decoration: underline;">Forgot Password?</router-link>
+            </div>
           </div>
 
           <div v-if="error" class="error-message">

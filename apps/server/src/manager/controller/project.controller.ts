@@ -118,4 +118,13 @@ export class ProjectController {
       throw new BadRequestException(error);
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':projectId/members')
+  async getAllMembers(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+  ) {
+    const members = await this.projects.getProjectMembers(projectId);
+    return { members };
+  }
 }

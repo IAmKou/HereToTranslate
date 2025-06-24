@@ -79,106 +79,144 @@
         </div>
       </div>
 
-      <!-- Management Sections -->
-      <div class="management-sections">
-        <!-- Add User to Project Section -->
-        <div class="management-section">
-          <div class="section-header">
-            <h2>Add User to Project</h2>
-          </div>
-          <form @submit.prevent="searchUser" class="add-user-form">
-            <div class="form-group">
-              <label for="userIdentifier">Search by Email or Name</label>
-              <input
-                id="userIdentifier"
-                v-model="userSearch.identifier"
-                type="text"
-                required
-                class="form-control"
-                placeholder="Enter email or full name"
-              />
-            </div>
-            <div class="modal-actions">
-              <button type="submit" class="btn btn-primary" :disabled="userSearch.loading">
-                {{ userSearch.loading ? 'Searching...' : 'Search User' }}
-              </button>
-            </div>
-          </form>
-          <div v-if="userSearch.error" class="error" style="margin-top: 1rem;">
-            <p>{{ userSearch.error }}</p>
-          </div>
-          <div v-if="userSearch.result" class="found-user" style="margin-top: 1rem;">
-            <div class="user-info">
-              <span><b>{{ userSearch.result.fullName || userSearch.result.username }}</b> ({{ userSearch.result.email }})</span>
-              <button class="btn btn-primary btn-sm" @click="addUserToProject" :disabled="userSearch.adding">
-                {{ userSearch.adding ? 'Adding...' : 'Add to Project' }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <!-- Roles Management -->
-        <div class="management-section">
-          <div class="section-header">
-            <h2>Project Roles</h2>
-            <button @click="showCreateRoleModal = true" class="btn btn-primary">
-              <span class="icon">+</span>
-              Add Role
-            </button>
-          </div>
-          <div v-if="project.projectRoles && project.projectRoles.length > 0" class="roles-list">
-            <div
-              v-for="role in project.projectRoles"
-              :key="role.id"
-              class="role-item"
-            >
-              <div class="role-info">
-                <h3>{{ role.name }}</h3>
-                <span class="permissions">Permissions: {{ formatPermissions(role.permissionFlags) }}</span>
-              </div>
-              <div class="role-actions">
-                <button @click="editRole(role)" class="btn btn-sm btn-outline">Edit</button>
-                <button @click="deleteRole(role.id)" class="btn btn-sm btn-danger">Delete</button>
-              </div>
-            </div>
-          </div>
-          <div v-else class="empty-section">
-            <p>No roles defined for this project.</p>
-            <button @click="showCreateRoleModal = true" class="btn btn-primary">Create First Role</button>
-          </div>
-        </div>
+      <!-- Tabs for Details and Members -->
+      <div class="tabs">
+        <button :class="['tab', { active: activeTab === 'details' }]" @click="activeTab = 'details'">Details</button>
+        <button :class="['tab', { active: activeTab === 'members' }]" @click="activeTab = 'members'">Members</button>
+      </div>
 
-        <!-- Groups Management -->
-        <div class="management-section">
-          <div class="section-header">
-            <h2>Project Groups</h2>
-            <button @click="showCreateGroupModal = true" class="btn btn-primary">
-              <span class="icon">+</span>
-              Add Group
-            </button>
-          </div>
-          <div v-if="project.groups && project.groups.length > 0" class="groups-list">
-            <div
-              v-for="group in project.groups"
-              :key="group.id"
-              class="group-item"
-            >
-              <div class="group-info">
-                <h3>{{ group.name }}</h3>
-                <span class="permissions">Permissions: {{ formatPermissions(group.permissionFlags) }}</span>
-                <span v-if="group.members" class="members-count">
-                  {{ group.members.length }} member{{ group.members.length !== 1 ? 's' : '' }}
-                </span>
+      <div v-if="activeTab === 'details'">
+        <!-- Management Sections -->
+        <div class="management-sections">
+          <!-- Add User to Project Section -->
+          <div class="management-section">
+            <div class="section-header">
+              <h2>Add User to Project</h2>
+            </div>
+            <form @submit.prevent="searchUser" class="add-user-form">
+              <div class="form-group">
+                <label for="userIdentifier">Search by Email or Name</label>
+                <input
+                  id="userIdentifier"
+                  v-model="userSearch.identifier"
+                  type="text"
+                  required
+                  class="form-control"
+                  placeholder="Enter email or full name"
+                />
               </div>
-              <div class="group-actions">
-                <button @click="editGroup(group)" class="btn btn-sm btn-outline">Edit</button>
-                <button @click="deleteGroup(group.id)" class="btn btn-sm btn-danger">Delete</button>
+              <div class="modal-actions">
+                <button type="submit" class="btn btn-primary" :disabled="userSearch.loading">
+                  {{ userSearch.loading ? 'Searching...' : 'Search User' }}
+                </button>
+              </div>
+            </form>
+            <div v-if="userSearch.error" class="error" style="margin-top: 1rem;">
+              <p>{{ userSearch.error }}</p>
+            </div>
+            <div v-if="userSearch.result" class="found-user" style="margin-top: 1rem;">
+              <div class="user-info">
+                <span><b>{{ userSearch.result.fullName || userSearch.result.username }}</b> ({{ userSearch.result.email }})</span>
+                <button class="btn btn-primary btn-sm" @click="addUserToProject" :disabled="userSearch.adding">
+                  {{ userSearch.adding ? 'Adding...' : 'Add to Project' }}
+                </button>
               </div>
             </div>
           </div>
-          <div v-else class="empty-section">
-            <p>No groups defined for this project.</p>
-            <button @click="showCreateGroupModal = true" class="btn btn-primary">Create First Group</button>
+          <!-- Roles Management -->
+          <div class="management-section">
+            <div class="section-header">
+              <h2>Project Roles</h2>
+              <button @click="showCreateRoleModal = true" class="btn btn-primary">
+                <span class="icon">+</span>
+                Add Role
+              </button>
+            </div>
+            <div v-if="project.projectRoles && project.projectRoles.length > 0" class="roles-list">
+              <div
+                v-for="role in project.projectRoles"
+                :key="role.id"
+                class="role-item"
+              >
+                <div class="role-info">
+                  <h3>{{ role.name }}</h3>
+                  <span class="permissions">Permissions: {{ formatPermissions(role.permissionFlags) }}</span>
+                </div>
+                <div class="role-actions">
+                  <button @click="editRole(role)" class="btn btn-sm btn-outline">Edit</button>
+                  <button @click="deleteRole(role.id)" class="btn btn-sm btn-danger">Delete</button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="empty-section">
+              <p>No roles defined for this project.</p>
+              <button @click="showCreateRoleModal = true" class="btn btn-primary">Create First Role</button>
+            </div>
           </div>
+
+          <!-- Groups Management -->
+          <div class="management-section">
+            <div class="section-header">
+              <h2>Project Groups</h2>
+              <button @click="showCreateGroupModal = true" class="btn btn-primary">
+                <span class="icon">+</span>
+                Add Group
+              </button>
+            </div>
+            <div v-if="project.groups && project.groups.length > 0" class="groups-list">
+              <div
+                v-for="group in project.groups"
+                :key="group.id"
+                class="group-item"
+              >
+                <div class="group-info">
+                  <h3>{{ group.name }}</h3>
+                  <span class="permissions">Permissions: {{ formatPermissions(group.permissionFlags) }}</span>
+                  <span v-if="group.members" class="members-count">
+                    {{ group.members.length }} member{{ group.members.length !== 1 ? 's' : '' }}
+                  </span>
+                </div>
+                <div class="group-actions">
+                  <button @click="editGroup(group)" class="btn btn-sm btn-outline">Edit</button>
+                  <button @click="deleteGroup(group.id)" class="btn btn-sm btn-danger">Delete</button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="empty-section">
+              <p>No groups defined for this project.</p>
+              <button @click="showCreateGroupModal = true" class="btn btn-primary">Create First Group</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="activeTab === 'members'">
+        <div class="management-section">
+          <div class="section-header">
+            <h2>Project Members</h2>
+          </div>
+          <div v-if="membersLoading" class="loading"><div class="loading-spinner"></div>Loading members...</div>
+          <div v-else-if="membersError" class="error">{{ membersError }}</div>
+          <table v-else class="members-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Roles</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="member in members" :key="member.id">
+                <td>{{ member.fullName || '-' }}</td>
+                <td>{{ member.username }}</td>
+                <td>{{ member.email }}</td>
+                <td>
+                  <span v-for="role in member.roles" :key="role.id" class="role-badge">{{ role.name }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -275,7 +313,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
@@ -355,6 +393,13 @@ const userSearch = ref({
   result: null as null | { id: string; username: string; fullName?: string; email: string },
   adding: false
 })
+
+// Members tab state
+const members = ref<Array<{ id: string; username: string; fullName?: string; email: string; roles: Array<{ id: string; name: string }> }>>([])
+const membersLoading = ref(false)
+const membersError = ref('')
+
+const activeTab = ref<'details' | 'members'>('details')
 
 // API helper function
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {
@@ -546,6 +591,45 @@ const addUserToProject = async () => {
     userSearch.value.adding = false;
   }
 }
+
+const loadMembers = async () => {
+  if (!project.value) return
+  membersLoading.value = true
+  membersError.value = ''
+  try {
+    const projectId = route.params.projectId as string
+    const data = await apiCall(`/projects/${projectId}/members`)
+    const memberMap: Record<string, { id: string; username: string; fullName?: string; email: string; roles: Array<{ id: string; name: string }> }> = {}
+    if (data.members) {
+      for (const m of data.members) {
+        memberMap[m.id] = { ...m, roles: [] }
+      }
+    }
+    if (data.projectRoles) {
+      for (const role of data.projectRoles) {
+        if (role.users) {
+          for (const user of role.users) {
+            if (!memberMap[user.id]) {
+              memberMap[user.id] = { ...user, roles: [] }
+            }
+            memberMap[user.id].roles.push({ id: role.id, name: role.name })
+          }
+        }
+      }
+    }
+    members.value = Object.values(memberMap)
+  } catch (err: any) {
+    membersError.value = err.message || 'Failed to load members.'
+  } finally {
+    membersLoading.value = false
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'members') {
+    loadMembers()
+  }
+})
 
 onMounted(() => {
   loadProject()
@@ -997,5 +1081,45 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.tab {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: #e2e8f0;
+  color: #4a5568;
+  transition: background 0.2s;
+}
+.tab.active {
+  background: #4299e1;
+  color: white;
+}
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+.members-table th, .members-table td {
+  border: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+.role-badge {
+  display: inline-block;
+  background: #edf2f7;
+  color: #4299e1;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  margin-right: 0.25rem;
+  font-size: 0.9em;
 }
 </style>

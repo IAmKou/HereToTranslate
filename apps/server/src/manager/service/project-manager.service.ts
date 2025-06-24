@@ -403,4 +403,43 @@ export class ProjectManagerService extends ManagerServiceImpl {
     project.members.push(user);
     return this.projectRepository.save(project);
   }
+
+  async getProjectMembers(projectId: bigint): Promise<{
+    id: string;
+    username: string;
+    fullName: string;
+    email: string;
+    roles: { id: string; name: string }[];
+  }[]> {
+    const roles = await this.projectRoleRepository.find({
+      where: { project: { id: projectId } },
+      relations: ['users']
+    });
+
+    const memberMap: Record<string, {
+      id: string;
+      username: string;
+      fullName: string;
+      email: string;
+      roles: { id: string; name: string }[];
+    }> = {};
+
+    for (const role of roles) {
+      for (const user of role.users) {
+        const key = user.id.toString();
+        if (!memberMap[key]) {
+          memberMap[key] = {
+            id: key,
+            username: user.username,
+            fullName: user.fullName,
+            email: user.email,
+            roles: []
+          };
+        }
+        memberMap[key].roles.push({ id: role.id.toString(), name: role.name });
+      }
+    }
+
+    return Object.values(memberMap);
+  }
 }

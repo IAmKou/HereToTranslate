@@ -439,7 +439,7 @@ export class ProjectManagerService extends ManagerServiceImpl {
         memberMap[key].roles.push({ id: role.id.toString(), name: role.name });
       }
     }
-
     return Object.values(memberMap);
   }
+
 }

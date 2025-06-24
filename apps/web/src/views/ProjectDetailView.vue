@@ -240,85 +240,6 @@
                 </div>
               </div>
 
-              <!-- Enhanced Roles Management -->
-              <div class="management-section roles-section">
-                <div class="section-header">
-                  <h2 class="section-title">
-                    <span class="title-icon">👤</span>
-                    Project Roles
-                  </h2>
-                  <button
-                    @click="showCreateRoleModal = true"
-                    class="btn btn-primary btn-add"
-                  >
-                    <span class="icon">➕</span>
-                    Add Role
-                  </button>
-                </div>
-                <div class="section-content">
-                  <div
-                    v-if="
-                      project.projectRoles && project.projectRoles.length > 0
-                    "
-                    class="roles-list"
-                  >
-                    <div
-                      v-for="role in project.projectRoles"
-                      :key="role.id"
-                      class="role-item"
-                    >
-                      <div class="role-info">
-                        <div class="role-header">
-                          <h3 class="role-name">{{ role.name }}</h3>
-                          <span class="role-badge">Role</span>
-                        </div>
-                        <p class="permissions">
-                          Permissions:
-                          {{ formatPermissions(role.permissionFlags) }}
-                        </p>
-                      </div>
-                      <div class="role-actions">
-                        <div class="dropdown">
-                          <button
-                            class="btn btn-sm btn-outline dropdown-toggle"
-                            @click="toggleRoleDropdown(role.id)"
-                          >
-                            <span class="icon">⚙️</span>
-                            Actions
-                            <span class="dropdown-arrow">▼</span>
-                          </button>
-                          <div v-if="activeRoleDropdown === role.id" class="dropdown-menu" @click.stop>
-                            <button @click="editRole(role)" class="dropdown-item">
-                              <span class="icon">✏️</span>
-                              Edit Role
-                            </button>
-                            <button
-                              @click="deleteRole(role.id)"
-                              class="dropdown-item dropdown-item-danger"
-                            >
-                              <span class="icon">🗑️</span>
-                              Delete Role
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="empty-section">
-                    <div class="empty-icon">👤</div>
-                    <h3>No Roles Defined</h3>
-                    <p>
-                      Create roles to manage user permissions in this project.
-                    </p>
-                    <button
-                      @click="showCreateRoleModal = true"
-                      class="btn btn-primary"
-                    >
-                      Create First Role
-                    </button>
-                  </div>
-                </div>
-              </div>
               <!-- Tabs for Details and Members -->
               <div class="tabs">
                 <button
@@ -457,285 +378,173 @@
                       </button>
                     </div>
                   </div>
-
-              <!-- Enhanced Groups Management -->
-              <div class="management-section groups-section">
-                <div class="section-header">
-                  <h2 class="section-title">
-                    <span class="title-icon">👨‍👩‍👧‍👦</span>
-                    Project Groups
-                  </h2>
-                  <button @click="showCreateGroupModal = true" class="btn btn-primary btn-add">
-                    <span class="icon">➕</span>
-                    Add Group
-                  </button>
-                </div>
-                <div class="section-content">
-                  <div v-if="project.groups && project.groups.length > 0" class="groups-list">
-                    <div
-                      v-for="group in project.groups"
-                      :key="group.id"
-                      class="group-item"
-                    >
-                      <div class="group-info">
-                        <div class="group-header">
-                          <h3 class="group-name">{{ group.name }}</h3>
-                          <span class="group-badge">Group</span>
-                        </div>
-                        <p class="permissions">Permissions: {{ formatPermissions(group.permissionFlags) }}</p>
-                        <div v-if="group.members" class="members-info">
-                          <span class="members-count">
-                            <span class="count-icon">👥</span>
-                            {{ group.members.length }} member{{ group.members.length !== 1 ? 's' : '' }}
-                          </span>
-                        </div>
-                      </div>
-                      <div class="group-actions">
-                        <div class="dropdown">
-                          <button class="btn btn-sm btn-outline dropdown-toggle" @click="toggleGroupDropdown(group.id)">
-                            <span class="icon">⚙️</span>
-                            Actions
-                            <span class="dropdown-arrow">▼</span>
-                          </button>
-                          <div v-if="activeGroupDropdown === group.id" class="dropdown-menu" @click.stop>
-                            <button @click="editGroup(group)" class="dropdown-item">
-                              <span class="icon">✏️</span>
-                              Edit Group
-                            </button>
-                            <button @click="deleteGroup(group.id)" class="dropdown-item dropdown-item-danger">
-                              <span class="icon">🗑️</span>
-                              Delete Group
-                            </button>
+                  <!-- Enhanced Groups Management -->
+                  <div class="management-section groups-section">
+                    <div class="section-header">
+                      <h2 class="section-title">
+                        <span class="title-icon">👨‍👩‍👧‍👦</span>
+                        Project Groups
+                      </h2>
+                      <button
+                        @click="showCreateGroupModal = true"
+                        class="btn btn-primary btn-add"
+                      >
+                        <span class="icon">➕</span>
+                        Add Group
+                      </button>
+                    </div>
+                    <div class="section-content">
+                      <div
+                        v-if="project.groups && project.groups.length > 0"
+                        class="groups-list"
+                      >
+                        <div
+                          v-for="group in project.groups"
+                          :key="group.id"
+                          class="group-item"
+                        >
+                          <div class="group-info">
+                            <div class="group-header">
+                              <h3 class="group-name">{{ group.name }}</h3>
+                              <span class="group-badge">Group</span>
+                            </div>
+                            <p class="permissions">
+                              Permissions:
+                              {{ formatPermissions(group.permissionFlags) }}
+                            </p>
+                            <div v-if="group.members" class="members-info">
+                              <span class="members-count">
+                                <span class="count-icon">👥</span>
+                                {{ group.members.length }} member{{
+                                  group.members.length !== 1 ? 's' : ''
+                                }}
+                              </span>
+                            </div>
+                          </div>
+                          <div class="group-actions">
+                            <div class="dropdown">
+                              <button
+                                class="btn btn-sm btn-outline dropdown-toggle"
+                                @click="toggleGroupDropdown(group.id)"
+                              >
+                                <span class="icon">⚙️</span>
+                                Actions
+                                <span class="dropdown-arrow">▼</span>
+                              </button>
+                              <div
+                                v-if="activeGroupDropdown === group.id"
+                                class="dropdown-menu"
+                                @click.stop
+                              >
+                                <button
+                                  @click="editGroup(group)"
+                                  class="dropdown-item"
+                                >
+                                  <span class="icon">✏️</span>
+                                  Edit Group
+                                </button>
+                                <button
+                                  @click="deleteGroup(group.id)"
+                                  class="dropdown-item dropdown-item-danger"
+                                >
+                                  <span class="icon">🗑️</span>
+                                  Delete Group
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
+                      <div v-else class="empty-section">
+                        <div class="empty-icon">👨‍👩‍👧‍👦</div>
+                        <h3>No Groups Defined</h3>
+                        <p>
+                          Create groups to organize users and manage permissions
+                          collectively.
+                        </p>
+                        <button
+                          @click="showCreateGroupModal = true"
+                          class="btn btn-primary"
+                        >
+                          Create First Group
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div v-else class="empty-section">
-                    <div class="empty-icon">👨‍👩‍👧‍👦</div>
-                    <h3>No Groups Defined</h3>
-                    <p>Create groups to organize users and manage permissions collectively.</p>
-                    <button @click="showCreateGroupModal = true" class="btn btn-primary">Create First Group</button>
-                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-    <!-- Footer -->
-    <AppFooter />
+        <!-- Footer -->
+        <AppFooter />
 
-    <!-- Enhanced Create Role Modal -->
-    <div
-      v-if="showCreateRoleModal"
-      class="modal-overlay"
-      @click.self="showCreateRoleModal = false"
-    >
-      <div class="modal-content role-modal">
-        <div class="modal-header">
-          <div class="modal-title">
-            <div class="title-icon">👤</div>
-            <h3>Create New Role</h3>
-          </div>
-          <button
-            class="close-button"
-            @click="showCreateRoleModal = false"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div class="modal-body">
-          <form @submit.prevent="createRole" class="role-form">
-            <div class="form-group">
-              <label for="roleName" class="form-label">
-                <span class="label-text">Role Name</span>
-                <span class="required">*</span>
-              </label>
-              <input
-                id="roleName"
-                v-model="newRole.name"
-                type="text"
-                required
-                class="form-control"
-                placeholder="e.g., Translator, Reviewer, Admin"
-                :disabled="isCreatingRole"
-              />
-              <div class="form-hint">
-                Choose a descriptive name for this role
+        <!-- Enhanced Create Group Modal -->
+        <div
+          v-if="showCreateGroupModal"
+          class="modal-overlay"
+          @click.self="showCreateGroupModal = false"
+        >
+          <div class="modal-content group-modal">
+            <div class="modal-header">
+              <div class="modal-title">
+                <div class="title-icon">👨‍👩‍👧‍👦</div>
+                <h3>Create New Group</h3>
               </div>
+              <button
+                class="close-button"
+                @click="showCreateGroupModal = false"
+              >
+                &times;
+              </button>
             </div>
-
-            <div class="form-group">
-              <label class="form-label">
-                <span class="label-text">Permissions</span>
+            <div class="modal-body">
+              <form @submit.prevent="createGroup" class="group-form">
+                <div class="form-group">
+                  <label for="groupName" class="form-label">
+                    <span class="label-text">Group Name</span>
+                    <span class="required">*</span>
+                  </label>
+                  <input
+                    id="groupName"
+                    v-model="newGroup.name"
+                    type="text"
+                    required
+                    class="form-control"
+                    placeholder="Enter group name"
+                  />
+                  <div class="form-hint">
+                    Choose a descriptive name for this group
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                @click="showCreateGroupModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                @click="createGroup"
+                :disabled="isCreatingGroup"
+              >
                 <span
-                  class="permissions-count"
-                  v-if="selectedPermissions.length > 0"
-                >
-                  ({{ selectedPermissions.length }} selected)
-                </span>
-              </label>
-              <div class="permissions-container">
-                <div class="permissions-header">
-                  <button
-                    type="button"
-                    class="select-all-btn"
-                    @click="toggleSelectAll"
-                  >
-                    {{ isAllSelected ? 'Deselect All' : 'Select All' }}
-                  </button>
-                  <div class="permissions-search">
-                    <input
-                      v-model="permissionSearch"
-                      type="text"
-                      placeholder="Search permissions..."
-                      class="search-input"
-                    />
-                  </div>
-                </div>
-
-                <div class="permissions-list">
-                  <div
-                    v-for="perm in filteredPermissions"
-                    :key="perm"
-                    class="permission-item"
-                    :class="{
-                      selected: selectedPermissions.includes(perm),
-                    }"
-                  >
-                    <label class="permission-checkbox">
-                      <input
-                        type="checkbox"
-                        :id="perm"
-                        :value="perm"
-                        v-model="selectedPermissions"
-                        :disabled="isCreatingRole"
-                      />
-                      <span class="checkmark"></span>
-                      <div class="permission-content">
-                        <span class="permission-name">{{
-                          formatPermissionName(perm)
-                        }}</span>
-                        <span class="permission-description">{{
-                          getPermissionDescription(perm)
-                        }}</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                <div
-                  v-if="filteredPermissions.length === 0"
-                  class="no-permissions"
-                >
-                  <div class="no-permissions-icon">🔍</div>
-                  <p>
-                    No permissions found matching "{{ permissionSearch }}"
-                  </p>
-                </div>
-              </div>
+                  v-if="isCreatingGroup"
+                  class="loading-spinner-small"
+                ></span>
+                {{ isCreatingGroup ? 'Creating...' : 'Create Group' }}
+              </button>
             </div>
-          </form>
-        </div>
-
-        <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            @click="showCreateRoleModal = false"
-            :disabled="isCreatingRole"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            class="btn btn-primary"
-            @click="createRole"
-            :disabled="
-              isCreatingRole ||
-              !newRole.name.trim() ||
-              selectedPermissions.length === 0
-            "
-          >
-            <span
-              v-if="isCreatingRole"
-              class="loading-spinner-small"
-            ></span>
-            {{ isCreatingRole ? 'Creating...' : 'Create Role' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Enhanced Create Group Modal -->
-    <div
-      v-if="showCreateGroupModal"
-      class="modal-overlay"
-      @click.self="showCreateGroupModal = false"
-    >
-      <div class="modal-content group-modal">
-        <div class="modal-header">
-          <div class="modal-title">
-            <div class="title-icon">👨‍👩‍👧‍👦</div>
-            <h3>Create New Group</h3>
           </div>
-          <button
-            class="close-button"
-            @click="showCreateGroupModal = false"
-          >
-            &times;
-          </button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="createGroup" class="group-form">
-            <div class="form-group">
-              <label for="groupName" class="form-label">
-                <span class="label-text">Group Name</span>
-                <span class="required">*</span>
-              </label>
-              <input
-                id="groupName"
-                v-model="newGroup.name"
-                type="text"
-                required
-                class="form-control"
-                placeholder="Enter group name"
-              />
-              <div class="form-hint">
-                Choose a descriptive name for this group
-              </div>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            @click="showCreateGroupModal = false"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            class="btn btn-primary"
-            @click="createGroup"
-            :disabled="isCreatingGroup"
-          >
-            <span
-              v-if="isCreatingGroup"
-              class="loading-spinner-small"
-            ></span>
-            {{ isCreatingGroup ? 'Creating...' : 'Create Group' }}
-          </button>
         </div>
       </div>
     </div>
   </div>
-</div>
-</div>
 </template>
 
 <script lang="ts" setup>
@@ -800,17 +609,10 @@ const availablePermissions = Object.keys(PermissionFlags).filter(
 ) as PermissionStrings[];
 
 // Modal states
-const showCreateRoleModal = ref(false);
 const showCreateGroupModal = ref(false);
-const isCreatingRole = ref(false);
 const isCreatingGroup = ref(false);
 
 // Form data
-const newRole = ref<CreateRoleData>({
-  name: '',
-  permissions: '',
-});
-
 const newGroup = ref<CreateGroupData>({
   name: '',
 });
@@ -837,10 +639,15 @@ const members = ref<
     fullName?: string;
     email: string;
     roles: Array<{ id: string; name: string }>;
+    selectedRole: string;
   }>
 >([]);
 const membersLoading = ref(false);
 const membersError = ref('');
+
+// New: Role assignment state
+const assigningRole = ref<string | null>(null); // userId being assigned
+const assignRoleError = ref('');
 
 const activeTab = ref<'details' | 'members'>('details');
 
@@ -1005,34 +812,6 @@ const deleteProject = async () => {
   }
 };
 
-const createRole = async () => {
-  if (!project.value) return;
-
-  isCreatingRole.value = true;
-
-  try {
-    const permissionValue = selectedPermissions.value.reduce((acc, key) => {
-      return acc | PermissionFlags[key as PermissionStrings];
-    }, 0n);
-
-    await apiCall(`/projects/${project.value.id}/roles/create`, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: newRole.value.name,
-        permissionFlags: permissionValue.toString(),
-      }),
-    });
-    await loadProject();
-    showCreateRoleModal.value = false;
-    newRole.value = { name: '', permissions: '' };
-    selectedPermissions.value = []; // Reset
-  } catch (err: any) {
-    alert('Failed to create role: ' + err.message);
-  } finally {
-    isCreatingRole.value = false;
-  }
-};
-
 const createGroup = async () => {
   if (!project.value) return;
 
@@ -1147,15 +926,6 @@ const toggleSelectAll = () => {
   }
 };
 
-const toggleRoleDropdown = (roleId: string) => {
-  if (activeRoleDropdown.value === roleId) {
-    activeRoleDropdown.value = null;
-  } else {
-    activeRoleDropdown.value = roleId;
-    activeGroupDropdown.value = null; // Close other dropdowns
-  }
-};
-
 const toggleGroupDropdown = (groupId: string) => {
   if (activeGroupDropdown.value === groupId) {
     activeGroupDropdown.value = null;
@@ -1169,7 +939,7 @@ const toggleGroupDropdown = (groupId: string) => {
 function closeDropdowns() {
   activeRoleDropdown.value = null;
   activeGroupDropdown.value = null;
-};
+}
 
 const loadMembers = async () => {
   if (!project.value) return;
@@ -1186,11 +956,12 @@ const loadMembers = async () => {
         fullName?: string;
         email: string;
         roles: Array<{ id: string; name: string }>;
+        selectedRole: string;
       }
     > = {};
     if (data.members) {
       for (const m of data.members) {
-        memberMap[m.id] = { ...m, roles: [] };
+        memberMap[m.id] = { ...m, roles: [], selectedRole: '' };
       }
     }
     if (data.projectRoles) {
@@ -1198,7 +969,7 @@ const loadMembers = async () => {
         if (role.users) {
           for (const user of role.users) {
             if (!memberMap[user.id]) {
-              memberMap[user.id] = { ...user, roles: [] };
+              memberMap[user.id] = { ...user, roles: [], selectedRole: '' };
             }
             memberMap[user.id].roles.push({ id: role.id, name: role.name });
           }
@@ -1220,12 +991,30 @@ watch(activeTab, (tab) => {
 });
 
 onMounted(() => {
-  loadProject()
-})
-
-defineExpose({ closeDropdowns })
   loadProject();
+});
 
+defineExpose({ closeDropdowns });
+loadProject();
+
+const assignRoleToMember = async (userId: string, roleName: string) => {
+  if (!project.value) return;
+  assigningRole.value = userId;
+  assignRoleError.value = '';
+  try {
+    await apiCall(`/projects/${project.value.id}/assign-role`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, roleName }),
+    });
+    await loadMembers();
+    alert('Role assigned successfully!');
+  } catch (err: any) {
+    assignRoleError.value = err.message || 'Failed to assign role.';
+    alert('Failed to assign role: ' + assignRoleError.value);
+  } finally {
+    assigningRole.value = null;
+  }
+};
 </script>
 
 <style scoped>
@@ -2180,7 +1969,6 @@ defineExpose({ closeDropdowns })
   }
 }
 
-.role-modal,
 .group-modal {
   max-width: 700px;
   max-height: 90vh;
@@ -2262,7 +2050,6 @@ defineExpose({ closeDropdowns })
 }
 
 /* Enhanced Form Styles */
-.role-form,
 .group-form {
   display: flex;
   flex-direction: column;
@@ -2290,12 +2077,6 @@ defineExpose({ closeDropdowns })
 .required {
   color: #e53e3e;
   font-weight: 700;
-}
-
-.permissions-count {
-  color: #4299e1;
-  font-weight: 500;
-  font-size: 0.9rem;
 }
 
 .form-control {
@@ -2589,7 +2370,6 @@ defineExpose({ closeDropdowns })
     margin: 0;
   }
 
-  .role-modal,
   .group-modal {
     width: 95%;
     max-width: none;

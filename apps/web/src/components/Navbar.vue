@@ -182,7 +182,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
-  margin-left: 15rem;
+  margin-left: 14rem;
 }
 
 .navbar-menu {

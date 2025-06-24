@@ -654,6 +654,8 @@ onMounted(async () => {
 
 .content {
   flex: 1;
+  display: flex;
+  justify-content: center;
   padding: 20px;
   margin-left: 0;
   max-width: none;
@@ -665,9 +667,9 @@ onMounted(async () => {
   background: #fff;
   border-radius: 18px;
   box-shadow: 0 2px 16px 0 rgba(60,60,60,0.08);
-  max-width: none;
-  width: 90%;
-  margin-left: 15rem;
+  max-width: 1400px;
+  width: 100%;
+  margin-left: 13rem;
   padding: 32px 32px 40px 32px;
 }
 
@@ -693,7 +695,7 @@ onMounted(async () => {
 }
 
 .welcome-title {
-  font-size: 2.1rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #23272f;
   margin: 0;
@@ -731,19 +733,19 @@ onMounted(async () => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 32px;
 }
 
 .stat-card {
   background: #fff;
-  border-radius: 16px;
+  border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(60,60,60,0.07);
   border: 1px solid #e5e7eb;
-  padding: 24px;
+  padding: 14px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   transition: all 0.2s ease;
 }
 
@@ -753,13 +755,13 @@ onMounted(async () => {
 }
 
 .stat-icon {
-  width: 60px;
-  height: 60px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
+  font-size: 1.2rem;
   color: white;
 }
 
@@ -773,16 +775,17 @@ onMounted(async () => {
 }
 
 .stat-number {
-  font-size: 2.2rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #23272f;
   line-height: 1;
 }
 
-.stat-label {
-  font-size: 1rem;
-  color: #6b7280;
-  margin: 4px 0 8px 0;
+.stat-label,
+.stat-change,
+.metric-value,
+.metric-header h3 {
+  font-size: 0.95rem;
 }
 
 .stat-change {
@@ -805,7 +808,7 @@ onMounted(async () => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 32px;
+  gap: 40px;
 }
 
 /* Section Headers */
@@ -814,7 +817,7 @@ onMounted(async () => {
 }
 
 .section-header h2 {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: #23272f;
   margin: 0 0 4px 0;
@@ -839,13 +842,13 @@ onMounted(async () => {
 
 .action-card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
   border-left: 4px solid;
-  padding: 20px;
+  padding: 14px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -856,14 +859,14 @@ onMounted(async () => {
 }
 
 .action-icon {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 1.3rem;
+  font-size: 1rem;
 }
 
 .action-content {
@@ -901,9 +904,9 @@ onMounted(async () => {
 
 .metric-card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
-  padding: 20px;
+  padding: 14px;
 }
 
 .metric-header {
@@ -970,13 +973,13 @@ onMounted(async () => {
 
 .activity-item {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
   border-left: 4px solid;
-  padding: 20px;
+  padding: 14px;
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 12px;
   transition: all 0.2s ease;
 }
 
@@ -985,14 +988,14 @@ onMounted(async () => {
 }
 
 .activity-icon {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 1rem;
+  font-size: 0.9rem;
   flex-shrink: 0;
 }
 

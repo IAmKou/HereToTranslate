@@ -5,6 +5,7 @@ export * from './commit.entity';
 export * from './file.entity';
 export * from './post.entity';
 export * from './project.entity';
+export * from './project-discussion.entity';
 export * from './project-group.entity';
 export * from './project-role.entity';
 export * from './project-tag.entity';
@@ -15,4 +16,3 @@ export * from './user-type.entity';
 export * from './task.entity';
 export * from './transaction.entity';
 export * from './user.entity';
-export * from './project-discussion.entity'

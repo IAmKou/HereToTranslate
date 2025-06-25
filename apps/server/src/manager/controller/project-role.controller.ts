@@ -15,13 +15,13 @@ import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { CreateProjectRoleDto, UpdateProjectRoleDto, UserIdsArray } from '#LocalProject/Dtos';
-import { RoleManagerService } from '#LocalProject/Managers/service/role-manager.service';
+import { ProjectRoleManagerService } from '#LocalProject/Managers/service/project-role-manager.service';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 
 @Controller('projects/:projectId/roles')
 @UseInterceptors(JsonSerializerInterceptor)
-export class RoleController {
-  constructor(private readonly roles: RoleManagerService) {
+export class ProjectRoleController {
+  constructor(private readonly roles: ProjectRoleManagerService) {
   }
 
   @UseGuards(JwtAuthGuard)

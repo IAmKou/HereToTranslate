@@ -4,13 +4,13 @@ import { Permission, PermissionFlags } from '@here-to-translate/common';
 import { Maybe } from '@here-to-translate/common/types';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { In, Repository } from 'typeorm';
-import { ManagerServiceImpl } from './manager-service.impl';
+import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ProjectManagerService } from './project-manager.service';
 
 @Injectable()
-export class RoleManagerService extends ManagerServiceImpl {
-  protected override readonly logger = new Logger(RoleManagerService.name);
+export class ProjectRoleManagerService extends CommonHttpServiceImpl {
+  protected override readonly logger = new Logger(ProjectRoleManagerService.name);
 
   constructor(
     @InjectRepository(ProjectRoleEntity)

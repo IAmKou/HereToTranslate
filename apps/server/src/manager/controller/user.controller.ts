@@ -12,7 +12,7 @@ import {
   UseInterceptors,
   ValidationPipe
 } from '@nestjs/common';
-import { ChangePasswordDto, RegisterDto, UpdateUserDto } from '#LocalProject/Dtos';
+import { ChangePasswordDto, RegisterDto, UpdateUserDto, UpdateUserProfileDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
@@ -23,7 +23,7 @@ import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
 import { UserEntity } from '#LocalProject/Entities';
 import { logger } from 'nx/src/utils/logger';
 
-@Controller('user')
+@Controller('users')
 @UseInterceptors(JsonSerializerInterceptor)
 export class UserController {
   constructor(private readonly users: UserManagerService) {}
@@ -45,23 +45,20 @@ export class UserController {
     @Param('id', BigIntTransformPipe) id: bigint,
     @Req() request: AuthenticatedRequest
   ) {
-    return this.users.getUser(id);
+    return this.users.getUserProfile(id);
   }
 
   @Put('/:id/update')
   @UseGuards(JwtAuthGuard)
-  updateUser(
-    @Param('id', BigIntTransformPipe) id: bigint,
-    @Body(ValidationPipe) userUpdateData: UpdateUserDto,
+  updateProfile(
+    @Body('id', BigIntTransformPipe) id: bigint,
+    @Body(ValidationPipe) userUpdateData: UpdateUserProfileDto,
     @Req() request: AuthenticatedRequest
   ) {
-    const  uid = request.user.id;
-    logger.log(uid.toString());
-    logger.log(id.toString());
-    if (uid.toString() !== id.toString()) {
+    if (request.user.id !== id) {
       throw new BadRequestException("You can only update your own user data.");
     }
-    return this.users.update(id, userUpdateData);
+    return this.users.updateProfile(id, userUpdateData);
   }
 
   @Patch('/:id/change-password')

@@ -12,10 +12,10 @@ import { CategoryEntity, ProjectEntity, ProjectRoleEntity, ProjectTagEntity, Use
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { IntoPermission, Permission, PermissionFlags } from '@here-to-translate/common';
 import { Maybe } from '@here-to-translate/common/types';
-import { ManagerServiceImpl } from './manager-service.impl';
+import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 
 @Injectable()
-export class ProjectManagerService extends ManagerServiceImpl {
+export class ProjectManagerService extends CommonHttpServiceImpl {
   protected override readonly logger = new Logger(ProjectManagerService.name);
 
   constructor(

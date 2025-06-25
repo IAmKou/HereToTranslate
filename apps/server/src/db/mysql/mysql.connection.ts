@@ -12,13 +12,16 @@ import {
   FileEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
+  ProjectDiscussionCommentEntity,
+  ProjectDiscussionThreadEntity,
+  DiscussionAccessPolicyEntity,
   RatingEntity,
   ReportEntity,
   RequestEntity,
   TaskEntity,
   TransactionEntity,
   CommitEntity,
-  ProjectTagEntity, ProjectDiscussionThreadEntity, ProjectDiscussionCommentEntity, DiscussionAccessPolicyEntity
+  ProjectTagEntity,
 } from '#LocalProject/Entities';
 
 
@@ -27,20 +30,19 @@ export class MySqlConnection {
   private static instance: MySqlConnection;
 
   // TypeORM DataSource instance
-  private readonly dataSource: DataSource;
+  private readonly _dataSource: DataSource;
 
   private readonly logger = new Logger(MySqlConnection.name);
 
   constructor(private readonly config: ConfigService) {
-    if (MySqlConnection.instance) return MySqlConnection.instance;
-    this.dataSource = new DataSource({
+    this._dataSource = new DataSource({
       type: 'mysql',
       host: this.config.get<string>('MYSQL_HOST'),
       port: this.config.get<number>('MYSQL_PORT'),
       username: this.config.get<string>('MYSQL_USER'),
       password: this.config.get<string>('MYSQL_PASSWORD'),
       database: this.config.get<string>('MYSQL_DATABASE'),
-      synchronize: false, // Auto create tables (turn off in production)
+      synchronize: true, // Auto create tables (turn off in production)
       logging: true,
       supportBigNumbers: true,
       entities: [UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
@@ -62,8 +64,8 @@ export class MySqlConnection {
   }
 
   // Get the MySQL DataSource instance
-  getDataSource(): DataSource {
-    return this.dataSource;
+  get dataSource(): DataSource {
+    return this._dataSource;
   }
 
   // Close the MySQL connection

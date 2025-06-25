@@ -17,6 +17,7 @@
       "#LocalProject/Dtos": ["src/dto/index.ts"],
       "#LocalProject/Services/*": ["src/service/*"],
       "#LocalProject/Entities": ["src/db/mysql/entity/index.ts"],
+      "#LocalProject/SqliteEntities": ["src/db/sqlite/entity/index.ts"],
       "#LocalProject/Utils/*": ["src/util/*"],
       "#LocalProject/Exceptions": ["src/util/exceptions/index.ts"],
       "#LocalProject/Managers/*": ["src/manager/*"],

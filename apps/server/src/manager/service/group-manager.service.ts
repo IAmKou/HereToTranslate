@@ -5,10 +5,10 @@ import { PermissionFlags } from '@here-to-translate/common';
 import { CreateProjectGroupDto, UpdateProjectGroupDto } from '#LocalProject/Dtos';
 import { ProjectGroupEntity, UserEntity } from '#LocalProject/Entities';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
-import { ManagerServiceImpl } from './manager-service.impl';
+import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 
 @Injectable()
-export class GroupManagerService extends ManagerServiceImpl {
+export class GroupManagerService extends CommonHttpServiceImpl {
   protected override readonly logger = new Logger(GroupManagerService.name);
 
   constructor(

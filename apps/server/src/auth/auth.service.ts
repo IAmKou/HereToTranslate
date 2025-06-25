@@ -276,6 +276,15 @@ export class AuthService {
       sessionId: v4()
     });
 
-    return await this.authRepository.save(meta);
+    await this.authRepository.save(meta);
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        username: user.username, 
+      }
+    };
   }
 }

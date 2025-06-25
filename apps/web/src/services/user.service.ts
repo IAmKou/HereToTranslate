@@ -75,7 +75,7 @@ export class UserService {
   }
 
   async getUserProfile(): Promise<UserProfile> {
-    const response = await this.api.get<UserProfile>('/user/profile');
+    const response = await this.api.get<UserProfile>('/users/profile');
 
     return {
       ...response.data,
@@ -85,7 +85,7 @@ export class UserService {
   }
 
   async updateProfile(data: UpdateProfileData, userId: string): Promise<UserProfile> {
-    const response = await this.api.put(`/user/${userId}/update`, data);
+    const response = await this.api.put(`/users/${userId}/update`, data);
 
     return {
       ...response.data,
@@ -95,11 +95,11 @@ export class UserService {
   }
 
   async changePassword(data: ChangePasswordData, userId : string): Promise<void> {
-    await this.api.patch(`/user/${userId}/change-password`, data);
+    await this.api.patch(`/users/${userId}/change-password`, data);
   }
 
   async getAllUsers(): Promise<User[]> {
-    const response = await this.api.get('/user/admin/all');
+    const response = await this.api.get('/users/admin/all');
     // Normalize dates in the response
     return response.data.map((user: any) => ({
       ...user,
@@ -108,18 +108,18 @@ export class UserService {
   }
 
   async updateUserRole(userId: string, role: number): Promise<User> {
-    const response = await this.api.put(`/user/admin/${userId}/role/${role}`);
+    const response = await this.api.put(`/users/admin/${userId}/role/${role}`);
     console.log('Updated user role response:', response.data);
     return response.data;
   }
 
   async updateUserStatus(userId: string, isActive: boolean): Promise<User> {
-    const response = await this.api.put(`/user/admin/${userId}/toggle-status`);
+    const response = await this.api.put(`/users/admin/${userId}/toggle-status`);
     return response.data;
   }
 
   async toggleUserStatus(userId: string): Promise<User> {
-    const response = await this.api.put(`/user/admin/${userId}/toggle-status`);
+    const response = await this.api.put(`/users/admin/${userId}/toggle-status`);
     return response.data;
   }
 

@@ -21,6 +21,7 @@ import { ConnectionStates } from 'mongoose';
       }
     }),
     TypeOrmModule.forRootAsync({
+      name: 'sqlite',
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {

@@ -12,7 +12,7 @@ import {
   UseInterceptors,
   ValidationPipe
 } from '@nestjs/common';
-import { ChangePasswordDto, RegisterDto, UpdateUserDto, UpdateUserProfileDto } from '#LocalProject/Dtos';
+import { RegisterDto, UpdateUserPasswordDto, UpdateUserProfileDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
@@ -21,7 +21,6 @@ import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.
 import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
 import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
 import { UserEntity } from '#LocalProject/Entities';
-import { logger } from 'nx/src/utils/logger';
 
 @Controller('users')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -36,16 +35,7 @@ export class UserController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   getProfile(@Req() request: AuthenticatedRequest) {
-    return this.users.getUser(request.user.id);
-  }
-
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  getUser(
-    @Param('id', BigIntTransformPipe) id: bigint,
-    @Req() request: AuthenticatedRequest
-  ) {
-    return this.users.getUserProfile(id);
+    return this.users.getUserProfile(request.user.id);
   }
 
   @Put('/:id/update')
@@ -65,9 +55,9 @@ export class UserController {
   async changePassword(
     @Param('id', BigIntTransformPipe) id: bigint,
     @Req() request: AuthenticatedRequest,
-    @Body() dto: ChangePasswordDto
+    @Body() dto: UpdateUserPasswordDto
   ) {
-    await this.users.changePassword(id, dto.currentPassword, dto.newPassword);
+    await this.users.changePassword(id, dto);
   }
 
 

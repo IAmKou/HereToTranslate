@@ -25,11 +25,12 @@ import { GroupManagerService } from './service/group-manager.service';
 import { DiscussionManagerService } from './service/discussion-manager.service';
 import { ProjectRoleManagerService } from './service/project-role-manager.service';
 import { RequestController } from './controller/request.controller';
-import { ProjectRoleController } from '#LocalProject/Managers/controller/projectRoleController';
+import { ProjectRoleController } from './controller/project-role.controller';
 import { DiscussionController } from '#LocalProject/Managers/controller/discussion.controller';
 import { GroupController } from '#LocalProject/Managers/controller/group.controller';
 import { ProjectTagManagerService } from '#LocalProject/Managers/service/project-tag-manager.service';
 import { ProjectTagController } from '#LocalProject/Managers/controller/project-tag.controller';
+import { AuthEntity } from '#LocalProject/SqliteEntities';
 
 @Global()
 @Module({
@@ -47,7 +48,7 @@ import { ProjectTagController } from '#LocalProject/Managers/controller/project-
       RequestEntity,
       UserEntity,
       UserTypeEntity,
-
+      AuthEntity,
     ])
   ],
   providers: [

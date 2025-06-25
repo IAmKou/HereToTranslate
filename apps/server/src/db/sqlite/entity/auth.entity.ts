@@ -1,7 +1,8 @@
-import { Column } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
+@Entity()
 export class AuthEntity {
-  @Column({ type: 'uuid', primary: true })
+  @PrimaryGeneratedColumn('uuid')
   sessionId: string;
   @Column({ type: 'bigint', unsigned: true })
   userId: bigint;

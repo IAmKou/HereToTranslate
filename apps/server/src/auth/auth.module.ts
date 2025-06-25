@@ -12,7 +12,8 @@ import { JwtFallthroughGuard } from './guards/jwt-fallthrough.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity, AuthEntity]),
+    TypeOrmModule.forFeature([UserEntity]),
+    TypeOrmModule.forFeature([AuthEntity], 'sqlite'),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

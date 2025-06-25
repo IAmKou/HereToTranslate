@@ -31,9 +31,6 @@ type ResetSession = {
 
 @Injectable()
 export class AuthService {
-  private readonly refreshTokenMap = new Map<RefreshToken, AccessToken>();
-  private readonly activeTokens = new Set<AccessToken>();
-  private readonly tokenMap = new Map<string, Set<RefreshToken | AccessToken>>();
   private readonly googleClient: OAuth2Client;
   private readonly logger = new Logger(AuthService.name);
   private resetSessions = new Map<string, ResetSession>();
@@ -47,7 +44,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    @InjectRepository(AuthEntity)
+    @InjectRepository(AuthEntity, 'sqlite')
     private readonly authRepository: Repository<AuthEntity>
   ) {
     const googleClientId = this.configService.get<string>('GOOGLE_OAUTH2_CLIENT');

@@ -18,6 +18,7 @@ import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
+// import InputSwitch from 'primevue/inputswitch';
 
 import ConfirmationService from 'primevue/confirmationservice';
 import ToastService from 'primevue/toastservice';
@@ -29,6 +30,7 @@ app.use(PrimeVue);
 app.use(ConfirmationService);
 app.use(ToastService);
 
+
 // Register PrimeVue Components
 
 app.component('Card', Card);
@@ -37,7 +39,7 @@ app.component('Column', Column);
 app.component('InputText', InputText);
 app.component('ConfirmDialog', ConfirmDialog);
 app.component('Toast', Toast);
-
+// app.component('InputSwitch',InputSwitch)
 
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');

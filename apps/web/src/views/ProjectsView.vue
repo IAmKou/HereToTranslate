@@ -142,8 +142,8 @@
                 <div class="project-header">
                   <h3>{{ project.name }}</h3>
                   <div class="project-badges">
-                    <span v-if="project.isPublic" class="badge badge-public">
-                      <i class="pi pi-globe"></i>
+                      <span v-if="project.isPrivate" class="badge badge-public">
+                        <i class="pi pi-globe"></i>
                       Public
                     </span>
                     <span v-else class="badge badge-private">
@@ -204,16 +204,14 @@
   </div>
 </template>
 
-<!-- ... phần script và style giữ nguyên như file của bạn ... -->
-
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import AppFooter from '../components/AppFooter.vue';
-import { authService } from '../services/auth.service';
 import { isSidebarCollapsed } from '../store/sidebar';
+import axiosInstance from '../api';
 
 // Interfaces
 interface Project {
@@ -262,35 +260,12 @@ export default defineComponent({
       }, 500);
     });
 
-    // API helper function
-    const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-      const token = authService.getAccessToken()
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers
-      }
-
-      const response = await fetch(`http://localhost:3000/api/projects${endpoint}`, {
-        ...options,
-        headers
-      })
-
-      if (!response.ok) {
-        throw new Error(`API call failed: ${response.statusText}`)
-      }
-
-      return response.json()
-    }
-
     const loadProjects = async () => {
       try {
         loading.value = true;
         error.value = null;
-
-        const data = await apiCall(`/me/projects`);
+        const { data } = await axiosInstance.get('/projects/me/projects');
         projects.value = data;
-
       } catch (err: any) {
         error.value = 'Failed to load your projects.';
         console.error(err);

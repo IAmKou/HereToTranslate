@@ -9,38 +9,23 @@ export interface CrudItem {
 
 const BASE_URL = 'http://localhost:3000/api';
 
-// Create axios instance
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true,
 });
 
-// Add request interceptor
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = authService.getAccessToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Add response interceptor
+// Response interceptor for 401 errors
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // refresh token if 401
+    // Refresh token if 401 and request hasn't been retried
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
         await authService.refreshTokens();
-        originalRequest.headers.Authorization = `Bearer ${authService.getAccessToken()}`;
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         await authService.logout();
@@ -53,6 +38,7 @@ axiosInstance.interceptors.response.use(
   }
 );
 
+// Exported API methods
 export const api = {
   async getAll(type: 'test' | 'mongo'): Promise<CrudItem[]> {
     const res = await axiosInstance.get<CrudItem[]>(`/${type}`);

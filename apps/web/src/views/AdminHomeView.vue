@@ -6,6 +6,7 @@ import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
 import { authService } from '../services/auth.service';
 import { userService, UserProfile, User } from '../services/user.service';
+import axiosInstance from '../api';
 
 // Interfaces
 interface SystemStats {
@@ -99,27 +100,6 @@ const quickActions = ref<QuickAction[]>([
   }
 ]);
 
-// API helper function
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const token = authService.getAccessToken();
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers
-  };
-
-  const response = await fetch(`http://localhost:3000/api${endpoint}`, {
-    ...options,
-    headers
-  });
-
-  if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`);
-  }
-
-  return response.json();
-};
-
 const fetchUserData = async () => {
   try {
     isLoadingUser.value = true;
@@ -163,30 +143,26 @@ const fetchUsers = async () => {
 const fetchSystemStats = async () => {
   try {
     isLoadingStats.value = true;
-
     // Fetch projects count using the new admin endpoint
     try {
-      const projectsResponse = await apiCall('/projects/admin/count');
+      const { data: projectsResponse } = await axiosInstance.get('/projects/admin/count');
       systemStats.value.totalProjects = projectsResponse.count || 0;
     } catch (error) {
       console.error('Error fetching projects count:', error);
       systemStats.value.totalProjects = 0;
     }
-
     // Fetch pending requests count
     try {
-      const requestsResponse = await apiCall('/requests/pending/count');
+      const { data: requestsResponse } = await axiosInstance.get('/requests/pending/count');
       systemStats.value.pendingRequests = requestsResponse.count || 0;
     } catch (error) {
       console.error('Error fetching pending requests count:', error);
       systemStats.value.pendingRequests = 0;
     }
-
     // Mock system metrics (replace with real API calls when available)
     systemStats.value.lastBackup = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     systemStats.value.diskUsage = Math.floor(Math.random() * 30) + 50; // 50-80%
     systemStats.value.memoryUsage = Math.floor(Math.random() * 40) + 30; // 30-70%
-
   } catch (error) {
     console.error('Error fetching system stats:', error);
   } finally {

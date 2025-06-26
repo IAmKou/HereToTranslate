@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { authService } from '../services/auth.service';
 import { useRouter } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
-import Button from 'primevue/button';
 import { ref, onMounted, computed } from 'vue';
 import { userService, UserProfile } from '../services/user.service';
+import axiosInstance from '../api';
 
 // Interfaces
 interface Project {
@@ -31,27 +30,6 @@ const projects = ref<Project[]>([]);
 const isLoadingProjects = ref(false);
 const projectsError = ref<string | null>(null);
 
-// API helper function
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const token = authService.getAccessToken()
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers
-  }
-
-  const response = await fetch(`http://localhost:3000/api/projects${endpoint}`, {
-    ...options,
-    headers
-  })
-
-  if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`)
-  }
-
-  return response.json()
-}
-
 const fetchUserData = async () => {
   try {
     isLoadingUser.value = true;
@@ -67,7 +45,7 @@ const fetchProjects = async () => {
   try {
     isLoadingProjects.value = true;
     projectsError.value = null;
-    const data = await apiCall(`/me/projects`);
+    const { data } = await axiosInstance.get('/projects/me/projects');
     projects.value = data;
   } catch (err: any) {
     projectsError.value = 'Failed to load your projects.';
@@ -122,16 +100,7 @@ onMounted(() => {
   fetchProjects();
 });
 
-const handleLogout = async () => {
-  try {
-    // Call logout service
-    await authService.logout();
-    // Redirect to login page
-    router.push('/login');
-  } catch (error) {
-    console.error('Logout failed:', error);
-  }
-};
+
 </script>
 
 <template>

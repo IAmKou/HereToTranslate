@@ -10,4 +10,10 @@ export class AuthEntity {
   accessToken: string;
   @Column({ type: 'varchar', length: 2000, nullable: true })
   refreshToken: string;
+  @Column({ type: 'datetime', nullable: false })
+  accessTokenExpiresAt: Date;
+  @Column({ type: 'datetime', nullable: true })
+  refreshTokenExpiresAt: Date;
+  @Column({ type: 'datetime', nullable: false })
+  lastActivityAt: Date;
 }

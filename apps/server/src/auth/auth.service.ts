@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
   Logger,
   UnauthorizedException
@@ -19,11 +18,9 @@ import { AuthEntity } from '#LocalProject/SqliteEntities';
 import { v4 } from 'uuid';
 import { MailerService } from '@nestjs-modules/mailer';
 import * as crypto from 'crypto';
+import { setInterval } from 'timers';
+import { LessThan } from 'typeorm';
 
-type TokenMeta = {
-  userId: string;
-  username: string;
-};
 type ResetSession = {
   code: string;
   expiresAt: Date;
@@ -34,6 +31,7 @@ export class AuthService {
   private readonly googleClient: OAuth2Client;
   private readonly logger = new Logger(AuthService.name);
   private resetSessions = new Map<string, ResetSession>();
+  private sessionCleanupInterval: NodeJS.Timeout;
 
   private readonly refreshExpiry: string;
   private readonly accessExpiry: string;
@@ -54,31 +52,47 @@ export class AuthService {
     this.googleClient = new OAuth2Client(googleClientId);
     this.refreshExpiry = this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ?? '7d';
     this.accessExpiry = this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '15m';
+    this.sessionCleanupInterval = setInterval(() => this.cleanupExpiredSessions(), 60 * 1000); // every 1 min
     this.logger.log('AuthService initialized');
   }
 
+  private async cleanupExpiredSessions() {
+    const now = new Date();
+    await this.authRepository.delete({ accessTokenExpiresAt: LessThan(now) });
+    await this.authRepository.delete({ lastActivityAt: LessThan(new Date(now.getTime() - 30 * 60 * 1000)) }); // 30 min inactivity
+  }
+
   async refreshTokens(refreshToken: string) {
-    if (!(await this.jwt.verifyAsync(refreshToken))) {
-      throw new UnauthorizedException('Invalid token');
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is missing');
     }
-
-    if (!await this.authRepository.exists({ where: { refreshToken }})) {
-      throw new UnauthorizedException('Token expired');
+    const meta = await this.authRepository.findOne({ where: { refreshToken } });
+    if (!meta) {
+      throw new UnauthorizedException('Refresh token expired or invalid');
     }
-
-    const meta: TokenMeta = this.jwt.decode(refreshToken);
-
+    const now = new Date();
+    if (meta.refreshTokenExpiresAt < now) {
+      await this.authRepository.delete({ refreshToken });
+      throw new UnauthorizedException('Refresh token expired');
+    }
+    // Inactivity check (30 min)
+    if (meta.lastActivityAt < new Date(now.getTime() - 30 * 60 * 1000)) {
+      await this.authRepository.delete({ refreshToken });
+      throw new UnauthorizedException('Session expired due to inactivity');
+    }
+    // Update last activity
+    meta.lastActivityAt = now;
+    await this.authRepository.save(meta);
+    // Fetch user info
     const user: Nullable<UserEntity> = await this.userRepository.findOne({
-      where: { id: BigInt(meta.userId) },
+      where: { id: meta.userId },
       relations: ['role']
     });
-
     if (!user) {
       this.logger.warn(`User with ID ${meta.userId} not found during token refresh`);
       await this.authRepository.delete({ refreshToken });
       throw new UnauthorizedException('User not found');
     }
-
     return this.generateTokenPair(user);
   }
 
@@ -86,34 +100,29 @@ export class AuthService {
     if (!token) {
       throw new UnauthorizedException('Token is missing');
     }
-
-    const tokenExists = await this.authRepository.exists({ where: {
-      accessToken: token
-    }})
-    if (!tokenExists) {
+    const meta = await this.authRepository.findOne({ where: { accessToken: token } });
+    if (!meta) {
+      throw new UnauthorizedException('Token expired or invalid');
+    }
+    const now = new Date();
+    if (meta.accessTokenExpiresAt < now) {
+      await this.authRepository.delete({ accessToken: token });
       throw new UnauthorizedException('Token expired');
     }
-
-    const payload = await this.jwt.verifyAsync(token);
-    if (!payload) {
-      throw new UnauthorizedException('Invalid token');
+    // Inactivity check (30 min)
+    if (meta.lastActivityAt < new Date(now.getTime() - 30 * 60 * 1000)) {
+      await this.authRepository.delete({ accessToken: token });
+      throw new UnauthorizedException('Session expired due to inactivity');
     }
-
-    let user: Nullable<UserEntity>;
-    try {
-      user = await this.userRepository.findOne({
-        where: { id: BigInt(payload.userId) },
-        select: ['id', 'username']
-      });
-    } catch (e) {
-      this.logger.error('Error fetching user from repository', e);
-      throw new InternalServerErrorException('Error fetching user from repository');
-    }
+    // Update last activity
+    meta.lastActivityAt = now;
+    await this.authRepository.save(meta);
+    const user = await this.userRepository.findOne({ where: { id: meta.userId }, select: ['id', 'username'] });
     if (!user) {
       await this.authRepository.delete({ accessToken: token });
       throw new UnauthorizedException('User not found');
     }
-    return user as IUserAuthMeta;
+    return { id: user.id, username: user.username };
   }
 
   async login(username: string, password: string) {
@@ -250,40 +259,53 @@ export class AuthService {
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await this.userRepository.save(user);
 
-    this.resetSessions.delete(email); // clear session
+    this.resetSessions.delete(email);
 
     return { message: 'Password reset successful' };
   }
 
+  public getExpiryDate(duration: string): Date {
+    // duration:  '15m', '7d'
+    const now = new Date();
+    const match = duration.match(/(\d+)([smhd])/);
+    if (!match) return now;
+    const value = parseInt(match[1], 10);
+    switch (match[2]) {
+      case 's': return new Date(now.getTime() + value * 1000);
+      case 'm': return new Date(now.getTime() + value * 60 * 1000);
+      case 'h': return new Date(now.getTime() + value * 60 * 60 * 1000);
+      case 'd': return new Date(now.getTime() + value * 24 * 60 * 60 * 1000);
+      default: return now;
+    }
+  }
+
   private async generateTokenPair(user: UserEntity) {
+    const now = new Date();
+    const accessTokenExpiresAt = this.getExpiryDate(this.accessExpiry);
+    const refreshTokenExpiresAt = this.getExpiryDate(this.refreshExpiry);
     const jwtPayload = {
       sub: Date.now().toString(2),
       userId: user.id.toString(),
       username: user.username
     };
-
-    const accessToken = this.jwt.sign(jwtPayload, {
-      expiresIn: this.accessExpiry
-    });
-    const refreshToken = this.jwt.sign(jwtPayload, {
-      expiresIn: this.refreshExpiry
-    });
-
+    const accessToken = this.jwt.sign(jwtPayload, { expiresIn: this.accessExpiry });
+    const refreshToken = this.jwt.sign(jwtPayload, { expiresIn: this.refreshExpiry });
     const meta = this.authRepository.create({
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+      accessToken,
+      refreshToken,
       userId: user.id,
-      sessionId: v4()
+      sessionId: v4(),
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+      lastActivityAt: now
     });
-
     await this.authRepository.save(meta);
-
     return {
       accessToken,
       refreshToken,
       user: {
         id: user.id,
-        username: user.username, 
+        username: user.username,
       }
     };
   }

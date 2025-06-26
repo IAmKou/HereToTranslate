@@ -16,14 +16,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   constructor(private readonly authService: AuthService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: (req: Request) => {
+        // Extract token from cookies first, then fallback to Authorization header
+        return req.cookies?.access_token || ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+      },
       secretOrKey: process.env.JWT_SECRET_KEY ?? 'secret',  // MUST match JWT module config
       passReqToCallback: true,
     });
   }
 
   override authenticate(req: Request) {
-    const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+    const token = req.cookies?.access_token || ExtractJwt.fromAuthHeaderAsBearerToken()(req);
     this.authService.validateToken(token)
       .then(user => {
         if (!user) {

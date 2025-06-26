@@ -16,20 +16,37 @@ export interface RegisterData {
 }
 
 export interface AuthResponse {
-  accessToken: string;
-  refreshToken: string;
-  role: string;
+  user: {
+    id: string;
+    username: string;
+  };
+}
+
+export interface User {
+  id: string;
   username: string;
+  email: string;
+  fullName: string;
+  role: {
+    id: number;
+    name: string;
+  };
+  isActive: boolean;
+  phone?: string;
+  createdAt: string;
 }
 
 class AuthService {
-  private accessToken: string | null = localStorage.getItem('accessToken');
-  private refreshToken: string | null = localStorage.getItem('refreshToken');
-  private user: { username: string; role: string } | null = JSON.parse(localStorage.getItem('user') || 'null');
+  private user: User | null = null;
+
+  constructor() {
+    // Configure axios to send cookies with requests
+    axios.defaults.withCredentials = true;
+  }
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/login`, credentials);
-    this.setAuthData(response.data);
+    this.user = response.data.user as User;
     return response.data;
   }
 
@@ -40,20 +57,14 @@ class AuthService {
 
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
     const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/google`, { idToken });
-    this.setAuthData(response.data);
+    this.user = response.data.user as User;
     return response.data;
   }
 
   async refreshTokens(): Promise<AuthResponse> {
-    if (!this.refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
     try {
-      const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/refresh`, {
-        refreshToken: this.refreshToken,
-      });
-      this.setAuthData(response.data);
+      const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/refresh`);
+      this.user = response.data.user as User;
       return response.data;
     } catch (error) {
       this.clearAuthData();
@@ -63,11 +74,7 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      if (this.refreshToken) {
-        await axios.post(`${BASE_URL}/auth/logout`, {
-          refreshToken: this.refreshToken,
-        });
-      }
+      await axios.post(`${BASE_URL}/auth/logout`);
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
@@ -75,49 +82,37 @@ class AuthService {
     }
   }
 
+  async getCurrentUser(): Promise<User | null> {
+    try {
+      // Try to get user info from the server
+      const response = await axios.get<User>(`${BASE_URL}/auth/me`);
+      this.user = response.data;
+      return this.user;
+    } catch (error) {
+      // If the request fails, user is not authenticated
+      this.user = null;
+      return null;
+    }
+  }
+
   isAuthenticated(): boolean {
-    return !!this.accessToken;
+    return !!this.user;
   }
 
   isAdmin(): boolean {
-    return this.user?.role === 'admin' || this.user?.role === 'super_admin';
+    return this.user?.role?.id === 2; // Admin role ID
   }
 
   isSuperAdmin(): boolean {
-    return this.user?.role === 'super_admin';
+    return this.user?.role?.id === 1; // SuperAdmin role ID
   }
 
-  getAccessToken(): string | null {
-    return this.accessToken;
-  }
-
-  getRefreshToken(): string | null {
-    return this.refreshToken;
-  }
-
-  getUser(): { username: string; role: string } | null {
+  getUser(): User | null {
     return this.user;
   }
 
-  private setAuthData(data: AuthResponse): void {
-    this.accessToken = data.accessToken;
-    this.refreshToken = data.refreshToken;
-    this.user = {
-      username: data.username,
-      role: data.role
-    };
-    localStorage.setItem('accessToken', data.accessToken);
-    localStorage.setItem('refreshToken', data.refreshToken);
-    localStorage.setItem('user', JSON.stringify(this.user));
-  }
-
   private clearAuthData(): void {
-    this.accessToken = null;
-    this.refreshToken = null;
     this.user = null;
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
   }
 }
 

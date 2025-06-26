@@ -8,13 +8,14 @@ import { NestFactory } from '@nestjs/core';
 import { MainModule } from './main.module';
 import { shared } from '@here-to-translate/common';
 import { BigIntSerializerInterceptor } from './util/bigint-serializer.interceptor';
-import * as cookieParser from 'cookie-parser';
+import cookieParser from 'cookie-parser';
+
 
 async function bootstrap() {
   shared();
   const app = await NestFactory.create(MainModule);
     app.use(cookieParser());
-  
+
   app.useGlobalPipes(new ValidationPipe(
     {
       enableDebugMessages: true,

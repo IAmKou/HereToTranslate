@@ -24,7 +24,6 @@ import { ProjectTagController } from "./controller/project-tag.controller";
 import { UserController } from "./controller/user.controller";
 import { AuthModule } from "#LocalProject/Auth/auth.module";
 import { GroupManagerService } from '#LocalProject/Managers/service/group-manager.service';
-import { RoleManagerService } from '#LocalProject/Managers/service/role-manager.service';
 import { DiscussionManagerService } from '#LocalProject/Managers/service/discussion-manager.service';
 
 @Global()
@@ -52,7 +51,6 @@ import { DiscussionManagerService } from '#LocalProject/Managers/service/discuss
     ProjectManagerService,
     ProjectTagManagerService,
     GroupManagerService,
-    RoleManagerService,
     DiscussionManagerService
   ],
   exports: [
@@ -62,7 +60,6 @@ import { DiscussionManagerService } from '#LocalProject/Managers/service/discuss
     ProjectManagerService,
     ProjectTagManagerService,
     GroupManagerService,
-    RoleManagerService,
     DiscussionManagerService,
   ],
   controllers: [

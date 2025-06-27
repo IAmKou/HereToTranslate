@@ -54,15 +54,15 @@
                   <div class="meta-item">
                     <span class="meta-icon">👤</span>
                     <span class="meta-text"
-                      >Created by
+                    >Created by
                       <strong>{{ project.createdBy.username }}</strong></span
                     >
                   </div>
                   <div class="meta-item">
                     <span class="meta-icon">📅</span>
                     <span class="meta-text">{{
-                      formatDate(project.createdAt)
-                    }}</span>
+                        formatDate(project.createdAt)
+                      }}</span>
                   </div>
                 </div>
               </div>
@@ -78,7 +78,7 @@
                   <span class="icon">✏️</span>
                   Edit Project
                 </button>
-                <button @click="deleteProject" class="btn btn-danger">
+                <button @click="openDeleteModal" class="btn btn-danger">
                   <span class="icon">🗑️</span>
                   Delete Project
                 </button>
@@ -206,13 +206,13 @@
                     <div class="user-info">
                       <div class="user-avatar">
                         <span class="avatar-text">{{
-                          (
-                            userSearch.result.fullName ||
-                            userSearch.result.username
-                          )
-                            .charAt(0)
-                            .toUpperCase()
-                        }}</span>
+                            (
+                              userSearch.result.fullName ||
+                              userSearch.result.username
+                            )
+                              .charAt(0)
+                              .toUpperCase()
+                          }}</span>
                       </div>
                       <div class="user-details">
                         <h4>
@@ -267,7 +267,7 @@
                     <form @submit.prevent="searchUser" class="add-user-form">
                       <div class="form-group">
                         <label for="userIdentifier"
-                          >Search by Email or Name</label
+                        >Search by Email or Name</label
                         >
                         <input
                           id="userIdentifier"
@@ -304,7 +304,7 @@
                     >
                       <div class="user-info">
                         <span
-                          ><b>{{
+                        ><b>{{
                             userSearch.result.fullName ||
                             userSearch.result.username
                           }}</b>
@@ -486,6 +486,52 @@
             </div>
           </div>
         </div>
+
+        <!-- Delete Project Modal -->
+        <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Delete Project</h3>
+            </div>
+            <div class="modal-body">
+              <p>Are you sure you want to delete this project? This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="showDeleteModal = false">Cancel</button>
+              <button class="btn btn-danger" @click="confirmDeleteProject">Delete</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div v-if="showSuccessModal" class="modal-overlay">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Project Deleted</h3>
+            </div>
+            <div class="modal-body">
+              <p>Project deleted successfully!</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-primary" @click="handleSuccessModalOk">OK</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add User Success Modal -->
+        <div v-if="showAddUserSuccessModal" class="modal-overlay">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>User Added</h3>
+            </div>
+            <div class="modal-body">
+              <p>User added to project!</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-primary" @click="showAddUserSuccessModal = false">OK</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -533,8 +579,6 @@ interface ProjectGroup {
   members?: Array<{ id: string; username: string; fullName?: string }>;
 }
 
-
-
 interface CreateGroupData {
   name: string;
 }
@@ -552,6 +596,9 @@ const availablePermissions = Object.keys(PermissionFlags).filter(
 // Modal states
 const showCreateGroupModal = ref(false);
 const isCreatingGroup = ref(false);
+const showDeleteModal = ref(false);
+const showSuccessModal = ref(false);
+const showAddUserSuccessModal = ref(false);
 
 // Form data
 const newGroup = ref<CreateGroupData>({
@@ -586,18 +633,13 @@ const members = ref<
 const membersLoading = ref(false);
 const membersError = ref('');
 
-
 const activeTab = ref<'details' | 'members'>('details');
-
-
 
 const isAllSelected = ref(false);
 
 // Dropdown states
 const activeRoleDropdown = ref<string | null>(null);
 const activeGroupDropdown = ref<string | null>(null);
-
-
 
 // Watch for changes in selected permissions to update select all state
 watch(
@@ -613,7 +655,6 @@ watch(availablePermissions, () => {
   isAllSelected.value =
     selectedPermissions.value.length === availablePermissions.length;
 });
-
 
 const loadProject = async () => {
   try {
@@ -647,23 +688,25 @@ const editProject = () => {
   router.push(`/projects/${project.value?.id}/edit`);
 };
 
-const deleteProject = async () => {
-  if (
-    !project.value ||
-    !confirm(
-      'Are you sure you want to delete this project? This action cannot be undone.'
-    )
-  ) {
-    return;
-  }
+const openDeleteModal = () => {
+  showDeleteModal.value = true;
+};
 
+const confirmDeleteProject = async () => {
+  if (!project.value) return;
   try {
     await axiosInstance.delete(`/projects/${project.value.id}`);
-    alert('Project deleted successfully!');
-    router.push('/projects');
+    showDeleteModal.value = false;
+    showSuccessModal.value = true;
   } catch (err: any) {
     alert('Failed to delete project: ' + err.message);
+    showDeleteModal.value = false;
   }
+};
+
+const handleSuccessModalOk = () => {
+  showSuccessModal.value = false;
+  router.push('/projects');
 };
 
 const createGroup = async () => {
@@ -735,7 +778,7 @@ const addUserToProject = async () => {
       { identifier: userSearch.value.result.email }
     );
     await loadProject();
-    alert('User added to project!');
+    showAddUserSuccessModal.value = true;
     userSearch.value.result = null;
     userSearch.value.identifier = '';
   } catch (err: any) {

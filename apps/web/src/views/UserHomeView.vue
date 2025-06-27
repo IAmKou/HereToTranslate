@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
 import { ref, onMounted, computed } from 'vue';
-import { userService, UserProfile } from '../services/user.service';
+import { UserProfile } from '../services/user.service';
 import axiosInstance from '../api';
 
 // Interfaces
@@ -22,8 +21,6 @@ interface Project {
   tags?: Array<{ id: string; name: string }>;
 }
 
-const router = useRouter();
-
 const user = ref<UserProfile | null>(null);
 const isLoadingUser = ref(false);
 const projects = ref<Project[]>([]);
@@ -33,13 +30,15 @@ const projectsError = ref<string | null>(null);
 const fetchUserData = async () => {
   try {
     isLoadingUser.value = true;
-    user.value = await userService.getUserProfile();
+    const { data } = await axiosInstance.get('/auth/me');
+    user.value = data;
   } catch (error) {
     console.error('Error fetching user data:', error);
   } finally {
     isLoadingUser.value = false;
   }
 };
+
 
 const fetchProjects = async () => {
   try {
@@ -57,14 +56,10 @@ const fetchProjects = async () => {
 
 // Computed properties for stats
 const inProgressProjects = computed(() => {
-  // For now, we'll assume projects are in progress if they have recent activity
-  // You might want to add a status field to your project model
   return projects.value.length;
 });
 
 const completedProjects = computed(() => {
-  // For now, return 0 as we don't have completion status
-  // You might want to add a status field to your project model
   return 0;
 });
 

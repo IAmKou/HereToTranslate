@@ -216,8 +216,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
 
     const userCanViewProject =
-      (typeof uid !== 'undefined')
-      && await this.testPermissions(projectId, uid, PermissionFlags.ViewProject).catch(() => false);
+      (typeof uid !== 'undefined') &&
+      await this.testPermissions(projectId, uid, PermissionFlags.ViewProject).catch(() => false);
 
     if (project.isPrivate && !userCanViewProject) {
       this.logger.debug(`User with ID ${uid} does not have access to project with ID ${projectId}`);
@@ -235,11 +235,15 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         'createdBy.id',
         'createdBy.username',
         'createdBy.fullName',
-        'tags'
+        'tags',
+        'category.id',
+        'category.name',
+        'category.description'
       ])
       .where('project.id = :projectId', { projectId })
       .leftJoin('project.createdBy', 'createdBy')
-      .leftJoin('project.tags', 'tags');
+      .leftJoin('project.tags', 'tags')
+      .leftJoin('project.category', 'category');
 
     if (!userCanViewProject) {
       this.logger.debug(`Project with ID ${projectId} is public, allowing metadata access`);
@@ -255,6 +259,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.unknownErrorHanlder(error, 'Failed to fetch project metadata');
     }
   }
+
 
   async updateProjectMetadata(uid: bigint, projectId: bigint, updateData: UpdateProjectMetadataDto) {
     this.logger.debug(`Updating project with ID: ${projectId}`, updateData);

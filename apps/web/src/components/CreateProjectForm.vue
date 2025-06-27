@@ -277,82 +277,63 @@ const isFormValid = computed(() => {
 
 // API helper function
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const token = authService.getAccessToken()
-
-  if (!token) {
-    throw new Error('Authentication required. Please log in.')
-  }
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
-    ...options.headers
-  }
-
   const response = await fetch(`/api${endpoint}`, {
     ...options,
-    headers
-  })
+    credentials: 'include', // ✅ Important for cookies
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
 
   if (response.status === 401) {
-    // Token might be expired, try to refresh
     try {
-      await authService.refreshTokens()
-      const newToken = authService.getAccessToken()
-      if (newToken) {
-        // Retry the request with new token
-        const retryResponse = await fetch(`/api${endpoint}`, {
-          ...options,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${newToken}`,
-            ...options.headers
-          }
-        })
+      await authService.refreshTokens();
 
-        if (!retryResponse.ok) {
-          throw new Error(`API call failed: ${retryResponse.statusText}`)
+      const retryResponse = await fetch(`/api${endpoint}`, {
+        ...options,
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {})
         }
-        return retryResponse.json()
+      });
+
+      if (!retryResponse.ok) {
+        throw new Error(`API call failed: ${retryResponse.statusText}`);
       }
+
+      return retryResponse.json();
     } catch (refreshError) {
       // Refresh failed, redirect to login
-      authService.logout()
-      router.push('/login')
-      throw new Error('Session expired. Please log in again.')
+      await authService.logout();
+      router.push('/login');
+      throw new Error('Session expired. Please log in again.');
     }
   }
 
   if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`)
+    throw new Error(`API call failed: ${response.statusText}`);
   }
 
-  return response.json()
-}
+  return response.json();
+};
 
 const fetchCategories = async () => {
   try {
-    const token = authService.getAccessToken()
-    if (!token) {
-      console.error('No authentication token available')
-      return
-    }
-
     const response = await fetch('/api/categories/all', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
+      credentials: 'include'
+    });
 
     if (response.ok) {
-      categories.value = await response.json()
+      categories.value = await response.json();
     } else {
-      console.error('Failed to fetch categories:', response.statusText)
+      console.error('Failed to fetch categories:', response.statusText);
     }
   } catch (error) {
-    console.error('Error fetching categories:', error)
+    console.error('Error fetching categories:', error);
   }
-}
+};
 
 // Prevent double submission
 const handleSubmitClick = (event: Event) => {

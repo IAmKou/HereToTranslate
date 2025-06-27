@@ -92,7 +92,6 @@ export class UserService {
 
   async getAllUsers(): Promise<User[]> {
     const response = await this.api.get('/users/admin/all');
-    // Normalize dates in the response
     return response.data.map((user: any) => ({
       ...user,
       createdAt: this.normalizeDate(user.createdAt)

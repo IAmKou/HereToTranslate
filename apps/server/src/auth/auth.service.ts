@@ -190,7 +190,10 @@ export class AuthService {
 
   async logout(token: string, allSessions = false) {
     const meta = await this.authRepository.findOne({
-      where: { accessToken: token }
+      where: [
+        { accessToken: token },
+        { refreshToken: token }
+      ]
     });
 
     if (!meta) {
@@ -201,11 +204,13 @@ export class AuthService {
       await this.authRepository.delete({ userId: meta.userId });
       this.logger.log(`User ${meta.userId} logged out from all sessions`);
     } else {
-      await this.authRepository.delete({ accessToken: token });
+      await this.authRepository.delete({ sessionId: meta.sessionId });
       this.logger.log(`User ${meta.userId} logged out from session ${meta.sessionId}`);
     }
+
     return { message: 'Logged out successfully' };
   }
+
 
   async sendResetCode(email: string) {
     const user = await this.userRepository.findOne({ where: { email } });

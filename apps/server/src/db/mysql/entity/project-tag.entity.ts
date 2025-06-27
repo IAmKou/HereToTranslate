@@ -9,6 +9,8 @@ export class ProjectTagEntity {
   @Column({ unique: true })
   name: string;
 
-  @ManyToMany(() => ProjectEntity, project => project.tags)
+  @ManyToMany(() => ProjectEntity, project => project.tags,{
+
+  })
   projects: ProjectEntity[];
 }

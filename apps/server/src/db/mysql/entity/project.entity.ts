@@ -29,10 +29,16 @@ export class ProjectEntity {
   @CreateDateColumn()
   createdAt: Date;
 
-  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.project)
+  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.project, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   projectRoles: ProjectRoleEntity[];
 
-  @OneToMany(() => ProjectGroupEntity, group => group.project)
+  @OneToMany(() => ProjectGroupEntity, group => group.project, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   groups: ProjectGroupEntity[];
 
   @OneToMany(() => BranchEntity, branch => branch.project)

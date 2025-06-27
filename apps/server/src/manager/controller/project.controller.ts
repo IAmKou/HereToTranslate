@@ -53,6 +53,7 @@ export class ProjectController {
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @Req() req: Partial<AuthenticatedRequest>
   ) {
+
     return this.projects.fetchProject(req.user?.id, BigInt(projectId));
   }
 
@@ -68,7 +69,7 @@ export class ProjectController {
 
   @UseGuards(JwtAuthGuard)
   @Delete(':projectId')
-  async delete(@Body('projectId', BigIntTransformPipe) projectId: bigint) {
+  async delete( @Param('projectId', BigIntTransformPipe) projectId: bigint) {
     await this.projects.deleteProject(projectId);
     return { message: `Project with ID ${projectId} deleted successfully` };
   }

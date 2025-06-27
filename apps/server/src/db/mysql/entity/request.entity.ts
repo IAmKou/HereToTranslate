@@ -21,6 +21,9 @@ export class RequestEntity {
   @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'SET NULL' })
   project: ProjectEntity;
 
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  assignee: UserEntity;
+
   @Column({ nullable: true })
   title: string;
 
@@ -38,4 +41,7 @@ export class RequestEntity {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column()
+  isPublic: boolean;
 }

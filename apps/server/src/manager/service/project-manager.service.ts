@@ -355,11 +355,12 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
   }
 
-  async findUserToProject(projectId: bigint, identifier : string) : Promise<UserEntity | null>{
+  async findUserToProject(projectId: bigint, identifier: string): Promise<UserEntity | null> {
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
     });
+
     if (!project) {
       throw new NotFoundException('Project not found');
     }
@@ -370,15 +371,13 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       where: [
         {
           email: identifier,
-          id: existingMemberIds.length
-            ? Not(In(existingMemberIds))
-            : undefined,
+          id: existingMemberIds.length ? Not(In(existingMemberIds)) : undefined,
+          role: Not(In(['ADMIN', 'SUPER_ADMIN'])),
         },
         {
           fullName: Like(`%${identifier}%`),
-          id: existingMemberIds.length
-            ? Not(In(existingMemberIds))
-            : undefined,
+          id: existingMemberIds.length ? Not(In(existingMemberIds)) : undefined,
+          role: Not(In(['ADMIN', 'SUPER_ADMIN'])),
         },
       ],
     });

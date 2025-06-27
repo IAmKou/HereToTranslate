@@ -1,4 +1,4 @@
-import { RequestEntity, RequestStatus } from '#LocalProject/Entities';
+import { RequestEntity, RequestStatus, UserEntity } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { PermissionFlags } from '@here-to-translate/common';
 import { DAY } from '#LocalProject/Utils/common';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
+import { MailService } from '../../mailer/mailer.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -13,18 +14,25 @@ export class RequestManagerService {
   constructor(
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
-    private readonly projectManager: ProjectManagerService
+    private readonly projectManager: ProjectManagerService,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+    private readonly mailService: MailService,
+
   ) { }
 
-  async createRequest(uid: bigint, projectId: bigint, data: CreateRequestDto) {
-    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ViewProject);
-
+  async createRequest(
+    dto: CreateRequestDto,
+    uid: bigint
+  ): Promise<RequestEntity> {
+    const DAY = 24 * 60 * 60 * 1000;
     const {
       title,
       description,
       dealAmount,
       deadline: deadlineRaw,
-    } = data;
+      isPublic,
+    } = dto;
 
     const deadline = new Date(deadlineRaw);
 
@@ -33,15 +41,27 @@ export class RequestManagerService {
     }
 
     const request = this.requestRepository.create({
-      requester: { id: BigInt(uid) },
-      project: { id: BigInt(projectId) },
+      requester:  { id: BigInt(uid) },
+      project: dto.projectId ? { id: BigInt(dto.projectId) } : undefined,
+      assignee: dto.assigneeId ? { id: BigInt(dto.assigneeId) } : undefined,
       title,
       description,
       dealAmount,
       deadline,
       createdAt: new Date(),
       status: RequestStatus.Pending,
+      isPublic,
     });
+
+    if (!isPublic) {
+      const asigneeUser = await this.userRepository.findOne({ where: { id: BigInt(dto.assigneeId) } });
+      if (asigneeUser?.email) {
+        await this.mailService.sendPrivateRequestConfirmation(asigneeUser.email,{
+          title,
+          deadline,
+        });
+      }
+    }
 
     return this.requestRepository.save(request);
   }
@@ -68,8 +88,7 @@ export class RequestManagerService {
     return await queryBuilder.getMany();
   }
 
-  async fetchRequest(uid: bigint, projectId: bigint, requestId: bigint) {
-    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ViewProject);
+  async fetchRequests() {
     const query = this.requestRepository.createQueryBuilder('requests')
       .select([
         'requests.id',
@@ -81,20 +100,19 @@ export class RequestManagerService {
         'requests.createdAt',
         'requester.id',
         'requester.username',
-        'project.id',
-        'project.name'
       ])
-      .where('requests.id = :requestId', { requestId: BigInt(requestId) })
-      .andWhere('project.id = :projectId', { projectId: BigInt(projectId) })
       .leftJoin('requests.requester', 'requester')
       .leftJoin('requests.project', 'project');
 
-    const result = await query.getOne();
-    if (!result) {
-      throw new NotFoundException("Unknown request");
+    const result = await query.getMany();
+
+    if (!result || result.length === 0) {
+      throw new NotFoundException('No requests found');
     }
+
     return result;
   }
+
 
   async updateRequest(uid: bigint, requestId: bigint, data: Partial<UpdateRequestDto>) {
     const {
@@ -168,4 +186,59 @@ export class RequestManagerService {
     request.status = status;
     return this.requestRepository.save(request);
   }
+
+  // async registerForPublicRequest(requestId: number, user: UserEntity) {
+  //   const request = await this.requestRepo.findOneOrFail({ where: { id: requestId } });
+  //
+  //   if (request.status !== RequestStatus.Pending) {
+  //     throw new BadRequestException('Request is not open for registration.');
+  //   }
+  //
+  //   await this.mailService.notifyRequesterOfRegistration(request, user);
+  //   if (request.requester) {
+  //     await this.chatService.openChatBetween(user, request.requester);
+  //   }
+  // }
+  //
+  //
+  // async approveRegistrant(
+  //   requestId: number,
+  //   selectedUserId: number
+  // ): Promise<ProjectEntity> {
+  //   const request = await this.requestRepo.findOneOrFail({
+  //     where: { id: requestId },
+  //     relations: ['requester', 'assignee'],
+  //   });
+  //
+  //   if (request.assignee) {
+  //     throw new BadRequestException('Request has already been assigned.');
+  //   }
+  //
+  //   const selectedUser = await this.userRepo.findOneOrFail({
+  //     where: { id: selectedUserId },
+  //   });
+  //
+  //   await this.mailService.notifyAllOthersRequestTaken(requestId, selectedUser.id);
+  //   await this.notificationService.notifyAllOthers(requestId, selectedUser.id);
+  //
+  //   const depositSuccess = await this.paypalService.createDeposit(request.dealAmount, selectedUser);
+  //   if (!depositSuccess) {
+  //     throw new Error('Deposit failed.');
+  //   }
+  //
+  //   const newProject = this.projectRepo.create({
+  //     name: request.title,
+  //     description: request.description,
+  //     isPrivate: true,
+  //     createdBy: selectedUser,
+  //   });
+  //   const savedProject = await this.projectRepo.save(newProject);
+  //
+  //   request.assignee = selectedUser;
+  //   request.project = savedProject;
+  //   request.status = RequestStatus.Approved;
+  //   await this.requestRepo.save(request);
+  //
+  //   return savedProject;
+  // }
 }

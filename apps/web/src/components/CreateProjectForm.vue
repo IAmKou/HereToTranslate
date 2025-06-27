@@ -367,9 +367,16 @@ const handleSubmit = async () => {
   try {
     console.log('Submitting project creation request...')
 
+    // Chuyển đổi isPublic thành isPrivate trước khi gửi lên backend
+    const payload = {
+      ...form.value,
+      isPrivate: !form.value.isPublic,
+    }
+    delete payload.isPublic;
+
     const result = await apiCall('/projects/create', {
       method: 'POST',
-      body: JSON.stringify(form.value)
+      body: JSON.stringify(payload)
     })
 
     console.log('Project created successfully:', result)

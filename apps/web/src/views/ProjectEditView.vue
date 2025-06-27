@@ -51,7 +51,9 @@
               class="form-control"
               placeholder="Enter project name"
               maxlength="100"
+              @blur="nameTouched = true"
             >
+            <span v-if="nameError" class="error-text">Project name is required.</span>
           </div>
 
           <div class="form-group">
@@ -95,50 +97,18 @@
 
           <div class="form-group">
             <label for="tags">Tags</label>
-            <div class="tags-input-container">
-              <div class="tags-display">
-                <span
-                  v-for="(tag, index) in form.tags"
-                  :key="index"
-                  class="tag"
-                >
-                  <span class="tag-icon">
-                    <!-- Tag SVG Icon -->
-                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="2" y="6" width="16" height="8" rx="3" fill="#4299e1"/>
-                    </svg>
-                  </span>
-                  {{ tag }}
-                  <button
-                    type="button"
-                    class="tag-remove"
-                    @click="removeTag(index)"
-                    aria-label="Remove tag"
-                  >
-                    ×
-                  </button>
-                </span>
-              </div>
-              <input
-                id="tags"
-                v-model="newTag"
-                type="text"
-                class="form-control"
-                placeholder="Add tags (press Enter to add)"
-                @keydown.enter.prevent="addTag"
-                maxlength="30"
-              >
-            </div>
-            <ul class="tag-suggestions">
-              <li
-                v-for="tag in filteredSuggestions"
-                :key="tag"
-                @click="selectSuggestedTag(tag)"
-              >
-                {{ tag }}
-              </li>
-            </ul>
-            <span class="help-text">Tags help users find your project. Press Enter to add.</span>
+            <Multiselect
+              v-model="form.tags"
+              :options="allTags"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              :preserve-search="true"
+              placeholder="Select tag..."
+              :taggable="false"
+              class="multiselect-custom"
+            />
+            <span class="help-text">Select one or many tags.</span>
           </div>
         </section>
 
@@ -154,15 +124,21 @@
             Visibility
           </h2>
           <div class="form-group">
-            <label class="checkbox-label">
+            <label class="switch-label">
               <input
                 v-model="form.isPrivate"
                 type="checkbox"
-                class="checkbox-input"
+                class="switch-input"
+                @change="() => {}"
               >
-              <span class="checkbox-text">Make this project public</span>
+              <span class="switch-slider"></span>
+              <span class="switch-text">
+                {{ form.isPrivate ? 'Private' : 'Public' }}
+              </span>
             </label>
-            <span class="help-text">Public projects are visible to all users</span>
+            <span class="help-text">
+              {{ form.isPrivate ? 'Only you and collaborators can see this project.' : 'Public projects are visible to all users.' }}
+            </span>
           </div>
         </section>
 
@@ -181,9 +157,25 @@
 </template>
 
 <script lang="ts" setup>
-import { ref,computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axiosInstance from '../api'
+import Multiselect from 'vue-multiselect'
+
+// Toast notification
+const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+  const toast = document.createElement('div')
+  toast.className = `custom-toast ${type}`
+  toast.innerText = msg
+  document.body.appendChild(toast)
+  setTimeout(() => {
+    toast.classList.add('show')
+  }, 10)
+  setTimeout(() => {
+    toast.classList.remove('show')
+    setTimeout(() => document.body.removeChild(toast), 300)
+  }, 2200)
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -226,7 +218,8 @@ const error = ref<string | null>(null)
 const isSubmitting = ref(false)
 const newTag = ref('')
 const allTags = ref<string[]>([])
-
+const tagInputFocused = ref(false)
+const nameTouched = ref(false)
 const categories = ref<Category[]>([])
 
 const form = ref<UpdateProjectData>({
@@ -236,6 +229,8 @@ const form = ref<UpdateProjectData>({
   tags: [],
   isPrivate: false
 })
+
+const nameError = computed(() => !form.value.name && nameTouched.value)
 
 const loadProject = async () => {
   try {
@@ -252,7 +247,7 @@ const loadProject = async () => {
         description: project.value.description || '',
         categoryId: project.value.category?.id || '',
         tags: project.value.tags?.map(tag => tag.name) || [],
-        isPrivate: !project.value.isPrivate,
+        isPrivate: project.value.isPrivate,
       }
     }
   } catch (err: any) {
@@ -272,22 +267,6 @@ const fetchTags = async () => {
   }
 }
 
-const filteredSuggestions = computed(() => {
-  return allTags.value.filter(
-    (tag) =>
-      tag.toLowerCase().includes(newTag.value.toLowerCase()) &&
-      !form.value.tags?.includes(tag)
-  )
-})
-
-const selectSuggestedTag = (tag: string) => {
-  if (!form.value.tags?.includes(tag)) {
-    form.value.tags?.push(tag)
-  }
-  newTag.value = ''
-}
-
-
 const fetchCategories = async () => {
   try {
     const response = await fetch('/api/categories/all')
@@ -297,31 +276,26 @@ const fetchCategories = async () => {
   }
 }
 
-const addTag = () => {
-  const tag = newTag.value.trim()
-  if (tag && form.value.tags && !form.value.tags.includes(tag)) {
-    form.value.tags.push(tag)
-  }
-  newTag.value = ''
-}
-
-const removeTag = (index: number) => {
-  if (form.value.tags) {
-    form.value.tags.splice(index, 1)
-  }
-}
-
 const handleSubmit = async () => {
+  nameTouched.value = true
   if (!project.value || !form.value.name) return
-
   isSubmitting.value = true
-
   try {
-    await axiosInstance.patch(`/projects/${project.value.id}`, form.value)
-    alert('Project updated successfully!')
-    router.push(`/projects/${project.value.id}`)
+    // Tính toán addTags và removeTags
+    const oldTags = project.value?.tags?.map(tag => tag.name) || [];
+    const newTags = form.value.tags || [];
+    const addTags = newTags.filter(tag => !oldTags.includes(tag));
+    const removeTags = oldTags.filter(tag => !newTags.includes(tag));
+
+    await axiosInstance.patch(`/projects/${project.value.id}`, {
+      ...form.value,
+      addTags,
+      removeTags
+    });
+    showToast('Project updated successfully!', 'success')
+    setTimeout(() => router.push(`/projects/${project.value.id}`), 1200)
   } catch (err: any) {
-    alert('Failed to update project: ' + err.message)
+    showToast('Failed to update project: ' + err.message, 'error')
   } finally {
     isSubmitting.value = false
   }
@@ -410,26 +384,32 @@ onMounted(() => {
 
 .edit-form {
   background: white;
-  padding: 2.2rem 2rem 2rem 2rem;
-  border-radius: 14px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  padding: 2.5rem 2.2rem 2.2rem 2.2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.09);
   border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  gap: 2.2rem;
+  gap: 2.7rem;
 }
 
 .form-section {
   margin-bottom: 0;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+.form-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  font-size: 1.15rem;
-  font-weight: 600;
+  gap: 0.7rem;
+  font-size: 1.18rem;
+  font-weight: 700;
   color: #2d3748;
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.3rem;
   letter-spacing: -0.5px;
 }
 .section-icon {
@@ -439,10 +419,10 @@ onMounted(() => {
 }
 
 .form-group {
-  margin-bottom: 1.3rem;
+  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 .form-group label {
   color: #2d3748;
@@ -471,111 +451,97 @@ onMounted(() => {
 
 .form-control {
   width: 100%;
-  padding: 0.7rem 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 1rem;
+  padding: 0.85rem 1.1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1.05rem;
   background-color: #f8fafc;
   color: #2d3748;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
   font-family: inherit;
+  box-shadow: none;
 }
 .form-control:focus {
   outline: none;
   border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.09);
-  background-color: white;
+  box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.13);
+  background-color: #fff;
 }
 textarea.form-control {
   resize: vertical;
   min-height: 110px;
 }
 
-.tags-input-container {
+.switch-label {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.tags-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  min-height: 2.5rem;
-  padding: 0.5rem 0.5rem 0.5rem 0.2rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background-color: #f8fafc;
-}
-.tag {
-  display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.22rem 0.6rem 0.22rem 0.4rem;
-  background-color: #4299e1;
-  color: white;
-  border-radius: 4px;
-  font-size: 0.93rem;
-  font-weight: 500;
+  gap: 0.7rem;
+  cursor: pointer;
+  font-size: 1.05rem;
+  user-select: none;
+}
+.switch-input {
+  display: none;
+}
+.switch-slider {
+  width: 40px;
+  height: 22px;
+  background: #e2e8f0;
+  border-radius: 11px;
   position: relative;
+  transition: background 0.2s;
 }
-.tag-icon {
-  margin-right: 0.18rem;
-  display: flex;
-  align-items: center;
+.switch-input:checked + .switch-slider {
+  background: #4299e1;
 }
-.tag-remove {
-  background: none;
-  border: none;
-  color: white;
-  cursor: pointer;
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 0 0 0 0.2rem;
-  width: 1.1rem;
-  height: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.switch-slider::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
   border-radius: 50%;
-  transition: background 0.15s;
+  transition: transform 0.2s;
 }
-.tag-remove:hover {
-  background: rgba(0,0,0,0.13);
+.switch-input:checked + .switch-slider::before {
+  transform: translateX(18px);
 }
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-.checkbox-input {
-  width: 1.25rem;
-  height: 1.25rem;
-  accent-color: #4299e1;
-}
-.checkbox-text {
+.switch-text {
   font-weight: 500;
   color: #2d3748;
+}
+.error-text {
+  color: #e53e3e;
+  font-size: 0.92rem;
+  margin-top: 0.1rem;
+}
+.form-section {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 1.2rem 1rem;
+  margin-bottom: 1.2rem;
+  border: 1px solid #e2e8f0;
 }
 
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  padding-top: 1.2rem;
+  gap: 1.2rem;
+  margin-top: 1.7rem;
+  padding-top: 1.3rem;
   border-top: 1px solid #e2e8f0;
 }
 
 .btn {
-  padding: 0.7rem 1.5rem;
+  padding: 0.8rem 1.7rem;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
+  border-radius: 10px;
+  font-size: 1.07rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -583,6 +549,7 @@ textarea.form-control {
 .btn-primary {
   background-color: #4299e1;
   color: white;
+  box-shadow: 0 2px 8px rgba(66,153,225,0.07);
 }
 .btn-primary:hover:not(:disabled) {
   background-color: #3182ce;
@@ -600,6 +567,33 @@ textarea.form-control {
   opacity: 0.7;
 }
 
+/* Toast notification */
+.custom-toast {
+  position: fixed;
+  top: 2.5rem;
+  right: 2.5rem;
+  z-index: 9999;
+  background: #4299e1;
+  color: #fff;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1.08rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-30px);
+  transition: all 0.3s;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.13);
+}
+.custom-toast.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.custom-toast.error {
+  background: #e53e3e;
+}
+
 @media (max-width: 900px) {
   .project-edit-view {
     padding: 1.2rem 0.5rem;
@@ -607,6 +601,12 @@ textarea.form-control {
   }
   .edit-form {
     padding: 1.2rem 0.5rem 1.2rem 0.5rem;
+  }
+  .custom-toast {
+    right: 1rem;
+    top: 1rem;
+    padding: 0.8rem 1.2rem;
+    font-size: 0.98rem;
   }
 }
 @media (max-width: 600px) {
@@ -642,3 +642,5 @@ textarea.form-control {
   }
 }
 </style>
+
+<style src="vue-multiselect/dist/vue-multiselect.min.css"></style>

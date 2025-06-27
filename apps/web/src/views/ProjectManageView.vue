@@ -55,7 +55,9 @@
                     <div class="overview-label">Tags</div>
                     <div class="overview-value">
                       <span v-if="project.tags && project.tags.length > 0">
-                        {{ project.tags.length }} tag{{ project.tags.length !== 1 ? 's' : '' }}
+                        <span v-for="tag in project.tags" :key="tag.id" class="tag-badge">
+                          <span class="tag-icon">#</span>{{ tag.name }}
+                        </span>
                       </span>
                       <span v-else class="no-tags">No tags</span>
                     </div>
@@ -153,6 +155,16 @@
 
     <!-- Footer -->
     <AppFooter />
+
+    <!-- Modal xác nhận xóa -->
+    <div v-if="showDeleteConfirm" class="modal-overlay">
+      <div class="modal">
+        <h3>Xác nhận xóa dự án</h3>
+        <p>Bạn có chắc chắn muốn xóa dự án này? Hành động này không thể hoàn tác.</p>
+        <button @click="confirmDelete" class="btn btn-danger">Xóa</button>
+        <button @click="showDeleteConfirm = false" class="btn btn-secondary">Hủy</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -163,9 +175,11 @@ import axiosInstance from '../api'
 import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import { useToast } from "vue-toastification";
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast();
 
 // Interfaces
 interface Project {
@@ -200,6 +214,7 @@ interface ProjectGroup {
 const project = ref<Project | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const showDeleteConfirm = ref(false);
 
 const loadProject = async () => {
   try {
@@ -255,19 +270,22 @@ const exportProject = () => {
   console.log('Export project')
 }
 
-const deleteProject = async () => {
-  if (!project.value || !confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-    return
-  }
+const deleteProject = () => {
+  showDeleteConfirm.value = true;
+}
 
+const confirmDelete = async () => {
+  if (!project.value) return;
   try {
     await axiosInstance.delete(`/projects/${project.value.id}`)
-    alert('Project deleted successfully')
+    toast.success('Project deleted successfully');
     router.push('/projects')
   } catch (err: any) {
-    alert('Failed to delete project: ' + err.message)
+    toast.error('Failed to delete project: ' + err.message)
+  } finally {
+    showDeleteConfirm.value = false;
   }
-}
+};
 
 const transferOwnership = () => {
   // Open transfer ownership modal
@@ -399,8 +417,10 @@ onMounted(() => {
 }
 
 .overview-value {
-  color: #2d3748;
-  font-weight: 500;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .badge {
@@ -625,5 +645,44 @@ onMounted(() => {
     width: 100%;
     justify-content: center;
   }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+  min-width: 300px;
+  text-align: center;
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(90deg, #e2e8f0 60%, #c3cfe2 100%);
+  color: #22577a;
+  border-radius: 16px;
+  padding: 0.25rem 1rem 0.25rem 0.7rem;
+  margin: 0.2rem 0.5rem 0.2rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(66,153,225,0.07);
+  border: 1.5px solid #b5c7d3;
+  transition: background 0.2s;
+}
+
+.tag-badge .tag-icon {
+  margin-right: 0.4em;
+  color: #4299e1;
+  font-size: 1.1em;
 }
 </style>

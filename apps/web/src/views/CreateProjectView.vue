@@ -1,6 +1,6 @@
 <template>
   <div class="layout-wrapper">
-    <TopNavbar />
+    <Navbar />
     <div class="main-content">
       <Sidebar />
       <div class="content">
@@ -32,7 +32,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue';
 import Sidebar from '../components/Sidebar.vue';
-import TopNavbar from '../components/Navbar.vue';
+import Navbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
 import CreateProjectForm from '../components/CreateProjectForm.vue';
 
@@ -40,7 +40,7 @@ export default defineComponent({
   name: 'CreateProjectView',
   components: {
     Sidebar,
-    TopNavbar,
+    Navbar,
     Footer,
     CreateProjectForm,
   },

@@ -10,7 +10,9 @@ export class ProjectGroupEntity {
   @Column({ length: 255 })
   name: string;
 
-  @ManyToOne(() => ProjectEntity, project => project.groups)
+  @ManyToOne(() => ProjectEntity, project => project.groups,{
+    onDelete: 'CASCADE',
+  })
   project: ProjectEntity;
 
   @ManyToMany(() => UserEntity, user => user.groups)

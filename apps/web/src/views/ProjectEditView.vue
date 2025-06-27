@@ -129,6 +129,15 @@
                 maxlength="30"
               >
             </div>
+            <ul class="tag-suggestions">
+              <li
+                v-for="tag in filteredSuggestions"
+                :key="tag"
+                @click="selectSuggestedTag(tag)"
+              >
+                {{ tag }}
+              </li>
+            </ul>
             <span class="help-text">Tags help users find your project. Press Enter to add.</span>
           </div>
         </section>
@@ -147,7 +156,7 @@
           <div class="form-group">
             <label class="checkbox-label">
               <input
-                v-model="form.isPublic"
+                v-model="form.isPrivate"
                 type="checkbox"
                 class="checkbox-input"
               >
@@ -172,7 +181,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue'
+import { ref,computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axiosInstance from '../api'
 
@@ -184,7 +193,7 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  isPublic: boolean;
+  isPrivate: boolean;
   createdAt: string;
   createdBy: {
     id: string;
@@ -198,7 +207,7 @@ interface Project {
 interface UpdateProjectData {
   name?: string;
   description?: string;
-  isPublic?: boolean;
+  isPrivate?: boolean;
   addTags?: string[];
   removeTags?: string[];
   categoryId?: string;
@@ -216,6 +225,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const isSubmitting = ref(false)
 const newTag = ref('')
+const allTags = ref<string[]>([])
 
 const categories = ref<Category[]>([])
 
@@ -224,7 +234,7 @@ const form = ref<UpdateProjectData>({
   description: '',
   categoryId: '',
   tags: [],
-  isPublic: false
+  isPrivate: false
 })
 
 const loadProject = async () => {
@@ -235,14 +245,14 @@ const loadProject = async () => {
     const { data } = await axiosInstance.get(`/projects/${projectId}`)
     project.value = data
 
-    // Populate form with current project data
+    // Populate form
     if (project.value) {
       form.value = {
         name: project.value.name,
         description: project.value.description || '',
         categoryId: project.value.category?.id || '',
-        tags: project.value.tags?.map((tag: any) => tag.name) || [],
-        isPublic: project.value.isPublic
+        tags: project.value.tags?.map(tag => tag.name) || [],
+        isPrivate: !project.value.isPrivate,
       }
     }
   } catch (err: any) {
@@ -252,6 +262,31 @@ const loadProject = async () => {
     loading.value = false
   }
 }
+
+const fetchTags = async () => {
+  try {
+    const res = await axiosInstance.get('/project-tag/all')
+    allTags.value = res.data.map((tag: any) => tag.name)
+  } catch (err) {
+    console.error('Error fetching tags:', err)
+  }
+}
+
+const filteredSuggestions = computed(() => {
+  return allTags.value.filter(
+    (tag) =>
+      tag.toLowerCase().includes(newTag.value.toLowerCase()) &&
+      !form.value.tags?.includes(tag)
+  )
+})
+
+const selectSuggestedTag = (tag: string) => {
+  if (!form.value.tags?.includes(tag)) {
+    form.value.tags?.push(tag)
+  }
+  newTag.value = ''
+}
+
 
 const fetchCategories = async () => {
   try {
@@ -299,6 +334,7 @@ const cancelEdit = () => {
 onMounted(() => {
   loadProject()
   fetchCategories()
+  fetchTags()
 })
 </script>
 

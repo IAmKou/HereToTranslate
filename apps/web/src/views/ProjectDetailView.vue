@@ -322,62 +322,6 @@
                       </div>
                     </div>
                   </div>
-                  <!-- Roles Management -->
-                  <div class="management-section">
-                    <div class="section-header">
-                      <h2>Project Roles</h2>
-                      <button
-                        @click="showCreateRoleModal = true"
-                        class="btn btn-primary"
-                      >
-                        <span class="icon">+</span>
-                        Add Role
-                      </button>
-                    </div>
-                    <div
-                      v-if="
-                        project.projectRoles && project.projectRoles.length > 0
-                      "
-                      class="roles-list"
-                    >
-                      <div
-                        v-for="role in project.projectRoles"
-                        :key="role.id"
-                        class="role-item"
-                      >
-                        <div class="role-info">
-                          <h3>{{ role.name }}</h3>
-                          <span class="permissions"
-                            >Permissions:
-                            {{ formatPermissions(role.permissionFlags) }}</span
-                          >
-                        </div>
-                        <div class="role-actions">
-                          <button
-                            @click="editRole(role)"
-                            class="btn btn-sm btn-outline"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            @click="deleteRole(role.id)"
-                            class="btn btn-sm btn-danger"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div v-else class="empty-section">
-                      <p>No roles defined for this project.</p>
-                      <button
-                        @click="showCreateRoleModal = true"
-                        class="btn btn-primary"
-                      >
-                        Create First Role
-                      </button>
-                    </div>
-                  </div>
                   <!-- Enhanced Groups Management -->
                   <div class="management-section groups-section">
                     <div class="section-header">
@@ -548,9 +492,9 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { authService } from '../services/auth.service';
+import axiosInstance from '../api';
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
@@ -589,10 +533,7 @@ interface ProjectGroup {
   members?: Array<{ id: string; username: string; fullName?: string }>;
 }
 
-interface CreateRoleData {
-  name: string;
-  permissions: string;
-}
+
 
 interface CreateGroupData {
   name: string;
@@ -645,29 +586,18 @@ const members = ref<
 const membersLoading = ref(false);
 const membersError = ref('');
 
-// New: Role assignment state
-const assigningRole = ref<string | null>(null); // userId being assigned
-const assignRoleError = ref('');
 
 const activeTab = ref<'details' | 'members'>('details');
 
-// Permission search and selection state
-const permissionSearch = ref('');
+
+
 const isAllSelected = ref(false);
 
 // Dropdown states
 const activeRoleDropdown = ref<string | null>(null);
 const activeGroupDropdown = ref<string | null>(null);
 
-// Computed properties for permissions
-const filteredPermissions = computed(() => {
-  if (!permissionSearch.value) return availablePermissions;
-  return availablePermissions.filter((perm) =>
-    formatPermissionName(perm)
-      .toLowerCase()
-      .includes(permissionSearch.value.toLowerCase())
-  );
-});
+
 
 // Watch for changes in selected permissions to update select all state
 watch(
@@ -684,33 +614,14 @@ watch(availablePermissions, () => {
     selectedPermissions.value.length === availablePermissions.length;
 });
 
-// API helper function
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const token = authService.getAccessToken();
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers,
-  };
-
-  const response = await fetch(`/api${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`);
-  }
-
-  return response.json();
-};
 
 const loadProject = async () => {
   try {
     loading.value = true;
     error.value = null;
     const projectId = route.params.projectId as string;
-    project.value = await apiCall(`/projects/${projectId}`);
+    const { data } = await axiosInstance.get(`/projects/${projectId}`);
+    project.value = data;
   } catch (err: any) {
     error.value = err.message || 'Failed to load project';
     console.error('Error loading project:', err);
@@ -732,63 +643,6 @@ const formatPermissions = (permissions: string) => {
   return permissions;
 };
 
-const formatPermissionName = (permission: string) => {
-  return permission
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (str) => str.toUpperCase());
-};
-
-const getPermissionDescription = (permission: string): string => {
-  const descriptions: Record<string, string> = {
-    ReadProject: 'View project details and content',
-    WriteProject: 'Edit project settings and content',
-    DeleteProject: 'Delete the entire project',
-    ManageUsers: 'Add, remove, and manage project users',
-    ManageRoles: 'Create, edit, and delete project roles',
-    ManageGroups: 'Create, edit, and delete project groups',
-    ReadFiles: 'View project files and documents',
-    WriteFiles: 'Upload and edit project files',
-    DeleteFiles: 'Remove files from the project',
-    ReadBranches: 'View project branches',
-    WriteBranches: 'Create and edit branches',
-    DeleteBranches: 'Delete project branches',
-    ReadComments: 'View comments and discussions',
-    WriteComments: 'Add comments and participate in discussions',
-    DeleteComments: 'Remove comments from discussions',
-    ReadTasks: 'View project tasks and assignments',
-    WriteTasks: 'Create and edit tasks',
-    DeleteTasks: 'Remove tasks from the project',
-    ReadRequests: 'View translation requests',
-    WriteRequests: 'Create and edit translation requests',
-    DeleteRequests: 'Remove translation requests',
-    ReadRatings: 'View ratings and reviews',
-    WriteRatings: 'Submit ratings and reviews',
-    DeleteRatings: 'Remove ratings and reviews',
-    ReadReports: 'View project reports and analytics',
-    WriteReports: 'Generate and edit reports',
-    DeleteReports: 'Remove reports from the project',
-    ReadTransactions: 'View financial transactions',
-    WriteTransactions: 'Create and edit transactions',
-    DeleteTransactions: 'Remove transaction records',
-    ReadDiscussions: 'View project discussions',
-    WriteDiscussions: 'Create and participate in discussions',
-    DeleteDiscussions: 'Remove discussions from the project',
-    ReadPosts: 'View project posts and announcements',
-    WritePosts: 'Create and edit posts',
-    DeletePosts: 'Remove posts from the project',
-    ReadCategories: 'View project categories',
-    WriteCategories: 'Create and edit categories',
-    DeleteCategories: 'Remove categories from the project',
-    ReadTags: 'View project tags',
-    WriteTags: 'Create and edit tags',
-    DeleteTags: 'Remove tags from the project',
-    ReadCommits: 'View project commit history',
-    WriteCommits: 'Create and edit commits',
-    DeleteCommits: 'Remove commits from the project',
-  };
-  return descriptions[permission] || 'Manage this permission type';
-};
-
 const editProject = () => {
   router.push(`/projects/${project.value?.id}/edit`);
 };
@@ -804,7 +658,7 @@ const deleteProject = async () => {
   }
 
   try {
-    await apiCall(`/projects/${project.value.id}`, { method: 'DELETE' });
+    await axiosInstance.delete(`/projects/${project.value.id}`);
     alert('Project deleted successfully!');
     router.push('/projects');
   } catch (err: any) {
@@ -817,8 +671,7 @@ const createGroup = async () => {
 
   isCreatingGroup.value = true;
   try {
-    await apiCall(`/projects/${project.value.id}/groups/create`, {
-      method: 'POST',
+    await axiosInstance.post(`/projects/${project.value.id}/groups/create`, {
       body: JSON.stringify(newGroup.value),
     });
     await loadProject(); // Reload project to get updated groups
@@ -828,29 +681,6 @@ const createGroup = async () => {
     alert('Failed to create group: ' + err.message);
   } finally {
     isCreatingGroup.value = false;
-  }
-};
-
-const editRole = (role: any) => {
-  // Navigate to role edit page or open edit modal
-  console.log('Edit role:', role);
-};
-
-const deleteRole = async (roleId: string) => {
-  if (
-    !project.value ||
-    !confirm('Are you sure you want to delete this role?')
-  ) {
-    return;
-  }
-
-  try {
-    await apiCall(`/projects/${project.value.id}/roles/${roleId}`, {
-      method: 'DELETE',
-    });
-    await loadProject(); // Reload project to get updated roles
-  } catch (err: any) {
-    alert('Failed to delete role: ' + err.message);
   }
 };
 
@@ -868,9 +698,7 @@ const deleteGroup = async (groupId: string) => {
   }
 
   try {
-    await apiCall(`/projects/${project.value.id}/groups/${groupId}`, {
-      method: 'DELETE',
-    });
+    await axiosInstance.delete(`/projects/${project.value.id}/groups/${groupId}`);
     await loadProject(); // Reload project to get updated groups
   } catch (err: any) {
     alert('Failed to delete group: ' + err.message);
@@ -883,12 +711,12 @@ const searchUser = async () => {
   userSearch.value.error = '';
   userSearch.value.result = null;
   try {
-    const res = await apiCall(`/projects/${project.value.id}/search-user`, {
-      method: 'POST',
-      body: JSON.stringify({ identifier: userSearch.value.identifier }),
-    });
-    if (res.user) {
-      userSearch.value.result = res.user;
+    const { data } = await axiosInstance.post(
+      `/projects/${project.value.id}/search-user`,
+      { identifier: userSearch.value.identifier }
+    );
+    if (data.user) {
+      userSearch.value.result = data.user;
     } else {
       userSearch.value.error = 'No user found.';
     }
@@ -898,15 +726,14 @@ const searchUser = async () => {
     userSearch.value.loading = false;
   }
 };
-
 const addUserToProject = async () => {
   if (!project.value || !userSearch.value.result) return;
   userSearch.value.adding = true;
   try {
-    await apiCall(`/projects/${project.value.id}/add-user`, {
-      method: 'POST',
-      body: JSON.stringify({ identifier: userSearch.value.result.email }),
-    });
+    await axiosInstance.post(
+      `/projects/${project.value.id}/add-user`,
+      { identifier: userSearch.value.result.email }
+    );
     await loadProject();
     alert('User added to project!');
     userSearch.value.result = null;
@@ -915,14 +742,6 @@ const addUserToProject = async () => {
     alert('Failed to add user: ' + err.message);
   } finally {
     userSearch.value.adding = false;
-  }
-};
-
-const toggleSelectAll = () => {
-  if (isAllSelected.value) {
-    selectedPermissions.value = [];
-  } else {
-    selectedPermissions.value = [...availablePermissions];
   }
 };
 
@@ -935,7 +754,6 @@ const toggleGroupDropdown = (groupId: string) => {
   }
 };
 
-// Close dropdowns when clicking outside
 function closeDropdowns() {
   activeRoleDropdown.value = null;
   activeGroupDropdown.value = null;
@@ -947,7 +765,8 @@ const loadMembers = async () => {
   membersError.value = '';
   try {
     const projectId = route.params.projectId as string;
-    const data = await apiCall(`/projects/${projectId}/members`);
+    const { data } = await axiosInstance.get(`/projects/${projectId}/members`);
+
     const memberMap: Record<
       string,
       {
@@ -959,11 +778,13 @@ const loadMembers = async () => {
         selectedRole: string;
       }
     > = {};
+
     if (data.members) {
       for (const m of data.members) {
         memberMap[m.id] = { ...m, roles: [], selectedRole: '' };
       }
     }
+
     if (data.projectRoles) {
       for (const role of data.projectRoles) {
         if (role.users) {
@@ -976,6 +797,7 @@ const loadMembers = async () => {
         }
       }
     }
+
     members.value = Object.values(memberMap);
   } catch (err: any) {
     membersError.value = err.message || 'Failed to load members.';
@@ -997,24 +819,6 @@ onMounted(() => {
 defineExpose({ closeDropdowns });
 loadProject();
 
-const assignRoleToMember = async (userId: string, roleName: string) => {
-  if (!project.value) return;
-  assigningRole.value = userId;
-  assignRoleError.value = '';
-  try {
-    await apiCall(`/projects/${project.value.id}/assign-role`, {
-      method: 'POST',
-      body: JSON.stringify({ userId, roleName }),
-    });
-    await loadMembers();
-    alert('Role assigned successfully!');
-  } catch (err: any) {
-    assignRoleError.value = err.message || 'Failed to assign role.';
-    alert('Failed to assign role: ' + assignRoleError.value);
-  } finally {
-    assigningRole.value = null;
-  }
-};
 </script>
 
 <style scoped>

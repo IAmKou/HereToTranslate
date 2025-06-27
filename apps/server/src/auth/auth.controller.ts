@@ -14,6 +14,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService
+
   ) {}
 
   @IsPublicEndpoint()
@@ -60,9 +61,9 @@ export class AuthController {
     if (!refreshToken) {
       return res.status(401).json({ message: 'Refresh token not found' });
     }
-    
+
     const { accessToken, refreshToken: newRefreshToken, user } = await this.authService.refreshTokens(refreshToken);
-    
+
     // Set new access token cookie
     res.cookie('access_token', accessToken, {
       httpOnly: true,
@@ -103,17 +104,23 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   async logout(@Req() req: Request, @Res() res: Response) {
-    const refreshToken = req.cookies?.refresh_token;
-    if (refreshToken) {
-      await this.authService.logout(refreshToken);
+    const accessToken = req.cookies?.access_token;
+    // const refreshToken = req.cookies?.refresh_token;
+
+    if (accessToken) {
+      await this.authService.logout(accessToken);
     }
-    
-    // Clear cookies
+//multi session logout
+    // if (refreshToken) {
+    //   await this.authRepository.delete({ refreshToken });
+    // }
+
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');
-    
+
     return res.json({ message: 'Logged out successfully' });
   }
+
 
   @Post('forgot-password')
   @IsPublicEndpoint()
@@ -146,7 +153,7 @@ export class AuthController {
     if (!token) {
       throw new UnauthorizedException('No access token found');
     }
-    
+
     const user = await this.authService.validateToken(token);
     return user;
   }

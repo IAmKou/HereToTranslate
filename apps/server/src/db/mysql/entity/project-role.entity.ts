@@ -9,7 +9,9 @@ export class ProjectRoleEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => ProjectEntity, project => project.projectRoles)
+  @ManyToOne(() => ProjectEntity, project => project.projectRoles,{
+    onDelete: 'CASCADE',
+  })
   project: ProjectEntity;
 
   @ManyToMany(() => UserEntity, user => user.projectRoles, { cascade: true })

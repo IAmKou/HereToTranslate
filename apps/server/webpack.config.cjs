@@ -10,6 +10,7 @@ module.exports = {
       target: 'node',
       sourceMap: true,
       compiler: 'tsc',
+      sourceMap: true,
       main: './src/main.ts',
       tsConfig: './tsconfig.app.json',
       assets: ['./src/assets', './src/mailer'],

@@ -331,7 +331,7 @@ const submitForm = async () => {
     roleId: form.roleId,
   };
   try {
-    await axios.post('http://localhost:3000/api/users/register', payload);
+    await axios.post('http://localhost:3000/api/auth/register', payload);
     message.value = 'Register sucess! You will be redirected to login page.';
     messageType.value = 'success';
     Object.assign(form, {

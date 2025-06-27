@@ -4,4 +4,4 @@ import { UserRole } from '#LocalProject/Entities';
 export class UpdateUserRoleDto {
   @IsEnum(UserRole)
   role: UserRole;
-} 
+}

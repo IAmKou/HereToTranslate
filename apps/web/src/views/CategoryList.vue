@@ -482,7 +482,7 @@ const tagSubmitted = ref(false);
 const fetchCategories = async () => {
   loading.value = true;
   try {
-    const response = await axios.get(`${API_BASE_URL}/categories/all`);
+    const response = await axios.get(`${API_BASE_URL}/category/all`);
     console.log('API Response:', response.data); // Debug log
     categories.value = response.data;
     console.log('Categories after update:', categories.value); // Debug log
@@ -561,7 +561,7 @@ const saveCategory = async () => {
   saving.value = true;
   try {
     if (isEditing.value && currentCategory.value.id) {
-      await axios.put(`${API_BASE_URL}/categories/${currentCategory.value.id}/update`, {
+      await axios.put(`${API_BASE_URL}/category/update/${currentCategory.value.id}`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description
       });
@@ -574,7 +574,7 @@ const saveCategory = async () => {
       await fetchCategories();
       closeDialog();
     } else {
-      await axios.post(`${API_BASE_URL}/categories/create`, {
+      await axios.post(`${API_BASE_URL}/category/create`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description
       });

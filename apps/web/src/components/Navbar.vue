@@ -1,38 +1,94 @@
 <template>
   <nav class="navbar">
     <div class="navbar-container">
+      <!-- Brand Section with Logo -->
       <div class="navbar-brand">
+
         <span v-if="currentUser" class="username">{{ currentUser.username }}</span>
         <span v-else class="username">Guest</span>
       </div>
 
       <div class="navbar-menu">
         <div class="navbar-start">
-          <router-link to="/" class="navbar-item">Home</router-link>
-          <router-link to="/projects" class="navbar-item">Projects</router-link>
-          <router-link to="/translate" class="navbar-item">Translate</router-link>
-          <router-link to="/history" class="navbar-item">History</router-link>
+          <router-link to="/" class="navbar-item" aria-label="Home">
+            <i class="pi pi-home nav-icon"></i> Home
+          </router-link>
+          <router-link to="/projects" class="navbar-item" aria-label="Projects">
+            <i class="pi pi-briefcase nav-icon"></i> Projects
+          </router-link>
+          <router-link to="/translate" class="navbar-item" aria-label="Translate">
+            <i class="pi pi-globe nav-icon"></i> Translate
+          </router-link>
+          <router-link to="/history" class="navbar-item" aria-label="History">
+            <i class="pi pi-history nav-icon"></i> History
+          </router-link>
         </div>
 
         <div class="navbar-end">
           <div class="navbar-item" v-if="!currentUser">
             <router-link to="/login" class="button is-primary">Sign In</router-link>
           </div>
-          <div v-else class="user-menu">
+          <div v-else class="user-menu" style="position: relative;">
             <Button
               v-if="currentUser"
-              @click="toggleMenu"
-              aria-haspopup="true"
+              @click="menuVisible = !menuVisible"
+              aria-haspopup="menu"
+              :aria-expanded="menuVisible"
               class="avatar-button"
+              aria-label="Open user menu"
             >
               <Avatar
                 :label="getInitials(currentUser.fullName)"
                 size="large"
                 shape="circle"
-                :style="{ backgroundColor: getRandomColor(currentUser.username) }"
+                :style="{ backgroundColor: getRandomColor(currentUser.username), boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '2px solid #e0e7ef' }"
               />
             </Button>
-            <Menu ref="menu" :model="menuItems" :popup="true" />
+            <transition name="fade-scale">
+              <div
+                v-if="menuVisible"
+                class="user-dropdown-menu"
+                tabindex="-1"
+                @keydown.esc="menuVisible = false"
+              >
+                <!-- User Info -->
+                <div class="user-info">
+                  <div class="avatar-initials" :style="{ background: getRandomColor(currentUser.username) }">
+                    {{ getInitials(currentUser.fullName) }}
+                  </div>
+                  <div>
+                    <div class="user-name">{{ currentUser.fullName }}</div>
+                    <div class="user-username">@{{ currentUser.username }}</div>
+                  </div>
+                </div>
+                <div class="menu-section">
+                  <router-link to="/userprofile" class="menu-item" tabindex="0">
+                    <i class="pi pi-user"></i> View Profile <span class="shortcut"></span>
+                  </router-link>
+                  <router-link to="/settings" class="menu-item" tabindex="0">
+                    <i class="pi pi-cog"></i> Settings <span class="shortcut"></span>
+                  </router-link>
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-section">
+                  <div class="menu-header">Team</div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-users"></i> Team <span class="shortcut"></span></div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-user-plus"></i> Invite Member <span class="shortcut"></span></div>
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-section">
+                  <div class="menu-header">Help</div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-question-circle"></i> Support <span class="shortcut"></span></div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-comments"></i> Community <span class="shortcut"></span></div>
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-section">
+                  <div class="menu-item sign-out" tabindex="0" @click="signOut">
+                    <i class="pi pi-sign-out"></i> Sign Out <span class="shortcut"></span>
+                  </div>
+                </div>
+              </div>
+            </transition>
           </div>
         </div>
       </div>
@@ -46,8 +102,6 @@ import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
-import Menu from 'primevue/menu';
-import type { MenuItem } from 'primevue/menuitem';
 
 interface User {
   id: string;
@@ -64,190 +118,14 @@ interface User {
 }
 
 const router = useRouter();
-const menu = ref();
+const menuVisible = ref(false);
 const currentUser = ref<User | null>(null);
 
-const menuItems: MenuItem[] = [
-  {
-    template: () => {
-      return `
-        <div class="user-info">
-          <Avatar
-            label="${currentUser.value?.fullName ? getInitials(currentUser.value.fullName) : ''}"
-            size="large"
-            shape="circle"
-            style="width: 36px; height: 36px; font-size: 15px; background-color: ${currentUser.value?.username ? getRandomColor(currentUser.value.username) : '#4CAF50'}"
-          />
-          <div class="user-details">
-            <div class="user-name">${currentUser.value?.fullName || 'Godzilla D. White'}</div>
-            <div class="user-email">${currentUser.value?.email || 'supportingtext@gmail.com'}</div>
-          </div>
-        </div>
-      `;
-    }
-  },
-  {
-    label: 'View Profile',
-    icon: 'pi pi-user',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content">
-          <div class="menu-item-icon">
-            <i class="pi pi-user"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">View Profile</span>
-            <span class="menu-shortcut">⌘ F</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  {
-    label: 'Settings',
-    icon: 'pi pi-cog',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content selected">
-          <div class="menu-item-icon">
-            <i class="pi pi-cog"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Settings</span>
-            <span class="menu-shortcut">⌘ G</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  {
-    label: 'Subscription',
-    icon: 'pi pi-credit-card',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content">
-          <div class="menu-item-icon">
-            <i class="pi pi-credit-card"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Subscription</span>
-            <span class="menu-shortcut">⌘ ⇧ D</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  { separator: true },
-  {
-    label: 'Changelog',
-    icon: 'pi pi-clock',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content">
-          <div class="menu-item-icon">
-            <i class="pi pi-clock"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Changelog</span>
-            <span class="menu-shortcut">⌘ F</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  {
-    label: 'Team',
-    icon: 'pi pi-users',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content">
-          <div class="menu-item-icon">
-            <i class="pi pi-users"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Team</span>
-            <span class="menu-shortcut">⇧ N</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  {
-    label: 'Invite Member',
-    icon: 'pi pi-user-plus',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content">
-          <div class="menu-item-icon">
-            <i class="pi pi-user-plus"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Invite Member</span>
-            <span class="menu-shortcut">⌘ F</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  { separator: true },
-  {
-    label: 'Support',
-    icon: 'pi pi-question-circle',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content">
-          <div class="menu-item-icon">
-            <i class="pi pi-question-circle"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Support</span>
-            <span class="menu-shortcut">⇧ R</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  {
-    label: 'Community',
-    icon: 'pi pi-comments',
-    template: (item: MenuItem) => {
-      return `
-        <div class="menu-item-content">
-          <div class="menu-item-icon">
-            <i class="pi pi-comments"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Community</span>
-            <span class="menu-shortcut">⌘ ⇧ P</span>
-          </div>
-        </div>
-      `;
-    }
-  },
-  { separator: true },
-  {
-    label: 'Sign Out',
-    icon: 'pi pi-sign-out',
-    command: async () => {
-      await handleLogout();
-    },
-    template: (item: MenuItem) => {
-      return `
-      <div class="menu-item-content">
-        <div class="menu-item-icon">
-          <i class="pi pi-sign-out"></i>
-        </div>
-        <div class="menu-item-details">
-          <span class="menu-item-label">Sign Out</span>
-        </div>
-      </div>
-    `;
-    }
-  }
-];
-
-const toggleMenu = (event: MouseEvent): void => {
-  menu.value.toggle(event);
+const signOut = async () => {
+  await authService.logout();
+  currentUser.value = null;
+  router.push('/login');
+  menuVisible.value = false;
 };
 
 const getInitials = (name: string): string => {
@@ -286,17 +164,6 @@ const loadUserInfo = async (): Promise<void> => {
   }
 };
 
-const handleLogout = async () => {
-  try {
-    await authService.logout();
-    currentUser.value = null;
-    router.push('/login');
-  } catch (error) {
-    console.error('Logout failed:', error);
-  }
-};
-
-
 onMounted(() => {
   loadUserInfo();
   document.addEventListener('sign-out', async () => {
@@ -313,11 +180,12 @@ onMounted(() => {
 
 <style scoped>
 .navbar {
-  background-color: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background: linear-gradient(90deg, #f8fafc 0%, #e0e7ef 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   position: sticky;
   top: 0;
   z-index: 1000;
+  transition: background 0.3s;
 }
 
 .navbar-container {
@@ -327,78 +195,93 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 56px;
+  height: 64px;
 }
 
 .navbar-brand {
   display: flex;
   align-items: center;
+  gap: 1.5rem;
 }
 
 .brand-link {
   text-decoration: none;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .logo {
-  height: 32px;
-  width: auto;
+  height: 36px;
+  width: 36px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .brand-name {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #333;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #2d3748;
+  letter-spacing: -0.5px;
 }
 
 .navbar-menu {
   display: flex;
   align-items: center;
   gap: 2.5rem;
-  flex: 1;
-  justify-content: space-between;
 }
 
 .navbar-start {
   display: flex;
-  gap: 8px;
+  gap: 12px;
 }
 
 .navbar-item {
   text-decoration: none;
-  color: #666;
-  font-size: 14px;
+  color: #4b5563;
+  font-size: 15px;
   font-weight: 500;
-  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
 }
 
-.navbar-item:hover {
+.navbar-item:hover, .navbar-item.router-link-exact-active {
   color: #2563eb;
+  background: #f1f5f9;
+}
+
+.nav-icon {
+  font-size: 1.1em;
+  margin-right: 2px;
 }
 
 .button.is-primary {
-  height: 32px;
-  padding: 0 16px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 4px;
-  background-color: #007bff;
+  height: 36px;
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
   color: white;
   border: none;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  box-shadow: 0 1px 4px rgba(37,99,235,0.08);
+  transition: background 0.3s;
 }
 
 .button.is-primary:hover {
-  background-color: #0056b3;
+  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
 }
 
 .username {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
-  color: #333;
+  color: #475569;
+  margin-left: 5rem;
 }
 
 .user-menu {
@@ -409,200 +292,105 @@ onMounted(() => {
   padding: 2px;
   border-radius: 50%;
   transition: background-color 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .avatar-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: rgba(37, 99, 235, 0.08);
 }
 
 .avatar-button:active {
-  background-color: rgba(0, 0, 0, 0.08);
+  background-color: rgba(37, 99, 235, 0.16);
 }
 
 :deep(.p-avatar) {
   width: 36px;
   height: 36px;
   border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-:deep(.p-menu) {
-  min-width: 300px;
-  padding: 20px 0;
-  border-radius: 20px;
-  border: none;
+.fade-scale-enter-active, .fade-scale-leave-active {
+  transition: all 0.18s cubic-bezier(0.4,0,0.2,1);
+}
+.fade-scale-enter-from, .fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.98) translateY(-4px);
+}
+.user-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 48px;
+  min-width: 240px;
   background: #fff;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.14);
+  z-index: 1001;
+  padding: 0;
+  overflow: hidden;
 }
-
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 20px 20px;
+  gap: 10px;
+  padding: 16px 16px 12px 16px;
+  background: linear-gradient(90deg, #f8fafc 0%, #e0e7ef 100%);
   border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 8px;
 }
-
-.user-name {
-  color: #111827;
-  font-weight: 600;
-  font-size: 15px;
-  line-height: 1.3;
-  margin-bottom: 1px;
-}
-
-.user-email {
-  color: #6B7280;
-  font-size: 13px;
-  line-height: 1.3;
-}
-
-.menu-item-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  position: relative;
-  min-height: 40px;
-}
-
-.menu-item-content:hover {
-  background: #F3F4F6;
-}
-
-.menu-item-content.selected {
-  background: #EEF2FF;
-}
-
-.menu-item-content.selected .menu-item-label {
-  color: #4F46E5;
-}
-
-.menu-item-icon {
+.avatar-initials {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: #4B5563;
-  flex-shrink: 0;
+  font-weight: 700;
+  color: #fff;
+  border: 2px solid #e0e7ef;
 }
-
-.menu-item-icon i {
-  font-size: 18px;
+.user-name { font-size: 14px; }
+.user-username { font-size: 12px; }
+.menu-section { padding: 8px 0; }
+.menu-header {
+  font-size: 11px;
+  padding: 6px 16px 2px 16px;
 }
-
-.menu-item-details {
+.menu-item {
+  text-decoration: none !important;
+  color: inherit !important;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex: 1;
-}
-
-.menu-item-label {
-  color: #374151;
-  font-weight: 450;
+  gap: 10px;
+  padding: 8px 16px;
+  min-height: 36px;
+  border-radius: 8px;
+  margin: 0 8px;
+  cursor: pointer;
   font-size: 14px;
-  letter-spacing: -0.01em;
-}
-
-.menu-shortcut {
-  color: #9CA3AF;
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-}
-
-:deep(.p-menu .p-menuitem) {
-  margin: 0;
-}
-
-:deep(.p-menu .p-separator) {
-  border-top: 1px solid #f0f0f0;
-  margin: 8px 0;
-}
-
-/* Sections styling */
-.menu-section {
-  padding: 8px 0;
-}
-
-/* Sign out styling */
-.sign-out .menu-item-content {
-  margin: 4px 8px 8px;
-}
-
-.sign-out .menu-item-icon {
-  background: rgba(255, 59, 48, 0.15);
-}
-
-.sign-out .menu-item-icon i {
-  color: #ff3b30;
-}
-
-.sign-out .menu-item-label {
-  color: #ff3b30;
   font-weight: 500;
+  transition: background 0.18s, color 0.18s, transform 0.12s;
+  outline: none;
 }
-
-.sign-out .menu-item-content:hover {
-  background: rgba(255, 59, 48, 0.1);
+.menu-item:hover, .menu-item:focus-visible {
+  background: #f3f4f6;
+  color: #2563eb;
+  transform: scale(1.02);
+  text-decoration: none !important;
 }
-
-.sign-out .menu-item-content:hover .menu-item-icon {
-  background: rgba(255, 59, 48, 0.2);
+.menu-item.router-link-exact-active {
+  color: inherit;
+  background: none;
+  text-decoration: none !important;
 }
-
-/* Menu animation */
-:deep(.p-menu.p-menu-overlay) {
-  transform-origin: top right;
-  animation: menuFadeIn 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+.menu-divider {
+  border-top: 1px solid #f0f0f0; margin: 8px 0;
 }
-
-@keyframes menuFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.98) translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-/* Avatar styling */
-:deep(.p-avatar) {
-  width: 36px;
-  height: 36px;
-  border: none;
-}
-
-/* Avatar button */
-.avatar-button {
-  padding: 2px;
-  border-radius: 50%;
-  transition: background-color 0.15s ease;
-}
-
-.avatar-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.avatar-button:active {
-  background-color: rgba(0, 0, 0, 0.08);
-}
-
-/* Active menu item */
-.menu-item-content:active {
-  transform: scale(0.98) translateX(4px);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.navbar-end {
-  display: flex;
-  align-items: center;
-  padding-right: 16px;
+.shortcut { color: #9ca3af; font-size: 12px; font-weight: 400; margin-left: auto; }
+.sign-out { background: rgba(255,59,48,0.08); color: #ff3b30; font-weight: 700; }
+.sign-out:hover, .sign-out:focus-visible { background: rgba(255,59,48,0.16); }
+@media (max-width: 600px) {
+  .user-dropdown-menu { min-width: 100vw; border-radius: 0; left: 0 !important; right: 0 !important; }
+  .user-info { border-radius: 0; }
 }
 </style>

@@ -91,7 +91,7 @@
                 :true-value="true"
                 :false-value="false"
               />
-              <span>{{ form.isPublic ? 'Public (ai cũng xem được)' : 'Private (chỉ thành viên xem được)' }}</span>
+              <span>{{ form.isPublic ? 'Public ' : 'Private ' }}</span>
             </div>
           </div>
         </div>

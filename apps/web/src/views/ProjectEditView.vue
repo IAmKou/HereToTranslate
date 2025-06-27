@@ -97,39 +97,18 @@
 
           <div class="form-group">
             <label for="tags">Tags</label>
-            <div class="tags-input-wrapper" @click="focusTagInput">
-              <div class="tag-chip" v-for="(tag, idx) in form.tags" :key="tag">
-                {{ tag }}
-                <span class="remove-chip" @click.stop="removeTag(idx)">×</span>
-              </div>
-              <input
-                ref="tagInput"
-                v-model="newTag"
-                @keydown.enter.prevent="addTag"
-                @keydown.down.prevent="moveSuggestion(1)"
-                @keydown.up.prevent="moveSuggestion(-1)"
-                @keydown.tab.prevent="selectActiveSuggestion"
-                @input="updateSuggestions"
-                @focus="tagInputFocused = true"
-                @blur="onTagInputBlur"
-                class="tag-input"
-                placeholder="Add tag..."
-                maxlength="30"
-                autocomplete="off"
-              />
-              <ul v-if="showSuggestions" class="tag-suggestion-list">
-                <li
-                  v-for="(suggestion, i) in filteredSuggestions"
-                  :key="suggestion"
-                  :class="{ active: i === activeSuggestionIdx }"
-                  @mousedown.prevent="selectSuggestedTag(suggestion)"
-                >
-                  {{ suggestion }}
-                </li>
-                <li v-if="filteredSuggestions.length === 0" class="no-suggestion">No suggestions</li>
-              </ul>
-            </div>
-            <span class="help-text">Press Enter to add. Use ↑/↓ to navigate suggestions.</span>
+            <Multiselect
+              v-model="form.tags"
+              :options="allTags"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              :preserve-search="true"
+              placeholder="Select tag..."
+              :taggable="false"
+              class="multiselect-custom"
+            />
+            <span class="help-text">Select one or many tags.</span>
           </div>
         </section>
 
@@ -181,6 +160,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axiosInstance from '../api'
+import Multiselect from 'vue-multiselect'
 
 // Toast notification
 const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -287,41 +267,12 @@ const fetchTags = async () => {
   }
 }
 
-const filteredSuggestions = computed(() => {
-  return allTags.value.filter(
-    (tag: string) =>
-      tag.toLowerCase().includes(newTag.value.toLowerCase()) &&
-      !form.value.tags?.includes(tag)
-  )
-})
-
-const selectSuggestedTag = (tag: string) => {
-  if (!form.value.tags?.includes(tag)) {
-    form.value.tags?.push(tag)
-  }
-  newTag.value = ''
-}
-
 const fetchCategories = async () => {
   try {
     const response = await fetch('/api/categories/all')
     categories.value = await response.json()
   } catch (error) {
     console.error('Error fetching categories:', error)
-  }
-}
-
-const addTag = () => {
-  const tag = newTag.value.trim()
-  if (tag && form.value.tags && !form.value.tags.includes(tag)) {
-    form.value.tags.push(tag)
-  }
-  newTag.value = ''
-}
-
-const removeTag = (index: number) => {
-  if (form.value.tags) {
-    form.value.tags.splice(index, 1)
   }
 }
 
@@ -352,30 +303,6 @@ const handleSubmit = async () => {
 
 const cancelEdit = () => {
   router.push(`/projects/${project.value?.id}`)
-}
-
-const tagInput = ref<HTMLInputElement | null>(null)
-const activeSuggestionIdx = ref(-1)
-const showSuggestions = computed(() => tagInputFocused.value && newTag.value.length > 0)
-const focusTagInput = () => tagInput.value?.focus()
-
-const updateSuggestions = () => {
-  activeSuggestionIdx.value = 0
-}
-
-const moveSuggestion = (dir: number) => {
-  if (!filteredSuggestions.value.length) return
-  activeSuggestionIdx.value = (activeSuggestionIdx.value + dir + filteredSuggestions.value.length) % filteredSuggestions.value.length
-}
-
-const selectActiveSuggestion = () => {
-  if (filteredSuggestions.value[activeSuggestionIdx.value]) {
-    selectSuggestedTag(filteredSuggestions.value[activeSuggestionIdx.value])
-  }
-}
-
-const onTagInputBlur = () => {
-  setTimeout(() => tagInputFocused.value = false, 100)
 }
 
 onMounted(() => {
@@ -543,73 +470,6 @@ onMounted(() => {
 textarea.form-control {
   resize: vertical;
   min-height: 110px;
-}
-
-.tags-input-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  min-height: 2.5rem;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
-  padding: 0.3rem 0.5rem;
-  position: relative;
-  gap: 0.3rem;
-}
-.tag-chip {
-  background: #4299e1;
-  color: #fff;
-  border-radius: 6px;
-  padding: 0.18rem 0.7rem 0.18rem 0.5rem;
-  display: flex;
-  align-items: center;
-  font-size: 0.97rem;
-  margin: 0.1rem 0;
-}
-.remove-chip {
-  margin-left: 0.4rem;
-  cursor: pointer;
-  font-weight: bold;
-}
-.tag-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  min-width: 120px;
-  font-size: 1rem;
-  flex: 1;
-  padding: 0.3rem 0;
-}
-.tag-suggestion-list {
-  position: absolute;
-  left: 0;
-  top: 100%;
-  width: 100%;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  z-index: 10;
-  margin-top: 0.2rem;
-  list-style: none;
-  padding: 0;
-  max-height: 140px;
-  overflow-y: auto;
-}
-.tag-suggestion-list li {
-  padding: 0.6rem 1rem;
-  cursor: pointer;
-  color: #2d3748;
-  font-size: 0.98rem;
-}
-.tag-suggestion-list li.active,
-.tag-suggestion-list li:hover {
-  background: #f1f5f9;
-}
-.no-suggestion {
-  color: #a0aec0;
-  padding: 0.6rem 1rem;
 }
 
 .switch-label {
@@ -782,3 +642,5 @@ textarea.form-control {
   }
 }
 </style>
+
+<style src="vue-multiselect/dist/vue-multiselect.min.css"></style>

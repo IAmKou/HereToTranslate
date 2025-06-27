@@ -15,6 +15,43 @@
           </div>
 
           <div class="form-group">
+            <label>Request Type <span class="required-mark">*</span></label>
+            <div style="display: flex; gap: 1rem;">
+              <label><input type="radio" value="project" v-model="requestType"> Project</label>
+              <label><input type="radio" value="public" v-model="requestType"> Public</label>
+              <label><input type="radio" value="private" v-model="requestType"> Private</label>
+            </div>
+          </div>
+
+          <div class="form-group" v-if="requestType === 'project'">
+            <label for="project">Project <span class="required-mark">*</span></label>
+            <div class="select-wrapper">
+              <select
+                id="project"
+                v-model="projectId"
+                class="form-control"
+                :class="{ 'error': projectTouched && !projectId }"
+                required
+                @change="projectTouched = true"
+                @blur="projectTouched = true"
+              >
+                <option value="">Choose a project</option>
+                <option v-for="project in projectOptions" :key="project.id" :value="project.id">
+                  {{ project.name }}
+                </option>
+              </select>
+              <div class="select-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="input-info">
+              <span v-if="projectTouched && !projectId" class="error-message">Please select a project</span>
+            </div>
+          </div>
+
+          <div class="form-group">
             <label for="title">
               Title <span class="required-mark">*</span>
             </label>
@@ -72,34 +109,6 @@
               <span class="char-count">{{ description.length }}/500</span>
               <span v-if="descTouched && description.length > 500" class="error-message">Description too long</span>
               <span v-else class="help-text">A good description helps others understand your request better</span>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="project">Project <span class="required-mark">*</span></label>
-            <div class="select-wrapper">
-              <select
-                id="project"
-                v-model="projectId"
-                class="form-control"
-                :class="{ 'error': projectTouched && !projectId }"
-                required
-                @change="projectTouched = true"
-                @blur="projectTouched = true"
-              >
-                <option value="">Choose a project</option>
-                <option v-for="project in projectOptions" :key="project.id" :value="project.id">
-                  {{ project.name }}
-                </option>
-              </select>
-              <div class="select-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-            </div>
-            <div class="input-info">
-              <span v-if="projectTouched && !projectId" class="error-message">Please select a project</span>
             </div>
           </div>
 
@@ -220,10 +229,16 @@ const projectTouched = ref(false)
 const amountTouched = ref(false)
 const deadlineTouched = ref(false)
 
+const requestType = ref('project')
+
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
-const isFormValid = computed(() =>
-  title.value && projectId.value && isDealAmountValid.value && deadline.value
-)
+const isFormValid = computed(() => {
+  if (requestType.value === 'project') {
+    return title.value && projectId.value && isDealAmountValid.value && deadline.value
+  } else {
+    return title.value && isDealAmountValid.value && deadline.value
+  }
+})
 
 const minDateString = computed(() => {
   const d = minDate.value
@@ -270,7 +285,11 @@ async function handleSubmit() {
   }
   loading.value = true
   try {
-    await axios.post(`/api/projects/${projectId.value}/requests/create`, {
+    let pid = projectId.value
+    if (requestType.value !== 'project') {
+      pid = '0'
+    }
+    await axios.post(`/api/projects/${pid}/requests/create`, {
       title: title.value,
       description: description.value,
       dealAmount: dealAmount.value,

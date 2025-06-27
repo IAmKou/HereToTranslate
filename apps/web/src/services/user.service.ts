@@ -49,15 +49,7 @@ export class UserService {
       headers: {
         'Content-Type': 'application/json',
       },
-    });
-
-    // Add request interceptor to include auth token
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
+      withCredentials: true,
     });
   }
 

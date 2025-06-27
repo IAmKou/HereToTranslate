@@ -103,6 +103,7 @@ import { useRoute } from 'vue-router';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
+import axiosInstance from '../api';
 
 const route = useRoute();
 const projectId = route.params.projectId as string;
@@ -124,23 +125,12 @@ const roleUsersLoading = ref(false);
 const roleUsersError = ref('');
 const addUserIdentifier = ref('');
 
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('accessToken');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers,
-  };
-  const response = await fetch(`/api${endpoint}`, { ...options, headers });
-  if (!response.ok) throw new Error(`API call failed: ${response.statusText}`);
-  return response.json();
-};
-
 const loadRoles = async () => {
   loading.value = true;
   error.value = '';
   try {
-    roles.value = await apiCall(`/projects/${projectId}/roles`);
+    const { data } = await axiosInstance.get(`/projects/${projectId}/roles`);
+    roles.value = data;
   } catch (err: any) {
     error.value = err.message || 'Failed to load roles';
   } finally {
@@ -150,10 +140,7 @@ const loadRoles = async () => {
 
 const createRole = async () => {
   try {
-    await apiCall(`/projects/${projectId}/roles/create`, {
-      method: 'POST',
-      body: JSON.stringify(roleForm.value),
-    });
+    await axiosInstance.post(`/projects/${projectId}/roles/create`, roleForm.value);
     showCreateRoleModal.value = false;
     roleForm.value = { name: '', permissionFlags: '' };
     await loadRoles();
@@ -170,10 +157,7 @@ const openEditRole = (role: any) => {
 
 const updateRole = async () => {
   try {
-    await apiCall(`/projects/${projectId}/roles/${roleForm.value.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(roleForm.value),
-    });
+    await axiosInstance.patch(`/projects/${projectId}/roles/${roleForm.value.id}`, roleForm.value);
     showCreateRoleModal.value = false;
     editingRole.value = false;
     roleForm.value = { name: '', permissionFlags: '' };
@@ -186,7 +170,7 @@ const updateRole = async () => {
 const deleteRole = async (roleId: string) => {
   if (!confirm('Are you sure you want to delete this role?')) return;
   try {
-    await apiCall(`/projects/${projectId}/roles/${roleId}`, { method: 'DELETE' });
+    await axiosInstance.delete(`/projects/${projectId}/roles/${roleId}`);
     await loadRoles();
   } catch (err: any) {
     alert('Failed to delete role: ' + err.message);
@@ -198,7 +182,8 @@ const viewRoleUsers = async (role: any) => {
   roleUsersLoading.value = true;
   roleUsersError.value = '';
   try {
-    roleUsers.value = await apiCall(`/projects/${projectId}/roles/${role.id}/users`);
+    const { data } = await axiosInstance.get(`/projects/${projectId}/roles/${role.id}/users`);
+    roleUsers.value = data;
   } catch (err: any) {
     roleUsersError.value = err.message || 'Failed to load users in role';
   } finally {
@@ -209,10 +194,7 @@ const viewRoleUsers = async (role: any) => {
 const addUserToRole = async () => {
   if (!selectedRole.value) return;
   try {
-    await apiCall(`/projects/${projectId}/roles/${selectedRole.value.id}/users/add`, {
-      method: 'POST',
-      body: JSON.stringify({ userIds: [addUserIdentifier.value] }),
-    });
+    await axiosInstance.post(`/projects/${projectId}/roles/${selectedRole.value.id}/users/add`, { userIds: [addUserIdentifier.value] });
     addUserIdentifier.value = '';
     await viewRoleUsers(selectedRole.value);
   } catch (err: any) {
@@ -223,10 +205,7 @@ const addUserToRole = async () => {
 const removeUserFromRole = async (userId: string) => {
   if (!selectedRole.value) return;
   try {
-    await apiCall(`/projects/${projectId}/roles/${selectedRole.value.id}/users/remove`, {
-      method: 'POST',
-      body: JSON.stringify({ userIds: [userId] }),
-    });
+    await axiosInstance.post(`/projects/${projectId}/roles/${selectedRole.value.id}/users/remove`, { userIds: [userId] });
     await viewRoleUsers(selectedRole.value);
   } catch (err: any) {
     alert('Failed to remove user: ' + err.message);

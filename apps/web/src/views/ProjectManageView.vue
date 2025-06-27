@@ -159,7 +159,7 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { authService } from '../services/auth.service'
+import axiosInstance from '../api'
 import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
 import AppFooter from '../components/AppFooter.vue'
@@ -201,33 +201,13 @@ const project = ref<Project | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-// API helper function
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const token = authService.getAccessToken()
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers
-  }
-
-  const response = await fetch(`/api${endpoint}`, {
-    ...options,
-    headers
-  })
-
-  if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`)
-  }
-
-  return response.json()
-}
-
 const loadProject = async () => {
   try {
     loading.value = true
     error.value = null
     const projectId = route.params.projectId as string
-    project.value = await apiCall(`/projects/${projectId}`)
+    const { data } = await axiosInstance.get(`/projects/${projectId}`)
+    project.value = data
   } catch (err: any) {
     error.value = err.message || 'Failed to load project'
     console.error('Error loading project:', err)
@@ -281,7 +261,7 @@ const deleteProject = async () => {
   }
 
   try {
-    await apiCall(`/projects/${project.value.id}`, { method: 'DELETE' })
+    await axiosInstance.delete(`/projects/${project.value.id}`)
     alert('Project deleted successfully')
     router.push('/projects')
   } catch (err: any) {

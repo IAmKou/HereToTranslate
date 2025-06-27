@@ -228,18 +228,20 @@ const menuItems: MenuItem[] = [
   {
     label: 'Sign Out',
     icon: 'pi pi-sign-out',
+    command: async () => {
+      await handleLogout();
+    },
     template: (item: MenuItem) => {
       return `
-        <div class="menu-item-content" onclick="document.dispatchEvent(new CustomEvent('sign-out'))">
-          <div class="menu-item-icon">
-            <i class="pi pi-sign-out"></i>
-          </div>
-          <div class="menu-item-details">
-            <span class="menu-item-label">Sign Out</span>
-            <span class="menu-shortcut">⌘ F</span>
-          </div>
+      <div class="menu-item-content">
+        <div class="menu-item-icon">
+          <i class="pi pi-sign-out"></i>
         </div>
-      `;
+        <div class="menu-item-details">
+          <span class="menu-item-label">Sign Out</span>
+        </div>
+      </div>
+    `;
     }
   }
 ];
@@ -283,6 +285,17 @@ const loadUserInfo = async (): Promise<void> => {
     currentUser.value = null;
   }
 };
+
+const handleLogout = async () => {
+  try {
+    await authService.logout();
+    currentUser.value = null;
+    router.push('/login');
+  } catch (error) {
+    console.error('Logout failed:', error);
+  }
+};
+
 
 onMounted(() => {
   loadUserInfo();
@@ -343,7 +356,9 @@ onMounted(() => {
 .navbar-menu {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 2.5rem;
+  flex: 1;
+  justify-content: space-between;
 }
 
 .navbar-start {
@@ -583,5 +598,11 @@ onMounted(() => {
 .menu-item-content:active {
   transform: scale(0.98) translateX(4px);
   background: rgba(255, 255, 255, 0.08);
+}
+
+.navbar-end {
+  display: flex;
+  align-items: center;
+  padding-right: 16px;
 }
 </style>

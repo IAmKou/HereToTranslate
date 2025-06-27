@@ -42,30 +42,6 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
-      path: '/forgot-password',
-      name: 'forgotpassword',
-      component: () => import('../views/ForgotPasswordView.vue'),
-      meta: { requiresAuth: false }
-    },
-    {
-      path: '/rate',
-      name: 'rate',
-      component: () => import('../views/RateView.vue'),
-      meta: { requiresAuth: false }
-    },
-    {
-      path: '/createrequest',
-      name: 'createrequest',
-      component: () => import('../views/CreateRequestView.vue'),
-      meta: { requiresAuth: false }
-    },
-    {
-      path: '/request',
-      name: 'request',
-      component: () => import('../views/RequestListView.vue'),
-      meta: { requiresAuth: false }
-    },
-    {
       path: '/projects/create',
       name: 'create-project',
       component: () => import('../views/CreateProjectView.vue'),
@@ -128,6 +104,30 @@ const router = createRouter({
           component: () => import('../views/ChatRoomView.vue'),
         },
       ],
+    },
+    {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: () => import('../views/ForgotPasswordView.vue'),
+      meta: { requiresAuth: false},
+    },
+    {
+      path: '/requests/create',
+      name: 'create-request',
+      component: () => import('../views/CreateRequestView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:projectId/prole',
+      name: 'prole',
+      component: () => import('../views/ProjectRoleManagementView.vue'),
+      meta: {requiresAuth: true},
+    },
+    {
+      path: '/my-requests',
+      name: 'my-requests',
+      component: () => import('../views/MyRequestView.vue'),
+      meta: { requiresAuth: true },
     },
   ],
 });

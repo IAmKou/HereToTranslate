@@ -15,6 +15,7 @@ import { CommitEntity } from './commit.entity';
 import { FileEntity } from './file.entity';
 import { ProjectGroupEntity } from './project-group.entity';
 import { UserTypeEntity } from './user-type.entity';
+import { RequestEntity } from './request.entity';
 
 export enum UserRole {
   SuperAdmin = 1,
@@ -73,5 +74,7 @@ export class UserEntity {
   @OneToMany(() => FileEntity, file => file.uploader)
   file: FileEntity[];
 
+  @ManyToMany(() => RequestEntity, request => request.registrants)
+  registeredRequests: RequestEntity[];
 
 }

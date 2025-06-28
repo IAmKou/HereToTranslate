@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 
@@ -28,5 +27,10 @@ export class MailService {
         username,
       }
     })
+  }
+
+  async notifyAllOthersRequestTaken(requestId: number, userIds: number[]) {
+    // TODO: Implement actual mail notification logic for all other registrants
+    return;
   }
 }

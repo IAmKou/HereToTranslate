@@ -1,6 +1,6 @@
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
-import { CreateRequestDto, ReviewRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
+import { CreateRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
 import { Body, Controller, Get, Param, Post, Req, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
 import { RequestManagerService } from "../service/request-manager.service";
 import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
@@ -36,6 +36,12 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('private')
+  async getAllPrivateRequests() {
+    return this.requests.fetchPrivateRequests();
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post(':requestId/update')
   async updateRequest(
     @Param('requestId', BigIntTransformPipe) requestId: bigint,
@@ -45,16 +51,16 @@ export class RequestController {
     return this.requests.updateRequest(req.user.id, requestId, body);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Post(':requestId/review')
-  async reviewRequest(
-    @Param('requestId', BigIntTransformPipe) requestId: bigint,
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body(ValidationPipe) body: ReviewRequestDto,
-    @Req() req: AuthenticatedRequest
-  ) {
-    return this.requests.reviewRequest(req.user.id, projectId, requestId, body.status);
-  }
+  // @UseGuards(JwtAuthGuard)
+  // @Post(':requestId/review')
+  // async reviewRequest(
+  //   @Param('requestId', BigIntTransformPipe) requestId: bigint,
+  //   @Param('projectId', BigIntTransformPipe) projectId: bigint,
+  //   @Body(ValidationPipe) body: ReviewRequestDto,
+  //   @Req() req: AuthenticatedRequest
+  // ) {
+  //   return this.requests.reviewRequest(req.user.id, projectId, requestId, body.status);
+  // }
 
   @UseGuards(JwtAuthGuard)
   @Post(':requestId/cancel')

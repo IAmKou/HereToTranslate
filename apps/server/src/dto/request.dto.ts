@@ -1,5 +1,15 @@
 import { RequestStatus } from "#LocalProject/Entities";
-import { IsDateString, IsEnum, IsNumber, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsNumberString,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength
+} from 'class-validator';
 import { Optional } from '@nestjs/common';
 
 export class CreateRequestDto {
@@ -19,6 +29,9 @@ export class CreateRequestDto {
   assigneeId: number;
   @Optional()
   projectId: number;
+  @IsNotEmpty()
+  @IsNumberString()
+  categoryId: string;
 }
 
 export class UpdateRequestDto {

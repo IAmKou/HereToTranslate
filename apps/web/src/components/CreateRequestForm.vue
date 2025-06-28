@@ -186,6 +186,36 @@
               <span v-else class="help-text">Deadline must be at least 7 days from now</span>
             </div>
           </div>
+
+          <div class="form-group">
+            <label for="category">
+              Category <span class="required-mark">*</span>
+            </label>
+            <div class="select-wrapper">
+              <select
+                id="category"
+                v-model="categoryId"
+                class="form-control"
+                :class="{ 'error': categoryTouched && !categoryId }"
+                required
+                @change="categoryTouched = true"
+                @blur="categoryTouched = true"
+              >
+                <option value="">Choose a category for your request</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
+              </select>
+              <div class="select-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="input-info">
+              <span v-if="categoryTouched && !categoryId" class="error-message">Please select a category</span>
+            </div>
+          </div>
         </div>
 
         <div class="form-actions">
@@ -223,6 +253,7 @@ const description = ref('')
 const projectId = ref('')
 const dealAmount = ref(null)
 const deadline = ref('')
+const categoryId = ref('')
 const loading = ref(false)
 const minDate = ref(new Date())
 // Set minDate to 7 days from now to match backend validation
@@ -230,12 +261,14 @@ minDate.value.setDate(minDate.value.getDate() + 7)
 const toast = useToast()
 
 const projectOptions = ref([])
+const categories = ref([])
 
 const titleTouched = ref(false)
 const descTouched = ref(false)
 const projectTouched = ref(false)
 const amountTouched = ref(false)
 const deadlineTouched = ref(false)
+const categoryTouched = ref(false)
 const assigneeEmail = ref('')
 const assigneeTouched = ref(false)
 
@@ -244,11 +277,11 @@ const requestType = ref('project')
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
 const isFormValid = computed(() => {
   if (requestType.value === 'project') {
-    return title.value && projectId.value && isDealAmountValid.value && deadline.value
+    return title.value && projectId.value && isDealAmountValid.value && deadline.value && categoryId.value
   } else if (requestType.value === 'private') {
-    return title.value && isDealAmountValid.value && deadline.value && assigneeEmail.value
+    return title.value && isDealAmountValid.value && deadline.value && assigneeEmail.value && categoryId.value
   } else {
-    return title.value && isDealAmountValid.value && deadline.value
+    return title.value && isDealAmountValid.value && deadline.value && categoryId.value
   }
 })
 
@@ -264,6 +297,13 @@ onMounted(async () => {
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch project list', life: 3000 })
   }
+
+  try {
+    const categoriesRes = await axios.get('/api/categories/all')
+    categories.value = categoriesRes.data
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch categories', life: 3000 })
+  }
 })
 
 async function handleSubmit() {
@@ -273,6 +313,7 @@ async function handleSubmit() {
   amountTouched.value = true
   deadlineTouched.value = true
   assigneeTouched.value = true
+  categoryTouched.value = true
   if (!isFormValid.value) {
     toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all required information', life: 3000 })
     return
@@ -359,7 +400,8 @@ async function handleSubmit() {
       deadline: deadline.value,
       isPublic: isPublic,
       projectId: selectedProjectId,
-      assigneeId: assigneeId
+      assigneeId: assigneeId,
+      categoryId: categoryId.value
     }
     console.log('Sending request data:', requestData)
 

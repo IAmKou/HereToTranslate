@@ -94,6 +94,30 @@
               <span>{{ form.isPublic ? 'Public ' : 'Private ' }}</span>
             </div>
           </div>
+
+          <!-- Project Tags -->
+          <div class="form-group">
+            <label for="tags">
+              Project Tags
+            </label>
+            <Multiselect
+              v-model="form.tags"
+              :options="allTags"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              :preserve-search="true"
+              placeholder="Select tag..."
+              :taggable="false"
+              class="multiselect-custom"
+              label="name"
+              track-by="id"
+            />
+            <div class="input-info">
+              <span v-if="errors.tags" class="error-message">{{ errors.tags }}</span>
+              <span v-else class="help-text">Select one or many tags to help others find your project</span>
+            </div>
+          </div>
         </div>
 
         <div class="form-section">
@@ -169,6 +193,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
 import InputSwitch from 'primevue/inputswitch'
+import Multiselect from 'vue-multiselect'
 
 interface Category {
   id: string;
@@ -176,11 +201,16 @@ interface Category {
   description?: string;
 }
 
+interface Tag {
+  id: string;
+  name: string;
+}
+
 interface CreateProjectData {
   name: string;
   description?: string;
   isPublic?: boolean;
-  tags?: string[];
+  tags?: Tag[];
   categoryId: string;
 }
 
@@ -188,6 +218,7 @@ interface FormErrors {
   name?: string;
   description?: string;
   categoryId?: string;
+  tags?: string;
 }
 
 const router = useRouter()
@@ -204,6 +235,7 @@ const errors = ref<FormErrors>({})
 const isSubmitting = ref(false)
 const hasSubmitted = ref(false)
 const categories = ref<Category[]>([])
+const allTags = ref<Tag[]>([])
 
 // Validation functions
 const validateName = () => {
@@ -257,12 +289,23 @@ const validateCategory = () => {
   return true
 }
 
+const validateTags = () => {
+  if (form.value.tags && form.value.tags.length > 10) {
+    errors.value.tags = 'You can only select up to 10 tags'
+    return false
+  }
+
+  errors.value.tags = undefined
+  return true
+}
+
 const validateForm = () => {
   const isNameValid = validateName()
   const isDescriptionValid = validateDescription()
   const isCategoryValid = validateCategory()
+  const isTagsValid = validateTags()
 
-  return isNameValid && isDescriptionValid && isCategoryValid
+  return isNameValid && isDescriptionValid && isCategoryValid && isTagsValid
 }
 
 // Computed property to check if form is valid
@@ -272,7 +315,8 @@ const isFormValid = computed(() => {
     form.value.categoryId &&
     !errors.value.name &&
     !errors.value.description &&
-    !errors.value.categoryId
+    !errors.value.categoryId &&
+    (form.value.tags || []).length <= 10
 })
 
 // API helper function
@@ -335,6 +379,22 @@ const fetchCategories = async () => {
   }
 };
 
+const fetchTags = async () => {
+  try {
+    const response = await fetch('/api/project-tag/all', {
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      allTags.value = await response.json();
+    } else {
+      console.error('Failed to fetch tags:', response.statusText);
+    }
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+  }
+};
+
 // Prevent double submission
 const handleSubmitClick = (event: Event) => {
   event.preventDefault()
@@ -367,9 +427,13 @@ const handleSubmit = async () => {
   try {
     console.log('Submitting project creation request...')
 
+    // Convert tags to string array for backend
+    const tagNames = form.value.tags ? form.value.tags.map(tag => tag.name) : []
+
     // Chuyển đổi isPublic thành isPrivate trước khi gửi lên backend
     const payload = {
       ...form.value,
+      tags: tagNames,
       isPrivate: !form.value.isPublic,
     }
     delete payload.isPublic;
@@ -430,6 +494,7 @@ onMounted(() => {
   }
 
   fetchCategories()
+  fetchTags()
 })
 </script>
 
@@ -759,6 +824,11 @@ textarea.form-control {
   }
 }
 
+/* Multiselect custom styles */
+.multiselect-custom {
+  margin-bottom: 0.5rem;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .create-project-container {
@@ -858,4 +928,6 @@ textarea.form-control {
   }
 }
 </style>
+
+<style src="vue-multiselect/dist/vue-multiselect.min.css"></style>
 

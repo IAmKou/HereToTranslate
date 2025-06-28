@@ -54,11 +54,15 @@ export class RequestManagerService {
     });
 
     if (!isPublic) {
-      const asigneeUser = await this.userRepository.findOne({ where: { id: BigInt(dto.assigneeId) } });
-      if (asigneeUser?.email) {
-        await this.mailService.sendPrivateRequestConfirmation(asigneeUser.email,{
+      const requesterUser = await this.userRepository.findOneOrFail({where : {id : BigInt(uid)}});
+      const assigneeUser = await this.userRepository.findOne({ where: { id: BigInt(dto.assigneeId) } });
+
+      const username = requesterUser.username;
+      if (assigneeUser?.email) {
+        await this.mailService.sendPrivateRequestConfirmation(assigneeUser.email,{
           title,
           deadline,
+          username,
         });
       }
     }
@@ -187,20 +191,23 @@ export class RequestManagerService {
     return this.requestRepository.save(request);
   }
 
-  // async registerForPublicRequest(requestId: number, user: UserEntity) {
-  //   const request = await this.requestRepo.findOneOrFail({ where: { id: requestId } });
-  //
-  //   if (request.status !== RequestStatus.Pending) {
-  //     throw new BadRequestException('Request is not open for registration.');
-  //   }
-  //
-  //   await this.mailService.notifyRequesterOfRegistration(request, user);
-  //   if (request.requester) {
-  //     await this.chatService.openChatBetween(user, request.requester);
-  //   }
-  // }
-  //
-  //
+  async registerForPublicRequest(requestId: bigint, uid : number) {
+    const request = await this.requestRepository.findOneOrFail({ where: { id: requestId } });
+    const requesterEmail = request.requester.email;
+    const register = await this.userRepository.findOneOrFail({ where: {id : BigInt(uid)}});
+
+
+    if (request.status !== RequestStatus.Pending) {
+      throw new BadRequestException('Request is not open for registration.');
+    }
+
+    await this.mailService.notifyRequesterOfRegistration(requesterEmail, register.username);
+    // if (request.requester) {
+    //   await this.chatService.openChatBetween(user, request.requester);
+    // }
+  }
+
+
   // async approveRegistrant(
   //   requestId: number,
   //   selectedUserId: number

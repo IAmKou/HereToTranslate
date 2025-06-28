@@ -31,6 +31,7 @@ import { GroupController } from '#LocalProject/Managers/controller/group.control
 import { ProjectTagManagerService } from '#LocalProject/Managers/service/project-tag-manager.service';
 import { ProjectTagController } from '#LocalProject/Managers/controller/project-tag.controller';
 import { AuthEntity } from '#LocalProject/SqliteEntities';
+import { MailService } from '../mailer/mailer.service';
 
 @Global()
 @Module({
@@ -60,6 +61,7 @@ import { AuthEntity } from '#LocalProject/SqliteEntities';
     DiscussionManagerService,
     ProjectManagerService,
     ProjectTagManagerService,
+    MailService,
   ],
   exports: [
     CategoryManagerService,
@@ -70,6 +72,7 @@ import { AuthEntity } from '#LocalProject/SqliteEntities';
     DiscussionManagerService,
     ProjectManagerService,
     ProjectTagManagerService,
+    MailService,
   ],
   controllers: [
     CategoryController,

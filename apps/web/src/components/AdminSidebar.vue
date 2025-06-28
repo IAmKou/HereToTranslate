@@ -40,7 +40,7 @@
           <span class="material-icons">category</span>
           <span class="menu-text">Categories</span>
         </router-link>
-        
+
       </div>
 
       <!-- System Section -->

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import Sidebar from '../components/Sidebar.vue';
-import TopNavbar from '../components/Navbar.vue';
+import AdminNavbar from '../components/AdminNavbar.vue';
+import AdminSidebar from '../components/AdminSidebar.vue';
 import Footer from '../components/AppFooter.vue';
 import { authService } from '../services/auth.service';
 import { userService, UserProfile, User } from '../services/user.service';
@@ -99,6 +99,8 @@ const quickActions = ref<QuickAction[]>([
     color: '#dc2626'
   }
 ]);
+
+const isSidebarCollapsed = ref(false);
 
 const fetchUserData = async () => {
   try {
@@ -412,10 +414,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="layout-wrapper">
-    <TopNavbar />
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+    <AdminNavbar />
     <div class="main-content">
-      <Sidebar />
+      <AdminSidebar v-model:collapsed="isSidebarCollapsed" />
       <div class="content">
         <main class="admin-home-main">
           <!-- Header Section -->
@@ -645,7 +647,6 @@ onMounted(async () => {
   box-shadow: 0 2px 16px 0 rgba(60,60,60,0.08);
   max-width: 1400px;
   width: 100%;
-  margin-left: 13rem;
   padding: 32px 32px 40px 32px;
 }
 
@@ -1052,5 +1053,13 @@ onMounted(async () => {
   .stat-number {
     font-size: 1.8rem;
   }
+}
+
+.layout-wrapper .admin-home-main {
+  margin-left: 16.25rem;
+  transition: margin-left 0.2s;
+}
+.layout-wrapper.sidebar-collapsed .admin-home-main {
+  margin-left: 4.5rem;
 }
 </style>

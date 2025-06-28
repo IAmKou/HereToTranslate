@@ -1,113 +1,104 @@
 <template>
-  <div class="center-container">
-    <div class="form-card">
-      <h1 class="text-3xl font-bold mb-6 text-center">Create New Request</h1>
-
-      <form @submit.prevent="submitRequest" enctype="multipart/form-data" class="space-y-4">
-        <div>
-          <label class="block font-semibold mb-1">Title *</label>
-          <input v-model="form.title" required class="w-full border rounded p-2" />
+  <div class="layout-wrapper">
+    <Navbar />
+    <div class="main-content">
+      <Sidebar />
+      <div class="content">
+        <div class="create-request-container">
+          <!-- Header -->
+          <div class="create-header">
+            <div>
+              <h1 class="create-title">
+                <span class="emoji">📝</span> Create New Request
+              </h1>
+              <p class="create-desc">
+                Start a new translation request. Fill in the details below !
+              </p>
+            </div>
+            <!-- Optional illustration or icon -->
+            <img src="https://illustrations.popsy.co/gray/web-design.svg" alt="Create Request" class="create-illustration" />
+          </div>
+          <!-- Form Card -->
+          <div class="create-form-card">
+            <CreateRequestForm @success="onSuccess" @cancel="onCancel" />
+          </div>
         </div>
-
-        <div>
-          <label class="block font-semibold mb-1">Description *</label>
-          <textarea v-model="form.description" required class="w-full border rounded p-2" rows="3"></textarea>
-        </div>
-
-        <div>
-          <label class="block font-semibold mb-1">Deal Amount</label>
-          <input v-model.number="form.dealAmount" type="number" min="0" class="w-full border rounded p-2" />
-        </div>
-
-        <div>
-          <label class="block font-semibold mb-1">Deadline</label>
-          <input v-model="form.deadline" type="date" class="w-full border rounded p-2" />
-        </div>
-
-        <div>
-          <label class="block font-semibold mb-1">Attach File</label>
-          <input @change="handleFileUpload" type="file" class="w-full" />
-        </div>
-
-        <button type="submit" class="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-          Submit Request
-        </button>
-
-        <p v-if="error" class="text-red-600 text-sm mt-2 text-center">{{ error }}</p>
-      </form>
+      </div>
     </div>
+    <Footer />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import axios from 'axios';
-import { useRouter } from 'vue-router';
+import Sidebar from '../components/Sidebar.vue';
+import Navbar from '../components/Navbar.vue';
+import Footer from '../components/AppFooter.vue';
+import CreateRequestForm from '../components/CreateRequestForm.vue';
 
-const router = useRouter();
+function onSuccess() {
+  setTimeout(() => {
+    window.location.href = '/my-requests'
+  }, 2000)
+}
 
-const form = ref({
-  title: '',
-  description: '',
-  dealAmount: null,
-  deadline: '',
-  targetUserId: null,
-  projectId: null,
-});
-
-const file = ref(null);
-const error = ref(null);
-
-const handleFileUpload = (event) => {
-  file.value = event.target.files[0];
-};
-
-const submitRequest = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    const formData = new FormData();
-
-    for (const [key, value] of Object.entries(form.value)) {
-      if (value !== null && value !== '') {
-        formData.append(key, value);
-      }
-    }
-
-    if (file.value) {
-      formData.append('file', file.value);
-    }
-
-    await axios.post('http://localhost:3000/api/requests', formData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    router.push('/request');
-  } catch (err) {
-    error.value = err.response?.data?.message || 'Failed to create request.';
-  }
-};
+function onCancel() {
+  window.history.back()
+}
 </script>
 
 <style scoped>
-.center-container {
+.layout-wrapper {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100vh - 80px); /* header-safe */
-  padding: 2rem;
-  background-color: #f5f5f5;
-  margin-left: 240px; /* offset for sidebar */
+  flex-direction: column;
+  min-height: 100vh;
 }
-
-.form-card {
+.main-content {
+  display: flex;
+  flex: 1;
+}
+.content {
+  flex: 1;
+  padding: 32px 20px;
+  background: #f6f8fa;
+}
+.create-request-container {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.create-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  gap: 32px;
+}
+.create-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.emoji {
+  font-size: 2.5rem;
+}
+.create-desc {
+  font-size: 1.1rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.6;
+}
+.create-illustration {
+  width: 200px;
+  height: auto;
+  opacity: 0.8;
+}
+.create-form-card {
   background: white;
-  padding: 2rem;
-  max-width: 600px;
-  width: 100%;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
 }
 </style>

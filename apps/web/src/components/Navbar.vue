@@ -19,9 +19,7 @@
           <router-link to="/translate" class="navbar-item" aria-label="Translate">
             <i class="pi pi-globe nav-icon"></i> Translate
           </router-link>
-          <router-link to="/history" class="navbar-item" aria-label="History">
-            <i class="pi pi-history nav-icon"></i> History
-          </router-link>
+
         </div>
 
         <div class="navbar-end">

@@ -1,400 +1,406 @@
 <template>
-  <div class="category-list">
-    <!-- Header Section -->
-    <div class="page-header mb-4">
-      <div class="header-content">
-        <div class="header-icon">
-          <i class="pi pi-folder"></i>
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+    <AdminNavbar />
+    <div class="main-content">
+      <AdminSidebar v-model:collapsed="isSidebarCollapsed" />
+      <div class="category-list">
+        <!-- Header Section -->
+        <div class="page-header mb-4">
+          <div class="header-content">
+            <div class="header-icon">
+              <i class="pi pi-folder"></i>
+            </div>
+            <div class="header-text">
+              <h2>Categories Management</h2>
+              <p class="page-description">Create and manage categories and their subcategories</p>
+            </div>
+          </div>
         </div>
-        <div class="header-text">
-          <h2>Categories Management</h2>
-          <p class="page-description">Create and manage categories and their subcategories</p>
-        </div>
+
+        <!-- Main Content -->
+        <Card class="mb-4">
+          <template #title>
+            <div class="flex justify-between items-center">
+              <div class="flex items-center gap-2">
+                <i class="pi pi-list text-xl"></i>
+                <h2 class="text-xl font-semibold m-0">
+                  {{ activeTab === 'categories' ? 'Categories' : 'Tags' }}
+                </h2>
+              </div>
+              <div class="flex gap-2">
+                <Button
+                  v-if="activeTab === 'categories'"
+                  icon="pi pi-tags"
+                  label="Manage Tags"
+                  class="p-button-secondary"
+                  @click="activeTab = 'tags'"
+                />
+                <Button
+                  v-if="activeTab === 'tags'"
+                  icon="pi pi-list"
+                  label="Manage Categories"
+                  class="p-button-secondary"
+                  @click="activeTab = 'categories'"
+                />
+              </div>
+            </div>
+          </template>
+          <template #content>
+            <div v-if="activeTab === 'categories'">
+              <DataTable
+                :value="categories"
+                :paginator="true"
+                :rows="10"
+                :loading="loading"
+                :filters="filters"
+                filterDisplay="menu"
+                :globalFilterFields="['name', 'description']"
+                class="p-datatable-sm"
+                v-model:filters1="filters"
+                stripedRows
+                showGridlines
+                responsiveLayout="scroll"
+                :rowHover="true"
+                paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                :rowsPerPageOptions="[5,10,20,50]"
+                currentPageReportTemplate="Showing {first} to {last} of {totalRecords} categories"
+              >
+                <template #header>
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="p-input-icon-left">
+                      <i class="pi pi-search" />
+                      <InputText v-model="filters.global.value" placeholder="Search..." />
+                    </span>
+                    <Button
+                      icon="pi pi-plus"
+                      label="Add Category"
+                      @click="openAddModal"
+                      class="p-button-primary"
+                    />
+                  </div>
+                </template>
+                <template #empty>
+                  <div class="text-center p-4">
+                    <i class="pi pi-folder text-4xl text-gray-400 mb-2"></i>
+                    <p class="text-gray-500">No categories found.</p>
+                  </div>
+                </template>
+                <template #loading>
+                  <div class="text-center p-4">
+                    <i class="pi pi-spin pi-spinner text-2xl"></i>
+                    <p class="mt-2">Loading categories...</p>
+                  </div>
+                </template>
+
+                <Column field="name" header="Name" sortable style="min-width: 200px">
+                  <template #body="{ data }">
+                    <div class="flex items-center gap-2">
+                      <i class="pi pi-folder text-primary"></i>
+                      <span>{{ data.name }}</span>
+                    </div>
+                  </template>
+                  <template #filter="{ filterModel, filterCallback }">
+                    <span class="p-input-icon-left">
+                      <i class="pi pi-search" />
+                      <InputText
+                        v-model="filterModel.value"
+                        @input="filterCallback()"
+                        placeholder="Search by name"
+                        class="p-column-filter"
+                      />
+                    </span>
+                  </template>
+                </Column>
+                <Column field="description" header="Description" sortable style="min-width: 300px">
+                  <template #body="{ data }">
+                    <span class="text-gray-600">{{ data.description || 'No description' }}</span>
+                  </template>
+                  <template #filter="{ filterModel, filterCallback }">
+                    <span class="p-input-icon-left">
+                      <i class="pi pi-search" />
+                      <InputText
+                        v-model="filterModel.value"
+                        @input="filterCallback()"
+                        placeholder="Search by description"
+                        class="p-column-filter"
+                      />
+                    </span>
+                  </template>
+                </Column>
+
+                <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
+                  <template #body="slotProps">
+                    <div class="flex items-center gap-2">
+                      <i class="pi pi-clock text-gray-400"></i>
+                      <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
+                    </div>
+                  </template>
+                </Column>
+                <Column style="min-width: 150px">
+                  <template #body="slotProps">
+                    <div class="flex gap-2">
+                      <Button
+                        icon="pi pi-pencil"
+                        class="p-button-rounded p-button-text p-button-sm"
+                        @click="editCategory(slotProps.data)"
+                        v-tooltip.top="'Edit Category'"
+                      />
+                      <Button
+                        icon="pi pi-trash"
+                        class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                        @click="confirmDelete(slotProps.data)"
+                        v-tooltip.top="'Delete Category'"
+                      />
+                    </div>
+                  </template>
+                </Column>
+              </DataTable>
+            </div>
+            <div v-else>
+              <!-- Tag Management Table -->
+              <DataTable
+                :value="tags"
+                :paginator="true"
+                :rows="10"
+                :loading="tagLoading"
+                :filters="tagFilters"
+                filterDisplay="menu"
+                :globalFilterFields="['name']"
+                class="p-datatable-sm"
+                stripedRows
+                showGridlines
+                responsiveLayout="scroll"
+                :rowHover="true"
+                paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                :rowsPerPageOptions="[5,10,20,50]"
+                currentPageReportTemplate="Showing {first} to {last} of {totalRecords} tags"
+              >
+                <template #header>
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="p-input-icon-left">
+                      <i class="pi pi-search" />
+                      <InputText v-model="tagFilters.global.value" placeholder="Search..." />
+                    </span>
+                    <Button icon="pi pi-plus" label="Add Tag" @click="openAddTagDialog" class="p-button-primary" />
+                  </div>
+                </template>
+                <template #empty>
+                  <div class="text-center p-4">
+                    <i class="pi pi-tags text-4xl text-gray-400 mb-2"></i>
+                    <p class="text-gray-500">No tags found.</p>
+                  </div>
+                </template>
+                <template #loading>
+                  <div class="text-center p-4">
+                    <i class="pi pi-spin pi-spinner text-2xl"></i>
+                    <p class="mt-2">Loading tags...</p>
+                  </div>
+                </template>
+                <Column field="name" header="Tag Name" sortable style="min-width: 200px">
+                  <template #body="{ data }">
+                    <span>{{ data.name }}</span>
+                  </template>
+                  <template #filter="{ filterModel, filterCallback }">
+                    <span class="p-input-icon-left">
+                      <i class="pi pi-search" />
+                      <InputText
+                        v-model="filterModel.value"
+                        @input="filterCallback()"
+                        placeholder="Search by tag name"
+                        class="p-column-filter"
+                      />
+                    </span>
+                  </template>
+                </Column>
+
+                <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
+                  <template #body="slotProps">
+                    <div class="flex items-center gap-2">
+                      <i class="pi pi-clock text-gray-400"></i>
+                      <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
+                    </div>
+                  </template>
+                </Column>
+                <Column style="min-width: 150px">
+                  <template #body="slotProps">
+                    <div class="flex gap-2">
+                      <Button
+                        icon="pi pi-pencil"
+                        class="p-button-rounded p-button-text p-button-sm"
+                        @click="editTag(slotProps.data)"
+                        v-tooltip.top="'Edit Tag'"
+                      />
+                      <Button
+                        icon="pi pi-trash"
+                        class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                        @click="confirmDeleteTag(slotProps.data)"
+                        v-tooltip.top="'Delete Tag'"
+                      />
+                    </div>
+                  </template>
+                </Column>
+              </DataTable>
+              <!-- Add/Edit Tag Dialog -->
+              <Dialog
+                v-model:visible="showTagDialog"
+                :header="isEditingTag ? 'Edit Tag' : 'Add New Tag'"
+                :style="{width: '400px'}"
+                :modal="true"
+                :closable="true"
+                :closeOnEscape="true"
+                class="category-dialog"
+              >
+                <div class="p-fluid">
+                  <div class="dialog-content">
+                    <div class="form-section">
+                      <div class="section-header">
+                        <i class="pi pi-tag text-primary"></i>
+                        <h3>Tag Information</h3>
+                      </div>
+                      <div class="field">
+                        <label for="tagName" class="font-medium flex items-center gap-2">
+                          <i class="pi pi-tag text-primary"></i>
+                          Tag Name
+                          <span class="required-mark">*</span>
+                        </label>
+                        <InputText
+                          id="tagName"
+                          v-model="currentTag.name"
+                          required
+                          autofocus
+                          :class="{'p-invalid': tagSubmitted && !currentTag.name}"
+                          placeholder="Enter tag name"
+                          class="w-full"
+                        />
+                        <small class="p-error flex items-center gap-1 mt-1" v-if="tagSubmitted && !currentTag.name">
+                          <i class="pi pi-exclamation-circle"></i>
+                          Name is required
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <template #footer>
+                  <div class="dialog-footer">
+                    <Button
+                      label="Cancel"
+                      icon="pi pi-times"
+                      class="p-button-text p-button-rounded"
+                      @click="closeTagDialog"
+                      :disabled="tagSaving"
+                    />
+                    <Button
+                      :label="isEditingTag ? 'Update Tag' : 'Create Tag'"
+                      :icon="isEditingTag ? 'pi pi-save' : 'pi pi-plus'"
+                      class="p-button-primary p-button-rounded"
+                      @click="saveTag"
+                      :loading="tagSaving"
+                    />
+                  </div>
+                </template>
+              </Dialog>
+              <!-- Confirm Dialog for Delete -->
+              <ConfirmDialog></ConfirmDialog>
+            </div>
+          </template>
+        </Card>
+
+        <!-- Add/Edit Category Dialog -->
+        <Dialog
+          v-model:visible="showDialog"
+          :header="isEditing ? 'Edit Category' : 'Add New Category'"
+          :style="{width: '600px'}"
+          :modal="true"
+          :closable="true"
+          :closeOnEscape="true"
+          class="category-dialog"
+        >
+          <div class="p-fluid">
+            <div class="dialog-content">
+              <div class="form-section">
+                <div class="section-header">
+                  <i class="pi pi-folder text-primary"></i>
+                  <h3>Category Information</h3>
+                </div>
+                <div class="field">
+                  <label for="name" class="font-medium flex items-center gap-2">
+                    <i class="pi pi-tag text-primary"></i>
+                    Category Name
+                    <span class="required-mark">*</span>
+                  </label>
+                  <InputText
+                    id="name"
+                    v-model="currentCategory.name"
+                    required
+                    autofocus
+                    :class="{'p-invalid': submitted && !currentCategory.name}"
+                    placeholder="Enter category name"
+                    class="w-full"
+                  />
+                  <small class="p-error flex items-center gap-1 mt-1" v-if="submitted && !currentCategory.name">
+                    <i class="pi pi-exclamation-circle"></i>
+                    Name is required
+                  </small>
+                </div>
+                <div class="field">
+                  <label for="description" class="font-medium flex items-center gap-2">
+                    <i class="pi pi-info-circle text-primary"></i>
+                    Description
+                    <span class="text-sm text-gray-500">(Optional)</span>
+                  </label>
+                  <Textarea
+                    id="description"
+                    v-model="currentCategory.description"
+                    placeholder="Enter category description"
+                    rows="4"
+                    class="w-full"
+                    autoResize
+                  />
+                  <small class="text-gray-500 mt-1">
+                    <i class="pi pi-info-circle"></i>
+                    Add a brief description to help identify this category
+                  </small>
+                </div>
+              </div>
+
+              <div class="form-section" v-if="isEditing">
+                <div class="section-header">
+                  <i class="pi pi-clock text-primary"></i>
+                  <h3>Category Details</h3>
+                </div>
+                <div class="details-grid">
+                  <div class="detail-item">
+                    <span class="detail-label">Created At</span>
+                    <span class="detail-value">{{ formatDate(currentCategory.updatedAt) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <template #footer>
+            <div class="dialog-footer">
+              <Button
+                label="Cancel"
+                icon="pi pi-times"
+                class="p-button-text p-button-rounded"
+                @click="closeDialog"
+                :disabled="saving"
+              />
+              <Button
+                :label="isEditing ? 'Update Category' : 'Create Category'"
+                :icon="isEditing ? 'pi pi-save' : 'pi pi-plus'"
+                class="p-button-primary p-button-rounded"
+                @click="saveCategory"
+                :loading="saving"
+              />
+            </div>
+          </template>
+        </Dialog>
+
+        <!-- Confirm Dialog for Delete -->
+        <ConfirmDialog></ConfirmDialog>
       </div>
     </div>
-
-    <!-- Main Content -->
-    <Card class="mb-4">
-      <template #title>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2">
-            <i class="pi pi-list text-xl"></i>
-            <h2 class="text-xl font-semibold m-0">
-              {{ activeTab === 'categories' ? 'Categories' : 'Tags' }}
-            </h2>
-          </div>
-          <div class="flex gap-2">
-            <Button
-              v-if="activeTab === 'categories'"
-              icon="pi pi-tags"
-              label="Manage Tags"
-              class="p-button-secondary"
-              @click="activeTab = 'tags'"
-            />
-            <Button
-              v-if="activeTab === 'tags'"
-              icon="pi pi-list"
-              label="Manage Categories"
-              class="p-button-secondary"
-              @click="activeTab = 'categories'"
-            />
-          </div>
-        </div>
-      </template>
-      <template #content>
-        <div v-if="activeTab === 'categories'">
-          <DataTable
-            :value="categories"
-            :paginator="true"
-            :rows="10"
-            :loading="loading"
-            :filters="filters"
-            filterDisplay="menu"
-            :globalFilterFields="['name', 'description']"
-            class="p-datatable-sm"
-            v-model:filters1="filters"
-            stripedRows
-            showGridlines
-            responsiveLayout="scroll"
-            :rowHover="true"
-            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-            :rowsPerPageOptions="[5,10,20,50]"
-            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} categories"
-          >
-            <template #header>
-              <div class="flex justify-between items-center mb-2">
-                <span class="p-input-icon-left">
-                  <i class="pi pi-search" />
-                  <InputText v-model="filters.global.value" placeholder="Search..." />
-                </span>
-                <Button
-                  icon="pi pi-plus"
-                  label="Add Category"
-                  @click="openAddModal"
-                  class="p-button-primary"
-                />
-              </div>
-            </template>
-            <template #empty>
-              <div class="text-center p-4">
-                <i class="pi pi-folder text-4xl text-gray-400 mb-2"></i>
-                <p class="text-gray-500">No categories found.</p>
-              </div>
-            </template>
-            <template #loading>
-              <div class="text-center p-4">
-                <i class="pi pi-spin pi-spinner text-2xl"></i>
-                <p class="mt-2">Loading categories...</p>
-              </div>
-            </template>
-
-            <Column field="name" header="Name" sortable style="min-width: 200px">
-              <template #body="{ data }">
-                <div class="flex items-center gap-2">
-                  <i class="pi pi-folder text-primary"></i>
-                  <span>{{ data.name }}</span>
-                </div>
-              </template>
-              <template #filter="{ filterModel, filterCallback }">
-                <span class="p-input-icon-left">
-                  <i class="pi pi-search" />
-                  <InputText
-                    v-model="filterModel.value"
-                    @input="filterCallback()"
-                    placeholder="Search by name"
-                    class="p-column-filter"
-                  />
-                </span>
-              </template>
-            </Column>
-            <Column field="description" header="Description" sortable style="min-width: 300px">
-              <template #body="{ data }">
-                <span class="text-gray-600">{{ data.description || 'No description' }}</span>
-              </template>
-              <template #filter="{ filterModel, filterCallback }">
-                <span class="p-input-icon-left">
-                  <i class="pi pi-search" />
-                  <InputText
-                    v-model="filterModel.value"
-                    @input="filterCallback()"
-                    placeholder="Search by description"
-                    class="p-column-filter"
-                  />
-                </span>
-              </template>
-            </Column>
-
-            <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
-              <template #body="slotProps">
-                <div class="flex items-center gap-2">
-                  <i class="pi pi-clock text-gray-400"></i>
-                  <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
-                </div>
-              </template>
-            </Column>
-            <Column style="min-width: 150px">
-              <template #body="slotProps">
-                <div class="flex gap-2">
-                  <Button
-                    icon="pi pi-pencil"
-                    class="p-button-rounded p-button-text p-button-sm"
-                    @click="editCategory(slotProps.data)"
-                    v-tooltip.top="'Edit Category'"
-                  />
-                  <Button
-                    icon="pi pi-trash"
-                    class="p-button-rounded p-button-text p-button-danger p-button-sm"
-                    @click="confirmDelete(slotProps.data)"
-                    v-tooltip.top="'Delete Category'"
-                  />
-                </div>
-              </template>
-            </Column>
-          </DataTable>
-        </div>
-        <div v-else>
-          <!-- Tag Management Table -->
-          <DataTable
-            :value="tags"
-            :paginator="true"
-            :rows="10"
-            :loading="tagLoading"
-            :filters="tagFilters"
-            filterDisplay="menu"
-            :globalFilterFields="['name']"
-            class="p-datatable-sm"
-            stripedRows
-            showGridlines
-            responsiveLayout="scroll"
-            :rowHover="true"
-            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-            :rowsPerPageOptions="[5,10,20,50]"
-            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} tags"
-          >
-            <template #header>
-              <div class="flex justify-between items-center mb-2">
-                <span class="p-input-icon-left">
-                  <i class="pi pi-search" />
-                  <InputText v-model="tagFilters.global.value" placeholder="Search..." />
-                </span>
-                <Button icon="pi pi-plus" label="Add Tag" @click="openAddTagDialog" class="p-button-primary" />
-              </div>
-            </template>
-            <template #empty>
-              <div class="text-center p-4">
-                <i class="pi pi-tags text-4xl text-gray-400 mb-2"></i>
-                <p class="text-gray-500">No tags found.</p>
-              </div>
-            </template>
-            <template #loading>
-              <div class="text-center p-4">
-                <i class="pi pi-spin pi-spinner text-2xl"></i>
-                <p class="mt-2">Loading tags...</p>
-              </div>
-            </template>
-            <Column field="name" header="Tag Name" sortable style="min-width: 200px">
-              <template #body="{ data }">
-                <span>{{ data.name }}</span>
-              </template>
-              <template #filter="{ filterModel, filterCallback }">
-                <span class="p-input-icon-left">
-                  <i class="pi pi-search" />
-                  <InputText
-                    v-model="filterModel.value"
-                    @input="filterCallback()"
-                    placeholder="Search by tag name"
-                    class="p-column-filter"
-                  />
-                </span>
-              </template>
-            </Column>
-
-            <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
-              <template #body="slotProps">
-                <div class="flex items-center gap-2">
-                  <i class="pi pi-clock text-gray-400"></i>
-                  <span>{{ formatDate(slotProps.data.updatedAt) }}</span>
-                </div>
-              </template>
-            </Column>
-            <Column style="min-width: 150px">
-              <template #body="slotProps">
-                <div class="flex gap-2">
-                  <Button
-                    icon="pi pi-pencil"
-                    class="p-button-rounded p-button-text p-button-sm"
-                    @click="editTag(slotProps.data)"
-                    v-tooltip.top="'Edit Tag'"
-                  />
-                  <Button
-                    icon="pi pi-trash"
-                    class="p-button-rounded p-button-text p-button-danger p-button-sm"
-                    @click="confirmDeleteTag(slotProps.data)"
-                    v-tooltip.top="'Delete Tag'"
-                  />
-                </div>
-              </template>
-            </Column>
-          </DataTable>
-          <!-- Add/Edit Tag Dialog -->
-          <Dialog
-            v-model:visible="showTagDialog"
-            :header="isEditingTag ? 'Edit Tag' : 'Add New Tag'"
-            :style="{width: '400px'}"
-            :modal="true"
-            :closable="true"
-            :closeOnEscape="true"
-            class="category-dialog"
-          >
-            <div class="p-fluid">
-              <div class="dialog-content">
-                <div class="form-section">
-                  <div class="section-header">
-                    <i class="pi pi-tag text-primary"></i>
-                    <h3>Tag Information</h3>
-                  </div>
-                  <div class="field">
-                    <label for="tagName" class="font-medium flex items-center gap-2">
-                      <i class="pi pi-tag text-primary"></i>
-                      Tag Name
-                      <span class="required-mark">*</span>
-                    </label>
-                    <InputText
-                      id="tagName"
-                      v-model="currentTag.name"
-                      required
-                      autofocus
-                      :class="{'p-invalid': tagSubmitted && !currentTag.name}"
-                      placeholder="Enter tag name"
-                      class="w-full"
-                    />
-                    <small class="p-error flex items-center gap-1 mt-1" v-if="tagSubmitted && !currentTag.name">
-                      <i class="pi pi-exclamation-circle"></i>
-                      Name is required
-                    </small>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <template #footer>
-              <div class="dialog-footer">
-                <Button
-                  label="Cancel"
-                  icon="pi pi-times"
-                  class="p-button-text p-button-rounded"
-                  @click="closeTagDialog"
-                  :disabled="tagSaving"
-                />
-                <Button
-                  :label="isEditingTag ? 'Update Tag' : 'Create Tag'"
-                  :icon="isEditingTag ? 'pi pi-save' : 'pi pi-plus'"
-                  class="p-button-primary p-button-rounded"
-                  @click="saveTag"
-                  :loading="tagSaving"
-                />
-              </div>
-            </template>
-          </Dialog>
-          <!-- Confirm Dialog for Delete -->
-          <ConfirmDialog></ConfirmDialog>
-        </div>
-      </template>
-    </Card>
-
-    <!-- Add/Edit Category Dialog -->
-    <Dialog
-      v-model:visible="showDialog"
-      :header="isEditing ? 'Edit Category' : 'Add New Category'"
-      :style="{width: '600px'}"
-      :modal="true"
-      :closable="true"
-      :closeOnEscape="true"
-      class="category-dialog"
-    >
-      <div class="p-fluid">
-        <div class="dialog-content">
-          <div class="form-section">
-            <div class="section-header">
-              <i class="pi pi-folder text-primary"></i>
-              <h3>Category Information</h3>
-            </div>
-            <div class="field">
-              <label for="name" class="font-medium flex items-center gap-2">
-                <i class="pi pi-tag text-primary"></i>
-                Category Name
-                <span class="required-mark">*</span>
-              </label>
-              <InputText
-                id="name"
-                v-model="currentCategory.name"
-                required
-                autofocus
-                :class="{'p-invalid': submitted && !currentCategory.name}"
-                placeholder="Enter category name"
-                class="w-full"
-              />
-              <small class="p-error flex items-center gap-1 mt-1" v-if="submitted && !currentCategory.name">
-                <i class="pi pi-exclamation-circle"></i>
-                Name is required
-              </small>
-            </div>
-            <div class="field">
-              <label for="description" class="font-medium flex items-center gap-2">
-                <i class="pi pi-info-circle text-primary"></i>
-                Description
-                <span class="text-sm text-gray-500">(Optional)</span>
-              </label>
-              <Textarea
-                id="description"
-                v-model="currentCategory.description"
-                placeholder="Enter category description"
-                rows="4"
-                class="w-full"
-                autoResize
-              />
-              <small class="text-gray-500 mt-1">
-                <i class="pi pi-info-circle"></i>
-                Add a brief description to help identify this category
-              </small>
-            </div>
-          </div>
-
-          <div class="form-section" v-if="isEditing">
-            <div class="section-header">
-              <i class="pi pi-clock text-primary"></i>
-              <h3>Category Details</h3>
-            </div>
-            <div class="details-grid">
-              <div class="detail-item">
-                <span class="detail-label">Created At</span>
-                <span class="detail-value">{{ formatDate(currentCategory.updatedAt) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <div class="dialog-footer">
-          <Button
-            label="Cancel"
-            icon="pi pi-times"
-            class="p-button-text p-button-rounded"
-            @click="closeDialog"
-            :disabled="saving"
-          />
-          <Button
-            :label="isEditing ? 'Update Category' : 'Create Category'"
-            :icon="isEditing ? 'pi pi-save' : 'pi pi-plus'"
-            class="p-button-primary p-button-rounded"
-            @click="saveCategory"
-            :loading="saving"
-          />
-        </div>
-      </template>
-    </Dialog>
-
-    <!-- Confirm Dialog for Delete -->
-    <ConfirmDialog></ConfirmDialog>
   </div>
 </template>
 
@@ -403,6 +409,8 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
+import AdminSidebar from '../components/AdminSidebar.vue';
+import AdminNavbar from '../components/AdminNavbar.vue';
 
 // PrimeVue Components
 import Button from 'primevue/button';
@@ -478,6 +486,8 @@ const tagFilters = ref({
 const isEditingTag = ref(false);
 const currentTag = ref<Tag>({ name: '' });
 const tagSubmitted = ref(false);
+
+const isSidebarCollapsed = ref(false);
 
 const fetchCategories = async () => {
   loading.value = true;
@@ -753,6 +763,12 @@ onMounted(() => {
   padding: 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
+  margin-left: 16.25rem;
+  transition: margin-left 0.2s;
+}
+
+.layout-wrapper.sidebar-collapsed .category-list {
+  margin-left: 4.5rem;
 }
 
 .page-header {

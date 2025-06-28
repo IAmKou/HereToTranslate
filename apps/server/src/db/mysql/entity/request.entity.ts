@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, ManyToMany, JoinTable } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
+import { CategoryEntity } from './category.entity';
 
 export enum RequestStatus {
   Cancelled = 'CANCELLED',
@@ -21,6 +22,14 @@ export class RequestEntity {
   @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'SET NULL' })
   project: ProjectEntity;
 
+  @ManyToMany(() => UserEntity)
+  @JoinTable({
+    name: 'request_registrants',
+    joinColumn: { name: 'request_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'user_id', referencedColumnName: 'id' },
+  })
+  registrants: UserEntity[];
+
   @Column({ nullable: true })
   title: string;
 
@@ -38,4 +47,13 @@ export class RequestEntity {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column()
+  isPublic: boolean;
+
+  @ManyToOne(() => CategoryEntity, { nullable: true, onDelete: 'SET NULL' })
+  category: CategoryEntity;
+
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  assignee: UserEntity;
 }

@@ -40,14 +40,36 @@
                   {{ project.name }}
                 </option>
               </select>
-              <div class="select-icon">
+
+            </div>
+            <div class="input-info">
+              <span v-if="projectTouched && !projectId" class="error-message">Please select a project</span>
+            </div>
+          </div>
+
+          <div class="form-group" v-if="requestType === 'private'">
+            <label for="assignee">Assignee <span class="required-mark">*</span></label>
+            <div class="input-wrapper">
+              <input
+                id="assignee"
+                v-model="assigneeEmail"
+                type="email"
+                required
+                class="form-control"
+                :class="{ 'error': assigneeTouched && !assigneeEmail }"
+                placeholder="Enter assignee email"
+                @input="assigneeTouched = true"
+                @blur="assigneeTouched = true"
+              >
+              <div class="input-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M12 14C8.13401 14 5 17.134 5 21H19C19 17.134 15.866 14 12 14Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </div>
             </div>
             <div class="input-info">
-              <span v-if="projectTouched && !projectId" class="error-message">Please select a project</span>
+              <span v-if="assigneeTouched && !assigneeEmail" class="error-message">Please enter assignee email</span>
             </div>
           </div>
 
@@ -161,22 +183,38 @@
             </div>
             <div class="input-info">
               <span v-if="deadlineTouched && !deadline" class="error-message">Please select a deadline</span>
+              <span v-else class="help-text">Deadline must be at least 7 days from now</span>
             </div>
           </div>
 
           <div class="form-group">
-            <label for="file">Attachment</label>
-            <div class="input-wrapper">
-              <input
-                id="file"
-                type="file"
-                @change="onFileInput"
-                :disabled="uploading"
+            <label for="category">
+              Category <span class="required-mark">*</span>
+            </label>
+            <div class="select-wrapper">
+              <select
+                id="category"
+                v-model="categoryId"
                 class="form-control"
-                style="padding-left: 1rem;"
+                :class="{ 'error': categoryTouched && !categoryId }"
+                required
+                @change="categoryTouched = true"
+                @blur="categoryTouched = true"
               >
+                <option value="">Choose a category for your request</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
+              </select>
+              <div class="select-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
             </div>
-            <div v-if="fileUrl" class="file-link">Uploaded: <a :href="fileUrl" target="_blank">{{ fileUrl }}</a></div>
+            <div class="input-info">
+              <span v-if="categoryTouched && !categoryId" class="error-message">Please select a category</span>
+            </div>
           </div>
         </div>
 
@@ -215,28 +253,35 @@ const description = ref('')
 const projectId = ref('')
 const dealAmount = ref(null)
 const deadline = ref('')
-const fileUrl = ref('')
+const categoryId = ref('')
 const loading = ref(false)
-const uploading = ref(false)
 const minDate = ref(new Date())
+// Set minDate to 7 days from now to match backend validation
+minDate.value.setDate(minDate.value.getDate() + 7)
 const toast = useToast()
 
 const projectOptions = ref([])
+const categories = ref([])
 
 const titleTouched = ref(false)
 const descTouched = ref(false)
 const projectTouched = ref(false)
 const amountTouched = ref(false)
 const deadlineTouched = ref(false)
+const categoryTouched = ref(false)
+const assigneeEmail = ref('')
+const assigneeTouched = ref(false)
 
 const requestType = ref('project')
 
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
 const isFormValid = computed(() => {
   if (requestType.value === 'project') {
-    return title.value && projectId.value && isDealAmountValid.value && deadline.value
+    return title.value && projectId.value && isDealAmountValid.value && deadline.value && categoryId.value
+  } else if (requestType.value === 'private') {
+    return title.value && isDealAmountValid.value && deadline.value && assigneeEmail.value && categoryId.value
   } else {
-    return title.value && isDealAmountValid.value && deadline.value
+    return title.value && isDealAmountValid.value && deadline.value && categoryId.value
   }
 })
 
@@ -250,28 +295,16 @@ onMounted(async () => {
     const res = await axios.get('/api/projects')
     projectOptions.value = res.data
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Lỗi', detail: 'Không lấy được danh sách dự án', life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch project list', life: 3000 })
+  }
+
+  try {
+    const categoriesRes = await axios.get('/api/categories/all')
+    categories.value = categoriesRes.data
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch categories', life: 3000 })
   }
 })
-
-function onFileInput(e) {
-  const file = e.target.files[0]
-  if (!file) return
-  uploading.value = true
-  const formData = new FormData()
-  formData.append('file', file)
-  axios.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
-    .then(res => {
-      fileUrl.value = res.data.url
-      toast.add({ severity: 'success', summary: 'Thành công', detail: 'Tải tệp lên thành công', life: 2000 })
-    })
-    .catch(() => {
-      toast.add({ severity: 'error', summary: 'Lỗi', detail: 'Tải tệp lên thất bại', life: 3000 })
-    })
-    .finally(() => {
-      uploading.value = false
-    })
-}
 
 async function handleSubmit() {
   titleTouched.value = true
@@ -279,27 +312,104 @@ async function handleSubmit() {
   projectTouched.value = true
   amountTouched.value = true
   deadlineTouched.value = true
+  assigneeTouched.value = true
+  categoryTouched.value = true
   if (!isFormValid.value) {
-    toast.add({ severity: 'warn', summary: 'Cảnh báo', detail: 'Vui lòng điền đầy đủ thông tin', life: 3000 })
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all required information', life: 3000 })
     return
   }
   loading.value = true
   try {
-    let pid = projectId.value
-    if (requestType.value !== 'project') {
-      pid = '0'
+    // Validate deadline is at least 7 days from now (backend requirement)
+    const deadlineDate = new Date(deadline.value)
+    const sevenDaysFromNow = new Date()
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
+
+    if (deadlineDate < sevenDaysFromNow) {
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Deadline must be at least 7 days from now',
+        life: 3000
+      })
+      loading.value = false
+      return
     }
-    await axios.post(`/api/projects/${pid}/requests/create`, {
+
+    // Map requestType to backend fields
+    let isPublic = false
+    let selectedProjectId = null
+    let assigneeId = null
+
+    if (requestType.value === 'public') {
+      isPublic = true
+    } else if (requestType.value === 'project') {
+      isPublic = false
+      selectedProjectId = parseInt(projectId.value)
+    } else if (requestType.value === 'private') {
+      isPublic = false
+      // Find assigneeId from email
+      try {
+        console.log('Searching for user with email:', assigneeEmail.value)
+        const response = await axios.get(`/api/users/search?q=${assigneeEmail.value}`)
+        console.log('Search response:', response.data)
+        if (response.data && response.data.length > 0) {
+          // Find exact email match
+          const user = response.data.find(u => u.email === assigneeEmail.value)
+          console.log('Found user:', user)
+          if (user) {
+            assigneeId = Number(user.id) // Convert bigint to number for backend
+            console.log('Assignee ID converted:', assigneeId, 'Type:', typeof assigneeId)
+          } else {
+            toast.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: 'No user found with this email',
+              life: 3000
+            })
+            loading.value = false
+            return
+          }
+        } else {
+          toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'No user found with this email',
+            life: 3000
+          })
+          loading.value = false
+          return
+        }
+      } catch (error) {
+        console.error('Error searching for user:', error)
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'No user found with this email',
+          life: 3000
+        })
+        loading.value = false
+        return
+      }
+    }
+
+    const requestData = {
       title: title.value,
       description: description.value,
       dealAmount: dealAmount.value,
       deadline: deadline.value,
-      fileUrl: fileUrl.value
-    })
-    toast.add({ severity: 'success', summary: 'Thành công', detail: 'Tạo request thành công!', life: 3000 })
+      isPublic: isPublic,
+      projectId: selectedProjectId,
+      assigneeId: assigneeId,
+      categoryId: categoryId.value
+    }
+    console.log('Sending request data:', requestData)
+
+    await axios.post('/api/requests/create', requestData)
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Request created successfully!', life: 3000 })
     emit('success')
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Lỗi', detail: e.response?.data?.message || 'Tạo request thất bại', life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || 'Failed to create request', life: 3000 })
   } finally {
     loading.value = false
   }

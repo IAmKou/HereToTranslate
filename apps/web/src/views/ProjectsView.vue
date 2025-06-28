@@ -142,8 +142,8 @@
                 <div class="project-header">
                   <h3>{{ project.name }}</h3>
                   <div class="project-badges">
-                      <span v-if="project.isPrivate" class="badge badge-public">
-                        <i class="pi pi-globe"></i>
+                    <span v-if="!project.isPrivate" class="badge badge-public">
+                      <i class="pi pi-globe"></i>
                       Public
                     </span>
                     <span v-else class="badge badge-private">

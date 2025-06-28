@@ -40,7 +40,7 @@
                 <div class="project-title-section">
                   <h1 class="project-title">{{ project.name }}</h1>
                   <div class="project-badges">
-                    <span v-if="project.isPublic" class="badge badge-public">
+                    <span v-if="!project.isPrivate" class="badge badge-public">
                       <span class="badge-icon">🌍</span>
                       Public
                     </span>
@@ -554,7 +554,7 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  isPublic: boolean;
+  isPrivate: boolean;
   createdAt: string;
   createdBy: {
     id: string;

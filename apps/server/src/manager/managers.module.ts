@@ -7,7 +7,7 @@ import {
   ProjectGroupEntity,
   ProjectRoleEntity,
   ProjectTagEntity,
-  RequestEntity,
+  RequestEntity, TransactionEntity,
   UserEntity, UserTypeEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
@@ -33,11 +33,14 @@ import { ProjectTagController } from '#LocalProject/Managers/controller/project-
 import { AuthEntity } from '#LocalProject/SqliteEntities';
 import { MailService } from '../mailer/mailer.service';
 import { ChatService } from '../chat/chat.service';
+import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
+import { MongoModule } from '../db/mongo/mongo.module';
 
 @Global()
 @Module({
   imports: [
     AuthModule,
+    MongoModule,
     TypeOrmModule.forFeature([
       CategoryEntity,
       DiscussionAccessPolicyEntity,
@@ -51,6 +54,7 @@ import { ChatService } from '../chat/chat.service';
       UserEntity,
       UserTypeEntity,
       AuthEntity,
+      TransactionEntity,
     ])
   ],
   providers: [
@@ -64,6 +68,7 @@ import { ChatService } from '../chat/chat.service';
     ProjectTagManagerService,
     MailService,
     ChatService,
+    PaypalService,
   ],
   exports: [
     CategoryManagerService,
@@ -76,6 +81,7 @@ import { ChatService } from '../chat/chat.service';
     ProjectTagManagerService,
     MailService,
     ChatService,
+    PaypalService,
   ],
   controllers: [
     CategoryController,

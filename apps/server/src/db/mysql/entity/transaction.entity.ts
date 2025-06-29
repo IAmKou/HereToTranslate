@@ -1,41 +1,33 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
+import { RequestEntity } from './request.entity';
 
-export enum TransactionType {
-  Hold = 'HOLD',
-  Transfer = 'TRANSFER',
-  Withdraw = 'WITHDRAW',
-}
 export enum TransactionStatus {
   Pending = 'PENDING',
-  Approved = 'APPROVED',
-  Disputed = 'DISPUTED',
   Completed = 'COMPLETED',
+  Failed = 'FAILED',
 }
 
-@Entity('transaction')
+@Entity('transactions')
 export class TransactionEntity {
-  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
-  id: bigint;
+  @PrimaryGeneratedColumn()
+  id: number;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
-  fromUser: UserEntity;
+  @ManyToOne(() => UserEntity, { nullable: false })
+  user: UserEntity;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
-  toUser: UserEntity;
+  @ManyToOne(() => RequestEntity, { nullable: false })
+  request: RequestEntity;
 
-  @Column('decimal', { precision: 12, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2 })
   amount: number;
 
-  @Column({ type: 'enum', enum: TransactionType })
-  type: TransactionType;
-
   @Column({ type: 'enum', enum: TransactionStatus, default: TransactionStatus.Pending })
-  status: string;
+  status: TransactionStatus;
+
+  @Column({ nullable: true })
+  paypalOrderId: string;
 
   @CreateDateColumn()
   createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }

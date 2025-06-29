@@ -278,7 +278,7 @@ export class RequestManagerService {
     }
   }
 
-  async getRequestRegistrants(requestId: bigint): Promise<{ id: number; fullName: string; email: string }[]> {
+  async getRequestRegistrants(requestId: bigint): Promise<UserEntity[]> {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
       relations: ['registrants'],

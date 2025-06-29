@@ -44,6 +44,8 @@ export class UpdateRequestDto {
   @MaxLength(10)
   @IsDateString({ strict: true })
   deadline?: string;
+  @Optional()
+  categoryId:string;
 }
 
 export class ReviewRequestDto {

@@ -33,7 +33,7 @@ export class DbContextService implements OnModuleInit, OnModuleDestroy {
 
   // Getter for MySQL
   get mysql() {
-    return this.mySqlDb.getDataSource();
+    return this.mySqlDb.dataSource;
   }
 
   // Manual reconnect function for all databases

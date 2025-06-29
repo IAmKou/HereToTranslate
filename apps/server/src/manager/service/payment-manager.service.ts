@@ -1,13 +1,16 @@
 import axios from 'axios';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import {
-  RequestEntity,
+  ProjectEntity,
+  RequestEntity, RequestStatus,
   TransactionEntity,
   TransactionStatus,
-  UserEntity,
+  UserEntity
 } from '#LocalProject/Entities';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
+import { MailService } from '../../mailer/mailer.service';
 
 @Injectable()
 export class PaypalService {
@@ -17,6 +20,10 @@ export class PaypalService {
   constructor(
     @InjectRepository(TransactionEntity)
     private transactionRepo: Repository<TransactionEntity>,
+    @InjectRepository(ProjectEntity)
+    private projectRepository: Repository<ProjectEntity>,
+    private readonly projectService: ProjectManagerService,
+    private readonly mailService: MailService,
   ) {}
 
   private async getAccessToken(): Promise<string> {
@@ -118,7 +125,7 @@ export class PaypalService {
     }
   }
 
-  async capturePaymentAndCreateProject(orderId: string): Promise<{ success: boolean; projectId?: number }> {
+  async capturePaymentAndCreateProject(orderId: string): Promise<{ success: boolean; projectId?: bigint }> {
     const accessToken = await this.getAccessToken();
 
     try {
@@ -133,6 +140,10 @@ export class PaypalService {
         }
       );
 
+      if (captureRes.status !== 201) {
+        throw new Error('Payment capture failed with status: ' + captureRes.status);
+      }
+
       const transaction = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
         relations: ['user', 'request'],
@@ -144,7 +155,7 @@ export class PaypalService {
         .map(user => Number(user.id))
         .filter(uid => uid !== Number(selectedUser.id));
 
-      const queryRunner = this.dataSource.createQueryRunner();
+      const queryRunner = this.projectService['dataSource'].createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction();
 
@@ -170,8 +181,8 @@ export class PaypalService {
         await queryRunner.manager.save([request, transaction]);
 
         if (otherUserIds.length > 0) {
-          await this.mailService.notifyAllOthersRequestTaken(request.id, otherUserIds);
-          await this.notificationService.notifyAllOthers(request.id, otherUserIds);
+          await this.mailService.notifyAllOthersRequestTaken(Number(request.id), otherUserIds);
+          // await this.notificationService.notifyAllOthers(request.id, otherUserIds);
         }
 
         await queryRunner.commitTransaction();

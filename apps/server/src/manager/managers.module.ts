@@ -32,6 +32,7 @@ import { ProjectTagManagerService } from '#LocalProject/Managers/service/project
 import { ProjectTagController } from '#LocalProject/Managers/controller/project-tag.controller';
 import { AuthEntity } from '#LocalProject/SqliteEntities';
 import { MailService } from '../mailer/mailer.service';
+import { ChatService } from '../chat/chat.service';
 
 @Global()
 @Module({
@@ -62,6 +63,7 @@ import { MailService } from '../mailer/mailer.service';
     ProjectManagerService,
     ProjectTagManagerService,
     MailService,
+    ChatService,
   ],
   exports: [
     CategoryManagerService,
@@ -73,6 +75,7 @@ import { MailService } from '../mailer/mailer.service';
     ProjectManagerService,
     ProjectTagManagerService,
     MailService,
+    ChatService,
   ],
   controllers: [
     CategoryController,

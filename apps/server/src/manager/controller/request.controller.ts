@@ -87,4 +87,13 @@ export class RequestController {
   ) {
     return this.requests.getRequestRegistrants(requestId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/approve/:userId')
+  async approveRegistrant(
+    @Param('requestId', BigIntTransformPipe) requestId: number,
+    @Param('userId', BigIntTransformPipe) userId: number
+  ) {
+    return this.requests.approveRegistrant(requestId, userId);
+  }
 }

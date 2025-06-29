@@ -7,6 +7,8 @@ import { DAY } from '#LocalProject/Utils/common';
 import { MailService } from '../../mailer/mailer.service';
 import { ProjectManagerService } from './project-manager.service';
 import { ChatService } from '../../chat/chat.service';
+import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
+import { logger } from 'nx/src/utils/logger';
 
 @Injectable()
 export class RequestManagerService {
@@ -23,6 +25,7 @@ export class RequestManagerService {
     private readonly mailService: MailService,
     private readonly projectService: ProjectManagerService,
     private readonly chatService: ChatService,
+    private readonly paymentService: PaypalService,
 
   ) { }
 
@@ -295,20 +298,10 @@ export class RequestManagerService {
       .getMany();
   }
 
-
-
-
-  private readonly paypalService = {
-    async createDeposit(amount: number, user: any) {
-      // TODO: Implement actual PayPal logic
-      return true;
-    }
-  };
-
   private readonly notificationService = {
     async notifyAllOthers(requestId: number, userIds: number[]) {
-      // TODO: Implement actual notification logic
-      return;
+      logger.log('Hehe.Implant later on');
+      return 'hehe';
     }
   };
 
@@ -333,7 +326,7 @@ export class RequestManagerService {
       .map(user => Number(user.id))
       .filter(uid => uid !== Number(selectedUser.id));
 
-    const depositSuccess = await this.paypalService.createDeposit(
+    const depositSuccess = await this.paymentService.createDeposit(
       request.dealAmount,
       selectedUser
     );
@@ -374,7 +367,7 @@ export class RequestManagerService {
 
       await queryRunner.commitTransaction();
       return newProject;
-    } catch (err) {
+    } catch (e) {
       await queryRunner.rollbackTransaction();
       throw new (await import('@nestjs/common')).InternalServerErrorException('Failed to approve and create project');
     } finally {

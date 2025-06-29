@@ -128,18 +128,19 @@ export class RequestManagerService {
 
   async fetchPrivateRequests(uid: bigint) {
     const query = this.requestRepository.createQueryBuilder('requests')
-    .select([
-      'requests.id',
-      'requests.title',
-      'requests.description',
-      'requests.dealAmount',
-      'requests.deadline',
-      'requests.status',
-      'requests.createdAt',
-      'requester.id',
-      'requester.username',
-      'category.name',
-    ])
+      .select([
+        'requests.id',
+        'requests.title',
+        'requests.description',
+        'requests.dealAmount',
+        'requests.deadline',
+        'requests.status',
+        'requests.isPublic',
+        'requests.createdAt',
+        'requester.id',
+        'requester.username',
+        'category.name',
+      ])
       .where('requests.isPublic = false')
       .andWhere('assigneeId = :uid', { uid: BigInt(uid) })
       .leftJoin('requests.requester', 'requester')

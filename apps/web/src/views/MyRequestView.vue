@@ -64,17 +64,14 @@
           <!-- My Requests Tab -->
           <div v-else-if="activeTab === 'my-requests'">
             <!-- Empty State for My Requests -->
-            <div v-if="myRequests.length === 0" class="empty-container">
+            <div v-if="debugRequests.length === 0" class="empty-container">
               <div class="empty-content">
                 <div class="empty-icon">
                   <i class="pi pi-file"></i>
                 </div>
                 <h3>No requests found</h3>
                 <p>You haven't created any requests yet.</p>
-                <router-link to="/requests/create" class="btn btn-primary">
-                  <i class="pi pi-plus"></i>
-                  Create Your First Request
-                </router-link>
+
               </div>
             </div>
 
@@ -90,11 +87,12 @@
                     <th>Deal Amount</th>
                     <th>Deadline</th>
                     <th>Status</th>
+                    <th>Visibility</th>
                     <th>Actions</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="req in myRequests" :key="req.id" class="request-row">
+                  <tr v-for="req in debugRequests" :key="req.id" class="request-row">
                     <td class="request-title">{{ req.title }}</td>
                     <td>{{ req.project?.name || '-' }}</td>
                     <td>{{ req.category?.name || '-' }}</td>
@@ -104,6 +102,12 @@
                         <span :class="['status-badge', `status-${req.status.toLowerCase()}`]">
                           {{ req.status }}
                         </span>
+                    </td>
+                    <td>
+                      <span :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
+                        <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                        {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                      </span>
                     </td>
                     <td class="actions">
                       <button @click="onEdit(req)" class="btn btn-small btn-secondary">
@@ -154,6 +158,10 @@
                   <div class="request-meta">
                     <span class="requester">By: {{ request.requester?.username || 'Unknown' }}</span>
                     <span class="category">{{ request.category?.name || 'No Category' }}</span>
+                    <span :class="['visibility-badge', isRequestPublic(request.isPublic) ? 'visibility-public' : 'visibility-private']">
+                      <i :class="isRequestPublic(request.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                      {{ isRequestPublic(request.isPublic) ? 'Public' : 'Private' }}
+                    </span>
                   </div>
                 </div>
 
@@ -249,6 +257,17 @@ const actionLoading = ref(false)
 const myRequestsCount = computed(() => myRequests.value.length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
 
+// Debug computed property
+const debugRequests = computed(() => {
+  console.log('Debug - My requests with isPublic:', myRequests.value.map(req => ({
+    id: req.id,
+    title: req.title,
+    isPublic: req.isPublic,
+    type: typeof req.isPublic
+  })))
+  return myRequests.value
+})
+
 function fetchRequests() {
   loading.value = true
   error.value = null
@@ -256,6 +275,7 @@ function fetchRequests() {
   // Fetch my requests
   axios.get('/api/requests/myRequests')
     .then(res => {
+      console.log('My requests data received:', res.data)
       myRequests.value = res.data
     })
     .catch(err => {
@@ -265,6 +285,7 @@ function fetchRequests() {
   // Fetch assigned requests
   axios.get('/api/requests/private')
     .then(res => {
+      console.log('Assigned requests data received:', res.data)
       assignedRequests.value = res.data
     })
     .catch(err => {
@@ -453,6 +474,21 @@ async function completeRequest(requestId) {
   }
 }
 
+function isRequestPublic(isPublic) {
+  // Handle different data types that might come from backend
+  if (typeof isPublic === 'boolean') {
+    return isPublic
+  }
+  if (typeof isPublic === 'number') {
+    return isPublic === 1
+  }
+  if (typeof isPublic === 'string') {
+    return isPublic === 'true' || isPublic === '1'
+  }
+  // Default to false for any other value
+  return false
+}
+
 onMounted(fetchRequests)
 </script>
 
@@ -613,9 +649,36 @@ onMounted(fetchRequests)
   color: #991b1b;
 }
 
+.status-completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 .status-cancelled {
   background: #f3f4f6;
   color: #374151;
+}
+
+.visibility-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.visibility-public {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.visibility-private {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .actions {

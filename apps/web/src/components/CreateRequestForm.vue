@@ -17,33 +17,8 @@
           <div class="form-group">
             <label>Request Type <span class="required-mark">*</span></label>
             <div style="display: flex; gap: 1rem;">
-              <label><input type="radio" value="project" v-model="requestType"> Project</label>
               <label><input type="radio" value="public" v-model="requestType"> Public</label>
               <label><input type="radio" value="private" v-model="requestType"> Private</label>
-            </div>
-          </div>
-
-          <div class="form-group" v-if="requestType === 'project'">
-            <label for="project">Project <span class="required-mark">*</span></label>
-            <div class="select-wrapper">
-              <select
-                id="project"
-                v-model="projectId"
-                class="form-control"
-                :class="{ 'error': projectTouched && !projectId }"
-                required
-                @change="projectTouched = true"
-                @blur="projectTouched = true"
-              >
-                <option value="">Choose a project</option>
-                <option v-for="project in projectOptions" :key="project.id" :value="project.id">
-                  {{ project.name }}
-                </option>
-              </select>
-
-            </div>
-            <div class="input-info">
-              <span v-if="projectTouched && !projectId" class="error-message">Please select a project</span>
             </div>
           </div>
 
@@ -250,7 +225,6 @@ const emit = defineEmits(['success', 'cancel'])
 
 const title = ref('')
 const description = ref('')
-const projectId = ref('')
 const dealAmount = ref(null)
 const deadline = ref('')
 const categoryId = ref('')
@@ -260,25 +234,21 @@ const minDate = ref(new Date())
 minDate.value.setDate(minDate.value.getDate() + 7)
 const toast = useToast()
 
-const projectOptions = ref([])
 const categories = ref([])
 
 const titleTouched = ref(false)
 const descTouched = ref(false)
-const projectTouched = ref(false)
 const amountTouched = ref(false)
 const deadlineTouched = ref(false)
 const categoryTouched = ref(false)
 const assigneeEmail = ref('')
 const assigneeTouched = ref(false)
 
-const requestType = ref('project')
+const requestType = ref('public')
 
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
 const isFormValid = computed(() => {
-  if (requestType.value === 'project') {
-    return title.value && projectId.value && isDealAmountValid.value && deadline.value && categoryId.value
-  } else if (requestType.value === 'private') {
+  if (requestType.value === 'private') {
     return title.value && isDealAmountValid.value && deadline.value && assigneeEmail.value && categoryId.value
   } else {
     return title.value && isDealAmountValid.value && deadline.value && categoryId.value
@@ -292,13 +262,6 @@ const minDateString = computed(() => {
 
 onMounted(async () => {
   try {
-    const res = await axios.get('/api/projects')
-    projectOptions.value = res.data
-  } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch project list', life: 3000 })
-  }
-
-  try {
     const categoriesRes = await axios.get('/api/categories/all')
     categories.value = categoriesRes.data
   } catch (e) {
@@ -309,7 +272,6 @@ onMounted(async () => {
 async function handleSubmit() {
   titleTouched.value = true
   descTouched.value = true
-  projectTouched.value = true
   amountTouched.value = true
   deadlineTouched.value = true
   assigneeTouched.value = true
@@ -338,14 +300,11 @@ async function handleSubmit() {
 
     // Map requestType to backend fields
     let isPublic = false
-    let selectedProjectId = null
-    let assigneeId = null
+    let assigneeId = undefined
 
     if (requestType.value === 'public') {
       isPublic = true
-    } else if (requestType.value === 'project') {
-      isPublic = false
-      selectedProjectId = parseInt(projectId.value)
+      assigneeId = undefined
     } else if (requestType.value === 'private') {
       isPublic = false
       // Find assigneeId from email
@@ -398,14 +357,24 @@ async function handleSubmit() {
       description: description.value,
       dealAmount: dealAmount.value,
       deadline: deadline.value,
-      isPublic: isPublic,
-      projectId: selectedProjectId,
-      assigneeId: assigneeId,
+      isPublic: Boolean(isPublic),
       categoryId: categoryId.value
     }
-    console.log('Sending request data:', requestData)
 
-    await axios.post('/api/requests/create', requestData)
+    // Only add assigneeId if it's defined
+    if (assigneeId !== undefined) {
+      requestData.assigneeId = assigneeId
+    }
+
+    console.log('=== DEBUG INFO ===')
+    console.log('Request type selected:', requestType.value)
+    console.log('isPublic value:', isPublic, 'Type:', typeof isPublic)
+    console.log('assigneeId value:', assigneeId, 'Type:', typeof assigneeId)
+    console.log('Full request data being sent:', JSON.stringify(requestData, null, 2))
+    console.log('=== END DEBUG ===')
+
+    const response = await axios.post('/api/requests/create', requestData)
+    console.log('Backend response:', response.data)
     toast.add({ severity: 'success', summary: 'Success', detail: 'Request created successfully!', life: 3000 })
     emit('success')
   } catch (e) {

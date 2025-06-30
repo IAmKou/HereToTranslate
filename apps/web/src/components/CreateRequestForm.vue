@@ -402,7 +402,6 @@ async function handleSubmit() {
   }
   loading.value = true
   try {
-    // Validate deadline is at least 7 days from now (backend requirement)
     const deadlineDate = new Date(deadline.value)
     const sevenDaysFromNow = new Date()
     sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
@@ -437,7 +436,7 @@ async function handleSubmit() {
           const user = response.data.find(u => u.email === assigneeEmail.value)
           console.log('Found user:', user)
           if (user) {
-            assigneeId = Number(user.id) // Convert bigint to number for backend
+            assigneeId = Number(user.id)
             console.log('Assignee ID converted:', assigneeId, 'Type:', typeof assigneeId)
           } else {
             toast.add({

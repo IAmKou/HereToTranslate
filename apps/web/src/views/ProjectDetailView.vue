@@ -9,6 +9,25 @@
 
       <!-- Main Content -->
       <div class="content-wrapper" @click="closeDropdowns">
+        <!-- Page Header -->
+        <div class="page-header">
+          <div class="page-header-content">
+            <div class="page-title-section">
+              <h1 class="page-title">
+                <span class="page-icon">📋</span>
+                Project Details
+              </h1>
+              <p class="page-subtitle">View and manage project information, members, and settings</p>
+            </div>
+            <div class="page-actions">
+              <router-link to="/projects" class="btn btn-outline btn-back">
+                <span class="icon">←</span>
+                Back to Projects
+              </router-link>
+            </div>
+          </div>
+        </div>
+
         <div class="project-detail-view">
           <!-- Loading State -->
           <div v-if="loading" class="loading-container">
@@ -886,6 +905,80 @@ loadProject();
   padding: 2rem 2rem 2rem 17rem;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   margin-right: 0;
+}
+
+/* Page Header */
+.page-header {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.page-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.page-title-section {
+  flex: 1;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.page-icon {
+  font-size: 2.5rem;
+  width: 4rem;
+  height: 4rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.page-subtitle {
+  margin: 0;
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
+}
+
+.page-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-back {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.btn-back:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .project-detail-view {
@@ -2155,6 +2248,33 @@ loadProject();
 @media (max-width: 768px) {
   .content-wrapper {
     padding: 1rem;
+  }
+
+  .page-header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+    justify-content: center;
+  }
+
+  .page-icon {
+    font-size: 2rem;
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .page-subtitle {
+    text-align: center;
+    font-size: 1rem;
+  }
+
+  .page-actions {
+    justify-content: center;
   }
 
   .project-header {

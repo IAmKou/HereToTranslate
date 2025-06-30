@@ -13,7 +13,7 @@
                 <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
-            <h3>Project Details</h3>
+            <h3>Project Information</h3>
           </div>
 
           <div class="form-group">

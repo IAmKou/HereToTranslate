@@ -589,7 +589,10 @@ async function completeRequest(requestId) {
 }
 
 function isRequestPublic(isPublic) {
-  // Handle different data types that might come from backend
+  if (isPublic === undefined || isPublic === null) {
+    // Nếu không có trường này, mặc định là public
+    return true
+  }
   if (typeof isPublic === 'boolean') {
     return isPublic
   }
@@ -597,9 +600,12 @@ function isRequestPublic(isPublic) {
     return isPublic === 1
   }
   if (typeof isPublic === 'string') {
-    return isPublic === 'true' || isPublic === '1'
+    return (
+      isPublic === 'true' ||
+      isPublic === '1' ||
+      isPublic.toLowerCase() === 'public'
+    )
   }
-  // Default to false for any other value
   return false
 }
 

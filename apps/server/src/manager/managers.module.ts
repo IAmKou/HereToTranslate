@@ -8,7 +8,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
-  UserEntity, UserTypeEntity, WalletEntity
+  UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -59,6 +59,7 @@ import { WalletManagerService } from './service/wallet-manager.service';
       AuthEntity,
       TransactionEntity,
       WalletEntity,
+      TranslationApprovalEntity
     ])
   ],
   providers: [

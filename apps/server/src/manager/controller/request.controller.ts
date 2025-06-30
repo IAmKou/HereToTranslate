@@ -37,8 +37,8 @@ export class RequestController {
 
   @UseGuards(JwtAuthGuard)
   @Get('private')
-  async getAllPrivateRequests() {
-    return this.requests.fetchPrivateRequests();
+  async getAllPrivateRequests(@Req() req: AuthenticatedRequest) {
+    return this.requests.fetchPrivateRequests(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -69,5 +69,31 @@ export class RequestController {
     @Req() req: AuthenticatedRequest
   ) {
     return this.requests.cancelRequest(req.user.id, requestId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/register')
+  async registerRequest(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Req() req: AuthenticatedRequest
+  ){
+       return this.requests.registerForPublicRequest(requestId, Number(req.user.id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':requestId/registrants')
+  async getRegistrants(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+  ) {
+    return this.requests.getRequestRegistrants(requestId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/approve/:userId')
+  async approveRegistrant(
+    @Param('requestId', BigIntTransformPipe) requestId: number,
+    @Param('userId', BigIntTransformPipe) userId: number
+  ) {
+    return this.requests.approveRegistrant(requestId, userId);
   }
 }

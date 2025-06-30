@@ -64,7 +64,7 @@
             :class="{ 'error': errors.deadline }"
           >
           <span v-if="errors.deadline" class="error-message">{{ errors.deadline }}</span>
-          <span v-else class="help-text">Deadline phải cách hiện tại ít nhất 7 ngày</span>
+          <span v-else class="help-text">Deadline must be at least 7 days from now</span>
         </div>
 
         <div class="form-actions">

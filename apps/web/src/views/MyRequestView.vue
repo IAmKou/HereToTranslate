@@ -26,7 +26,7 @@
           <!-- Tabs -->
           <div class="tabs-container">
             <button
-              @click="activeTab = 'my-requests'"
+              @click="switchTab('my-requests')"
               :class="['tab-button', { active: activeTab === 'my-requests' }]"
             >
               <span class="material-icons">description</span>
@@ -34,7 +34,7 @@
               <span v-if="myRequestsCount > 0" class="badge">{{ myRequestsCount }}</span>
             </button>
             <button
-              @click="activeTab = 'assigned-requests'"
+              @click="switchTab('assigned-requests')"
               :class="['tab-button', { active: activeTab === 'assigned-requests' }]"
             >
               <span class="material-icons">assignment_ind</span>
@@ -64,17 +64,14 @@
           <!-- My Requests Tab -->
           <div v-else-if="activeTab === 'my-requests'">
             <!-- Empty State for My Requests -->
-            <div v-if="myRequests.length === 0" class="empty-container">
+            <div v-if="debugRequests.length === 0" class="empty-container">
               <div class="empty-content">
                 <div class="empty-icon">
                   <i class="pi pi-file"></i>
                 </div>
                 <h3>No requests found</h3>
                 <p>You haven't created any requests yet.</p>
-                <router-link to="/requests/create" class="btn btn-primary">
-                  <i class="pi pi-plus"></i>
-                  Create Your First Request
-                </router-link>
+
               </div>
             </div>
 
@@ -90,11 +87,12 @@
                     <th>Deal Amount</th>
                     <th>Deadline</th>
                     <th>Status</th>
+                    <th>Visibility</th>
                     <th>Actions</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="req in myRequests" :key="req.id" class="request-row">
+                  <tr v-for="req in paginatedMyRequests" :key="req.id" class="request-row">
                     <td class="request-title">{{ req.title }}</td>
                     <td>{{ req.project?.name || '-' }}</td>
                     <td>{{ req.category?.name || '-' }}</td>
@@ -104,6 +102,12 @@
                         <span :class="['status-badge', `status-${req.status.toLowerCase()}`]">
                           {{ req.status }}
                         </span>
+                    </td>
+                    <td>
+                      <span :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
+                        <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                        {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                      </span>
                     </td>
                     <td class="actions">
                       <button @click="onEdit(req)" class="btn btn-small btn-secondary">
@@ -119,6 +123,31 @@
                   </tr>
                   </tbody>
                 </table>
+              </div>
+              <div class="pagination-controls">
+                <div class="pagination-info">
+                  <span>Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, debugRequests.length) }} of {{ debugRequests.length }} requests</span>
+                </div>
+                <div class="pagination-buttons">
+                  <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-secondary">
+                    <i class="pi pi-chevron-left"></i> Previous
+                  </button>
+                  <span class="page-info">Page {{ currentPage }} of {{ totalMyPages }}</span>
+                  <button @click="nextPage" :disabled="currentPage === totalMyPages" class="btn btn-secondary">
+                    Next <i class="pi pi-chevron-right"></i>
+                  </button>
+                </div>
+                <div class="page-size-selector">
+                  <label for="pageSize">Show:</label>
+                  <select id="pageSize" v-model="itemsPerPage" @change="currentPage = 1" class="page-size-select">
+                    <option value="5">5</option>
+                    <option value="7">7</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                  </select>
+                  <span>per page</span>
+                </div>
               </div>
             </div>
           </div>
@@ -139,7 +168,7 @@
             <!-- Assigned Requests Grid -->
             <div v-else class="assigned-requests-grid">
               <div
-                v-for="request in assignedRequests"
+                v-for="request in paginatedAssignedRequests"
                 :key="request.id"
                 class="request-card"
                 :class="getStatusClass(request.status)"
@@ -154,6 +183,10 @@
                   <div class="request-meta">
                     <span class="requester">By: {{ request.requester?.username || 'Unknown' }}</span>
                     <span class="category">{{ request.category?.name || 'No Category' }}</span>
+                    <span :class="['visibility-badge', isRequestPublic(request.isPublic) ? 'visibility-public' : 'visibility-private']">
+                      <i :class="isRequestPublic(request.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                      {{ isRequestPublic(request.isPublic) ? 'Public' : 'Private' }}
+                    </span>
                   </div>
                 </div>
 
@@ -206,6 +239,31 @@
                   </button>
                 </div>
               </div>
+              <div class="pagination-controls">
+                <div class="pagination-info">
+                  <span>Showing {{ (currentAssignedPage - 1) * assignedItemsPerPage + 1 }} to {{ Math.min(currentAssignedPage * assignedItemsPerPage, assignedRequests.length) }} of {{ assignedRequests.length }} requests</span>
+                </div>
+                <div class="pagination-buttons">
+                  <button @click="prevAssignedPage" :disabled="currentAssignedPage === 1" class="btn btn-secondary">
+                    <i class="pi pi-chevron-left"></i> Previous
+                  </button>
+                  <span class="page-info">Page {{ currentAssignedPage }} of {{ totalAssignedPages }}</span>
+                  <button @click="nextAssignedPage" :disabled="currentAssignedPage === totalAssignedPages" class="btn btn-secondary">
+                    Next <i class="pi pi-chevron-right"></i>
+                  </button>
+                </div>
+                <div class="page-size-selector">
+                  <label for="assignedPageSize">Show:</label>
+                  <select id="assignedPageSize" v-model="assignedItemsPerPage" @change="currentAssignedPage = 1" class="page-size-select">
+                    <option value="3">3</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="9">9</option>
+                    <option value="12">12</option>
+                  </select>
+                  <span>per page</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -245,9 +303,84 @@ const myRequests = ref([])
 const assignedRequests = ref([])
 const actionLoading = ref(false)
 
+// Pagination state
+const currentPage = ref(1)
+const itemsPerPage = ref(7)
+const currentAssignedPage = ref(1)
+const assignedItemsPerPage = ref(7)
+
 // Computed properties for counts
 const myRequestsCount = computed(() => myRequests.value.length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
+
+// Pagination computed properties for My Requests
+const paginatedMyRequests = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return debugRequests.value.slice(start, end)
+})
+
+const totalMyPages = computed(() => Math.ceil(debugRequests.value.length / itemsPerPage.value))
+
+// Pagination computed properties for Assigned Requests
+const paginatedAssignedRequests = computed(() => {
+  const start = (currentAssignedPage.value - 1) * assignedItemsPerPage.value
+  const end = start + assignedItemsPerPage.value
+  return assignedRequests.value.slice(start, end)
+})
+
+const totalAssignedPages = computed(() => Math.ceil(assignedRequests.value.length / assignedItemsPerPage.value))
+
+// Debug computed property
+const debugRequests = computed(() => {
+  console.log('Debug - My requests with isPublic:', myRequests.value.map(req => ({
+    id: req.id,
+    title: req.title,
+    isPublic: req.isPublic,
+    type: typeof req.isPublic
+  })))
+  return myRequests.value
+})
+
+// Pagination methods
+function goToPage(page) {
+  currentPage.value = page
+}
+
+function goToAssignedPage(page) {
+  currentAssignedPage.value = page
+}
+
+function nextPage() {
+  if (currentPage.value < totalMyPages.value) {
+    currentPage.value++
+  }
+}
+
+function prevPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
+}
+
+function nextAssignedPage() {
+  if (currentAssignedPage.value < totalAssignedPages.value) {
+    currentAssignedPage.value++
+  }
+}
+
+function prevAssignedPage() {
+  if (currentAssignedPage.value > 1) {
+    currentAssignedPage.value--
+  }
+}
+
+// Reset pagination when switching tabs
+function switchTab(tab) {
+  activeTab.value = tab
+  currentPage.value = 1
+  currentAssignedPage.value = 1
+}
 
 function fetchRequests() {
   loading.value = true
@@ -256,6 +389,7 @@ function fetchRequests() {
   // Fetch my requests
   axios.get('/api/requests/myRequests')
     .then(res => {
+      console.log('My requests data received:', res.data)
       myRequests.value = res.data
     })
     .catch(err => {
@@ -265,6 +399,7 @@ function fetchRequests() {
   // Fetch assigned requests
   axios.get('/api/requests/private')
     .then(res => {
+      console.log('Assigned requests data received:', res.data)
       assignedRequests.value = res.data
     })
     .catch(err => {
@@ -453,6 +588,21 @@ async function completeRequest(requestId) {
   }
 }
 
+function isRequestPublic(isPublic) {
+  // Handle different data types that might come from backend
+  if (typeof isPublic === 'boolean') {
+    return isPublic
+  }
+  if (typeof isPublic === 'number') {
+    return isPublic === 1
+  }
+  if (typeof isPublic === 'string') {
+    return isPublic === 'true' || isPublic === '1'
+  }
+  // Default to false for any other value
+  return false
+}
+
 onMounted(fetchRequests)
 </script>
 
@@ -613,9 +763,36 @@ onMounted(fetchRequests)
   color: #991b1b;
 }
 
+.status-completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 .status-cancelled {
   background: #f3f4f6;
   color: #374151;
+}
+
+.visibility-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.visibility-public {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.visibility-private {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .actions {
@@ -925,6 +1102,89 @@ onMounted(fetchRequests)
   box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
 }
 
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.pagination-controls button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pagination-controls button:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.pagination-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.page-info {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0 0.5rem;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.page-size-selector label {
+  font-weight: 500;
+}
+
+.page-size-select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: white;
+  color: #374151;
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
 @media (max-width: 768px) {
   .tabs-container {
     flex-direction: column;
@@ -951,6 +1211,26 @@ onMounted(fetchRequests)
 
   .btn {
     width: 100%;
+  }
+
+  .pagination-controls {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .pagination-info {
+    order: 1;
+  }
+
+  .pagination-buttons {
+    order: 2;
+    justify-content: center;
+  }
+
+  .page-size-selector {
+    order: 3;
+    justify-content: center;
   }
 }
 </style>

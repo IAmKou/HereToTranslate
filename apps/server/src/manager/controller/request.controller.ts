@@ -88,7 +88,7 @@ export class RequestController {
     @Param('requestId', BigIntTransformPipe) requestId: bigint,
     @Req() req: AuthenticatedRequest
   ){
-       return this.requests.registerForPublicRequest(requestId, Number(req.user.id));
+    return this.requests.registerForPublicRequest(requestId, Number(req.user.id));
   }
 
   @UseGuards(JwtAuthGuard)
@@ -112,9 +112,9 @@ export class RequestController {
   @Get('search')
   async searchUsers(
     @Query('keyword') keyword: string,
-    @Query('currentUserId') currentUserId: string
+    @Req() req: AuthenticatedRequest
   ) {
-    const uid = BigInt(currentUserId);
+    const uid = req.user.id;
     return this.requests.searchUsers(keyword, uid);
   }
 

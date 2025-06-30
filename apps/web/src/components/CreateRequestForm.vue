@@ -300,8 +300,6 @@ const requestType = ref('public')
 const currentUserId = ref(null)
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-// Regex chỉ cho phép chữ cái, số, khoảng trắng, dấu câu cơ bản và tiếng Việt
-const specialCharRegex = /^[a-zA-Z0-9\s.,!?'"À-ỹà-ỹ-]+$/u
 const userEmail = ref('')
 
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
@@ -316,13 +314,11 @@ const titleError = computed(() => {
   if (!title.value) return 'Title is required'
   if (title.value.length < 3) return 'Title must be at least 3 characters'
   if (title.value.length > 255) return 'Title is too long (max 255 characters)'
-  if (!specialCharRegex.test(title.value)) return 'Title contains invalid special characters'
   return ''
 })
 const descriptionError = computed(() => {
   if (!descTouched.value) return ''
   if (description.value.length > 1000) return 'Description too long (max 1000 characters)'
-  if (description.value && !specialCharRegex.test(description.value)) return 'Description contains invalid special characters'
   return ''
 })
 const dealAmountError = computed(() => {
@@ -434,10 +430,7 @@ async function handleSubmit() {
       // Find assigneeId from email
       try {
         console.log('Searching for user with email:', assigneeEmail.value)
-        if (!currentUserId.value) {
-          throw new Error('Current user ID not found in localStorage')
-        }
-        const response = await axios.get(`/api/requests/search?keyword=${encodeURIComponent(assigneeEmail.value)}&currentUserId=${currentUserId.value}`)
+        const response = await axios.get(`/api/requests/search?keyword=${encodeURIComponent(assigneeEmail.value)}`)
         console.log('Search response:', response.data)
         if (response.data && response.data.length > 0) {
           // Find exact email match

@@ -1,7 +1,18 @@
 import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
 import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
 import { CreateRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
-import { Body, Controller, Get, Param, Post, Req, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe
+} from '@nestjs/common';
 import { RequestManagerService } from "../service/request-manager.service";
 import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
 import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
@@ -96,4 +107,15 @@ export class RequestController {
   ) {
     return this.requests.approveRegistrant(requestId, userId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('search')
+  async searchUsers(
+    @Query('keyword') keyword: string,
+    @Query('currentUserId') currentUserId: string
+  ) {
+    const uid = BigInt(currentUserId);
+    return this.requests.searchUsers(keyword, uid);
+  }
+
 }

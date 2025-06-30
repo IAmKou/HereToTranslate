@@ -301,7 +301,7 @@ const currentUserId = ref(null)
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Regex chỉ cho phép chữ cái, số, khoảng trắng, dấu câu cơ bản và tiếng Việt
-const specialCharRegex = /^[a-zA-Z0-9\s.,!?\'"\-À-ỹà-ỹ]+$/u
+const specialCharRegex = /^[a-zA-Z0-9\s.,!?'"À-ỹà-ỹ-]+$/u
 const userEmail = ref('')
 
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)

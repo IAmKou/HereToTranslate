@@ -32,6 +32,10 @@
                     </div>
                   </div>
                 </div>
+                <router-link to="/userhome" class="back-home-label" title="Back to Home">
+                  <i class="pi pi-home"></i>
+                  <span>Back to Home</span>
+                </router-link>
               </div>
             </div>
             <!-- Animated Filters -->
@@ -98,17 +102,17 @@
               >
                 <div class="card-header">
                   <span class="card-title" :title="req.title">{{ req.title }}</span>
-                  <Badge :value="req.status || 'Pending'" :severity="req.status?.toLowerCase() === 'closed' ? 'danger' : 'info'" />
+                  <Badge :value="req.status || 'Pending'" :class="badgeClass(req.status)" />
                 </div>
                 <div class="card-body">
                   <div class="deal"><i class="pi pi-money-bill"></i> {{ formatDeal(req.dealAmount) }}</div>
                   <div class="meta">
-                    <span><i class="pi pi-calendar"></i> {{ formatDate(req.deadline) }}</span>
-                    <span><i class="pi pi-tag"></i> {{ req.category?.name }}</span>
+                    <span><i class="pi pi-user"></i> {{ req.requester?.username }}</span>
+                    <span><i class="pi pi-clock"></i> <b>Created:</b> {{ formatDate(req.createdAt) }}</span>
                   </div>
                   <div class="meta">
-                    <span><i class="pi pi-user"></i> {{ req.requester?.username }}</span>
-                    <span><i class="pi pi-clock"></i> {{ formatDate(req.createdAt) }}</span>
+                    <span><i class="pi pi-calendar"></i> <b>Deadline:</b> {{ formatDate(req.deadline) }}</span>
+                    <span><i class="pi pi-tag"></i> {{ req.category?.name }}</span>
                   </div>
                 </div>
                 <Button icon="pi pi-eye" label="Details" class="p-button-text detail-btn" />
@@ -125,6 +129,7 @@
         </div>
       </div>
     </div>
+    <AppFooter />
   </div>
 </template>
 
@@ -136,6 +141,7 @@ import Button from 'primevue/button'
 import Badge from 'primevue/badge'
 import Paginator from 'primevue/paginator'
 import axios from 'axios'
+import AppFooter from '../components/AppFooter.vue'
 
 const requests = ref([])
 const loading = ref(true)
@@ -220,6 +226,17 @@ function formatDate(dateStr) {
 function formatDeal(amount) {
   if (amount == null) return '-'
   return amount.toLocaleString() + ' đ'
+}
+
+function badgeClass(status) {
+  switch ((status || '').toLowerCase()) {
+    case 'pending': return 'p-badge-info';
+    case 'cancelled': return 'p-badge-danger';
+    case 'approved': return 'p-badge-success';
+    case 'completed': return 'p-badge-success';
+    case 'rejected': return 'p-badge-warning';
+    default: return 'p-badge-info';
+  }
 }
 </script>
 
@@ -500,6 +517,7 @@ function formatDeal(amount) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.7rem;
+  min-height: 32px;
 }
 .card-title {
   font-size: 1.15rem;
@@ -556,6 +574,39 @@ function formatDeal(amount) {
   margin-top: 1.5rem;
   display: flex;
   justify-content: center;
+}
+.request-card .p-badge {
+  font-size: 1rem;
+  padding: 0.35em 1em;
+  border-radius: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  height: 2.1em;
+}
+.back-home-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #667eea;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 0.5em 1.2em;
+  font-size: 1.05rem;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(102,126,234,0.08);
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  margin-left: auto;
+}
+.back-home-label:hover {
+  background: #4338ca;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(67,56,202,0.12);
 }
 @media (max-width: 1024px) {
   .content {

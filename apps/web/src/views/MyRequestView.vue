@@ -165,79 +165,69 @@
               </div>
             </div>
 
-            <!-- Assigned Requests Grid -->
-            <div v-else class="assigned-requests-grid">
-              <div
-                v-for="request in paginatedAssignedRequests"
-                :key="request.id"
-                class="request-card"
-                :class="getStatusClass(request.status)"
-              >
-                <div class="request-header">
-                  <div class="request-title">
-                    <h3>{{ request.title }}</h3>
-                    <span class="status-badge" :class="getStatusClass(request.status)">
-                      {{ formatStatus(request.status) }}
-                    </span>
-                  </div>
-                  <div class="request-meta">
-                    <span class="requester">By: {{ request.requester?.username || 'Unknown' }}</span>
-                    <span class="category">{{ request.category?.name || 'No Category' }}</span>
-                    <span :class="['visibility-badge', isRequestPublic(request.isPublic) ? 'visibility-public' : 'visibility-private']">
-                      <i :class="isRequestPublic(request.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
-                      {{ isRequestPublic(request.isPublic) ? 'Public' : 'Private' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="request-content">
-                  <p v-if="request.description" class="description">
-                    {{ request.description }}
-                  </p>
-                  <div class="request-details">
-                    <div class="detail-item">
-                      <span class="detail-label">Deal Amount:</span>
-                      <span class="detail-value">${{ formatAmount(request.dealAmount) }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Deadline:</span>
-                      <span class="detail-value" :class="getDeadlineClass(request.deadline)">
-                        {{ formatDate(request.deadline) }}
-                      </span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Created:</span>
-                      <span class="detail-value">{{ formatDate(request.createdAt) }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="request-actions">
-                  <button
-                    v-if="request.status === 'PENDING'"
-                    @click="acceptRequest(request.id)"
-                    class="btn btn-success"
-                    :disabled="actionLoading"
-                  >
-                    Accept Request
-                  </button>
-                  <button
-                    v-if="request.status === 'PENDING'"
-                    @click="rejectRequest(request.id)"
-                    class="btn btn-danger"
-                    :disabled="actionLoading"
-                  >
-                    Reject Request
-                  </button>
-                  <button
-                    v-if="request.status === 'APPROVED'"
-                    @click="completeRequest(request.id)"
-                    class="btn btn-primary"
-                    :disabled="actionLoading"
-                  >
-                    Mark Complete
-                  </button>
-                </div>
+            <!-- Assigned Requests Table (giống My Requests) -->
+            <div v-else class="requests-table-container">
+              <div class="table-wrapper">
+                <table class="requests-table">
+                  <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Requester</th>
+                    <th>Category</th>
+                    <th>Deal Amount</th>
+                    <th>Deadline</th>
+                    <th>Status</th>
+                    <th>Visibility</th>
+                    <th>Actions</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <tr v-for="req in paginatedAssignedRequests" :key="req.id" class="request-row">
+                    <td class="request-title">{{ req.title }}</td>
+                    <td>{{ req.requester?.username || 'Unknown' }}</td>
+                    <td>{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount">${{ formatAmount(req.dealAmount) }}</td>
+                    <td>{{ formatDate(req.deadline) }}</td>
+                    <td>
+                        <span :class="['status-badge', getStatusClass(req.status)]">
+                          {{ formatStatus(req.status) }}
+                        </span>
+                    </td>
+                    <td>
+                        <span :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
+                          <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                          {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                        </span>
+                    </td>
+                    <td class="actions">
+                      <button
+                        v-if="req.status === 'PENDING'"
+                        @click="acceptRequest(req.id)"
+                        class="btn btn-small btn-success"
+                        :disabled="actionLoading"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        v-if="req.status === 'PENDING'"
+                        @click="rejectRequest(req.id)"
+                        class="btn btn-small btn-danger"
+                        :disabled="actionLoading"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        v-if="req.status === 'APPROVED'"
+                        @click="completeRequest(req.id)"
+                        class="btn btn-small btn-primary"
+                        :disabled="actionLoading"
+                      >
+                        Mark Complete
+                      </button>
+                    </td>
+                  </tr>
+                  </tbody>
+                </table>
               </div>
               <div class="pagination-controls">
                 <div class="pagination-info">
@@ -589,18 +579,8 @@ async function completeRequest(requestId) {
 }
 
 function isRequestPublic(isPublic) {
-  // Handle different data types that might come from backend
-  if (typeof isPublic === 'boolean') {
-    return isPublic
-  }
-  if (typeof isPublic === 'number') {
-    return isPublic === 1
-  }
-  if (typeof isPublic === 'string') {
-    return isPublic === 'true' || isPublic === '1'
-  }
-  // Default to false for any other value
-  return false
+  // Hỗ trợ cả số, string và boolean
+  return isPublic == 1 || isPublic === true;
 }
 
 onMounted(fetchRequests)

@@ -19,6 +19,10 @@
         <span class="material-icons">description</span>
         <span class="menu-text">My Requests</span>
       </router-link>
+      <router-link to="/all-requests" class="menu-item" :title="isCollapsed ? 'Public Requests' : ''">
+        <span class="material-icons">public</span>
+        <span class="menu-text">Public Requests</span>
+      </router-link>
       <div class="sidebar-divider"></div>
       <router-link to="/user-home/settings" class="menu-item" :title="isCollapsed ? 'Settings' : ''">
         <span class="material-icons">settings</span>

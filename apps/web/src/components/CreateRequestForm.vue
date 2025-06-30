@@ -63,7 +63,7 @@
                   type="email"
                   required
                   class="form-control"
-                  :class="{ 'error': assigneeTouched && !assigneeEmail }"
+                  :class="{ 'error': assigneeTouched && !!assigneeError }"
                   placeholder="Enter assignee email address"
                   @input="assigneeTouched = true"
                   @blur="assigneeTouched = true"
@@ -76,7 +76,7 @@
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="assigneeTouched && !assigneeEmail" class="error-message">Please enter assignee email</span>
+                <span v-if="assigneeTouched && assigneeError" class="error-message">{{ assigneeError }}</span>
                 <span v-else class="help-text">Enter the email of the translator you want to assign</span>
               </div>
             </div>
@@ -93,9 +93,9 @@
                   type="text"
                   required
                   class="form-control"
-                  :class="{ 'error': titleTouched && !title }"
+                  :class="{ 'error': titleTouched && !!titleError }"
                   placeholder="Enter a descriptive request title"
-                  maxlength="1200"
+                  maxlength="255"
                   @input="titleTouched = true"
                   @blur="titleTouched = true"
                 >
@@ -108,8 +108,8 @@
                 </div>
               </div>
               <div class="input-info">
-                <span class="char-count" :class="{ 'warning': title.length > 1000 }">{{ title.length }}/1200</span>
-                <span v-if="titleTouched && !title" class="error-message">Title is required</span>
+                <span class="char-count" :class="{ 'warning': title.length > 200 }">{{ title.length }}/255</span>
+                <span v-if="titleTouched && titleError" class="error-message">{{ titleError }}</span>
               </div>
             </div>
 
@@ -123,7 +123,7 @@
                   class="form-control"
                   rows="4"
                   placeholder="Describe your request in detail (optional)"
-                  maxlength="500"
+                  maxlength="1000"
                   @input="descTouched = true"
                   @blur="descTouched = true"
                 ></textarea>
@@ -138,9 +138,8 @@
                 </div>
               </div>
               <div class="input-info">
-                <span class="char-count" :class="{ 'warning': description.length > 400 }">{{ description.length }}/500</span>
-                <span v-if="descTouched && description.length > 500" class="error-message">Description too long</span>
-                <span v-else class="help-text">A detailed description helps translators understand your requirements better</span>
+                <span class="char-count" :class="{ 'warning': description.length > 800 }">{{ description.length }}/1000</span>
+                <span v-if="descTouched && descriptionError" class="error-message">{{ descriptionError }}</span>
               </div>
             </div>
 
@@ -158,7 +157,7 @@
                   step="0.01"
                   required
                   class="form-control"
-                  :class="{ 'error': amountTouched && !isDealAmountValid }"
+                  :class="{ 'error': amountTouched && !!dealAmountError }"
                   placeholder="0.00"
                   @input="amountTouched = true"
                   @blur="amountTouched = true"
@@ -171,7 +170,7 @@
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="amountTouched && !isDealAmountValid" class="error-message">Deal amount must be greater than 0</span>
+                <span v-if="amountTouched && dealAmountError" class="error-message">{{ dealAmountError }}</span>
                 <span v-else class="help-text">Set the budget for this translation request</span>
               </div>
             </div>
@@ -189,7 +188,7 @@
                   :min="minDateString"
                   required
                   class="form-control"
-                  :class="{ 'error': deadlineTouched && !deadline }"
+                  :class="{ 'error': deadlineTouched && !!deadlineError }"
                   @input="deadlineTouched = true"
                   @blur="deadlineTouched = true"
                 >
@@ -200,7 +199,7 @@
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="deadlineTouched && !deadline" class="error-message">Please select a deadline</span>
+                <span v-if="deadlineTouched && deadlineError" class="error-message">{{ deadlineError }}</span>
                 <span v-else class="help-text">Deadline must be at least 7 days from now</span>
               </div>
             </div>
@@ -215,7 +214,7 @@
                   id="category"
                   v-model="categoryId"
                   class="form-control"
-                  :class="{ 'error': categoryTouched && !categoryId }"
+                  :class="{ 'error': categoryTouched && !!categoryError }"
                   required
                   @change="categoryTouched = true"
                   @blur="categoryTouched = true"
@@ -232,7 +231,7 @@
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="categoryTouched && !categoryId" class="error-message">Please select a category</span>
+                <span v-if="categoryTouched && categoryError" class="error-message">{{ categoryError }}</span>
                 <span v-else class="help-text">Select the most appropriate category for your request</span>
               </div>
             </div>
@@ -298,18 +297,78 @@ const assigneeTouched = ref(false)
 
 const requestType = ref('public')
 
+const currentUserId = ref(null)
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const userEmail = ref('')
+
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
-const isFormValid = computed(() => {
-  if (requestType.value === 'private') {
-    return title.value && isDealAmountValid.value && deadline.value && assigneeEmail.value && categoryId.value
-  } else {
-    return title.value && isDealAmountValid.value && deadline.value && categoryId.value
-  }
-})
 
 const minDateString = computed(() => {
   const d = minDate.value
   return d.toISOString().split('T')[0]
+})
+
+const titleError = computed(() => {
+  if (!titleTouched.value) return ''
+  if (!title.value) return 'Title is required'
+  if (title.value.length < 3) return 'Title must be at least 3 characters'
+  if (title.value.length > 255) return 'Title is too long (max 255 characters)'
+  return ''
+})
+const descriptionError = computed(() => {
+  if (!descTouched.value) return ''
+  if (description.value.length > 1000) return 'Description too long (max 1000 characters)'
+  return ''
+})
+const dealAmountError = computed(() => {
+  if (!amountTouched.value) return ''
+  if (dealAmount.value === null || dealAmount.value === '' || isNaN(dealAmount.value)) return 'Deal amount is required'
+  if (dealAmount.value <= 0) return 'Deal amount must be greater than 0'
+  return ''
+})
+const deadlineError = computed(() => {
+  if (!deadlineTouched.value) return ''
+  if (!deadline.value) return 'Please select a deadline'
+  const deadlineDate = new Date(deadline.value)
+  const sevenDaysFromNow = new Date()
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
+  if (deadlineDate < sevenDaysFromNow) return 'Deadline must be at least 7 days from now'
+  return ''
+})
+const categoryError = computed(() => {
+  if (!categoryTouched.value) return ''
+  if (!categoryId.value) return 'Please select a category'
+  return ''
+})
+const assigneeError = computed(() => {
+  if (requestType.value !== 'private') return ''
+  if (!assigneeTouched.value) return ''
+  if (!assigneeEmail.value) return 'Please enter assignee email'
+  if (!emailRegex.test(assigneeEmail.value)) return 'Invalid email format'
+  if (userEmail.value && assigneeEmail.value === userEmail.value) return 'You cannot assign the request to yourself'
+  return ''
+})
+
+const isFormValid = computed(() => {
+  if (requestType.value === 'private') {
+    return (
+      !titleError.value &&
+      !descriptionError.value &&
+      !dealAmountError.value &&
+      !deadlineError.value &&
+      !categoryError.value &&
+      !assigneeError.value
+    )
+  } else {
+    return (
+      !titleError.value &&
+      !descriptionError.value &&
+      !dealAmountError.value &&
+      !deadlineError.value &&
+      !categoryError.value
+    )
+  }
 })
 
 onMounted(async () => {
@@ -318,6 +377,15 @@ onMounted(async () => {
     categories.value = categoriesRes.data
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch categories', life: 3000 })
+  }
+
+  const storedId = localStorage.getItem('userId')
+  if (storedId) {
+    currentUserId.value = storedId
+  }
+  const storedEmail = localStorage.getItem('email')
+  if (storedEmail) {
+    userEmail.value = storedEmail
   }
 })
 
@@ -329,7 +397,7 @@ async function handleSubmit() {
   assigneeTouched.value = true
   categoryTouched.value = true
   if (!isFormValid.value) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all required information', life: 3000 })
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fix all validation errors', life: 3000 })
     return
   }
   loading.value = true
@@ -362,7 +430,7 @@ async function handleSubmit() {
       // Find assigneeId from email
       try {
         console.log('Searching for user with email:', assigneeEmail.value)
-        const response = await axios.get(`/api/users/search?q=${assigneeEmail.value}`)
+        const response = await axios.get(`/api/requests/search?keyword=${encodeURIComponent(assigneeEmail.value)}`)
         console.log('Search response:', response.data)
         if (response.data && response.data.length > 0) {
           // Find exact email match

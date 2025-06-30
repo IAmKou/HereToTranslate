@@ -1,7 +1,17 @@
-import { CategoryEntity, ProjectEntity, RequestEntity, RequestStatus, UserEntity } from '#LocalProject/Entities';
+import {
+  CategoryEntity,
+  ProjectEntity,
+  RequestEntity,
+  RequestStatus,
+  UserEntity,
+} from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DAY } from '#LocalProject/Utils/common';
 import { MailService } from '../../mailer/mailer.service';
@@ -10,7 +20,6 @@ import { PaypalService } from '#LocalProject/Managers/service/payment-manager.se
 
 @Injectable()
 export class RequestManagerService {
-
   constructor(
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
@@ -21,9 +30,8 @@ export class RequestManagerService {
     private readonly categoryRepository: Repository<CategoryEntity>,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
-    private readonly paymentService: PaypalService,
-
-  ) { }
+    private readonly paymentService: PaypalService
+  ) {}
 
   async createRequest(
     dto: CreateRequestDto,
@@ -41,13 +49,16 @@ export class RequestManagerService {
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
-      throw new BadRequestException(`Deadline has to be at least 7 days from the current date`);
+      throw new BadRequestException(
+        `Deadline has to be at least 7 days from the current date`
+      );
     }
 
     const request = this.requestRepository.create({
-      requester:  { id: BigInt(uid) },
+      requester: { id: BigInt(uid) },
       project: dto.projectId ? { id: BigInt(dto.projectId) } : undefined,
       registrants: dto.assigneeId ? [{ id: BigInt(dto.assigneeId) }] : [],
+      assignee: dto.assigneeId ? { id: BigInt(dto.assigneeId) } : undefined,
       title,
       description,
       dealAmount,
@@ -59,24 +70,53 @@ export class RequestManagerService {
     });
 
     if (!isPublic) {
-      const requesterUser = await this.userRepository.findOneOrFail({where : {id : BigInt(uid)}});
-      const assigneeUser = await this.userRepository.findOne({ where: { id: BigInt(dto.assigneeId) } });
+      const requesterUser = await this.userRepository.findOneOrFail({
+        where: { id: BigInt(uid) },
+      });
+      const assigneeUser = await this.userRepository.findOne({
+        where: { id: BigInt(dto.assigneeId) },
+      });
 
       const username = requesterUser.username;
       if (assigneeUser?.email) {
-        await this.mailService.sendPrivateRequestConfirmation(assigneeUser.email,{
-          title,
-          deadline,
-          username,
-        });
+        await this.mailService.sendPrivateRequestConfirmation(
+          assigneeUser.email,
+          {
+            title,
+            deadline,
+            username,
+          }
+        );
       }
     }
 
     return this.requestRepository.save(request);
   }
 
+  async searchUsers(
+    keyword: string,
+    currentUserId: bigint
+  ): Promise<UserEntity[]> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .leftJoin('user.role', 'role')
+      .where('user.isActive = :active', { active: true })
+      .andWhere('user.id != :currentUserId', {
+        currentUserId: currentUserId.toString(),
+      })
+      .andWhere(
+        `(user.username LIKE :keyword OR user.email LIKE :keyword OR user.fullName LIKE :keyword)`,
+        { keyword: `%${keyword}%` }
+      )
+      .andWhere('role.id NOT IN (:...excludedRoles)', {
+        excludedRoles: [1, 2],
+      })
+      .getMany();
+  }
+
   async getMyRequests(uid: bigint) {
-    const queryBuilder = this.requestRepository.createQueryBuilder('requests')
+    const queryBuilder = this.requestRepository
+      .createQueryBuilder('requests')
       .select([
         'requests.id',
         'requests.title',
@@ -84,6 +124,7 @@ export class RequestManagerService {
         'requests.dealAmount',
         'requests.deadline',
         'requests.status',
+        'requests.isPublic',
         'requests.createdAt',
         'requester.id',
         'requester.username',
@@ -100,7 +141,8 @@ export class RequestManagerService {
   }
 
   async fetchRequests() {
-    const query = this.requestRepository.createQueryBuilder('requests')
+    const query = this.requestRepository
+      .createQueryBuilder('requests')
       .select([
         'requests.id',
         'requests.title',
@@ -115,7 +157,7 @@ export class RequestManagerService {
       ])
       .where('requests.isPublic = true')
       .leftJoin('requests.requester', 'requester')
-      .leftJoin('requests.category','category');
+      .leftJoin('requests.category', 'category');
 
     const result = await query.getMany();
 
@@ -127,7 +169,8 @@ export class RequestManagerService {
   }
 
   async fetchPrivateRequests(uid: bigint) {
-    const query = this.requestRepository.createQueryBuilder('requests')
+    const query = this.requestRepository
+      .createQueryBuilder('requests')
       .select([
         'requests.id',
         'requests.title',
@@ -152,14 +195,12 @@ export class RequestManagerService {
     return result;
   }
 
-  async updateRequest(uid: bigint, requestId: bigint, data: Partial<UpdateRequestDto>) {
-    const {
-      title,
-      description,
-      dealAmount,
-      deadline,
-      categoryId,
-    } = data;
+  async updateRequest(
+    uid: bigint,
+    requestId: bigint,
+    data: Partial<UpdateRequestDto>
+  ) {
+    const { title, description, dealAmount, deadline, categoryId } = data;
 
     if (!title && !description && !dealAmount && !deadline && !categoryId) {
       throw new BadRequestException(`No fields to update`);
@@ -185,7 +226,9 @@ export class RequestManagerService {
     if (deadline) {
       const datelineValue = new Date(deadline);
       if (datelineValue.getTime() - Date.now() < 7 * DAY) {
-        throw new BadRequestException(`Deadline has to be at least 7 days from the current date`);
+        throw new BadRequestException(
+          `Deadline has to be at least 7 days from the current date`
+        );
       }
       request.deadline = datelineValue;
     }
@@ -195,7 +238,9 @@ export class RequestManagerService {
     if (dealAmount) request.dealAmount = dealAmount;
 
     if (categoryId) {
-      const category = await this.categoryRepository.findOne({ where: { id: BigInt(categoryId) } });
+      const category = await this.categoryRepository.findOne({
+        where: { id: BigInt(categoryId) },
+      });
       if (!category) {
         throw new BadRequestException(`Category not found`);
       }
@@ -205,18 +250,18 @@ export class RequestManagerService {
     return this.requestRepository.save(request);
   }
 
-
-
   async cancelRequest(uid: bigint, requestId: bigint) {
     const request = await this.requestRepository.findOne({
       where: { id: BigInt(requestId) },
-      relations: ['requester']
+      relations: ['requester'],
     });
     if (!request) {
       throw new NotFoundException(`Unknown request`);
     }
     if (request.requester.id !== uid) {
-      throw new BadRequestException(`You are not the requester of this request`);
+      throw new BadRequestException(
+        `You are not the requester of this request`
+      );
     }
     if (request.status !== RequestStatus.Pending) {
       throw new BadRequestException(`Request is not in pending status`);
@@ -259,7 +304,9 @@ export class RequestManagerService {
     });
 
     if (request.requester && request.requester.id === BigInt(uid)) {
-      throw new BadRequestException('You cannot register for your own request.');
+      throw new BadRequestException(
+        'You cannot register for your own request.'
+      );
     }
 
     if (request.status !== RequestStatus.Pending) {
@@ -268,12 +315,18 @@ export class RequestManagerService {
 
     const requesterEmail = request.requester.email;
 
-    await this.mailService.notifyRequesterOfRegistration(requesterEmail, register.username);
+    await this.mailService.notifyRequesterOfRegistration(
+      requesterEmail,
+      register.username
+    );
 
     if (request.requester) {
       await this.chatService.openChatBetween(
         { id: uid, username: register.username },
-        { id: Number(request.requester.id), username: request.requester.username },
+        {
+          id: Number(request.requester.id),
+          username: request.requester.username,
+        }
       );
     }
   }
@@ -284,7 +337,7 @@ export class RequestManagerService {
       relations: ['registrants'],
     });
 
-    const registrantIds = request.registrants.map(r => r.id);
+    const registrantIds = request.registrants.map((r) => r.id);
 
     if (registrantIds.length === 0) return [];
 

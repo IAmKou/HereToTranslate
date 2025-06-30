@@ -8,7 +8,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
-  UserEntity, UserTypeEntity
+  UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -34,6 +34,9 @@ import { MailService } from '../mailer/mailer.service';
 import { ChatService } from '../chat/chat.service';
 import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
 import { MongoModule } from '../db/mongo/mongo.module';
+import { WalletController } from './controller/wallet.controller';
+import { PaymentController } from './controller/payment.controller';
+import { WalletManagerService } from './service/wallet-manager.service';
 
 @Global()
 @Module({
@@ -54,6 +57,8 @@ import { MongoModule } from '../db/mongo/mongo.module';
       UserTypeEntity,
       AuthEntity,
       TransactionEntity,
+      WalletEntity,
+      TranslationApprovalEntity
     ])
   ],
   providers: [
@@ -68,6 +73,7 @@ import { MongoModule } from '../db/mongo/mongo.module';
     MailService,
     ChatService,
     PaypalService,
+    WalletManagerService,
   ],
   exports: [
     CategoryManagerService,
@@ -81,6 +87,7 @@ import { MongoModule } from '../db/mongo/mongo.module';
     MailService,
     ChatService,
     PaypalService,
+    WalletManagerService,
   ],
   controllers: [
     CategoryController,
@@ -91,6 +98,8 @@ import { MongoModule } from '../db/mongo/mongo.module';
     DiscussionController,
     GroupController,
     ProjectTagController,
+    WalletController,
+    PaymentController,
   ]
 })
 export class ManagersModule {

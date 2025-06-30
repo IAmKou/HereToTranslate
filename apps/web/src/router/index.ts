@@ -129,6 +129,12 @@ const router = createRouter({
       component: () => import('../views/MyRequestView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/all-requests',
+      name: 'all-requests',
+      component: () => import('../views/RequestPublicView.vue'),
+      meta: { requiresAuth: false },
+    },
   ],
 });
 

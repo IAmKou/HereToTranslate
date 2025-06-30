@@ -7,7 +7,6 @@ import { DbContextModule } from './db/db.module';
 import { AuthModule } from './auth/auth.module';
 import { SeederModule } from './seeder/seeder.module';
 import { ManagersModule } from './manager/managers.module';
-import { ChatModule } from './chat/chat.module';
 import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
@@ -55,7 +54,7 @@ import * as path from 'path';
     SeederModule,
     AuthModule,
     ManagersModule,
-    ChatModule
+
   ],
   controllers: [],
   providers: [

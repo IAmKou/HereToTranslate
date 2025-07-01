@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
   Logger,
-  UnauthorizedException
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -45,21 +45,32 @@ export class AuthService {
     @InjectRepository(AuthEntity, 'sqlite')
     private readonly authRepository: Repository<AuthEntity>
   ) {
-    const googleClientId = this.configService.get<string>('GOOGLE_OAUTH2_CLIENT');
+    const googleClientId = this.configService.get<string>(
+      'GOOGLE_OAUTH2_CLIENT'
+    );
     if (!googleClientId) {
-      throw new Error('GOOGLE_OAUTH2_CLIENT is not set in the environment variables');
+      throw new Error(
+        'GOOGLE_OAUTH2_CLIENT is not set in the environment variables'
+      );
     }
     this.googleClient = new OAuth2Client(googleClientId);
-    this.refreshExpiry = this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ?? '7d';
-    this.accessExpiry = this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '15m';
-    this.sessionCleanupInterval = setInterval(() => this.cleanupExpiredSessions(), 60 * 1000); // every 1 min
+    this.refreshExpiry =
+      this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ?? '7d';
+    this.accessExpiry =
+      this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '15m';
+    this.sessionCleanupInterval = setInterval(
+      () => this.cleanupExpiredSessions(),
+      60 * 1000
+    ); // every 1 min
     this.logger.log('AuthService initialized');
   }
 
   private async cleanupExpiredSessions() {
     const now = new Date();
     await this.authRepository.delete({ accessTokenExpiresAt: LessThan(now) });
-    await this.authRepository.delete({ lastActivityAt: LessThan(new Date(now.getTime() - 30 * 60 * 1000)) }); // 30 min inactivity
+    await this.authRepository.delete({
+      lastActivityAt: LessThan(new Date(now.getTime() - 30 * 60 * 1000)),
+    }); // 30 min inactivity
   }
 
   async refreshTokens(refreshToken: string) {
@@ -86,10 +97,12 @@ export class AuthService {
     // Fetch user info
     const user: Nullable<UserEntity> = await this.userRepository.findOne({
       where: { id: meta.userId },
-      relations: ['role']
+      relations: ['role'],
     });
     if (!user) {
-      this.logger.warn(`User with ID ${meta.userId} not found during token refresh`);
+      this.logger.warn(
+        `User with ID ${meta.userId} not found during token refresh`
+      );
       await this.authRepository.delete({ refreshToken });
       throw new UnauthorizedException('User not found');
     }
@@ -100,7 +113,9 @@ export class AuthService {
     if (!token) {
       throw new UnauthorizedException('Token is missing');
     }
-    const meta = await this.authRepository.findOne({ where: { accessToken: token } });
+    const meta = await this.authRepository.findOne({
+      where: { accessToken: token },
+    });
     if (!meta) {
       throw new UnauthorizedException('Token expired or invalid');
     }
@@ -117,18 +132,21 @@ export class AuthService {
     // Update last activity
     meta.lastActivityAt = now;
     await this.authRepository.save(meta);
-    const user = await this.userRepository.findOne({ where: { id: meta.userId }, select: ['id', 'username'] });
+    const user = await this.userRepository.findOne({
+      where: { id: meta.userId },
+      relations: ['role'],
+    });
     if (!user) {
       await this.authRepository.delete({ accessToken: token });
       throw new UnauthorizedException('User not found');
     }
-    return { id: user.id, username: user.username };
+    return { id: user.id, username: user.username, role: Number(user.role.id) };
   }
 
   async login(username: string, password: string) {
     const user = await this.userRepository.findOne({
       where: { username },
-      relations: ['role']
+      relations: ['role'],
     });
     if (!user?.isActive) {
       throw new UnauthorizedException('Your account have been deactivated');
@@ -164,7 +182,9 @@ export class AuthService {
 
     if (!user) {
       const username = email;
-      const existingUser = await this.userRepository.findOne({ where: { username } });
+      const existingUser = await this.userRepository.findOne({
+        where: { username },
+      });
       if (existingUser) {
         throw new BadRequestException('User with this email already exists');
       }
@@ -175,7 +195,7 @@ export class AuthService {
         passwordHash: '',
         fullName: name,
         phone: '', // Empty phone for Google users
-        role: { id: BigInt(UserRole.Member) } // Default to member role
+        role: { id: BigInt(UserRole.Member) }, // Default to member role
       });
       await this.userRepository.save(user);
     }
@@ -190,10 +210,7 @@ export class AuthService {
 
   async logout(token: string, allSessions = false) {
     const meta = await this.authRepository.findOne({
-      where: [
-        { accessToken: token },
-        { refreshToken: token }
-      ]
+      where: [{ accessToken: token }, { refreshToken: token }],
     });
 
     if (!meta) {
@@ -205,12 +222,13 @@ export class AuthService {
       this.logger.log(`User ${meta.userId} logged out from all sessions`);
     } else {
       await this.authRepository.delete({ sessionId: meta.sessionId });
-      this.logger.log(`User ${meta.userId} logged out from session ${meta.sessionId}`);
+      this.logger.log(
+        `User ${meta.userId} logged out from session ${meta.sessionId}`
+      );
     }
 
     return { message: 'Logged out successfully' };
   }
-
 
   async sendResetCode(email: string) {
     const user = await this.userRepository.findOne({ where: { email } });
@@ -235,11 +253,7 @@ export class AuthService {
 
   async verifyResetCode(email: string, code: string) {
     const session = this.resetSessions.get(email);
-    if (
-      !session ||
-      session.code !== code ||
-      new Date() > session.expiresAt
-    ) {
+    if (!session || session.code !== code || new Date() > session.expiresAt) {
       throw new NotFoundException('Invalid or expired reset code');
     }
 
@@ -248,11 +262,7 @@ export class AuthService {
 
   async resetPassword(email: string, code: string, newPassword: string) {
     const session = this.resetSessions.get(email);
-    if (
-      !session ||
-      session.code !== code ||
-      new Date() > session.expiresAt
-    ) {
+    if (!session || session.code !== code || new Date() > session.expiresAt) {
       throw new NotFoundException('Invalid or expired reset code');
     }
 
@@ -276,11 +286,16 @@ export class AuthService {
     if (!match) return now;
     const value = parseInt(match[1], 10);
     switch (match[2]) {
-      case 's': return new Date(now.getTime() + value * 1000);
-      case 'm': return new Date(now.getTime() + value * 60 * 1000);
-      case 'h': return new Date(now.getTime() + value * 60 * 60 * 1000);
-      case 'd': return new Date(now.getTime() + value * 24 * 60 * 60 * 1000);
-      default: return now;
+      case 's':
+        return new Date(now.getTime() + value * 1000);
+      case 'm':
+        return new Date(now.getTime() + value * 60 * 1000);
+      case 'h':
+        return new Date(now.getTime() + value * 60 * 60 * 1000);
+      case 'd':
+        return new Date(now.getTime() + value * 24 * 60 * 60 * 1000);
+      default:
+        return now;
     }
   }
 
@@ -291,10 +306,14 @@ export class AuthService {
     const jwtPayload = {
       sub: Date.now().toString(2),
       userId: user.id.toString(),
-      username: user.username
+      username: user.username,
     };
-    const accessToken = this.jwt.sign(jwtPayload, { expiresIn: this.accessExpiry });
-    const refreshToken = this.jwt.sign(jwtPayload, { expiresIn: this.refreshExpiry });
+    const accessToken = this.jwt.sign(jwtPayload, {
+      expiresIn: this.accessExpiry,
+    });
+    const refreshToken = this.jwt.sign(jwtPayload, {
+      expiresIn: this.refreshExpiry,
+    });
     const meta = this.authRepository.create({
       accessToken,
       refreshToken,
@@ -302,7 +321,7 @@ export class AuthService {
       sessionId: v4(),
       accessTokenExpiresAt,
       refreshTokenExpiresAt,
-      lastActivityAt: now
+      lastActivityAt: now,
     });
     await this.authRepository.save(meta);
     return {
@@ -311,7 +330,11 @@ export class AuthService {
       user: {
         id: user.id,
         username: user.username,
-      }
+        role: {
+          id: Number(user.role.id),
+          name: user.role.name,
+        },
+      },
     };
   }
 }

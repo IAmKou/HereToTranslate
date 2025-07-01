@@ -1,4 +1,13 @@
-import { Controller, Post, Body, UseGuards, Get, Req, Res, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt.guard';
 import { ForRoles, IsPublicEndpoint } from '#LocalProject/Auth/decorators';
@@ -6,7 +15,7 @@ import { RolesGuard } from './guards/role.guard';
 import { LoginDto } from '#LocalProject/Dtos';
 import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from './types';
-import type { Response, Request } from 'express';
+import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
@@ -14,7 +23,6 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService
-
   ) {}
 
   @IsPublicEndpoint()
@@ -62,7 +70,11 @@ export class AuthController {
       return res.status(401).json({ message: 'Refresh token not found' });
     }
 
-    const { accessToken, refreshToken: newRefreshToken, user } = await this.authService.refreshTokens(refreshToken);
+    const {
+      accessToken,
+      refreshToken: newRefreshToken,
+      user,
+    } = await this.authService.refreshTokens(refreshToken);
 
     // Set new access token cookie
     res.cookie('access_token', accessToken, {
@@ -110,7 +122,7 @@ export class AuthController {
     if (accessToken) {
       await this.authService.logout(accessToken);
     }
-//multi session logout
+    //multi session logout
     // if (refreshToken) {
     //   await this.authRepository.delete({ refreshToken });
     // }
@@ -120,7 +132,6 @@ export class AuthController {
 
     return res.json({ message: 'Logged out successfully' });
   }
-
 
   @Post('forgot-password')
   @IsPublicEndpoint()
@@ -154,7 +165,6 @@ export class AuthController {
       throw new UnauthorizedException('No access token found');
     }
 
-    const user = await this.authService.validateToken(token);
-    return user;
+    return await this.authService.validateToken(token);
   }
 }

@@ -16,24 +16,16 @@ export interface RegisterData {
 }
 
 export interface AuthResponse {
-  user: {
-    id: string;
-    username: string;
-  };
+  user: User;
 }
 
 export interface User {
   id: string;
   username: string;
-  email: string;
-  fullName: string;
   role: {
     id: number;
     name: string;
   };
-  isActive: boolean;
-  phone?: string;
-  createdAt: string;
 }
 
 class AuthService {
@@ -100,12 +92,11 @@ class AuthService {
   }
 
   isAdmin(): boolean {
-    return this.user?.role?.id === 2; // Admin role ID
+    const id = this.user?.role?.id;
+    return id == 1 || id == 2;
+
   }
 
-  isSuperAdmin(): boolean {
-    return this.user?.role?.id === 1; // SuperAdmin role ID
-  }
 
   getUser(): User | null {
     return this.user;

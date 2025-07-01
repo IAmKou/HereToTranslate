@@ -24,7 +24,7 @@ async function bootstrap() {
   try {
     await authService.getCurrentUser();
   } catch (e) {
-    // It's fine if user is not logged in
+    //sdad
   }
 
   const app = createApp(App);
@@ -54,4 +54,4 @@ async function bootstrap() {
   app.mount('#root');
 }
 
-bootstrap(); // 🟢 Call the setup
+bootstrap();

@@ -76,16 +76,21 @@ class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      // Try to get user info from the server
       const response = await axios.get<User>(`${BASE_URL}/auth/me`);
-      this.user = response.data;
+
+      const user = response.data;
+      if (typeof user.role === 'number') {
+        user.role = { id: user.role, name: '' };
+      }
+
+      this.user = user;
       return this.user;
     } catch (error) {
-      // If the request fails, user is not authenticated
       this.user = null;
       return null;
     }
   }
+
 
   isAuthenticated(): boolean {
     return !!this.user;

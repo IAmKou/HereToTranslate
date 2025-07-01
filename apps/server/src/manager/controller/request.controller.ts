@@ -1,6 +1,6 @@
-import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
-import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
-import { CreateRequestDto, UpdateRequestDto } from "#LocalProject/Dtos";
+import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
+import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import {
   Body,
   Controller,
@@ -11,19 +11,16 @@ import {
   Req,
   UseGuards,
   UseInterceptors,
-  ValidationPipe
+  ValidationPipe,
 } from '@nestjs/common';
-import { RequestManagerService } from "../service/request-manager.service";
-import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
-import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
+import { RequestManagerService } from '../service/request-manager.service';
+import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
+import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 
 @Controller('requests')
 @UseInterceptors(JsonSerializerInterceptor)
 export class RequestController {
-  constructor(
-    private readonly requests: RequestManagerService
-  ) {}
-
+  constructor(private readonly requests: RequestManagerService) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('create')
@@ -31,7 +28,7 @@ export class RequestController {
     @Body(ValidationPipe) body: CreateRequestDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.requests.createRequest(body,req.user.id);
+    return this.requests.createRequest(body, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -87,14 +84,17 @@ export class RequestController {
   async registerRequest(
     @Param('requestId', BigIntTransformPipe) requestId: bigint,
     @Req() req: AuthenticatedRequest
-  ){
-    return this.requests.registerForPublicRequest(requestId, Number(req.user.id));
+  ) {
+    return this.requests.registerForPublicRequest(
+      requestId,
+      Number(req.user.id)
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':requestId/registrants')
   async getRegistrants(
-    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Param('requestId', BigIntTransformPipe) requestId: bigint
   ) {
     return this.requests.getRequestRegistrants(requestId);
   }
@@ -118,4 +118,9 @@ export class RequestController {
     return this.requests.searchUsers(keyword, uid);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get(':requestId/detail')
+  async getDetail(@Param('requestId', BigIntTransformPipe) requestId: number) {
+    return this.requests.fetchRequestDetails(requestId);
+  }
 }

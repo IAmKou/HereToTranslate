@@ -195,6 +195,28 @@ export class RequestManagerService {
     return result;
   }
 
+  async fetchRequestDetails(requestId: bigint) {
+    const query = this.requestRepository
+    .createQueryBuilder('requests')
+    .select([
+      'requests.id',
+      'requests.title',
+      'requests.description',
+      'requests.dealAmount',
+      'requests.deadline',
+      'requests.status',
+      'requests.createdAt',
+      'requester.id',
+      'requester.username',
+      'category.name',
+    ])
+      .where('requests.id = :requestId', { requestId: requestId })
+      .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.category', 'category');
+
+    return await query.getOne();
+  }
+
   async updateRequest(
     uid: bigint,
     requestId: bigint,

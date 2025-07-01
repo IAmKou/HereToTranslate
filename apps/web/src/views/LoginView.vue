@@ -176,7 +176,7 @@ const handleGoogleSignIn = async (response) => {
 
     const user = authService.getUser();
     if (user?.role?.name === 'SUPER_ADMIN') {
-      await router.push('/adminhome'); 
+      await router.push('/adminhome');
     } else if (user?.role?.name === 'ADMIN') {
       await router.push('/adminhome');
     } else {

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProjectTagEntity } from '#LocalProject/Entities';
@@ -33,12 +37,14 @@ export class ProjectTagManagerService {
     }
 
     if (!validateName(data.name)) {
-      throw new BadRequestException('Tag name contains invalid characters or is empty after trimming');
+      throw new BadRequestException(
+        'Tag name contains invalid characters or is empty after trimming'
+      );
     }
 
     try {
       const newTag = this.projectTagRepository.create({
-        name: sanitizeName(data.name)
+        name: sanitizeName(data.name),
       });
       return this.projectTagRepository.save(newTag);
     } catch (error) {
@@ -57,7 +63,9 @@ export class ProjectTagManagerService {
     }
 
     if (!validateName(data.name)) {
-      throw new BadRequestException('Tag name contains invalid characters or is empty after trimming');
+      throw new BadRequestException(
+        'Tag name contains invalid characters or is empty after trimming'
+      );
     }
 
     try {
@@ -82,6 +90,4 @@ export class ProjectTagManagerService {
       throw new InternalServerErrorException('Failed to delete project tag');
     }
   }
-
-
 }

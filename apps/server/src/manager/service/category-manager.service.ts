@@ -17,7 +17,7 @@ interface DatabaseError extends Error {
 export class CategoryManagerService {
   constructor(
     @InjectRepository(CategoryEntity)
-    private readonly categoryRepository: Repository<CategoryEntity>,
+    private readonly categoryRepository: Repository<CategoryEntity>
   ) {}
 
   async getCategories() {
@@ -30,26 +30,32 @@ export class CategoryManagerService {
     }
 
     if (!validateName(data.name)) {
-      throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
+      throw new BadRequestException(
+        'Category name contains invalid characters or is empty after trimming'
+      );
     }
 
     const sanitizedName = sanitizeName(data.name);
     const existingCategory = await this.categoryRepository.exists({
-      where: { name: sanitizedName }
-    })
+      where: { name: sanitizedName },
+    });
     if (existingCategory) {
-      throw new BadRequestException(`Category with name "${sanitizedName}" already exists`);
+      throw new BadRequestException(
+        `Category with name "${sanitizedName}" already exists`
+      );
     }
     try {
       const newCategory = this.categoryRepository.create({
         name: sanitizeName(data.name),
-        description: data.description
+        description: data.description,
       });
       return this.categoryRepository.save(newCategory);
     } catch (error) {
       const dbError = error as DatabaseError;
       if (dbError.code === 'ER_DUP_ENTRY') {
-        throw new BadRequestException('A category with this name already exists');
+        throw new BadRequestException(
+          'A category with this name already exists'
+        );
       }
       console.error('Error creating category:', error);
       throw new InternalServerErrorException('Failed to create category');
@@ -58,7 +64,9 @@ export class CategoryManagerService {
 
   async updateCategory(id: bigint, data: UpdateCategoryDto) {
     if (data.name && !validateName(data.name)) {
-      throw new BadRequestException('Category name contains invalid characters or is empty after trimming');
+      throw new BadRequestException(
+        'Category name contains invalid characters or is empty after trimming'
+      );
     }
 
     try {
@@ -74,7 +82,9 @@ export class CategoryManagerService {
     } catch (error) {
       const dbError = error as DatabaseError;
       if (dbError.code === 'ER_DUP_ENTRY') {
-        throw new BadRequestException('A category with this name already exists');
+        throw new BadRequestException(
+          'A category with this name already exists'
+        );
       }
       console.error('Error updating category:', error);
       throw new InternalServerErrorException('Failed to update category');

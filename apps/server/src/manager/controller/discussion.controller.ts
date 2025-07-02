@@ -9,22 +9,26 @@ import {
   Req,
   UseGuards,
   UseInterceptors,
-  ValidationPipe
+  ValidationPipe,
 } from '@nestjs/common';
 import { JwtFallthroughGuard } from '#LocalProject/Auth/guards/jwt-fallthrough.guard';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
-import { CreateDiscussionDto, PostCommentDto, UpdateCommentDto, UpdateDiscussionDto } from '#LocalProject/Dtos';
+import {
+  CreateDiscussionDto,
+  PostCommentDto,
+  UpdateCommentDto,
+  UpdateDiscussionDto,
+} from '#LocalProject/Dtos';
 import { DiscussionManagerService } from '#LocalProject/Managers/service/discussion-manager.service';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 
 @Controller('projects/:projectId/discussions')
 @UseInterceptors(JsonSerializerInterceptor)
 export class DiscussionController {
-  constructor(private readonly discussions: DiscussionManagerService) {
-  }
+  constructor(private readonly discussions: DiscussionManagerService) {}
 
   @UseGuards(JwtFallthroughGuard)
   @IsPublicEndpoint()
@@ -43,7 +47,11 @@ export class DiscussionController {
     @Body(ValidationPipe) discussionData: CreateDiscussionDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.discussions.createDiscussion(req.user.id, projectId, discussionData);
+    return this.discussions.createDiscussion(
+      req.user.id,
+      projectId,
+      discussionData
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -54,7 +62,12 @@ export class DiscussionController {
     @Body(ValidationPipe) discussionUpdateData: UpdateDiscussionDto, // Replace with actual DTO
     @Req() req: AuthenticatedRequest
   ) {
-    return this.discussions.updateDiscussionMetadata(req.user.id, projectId, threadId, discussionUpdateData);
+    return this.discussions.updateDiscussionMetadata(
+      req.user.id,
+      projectId,
+      threadId,
+      discussionUpdateData
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -97,7 +110,12 @@ export class DiscussionController {
     @Body(ValidationPipe) commentUpdateData: UpdateCommentDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.discussions.updateDiscussionComment(req.user.id, threadId, commentId, commentUpdateData);
+    return this.discussions.updateDiscussionComment(
+      req.user.id,
+      threadId,
+      commentId,
+      commentUpdateData
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -107,7 +125,11 @@ export class DiscussionController {
     @Param('commentId', BigIntTransformPipe) commentId: bigint,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.discussions.deleteDiscussionComment(req.user.id, threadId, commentId);
+    return this.discussions.deleteDiscussionComment(
+      req.user.id,
+      threadId,
+      commentId
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -117,7 +139,11 @@ export class DiscussionController {
     @Param('commentId', BigIntTransformPipe) commentId: bigint,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.discussions.upvoteDiscussionComment(req.user.id, threadId, commentId);
+    return this.discussions.upvoteDiscussionComment(
+      req.user.id,
+      threadId,
+      commentId
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -127,6 +153,10 @@ export class DiscussionController {
     @Param('commentId', BigIntTransformPipe) commentId: bigint,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.discussions.downvoteDiscussionComment(req.user.id, threadId, commentId);
+    return this.discussions.downvoteDiscussionComment(
+      req.user.id,
+      threadId,
+      commentId
+    );
   }
 }

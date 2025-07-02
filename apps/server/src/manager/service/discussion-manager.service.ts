@@ -1,12 +1,23 @@
-import { CreateDiscussionDto, PostCommentDto, UpdateCommentDto, UpdateDiscussionDto } from '#LocalProject/Dtos';
+import {
+  CreateDiscussionDto,
+  PostCommentDto,
+  UpdateCommentDto,
+  UpdateDiscussionDto,
+} from '#LocalProject/Dtos';
 import {
   DiscussionAccessPolicyEntity,
   ProjectDiscussionCommentEntity,
   ProjectDiscussionThreadEntity,
-  ProjectRoleEntity
+  ProjectRoleEntity,
 } from '#LocalProject/Entities';
 import { Maybe } from '@here-to-translate/common/types';
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, DeepPartial, Repository } from 'typeorm';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
@@ -15,7 +26,9 @@ import { ProjectManagerService } from '#LocalProject/Managers/service/project-ma
 
 @Injectable()
 export class DiscussionManagerService extends CommonHttpServiceImpl {
-  protected override readonly logger = new Logger(DiscussionManagerService.name);
+  protected override readonly logger = new Logger(
+    DiscussionManagerService.name
+  );
 
   constructor(
     @InjectRepository(ProjectDiscussionThreadEntity)
@@ -43,15 +56,17 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
   async getUserPermissionForThread(uid: Maybe<bigint>, threadId: bigint) {
     const userRoles = await this.projectRoleRepository.findBy({
       users: { id: uid },
-      project: { discussions: { id: threadId } }
+      project: { discussions: { id: threadId } },
     });
     const everyoneRole = await this.projectRoleRepository.findOne({
       where: { name: 'Everyone', project: { discussions: { id: threadId } } },
-      select: ['id']
+      select: ['id'],
     });
     // TODO: Guarantee that the Everyone role exists for every project
     if (/* unreachable */ !everyoneRole) {
-      throw new NotFoundException('Everyone role not found for this discussion thread');
+      throw new NotFoundException(
+        'Everyone role not found for this discussion thread'
+      );
     }
     userRoles.unshift(everyoneRole);
     let resultPermission = new Permission(PermissionFlags.None);
@@ -59,8 +74,8 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       const overrides = await this.discussionAccessPolicyRepository.findOne({
         where: {
           thread: { id: threadId },
-          role: { id: role.id }
-        }
+          role: { id: role.id },
+        },
       });
       if (overrides) {
         resultPermission = resultPermission
@@ -71,59 +86,89 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     return resultPermission;
   }
 
-  async fetchDiscussion(uid: Maybe<bigint>, projectId: bigint, threadId: bigint) {
+  async fetchDiscussion(
+    uid: Maybe<bigint>,
+    projectId: bigint,
+    threadId: bigint
+  ) {
     const threadAccessPolicy = await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       select: ['accessPolicy'],
-      relations: ['accessPolicy']
+      relations: ['accessPolicy'],
     });
 
     if (!threadAccessPolicy) {
       throw new NotFoundException('Unknown discussion thread');
     }
 
-    const resultPermission = await this.getUserPermissionForThread(uid, threadId);
+    const resultPermission = await this.getUserPermissionForThread(
+      uid,
+      threadId
+    );
     if (!resultPermission.has(PermissionFlags.ViewThread)) {
-      throw new ForbiddenException('You do not have permission to view this discussion');
+      throw new ForbiddenException(
+        'You do not have permission to view this discussion'
+      );
     }
 
     return await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
-      relations: ['comments', 'comments.author', 'comments.upvotes', 'comments.downvotes'],
-      select: ['id', 'title', 'description', 'comments', 'isArchived']
+      relations: [
+        'comments',
+        'comments.author',
+        'comments.upvotes',
+        'comments.downvotes',
+      ],
+      select: ['id', 'title', 'description', 'comments', 'isArchived'],
     });
   }
   async fetchDiscussions(uid: Maybe<bigint>, projectId: bigint) {
     const threads = await this.discussionThreadRepository.find({
       where: { project: { id: projectId } },
-      select: ['id', 'title', 'description', 'isArchived']
+      select: ['id', 'title', 'description', 'isArchived'],
     });
     if (!threads || threads.length === 0) {
       return [];
     }
     try {
-      return (await Promise.all(
-        threads.map(async thread =>
-          Object.assign(
-            thread,
-            {
-              userPermission: await this.getUserPermissionForThread(uid, thread.id)
-            }))
-        )).filter(thread => thread.userPermission.has(PermissionFlags.ViewThread));
+      return (
+        await Promise.all(
+          threads.map(async (thread) =>
+            Object.assign(thread, {
+              userPermission: await this.getUserPermissionForThread(
+                uid,
+                thread.id
+              ),
+            })
+          )
+        )
+      ).filter((thread) =>
+        thread.userPermission.has(PermissionFlags.ViewThread)
+      );
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to fetch discussions');
     }
   }
-  async createDiscussion(uid: bigint, projectId: bigint, discussionData: CreateDiscussionDto) {
-    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
+  async createDiscussion(
+    uid: bigint,
+    projectId: bigint,
+    discussionData: CreateDiscussionDto
+  ) {
+    await this.projectManager.testPermissions(
+      projectId,
+      uid,
+      PermissionFlags.ManageDiscussions
+    );
     const { title, description } = discussionData;
     const discussion = this.discussionThreadRepository.create({
       project: { id: projectId },
       title,
       description,
-      accessPolicy: [{
-        role: { name: 'Everyone', project: { id: projectId } },
-      }]
+      accessPolicy: [
+        {
+          role: { name: 'Everyone', project: { id: projectId } },
+        },
+      ],
     });
 
     try {
@@ -131,78 +176,108 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to create discussion');
     }
-
   }
-  async updateDiscussionMetadata(uid: bigint, projectId: bigint, threadId: bigint, discussionUpdateData: UpdateDiscussionDto) {
-    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
-    const { title, description, accessPolicyOverrides: accessPolicy } = discussionUpdateData;
+  async updateDiscussionMetadata(
+    uid: bigint,
+    projectId: bigint,
+    threadId: bigint,
+    discussionUpdateData: UpdateDiscussionDto
+  ) {
+    await this.projectManager.testPermissions(
+      projectId,
+      uid,
+      PermissionFlags.ManageDiscussions
+    );
+    const {
+      title,
+      description,
+      accessPolicyOverrides: accessPolicy,
+    } = discussionUpdateData;
 
     const updateData: DeepPartial<ProjectDiscussionThreadEntity> = {};
     if (title) updateData.title = title;
     if (description) updateData.description = description;
-    if (accessPolicy) updateData.accessPolicy = accessPolicy.map(policy => {
-      const transformedPolicy: DeepPartial<DiscussionAccessPolicyEntity> = {
-        role: { id: BigInt(policy.roleId) },
-      }
-      if (typeof policy.allowOverrides === 'bigint') {
-        transformedPolicy.allowOverrides = new Permission(policy.allowOverrides);
-      }
-      if (typeof policy.denyOverrides === 'bigint') {
-        transformedPolicy.denyOverrides = new Permission(policy.denyOverrides);
-      }
-      return transformedPolicy;
-    });
+    if (accessPolicy)
+      updateData.accessPolicy = accessPolicy.map((policy) => {
+        const transformedPolicy: DeepPartial<DiscussionAccessPolicyEntity> = {
+          role: { id: BigInt(policy.roleId) },
+        };
+        if (typeof policy.allowOverrides === 'bigint') {
+          transformedPolicy.allowOverrides = new Permission(
+            policy.allowOverrides
+          );
+        }
+        if (typeof policy.denyOverrides === 'bigint') {
+          transformedPolicy.denyOverrides = new Permission(
+            policy.denyOverrides
+          );
+        }
+        return transformedPolicy;
+      });
 
     try {
       return await this.discussionThreadRepository.save({
         id: threadId,
-        ...updateData
+        ...updateData,
       });
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to update discussion metadata');
     }
-
   }
   async archiveDiscussion(uid: bigint, projectId: bigint, threadId: bigint) {
     const discussionExists = await this.discussionThreadRepository.exists({
-      where: { id: threadId }
+      where: { id: threadId },
     });
     if (!discussionExists) {
       throw new NotFoundException('Unknown discussion thread');
     }
-    await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ManageDiscussions);
+    await this.projectManager.testPermissions(
+      projectId,
+      uid,
+      PermissionFlags.ManageDiscussions
+    );
 
     const isArchived = await this.discussionThreadRepository.exists({
-      where: { id: threadId, isArchived: true }
+      where: { id: threadId, isArchived: true },
     });
     if (isArchived) {
       throw new BadRequestException('Discussion is already archived');
     }
     try {
-
       return await this.discussionThreadRepository.save({
         id: threadId,
-        isArchived: true
+        isArchived: true,
       });
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to archive discussion');
     }
   }
-  async postComment(uid: bigint, threadId: bigint, commentData: PostCommentDto) {
+  async postComment(
+    uid: bigint,
+    threadId: bigint,
+    commentData: PostCommentDto
+  ) {
     const { content } = commentData;
-    const resultPermission = await this.getUserPermissionForThread(uid, threadId);
+    const resultPermission = await this.getUserPermissionForThread(
+      uid,
+      threadId
+    );
     if (!resultPermission.has(PermissionFlags.PostComment)) {
-      throw new ForbiddenException('You do not have permission to post comments in this discussion');
+      throw new ForbiddenException(
+        'You do not have permission to post comments in this discussion'
+      );
     }
     const isArchived = await this.discussionThreadRepository.exists({
-      where: { id: threadId, isArchived: true }
+      where: { id: threadId, isArchived: true },
     });
     if (isArchived) {
-      throw new ForbiddenException('Cannot post comments in an archived discussion');
+      throw new ForbiddenException(
+        'Cannot post comments in an archived discussion'
+      );
     }
     const comment = this.discussionCommentRepository.create({
       thread: { id: threadId },
-      content
+      content,
     });
     try {
       return await this.discussionCommentRepository.save(comment);
@@ -210,19 +285,29 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       this.unknownErrorHanlder(error, 'Failed to post comment');
     }
   }
-  async updateDiscussionComment(uid: bigint, threadId: bigint, commentId: bigint, commentUpdateData: UpdateCommentDto) {
+  async updateDiscussionComment(
+    uid: bigint,
+    threadId: bigint,
+    commentId: bigint,
+    commentUpdateData: UpdateCommentDto
+  ) {
     const comment = await this.discussionCommentRepository.findOne({
       where: { id: commentId, thread: { id: threadId } },
-      select: ['author']
+      select: ['author'],
     });
     if (!comment) {
       throw new NotFoundException('Unknown comment');
     }
 
     const { content } = commentUpdateData;
-    const resultPermission = await this.getUserPermissionForThread(uid, threadId);
+    const resultPermission = await this.getUserPermissionForThread(
+      uid,
+      threadId
+    );
     if (!resultPermission.has(PermissionFlags.PostComment)) {
-      throw new ForbiddenException('You do not have permission to edit comments in this discussion');
+      throw new ForbiddenException(
+        'You do not have permission to edit comments in this discussion'
+      );
     }
 
     if (comment.author.id !== uid) {
@@ -230,19 +315,25 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     }
 
     const isArchived = await this.discussionThreadRepository.exists({
-      where: { id: threadId, isArchived: true }
+      where: { id: threadId, isArchived: true },
     });
     if (isArchived) {
-      throw new BadRequestException('Cannot edit comments in an archived discussion');
+      throw new BadRequestException(
+        'Cannot edit comments in an archived discussion'
+      );
     }
 
     return await this.discussionCommentRepository.save({
       id: commentId,
       content,
-      isEdited: true
+      isEdited: true,
     });
   }
-  async deleteDiscussionComment(uid: bigint, threadId: bigint, commentId: bigint) {
+  async deleteDiscussionComment(
+    uid: bigint,
+    threadId: bigint,
+    commentId: bigint
+  ) {
     const commentExists = await this.discussionCommentRepository.exists({
       where: { id: commentId, thread: { id: threadId } },
     });
@@ -250,16 +341,23 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException('Unknown comment');
     }
 
-    const resultPermission = await this.getUserPermissionForThread(uid, threadId);
+    const resultPermission = await this.getUserPermissionForThread(
+      uid,
+      threadId
+    );
     if (!resultPermission.has(PermissionFlags.ManageComments)) {
-      throw new ForbiddenException('You do not have permission to delete comments in this discussion');
+      throw new ForbiddenException(
+        'You do not have permission to delete comments in this discussion'
+      );
     }
 
     const isArchived = await this.discussionThreadRepository.exists({
-      where: { id: threadId, isArchived: true }
+      where: { id: threadId, isArchived: true },
     });
     if (isArchived) {
-      throw new BadRequestException('Cannot delete comments in an archived discussion');
+      throw new BadRequestException(
+        'Cannot delete comments in an archived discussion'
+      );
     }
     try {
       await this.discussionCommentRepository.delete({ id: commentId });
@@ -268,7 +366,11 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       this.unknownErrorHanlder(error, 'Failed to delete comment');
     }
   }
-  async upvoteDiscussionComment(uid: bigint, threadId: bigint, commentId: bigint) {
+  async upvoteDiscussionComment(
+    uid: bigint,
+    threadId: bigint,
+    commentId: bigint
+  ) {
     const commentExists = await this.discussionCommentRepository.exists({
       where: { id: commentId, thread: { id: threadId } },
     });
@@ -276,21 +378,28 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException('Unknown comment');
     }
 
-    const resultPermission = await this.getUserPermissionForThread(uid, threadId);
+    const resultPermission = await this.getUserPermissionForThread(
+      uid,
+      threadId
+    );
     if (!resultPermission.has(PermissionFlags.Vote)) {
-      throw new ForbiddenException('You do not have permission to upvote comments in this discussion');
+      throw new ForbiddenException(
+        'You do not have permission to upvote comments in this discussion'
+      );
     }
 
     const isArchived = await this.discussionThreadRepository.exists({
-      where: { id: threadId, isArchived: true }
+      where: { id: threadId, isArchived: true },
     });
     if (isArchived) {
-      throw new BadRequestException('Cannot upvote comments in an archived discussion');
+      throw new BadRequestException(
+        'Cannot upvote comments in an archived discussion'
+      );
     }
 
     const upvoted = await this.discussionCommentRepository.exists({
       where: { id: commentId, upvotes: { id: uid } },
-      relations: ['upvotes']
+      relations: ['upvotes'],
     });
 
     if (upvoted) {
@@ -304,7 +413,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     try {
       const downvoted = await this.discussionCommentRepository.exists({
         where: { id: commentId, downvotes: { id: uid } },
-        relations: ['downvotes']
+        relations: ['downvotes'],
       });
       if (downvoted) {
         await queryRunner.manager
@@ -327,7 +436,11 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       await queryRunner.release();
     }
   }
-  async downvoteDiscussionComment(uid: bigint, threadId: bigint, commentId: bigint) {
+  async downvoteDiscussionComment(
+    uid: bigint,
+    threadId: bigint,
+    commentId: bigint
+  ) {
     const commentExists = await this.discussionCommentRepository.exists({
       where: { id: commentId, thread: { id: threadId } },
     });
@@ -335,21 +448,28 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException('Unknown comment');
     }
 
-    const resultPermission = await this.getUserPermissionForThread(uid, threadId);
+    const resultPermission = await this.getUserPermissionForThread(
+      uid,
+      threadId
+    );
     if (!resultPermission.has(PermissionFlags.Vote)) {
-      throw new ForbiddenException('You do not have permission to downvote comments in this discussion');
+      throw new ForbiddenException(
+        'You do not have permission to downvote comments in this discussion'
+      );
     }
 
     const isArchived = await this.discussionThreadRepository.exists({
-      where: { id: threadId, isArchived: true }
+      where: { id: threadId, isArchived: true },
     });
     if (isArchived) {
-      throw new BadRequestException('Cannot downvote comments in an archived discussion');
+      throw new BadRequestException(
+        'Cannot downvote comments in an archived discussion'
+      );
     }
 
     const downvoted = await this.discussionCommentRepository.exists({
       where: { id: commentId, downvotes: { id: uid } },
-      relations: ['downvotes']
+      relations: ['downvotes'],
     });
 
     if (downvoted) {
@@ -363,7 +483,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     try {
       const upvoted = await this.discussionCommentRepository.exists({
         where: { id: commentId, upvotes: { id: uid } },
-        relations: ['upvotes']
+        relations: ['upvotes'],
       });
       if (upvoted) {
         await queryRunner.manager

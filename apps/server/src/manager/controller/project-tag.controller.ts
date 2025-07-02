@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { ProjectTagManagerService } from '../service/project-tag-manager.service';
 
 interface CreateProjectTagDto {
@@ -24,7 +32,10 @@ export class ProjectTagController {
   }
 
   @Put('update/:id')
-  updateProjectTag(@Param('id') id: string, @Body() tagUpdateData: UpdateProjectTagDto) {
+  updateProjectTag(
+    @Param('id') id: string,
+    @Body() tagUpdateData: UpdateProjectTagDto
+  ) {
     return this.projectTagService.updateProjectTag(id, tagUpdateData);
   }
 
@@ -32,4 +43,4 @@ export class ProjectTagController {
   deleteProjectTag(@Param('id') id: string) {
     return this.projectTagService.deleteProjectTag(id);
   }
-} 
+}

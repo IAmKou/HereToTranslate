@@ -9,7 +9,7 @@ import {
   Req,
   UseGuards,
   UseInterceptors,
-  ValidationPipe
+  ValidationPipe,
 } from '@nestjs/common';
 import { GroupManagerService } from '#LocalProject/Managers/service/group-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
@@ -21,8 +21,7 @@ import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.i
 @Controller('projects/:projectId/groups/')
 @UseInterceptors(JsonSerializerInterceptor)
 export class GroupController {
-  constructor(private readonly groups: GroupManagerService) {
-  }
+  constructor(private readonly groups: GroupManagerService) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -61,7 +60,12 @@ export class GroupController {
     @Body(ValidationPipe) groupUpdateData: CreateProjectGroupDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.groups.updateProjectGroupMetadata(req.user.id, projectId, groupId, groupUpdateData);
+    return this.groups.updateProjectGroupMetadata(
+      req.user.id,
+      projectId,
+      groupId,
+      groupUpdateData
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -82,9 +86,13 @@ export class GroupController {
     @Body(ValidationPipe) userIds: UserIdsArray,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.groups.addUsersToGroup(req.user.id, projectId, groupId, userIds.userIds);
+    return this.groups.addUsersToGroup(
+      req.user.id,
+      projectId,
+      groupId,
+      userIds.userIds
+    );
   }
-
 
   @UseGuards(JwtAuthGuard)
   @Post(':groupId/users/remove')
@@ -94,6 +102,11 @@ export class GroupController {
     @Body(ValidationPipe) userIds: UserIdsArray,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.groups.removeUsersFromGroup(req.user.id, projectId, groupId, userIds.userIds);
+    return this.groups.removeUsersFromGroup(
+      req.user.id,
+      projectId,
+      groupId,
+      userIds.userIds
+    );
   }
 }

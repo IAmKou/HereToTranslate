@@ -121,6 +121,6 @@ export class RequestController {
   @UseGuards(JwtAuthGuard)
   @Get(':requestId/detail')
   async getDetail(@Param('requestId', BigIntTransformPipe) requestId: number) {
-    return this.requests.fetchRequestDetails(requestId);
+    return this.requests.fetchRequestDetails(BigInt(requestId));
   }
 }

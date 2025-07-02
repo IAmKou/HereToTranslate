@@ -1,6 +1,7 @@
 /* eslint-disable */
 <template>
   <div class="request-detail-wrapper">
+    <Toast position="top-right" />
     <Navbar />
     <div class="main-content">
       <Sidebar />
@@ -154,8 +155,11 @@
                   v-if="request && request.isPublic && !request.assignee && userId !== null && request.requester && request.requester.id !== userId && request.status === 'PENDING'"
                   class="action-btn primary"
                   @click="registerForRequest"
+                  :disabled="request?.isRegistered"
                 >
-                  <i class="pi pi-user-plus"></i> Register request
+                  <i class="pi pi-user-plus"></i>
+                  <span v-if="request?.isRegistered">Registered</span>
+                  <span v-else>Register for this request</span>
                 </button>
               </div>
             </div>
@@ -166,7 +170,6 @@
     <Footer />
     <!-- Edit Request Modal -->
     <RequestEditView v-if="showEdit" :request="request" @close="showEdit = false" @updated="onRequestUpdated" />
-    <div v-if="notification" class="centered-notification">{{ notification }}</div>
   </div>
 </template>
 
@@ -183,6 +186,8 @@ import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
 import RequestEditView from './RequestEditView.vue'
 import { nextTick } from 'vue';
+import Toast from 'primevue/toast';
+import { useToast } from 'primevue/usetoast';
 // import { useUserStore } from '../store/user'; // Nếu có store user
 
 interface UserInfo {
@@ -227,7 +232,7 @@ const request = ref<RequestDetail | null>(null);
 const loading = ref<boolean>(true);
 const userId = ref<number | null>(null);
 const showEdit = ref(false)
-const notification = ref<string | null>(null);
+const toast = useToast();
 
 const timeRemaining = computed(() => {
   if (!request.value?.deadline) return null;
@@ -307,17 +312,13 @@ async function cancelRequest() {
   if (!request.value?.id) return;
   try {
     await axiosInstance.post(`/requests/${request.value.id}/cancel`);
-    notification.value = 'Request cancelled successfully!';
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Request cancelled successfully!', life: 3000 });
     await nextTick();
     setTimeout(() => {
-      notification.value = null;
       router.push({ name: 'my-requests' });
     }, 1500);
   } catch (e) {
-    notification.value = 'Failed to cancel request.';
-    setTimeout(() => {
-      notification.value = null;
-    }, 2000);
+    toast.add({ severity: 'error', summary: 'Failed', detail: 'Failed to cancel request.', life: 3000 });
   }
 }
 
@@ -332,14 +333,10 @@ async function registerForRequest() {
   if (!request.value?.id) return;
   try {
     await axiosInstance.post(`/requests/${request.value.id}/register`);
-    notification.value = 'Đăng ký nhận việc thành công! Hãy kiểm tra chat hoặc email.';
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Successfully registered for this request! Please check your chat or email.', life: 3000 });
     await fetchRequestDetail();
   } catch (e: any) {
-    notification.value = e?.response?.data?.message || 'Đăng ký thất bại.';
-  } finally {
-    setTimeout(() => {
-      notification.value = null;
-    }, 2000);
+    toast.add({ severity: 'error', summary: 'Failed', detail: e?.response?.data?.message || 'Registration failed.', life: 3000 });
   }
 }
 
@@ -644,20 +641,5 @@ onMounted(async () => {
   .main-content {
     margin-left: 0;
   }
-}
-.centered-notification {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: #2563eb;
-  color: #fff;
-  padding: 24px 40px;
-  border-radius: 12px;
-  font-size: 20px;
-  font-weight: 700;
-  z-index: 9999;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
-  text-align: center;
 }
 </style>

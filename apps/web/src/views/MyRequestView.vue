@@ -118,6 +118,17 @@
                       <button v-if="canReview(req)" @click="onReview(req)" class="btn btn-small btn-primary">
                         <i class="pi pi-eye"></i>
                       </button>
+                      <router-link
+                        v-if="req.isPublic"
+                        :to="{ name: 'request-registrants', params: { requestId: req.id } }"
+                        class="btn btn-small btn-candidate"
+                        :class="{ disabled: req.registrantCount === 0 }"
+                        :title="req.registrantCount > 0 ? 'View registered candidates' : 'No candidates yet'"
+                      >
+                        <i class="pi pi-users"></i>
+                        <span>Candidates</span>
+                        <span v-if="typeof req.registrantCount === 'number'" class="badge">{{ req.registrantCount }}</span>
+                      </router-link>
                     </td>
                   </tr>
                   </tbody>
@@ -1212,5 +1223,43 @@ onMounted(fetchRequests)
     order: 3;
     justify-content: center;
   }
+}
+
+.btn-candidate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  transition: background 0.2s;
+  position: relative;
+  text-decoration: none;
+}
+.btn-candidate .pi-users {
+  font-size: 16px;
+}
+.btn-candidate .badge {
+  background: #f59e42;
+  color: #fff;
+  border-radius: 8px;
+  padding: 2px 7px;
+  font-size: 12px;
+  margin-left: 4px;
+  font-weight: 600;
+}
+.btn-candidate.disabled,
+.btn-candidate[disabled] {
+  background: #cbd5e1;
+  color: #64748b;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.btn-candidate:hover:not(.disabled) {
+  background: #1d4ed8;
 }
 </style>

@@ -93,7 +93,9 @@
                   </thead>
                   <tbody>
                   <tr v-for="req in paginatedMyRequests" :key="req.id" class="request-row">
-                    <td class="request-title">{{ req.title }}</td>
+                    <td class="request-title">
+                      <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
+                    </td>
                     <td>{{ req.project?.name || '-' }}</td>
                     <td>{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount">${{ req.dealAmount }}</td>
@@ -110,9 +112,6 @@
                       </span>
                     </td>
                     <td class="actions">
-                      <button @click="onEdit(req)" class="btn btn-small btn-secondary">
-                        <i class="pi pi-pencil"></i>
-                      </button>
                       <button @click="onCancel(req)" class="btn btn-small btn-danger">
                         <i class="pi pi-times"></i>
                       </button>
@@ -126,7 +125,7 @@
               </div>
               <div class="pagination-controls">
                 <div class="pagination-info">
-                  <span>Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, debugRequests.length) }} of {{ debugRequests.length }} requests</span>
+                  <span>Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredMyRequests.length) }} of {{ filteredMyRequests.length }} requests</span>
                 </div>
                 <div class="pagination-buttons">
                   <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-secondary">
@@ -183,7 +182,9 @@
                   </thead>
                   <tbody>
                   <tr v-for="req in paginatedAssignedRequests" :key="req.id" class="request-row">
-                    <td class="request-title">{{ req.title }}</td>
+                    <td class="request-title">
+                      <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
+                    </td>
                     <td>{{ req.requester?.username || 'Unknown' }}</td>
                     <td>{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount">${{ formatAmount(req.dealAmount) }}</td>
@@ -258,7 +259,6 @@
           </div>
 
           <!-- Dialogs -->
-          <EditRequestForm v-if="showEdit" :request="selectedRequest" @close="showEdit = false" @updated="onRequestUpdated" />
           <ReviewRequestDialog v-if="showReview" :request="selectedRequest" @close="showReview = false" @reviewed="onRequestReviewed" />
           <CancelRequestDialog v-if="showCancel" :request="selectedRequest" @close="showCancel = false" @cancelled="onRequestCancelled" />
         </div>
@@ -273,6 +273,7 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { useToast } from 'primevue/usetoast'
+import { useRouter } from 'vue-router'
 import Sidebar from '../components/Sidebar.vue';
 import Navbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
@@ -292,6 +293,7 @@ const activeTab = ref('my-requests')
 const myRequests = ref([])
 const assignedRequests = ref([])
 const actionLoading = ref(false)
+const router = useRouter()
 
 // Pagination state
 const currentPage = ref(1)
@@ -303,24 +305,6 @@ const assignedItemsPerPage = ref(7)
 const myRequestsCount = computed(() => myRequests.value.length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
 
-// Pagination computed properties for My Requests
-const paginatedMyRequests = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value
-  const end = start + itemsPerPage.value
-  return debugRequests.value.slice(start, end)
-})
-
-const totalMyPages = computed(() => Math.ceil(debugRequests.value.length / itemsPerPage.value))
-
-// Pagination computed properties for Assigned Requests
-const paginatedAssignedRequests = computed(() => {
-  const start = (currentAssignedPage.value - 1) * assignedItemsPerPage.value
-  const end = start + assignedItemsPerPage.value
-  return assignedRequests.value.slice(start, end)
-})
-
-const totalAssignedPages = computed(() => Math.ceil(assignedRequests.value.length / assignedItemsPerPage.value))
-
 // Debug computed property
 const debugRequests = computed(() => {
   console.log('Debug - My requests with isPublic:', myRequests.value.map(req => ({
@@ -330,6 +314,33 @@ const debugRequests = computed(() => {
     type: typeof req.isPublic
   })))
   return myRequests.value
+})
+
+// Thêm biến computed cho danh sách đã filter (không có CANCELLED)
+const filteredMyRequests = computed(() => debugRequests.value.filter(req => req.status !== 'CANCELLED'))
+
+// Pagination computed properties for My Requests
+const paginatedMyRequests = computed(() => {
+  const filtered = filteredMyRequests.value
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filtered.slice(start, end)
+})
+
+const totalMyPages = computed(() => {
+  return Math.ceil(filteredMyRequests.value.length / itemsPerPage.value)
+})
+
+// Pagination computed properties for Assigned Requests
+const paginatedAssignedRequests = computed(() => {
+  const filtered = assignedRequests.value.filter(req => req.status !== 'CANCELLED')
+  const start = (currentAssignedPage.value - 1) * assignedItemsPerPage.value
+  const end = start + assignedItemsPerPage.value
+  return filtered.slice(start, end)
+})
+
+const totalAssignedPages = computed(() => {
+  return Math.ceil(assignedRequests.value.filter(req => req.status !== 'CANCELLED').length / assignedItemsPerPage.value)
 })
 
 // Pagination methods
@@ -414,11 +425,6 @@ function formatDate(dateString) {
   })
 }
 
-function onEdit(req) {
-  selectedRequest.value = req
-  showEdit.value = true
-}
-
 function onReview(req) {
   selectedRequest.value = req
   showReview.value = true
@@ -432,16 +438,6 @@ function onCancel(req) {
 function canReview(req) {
   // Tùy quyền, ví dụ: return req.status === 'pending' && userIsAdmin
   return false
-}
-
-function onRequestUpdated() {
-  fetchRequests()
-  toast.add({
-    severity: 'success',
-    summary: 'Success',
-    detail: 'Request updated successfully',
-    life: 3000
-  })
 }
 
 function onRequestReviewed() {
@@ -581,6 +577,10 @@ async function completeRequest(requestId) {
 function isRequestPublic(isPublic) {
   // Hỗ trợ cả số, string và boolean
   return isPublic == 1 || isPublic === true;
+}
+
+function goToRequestDetail(requestId) {
+  router.push({ name: 'request-detail', params: { requestId } })
 }
 
 onMounted(fetchRequests)

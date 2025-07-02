@@ -99,6 +99,8 @@
                 class="request-card"
                 :class="{ 'card-animated': true }"
                 :style="{ animationDelay: `${index * 0.1}s` }"
+                @click="goToDetail(req.id)"
+                style="cursor: pointer;"
               >
                 <div class="card-header">
                   <span class="card-title" :title="req.title">{{ req.title }}</span>
@@ -115,7 +117,7 @@
                     <span><i class="pi pi-tag"></i> {{ req.category?.name }}</span>
                   </div>
                 </div>
-                <Button icon="pi pi-eye" label="Details" class="p-button-text detail-btn" />
+                <Button icon="pi pi-eye" label="Details" class="p-button-text detail-btn" @click.stop="goToDetail(req.id)" />
               </div>
             </div>
             <Paginator
@@ -142,6 +144,7 @@ import Badge from 'primevue/badge'
 import Paginator from 'primevue/paginator'
 import axios from 'axios'
 import AppFooter from '../components/AppFooter.vue'
+import { useRouter } from 'vue-router'
 
 const requests = ref([])
 const loading = ref(true)
@@ -159,6 +162,8 @@ const isGridVisible = ref(false)
 
 const pageSize = 8
 const currentPage = ref(0)
+
+const router = useRouter()
 
 onMounted(() => {
   setTimeout(() => { isHeaderVisible.value = true }, 100)
@@ -237,6 +242,10 @@ function badgeClass(status) {
     case 'rejected': return 'p-badge-warning';
     default: return 'p-badge-info';
   }
+}
+
+function goToDetail(id) {
+  router.push(`/requests/${id}`)
 }
 </script>
 
@@ -736,4 +745,4 @@ function badgeClass(status) {
     font-size: 1.5rem;
   }
 }
-</style> 
+</style>

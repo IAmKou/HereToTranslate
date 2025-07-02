@@ -153,6 +153,9 @@ export class RequestManagerService {
         'requests.createdAt',
         'requester.id',
         'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
         'category.name',
       ])
       .where('requests.isPublic = true')
@@ -181,7 +184,9 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requester.id',
-        'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
         'category.name',
       ])
       .where('requests.isPublic = false')
@@ -206,12 +211,21 @@ export class RequestManagerService {
         'requests.deadline',
         'requests.status',
         'requests.createdAt',
+        'requests.isPublic',
         'requester.id',
         'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
+        'assignee.id',
+        'assignee.fullName',
+        'assignee.email',
+        'assignee.phone',
         'category.name',
       ])
       .where('requests.id = :requestId', { requestId: requestId })
       .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.assignee', 'assignee')
       .leftJoin('requests.category', 'category');
 
     return await query.getOne();

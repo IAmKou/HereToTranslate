@@ -481,6 +481,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       where: { id: projectId },
       relations: ['members'],
     });
+
     if (!project) {
       throw new NotFoundException('Project not found');
     }
@@ -493,8 +494,29 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
 
     project.members.push(user);
-    return this.projectRepository.save(project);
+    const updatedProject = await this.projectRepository.save(project);
+
+    const memberRole = await this.projectRoleRepository.findOne({
+      where: {
+        project: { id: projectId },
+        name: 'Everyone',
+      },
+      relations: ['users'],
+    });
+
+    if (memberRole) {
+      const existingUserIds = new Set(memberRole.users.map((u) => u.id.toString()));
+      if (!existingUserIds.has(user.id.toString())) {
+        memberRole.users.push(user);
+        await this.projectRoleRepository.save(memberRole);
+      }
+    } else {
+      this.logger.warn(`'member' role not found for project ${projectId}`);
+    }
+
+    return updatedProject;
   }
+
 
   async getProjectMembers(projectId: bigint): Promise<
     {

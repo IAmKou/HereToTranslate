@@ -144,14 +144,14 @@ router.beforeEach((to, from, next) => {
   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
   const isAuthenticated = authService.isAuthenticated();
   const isAdmin = authService.isAdmin();
-  const isSuperAdmin = authService.isSuperAdmin();
+
 
   if (requiresAuth && !isAuthenticated) {
     next('/login');
   } else if (requiresAdmin && !isAdmin) {
     next('/userhome');
   } else if (to.path === '/login' && isAuthenticated) {
-    next(isSuperAdmin ? '/adminhome' : isAdmin ? '/adminhome' : '/userhome');
+    next(isAdmin ? '/adminhome' : '/userhome');
   } else {
     next();
   }

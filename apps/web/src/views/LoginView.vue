@@ -50,8 +50,16 @@
                 <i :class="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
               </button>
             </div>
-            <div style="text-align: right; margin-top: 0.25rem;">
-              <router-link to="/forgot-password" style="font-size: 0.95em; color: #4CAF50; text-decoration: underline;">Forgot Password?</router-link>
+            <div style="text-align: right; margin-top: 0.25rem">
+              <router-link
+                to="/forgot-password"
+                style="
+                  font-size: 0.95em;
+                  color: #4caf50;
+                  text-decoration: underline;
+                "
+                >Forgot Password?</router-link
+              >
             </div>
           </div>
 
@@ -105,19 +113,22 @@ const login = async () => {
   try {
     isSubmitting.value = true;
     error.value = '';
+
     await authService.login({
       username: username.value,
       password: password.value,
     });
 
     const user = authService.getUser();
-    if (user?.role === 'superadmin') {
+    console.log(user.role);
+    if (user?.role?.id === 1) {
       await router.push('/adminhome');
-    } else if (user?.role === 'admin') {
+    } else if (user?.role?.id === 2) {
       await router.push('/adminhome');
     } else {
       await router.push('/userhome');
     }
+
   } catch (err) {
     error.value = err.response?.data?.message || err.message || 'Login failed.';
   } finally {
@@ -138,8 +149,9 @@ onMounted(() => {
   script.onload = () => {
     // Initialize Google Sign-In after script loads
     window.google.accounts.id.initialize({
-      client_id: '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com',
-      callback: handleGoogleSignIn
+      client_id:
+        '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com',
+      callback: handleGoogleSignIn,
     });
     window.google.accounts.id.renderButton(
       document.getElementById('g_id_signin'),
@@ -149,7 +161,7 @@ onMounted(() => {
         theme: 'outline',
         text: 'signin_with',
         shape: 'rectangular',
-        logo_alignment: 'left'
+        logo_alignment: 'left',
       }
     );
   };
@@ -163,15 +175,17 @@ const handleGoogleSignIn = async (response) => {
     await authService.loginWithGoogle(response.credential);
 
     const user = authService.getUser();
-    if (user?.role === 'superadmin') {
-      await router.push('/superadmin');
-    } else if (user?.role === 'admin') {
+    if (user?.role?.name === 'SUPER_ADMIN') {
+      await router.push('/adminhome');
+    } else if (user?.role?.name === 'ADMIN') {
       await router.push('/adminhome');
     } else {
       await router.push('/userhome');
     }
+
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Google sign-in failed.';
+    error.value =
+      err.response?.data?.message || err.message || 'Google sign-in failed.';
   } finally {
     isSubmitting.value = false;
   }
@@ -187,7 +201,7 @@ const handleGoogleSignIn = async (response) => {
 
 .logo-section {
   width: 50%;
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,10 +218,10 @@ const handleGoogleSignIn = async (response) => {
   height: 220px;
   object-fit: contain;
   margin-bottom: 2rem;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   padding: 2rem;
-  box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
 .logo-content h1 {
@@ -263,7 +277,7 @@ label {
 }
 
 label i {
-  color: #4CAF50;
+  color: #4caf50;
 }
 
 input {
@@ -278,7 +292,7 @@ input {
 
 input:focus {
   outline: none;
-  border-color: #4CAF50;
+  border-color: #4caf50;
   box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
   background-color: white;
 }
@@ -303,13 +317,13 @@ input:focus {
 
 .toggle-password:hover {
   background-color: #f0f0f0;
-  color: #4CAF50;
+  color: #4caf50;
 }
 
 .submit-button {
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -416,8 +430,8 @@ input:focus {
 
 .register-button {
   background: white;
-  color: #4CAF50;
-  border: 2px solid #4CAF50;
+  color: #4caf50;
+  border: 2px solid #4caf50;
   padding: 0.75rem 1.5rem;
   border-radius: 12px;
   font-size: 1rem;
@@ -432,7 +446,7 @@ input:focus {
 }
 
 .register-button:hover {
-  background: #4CAF50;
+  background: #4caf50;
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(76, 175, 80, 0.2);
@@ -446,7 +460,8 @@ input:focus {
   .login-container {
     flex-direction: column;
   }
-  .logo-section, .form-section {
+  .logo-section,
+  .form-section {
     width: 100%;
   }
   .logo-img {

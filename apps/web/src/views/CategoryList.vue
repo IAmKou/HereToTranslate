@@ -411,6 +411,7 @@ import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 import AdminSidebar from '../components/AdminSidebar.vue';
 import AdminNavbar from '../components/AdminNavbar.vue';
+import axiosInstance from '../api';
 
 // PrimeVue Components
 import Button from 'primevue/button';
@@ -421,11 +422,8 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Dialog from 'primevue/dialog';
 import ConfirmDialog from 'primevue/confirmdialog';
-import Chips from 'primevue/chips';
-import Tag from 'primevue/tag';
-import MultiSelect from 'primevue/multiselect';
-import Avatar from 'primevue/avatar';
-import Menu from 'primevue/menu';
+import PrimeTag from 'primevue/tag';
+
 
 interface Category {
   id?: number;
@@ -449,16 +447,13 @@ const categories = ref<Category[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const showDialog = ref(false);
-const showSubcategoryDialog = ref(false);
 const isEditing = ref(false);
 const submitted = ref(false);
 const currentCategory = ref<Category>({
   name: '',
   description: ''
 });
-const newSubcategory = ref<Category>({
-  name: ''
-});
+
 const selectedParentCategory = ref<Category | null>(null);
 const tags = ref([]);
 const showTagDialog = ref(false);
@@ -492,7 +487,7 @@ const isSidebarCollapsed = ref(false);
 const fetchCategories = async () => {
   loading.value = true;
   try {
-    const response = await axios.get(`${API_BASE_URL}/category/all`);
+    const response = await axiosInstance.get(`${API_BASE_URL}/categories/all`);
     console.log('API Response:', response.data); // Debug log
     categories.value = response.data;
     console.log('Categories after update:', categories.value); // Debug log
@@ -571,7 +566,7 @@ const saveCategory = async () => {
   saving.value = true;
   try {
     if (isEditing.value && currentCategory.value.id) {
-      await axios.put(`${API_BASE_URL}/category/update/${currentCategory.value.id}`, {
+      await axios.put(`${API_BASE_URL}/categories/${currentCategory.value.id}/update`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description
       });
@@ -584,7 +579,7 @@ const saveCategory = async () => {
       await fetchCategories();
       closeDialog();
     } else {
-      await axios.post(`${API_BASE_URL}/category/create`, {
+      await axios.post(`${API_BASE_URL}/categories/create`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description
       });

@@ -150,6 +150,13 @@
                 >
                   <i class="pi pi-times"></i> Reject
                 </button>
+                <button
+                  v-if="request && request.isPublic && !request.assignee && userId !== null && request.requester && request.requester.id !== userId && request.status === 'PENDING'"
+                  class="action-btn primary"
+                  @click="registerForRequest"
+                >
+                  <i class="pi pi-user-plus"></i> Register request
+                </button>
               </div>
             </div>
           </div>
@@ -319,6 +326,21 @@ function approveRequest() {
 }
 function rejectRequest() {
   alert('Reject request!');
+}
+
+async function registerForRequest() {
+  if (!request.value?.id) return;
+  try {
+    await axiosInstance.post(`/requests/${request.value.id}/register`);
+    notification.value = 'Đăng ký nhận việc thành công! Hãy kiểm tra chat hoặc email.';
+    await fetchRequestDetail();
+  } catch (e: any) {
+    notification.value = e?.response?.data?.message || 'Đăng ký thất bại.';
+  } finally {
+    setTimeout(() => {
+      notification.value = null;
+    }, 2000);
+  }
 }
 
 onMounted(async () => {

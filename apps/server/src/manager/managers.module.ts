@@ -38,6 +38,7 @@ import { MongoModule } from '../db/mongo/mongo.module';
 import { WalletController } from './controller/wallet.controller';
 import { PaymentController } from './controller/payment.controller';
 import { WalletManagerService } from './service/wallet-manager.service';
+import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 
 @Global()
 @Module({
@@ -75,6 +76,7 @@ import { WalletManagerService } from './service/wallet-manager.service';
     ChatService,
     PaypalService,
     WalletManagerService,
+    GitHubService,
   ],
   exports: [
     CategoryManagerService,
@@ -89,6 +91,8 @@ import { WalletManagerService } from './service/wallet-manager.service';
     ChatService,
     PaypalService,
     WalletManagerService,
+    GitHubService,
+
   ],
   controllers: [
     CategoryController,

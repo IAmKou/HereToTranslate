@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, CreateDateColumn, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectRoleEntity } from './project-role.entity';
 import { ProjectGroupEntity } from './project-group.entity';
@@ -43,6 +43,10 @@ export class ProjectEntity {
 
   @OneToMany(() => BranchEntity, branch => branch.project)
   branches: BranchEntity[];
+
+  @ManyToOne(() => BranchEntity, { nullable: true })
+  @JoinColumn({ name: 'defaultBranchId' })
+  defaultBranch: BranchEntity;
 
   @OneToMany(() => CommitEntity, commit => commit.project)
   commits: CommitEntity[];

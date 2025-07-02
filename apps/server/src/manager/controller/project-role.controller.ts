@@ -9,20 +9,23 @@ import {
   Req,
   UseGuards,
   UseInterceptors,
-  ValidationPipe
+  ValidationPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
-import { CreateProjectRoleDto, UpdateProjectRoleDto, UserIdsArray } from '#LocalProject/Dtos';
+import {
+  CreateProjectRoleDto,
+  UpdateProjectRoleDto,
+  UserIdsArray,
+} from '#LocalProject/Dtos';
 import { ProjectRoleManagerService } from '#LocalProject/Managers/service/project-role-manager.service';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 
 @Controller('projects/:projectId/roles')
 @UseInterceptors(JsonSerializerInterceptor)
 export class ProjectRoleController {
-  constructor(private readonly roles: ProjectRoleManagerService) {
-  }
+  constructor(private readonly roles: ProjectRoleManagerService) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -71,7 +74,12 @@ export class ProjectRoleController {
     @Body(ValidationPipe) roleUpdateData: UpdateProjectRoleDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.roles.updateProjectRole(req.user.id, projectId, roleId, roleUpdateData);
+    return this.roles.updateProjectRole(
+      req.user.id,
+      projectId,
+      roleId,
+      roleUpdateData
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -92,7 +100,12 @@ export class ProjectRoleController {
     @Body(ValidationPipe) userIds: UserIdsArray,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.roles.addUsersToRole(req.user.id, projectId, roleId, userIds.userIds);
+    return this.roles.addUsersToRole(
+      req.user.id,
+      projectId,
+      roleId,
+      userIds.userIds
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -103,7 +116,11 @@ export class ProjectRoleController {
     @Body(ValidationPipe) userIds: UserIdsArray,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.roles.removeUsersFromRole(req.user.id, projectId, roleId, userIds.userIds);
+    return this.roles.removeUsersFromRole(
+      req.user.id,
+      projectId,
+      roleId,
+      userIds.userIds
+    );
   }
-
 }

@@ -3,14 +3,15 @@ import {
   Body,
   Controller,
   Delete,
-  Get, NotFoundException,
+  Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
   Req,
   UseGuards,
   UseInterceptors,
-  ValidationPipe
+  ValidationPipe,
 } from '@nestjs/common';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
@@ -25,10 +26,7 @@ import { UserEntity } from '#LocalProject/Entities';
 @Controller('projects')
 @UseInterceptors(JsonSerializerInterceptor)
 export class ProjectController {
-  constructor(
-    private readonly projects: ProjectManagerService
-  ) {
-  }
+  constructor(private readonly projects: ProjectManagerService) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('create')
@@ -53,7 +51,6 @@ export class ProjectController {
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @Req() req: Partial<AuthenticatedRequest>
   ) {
-
     return this.projects.fetchProject(req.user?.id, BigInt(projectId));
   }
 
@@ -64,12 +61,16 @@ export class ProjectController {
     @Body(ValidationPipe) projectUpdateData: UpdateProjectMetadataDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.projects.updateProjectMetadata(req.user.id, projectId, projectUpdateData);
+    return this.projects.updateProjectMetadata(
+      req.user.id,
+      projectId,
+      projectUpdateData
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':projectId')
-  async delete( @Param('projectId', BigIntTransformPipe) projectId: bigint) {
+  async delete(@Param('projectId', BigIntTransformPipe) projectId: bigint) {
     await this.projects.deleteProject(projectId);
     return { message: `Project with ID ${projectId} deleted successfully` };
   }
@@ -78,7 +79,7 @@ export class ProjectController {
   @Post(':projectId/search-user')
   async searchUserToAdd(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body('identifier') identifier: string,
+    @Body('identifier') identifier: string
   ): Promise<{ user: UserEntity | null }> {
     if (!identifier?.trim()) {
       throw new BadRequestException('Identifier is required');
@@ -86,7 +87,7 @@ export class ProjectController {
 
     const user = await this.projects.findUserToProject(
       projectId,
-      identifier.trim(),
+      identifier.trim()
     );
     return {
       user,
@@ -97,7 +98,7 @@ export class ProjectController {
   @Post(':projectId/add-user')
   async addUserToProject(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body('identifier') identifier: string,
+    @Body('identifier') identifier: string
   ) {
     if (!identifier?.trim()) {
       throw new BadRequestException('Identifier is required');
@@ -106,14 +107,17 @@ export class ProjectController {
     try {
       const updatedProject = await this.projects.addUserToProject(
         projectId,
-        identifier.trim(),
+        identifier.trim()
       );
       return {
         message: 'User added successfully',
         project: updatedProject,
       };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new BadRequestException(error);
@@ -123,7 +127,7 @@ export class ProjectController {
   @UseGuards(JwtAuthGuard)
   @Get(':projectId/members')
   async getAllMembers(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('projectId', BigIntTransformPipe) projectId: bigint
   ) {
     const members = await this.projects.getProjectMembers(projectId);
     return { members };

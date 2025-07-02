@@ -10,15 +10,19 @@ import {
   Patch,
   UseGuards,
   UseInterceptors,
-  ValidationPipe
+  ValidationPipe,
 } from '@nestjs/common';
-import { RegisterDto, UpdateUserPasswordDto, UpdateUserProfileDto } from '#LocalProject/Dtos';
-import { IsPublicEndpoint } from "#LocalProject/Auth/decorators";
-import { JwtAuthGuard } from "#LocalProject/Auth/guards/jwt.guard";
-import type { AuthenticatedRequest } from "#LocalProject/Auth/types";
-import { UserManagerService } from "../service/user-manager.service";
-import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
-import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
+import {
+  RegisterDto,
+  UpdateUserPasswordDto,
+  UpdateUserProfileDto,
+} from '#LocalProject/Dtos';
+import { IsPublicEndpoint } from '#LocalProject/Auth/decorators';
+import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
+import { UserManagerService } from '../service/user-manager.service';
+import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
+import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
 import { UserEntity } from '#LocalProject/Entities';
 
@@ -46,7 +50,7 @@ export class UserController {
     @Req() request: AuthenticatedRequest
   ) {
     if (request.user.id !== id) {
-      throw new BadRequestException("You can only update your own user data.");
+      throw new BadRequestException('You can only update your own user data.');
     }
     return this.users.updateProfile(id, userUpdateData);
   }
@@ -59,7 +63,6 @@ export class UserController {
   ) {
     await this.users.changePassword(id, dto);
   }
-
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get('admin/all')
@@ -77,12 +80,9 @@ export class UserController {
     return this.users.updateUserRole(userId, roleId, req.user as UserEntity);
   }
 
-
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Put('admin/:id/toggle-status')
-  async toggleUserStatus(
-    @Param('id', BigIntTransformPipe) userId: bigint
-  ) {
+  async toggleUserStatus(@Param('id', BigIntTransformPipe) userId: bigint) {
     return this.users.toggleUserStatus(userId);
   }
 }

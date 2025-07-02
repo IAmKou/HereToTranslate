@@ -1,8 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseInterceptors, ValidationPipe } from "@nestjs/common";
-import { CategoryManagerService } from "#LocalProject/Managers/service/category-manager.service";
-import { CreateCategoryDto, UpdateCategoryDto } from "#LocalProject/Dtos";
-import { BigIntTransformPipe } from "#LocalProject/Utils/pipes/bigint-transform.pipe";
-import { JsonSerializerInterceptor } from "#LocalProject/Utils/json-serializer.interceptor";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseInterceptors,
+  ValidationPipe,
+} from '@nestjs/common';
+import { CategoryManagerService } from '#LocalProject/Managers/service/category-manager.service';
+import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
+import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
+import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 
 @Controller('categories')
 @UseInterceptors(JsonSerializerInterceptor)

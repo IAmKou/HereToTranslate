@@ -135,6 +135,18 @@ const router = createRouter({
       component: () => import('../views/RequestPublicView.vue'),
       meta: { requiresAuth: false },
     },
+    {
+      path: '/requests/:requestId',
+      name: 'request-detail',
+      component: () => import('../views/RequestDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/requests/:requestId/registrants',
+      name: 'request-registrants',
+      component: () => import('../views/RequestRegistrantsView.vue'),
+      meta: { requiresAuth: true }
+    },
   ],
 });
 

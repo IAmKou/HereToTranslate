@@ -140,7 +140,7 @@ export class RequestManagerService {
     return await queryBuilder.getMany();
   }
 
-  async fetchRequests() {
+  async fetchRequests(userId: bigint) {
     const query = this.requestRepository
       .createQueryBuilder('requests')
       .select([
@@ -153,11 +153,15 @@ export class RequestManagerService {
         'requests.createdAt',
         'requester.id',
         'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
         'category.name',
       ])
       .where('requests.isPublic = true')
       .leftJoin('requests.requester', 'requester')
-      .leftJoin('requests.category', 'category');
+      .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.registrants', 'registrants');
 
     const result = await query.getMany();
 
@@ -165,7 +169,10 @@ export class RequestManagerService {
       throw new NotFoundException('No requests found');
     }
 
-    return result;
+    return result.map((r: RequestEntity) => ({
+      ...r,
+      isRegistered: r.registrants ? r.registrants.some((u: UserEntity) => u.id.toString() === userId.toString()) : false
+    }));
   }
 
   async fetchPrivateRequests(uid: bigint) {
@@ -181,7 +188,9 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requester.id',
-        'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
         'category.name',
       ])
       .where('requests.isPublic = false')
@@ -195,7 +204,7 @@ export class RequestManagerService {
     return result;
   }
 
-  async fetchRequestDetails(requestId: bigint) {
+  async fetchRequestDetails(requestId: bigint, userId: bigint) {
     const query = this.requestRepository
       .createQueryBuilder('requests')
       .select([
@@ -206,15 +215,30 @@ export class RequestManagerService {
         'requests.deadline',
         'requests.status',
         'requests.createdAt',
+        'requests.isPublic',
         'requester.id',
         'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
+        'assignee.id',
+        'assignee.fullName',
+        'assignee.email',
+        'assignee.phone',
         'category.name',
       ])
       .where('requests.id = :requestId', { requestId: requestId })
       .leftJoin('requests.requester', 'requester')
-      .leftJoin('requests.category', 'category');
+      .leftJoin('requests.assignee', 'assignee')
+      .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.registrants', 'registrants');
 
-    return await query.getOne();
+    const request = await query.getOne();
+    let isRegistered = false;
+    if (request && request.registrants) {
+      isRegistered = request.registrants.some((u: UserEntity) => u.id.toString() === userId.toString());
+    }
+    return { ...request, isRegistered };
   }
 
   async updateRequest(
@@ -334,6 +358,14 @@ export class RequestManagerService {
     if (request.status !== RequestStatus.Pending) {
       throw new BadRequestException('Request is not open for registration.');
     }
+
+    if (!request.registrants) request.registrants = [];
+
+    if (!request.registrants.some(u => u.id === register.id)) {
+      request.registrants.push(register);
+      await this.requestRepository.save(request);
+    }
+
 
     const requesterEmail = request.requester.email;
 

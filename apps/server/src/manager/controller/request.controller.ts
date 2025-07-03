@@ -39,8 +39,8 @@ export class RequestController {
 
   @UseGuards(JwtAuthGuard)
   @Get('all')
-  async getAllRequests() {
-    return this.requests.fetchRequests();
+  async getAllRequests(@Req() req: AuthenticatedRequest) {
+    return this.requests.fetchRequests(BigInt(req.user.id));
   }
 
   @UseGuards(JwtAuthGuard)
@@ -120,7 +120,7 @@ export class RequestController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':requestId/detail')
-  async getDetail(@Param('requestId', BigIntTransformPipe) requestId: number) {
-    return this.requests.fetchRequestDetails(BigInt(requestId));
+  async getDetail(@Param('requestId', BigIntTransformPipe) requestId: number, @Req() req: AuthenticatedRequest) {
+    return this.requests.fetchRequestDetails(BigInt(requestId), BigInt(req.user.id));
   }
 }

@@ -87,7 +87,7 @@ export class PaypalService {
             {
               amount: {
                 currency_code: 'USD',
-                value: amount.toFixed(2),
+                value: Number(amount).toFixed(2),
               },
               description: `Deposit for request ID ${request.id}`,
             },
@@ -421,3 +421,4 @@ export class PaypalService {
     }
   }
 }
+

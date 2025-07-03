@@ -46,6 +46,15 @@
                   <a :href="`tel:${user.phone}`">{{ user.phone }}</a>
                 </div>
               </div>
+              <div class="candidate-actions">
+                <Button
+                  :label="approvingUser === user.id ? 'Approving...' : 'Approve'"
+                  :icon="approvingUser === user.id ? 'pi pi-spinner pi-spin' : 'pi pi-check'"
+                  :disabled="approvingUser !== null"
+                  class="approve-btn"
+                  @click="approveRegistrant(user.id)"
+                />
+              </div>
             </div>
           </transition-group>
         </div>
@@ -79,6 +88,7 @@ const route = useRoute();
 const router = useRouter();
 const registrants = ref<UserInfo[]>([]);
 const loading = ref(false);
+const approvingUser = ref<number | null>(null);
 
 function getInitial(name: string | undefined) {
   return name ? name.charAt(0).toUpperCase() : '?';
@@ -86,6 +96,33 @@ function getInitial(name: string | undefined) {
 
 function goBack() {
   router.back();
+}
+
+async function approveRegistrant(userId: number) {
+  if (approvingUser.value !== null) return;
+
+  approvingUser.value = userId;
+  try {
+    const requestId = route.params.requestId;
+    const response = await axiosInstance.post(`/requests/${requestId}/approve/${userId}`);
+
+    if (response.data && response.data.approvalUrl) {
+      // Mở link PayPal trong tab mới
+      window.open(response.data.approvalUrl, '_blank');
+
+      // Hiển thị thông báo thành công
+      alert('Registrant approved successfully! PayPal payment link has been opened.');
+
+      // Có thể redirect về trang request detail hoặc refresh danh sách
+      router.push(`/requests/${requestId}/detail`);
+    }
+  } catch (error: any) {
+    console.error('Error approving registrant:', error);
+    const errorMessage = error.response?.data?.message || 'Failed to approve registrant';
+    alert(`Error: ${errorMessage}`);
+  } finally {
+    approvingUser.value = null;
+  }
 }
 
 onMounted(async () => {
@@ -225,7 +262,7 @@ onMounted(async () => {
   box-shadow: 0 2px 12px rgba(59,130,246,0.10);
   transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
   min-width: 340px;
-  max-width: 420px;
+  max-width: 520px;
   width: 100%;
 }
 .candidate-card:hover {
@@ -245,6 +282,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
 }
 .candidate-name {
   font-size: 20px;
@@ -272,6 +310,33 @@ onMounted(async () => {
 }
 .candidate-email i, .candidate-phone i {
   color: #64748b;
+}
+.candidate-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.approve-btn {
+  background: #22c55e !important;
+  border: none !important;
+  color: white !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  transition: all 0.2s !important;
+  min-width: 100px !important;
+}
+.approve-btn:hover:not(:disabled) {
+  background: #16a34a !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+}
+.approve-btn:disabled {
+  background: #94a3b8 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
 .page-title {
   font-size: 28px;
@@ -324,6 +389,20 @@ onMounted(async () => {
     max-width: 98vw;
     min-width: unset;
     padding: 32px 8px 24px 8px;
+  }
+  .candidate-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+    padding: 24px 20px;
+  }
+  .candidate-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  .approve-btn {
+    width: 100%;
+    max-width: 200px;
   }
 }
 </style>

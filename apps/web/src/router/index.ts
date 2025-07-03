@@ -136,37 +136,35 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
-      path: '/requests/:requestId',
-      name: 'request-detail',
-      component: () => import('../views/RequestDetailView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
       path: '/requests/:requestId/registrants',
       name: 'request-registrants',
       component: () => import('../views/RequestRegistrantsView.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/paypal/success',
+      component: () => import('../views/PaypalSuccessView.vue')
+    },
   ],
 });
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
-  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
-  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
-  const isAuthenticated = authService.isAuthenticated();
-  const isAdmin = authService.isAdmin();
-
-
-  if (requiresAuth && !isAuthenticated) {
-    next('/login');
-  } else if (requiresAdmin && !isAdmin) {
-    next('/userhome');
-  } else if (to.path === '/login' && isAuthenticated) {
-    next(isAdmin ? '/adminhome' : '/userhome');
-  } else {
-    next();
-  }
-});
+// router.beforeEach((to, from, next) => {
+//   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+//   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
+//   const isAuthenticated = authService.isAuthenticated();
+//   const isAdmin = authService.isAdmin();
+//
+//
+//   if (requiresAuth && !isAuthenticated) {
+//     next('/login');
+//   } else if (requiresAdmin && !isAdmin) {
+//     next('/userhome');
+//   } else if (to.path === '/login' && isAuthenticated) {
+//     next(isAdmin ? '/adminhome' : '/userhome');
+//   } else {
+//     next();
+//   }
+// });
 
 export default router;

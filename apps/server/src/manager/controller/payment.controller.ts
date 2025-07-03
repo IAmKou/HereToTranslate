@@ -51,4 +51,9 @@ export class PaymentController {
   ) {
     return this.paymentService.finalizeTranslation(requestId);
   }
+
+  @Post('paypal/capture')
+  async capturePaypalOrder(@Body('orderId') orderId: string) {
+    return this.paymentService.capturePaymentAndCreateProject(orderId);
+  }
 }

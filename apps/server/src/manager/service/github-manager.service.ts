@@ -44,4 +44,22 @@ export class GitHubService {
       branch,
     });
   }
+
+  async deleteRepository(repoName: string) {
+    try {
+      const user = await this.octokit.rest.users.getAuthenticated();
+      await this.octokit.rest.repos.delete({
+        owner: user.data.login,
+        repo: repoName,
+      });
+      this.logger.debug(`GitHub repo '${repoName}' deleted`);
+    } catch (err) {
+      if (err.status === 404) {
+        this.logger.warn(`GitHub repo '${repoName}' not found`);
+      } else {
+        throw new Error(`GitHub deletion failed: ${err.message}`);
+      }
+    }
+  }
+
 }

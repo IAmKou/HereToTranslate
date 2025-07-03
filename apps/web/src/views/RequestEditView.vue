@@ -20,6 +20,7 @@
             class="form-control"
             :class="{ 'error': errors.title }"
             placeholder="Enter request title"
+            style="width: 100%;"
           >
           <span v-if="errors.title" class="error-message">{{ errors.title }}</span>
         </div>
@@ -31,8 +32,9 @@
             v-model="form.description"
             class="form-control"
             :class="{ 'error': errors.description }"
-            rows="4"
+            rows="8"
             placeholder="Enter request description"
+            style="width: 100%; resize: vertical;"
           ></textarea>
           <span v-if="errors.description" class="error-message">{{ errors.description }}</span>
         </div>
@@ -84,6 +86,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import { useToast } from 'primevue/usetoast'
 
 const props = defineProps({
   request: {
@@ -110,6 +113,8 @@ minDate.value.setDate(minDate.value.getDate() + 7)
 const minDateString = computed(() => {
   return minDate.value.toISOString().split('T')[0]
 })
+
+const toast = useToast ? useToast() : null
 
 onMounted(() => {
   if (props.request) {
@@ -182,6 +187,17 @@ async function handleSubmit() {
 
     console.log('Update response:', response.data)
 
+    if (toast) {
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Request updated successfully',
+        life: 3000
+      })
+    } else {
+      alert('Request updated successfully')
+    }
+
     emit('updated')
     emit('close')
   } catch (error) {
@@ -222,13 +238,14 @@ async function handleSubmit() {
 .modal-content {
   background: white;
   border-radius: 12px;
-  padding: 0;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
+  padding: 2.5rem 2rem;
+  width: 600px;
+  max-width: 90vw;
+  max-height: 800px;
+  overflow-y: visible;
   position: relative;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
 }
 
 .modal-header {

@@ -31,7 +31,6 @@ import { DiscussionController } from '#LocalProject/Managers/controller/discussi
 import { GroupController } from '#LocalProject/Managers/controller/group.controller';
 import { ProjectTagManagerService } from '#LocalProject/Managers/service/project-tag-manager.service';
 import { ProjectTagController } from '#LocalProject/Managers/controller/project-tag.controller';
-import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { AuthEntity } from '#LocalProject/SqliteEntities';
 import { MailService } from '../mailer/mailer.service';
 import { ChatService } from '../chat/chat.service';
@@ -40,6 +39,7 @@ import { MongoModule } from '../db/mongo/mongo.module';
 import { WalletController } from './controller/wallet.controller';
 import { PaymentController } from './controller/payment.controller';
 import { WalletManagerService } from './service/wallet-manager.service';
+import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 
 @Global()
 @Module({

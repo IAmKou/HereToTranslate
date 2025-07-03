@@ -6,7 +6,12 @@
 </template>
 
 <script setup lang="ts">
-// No imports needed
+import { onMounted } from 'vue';
+import { authService } from './services/auth.service';
+
+onMounted(() => {
+  authService.getCurrentUser();
+});
 </script>
 
 <style>

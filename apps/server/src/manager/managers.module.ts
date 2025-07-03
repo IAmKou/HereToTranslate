@@ -8,7 +8,8 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
-  UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity
+  UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity,
+  BranchEntity,CommitEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -30,6 +31,7 @@ import { DiscussionController } from '#LocalProject/Managers/controller/discussi
 import { GroupController } from '#LocalProject/Managers/controller/group.controller';
 import { ProjectTagManagerService } from '#LocalProject/Managers/service/project-tag-manager.service';
 import { ProjectTagController } from '#LocalProject/Managers/controller/project-tag.controller';
+import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { AuthEntity } from '#LocalProject/SqliteEntities';
 import { MailService } from '../mailer/mailer.service';
 import { ChatService } from '../chat/chat.service';
@@ -59,7 +61,9 @@ import { WalletManagerService } from './service/wallet-manager.service';
       AuthEntity,
       TransactionEntity,
       WalletEntity,
-      TranslationApprovalEntity
+      TranslationApprovalEntity,
+      BranchEntity,
+      CommitEntity,
     ])
   ],
   providers: [
@@ -75,6 +79,7 @@ import { WalletManagerService } from './service/wallet-manager.service';
     ChatService,
     PaypalService,
     WalletManagerService,
+    GitHubService,
   ],
   exports: [
     CategoryManagerService,
@@ -89,6 +94,7 @@ import { WalletManagerService } from './service/wallet-manager.service';
     ChatService,
     PaypalService,
     WalletManagerService,
+    GitHubService,
   ],
   controllers: [
     CategoryController,

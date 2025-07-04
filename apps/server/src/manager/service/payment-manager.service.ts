@@ -144,7 +144,17 @@ export class PaypalService {
 
   async capturePaymentAndCreateProject(
     orderId: string
-  ): Promise<{ success: boolean; projectId?: bigint; requestId?: bigint }> {
+  ): Promise<{
+    success: boolean;
+    projectId?: bigint;
+    requestId?: bigint;
+    amount?: number;
+    currency?: string;
+    payerEmail?: string;
+    receiver?: string;
+    date?: Date;
+    description?: string;
+  }> {
     const accessToken = await this.getAccessToken();
 
     try {
@@ -218,17 +228,30 @@ export class PaypalService {
 
         await queryRunner.commitTransaction();
 
-        return { success: true, projectId: newProject.id, requestId: request.id };
+        return {
+          success: true,
+          projectId: newProject.id,
+          requestId: request.id,
+          amount: transaction.amount,
+          currency: 'USD',
+          payerEmail: transaction.user?.email,
+          receiver: request.assignee?.fullName || request.assignee?.email,
+          date: transaction.createdAt,
+          description: request.description,
+        };
       } catch (err) {
         await queryRunner.rollbackTransaction();
         console.error('Project creation failed:', err);
-        return { success: false };
+        if (err instanceof Error) {
+          console.error('Error stack:', err.stack);
+        }
+        return { success: false, error: err?.message || 'Project creation failed' };
       } finally {
         await queryRunner.release();
       }
     } catch (err) {
       console.error('PayPal capture failed:', err);
-      return { success: false };
+      return { success: false, error: err?.message || 'PayPal capture failed' };
     }
   }
 

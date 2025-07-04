@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
+import { Buffer } from 'buffer';
+import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class GitHubService {
@@ -13,7 +15,24 @@ export class GitHubService {
     this.octokit = new Octokit({ auth: githubToken });
   }
 
+  async repoExists(repoName: string): Promise<boolean> {
+    try {
+      await this.octokit.rest.repos.get({
+        owner: this.username,
+        repo: repoName,
+      });
+      return true;
+    } catch (error: any) {
+      if (error.status === 404) return false;
+      throw error;
+    }
+  }
+
   async createRepository(repoName: string, isPrivate = true) {
+    const exists = await this.repoExists(repoName);
+    if (exists) {
+      throw new BadRequestException('Tên project đã tồn tại trên GitHub. Vui lòng chọn tên khác.');
+    }
     const res = await this.octokit.rest.repos.createForAuthenticatedUser({
       name: repoName,
       private: isPrivate,
@@ -52,10 +71,9 @@ export class GitHubService {
         owner: user.data.login,
         repo: repoName,
       });
-      this.logger.debug(`GitHub repo '${repoName}' deleted`);
-    } catch (err) {
+    } catch (err: any) {
       if (err.status === 404) {
-        this.logger.warn(`GitHub repo '${repoName}' not found`);
+        // Repo not found, không cần log
       } else {
         throw new Error(`GitHub deletion failed: ${err.message}`);
       }

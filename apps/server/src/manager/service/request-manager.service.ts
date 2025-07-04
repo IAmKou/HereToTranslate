@@ -428,7 +428,7 @@ export class RequestManagerService {
     if (!approvalUrl) {
       throw new Error('Failed to generate PayPal approval URL.');
     }
-
     return { approvalUrl };
   }
+
 }

@@ -22,6 +22,7 @@ export class TransactionEntity {
 
   @ManyToOne(() => RequestEntity, { nullable: true, onDelete: 'SET NULL' })
   request: RequestEntity;
+
   @Column('decimal', { precision: 10, scale: 2 })
   amount: number;
 

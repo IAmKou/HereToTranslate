@@ -52,8 +52,15 @@ export class PaymentController {
     return this.paymentService.finalizeTranslation(requestId);
   }
 
-  @Post('paypal/capture')
-  async capturePaypalOrder(@Body('orderId') orderId: string) {
-    return this.paymentService.capturePaymentAndCreateProject(orderId);
+  @Get('/paypal/success')
+  async handlePayPalSuccess(@Query('token') orderId: string, @Res() res: Response) {
+    const result = await this.paymentService.capturePaymentAndCreateProject(orderId);
+
+    if (result.success) {
+      return res.redirect(`/payment-success?projectId=${result.projectId}`);
+    } else {
+      return res.redirect('/payment-failed');
+    }
   }
+
 }

@@ -18,8 +18,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { MailService } from '../../mailer/mailer.service';
-import { TranslationApprovalEntity } from '../../db/mysql/entity/translation-approval.entity';
+import { TranslationApprovalEntity } from '#LocalProject/Entities';
 import { WalletManagerService } from './wallet-manager.service';
+import { logger } from 'nx/src/utils/logger';
 
 @Injectable()
 export class PaypalService {
@@ -75,11 +76,18 @@ export class PaypalService {
     amount: number,
     user: UserEntity,
     request: RequestEntity
-  ): Promise<string | null> {
+  ): Promise<string> {
+    const parsedAmount =
+      typeof amount === 'number' ? amount : parseFloat(amount as any);
+
+    if (isNaN(parsedAmount)) {
+      throw new BadRequestException('Invalid amount for PayPal deposit');
+    }
+
     const accessToken = await this.getAccessToken();
 
     try {
-      const res = await axios.post(
+      const { data } = await axios.post(
         `${this.api}/v2/checkout/orders`,
         {
           intent: 'CAPTURE',
@@ -87,14 +95,14 @@ export class PaypalService {
             {
               amount: {
                 currency_code: 'USD',
-                value: Number(amount).toFixed(2),
+                value: parsedAmount.toFixed(2),
               },
               description: `Deposit for request ID ${request.id}`,
             },
           ],
           application_context: {
-            return_url: `https://your-site.com/paypal/success`,
-            cancel_url: `https://your-site.com/paypal/cancel`,
+            return_url: `https://localhost:4200/paypal/success`,
+            cancel_url: `https://localhost:4200/paypal/cancel`,
           },
         },
         {
@@ -105,41 +113,40 @@ export class PaypalService {
         }
       );
 
-      const orderId = res.data.id;
+      const approvalUrl = data.links?.find(
+        (link: { rel: string }) => link.rel === 'approve'
+      )?.href;
+
+      if (!approvalUrl) {
+        throw new InternalServerErrorException('No approval URL returned by PayPal.');
+      }
 
       // Save transaction
       await this.transactionRepo.save({
         user,
         request,
-        amount,
+        amount: parsedAmount,
         status: TransactionStatus.Pending,
-        paypalOrderId: orderId,
+        paypalOrderId: data.id,
       });
-      type PaypalLink = {
-        href: string;
-        rel: 'approve' | 'self' | 'capture' | string;
-        method: 'GET' | 'POST' | string;
-      };
-      const approvalLink = (res.data.links as PaypalLink[]).find(
-        (link: PaypalLink) => link.rel === 'approve'
-      )?.href;
-      return approvalLink || null;
+
+      return approvalUrl;
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        const status = err.response?.status;
-        const data = err.response?.data;
-
-        console.error('PayPal API error:');
-        console.error('Status:', status);
-        console.error('Data:', JSON.stringify(data, null, 2));
-        console.error('Message:', err.message);
+        console.error('PayPal API error:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+        });
       } else {
         console.error('Unexpected error:', err);
       }
 
-      return null;
+      throw new InternalServerErrorException('Failed to create PayPal deposit');
     }
   }
+
+
 
   async capturePaymentAndCreateProject(
     orderId: string
@@ -299,7 +306,7 @@ export class PaypalService {
       where: { id: requestId },
       relations: ['assignee', 'requester'],
     });
-
+    logger.log(request);
     if (!request.assignee || !request.requester) {
       throw new BadRequestException(
         'Request must have both requester and assignee.'

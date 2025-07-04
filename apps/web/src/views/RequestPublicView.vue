@@ -21,10 +21,7 @@
                       Browse and discover all public translation requests. Use filters to find requests that match your skills!
                     </p>
                     <div class="header-stats">
-                      <div class="stat-item">
-                        <i class="pi pi-list stat-icon"></i>
-                        <span>{{ requests.length }} Requests</span>
-                      </div>
+
                       <div class="stat-item">
                         <i class="pi pi-clock stat-icon"></i>
                         <span>Active now</span>
@@ -219,6 +216,7 @@ const filteredRequests = computed(() => {
   if (currentUser.value) {
     list = list.filter(r => r.requester?.id !== currentUser.value.id)
   }
+  list = list.filter(r => r.status !== 'APPROVED')
   return list
 })
 

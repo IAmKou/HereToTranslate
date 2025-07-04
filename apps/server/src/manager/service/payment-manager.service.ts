@@ -20,7 +20,6 @@ import { ProjectManagerService } from '#LocalProject/Managers/service/project-ma
 import { MailService } from '../../mailer/mailer.service';
 import { TranslationApprovalEntity } from '#LocalProject/Entities';
 import { WalletManagerService } from './wallet-manager.service';
-import { logger } from 'nx/src/utils/logger';
 
 @Injectable()
 export class PaypalService {
@@ -150,7 +149,17 @@ export class PaypalService {
 
   async capturePaymentAndCreateProject(
     orderId: string
-  ): Promise<{ success: boolean; projectId?: bigint }> {
+  ): Promise<{
+    success: boolean;
+    projectId?: bigint;
+    requestId?: bigint;
+    amount?: number;
+    currency?: string;
+    payerEmail?: string;
+    receiver?: string;
+    date?: Date;
+    description?: string;
+  }> {
     const accessToken = await this.getAccessToken();
 
     try {
@@ -173,7 +182,7 @@ export class PaypalService {
 
       const transaction = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
-        relations: ['user', 'request'],
+        relations: ['user', 'request', 'request.registrants', 'request.category'],
       });
 
       const { user: selectedUser, request } = transaction;
@@ -187,15 +196,19 @@ export class PaypalService {
       await queryRunner.startTransaction();
 
       try {
+        const createProjectDto: any = {
+          name: request.title,
+          description: request.description,
+          isPrivate: true,
+          tags: [],
+        };
+        if (request.category?.id) {
+          createProjectDto.categoryId = request.category.id.toString();
+        }
+        console.log('createProjectDto:', createProjectDto);
         const createResult = await this.projectService.createProject(
           selectedUser.id,
-          {
-            name: request.title,
-            description: request.description,
-            isPrivate: true,
-            tags: [],
-            categoryId: request.category?.id?.toString() ?? '',
-          }
+          createProjectDto
         );
 
         const newProject = await this.projectRepository.findOneOrFail({
@@ -220,17 +233,30 @@ export class PaypalService {
 
         await queryRunner.commitTransaction();
 
-        return { success: true, projectId: newProject.id };
+        return {
+          success: true,
+          projectId: newProject.id,
+          requestId: request.id,
+          amount: transaction.amount,
+          currency: 'USD',
+          payerEmail: transaction.user?.email,
+          receiver: request.assignee?.fullName || request.assignee?.email,
+          date: transaction.createdAt,
+          description: request.description,
+        };
       } catch (err) {
         await queryRunner.rollbackTransaction();
         console.error('Project creation failed:', err);
-        return { success: false };
+        if (err instanceof Error) {
+          console.error('Error stack:', err.stack);
+        }
+        return { success: false, error: err?.message || 'Project creation failed' };
       } finally {
         await queryRunner.release();
       }
     } catch (err) {
       console.error('PayPal capture failed:', err);
-      return { success: false };
+      return { success: false, error: err?.message || 'PayPal capture failed' };
     }
   }
 
@@ -306,7 +332,7 @@ export class PaypalService {
       where: { id: requestId },
       relations: ['assignee', 'requester'],
     });
-    logger.log(request);
+
     if (!request.assignee || !request.requester) {
       throw new BadRequestException(
         'Request must have both requester and assignee.'

@@ -8,7 +8,9 @@ import {
   IsString,
   MaxLength,
   Min,
-  MinLength
+  MinLength,
+  IsArray,
+  IsOptional
 } from 'class-validator';
 import { Optional } from '@nestjs/common';
 
@@ -32,6 +34,11 @@ export class CreateRequestDto {
   @IsNotEmpty()
   @IsNumberString()
   categoryId: string;
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  tags?: string[];
 }
 
 export class UpdateRequestDto {
@@ -46,6 +53,11 @@ export class UpdateRequestDto {
   deadline?: string;
   @Optional()
   categoryId:string;
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  tags?: string[];
 }
 
 export class ReviewRequestDto {

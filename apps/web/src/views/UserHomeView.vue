@@ -109,7 +109,7 @@ onMounted(() => {
           <div class="greeting-row">
             <span class="greeting-emoji">👋</span>
             <h1 class="greeting-title">
-              Hello, <span class="greeting-name">{{ user?.fullName || '' }}</span>! This is your dashboard.
+              Hello, <span class="greeting-name">{{ user?.fullName }}</span>! This is your dashboard.
             </h1>
           </div>
           <!-- Cards -->

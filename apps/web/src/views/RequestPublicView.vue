@@ -219,6 +219,7 @@ const filteredRequests = computed(() => {
   if (currentUser.value) {
     list = list.filter(r => r.requester?.id !== currentUser.value.id)
   }
+  list = list.filter(r => r.status !== 'APPROVED')
   return list
 })
 

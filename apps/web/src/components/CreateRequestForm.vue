@@ -231,6 +231,29 @@
                 <span v-else class="help-text">Select the most appropriate category for your request</span>
               </div>
             </div>
+
+            <!-- Tags -->
+            <div class="form-group full-width">
+              <label for="tags" class="form-label">Tags (Optional)</label>
+              <Multiselect
+                v-model="selectedTags"
+                :options="allTags"
+                :multiple="true"
+                :close-on-select="false"
+                :clear-on-select="false"
+                :preserve-search="true"
+                placeholder="Select tag..."
+                :taggable="true"
+                @tag="handleTagCreate"
+                class="multiselect-custom"
+                label="name"
+                track-by="id"
+              />
+              <div class="input-info">
+                <span v-if="tagError" class="error-message">{{ tagError }}</span>
+                <span v-else class="help-text">Select one or many tags to help others find your request</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -267,6 +290,8 @@
 import { ref, computed, onMounted, defineEmits } from 'vue'
 import axios from 'axios'
 import { useToast } from 'primevue/usetoast'
+import Multiselect from 'vue-multiselect'
+import 'vue-multiselect/dist/vue-multiselect.min.css'
 
 const emit = defineEmits(['success', 'cancel'])
 
@@ -297,6 +322,13 @@ const currentUserId = ref(null)
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const userEmail = ref('')
+
+// Tags handling
+const selectedTags = ref([])
+const tagInput = ref('')
+
+const allTags = ref([])
+const tagError = ref('')
 
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
 
@@ -373,6 +405,13 @@ onMounted(async () => {
     categories.value = categoriesRes.data
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch categories', life: 3000 })
+  }
+
+  try {
+    const tagsRes = await axios.get('/api/project-tag/all')
+    allTags.value = tagsRes.data
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch tags', life: 3000 })
   }
 
   const storedId = localStorage.getItem('userId')
@@ -473,7 +512,8 @@ async function handleSubmit() {
       dealAmount: dealAmount.value,
       deadline: deadline.value,
       isPublic: Boolean(isPublic),
-      categoryId: categoryId.value
+      categoryId: categoryId.value,
+      tags: selectedTags.value.map(tag => tag.name)
     }
 
     // Only add assigneeId if it's defined
@@ -500,6 +540,37 @@ async function handleSubmit() {
 
 function onCancel() {
   emit('cancel')
+}
+
+// Tag handling methods
+function addTag() {
+  const tag = tagInput.value.trim()
+  if (tag && !selectedTags.value.includes(tag)) {
+    selectedTags.value.push(tag)
+    tagInput.value = ''
+  }
+}
+
+function removeTag(index) {
+  selectedTags.value.splice(index, 1)
+}
+
+function validateTags() {
+  if (selectedTags.value.length > 10) {
+    tagError.value = 'You can only select up to 10 tags'
+    return false
+  }
+  tagError.value = ''
+  return true
+}
+
+function handleTagCreate(newTagName) {
+  // Nếu tag chưa tồn tại, thêm vào allTags và chọn luôn
+  if (!allTags.value.some(tag => tag.name === newTagName)) {
+    const newTag = { id: `new-${Date.now()}`, name: newTagName }
+    allTags.value.push(newTag)
+    selectedTags.value.push(newTag)
+  }
 }
 </script>
 
@@ -1018,6 +1089,120 @@ textarea.form-control {
 
   .section-subtitle {
     font-size: 0.875rem;
+  }
+}
+
+/* Tags Input Styles */
+.tags-input-wrapper {
+  position: relative;
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+}
+
+.tags-input-container {
+  width: 100%;
+  min-height: 48px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background-color: #f9fafb;
+  padding: 0.5rem;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+}
+
+.tags-input-container:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background-color: white;
+  transform: translateY(-1px);
+}
+
+.tags-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  flex: 1;
+  min-height: 32px;
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  transition: all 0.3s ease;
+}
+
+.tag-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  transition: all 0.3s ease;
+}
+
+.tag-remove:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.tag-remove:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.tag-input {
+  flex: 1;
+  min-width: 120px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1rem;
+  color: #374151;
+  font-weight: 500;
+  padding: 0.5rem;
+}
+
+.tag-input::placeholder {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* Responsive adjustments for tags */
+@media (max-width: 768px) {
+  .tags-display {
+    gap: 0.25rem;
+  }
+
+  .tag-badge {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.6rem;
+  }
+
+  .tag-input {
+    min-width: 100px;
+    font-size: 0.9rem;
   }
 }
 </style>

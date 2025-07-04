@@ -4,6 +4,7 @@ import {
   RequestEntity,
   RequestStatus,
   UserEntity,
+  ProjectTagEntity,
 } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
@@ -28,6 +29,8 @@ export class RequestManagerService {
     @InjectRepository(ProjectEntity)
     @InjectRepository(CategoryEntity)
     private readonly categoryRepository: Repository<CategoryEntity>,
+    @InjectRepository(ProjectTagEntity)
+    private readonly projectTagRepository: Repository<ProjectTagEntity>,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
     private readonly paymentService: PaypalService
@@ -131,11 +134,14 @@ export class RequestManagerService {
         'project.id',
         'project.name',
         'category.name',
+        'tags.id',
+        'tags.name',
       ])
       .where('requester.id = :uid', { uid: BigInt(uid) })
       .leftJoin('requests.requester', 'requester')
       .leftJoin('requests.project', 'project')
-      .leftJoin('requests.category', 'category');
+      .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.tags', 'tags');
 
     return await queryBuilder.getMany();
   }
@@ -157,10 +163,13 @@ export class RequestManagerService {
         'requester.email',
         'requester.phone',
         'category.name',
+        'tags.id',
+        'tags.name',
       ])
       .where('requests.isPublic = true')
       .leftJoin('requests.requester', 'requester')
       .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.tags', 'tags')
       .leftJoinAndSelect('requests.registrants', 'registrants');
 
     const result = await query.getMany();
@@ -192,11 +201,14 @@ export class RequestManagerService {
         'requester.email',
         'requester.phone',
         'category.name',
+        'tags.id',
+        'tags.name',
       ])
       .where('requests.isPublic = false')
       .andWhere('assigneeId = :uid', { uid: BigInt(uid) })
       .leftJoin('requests.requester', 'requester')
-      .leftJoin('requests.category', 'category');
+      .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.tags', 'tags');
     const result = await query.getMany();
     if (!result || result.length === 0) {
       throw new NotFoundException('You have no request');
@@ -226,11 +238,14 @@ export class RequestManagerService {
         'assignee.email',
         'assignee.phone',
         'category.name',
+        'tags.id',
+        'tags.name',
       ])
       .where('requests.id = :requestId', { requestId: requestId })
       .leftJoin('requests.requester', 'requester')
       .leftJoin('requests.assignee', 'assignee')
       .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.tags', 'tags')
       .leftJoinAndSelect('requests.registrants', 'registrants');
 
     const request = await query.getOne();
@@ -246,15 +261,15 @@ export class RequestManagerService {
     requestId: bigint,
     data: Partial<UpdateRequestDto>
   ) {
-    const { title, description, dealAmount, deadline, categoryId } = data;
+    const { title, description, dealAmount, deadline, categoryId, tags } = data;
 
-    if (!title && !description && !dealAmount && !deadline && !categoryId) {
+    if (!title && !description && !dealAmount && !deadline && !categoryId && !tags) {
       throw new BadRequestException(`No fields to update`);
     }
 
     const request = await this.requestRepository.findOne({
       where: { id: BigInt(requestId) },
-      relations: ['requester', 'category'],
+      relations: ['requester', 'category', 'tags'],
     });
 
     if (!request) {
@@ -291,6 +306,22 @@ export class RequestManagerService {
         throw new BadRequestException(`Category not found`);
       }
       request.category = category;
+    }
+
+    // Handle tags update
+    if (tags !== undefined) {
+      const requestTags: Array<Partial<ProjectTagEntity>> = [];
+      for (const tag of tags) {
+        const existingTag = await this.projectTagRepository.findOne({ where: { name: tag } });
+        if (existingTag) {
+          requestTags.push({ id: existingTag.id });
+        } else {
+          const newTag = this.projectTagRepository.create({ name: tag });
+          const savedTag = await this.projectTagRepository.save(newTag);
+          requestTags.push({ id: savedTag.id });
+        }
+      }
+      request.tags = requestTags;
     }
 
     return this.requestRepository.save(request);

@@ -501,11 +501,13 @@ const loadUsers = async () => {
 
     users.value = response;
 
-    // Check if current user is super admin (fix: check role.name or id)
+    // Check if current user is super admin (fix: check role.name or id, hoặc role là string/number)
     const currentUser = authService.getUser();
     isSuperAdmin.value =
-      currentUser?.role?.name?.toLowerCase() === 'super_admin' ||
-      currentUser?.role?.id === 1;
+      (currentUser?.role?.name && currentUser.role.name.toLowerCase() === 'super_admin') ||
+      currentUser?.role?.id == 1 ||
+      currentUser?.role == 1 ||
+      currentUser?.role == '1';
     console.log('isSuperAdmin:', isSuperAdmin.value, 'currentUser:', currentUser);
 
     toast.add({

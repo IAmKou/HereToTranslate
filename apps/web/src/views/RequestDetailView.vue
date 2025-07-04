@@ -42,6 +42,17 @@
                   <span class="overview-value">{{ request?.category?.name || 'N/A' }}</span>
                 </div>
                 <div class="overview-row">
+                  <span class="overview-label">Tags</span>
+                  <span class="overview-value">
+                    <template v-if="request?.tags && request.tags.length">
+                      <span v-for="tag in request.tags" :key="tag.id" class="tag-badge">{{ tag.name }}</span>
+                    </template>
+                    <template v-else>
+                      N/A
+                    </template>
+                  </span>
+                </div>
+                <div class="overview-row">
                   <span class="overview-label">Created At</span>
                   <span class="overview-value">{{ formatDate(request?.createdAt) }}</span>
                 </div>
@@ -86,7 +97,7 @@
               </div>
             </div>
             <!-- Assigned Translator Card (only if exists) -->
-            <div v-if="request && request.isPublic === false" class="info-card">
+            <div v-if="request && request.assignee" class="info-card">
               <div class="info-card-title">Assigned Translator</div>
               <div class="requester-block">
                 <Avatar :image="request.assignee?.avatar" :label="getInitial(request.assignee?.username)" shape="circle" size="large" />
@@ -123,15 +134,14 @@
                   <i class="pi pi-envelope"></i> Contact Requester
                 </button>
                 <button
-                  v-if="request && request.requester && userId !== null && request.requester.id === userId"
+                  v-if="request && request.requester && userId !== null && request.requester.id === userId && !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.status)"
                   class="action-btn edit"
-                  :disabled="!canEdit"
                   @click="showEdit = true"
                 >
                   <i class="pi pi-pencil"></i> Edit Request
                 </button>
                 <button
-                  v-if="request && request.requester && userId !== null && request.requester.id === userId"
+                  v-if="request && request.requester && userId !== null && request.requester.id === userId && !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.status)"
                   class="action-btn danger"
                   @click="cancelRequest"
                 >
@@ -287,7 +297,16 @@ function contactRequester() {
   }
 }
 // const userStore = useUserStore();
-const canEdit = computed(() => true); // Sửa lại logic quyền nếu có userStore
+const canEdit = computed(() => {
+  // Chỉ cho phép sửa nếu là requester và trạng thái KHÔNG phải là APPROVED, CANCELLED, COMPLETED
+  return (
+    request.value &&
+    request.value.requester &&
+    userId.value !== null &&
+    request.value.requester.id === userId.value &&
+    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.value.status)
+  );
+});
 const canContact = computed(() => !!request.value?.assignee && request.value?.requester?.id !== userId.value);
 
 function onRequestUpdated() {
@@ -625,6 +644,16 @@ onMounted(async () => {
 .action-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.tag-badge {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 8px;
+  padding: 2px 10px;
+  margin-right: 6px;
+  font-size: 13px;
+  font-weight: 500;
 }
 @media (max-width: 1100px) {
   .request-detail-grid {

@@ -20,9 +20,16 @@ onMounted(async () => {
     return;
   }
   try {
-    await axiosInstance.post('/paypal/capture', { orderId });
-    alert('Thanh toán thành công!');
-    router.push('/projects');
+    const res = await axiosInstance.post('/payment/paypal/capture', { orderId });
+    // Ưu tiên redirect về trang chi tiết request nếu có
+    if (res.data && res.data.requestId) {
+      router.push({ name: 'request-detail', params: { requestId: res.data.requestId } });
+    } else if (res.data && res.data.projectId) {
+      router.push(`/projects/${res.data.projectId}`);
+    } else {
+      alert('Thanh toán thành công!');
+      router.push('/');
+    }
   } catch (e) {
     alert('Có lỗi khi xác nhận thanh toán!');
     router.push('/');

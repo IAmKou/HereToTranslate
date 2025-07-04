@@ -114,7 +114,7 @@ async function approveRegistrant(userId: number) {
       alert('Registrant approved successfully! PayPal payment link has been opened.');
 
       // Có thể redirect về trang request detail hoặc refresh danh sách
-      router.push(`/requests/${requestId}/detail`);
+      router.push({ name: 'request-detail', params: { requestId } });
     }
   } catch (error: any) {
     console.error('Error approving registrant:', error);

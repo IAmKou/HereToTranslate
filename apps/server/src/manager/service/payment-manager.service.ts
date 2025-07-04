@@ -79,6 +79,7 @@ export class PaypalService {
     const accessToken = await this.getAccessToken();
 
     try {
+      const baseUrl = process.env.BASE_URL || 'http://localhost:4200';
       const res = await axios.post(
         `${this.api}/v2/checkout/orders`,
         {
@@ -93,8 +94,8 @@ export class PaypalService {
             },
           ],
           application_context: {
-            return_url: `https://your-site.com/paypal/success`,
-            cancel_url: `https://your-site.com/paypal/cancel`,
+            return_url: `${baseUrl}/paypal/success`,
+            cancel_url: `${baseUrl}/paypal/cancel`,
           },
         },
         {
@@ -143,7 +144,7 @@ export class PaypalService {
 
   async capturePaymentAndCreateProject(
     orderId: string
-  ): Promise<{ success: boolean; projectId?: bigint }> {
+  ): Promise<{ success: boolean; projectId?: bigint; requestId?: bigint }> {
     const accessToken = await this.getAccessToken();
 
     try {
@@ -166,7 +167,7 @@ export class PaypalService {
 
       const transaction = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
-        relations: ['user', 'request'],
+        relations: ['user', 'request', 'request.registrants', 'request.category'],
       });
 
       const { user: selectedUser, request } = transaction;
@@ -180,15 +181,19 @@ export class PaypalService {
       await queryRunner.startTransaction();
 
       try {
+        const createProjectDto: any = {
+          name: request.title,
+          description: request.description,
+          isPrivate: true,
+          tags: [],
+        };
+        if (request.category?.id) {
+          createProjectDto.categoryId = request.category.id.toString();
+        }
+        console.log('createProjectDto:', createProjectDto);
         const createResult = await this.projectService.createProject(
           selectedUser.id,
-          {
-            name: request.title,
-            description: request.description,
-            isPrivate: true,
-            tags: [],
-            categoryId: request.category?.id?.toString() ?? '',
-          }
+          createProjectDto
         );
 
         const newProject = await this.projectRepository.findOneOrFail({
@@ -213,7 +218,7 @@ export class PaypalService {
 
         await queryRunner.commitTransaction();
 
-        return { success: true, projectId: newProject.id };
+        return { success: true, projectId: newProject.id, requestId: request.id };
       } catch (err) {
         await queryRunner.rollbackTransaction();
         console.error('Project creation failed:', err);
@@ -421,4 +426,3 @@ export class PaypalService {
     }
   }
 }
-

@@ -1,13 +1,10 @@
 <template>
   <nav class="navbar">
     <div class="navbar-container">
-      <!-- Brand Section with Logo -->
       <div class="navbar-brand">
-
         <span v-if="currentUser" class="username">{{ currentUser.username }}</span>
         <span v-else class="username">Guest</span>
       </div>
-
       <div class="navbar-menu">
         <div class="navbar-start">
           <router-link to="/" class="navbar-item" aria-label="Home">
@@ -19,9 +16,7 @@
           <router-link to="/translate" class="navbar-item" aria-label="Translate">
             <i class="pi pi-globe nav-icon"></i> Translate
           </router-link>
-
         </div>
-
         <div class="navbar-end">
           <div class="navbar-item" v-if="!currentUser">
             <router-link to="/login" class="button is-primary">Sign In</router-link>
@@ -187,16 +182,16 @@ onMounted(() => {
 }
 
 .navbar-container {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   padding: 0 24px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   height: 64px;
 }
 
 .navbar-brand {
+  padding-left: 10rem;
   display: flex;
   align-items: center;
   gap: 1.5rem;
@@ -227,6 +222,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 2.5rem;
+  margin-left: auto;
 }
 
 .navbar-start {

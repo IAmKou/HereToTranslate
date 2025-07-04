@@ -424,6 +424,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
+      relations: ['defaultBranch'],
     });
 
     if (!project) {
@@ -431,14 +432,20 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException(`Unknown project`);
     }
 
+    const repoName = `project-${projectId}`;
+
     try {
+      await this.githubService.deleteRepository(repoName);
+
       await this.projectRepository.remove(project);
-      this.logger.debug(`Project [${projectId}] deleted successfully`);
+
+      this.logger.debug(`Project [${projectId}] and repo deleted successfully`);
       return { message: `Project deleted successfully` };
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to delete project');
     }
   }
+
 
   async findUserToProject(
     projectId: bigint,

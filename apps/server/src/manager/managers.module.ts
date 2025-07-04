@@ -8,7 +8,8 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
-  UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity
+  UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity,
+  BranchEntity,CommitEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -60,7 +61,9 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
       AuthEntity,
       TransactionEntity,
       WalletEntity,
-      TranslationApprovalEntity
+      TranslationApprovalEntity,
+      BranchEntity,
+      CommitEntity,
     ])
   ],
   providers: [
@@ -92,7 +95,6 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
     PaypalService,
     WalletManagerService,
     GitHubService,
-
   ],
   controllers: [
     CategoryController,

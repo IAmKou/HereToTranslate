@@ -32,9 +32,11 @@
         },
         "configurations": {
           "development": {
+            "args": ["node-options=--experimental-require-module"],
             "buildTarget": "@here-to-translate/server:build:development"
           },
           "production": {
+            "args": ["node-options=--experimental-require-module"],
             "buildTarget": "@here-to-translate/server:build:production"
           }
         }

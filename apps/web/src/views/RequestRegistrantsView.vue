@@ -46,12 +46,53 @@
                   <a :href="`tel:${user.phone}`">{{ user.phone }}</a>
                 </div>
               </div>
+              <div class="candidate-actions">
+                <Button
+                  :label="approvingUser === user.id ? 'Approving...' : 'Approve'"
+                  :icon="approvingUser === user.id ? 'pi pi-spinner pi-spin' : 'pi pi-check'"
+                  :disabled="approvingUser !== null"
+                  class="approve-btn"
+                  @click="approveRegistrant(user.id)"
+                />
+              </div>
             </div>
           </transition-group>
         </div>
       </div>
     </div>
     <Footer />
+    <div v-if="showConfirmDialog" class="custom-modal-approve">
+      <div class="modal-overlay" @click="showConfirmDialog = false"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-icon">
+            <i class="pi pi-question-circle"></i>
+          </div>
+          <button class="close-btn" @click="showConfirmDialog = false">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <h3 class="modal-title">Approve this registrant?</h3>
+          <div class="modal-desc">You are about to approve this candidate and proceed to PayPal payment. This action cannot be undone.</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-cancel" @click="showConfirmDialog = false">Cancel</button>
+          <button class="btn btn-confirm" :disabled="approvingUser !== null" @click="confirmApproveRegistrant">
+            <span v-if="approvingUser !== null" class="loading-spinner"></span>
+            {{ approvingUser !== null ? 'Processing...' : 'Confirm' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    <Dialog v-model:visible="showDialog" :modal="true" :closable="true" :header="dialogType === 'error' ? 'Error' : 'Notification'" :style="{ width: '350px' }">
+      <div :style="{ color: dialogType === 'error' ? '#ef4444' : '#22c55e', 'font-weight': '600', 'font-size': '16px', 'text-align': 'center' }">
+        {{ dialogMessage }}
+      </div>
+      <template #footer>
+        <Button label="OK" @click="showDialog = false" autofocus />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -65,6 +106,7 @@ import Button from 'primevue/button';
 import Avatar from 'primevue/avatar';
 import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
+import Dialog from 'primevue/dialog';
 
 interface UserInfo {
   id: number;
@@ -79,6 +121,14 @@ const route = useRoute();
 const router = useRouter();
 const registrants = ref<UserInfo[]>([]);
 const loading = ref(false);
+const approvingUser = ref<number | null>(null);
+const showDialog = ref(false);
+const dialogMessage = ref('');
+const dialogType = ref<'success' | 'error'>('success');
+const showConfirmDialog = ref(false);
+const confirmDialogTitle = ref('');
+const confirmDialogDesc = ref('');
+const pendingApproveUserId = ref<number | null>(null);
 
 function getInitial(name: string | undefined) {
   return name ? name.charAt(0).toUpperCase() : '?';
@@ -86,6 +136,41 @@ function getInitial(name: string | undefined) {
 
 function goBack() {
   router.back();
+}
+
+function approveRegistrant(userId: number) {
+  if (approvingUser.value !== null) return;
+  confirmDialogTitle.value = 'Approve this registrant?';
+  confirmDialogDesc.value = 'You are about to approve this candidate and proceed to PayPal payment. This action cannot be undone.';
+  pendingApproveUserId.value = userId;
+  showConfirmDialog.value = true;
+}
+
+async function confirmApproveRegistrant() {
+  if (approvingUser.value !== null || pendingApproveUserId.value === null) return;
+  showConfirmDialog.value = false;
+  const userId = pendingApproveUserId.value;
+  approvingUser.value = userId;
+  try {
+    const requestId = route.params.requestId;
+    const response = await axiosInstance.post(`/requests/${requestId}/approve/${userId}`);
+    if (response.data && response.data.approvalUrl) {
+      window.location.href = response.data.approvalUrl;
+    } else {
+      dialogType.value = 'error';
+      dialogMessage.value = 'No PayPal approval URL returned. Please try again or contact support.';
+      showDialog.value = true;
+    }
+  } catch (error: any) {
+    console.error('Error approving registrant:', error);
+    const errorMessage = error.response?.data?.message || 'Failed to approve registrant';
+    dialogType.value = 'error';
+    dialogMessage.value = errorMessage;
+    showDialog.value = true;
+  } finally {
+    approvingUser.value = null;
+    pendingApproveUserId.value = null;
+  }
 }
 
 onMounted(async () => {
@@ -225,7 +310,7 @@ onMounted(async () => {
   box-shadow: 0 2px 12px rgba(59,130,246,0.10);
   transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
   min-width: 340px;
-  max-width: 420px;
+  max-width: 520px;
   width: 100%;
 }
 .candidate-card:hover {
@@ -245,6 +330,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
 }
 .candidate-name {
   font-size: 20px;
@@ -272,6 +358,33 @@ onMounted(async () => {
 }
 .candidate-email i, .candidate-phone i {
   color: #64748b;
+}
+.candidate-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.approve-btn {
+  background: #22c55e !important;
+  border: none !important;
+  color: white !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  transition: all 0.2s !important;
+  min-width: 100px !important;
+}
+.approve-btn:hover:not(:disabled) {
+  background: #16a34a !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+}
+.approve-btn:disabled {
+  background: #94a3b8 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
 .page-title {
   font-size: 28px;
@@ -325,5 +438,165 @@ onMounted(async () => {
     min-width: unset;
     padding: 32px 8px 24px 8px;
   }
+  .candidate-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+    padding: 24px 20px;
+  }
+  .candidate-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  .approve-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+.custom-modal-approve {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.custom-modal-approve .modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+.custom-modal-approve .modal-content {
+  background: #fff;
+  border-radius: 24px;
+  width: 95%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 16px 64px 0 rgba(59,130,246,0.18);
+  padding: 0 0 24px 0;
+  animation: modalIn 0.18s cubic-bezier(.4,0,.2,1);
+}
+@keyframes modalIn {
+  0% { transform: scale(0.95) translateY(40px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.custom-modal-approve .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 32px 32px 0 32px;
+  border-bottom: none;
+}
+.custom-modal-approve .modal-icon {
+  background: linear-gradient(180deg,#e0e7ff 0%,#fff 100%);
+  box-shadow: 0 4px 24px 0 rgba(59,130,246,0.10);
+  border-radius: 50%;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.7rem;
+  color: #2563eb;
+  margin-bottom: -24px;
+  margin-top: -24px;
+  border: 4px solid #fff;
+  position: relative;
+  z-index: 2;
+}
+.custom-modal-approve .close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+.custom-modal-approve .close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+.custom-modal-approve .modal-body {
+  padding: 0 32px 0 32px;
+  text-align: center;
+}
+.custom-modal-approve .modal-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #1e293b;
+  margin-bottom: 10px;
+  margin-top: 18px;
+}
+.custom-modal-approve .modal-desc {
+  font-size: 1.08rem;
+  color: #64748b;
+  margin-bottom: 28px;
+  line-height: 1.7;
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.custom-modal-approve .modal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 10px;
+  padding: 0 32px;
+}
+.custom-modal-approve .btn {
+  min-width: 130px;
+  font-size: 1.08rem;
+  font-weight: 700;
+  border-radius: 14px;
+  height: 48px;
+  outline: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border 0.2s;
+}
+.custom-modal-approve .btn-cancel {
+  background: #fff;
+  color: #222;
+  border: 2px solid #222;
+}
+.custom-modal-approve .btn-cancel:hover {
+  background: #f1f5f9;
+  color: #111;
+}
+.custom-modal-approve .btn-confirm {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 8px 0 rgba(59,130,246,0.10);
+}
+.custom-modal-approve .btn-confirm:hover {
+  background: #1746a2;
+  color: #fff;
+}
+.custom-modal-approve .loading-spinner {
+  border: 3px solid #e0e7ff;
+  border-top: 3px solid #2563eb;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
 }
 </style>

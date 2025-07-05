@@ -5,6 +5,7 @@ export interface ICreateRequestDto {
   description: string;
   dealAmount: number;
   deadline: Date;
+  tags?: string[];
 }
 
 export type IUpdateRequestDto = Partial<

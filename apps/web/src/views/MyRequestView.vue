@@ -112,14 +112,14 @@
                       </span>
                     </td>
                     <td class="actions">
-                      <button @click="onCancel(req)" class="btn btn-small btn-danger">
+                      <button @click="onCancel(req)" class="btn btn-small btn-danger" v-if="!req.project">
                         <i class="pi pi-times"></i>
                       </button>
-                      <button v-if="canReview(req)" @click="onReview(req)" class="btn btn-small btn-primary">
+                      <button v-if="canReview(req) && !req.project" @click="onReview(req)" class="btn btn-small btn-primary">
                         <i class="pi pi-eye"></i>
                       </button>
                       <router-link
-                        v-if="req.isPublic"
+                        v-if="req.isPublic && !req.project"
                         :to="{ name: 'request-registrants', params: { requestId: req.id } }"
                         class="btn btn-small btn-candidate"
                         :class="{ disabled: req.registrantCount === 0 }"

@@ -8,10 +8,10 @@ export class FileEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'CASCADE' })
   project: ProjectEntity;
 
-  @ManyToOne(() => BranchEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => BranchEntity, { nullable: true, onDelete: 'CASCADE' })
   branch: BranchEntity;
 
   @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })

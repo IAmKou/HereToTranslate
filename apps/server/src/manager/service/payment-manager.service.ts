@@ -18,7 +18,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { MailService } from '../../mailer/mailer.service';
-import { TranslationApprovalEntity } from '../../db/mysql/entity/translation-approval.entity';
+import { TranslationApprovalEntity } from '#LocalProject/Entities';
 import { WalletManagerService } from './wallet-manager.service';
 
 @Injectable()
@@ -75,11 +75,18 @@ export class PaypalService {
     amount: number,
     user: UserEntity,
     request: RequestEntity
-  ): Promise<string | null> {
+  ): Promise<string> {
+    const parsedAmount =
+      typeof amount === 'number' ? amount : parseFloat(amount as any);
+
+    if (isNaN(parsedAmount)) {
+      throw new BadRequestException('Invalid amount for PayPal deposit');
+    }
+
     const accessToken = await this.getAccessToken();
 
     try {
-      const res = await axios.post(
+      const { data } = await axios.post(
         `${this.api}/v2/checkout/orders`,
         {
           intent: 'CAPTURE',
@@ -87,14 +94,14 @@ export class PaypalService {
             {
               amount: {
                 currency_code: 'USD',
-                value: amount.toFixed(2),
+                value: parsedAmount.toFixed(2),
               },
               description: `Deposit for request ID ${request.id}`,
             },
           ],
           application_context: {
-            return_url: `https://your-site.com/paypal/success`,
-            cancel_url: `https://your-site.com/paypal/cancel`,
+            return_url: `https://localhost:4200/paypal/success`,
+            cancel_url: `https://localhost:4200/paypal/cancel`,
           },
         },
         {
@@ -105,45 +112,53 @@ export class PaypalService {
         }
       );
 
-      const orderId = res.data.id;
+      const approvalUrl = data.links?.find(
+        (link: { rel: string }) => link.rel === 'approve'
+      )?.href;
+
+      if (!approvalUrl) {
+        throw new InternalServerErrorException('No approval URL returned by PayPal.');
+      }
 
       // Save transaction
       await this.transactionRepo.save({
         user,
         request,
-        amount,
+        amount: parsedAmount,
         status: TransactionStatus.Pending,
-        paypalOrderId: orderId,
+        paypalOrderId: data.id,
       });
-      type PaypalLink = {
-        href: string;
-        rel: 'approve' | 'self' | 'capture' | string;
-        method: 'GET' | 'POST' | string;
-      };
-      const approvalLink = (res.data.links as PaypalLink[]).find(
-        (link: PaypalLink) => link.rel === 'approve'
-      )?.href;
-      return approvalLink || null;
+
+      return approvalUrl;
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        const status = err.response?.status;
-        const data = err.response?.data;
-
-        console.error('PayPal API error:');
-        console.error('Status:', status);
-        console.error('Data:', JSON.stringify(data, null, 2));
-        console.error('Message:', err.message);
+        console.error('PayPal API error:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+        });
       } else {
         console.error('Unexpected error:', err);
       }
 
-      return null;
+      throw new InternalServerErrorException('Failed to create PayPal deposit');
     }
   }
 
   async capturePaymentAndCreateProject(
     orderId: string
-  ): Promise<{ success: boolean; projectId?: bigint }> {
+  ): Promise<{
+    success: boolean;
+    projectId?: bigint;
+    requestId?: bigint;
+    amount?: number;
+    currency?: string;
+    payerEmail?: string;
+    receiver?: string;
+    date?: Date;
+    description?: string;
+    error?: string;
+  }> {
     const accessToken = await this.getAccessToken();
 
     try {
@@ -166,7 +181,7 @@ export class PaypalService {
 
       const transaction = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
-        relations: ['user', 'request'],
+        relations: ['user', 'request', 'request.registrants', 'request.category'],
       });
 
       const { user: selectedUser, request } = transaction;
@@ -180,15 +195,19 @@ export class PaypalService {
       await queryRunner.startTransaction();
 
       try {
+        const createProjectDto: any = {
+          name: request.title,
+          description: request.description,
+          isPrivate: true,
+          tags: [],
+        };
+        if (request.category?.id) {
+          createProjectDto.categoryId = request.category.id.toString();
+        }
+        console.log('createProjectDto:', createProjectDto);
         const createResult = await this.projectService.createProject(
           selectedUser.id,
-          {
-            name: request.title,
-            description: request.description,
-            isPrivate: true,
-            tags: [],
-            categoryId: request.category?.id?.toString() ?? '',
-          }
+          createProjectDto
         );
 
         const newProject = await this.projectRepository.findOneOrFail({
@@ -213,17 +232,30 @@ export class PaypalService {
 
         await queryRunner.commitTransaction();
 
-        return { success: true, projectId: newProject.id };
+        return {
+          success: true,
+          projectId: newProject.id,
+          requestId: request.id,
+          amount: transaction.amount,
+          currency: 'USD',
+          payerEmail: transaction.user?.email,
+          receiver: request.assignee?.fullName || request.assignee?.email,
+          date: transaction.createdAt,
+          description: request.description,
+        };
       } catch (err) {
         await queryRunner.rollbackTransaction();
         console.error('Project creation failed:', err);
-        return { success: false };
+        if (err instanceof Error) {
+          console.error('Error stack:', err.stack);
+        }
+        return { success: false, error: (err as any)?.message || 'Project creation failed' };
       } finally {
         await queryRunner.release();
       }
     } catch (err) {
       console.error('PayPal capture failed:', err);
-      return { success: false };
+      return { success: false, error: (err as any)?.message || 'PayPal capture failed' };
     }
   }
 
@@ -421,3 +453,4 @@ export class PaypalService {
     }
   }
 }
+

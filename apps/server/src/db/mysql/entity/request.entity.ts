@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, Ma
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 import { CategoryEntity } from './category.entity';
+import { ProjectTagEntity } from './project-tag.entity';
 
 export enum RequestStatus {
   Cancelled = 'CANCELLED',
@@ -56,4 +57,11 @@ export class RequestEntity {
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   assignee: UserEntity;
+
+  @ManyToMany(() => ProjectTagEntity, { cascade: true })
+  @JoinTable({
+    joinColumn: { name: 'requestId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'tagId', referencedColumnName: 'id' }
+  })
+  tags: ProjectTagEntity[];
 }

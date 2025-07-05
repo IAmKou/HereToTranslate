@@ -13,9 +13,7 @@
           <router-link to="/projects" class="navbar-item" aria-label="Projects">
             <i class="pi pi-briefcase nav-icon"></i> Projects
           </router-link>
-          <router-link to="/translate" class="navbar-item" aria-label="Translate">
-            <i class="pi pi-globe nav-icon"></i> Translate
-          </router-link>
+
         </div>
         <div class="navbar-end">
           <div class="navbar-item" v-if="!currentUser">

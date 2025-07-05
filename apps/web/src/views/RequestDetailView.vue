@@ -66,11 +66,29 @@
               </div>
             </div>
             <!-- Attached Files Card -->
-            <div v-if="request?.attachment" class="info-card">
-              <div class="info-card-title">Attached Files</div>
-              <div class="attached-file-row">
-                <Button icon="pi pi-paperclip" label="Download" @click="downloadFile(request.attachment)" class="p-button-text" />
-                <span class="file-name">{{ request.attachment.name }}</span>
+            <div v-if="request?.files && request.files.length > 0" class="info-card">
+              <div class="info-card-title">
+                <i class="pi pi-paperclip"></i>
+                Attached Files ({{ request.files.length }})
+              </div>
+              <div class="files-list">
+                <div v-for="file in request.files" :key="file.id" class="file-item">
+                  <div class="file-info">
+                    <div class="file-icon">
+                      <i class="pi pi-file"></i>
+                    </div>
+                    <div class="file-details">
+                      <span class="file-name">{{ file.fileName }}</span>
+                      <span class="file-size">{{ formatFileSize(file.fileSize) }}</span>
+                    </div>
+                  </div>
+                  <Button
+                    icon="pi pi-download"
+                    label="Download"
+                    @click="downloadFile(file)"
+                    class="p-button-text download-btn"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -219,6 +237,14 @@ interface AttachmentInfo {
   name: string;
   url: string;
 }
+
+interface FileInfo {
+  id: number;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  url?: string;
+}
 interface RequestDetail {
   id: number;
   title: string;
@@ -233,6 +259,7 @@ interface RequestDetail {
   category?: CategoryInfo;
   previewText?: string;
   attachment?: AttachmentInfo;
+  files?: FileInfo[];
   project?: any;
 }
 
@@ -259,6 +286,14 @@ function formatDate(date: string | Date) {
 function formatAmount(amount: number) {
   if (amount == null) return '-';
   return Number(amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 function formatStatus(status: string) {
   const statusMap: Record<string, string> = {
@@ -504,6 +539,70 @@ onMounted(async () => {
   color: #1e293b;
   font-size: 15px;
   font-weight: 500;
+}
+
+/* Files List Styles */
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.file-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.file-icon {
+  color: #64748b;
+  font-size: 1.2rem;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-name {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.file-size {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.download-btn {
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  min-width: auto !important;
 }
 .requester-block {
   display: flex;

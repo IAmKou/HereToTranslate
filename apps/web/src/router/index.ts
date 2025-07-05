@@ -148,8 +148,10 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
-      path: '/paypal/success',
-      component: () => import('../views/PaypalSuccessView.vue')
+      path: '/paypal-success',
+      name: 'paypal-success',
+      component: () => import('../views/PaypalSuccessView.vue'),
+      meta: { requiresAuth: false }
     },
   ],
 });

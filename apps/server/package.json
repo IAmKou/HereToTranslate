@@ -32,11 +32,15 @@
         },
         "configurations": {
           "development": {
-            "args": ["node-options=--experimental-require-module"],
+            "args": [
+              "node-options=--experimental-require-module"
+            ],
             "buildTarget": "@here-to-translate/server:build:development"
           },
           "production": {
-            "args": ["node-options=--experimental-require-module"],
+            "args": [
+              "node-options=--experimental-require-module"
+            ],
             "buildTarget": "@here-to-translate/server:build:production"
           }
         }
@@ -50,6 +54,8 @@
   },
   "dependencies": {
     "date-fns": "^4.1.0",
+    "docx-parser": "^0.2.1",
+    "pdf-parse": "^1.1.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
   }

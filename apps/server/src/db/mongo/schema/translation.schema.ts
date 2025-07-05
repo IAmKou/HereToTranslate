@@ -1,10 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
-export type TranslationDocument = Translation & Document;
+export type TranslationStringDocument = TranslationString & Document;
 
 @Schema({ timestamps: true })
-export class Translation {
+export class TranslationString {
   @Prop({ required: true })
   projectId: string;
 
@@ -15,19 +15,10 @@ export class Translation {
   fileId: string;
 
   @Prop({ required: true })
-  key: string;
-
-  @Prop({ required: true })
-  sourceText: string;
+  originalText: string;
 
   @Prop()
   translatedText?: string;
-
-  @Prop({ default: 'en' })
-  sourceLang: string;
-
-  @Prop({ default: 'vi' })
-  targetLang: string;
 }
 
-export const TranslationSchema = SchemaFactory.createForClass(Translation);
+export const TranslationStringSchema = SchemaFactory.createForClass(TranslationString);

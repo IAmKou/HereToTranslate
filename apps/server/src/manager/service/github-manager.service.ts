@@ -31,7 +31,9 @@ export class GitHubService {
   async createRepository(repoName: string, isPrivate = true) {
     const exists = await this.repoExists(repoName);
     if (exists) {
-      throw new BadRequestException('Tên project đã tồn tại trên GitHub. Vui lòng chọn tên khác.');
+      throw new BadRequestException(
+        'Tên project đã tồn tại trên GitHub. Vui lòng chọn tên khác.'
+      );
     }
     const res = await this.octokit.rest.repos.createForAuthenticatedUser({
       name: repoName,
@@ -42,12 +44,12 @@ export class GitHubService {
   }
 
   async pushInitialFile({
-                          repo,
-                          path,
-                          content,
-                          message,
-                          branch = 'main',
-                        }: {
+    repo,
+    path,
+    content,
+    message,
+    branch = 'main',
+  }: {
     repo: string;
     path: string;
     content: string;
@@ -79,5 +81,4 @@ export class GitHubService {
       }
     }
   }
-
 }

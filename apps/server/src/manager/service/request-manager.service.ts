@@ -308,7 +308,6 @@ export class RequestManagerService {
       request.category = category;
     }
 
-    // Handle tags update
     if (tags !== undefined) {
       const requestTags: Array<Partial<ProjectTagEntity>> = [];
       for (const tag of tags) {

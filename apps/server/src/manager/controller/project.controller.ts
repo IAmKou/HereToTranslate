@@ -61,6 +61,7 @@ export class ProjectController {
     @Body(ValidationPipe) projectUpdateData: UpdateProjectMetadataDto,
     @Req() req: AuthenticatedRequest
   ) {
+    console.log(projectUpdateData);
     return this.projects.updateProjectMetadata(
       req.user.id,
       projectId,

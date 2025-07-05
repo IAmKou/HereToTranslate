@@ -10,11 +10,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Like, Not, Repository } from 'typeorm';
 import {
   BranchEntity,
-  CategoryEntity, CommitEntity,
+  CategoryEntity,
+  CommitEntity,
   ProjectEntity,
   ProjectRoleEntity,
   ProjectTagEntity,
-  UserEntity
+  UserEntity,
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -40,7 +41,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     @InjectRepository(ProjectRoleEntity)
     private readonly projectRoleRepository: Repository<ProjectRoleEntity>,
     private readonly dataSource: DataSource,
-    private readonly githubService: GitHubService,
+    private readonly githubService: GitHubService
   ) {
     super();
   }
@@ -139,11 +140,16 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       // Handle tags
       const projectTags: Array<Partial<ProjectTagEntity>> = [];
       for (const tag of tags) {
-        const existingTag = await queryRunner.manager.findOne(ProjectTagEntity, { where: { name: tag } });
+        const existingTag = await queryRunner.manager.findOne(
+          ProjectTagEntity,
+          { where: { name: tag } }
+        );
         if (existingTag) {
           projectTags.push({ id: existingTag.id });
         } else {
-          const newTag = queryRunner.manager.create(ProjectTagEntity, { name: tag });
+          const newTag = queryRunner.manager.create(ProjectTagEntity, {
+            name: tag,
+          });
           const savedTag = await queryRunner.manager.save(newTag);
           projectTags.push({ id: savedTag.id });
         }
@@ -218,7 +224,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       await queryRunner.commitTransaction();
 
-      this.logger.debug(`Project created successfully with ID: ${savedProject.id}`);
+      this.logger.debug(
+        `Project created successfully with ID: ${savedProject.id}`
+      );
 
       return {
         message: 'Project created successfully',
@@ -235,10 +243,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.unknownErrorHanlder(error, 'Failed to create project');
     } finally {
       await queryRunner.release();
-
     }
   }
-
 
   async fetchAllUserProjects(userId: bigint): Promise<ProjectEntity[]> {
     const qb = this.projectRepository
@@ -396,7 +402,22 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       delete updateData.addTags;
       delete updateData.removeTags;
 
-      Object.assign(project, updateData, {
+      let category: CategoryEntity | undefined;
+      if (updateData.categoryId !== undefined) {
+        category = await queryRunner.manager.findOne(CategoryEntity, {
+          where: { id: BigInt(updateData.categoryId) },
+        });
+        if (!category) {
+          throw new BadRequestException(
+            `Category with ID ${updateData.categoryId} not found`
+          );
+        }
+      }
+      delete updateData.categoryId;
+
+      Object.assign(project, {
+        ...updateData,
+        category: category ?? project.category,
         tags: Array.from(newTags.entries()).map(([id, name]) => ({ id, name })),
       });
 
@@ -445,7 +466,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.unknownErrorHanlder(error, 'Failed to delete project');
     }
   }
-
 
   async findUserToProject(
     projectId: bigint,
@@ -512,7 +532,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     });
 
     if (memberRole) {
-      const existingUserIds = new Set(memberRole.users.map((u) => u.id.toString()));
+      const existingUserIds = new Set(
+        memberRole.users.map((u) => u.id.toString())
+      );
       if (!existingUserIds.has(user.id.toString())) {
         memberRole.users.push(user);
         await this.projectRoleRepository.save(memberRole);
@@ -523,7 +545,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     return updatedProject;
   }
-
 
   async getProjectMembers(projectId: bigint): Promise<
     {

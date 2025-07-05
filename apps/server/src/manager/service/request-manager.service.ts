@@ -180,7 +180,11 @@ export class RequestManagerService {
 
     return result.map((r: RequestEntity) => ({
       ...r,
-      isRegistered: r.registrants ? r.registrants.some((u: UserEntity) => u.id.toString() === userId.toString()) : false
+      isRegistered: r.registrants
+        ? r.registrants.some(
+            (u: UserEntity) => u.id.toString() === userId.toString()
+          )
+        : false,
     }));
   }
 
@@ -251,7 +255,9 @@ export class RequestManagerService {
     const request = await query.getOne();
     let isRegistered = false;
     if (request && request.registrants) {
-      isRegistered = request.registrants.some((u: UserEntity) => u.id.toString() === userId.toString());
+      isRegistered = request.registrants.some(
+        (u: UserEntity) => u.id.toString() === userId.toString()
+      );
     }
     return { ...request, isRegistered };
   }
@@ -263,7 +269,14 @@ export class RequestManagerService {
   ) {
     const { title, description, dealAmount, deadline, categoryId, tags } = data;
 
-    if (!title && !description && !dealAmount && !deadline && !categoryId && !tags) {
+    if (
+      !title &&
+      !description &&
+      !dealAmount &&
+      !deadline &&
+      !categoryId &&
+      !tags
+    ) {
       throw new BadRequestException(`No fields to update`);
     }
 
@@ -308,22 +321,24 @@ export class RequestManagerService {
       request.category = category;
     }
 
-    // Handle tags update
     if (tags !== undefined) {
-      const requestTags: Array<Partial<ProjectTagEntity>> = [];
+      const requestTags: ProjectTagEntity[] = [];
+
       for (const tag of tags) {
-        const existingTag = await this.projectTagRepository.findOne({ where: { name: tag } });
-        if (existingTag) {
-          requestTags.push({ id: existingTag.id });
-        } else {
+        let tagEntity = await this.projectTagRepository.findOne({
+          where: { name: tag },
+        });
+
+        if (!tagEntity) {
           const newTag = this.projectTagRepository.create({ name: tag });
-          const savedTag = await this.projectTagRepository.save(newTag);
-          requestTags.push({ id: savedTag.id });
+          tagEntity = await this.projectTagRepository.save(newTag);
         }
+
+        requestTags.push(tagEntity);
       }
+
       request.tags = requestTags;
     }
-
     return this.requestRepository.save(request);
   }
 
@@ -392,11 +407,10 @@ export class RequestManagerService {
 
     if (!request.registrants) request.registrants = [];
 
-    if (!request.registrants.some(u => u.id === register.id)) {
+    if (!request.registrants.some((u) => u.id === register.id)) {
       request.registrants.push(register);
       await this.requestRepository.save(request);
     }
-
 
     const requesterEmail = request.requester.email;
 
@@ -461,5 +475,4 @@ export class RequestManagerService {
     }
     return { approvalUrl };
   }
-
 }

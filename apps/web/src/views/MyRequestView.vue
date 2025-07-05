@@ -313,7 +313,7 @@ const currentAssignedPage = ref(1)
 const assignedItemsPerPage = ref(7)
 
 // Computed properties for counts
-const myRequestsCount = computed(() => myRequests.value.length)
+const myRequestsCount = computed(() => myRequests.value.filter(req => req.status !== 'CANCELLED').length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
 
 // Debug computed property

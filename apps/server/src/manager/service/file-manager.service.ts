@@ -3,8 +3,8 @@ import { Injectable } from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
-import type { Express } from 'express';
-import type { Multer } from 'multer';
+import  { Express } from 'express';
+import  { Multer } from 'multer';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 
 @Injectable()

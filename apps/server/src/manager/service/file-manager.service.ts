@@ -1,5 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BranchEntity, FileEntity, ProjectEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
@@ -16,7 +16,11 @@ export class FileService {
     private readonly githubService: GitHubService,
     private readonly translationService : TranslationService,
   ) {
+    this.logger = new Logger(FileService.name);
+    this.logger.log('FileService initialized');
   }
+  private readonly logger = new Logger(FileService.name);
+
   async saveFile(params: {
     uid: bigint;
     fileName: string;
@@ -25,6 +29,7 @@ export class FileService {
     projectId: bigint;
     branchId: bigint;
   }) {
+    this.logger.log('===DEBUG FILE NAME saveFile===');
     const { uid, fileName, fileType, fileContent, projectId, branchId } = params;
 
     const file = this.fileRepository.create({
@@ -36,22 +41,14 @@ export class FileService {
       branch: { id: branchId },
     });
 
-    console.log('FileEntity to be saved:', {
-      fileName,
-      fileType,
-      projectId,
-      branchId,
-      uploader: uid
-    });
+    this.logger.log(`Saving file: ${fileName}, type: ${fileType}, projectId: ${projectId}, branchId: ${branchId}, uploader: ${uid}`);
+    this.logger.log(`File content length: ${fileContent.length}`);
+    this.logger.log(`Raw fileName: ${fileName}`);
+    this.logger.log(`fileName (JSON): ${JSON.stringify(fileName)}`);
+    this.logger.log(`fileName (Buffer): ${Buffer.from(fileName, 'utf8').toString('hex')}`);
 
     const savedFile = await this.fileRepository.save(file);
-    const safeFileName = slugify(fileName, {
-      replacement: '_',
-      remove: /[*+~.()'"!:@\\/]/g,
-      lower: false,
-      strict: true,
-    });
-
+    const safeFileName = fileName.replace(/[\\/:*?"<>|]/g, '_');
     const timestamped = `${Date.now()}_${safeFileName}`;
     const repoName = `project-${projectId}`;
 
@@ -62,6 +59,9 @@ export class FileService {
       message: `Uploaded ${fileName}`,
     });
 
+    this.logger.log(`Saved FileEntity: ${JSON.stringify(savedFile)}`);
+    this.logger.log(`Pushed file to repo: ${repoName}, path: uploads/${timestamped}`);
+
     return savedFile;
   }
 
@@ -71,9 +71,10 @@ export class FileService {
     projectId: bigint,
     branchId: bigint,
   ) {
+    this.logger.log('===DEBUG FILE NAME handleUpload===');
     const saved = await this.saveFile({
       uid,
-      fileName: file.originalname,
+      fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
       fileType: file.mimetype,
       fileContent: file.buffer,
       projectId,
@@ -81,6 +82,8 @@ export class FileService {
     });
 
     await this.translationService.extractStrings(saved);
+    this.logger.log(`handleUpload called with file: ${file.originalname}, mimetype: ${file.mimetype}, size: ${file.size}`);
+    this.logger.log(`File uploaded and processed, fileId: ${saved.id}`);
     return { message: 'File uploaded and processed', fileId: saved.id };
   }
 

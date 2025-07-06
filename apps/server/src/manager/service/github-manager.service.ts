@@ -75,10 +75,11 @@ export class GitHubService {
       });
     } catch (err: any) {
       if (err.status === 404) {
-        // Repo not found, không cần log
+        throw new Error(`Repository ${repoName} not found on GitHub`);
       } else {
         throw new Error(`GitHub deletion failed: ${err.message}`);
       }
     }
   }
+
 }

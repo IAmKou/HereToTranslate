@@ -148,10 +148,7 @@
                   <span class="title-icon">📁</span>
                   Files
                 </h2>
-                <button @click="refreshFiles" class="btn btn-outline btn-sm">
-                  <span class="icon">🔄</span>
-                  Refresh
-                </button>
+
               </div>
               <div class="files-content">
                 <div v-if="filesLoading" class="files-loading">

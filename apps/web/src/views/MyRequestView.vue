@@ -38,7 +38,7 @@
               :class="['tab-button', { active: activeTab === 'assigned-requests' }]"
             >
               <span class="material-icons">assignment_ind</span>
-              Assigned to Me
+              Private Request Assign To You
               <span v-if="assignedRequestsCount > 0" class="badge">{{ assignedRequestsCount }}</span>
             </button>
           </div>

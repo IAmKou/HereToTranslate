@@ -26,10 +26,7 @@
                         <i class="pi pi-users stat-icon"></i>
                         <span>{{ projects.length }} Projects</span>
                       </div>
-                      <div class="stat-item">
-                        <i class="pi pi-clock stat-icon"></i>
-                        <span>Active collaboration</span>
-                      </div>
+
                     </div>
                   </div>
                 </div>

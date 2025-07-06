@@ -45,6 +45,8 @@
             <div class="input-info">
               <span class="char-count">{{ form.name.length }}/50</span>
               <span v-if="errors.name" class="error-message">{{ errors.name }}</span>
+              <span v-if="nameCheckLoading" class="help-text">Checking name...</span>
+              <span v-if="nameCheckError" class="error-message">{{ nameCheckError }}</span>
             </div>
           </div>
 
@@ -141,7 +143,7 @@
                   </div>
                   <div class="file-upload-text">
                     <p class="upload-title">Drop files here or click to browse</p>
-                    <p class="upload-subtitle">Support: PDF, DOC, DOCX, TXT, RTF (Max 10MB each) - At least one file is required</p>
+                    <p class="upload-subtitle">Support: PDF, DOC, DOCX, TXT, RTF - At least one file is required</p>
                   </div>
                 </div>
                 <input
@@ -224,11 +226,7 @@
                   {{ category.name }}
                 </option>
               </select>
-              <div class="select-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
+
             </div>
             <div class="input-info">
               <span v-if="errors.categoryId" class="error-message">{{ errors.categoryId }}</span>
@@ -255,11 +253,22 @@
         </div>
       </form>
     </div>
+    <div v-if="showLoadingOverlay" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Creating project, please wait...</div>
+    </div>
+    <div v-if="showSuccessScreen" class="success-screen">
+      <div class="success-card">
+        <div class="success-icon">🎉</div>
+        <h2>Project Created Successfully!</h2>
+        <p>Your project has been created. Redirecting to your projects...</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
 import InputSwitch from 'primevue/inputswitch'
@@ -312,6 +321,13 @@ const uploadedFiles = ref<File[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const isDragOver = ref(false)
 const fileError = ref('')
+
+const showLoadingOverlay = ref(false)
+const showSuccessScreen = ref(false)
+
+const nameExists = ref(false)
+const nameCheckLoading = ref(false)
+const nameCheckError = ref('')
 
 // Validation functions
 const validateName = () => {
@@ -473,7 +489,8 @@ const isFormValid = computed(() => {
     !errors.value.categoryId &&
     (form.value.tags || []).length <= 10 &&
     uploadedFiles.value.length > 0 &&
-    !fileError.value
+    !fileError.value &&
+    !nameExists.value
 })
 
 // API helper function
@@ -514,7 +531,9 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
   }
 
   if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('API call failed:', response.status, errorText);
+    throw new Error(`API call failed: ${response.statusText} - ${errorText}`);
   }
 
   return response.json();
@@ -586,20 +605,19 @@ const handleSubmit = async () => {
   // Set submission flags
   isSubmitting.value = true
   hasSubmitted.value = true
+  showLoadingOverlay.value = true
 
   try {
     console.log('Submitting project creation request...')
 
     // Convert tags to string array for backend
-    const tagNames = form.value.tags ? form.value.tags.map(tag => tag.name) : []
-
-    // Chuyển đổi isPublic thành isPrivate trước khi gửi lên backend
     const payload = {
-      ...form.value,
-      tags: tagNames,
+      name: form.value.name,
+      description: form.value.description,
+      tags: form.value.tags ? form.value.tags.map((tag: Tag) => tag.name) : [],
       isPrivate: !form.value.isPublic,
+      categoryId: String(form.value.categoryId),
     }
-    delete payload.isPublic;
 
     const result = await apiCall('/projects/create', {
       method: 'POST',
@@ -661,6 +679,12 @@ const handleSubmit = async () => {
       // Redirect to project page
       router.push(`/projects/${result.projectId}`);
     }, 3000);
+
+    showLoadingOverlay.value = false
+    showSuccessScreen.value = true
+    setTimeout(() => {
+      router.push('/projects')
+    }, 2500)
   } catch (error: any) {
     console.error('Project creation error:', error)
 
@@ -675,8 +699,37 @@ const handleSubmit = async () => {
     }
   } finally {
     isSubmitting.value = false
+    showLoadingOverlay.value = false
   }
 }
+
+const checkProjectName = async (name: string) => {
+  if (!name || name.length < 3) {
+    nameExists.value = false
+    nameCheckError.value = ''
+    return
+  }
+  nameCheckLoading.value = true
+  try {
+    const res = await fetch(`/api/projects/check-name?name=${encodeURIComponent(name)}`, { credentials: 'include' })
+    const data = await res.json()
+    nameExists.value = data.exists
+    nameCheckError.value = nameExists.value ? 'Project name already exists. Please choose another.' : ''
+  } catch (e) {
+    nameCheckError.value = 'Could not check project name.'
+  } finally {
+    nameCheckLoading.value = false
+  }
+}
+
+// Debounce project name check on input
+let nameCheckTimeout: any
+watch(() => form.value.name, (newName: string) => {
+  clearTimeout(nameCheckTimeout)
+  nameCheckTimeout = setTimeout(() => {
+    checkProjectName(newName)
+  }, 500)
+})
 
 onMounted(() => {
   // Check if user is authenticated before fetching data
@@ -1306,6 +1359,69 @@ textarea.form-control {
   .file-size {
     font-size: 0.7rem;
   }
+}
+
+.loading-overlay {
+  position: fixed;
+  z-index: 2000;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 6px solid #e5e7eb;
+  border-top: 6px solid #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 1.2rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.success-screen {
+  position: fixed;
+  z-index: 3000;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(30, 41, 59, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.success-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 2.5rem 3rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  text-align: center;
+  min-width: 340px;
+}
+.success-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.success-card h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+  color: #1e293b;
+  font-weight: 700;
+}
+.success-card p {
+  color: #64748b;
+  font-size: 1.1rem;
 }
 </style>
 

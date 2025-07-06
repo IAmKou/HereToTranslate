@@ -44,7 +44,7 @@ export class ProjectEntity {
   @OneToMany(() => BranchEntity, branch => branch.project)
   branches: BranchEntity[];
 
-  @ManyToOne(() => BranchEntity, { nullable: true })
+  @ManyToOne(() => BranchEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'defaultBranchId' })
   defaultBranch: BranchEntity;
 

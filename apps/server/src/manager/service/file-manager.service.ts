@@ -1,10 +1,11 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
-import { FileEntity } from '#LocalProject/Entities';
-import { Repository } from 'typeorm';
+import { BranchEntity, FileEntity, ProjectEntity, UserEntity } from '#LocalProject/Entities';
+import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import  { Express } from 'express';
 import  { Multer } from 'multer';
+import  slugify  from 'slugify';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 
 @Injectable()
@@ -44,11 +45,19 @@ export class FileService {
     });
 
     const savedFile = await this.fileRepository.save(file);
+    const safeFileName = slugify(fileName, {
+      replacement: '_',
+      remove: /[*+~.()'"!:@\\/]/g,
+      lower: false,
+      strict: true,
+    });
 
+    const timestamped = `${Date.now()}_${safeFileName}`;
     const repoName = `project-${projectId}`;
+
     await this.githubService.pushInitialFile({
       repo: repoName,
-      path: `uploads/${fileName}`,
+      path: `uploads/${timestamped}`,
       content: fileContent.toString('base64'),
       message: `Uploaded ${fileName}`,
     });
@@ -80,14 +89,16 @@ export class FileService {
       fileName: file.originalname,
       fileType: file.mimetype,
       fileContent: file.buffer,
-      uploader: { id: uid },
-      request: null,
-      project: null,
-      branch: null,
-    });
+      uploader: { id: uid } as UserEntity,
+      project: null as ProjectEntity | null,
+      branch: null as BranchEntity | null,
+    } as DeepPartial<FileEntity>);
+
     const saved = await this.fileRepository.save(fileEntity);
     return { fileId: saved.id, fileName: saved.fileName };
   }
+
+
 
   async getProjectFiles(projectId: bigint, uid: bigint) {
     const files = await this.fileRepository.find({

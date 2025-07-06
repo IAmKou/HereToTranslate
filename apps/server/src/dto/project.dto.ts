@@ -2,6 +2,25 @@ import { IsBigInt } from "#LocalProject/Utils/extensions/class-validator.extensi
 import { ICreateProjectDto, IUpdateProjectDto } from "@here-to-translate/common/interfaces";
 import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsOptional, IsString, MinLength } from "class-validator";
 
+// Add Express types
+declare global {
+  namespace Express {
+    namespace Multer {
+      interface File {
+        fieldname: string;
+        originalname: string;
+        encoding: string;
+        mimetype: string;
+        size: number;
+        destination: string;
+        filename: string;
+        path: string;
+        buffer: Buffer;
+      }
+    }
+  }
+}
+
 export class CreateProjectDto implements ICreateProjectDto {
   @IsNotEmpty()
   @IsString()
@@ -21,6 +40,8 @@ export class CreateProjectDto implements ICreateProjectDto {
   @IsNotEmpty()
   @IsNumberString()
   categoryId: string;
+  @IsOptional()
+  files?: Express.Multer.File[];
 }
 
 export class UpdateProjectMetadataDto implements IUpdateProjectDto {

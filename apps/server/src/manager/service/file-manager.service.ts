@@ -8,7 +8,7 @@ import  { Multer } from 'multer';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 
 @Injectable()
-export class fileService {
+export class FileService {
   constructor(
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
@@ -33,6 +33,14 @@ export class fileService {
       uploader: { id: uid },
       project: { id: projectId },
       branch: { id: branchId },
+    });
+
+    console.log('FileEntity to be saved:', {
+      fileName,
+      fileType,
+      projectId,
+      branchId,
+      uploader: uid
     });
 
     const savedFile = await this.fileRepository.save(file);
@@ -67,4 +75,48 @@ export class fileService {
     return { message: 'File uploaded and processed', fileId: saved.id };
   }
 
+  async saveTempFile(file: Express.Multer.File, uid: bigint) {
+    const fileEntity = this.fileRepository.create({
+      fileName: file.originalname,
+      fileType: file.mimetype,
+      fileContent: file.buffer,
+      uploader: { id: uid },
+      request: null,
+      project: null,
+      branch: null,
+    });
+    const saved = await this.fileRepository.save(fileEntity);
+    return { fileId: saved.id, fileName: saved.fileName };
+  }
+
+  async getProjectFiles(projectId: bigint, uid: bigint) {
+    const files = await this.fileRepository.find({
+      where: { project: { id: projectId } },
+      relations: ['uploader'],
+      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader'],
+      order: { createdAt: 'DESC' }
+    });
+
+    return files.map(file => ({
+      id: file.id,
+      fileName: file.fileName,
+      fileType: file.fileType,
+      fileSize: file.fileContent ? file.fileContent.length : 0,
+      createdAt: file.createdAt,
+      uploader: {
+        id: file.uploader.id,
+        username: file.uploader.username,
+        fullName: file.uploader.fullName
+      }
+    }));
+  }
+
+  async getFileById(fileId: string) {
+    const file = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      select: ['id', 'fileName', 'fileType', 'fileContent'],
+    });
+    if (!file) throw new Error('File not found');
+    return file;
+  }
 }

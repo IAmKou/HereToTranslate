@@ -9,7 +9,7 @@ import {
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
   UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity,
-  BranchEntity,CommitEntity
+  BranchEntity,CommitEntity,FileEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -39,6 +39,9 @@ import { WalletController } from './controller/wallet.controller';
 import { PaymentController } from './controller/payment.controller';
 import { WalletManagerService } from './service/wallet-manager.service';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
+import { FileService } from './service/file-manager.service';
+import { TranslationService } from './service/translation-manager.service';
+import { FileController } from './controller/file.controller';
 
 @Global()
 @Module({
@@ -63,6 +66,7 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
       TranslationApprovalEntity,
       BranchEntity,
       CommitEntity,
+      FileEntity,
     ])
   ],
   providers: [
@@ -79,6 +83,8 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
     PaypalService,
     WalletManagerService,
     GitHubService,
+    FileService,
+    TranslationService,
   ],
   exports: [
     CategoryManagerService,
@@ -94,6 +100,8 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
     PaypalService,
     WalletManagerService,
     GitHubService,
+    FileService,
+    TranslationService,
   ],
   controllers: [
     CategoryController,
@@ -106,6 +114,7 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
     ProjectTagController,
     WalletController,
     PaymentController,
+    FileController,
   ]
 })
 export class ManagersModule {

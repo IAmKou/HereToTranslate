@@ -141,6 +141,53 @@
               </div>
             </div>
 
+            <!-- Project Files -->
+            <div class="project-section files-section">
+              <div class="section-header">
+                <h2 class="section-title">
+                  <span class="title-icon">📁</span>
+                  Files
+                </h2>
+
+              </div>
+              <div class="files-content">
+                <div v-if="filesLoading" class="files-loading">
+                  <div class="loading-spinner-small"></div>
+                  <span>Loading files...</span>
+                </div>
+                <div v-else-if="filesError" class="files-error">
+                  <span class="error-icon">⚠️</span>
+                  <span>{{ filesError }}</span>
+                  <button @click="loadFiles" class="btn btn-outline btn-sm">Retry</button>
+                </div>
+                <div v-else-if="projectFiles && projectFiles.length > 0" class="files-list">
+                  <div v-for="file in projectFiles" :key="file.id" class="file-item">
+                    <div class="file-info">
+                      <div class="file-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </div>
+                      <div class="file-details">
+                        <span class="file-name">{{ file.fileName }}</span>
+                      </div>
+                    </div>
+                    <div class="file-actions">
+                      <button @click="downloadFile(file)" class="btn btn-outline btn-sm">
+                        <span class="icon">⬇️</span>
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="no-files">
+                  <div class="no-content-icon">📄</div>
+                  <p>No files uploaded to this project yet.</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Enhanced Project Statistics -->
             <div class="project-stats">
               <div class="stat-card">
@@ -598,6 +645,19 @@ interface ProjectGroup {
   members?: Array<{ id: string; username: string; fullName?: string }>;
 }
 
+interface ProjectFile {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: string;
+  uploader: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+}
+
 interface CreateGroupData {
   name: string;
 }
@@ -656,6 +716,11 @@ const activeTab = ref<'details' | 'members'>('details');
 
 const isAllSelected = ref(false);
 
+// File-related variables
+const projectFiles = ref<ProjectFile[]>([]);
+const filesLoading = ref(false);
+const filesError = ref<string | null>(null);
+
 // Dropdown states
 const activeRoleDropdown = ref<string | null>(null);
 const activeGroupDropdown = ref<string | null>(null);
@@ -673,6 +738,14 @@ watch(
 watch(availablePermissions, () => {
   isAllSelected.value =
     selectedPermissions.value.length === availablePermissions.length;
+});
+
+// Watch project, tự động gọi loadFiles khi project có dữ liệu
+watch(project, (newProject) => {
+  if (newProject) {
+    console.log('project.value changed, calling loadFiles');
+    loadFiles();
+  }
 });
 
 const loadProject = async () => {
@@ -880,6 +953,46 @@ onMounted(() => {
 
 defineExpose({ closeDropdowns });
 loadProject();
+
+// File handling functions
+const loadFiles = async () => {
+  if (!project.value) {
+    console.warn('loadFiles: project.value is null, cannot load files');
+    return;
+  }
+  try {
+    filesLoading.value = true;
+    filesError.value = null;
+    console.log('Call API: /files/project/' + project.value.id);
+    const { data } = await axiosInstance.get(`/files/project/${project.value.id}`);
+    console.log('API /files/project response:', data);
+    projectFiles.value = data;
+    console.log('Files loaded for project', project.value.id, ':', projectFiles.value);
+  } catch (err: any) {
+    filesError.value = err.message || 'Failed to load files';
+    console.error('Error loading files:', err);
+  } finally {
+    filesLoading.value = false;
+  }
+};
+
+const refreshFiles = () => {
+  console.log('Refresh button clicked, calling loadFiles');
+  loadFiles();
+};
+
+const downloadFile = (file) => {
+  // Mở link download ở tab mới
+  window.open(`/api/files/${file.id}/download`, '_blank');
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 </script>
 
@@ -1265,6 +1378,120 @@ loadProject();
 .tag:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Project Files */
+.files-section {
+  background: #f8fafc;
+}
+
+.files-content {
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.files-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: white;
+}
+
+.files-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: white;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.file-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.file-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.file-details {
+  flex: 1;
+}
+
+.file-name {
+  margin: 0 0 0.25rem 0;
+  color: #2d3748;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.file-meta {
+  margin: 0;
+  color: #718096;
+  font-size: 0.9rem;
+}
+
+.file-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.btn-outline {
+  background: transparent;
+  color: #4299e1;
+  border: 2px solid #4299e1;
+}
+
+.btn-outline:hover {
+  background: #4299e1;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.no-files {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
 }
 
 /* Enhanced Project Statistics */

@@ -14,7 +14,6 @@
           </div>
         </div>
         <div class="info-card">
-          <div class="info-card-title">Registered Candidates</div>
           <div v-if="loading" class="loading">
             <span class="spinner"></span> Loading...
           </div>
@@ -27,12 +26,17 @@
             <table class="candidates-table">
               <thead>
               <tr>
+                <th>STT</th>
                 <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Joined</th>
                 <th>Actions</th>
               </tr>
               </thead>
               <tbody>
-              <tr v-for="user in pagedRegistrants" :key="user.id" :class="{ 'approved-row': user.approved }">
+              <tr v-for="(user, index) in pagedRegistrants" :key="user.id" :class="{ 'approved-row': user.approved }">
+                <td class="stt-td">{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                 <td class="candidate-name-td">
                   <div class="candidate-name-flex">
                     <Avatar
@@ -50,6 +54,15 @@
                       <span v-if="user.verified" class="badge verified">Verified</span>
                     </div>
                   </div>
+                </td>
+                <td class="candidate-email-td">
+                  <span class="email-text">{{ user.email }}</span>
+                </td>
+                <td class="candidate-phone-td">
+                  <span class="phone-text">{{ user.phone || '—' }}</span>
+                </td>
+                <td class="candidate-joined-td">
+                  <span class="joined-text">{{ formatDate(user.createdAt) }}</span>
                 </td>
                 <td class="candidate-actions-td">
                   <template v-if="user.approved">
@@ -77,17 +90,26 @@
               </tbody>
             </table>
             <div class="pagination-wrapper" v-if="totalPages > 1">
-              <button class="pagination-btn" :disabled="currentPage === 1" @click="currentPage--">Prev</button>
-              <button
-                v-for="page in totalPages"
-                :key="page"
-                class="pagination-btn"
-                :class="{ active: currentPage === page }"
-                @click="currentPage = page"
-              >
-                {{ page }}
-              </button>
-              <button class="pagination-btn" :disabled="currentPage === totalPages" @click="currentPage++">Next</button>
+              <div class="pagination-info">
+                Showing {{ (currentPage - 1) * pageSize + 1 }} to {{ Math.min(currentPage * pageSize, registrants.length) }} of {{ registrants.length }} registrants
+              </div>
+              <div class="pagination-controls">
+                <button class="pagination-btn" :disabled="currentPage === 1" @click="currentPage--">
+                  <i class="pi pi-chevron-left"></i> Prev
+                </button>
+                <button
+                  v-for="page in visiblePages"
+                  :key="page"
+                  class="pagination-btn"
+                  :class="{ active: currentPage === page }"
+                  @click="currentPage = page"
+                >
+                  {{ page }}
+                </button>
+                <button class="pagination-btn" :disabled="currentPage === totalPages" @click="currentPage++">
+                  Next <i class="pi pi-chevron-right"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -126,16 +148,17 @@
         <Button label="OK" @click="showDialog = false" autofocus />
       </template>
     </Dialog>
-    <Dialog v-model:visible="showProfileModal" :modal="true" :closable="true" header="Translator Info" :style="{ width: '520px', maxWidth: '98vw', paddingTop: '18px', paddingBottom: '18px' }">
+    <Dialog v-model:visible="showProfileModal" :modal="true" :closable="true" header="Translator Info" :style="{ width: '720px', maxWidth: '98vw', paddingTop: '18px', paddingBottom: '18px' }">
       <div v-if="selectedUser">
         <div class="profile-modal-content-v2">
           <div class="profile-header">
             <Avatar :image="selectedUser.avatar || ''" :label="getInitial(selectedUser.fullName || selectedUser.username)" shape="circle" size="xxlarge" class="profile-avatar-v2" :style="!selectedUser.avatar ? { background: getAvatarColor(selectedUser.fullName || selectedUser.username) } : {}" />
             <div class="profile-main-info">
-              <div class="profile-name-v2">{{ selectedUser.fullName }} <span class="profile-username"></span></div>
+              <div class="profile-name-v2">{{ selectedUser.fullName }} <span class="profile-username">@{{ selectedUser.username }}</span></div>
               <div class="profile-badges">
                 <span v-if="selectedUser.isOwner" class="badge owner">Owner</span>
-                <!-- TODO: Add more badges if any -->
+                <span v-if="selectedUser.verified" class="badge verified">Verified</span>
+                <span class="badge member">Member since {{ formatDate(selectedUser.joined) }}</span>
               </div>
               <div class="profile-actions">
                 <Button label="Contact" icon="pi pi-envelope" class="contact-btn" @click="contactUser(selectedUser.email)" />
@@ -151,12 +174,81 @@
               </div>
             </div>
           </div>
-          <div class="profile-meta" style="margin-top: 18px; width: 100%; display: flex; gap: 32px; justify-content: center; color: #64748b; font-size: 15px;">
+          <div class="profile-meta">
             <div>Last seen: {{ selectedUser.lastSeen || '—' }}</div>
             <div>Languages: {{ selectedUser.languages?.join(', ') || '—' }}</div>
+            <div>Location: {{ selectedUser.location || '—' }}</div>
           </div>
-          <div class="profile-section-title" style="margin-top: 18px;">Activity History</div>
-          <div class="profile-history-placeholder">Feature in development...</div>
+
+          <div class="profile-section-title">Project History</div>
+          <div class="profile-projects">
+            <div v-if="selectedUser.projects && selectedUser.projects.length > 0" class="projects-list">
+              <div v-for="project in selectedUser.projects" :key="project.id" class="project-item">
+                <div class="project-header">
+                  <span class="project-name">{{ project.name }}</span>
+                  <span class="project-status" :class="project.status">{{ project.status }}</span>
+                </div>
+                <div class="project-details">
+                  <span class="project-role">{{ project.role }}</span>
+                  <span class="project-date">{{ formatDate(project.completedAt) }}</span>
+                </div>
+                <div v-if="project.rating" class="project-rating">
+                  <span class="rating-label">Rating:</span>
+                  <div class="rating-stars">
+                    <i v-for="star in 5" :key="star"
+                       :class="['pi', star <= project.rating ? 'pi-star-fill' : 'pi-star']"
+                       :style="{ color: star <= project.rating ? '#fbbf24' : '#d1d5db' }">
+                    </i>
+                  </div>
+                  <span class="rating-text">{{ project.rating }}/5</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-projects">
+              <i class="pi pi-folder-open"></i>
+              <span>No projects completed yet</span>
+            </div>
+          </div>
+
+          <div class="profile-section-title">Activity History</div>
+          <div class="profile-activity">
+            <div v-if="selectedUser.activities && selectedUser.activities.length > 0" class="activity-list">
+              <div v-for="activity in selectedUser.activities" :key="activity.id" class="activity-item">
+                <div class="activity-icon">
+                  <i :class="getActivityIcon(activity.type)"></i>
+                </div>
+                <div class="activity-content">
+                  <div class="activity-title">{{ activity.title }}</div>
+                  <div class="activity-desc">{{ activity.description }}</div>
+                  <div class="activity-time">{{ formatDate(activity.createdAt) }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-activity">
+              <i class="pi pi-clock"></i>
+              <span>No recent activity</span>
+            </div>
+          </div>
+
+          <div class="profile-section-title">Contribution Statistics</div>
+          <div class="profile-stats">
+            <div class="stat-item">
+              <div class="stat-number">{{ selectedUser.contribution?.translated?.strings || 0 }}</div>
+              <div class="stat-label">Strings Translated</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">{{ selectedUser.contribution?.approved?.strings || 0 }}</div>
+              <div class="stat-label">Strings Approved</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">{{ selectedUser.contribution?.voted?.strings || 0 }}</div>
+              <div class="stat-label">Votes Cast</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">{{ selectedUser.contribution?.commented?.strings || 0 }}</div>
+              <div class="stat-label">Comments Made</div>
+            </div>
+          </div>
         </div>
         <div v-if="showCopyToast" class="copy-toast">Email copied!</div>
       </div>
@@ -186,6 +278,23 @@ import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
 import Dialog from 'primevue/dialog';
 
+interface Project {
+  id: number;
+  name: string;
+  role: string;
+  status: 'completed' | 'in-progress' | 'cancelled';
+  completedAt: string;
+  rating?: number;
+}
+
+interface Activity {
+  id: number;
+  type: 'translation' | 'approval' | 'comment' | 'vote' | 'project';
+  title: string;
+  description: string;
+  createdAt: string;
+}
+
 interface UserInfo {
   id: number;
   username: string;
@@ -194,9 +303,13 @@ interface UserInfo {
   phone?: string;
   avatar?: string;
   isOwner: boolean;
+  verified?: boolean;
   joined: string;
   lastSeen: string;
+  location?: string;
   languages?: string[];
+  projects?: Project[];
+  activities?: Activity[];
   contribution?: {
     translated?: {
       strings: number;
@@ -219,12 +332,28 @@ const route = useRoute();
 const router = useRouter();
 const registrants = ref<UserInfo[]>([]);
 const currentPage = ref(1);
-const pageSize = ref(5);
+const pageSize = ref(10);
 
 const totalPages = computed(() => Math.ceil(registrants.value.length / pageSize.value));
 const pagedRegistrants = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
   return registrants.value.slice(start, start + pageSize.value);
+});
+
+const visiblePages = computed(() => {
+  const pages = [];
+  const maxVisible = 5;
+  let start = Math.max(1, currentPage.value - Math.floor(maxVisible / 2));
+  let end = Math.min(totalPages.value, start + maxVisible - 1);
+
+  if (end - start + 1 < maxVisible) {
+    start = Math.max(1, end - maxVisible + 1);
+  }
+
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+  return pages;
 });
 
 const loading = ref(false);
@@ -246,6 +375,27 @@ const showToast = ref(false);
 
 function getInitial(name: string | undefined) {
   return name ? name.charAt(0).toUpperCase() : '?';
+}
+
+function formatDate(dateString: string) {
+  if (!dateString) return '—';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function getActivityIcon(type: string) {
+  const icons = {
+    translation: 'pi pi-language',
+    approval: 'pi pi-check-circle',
+    comment: 'pi pi-comment',
+    vote: 'pi pi-thumbs-up',
+    project: 'pi pi-folder'
+  };
+  return icons[type as keyof typeof icons] || 'pi pi-info-circle';
 }
 
 function goBack() {
@@ -292,6 +442,7 @@ async function reloadRegistrants() {
   try {
     const requestId = route.params.requestId;
     const res = await axiosInstance.get(`/requests/${requestId}/registrants`);
+    console.log(res.data);
     if (Array.isArray(res.data)) {
       registrants.value = res.data;
     } else if (res.data && Array.isArray(res.data.registrants)) {
@@ -373,7 +524,7 @@ onMounted(async () => {
 }
 .content {
   flex: 1;
-  padding: 18px 0 0 0;
+  padding: 24px 32px 0 32px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -385,7 +536,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 18px;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
   margin-top: 6px;
   min-width: 320px;
   width: 100%;
@@ -395,18 +546,11 @@ onMounted(async () => {
   background: #fff;
   border-radius: 18px;
   box-shadow: 0 4px 24px rgba(59,130,246,0.08);
-  padding: 32px 18px 18px 18px;
+  padding: 32px 24px 24px 24px;
   margin-bottom: 0;
   max-width: 100%;
   width: 100%;
   min-width: 340px;
-}
-.info-card-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 28px;
-  text-align: center;
 }
 .loading {
   font-size: 16px;
@@ -460,7 +604,7 @@ onMounted(async () => {
 }
 .candidates-table {
   width: 100%;
-  min-width: 600px;
+  min-width: 800px;
   max-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -472,7 +616,7 @@ onMounted(async () => {
   overflow: hidden;
 }
 .candidates-table th, .candidates-table td {
-  padding: 10px 18px;
+  padding: 12px 16px;
   text-align: left;
   vertical-align: middle;
 }
@@ -480,7 +624,7 @@ onMounted(async () => {
   background: #f1f5f9;
   color: #2563eb;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 16px;
   border-bottom: 2.5px solid #e0e7ff;
   letter-spacing: 0.5px;
   text-align: center;
@@ -490,6 +634,24 @@ onMounted(async () => {
   text-align: center;
   vertical-align: middle;
   height: 100%;
+}
+.stt-td {
+  text-align: center;
+  font-weight: 700;
+  color: #64748b;
+  min-width: 60px;
+}
+.candidate-name-td {
+  min-width: 220px;
+}
+.candidate-email-td {
+  min-width: 180px;
+}
+.candidate-phone-td {
+  min-width: 120px;
+}
+.candidate-joined-td {
+  min-width: 100px;
 }
 .candidate-actions-td {
   display: flex;
@@ -514,9 +676,6 @@ onMounted(async () => {
 }
 .candidates-table tbody tr.approved-row {
   background: #e6f9ed !important;
-}
-.candidate-name-td {
-  min-width: 220px;
 }
 .candidate-name-flex {
   display: flex;
@@ -556,16 +715,10 @@ onMounted(async () => {
   color: #1746a2;
   text-decoration: underline wavy;
 }
-.candidate-email {
+.email-text, .phone-text, .joined-text {
   font-size: 14px;
-  color: #2563eb;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-}
-.candidate-email i {
   color: #64748b;
+  font-weight: 500;
 }
 .approve-btn {
   background: linear-gradient(90deg, #22c55e 60%, #16a34a 100%) !important;
@@ -632,6 +785,47 @@ onMounted(async () => {
   background: #2563eb;
   color: #fff;
 }
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  margin-bottom: 8px;
+  padding: 16px 0;
+  border-top: 1px solid #e0e7ff;
+}
+.pagination-info {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pagination-btn {
+  background: #fff;
+  color: #2563eb;
+  border: 1.5px solid #2563eb;
+  border-radius: 7px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pagination-btn.active, .pagination-btn:hover:not(:disabled) {
+  background: #2563eb;
+  color: #fff;
+}
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .fade-enter-active, .fade-leave-active {
   transition: all 0.3s;
 }
@@ -642,6 +836,7 @@ onMounted(async () => {
 @media (max-width: 900px) {
   .content {
     align-items: stretch;
+    padding: 18px 16px 0 16px;
   }
   .page-header {
     flex-direction: column;
@@ -652,26 +847,22 @@ onMounted(async () => {
   .info-card {
     max-width: 98vw;
     min-width: unset;
-    padding: 32px 8px 24px 8px;
+    padding: 24px 16px 20px 16px;
   }
   .candidates-table {
-    min-width: 600px;
+    min-width: 800px;
     font-size: 15px;
   }
   .candidates-table th, .candidates-table td {
-    padding: 14px 8px;
+    padding: 12px 8px;
   }
-  .candidate-name-td {
-    gap: 10px;
+  .pagination-wrapper {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
   }
-  .candidate-avatar-table {
-    width: 38px;
-    height: 38px;
-    font-size: 16px;
-  }
-  .candidate-actions-td {
-    min-width: 120px;
-    gap: 6px;
+  .pagination-controls {
+    justify-content: center;
   }
 }
 .custom-modal-approve {
@@ -824,7 +1015,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 24px;
   padding: 24px 32px 0 32px;
   box-sizing: border-box;
 }
@@ -849,6 +1040,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  flex: 1;
 }
 .profile-name-v2 {
   font-size: 22px;
@@ -863,6 +1055,7 @@ onMounted(async () => {
 .profile-badges {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .badge.owner {
   background: #e0e7ff;
@@ -872,6 +1065,22 @@ onMounted(async () => {
   padding: 2px 10px;
   font-weight: 700;
   border: 1.5px solid #2563eb;
+}
+.badge.verified {
+  background: #22c55e;
+  color: #fff;
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 700;
+}
+.badge.member {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 700;
 }
 .profile-actions {
   margin-top: 8px;
@@ -899,49 +1108,185 @@ onMounted(async () => {
   margin-bottom: 8px;
   justify-content: center;
   width: 100%;
+  flex-wrap: wrap;
 }
 .profile-section-title {
   font-size: 18px;
   font-weight: 700;
   color: #1e293b;
-  margin: 12px 0 4px 0;
+  margin: 12px 0 8px 0;
   align-self: flex-start;
-}
-.profile-contribution-table {
   width: 100%;
-  border-radius: 10px;
+}
+.profile-projects {
+  width: 100%;
+}
+.projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.project-item {
   background: #f9f9fb;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.06);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #e0e7ff;
+}
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
-.profile-contribution-header, .profile-contribution-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  padding: 8px 18px;
-  align-items: center;
-}
-.profile-contribution-header {
+.project-name {
   font-weight: 700;
-  color: #2563eb;
-  border-bottom: 1.5px solid #e0e7ff;
-  background: #f1f5f9;
-}
-.profile-contribution-row {
-  font-size: 15px;
   color: #1e293b;
-  border-bottom: 1px solid #f1f5f9;
+  font-size: 16px;
 }
-.profile-contribution-row:last-child {
-  border-bottom: none;
+.project-status {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
 }
-.profile-note {
-  font-size: 13px;
+.project-status.completed {
+  background: #22c55e;
+  color: #fff;
+}
+.project-status.in-progress {
+  background: #fbbf24;
+  color: #fff;
+}
+.project-status.cancelled {
+  background: #ef4444;
+  color: #fff;
+}
+.project-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
   color: #64748b;
-  background: #f1f5f9;
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-top: 8px;
+}
+.project-role {
+  font-weight: 600;
+  color: #2563eb;
+}
+.project-date {
+  color: #64748b;
+}
+.project-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.rating-label {
+  color: #64748b;
+  font-weight: 600;
+}
+.rating-stars {
+  display: flex;
+  gap: 2px;
+}
+.rating-text {
+  color: #1e293b;
+  font-weight: 700;
+}
+.no-projects {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 15px;
+  padding: 24px;
+  background: #f9f9fb;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+}
+.profile-activity {
+  width: 100%;
+}
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #f9f9fb;
+  border-radius: 10px;
+  border: 1px solid #e0e7ff;
+}
+.activity-icon {
+  width: 40px;
+  height: 40px;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.activity-content {
+  flex: 1;
+}
+.activity-title {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.activity-desc {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.activity-time {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.no-activity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 15px;
+  padding: 24px;
+  background: #f9f9fb;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+}
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+.stat-item {
+  background: #f9f9fb;
+  border-radius: 12px;
+  padding: 16px;
   text-align: center;
+  border: 1px solid #e0e7ff;
+}
+.stat-number {
+  font-size: 24px;
+  font-weight: 800;
+  color: #2563eb;
+  margin-bottom: 4px;
+}
+.stat-label {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
 }
 .profile-email-modal {
   font-size: 15px;
@@ -954,59 +1299,6 @@ onMounted(async () => {
 }
 .profile-email-modal i {
   color: #64748b;
-}
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
-  margin-bottom: 2px;
-}
-.pagination-btn {
-  background: #fff;
-  color: #2563eb;
-  border: 1.5px solid #2563eb;
-  border-radius: 7px;
-  padding: 6px 14px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s;
-}
-.pagination-btn.active, .pagination-btn:hover:not(:disabled) {
-  background: #2563eb;
-  color: #fff;
-}
-.pagination-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.profile-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 18px 0 12px 0;
-  width: 100%;
-}
-.profile-tabs button {
-  flex: 1;
-  padding: 8px 0;
-  background: #f1f5f9;
-  border: none;
-  border-radius: 8px 8px 0 0;
-  font-weight: 700;
-  color: #2563eb;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s;
-}
-.profile-tabs button.active, .profile-tabs button:hover {
-  background: #2563eb;
-  color: #fff;
-}
-.profile-tab-content {
-  width: 100%;
-  padding: 12px 0 0 0;
 }
 .copy-btn {
   background: #f1f5f9 !important;
@@ -1040,30 +1332,6 @@ onMounted(async () => {
   10% { opacity: 1; transform: translateX(-50%) translateY(0); }
   90% { opacity: 1; transform: translateX(-50%) translateY(0); }
   100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-}
-.profile-history-placeholder {
-  color: #64748b;
-  font-size: 15px;
-  padding: 18px 0;
-  text-align: center;
-}
-@media (max-width: 600px) {
-  .profile-modal-content-v2 {
-    padding: 12px 6px 0 6px;
-  }
-  .profile-header {
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-  }
-  .profile-main-info {
-    align-items: center;
-    text-align: center;
-  }
-  .profile-tabs {
-    flex-direction: column;
-    gap: 2px;
-  }
 }
 .custom-toast {
   position: fixed;
@@ -1133,5 +1401,26 @@ onMounted(async () => {
 }
 .profile-phone-modal i {
   color: #64748b;
+}
+@media (max-width: 600px) {
+  .profile-modal-content-v2 {
+    padding: 12px 6px 0 6px;
+  }
+  .profile-header {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .profile-main-info {
+    align-items: center;
+    text-align: center;
+  }
+  .profile-stats {
+    grid-template-columns: 1fr;
+  }
+  .profile-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 </style>

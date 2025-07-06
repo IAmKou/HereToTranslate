@@ -182,8 +182,8 @@ export class RequestManagerService {
       ...r,
       isRegistered: r.registrants
         ? r.registrants.some(
-            (u: UserEntity) => u.id.toString() === userId.toString()
-          )
+          (u: UserEntity) => u.id.toString() === userId.toString()
+        )
         : false,
     }));
   }
@@ -442,7 +442,7 @@ export class RequestManagerService {
 
     return this.userRepository
       .createQueryBuilder('user')
-      .select(['user.id', 'user.fullName', 'user.email'])
+      .select(['user.id', 'user.fullName', 'user.email', 'user.phone', 'user.createdAt'])
       .whereInIds(registrantIds)
       .getMany();
   }

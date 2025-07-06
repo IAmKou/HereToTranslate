@@ -1,14 +1,24 @@
-import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors, Get, Param, Res } from '@nestjs/common';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
-import { fileService } from '#LocalProject/Managers/service/file-manager.service';
+import { FileService } from '../service/file-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
+import { Response } from 'express';
 
 @Controller('files')
 export class FileController {
-  constructor(private readonly fileService: fileService) {
+  constructor(private readonly fileService: FileService) {
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('project/:projectId')
+  async getProjectFiles(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.fileService.getProjectFiles(projectId, req.user.id);
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post('upload')
@@ -18,5 +28,29 @@ export class FileController {
     branchId: bigint
   }, @Req() req: AuthenticatedRequest) {
     return this.fileService.handleUpload(file, req.user.id, body.projectId, body.branchId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('upload-temp')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadTempFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.fileService.saveTempFile(file, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':fileId/download')
+  async downloadFile(
+    @Param('fileId') fileId: string,
+    @Res() res: Response
+  ) {
+    const file = await this.fileService.getFileById(fileId);
+    res.set({
+      'Content-Type': file.fileType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.fileName)}"`
+    });
+    res.send(file.fileContent);
   }
 }

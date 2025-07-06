@@ -45,6 +45,8 @@
             <div class="input-info">
               <span class="char-count">{{ form.name.length }}/50</span>
               <span v-if="errors.name" class="error-message">{{ errors.name }}</span>
+              <span v-if="nameCheckLoading" class="help-text">Checking name...</span>
+              <span v-if="nameCheckError" class="error-message">{{ nameCheckError }}</span>
             </div>
           </div>
 
@@ -118,6 +120,76 @@
               <span v-else class="help-text">Select one or many tags to help others find your project</span>
             </div>
           </div>
+
+          <!-- File Upload -->
+          <div class="form-group">
+            <label for="files">
+              Files <span class="required-mark">*</span>
+            </label>
+            <div class="file-upload-container">
+              <div class="file-upload-area"
+                   :class="{ 'drag-over': isDragOver, 'has-files': uploadedFiles.length > 0 }"
+                   @drop="handleFileDrop"
+                   @dragover.prevent="isDragOver = true"
+                   @dragleave.prevent="isDragOver = false"
+                   @click="triggerFileInput">
+                <div class="file-upload-content">
+                  <div class="file-upload-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M17 8L12 3L7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M12 3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </div>
+                  <div class="file-upload-text">
+                    <p class="upload-title">Drop files here or click to browse</p>
+                    <p class="upload-subtitle">Support: PDF, DOC, DOCX, TXT, RTF - At least one file is required</p>
+                  </div>
+                </div>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.txt,.rtf"
+                  @change="handleFileSelect"
+                  class="file-input-hidden"
+                >
+              </div>
+
+              <!-- File List -->
+              <div v-if="uploadedFiles.length > 0" class="file-list">
+                <div v-for="(file, index) in uploadedFiles" :key="index" class="file-item">
+                  <div class="file-info">
+                    <div class="file-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="file-details">
+                      <span class="file-name">{{ file.name }}</span>
+                      <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="file-remove-btn"
+                    @click="removeFile(index)"
+                    title="Remove file">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="input-info">
+              <span v-if="fileError" class="error-message">{{ fileError }}</span>
+              <span v-else-if="uploadedFiles.length === 0" class="error-message">At least one file is required</span>
+              <span v-else class="help-text">Upload files related to your project. At least one file is required.</span>
+            </div>
+          </div>
         </div>
 
         <div class="form-section">
@@ -154,11 +226,7 @@
                   {{ category.name }}
                 </option>
               </select>
-              <div class="select-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
+
             </div>
             <div class="input-info">
               <span v-if="errors.categoryId" class="error-message">{{ errors.categoryId }}</span>
@@ -185,11 +253,22 @@
         </div>
       </form>
     </div>
+    <div v-if="showLoadingOverlay" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Creating project, please wait...</div>
+    </div>
+    <div v-if="showSuccessScreen" class="success-screen">
+      <div class="success-card">
+        <div class="success-icon">🎉</div>
+        <h2>Project Created Successfully!</h2>
+        <p>Your project has been created. Redirecting to your projects...</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
 import InputSwitch from 'primevue/inputswitch'
@@ -236,6 +315,19 @@ const isSubmitting = ref(false)
 const hasSubmitted = ref(false)
 const categories = ref<Category[]>([])
 const allTags = ref<Tag[]>([])
+
+// File upload variables
+const uploadedFiles = ref<File[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
+const isDragOver = ref(false)
+const fileError = ref('')
+
+const showLoadingOverlay = ref(false)
+const showSuccessScreen = ref(false)
+
+const nameExists = ref(false)
+const nameCheckLoading = ref(false)
+const nameCheckError = ref('')
 
 // Validation functions
 const validateName = () => {
@@ -299,13 +391,92 @@ const validateTags = () => {
   return true
 }
 
+const validateFiles = () => {
+  if (uploadedFiles.value.length === 0) {
+    fileError.value = 'At least one file is required'
+    return false
+  }
+  fileError.value = ''
+  return true
+}
+
 const validateForm = () => {
   const isNameValid = validateName()
   const isDescriptionValid = validateDescription()
   const isCategoryValid = validateCategory()
   const isTagsValid = validateTags()
+  const isFileValid = validateFiles()
 
-  return isNameValid && isDescriptionValid && isCategoryValid && isTagsValid
+  return isNameValid && isDescriptionValid && isCategoryValid && isTagsValid && isFileValid
+}
+
+// File upload functions
+const triggerFileInput = () => {
+  fileInput.value?.click()
+}
+
+const handleFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const files = Array.from(target.files || [])
+  addFiles(files)
+  target.value = '' // Reset input
+}
+
+const handleFileDrop = (event: DragEvent) => {
+  event.preventDefault()
+  isDragOver.value = false
+  const files = Array.from(event.dataTransfer?.files || [])
+  addFiles(files)
+}
+
+const addFiles = (files: File[]) => {
+  fileError.value = ''
+
+  for (const file of files) {
+    // Validate file type
+    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf']
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+
+    if (!fileExtension || !allowedTypes.includes(fileExtension)) {
+      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`
+      continue
+    }
+
+    // Validate file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+    if (file.size > maxSize) {
+      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`
+      continue
+    }
+
+    // Check if file already exists
+    const existingFile = uploadedFiles.value.find(f => f.name === file.name)
+    if (existingFile) {
+      fileError.value = `File ${file.name} is already uploaded.`
+      continue
+    }
+
+    // Check total number of files (max 5 files)
+    if (uploadedFiles.value.length >= 5) {
+      fileError.value = 'Maximum 5 files allowed.'
+      continue
+    }
+
+    uploadedFiles.value.push(file)
+  }
+}
+
+const removeFile = (index: number) => {
+  uploadedFiles.value.splice(index, 1)
+  fileError.value = ''
+}
+
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 // Computed property to check if form is valid
@@ -316,7 +487,10 @@ const isFormValid = computed(() => {
     !errors.value.name &&
     !errors.value.description &&
     !errors.value.categoryId &&
-    (form.value.tags || []).length <= 10
+    (form.value.tags || []).length <= 10 &&
+    uploadedFiles.value.length > 0 &&
+    !fileError.value &&
+    !nameExists.value
 })
 
 // API helper function
@@ -357,7 +531,9 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
   }
 
   if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('API call failed:', response.status, errorText);
+    throw new Error(`API call failed: ${response.statusText} - ${errorText}`);
   }
 
   return response.json();
@@ -420,55 +596,95 @@ const handleSubmit = async () => {
     return
   }
 
+  // Validate that at least one file is uploaded
+  if (uploadedFiles.value.length === 0) {
+    fileError.value = 'At least one file is required'
+    return
+  }
+
   // Set submission flags
   isSubmitting.value = true
   hasSubmitted.value = true
+  showLoadingOverlay.value = true
 
   try {
     console.log('Submitting project creation request...')
 
     // Convert tags to string array for backend
-    const tagNames = form.value.tags ? form.value.tags.map(tag => tag.name) : []
-
-    // Chuyển đổi isPublic thành isPrivate trước khi gửi lên backend
     const payload = {
-      ...form.value,
-      tags: tagNames,
+      name: form.value.name,
+      description: form.value.description,
+      tags: form.value.tags ? form.value.tags.map((tag: Tag) => tag.name) : [],
       isPrivate: !form.value.isPublic,
+      categoryId: String(form.value.categoryId),
     }
-    delete payload.isPublic;
 
     const result = await apiCall('/projects/create', {
       method: 'POST',
       body: JSON.stringify(payload)
     })
 
-    console.log('Project created successfully:', result)
+    console.log('Project create response:', result)
+    // Lấy branchId từ response (thử cả 2 cách)
+    const branchId = result.branchId || (result.data && result.data.branchId);
+    console.log('branchId:', branchId);
+    const projectId = result.projectId || (result.data && result.data.projectId);
+    console.log('Uploading files with projectId:', projectId, 'branchId:', branchId)
 
-    // Show success message
-    const successMessage = document.createElement('div')
-    successMessage.className = 'success-message'
+    // Upload từng file với đúng projectId và branchId
+    for (const file of uploadedFiles.value) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('projectId', projectId);
+      formData.append('branchId', branchId);
+
+      console.log('Uploading file:', file.name, 'to project:', projectId, 'branch:', branchId);
+
+      const uploadResponse = await fetch('/api/files/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      if (!uploadResponse.ok) {
+        console.error('File upload failed:', file.name, uploadResponse.statusText)
+        throw new Error(`File upload failed: ${uploadResponse.statusText}`);
+      }
+
+      const uploadResult = await uploadResponse.json();
+      console.log('File upload response for', file.name, ':', uploadResult);
+    }
+
+    // Show success message with file upload info
+    const successMessage = document.createElement('div');
+    successMessage.className = 'success-message';
     successMessage.innerHTML = `
       <div class="success-content">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.76488 14.1003 1.98232 16.07 2.85999" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>Project created successfully!</span>
+        <span>Project created successfully with ${uploadedFiles.value.length} file(s) uploaded!</span>
       </div>
-    `
-    document.body.appendChild(successMessage)
+    `;
+    document.body.appendChild(successMessage);
 
     // Wait 3 seconds before redirecting
     setTimeout(() => {
       // Remove success message
-      if (successMessage.parentNode) {
-        successMessage.parentNode.removeChild(successMessage)
+      const existingMessage = document.querySelector('.success-message');
+      if (existingMessage && existingMessage.parentNode) {
+        existingMessage.parentNode.removeChild(existingMessage);
       }
       // Redirect to project page
-      router.push(`/projects/${result.projectId}`)
-    }, 3000)
+      router.push(`/projects/${result.projectId}`);
+    }, 3000);
 
+    showLoadingOverlay.value = false
+    showSuccessScreen.value = true
+    setTimeout(() => {
+      router.push('/projects')
+    }, 2500)
   } catch (error: any) {
     console.error('Project creation error:', error)
 
@@ -483,8 +699,37 @@ const handleSubmit = async () => {
     }
   } finally {
     isSubmitting.value = false
+    showLoadingOverlay.value = false
   }
 }
+
+const checkProjectName = async (name: string) => {
+  if (!name || name.length < 3) {
+    nameExists.value = false
+    nameCheckError.value = ''
+    return
+  }
+  nameCheckLoading.value = true
+  try {
+    const res = await fetch(`/api/projects/check-name?name=${encodeURIComponent(name)}`, { credentials: 'include' })
+    const data = await res.json()
+    nameExists.value = data.exists
+    nameCheckError.value = nameExists.value ? 'Project name already exists. Please choose another.' : ''
+  } catch (e) {
+    nameCheckError.value = 'Could not check project name.'
+  } finally {
+    nameCheckLoading.value = false
+  }
+}
+
+// Debounce project name check on input
+let nameCheckTimeout: any
+watch(() => form.value.name, (newName: string) => {
+  clearTimeout(nameCheckTimeout)
+  nameCheckTimeout = setTimeout(() => {
+    checkProjectName(newName)
+  }, 500)
+})
 
 onMounted(() => {
   // Check if user is authenticated before fetching data
@@ -926,6 +1171,257 @@ textarea.form-control {
   .success-content span {
     font-size: 0.95rem;
   }
+}
+
+/* File Upload Styles */
+.file-upload-container {
+  width: 100%;
+}
+
+.file-upload-area {
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #f9fafb;
+  position: relative;
+  overflow: hidden;
+}
+
+.file-upload-area:hover {
+  border-color: #667eea;
+  background: #f0f4ff;
+  transform: translateY(-1px);
+}
+
+.file-upload-area.drag-over {
+  border-color: #667eea;
+  background: #e0e7ff;
+}
+
+.file-upload-area.has-files {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.file-upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.file-upload-icon {
+  color: #6b7280;
+  transition: color 0.3s ease;
+}
+
+.file-upload-area:hover .file-upload-icon {
+  color: #667eea;
+}
+
+.file-upload-area.drag-over .file-upload-icon {
+  color: #667eea;
+}
+
+.file-upload-area.has-files .file-upload-icon {
+  color: #10b981;
+}
+
+.file-upload-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.upload-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.upload-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.file-input-hidden {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.file-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.file-icon {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.file-remove-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.file-remove-btn:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  transform: scale(1.1);
+}
+
+.file-remove-btn:focus {
+  outline: none;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Responsive adjustments for file upload */
+@media (max-width: 768px) {
+  .file-upload-area {
+    padding: 1.5rem;
+  }
+
+  .upload-title {
+    font-size: 1rem;
+  }
+
+  .upload-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .file-item {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .file-name {
+    font-size: 0.8rem;
+  }
+
+  .file-size {
+    font-size: 0.7rem;
+  }
+}
+
+.loading-overlay {
+  position: fixed;
+  z-index: 2000;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 6px solid #e5e7eb;
+  border-top: 6px solid #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 1.2rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.success-screen {
+  position: fixed;
+  z-index: 3000;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(30, 41, 59, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.success-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 2.5rem 3rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  text-align: center;
+  min-width: 340px;
+}
+.success-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.success-card h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+  color: #1e293b;
+  font-weight: 700;
+}
+.success-card p {
+  color: #64748b;
+  font-size: 1.1rem;
 }
 </style>
 

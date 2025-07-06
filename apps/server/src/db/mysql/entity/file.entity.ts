@@ -17,7 +17,7 @@ export class FileEntity {
   @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
   uploader: UserEntity;
 
-  @Column()
+  @Column({ type: 'varchar', length: 255, charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' })
   fileName: string;
 
   @Column({ nullable: true })

@@ -38,7 +38,7 @@
               :class="['tab-button', { active: activeTab === 'assigned-requests' }]"
             >
               <span class="material-icons">assignment_ind</span>
-              Assigned to Me
+              Private Request Assign To You
               <span v-if="assignedRequestsCount > 0" class="badge">{{ assignedRequestsCount }}</span>
             </button>
           </div>
@@ -102,13 +102,17 @@
                     <td>{{ formatDate(req.deadline) }}</td>
                     <td>
                         <span :class="['status-badge', `status-${req.status.toLowerCase()}`]">
-                          {{ req.status }}
+                          {{ formatStatus(req.status) }}
                         </span>
                     </td>
                     <td>
-                      <span :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
+                      <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
                         <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
                         {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                      </span>
+                      <span v-else class="visibility-badge visibility-private">
+                        <i class="pi pi-lock"></i>
+                        Private
                       </span>
                     </td>
                     <td class="actions">
@@ -206,9 +210,13 @@
                         </span>
                     </td>
                     <td>
-                        <span :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
+                        <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
                           <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
                           {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                        </span>
+                      <span v-else class="visibility-badge visibility-private">
+                          <i class="pi pi-lock"></i>
+                          Private
                         </span>
                     </td>
                     <td class="actions">
@@ -733,33 +741,29 @@ onMounted(fetchRequests)
 .status-badge {
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.status-pending {
+.status-badge.status-pending {
   background: #fef3c7;
   color: #92400e;
 }
 
-.status-approved {
+.status-badge.status-approved {
   background: #d1fae5;
   color: #065f46;
 }
 
-.status-rejected {
+.status-badge.status-rejected {
   background: #fee2e2;
   color: #991b1b;
 }
 
-.status-completed {
+.status-badge.status-completed {
   background: #dbeafe;
   color: #1e40af;
 }
 
-.status-cancelled {
+.status-badge.status-cancelled {
   background: #f3f4f6;
   color: #374151;
 }
@@ -769,7 +773,6 @@ onMounted(fetchRequests)
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
-  text-transform: uppercase;
   letter-spacing: 0.05em;
   display: inline-flex;
   align-items: center;
@@ -968,7 +971,6 @@ onMounted(fetchRequests)
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 

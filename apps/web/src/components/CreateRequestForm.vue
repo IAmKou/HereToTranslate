@@ -254,6 +254,73 @@
                 <span v-else class="help-text">Select one or many tags to help others find your request</span>
               </div>
             </div>
+
+            <!-- File Upload -->
+            <div class="form-group full-width">
+              <label for="files" class="form-label">Files (Optional)</label>
+              <div class="file-upload-container">
+                <div class="file-upload-area"
+                     :class="{ 'drag-over': isDragOver, 'has-files': uploadedFiles.length > 0 }"
+                     @drop="handleFileDrop"
+                     @dragover.prevent="isDragOver = true"
+                     @dragleave.prevent="isDragOver = false"
+                     @click="triggerFileInput">
+                  <div class="file-upload-content">
+                    <div class="file-upload-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M17 8L12 3L7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="file-upload-text">
+                      <p class="upload-title">Drop files here or click to browse</p>
+                      <p class="upload-subtitle">Support: PDF, DOC, DOCX, TXT, RTF (Max 10MB each) - Files will be uploaded with request</p>
+                    </div>
+                  </div>
+                  <input
+                    ref="fileInput"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,.rtf"
+                    @change="handleFileSelect"
+                    class="file-input-hidden"
+                  >
+                </div>
+
+                <!-- File List -->
+                <div v-if="uploadedFiles.length > 0" class="file-list">
+                  <div v-for="(file, index) in uploadedFiles" :key="index" class="file-item">
+                    <div class="file-info">
+                      <div class="file-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </div>
+                      <div class="file-details">
+                        <span class="file-name">{{ file.name }}</span>
+                        <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="file-remove-btn"
+                      @click="removeFile(index)"
+                      title="Remove file">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="input-info">
+                <span v-if="fileError" class="error-message">{{ fileError }}</span>
+                <span v-else class="help-text">Upload files related to your translation request (optional). Files will be uploaded with the request.</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -329,6 +396,12 @@ const tagInput = ref('')
 
 const allTags = ref([])
 const tagError = ref('')
+
+// File upload variables
+const uploadedFiles = ref([])
+const fileInput = ref(null)
+const isDragOver = ref(false)
+const fileError = ref('')
 
 const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
 
@@ -528,8 +601,82 @@ async function handleSubmit() {
     console.log('Full request data being sent:', JSON.stringify(requestData, null, 2))
     console.log('=== END DEBUG ===')
 
+    // Create request first
     const response = await axios.post('/api/requests/create', requestData)
     console.log('Backend response:', response.data)
+
+    // If there are files to upload, upload them using the existing file upload endpoint
+    if (uploadedFiles.value.length > 0) {
+      try {
+        // Try to create a project first, then upload files
+        // If project creation fails, use default values
+        let projectId = '1'
+        let branchId = '1'
+
+        try {
+          // Create a project for this request
+          const projectData = {
+            name: `Project for Request: ${title.value}`,
+            description: `Auto-generated project for request: ${title.value}`,
+            isPublic: false,
+            categoryId: categoryId.value
+          }
+
+          const projectResponse = await axios.post('/api/projects/create', projectData)
+          projectId = projectResponse.data.id.toString()
+          branchId = '1' // Use default branch
+
+          console.log('Created project for request:', projectResponse.data)
+        } catch (projectError) {
+          console.warn('Failed to create project, using defaults:', projectError)
+          // Use default values if project creation fails
+          projectId = '1'
+          branchId = '1'
+        }
+
+        // Upload each file using the existing /api/files/upload endpoint
+        for (const file of uploadedFiles.value) {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('projectId', projectId)
+          formData.append('branchId', branchId)
+
+          console.log('Uploading file:', file.name, 'to project:', projectId, 'branch:', branchId)
+
+          const uploadResponse = await axios.post('/api/files/upload', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          })
+
+          console.log('File upload response:', uploadResponse.data)
+        }
+
+        toast.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: `Request created successfully with ${uploadedFiles.value.length} file(s) uploaded.`,
+          life: 3000
+        })
+      } catch (fileError) {
+        console.error('File upload error:', fileError)
+        console.error('Error details:', fileError.response?.data)
+        toast.add({
+          severity: 'warn',
+          summary: 'Warning',
+          detail: `Request created but file upload failed: ${fileError.response?.data?.message || 'Unknown error'}. You can upload files later.`,
+          life: 3000
+        })
+      }
+    } else {
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Request created successfully!',
+        life: 3000
+      })
+    }
+
     emit('success')
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || 'Failed to create request', life: 3000 })
@@ -571,6 +718,74 @@ function handleTagCreate(newTagName) {
     allTags.value.push(newTag)
     selectedTags.value.push(newTag)
   }
+}
+
+// File upload functions
+function triggerFileInput() {
+  fileInput.value.click()
+}
+
+function handleFileSelect(event) {
+  const files = Array.from(event.target.files)
+  addFiles(files)
+  event.target.value = '' // Reset input
+}
+
+function handleFileDrop(event) {
+  event.preventDefault()
+  isDragOver.value = false
+  const files = Array.from(event.dataTransfer.files)
+  addFiles(files)
+}
+
+function addFiles(files) {
+  fileError.value = ''
+
+  for (const file of files) {
+    // Validate file type
+    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf']
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+
+    if (!allowedTypes.includes(fileExtension)) {
+      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`
+      continue
+    }
+
+    // Validate file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+    if (file.size > maxSize) {
+      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`
+      continue
+    }
+
+    // Check if file already exists
+    const existingFile = uploadedFiles.value.find(f => f.name === file.name)
+    if (existingFile) {
+      fileError.value = `File ${file.name} is already uploaded.`
+      continue
+    }
+
+    // Check total number of files (max 5 files)
+    if (uploadedFiles.value.length >= 5) {
+      fileError.value = 'Maximum 5 files allowed.'
+      continue
+    }
+
+    uploadedFiles.value.push(file)
+  }
+}
+
+function removeFile(index) {
+  uploadedFiles.value.splice(index, 1)
+  fileError.value = ''
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 </script>
 
@@ -1203,6 +1418,195 @@ textarea.form-control {
   .tag-input {
     min-width: 100px;
     font-size: 0.9rem;
+  }
+}
+
+/* File Upload Styles */
+.file-upload-container {
+  width: 100%;
+}
+
+.file-upload-area {
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #f9fafb;
+  position: relative;
+  overflow: hidden;
+}
+
+.file-upload-area:hover {
+  border-color: #667eea;
+  background: #f0f4ff;
+  transform: translateY(-1px);
+}
+
+.file-upload-area.drag-over {
+  border-color: #667eea;
+  background: #e0e7ff;
+  transform: scale(1.02);
+}
+
+.file-upload-area.has-files {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.file-upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.file-upload-icon {
+  color: #6b7280;
+  transition: color 0.3s ease;
+}
+
+.file-upload-area:hover .file-upload-icon {
+  color: #667eea;
+}
+
+.file-upload-area.drag-over .file-upload-icon {
+  color: #667eea;
+}
+
+.file-upload-area.has-files .file-upload-icon {
+  color: #10b981;
+}
+
+.file-upload-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.upload-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.upload-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.file-input-hidden {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.file-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.file-icon {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.file-remove-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.file-remove-btn:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  transform: scale(1.1);
+}
+
+.file-remove-btn:focus {
+  outline: none;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Responsive adjustments for file upload */
+@media (max-width: 768px) {
+  .file-upload-area {
+    padding: 1.5rem;
+  }
+
+  .upload-title {
+    font-size: 1rem;
+  }
+
+  .upload-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .file-item {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .file-name {
+    font-size: 0.8rem;
+  }
+
+  .file-size {
+    font-size: 0.7rem;
   }
 }
 </style>

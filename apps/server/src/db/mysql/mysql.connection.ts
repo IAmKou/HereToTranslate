@@ -45,6 +45,7 @@ export class MySqlConnection {
       synchronize: true,
       logging: true,
       supportBigNumbers: true,
+      charset: 'utf8mb4_unicode_ci',
       entities: [UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,

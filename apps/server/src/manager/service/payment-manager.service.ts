@@ -218,6 +218,9 @@ export class PaypalService {
         request.registrants = [];
         request.project = newProject;
         request.status = RequestStatus.Approved;
+        if (request.status !== RequestStatus.Pending) {
+          request.isPublic = false;
+        }
         transaction.status = TransactionStatus.Completed;
 
         await queryRunner.manager.save([request, transaction]);

@@ -26,6 +26,7 @@ import {
 import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
+import { fileService } from '#LocalProject/Managers/service/file-manager.service';
 
 @Injectable()
 export class ProjectManagerService extends CommonHttpServiceImpl {
@@ -231,6 +232,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       return {
         message: 'Project created successfully',
         projectId: savedProject.id,
+        branchId: savedBranch.id,
       };
     } catch (error) {
       this.logger.debug('Rolling back transaction');

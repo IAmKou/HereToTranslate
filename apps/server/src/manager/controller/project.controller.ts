@@ -12,6 +12,7 @@ import {
   UseGuards,
   UseInterceptors,
   ValidationPipe,
+  UploadedFiles,
 } from '@nestjs/common';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
@@ -22,6 +23,7 @@ import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.i
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { ProjectManagerService } from '../service/project-manager.service';
 import { UserEntity } from '#LocalProject/Entities';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('projects')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -34,7 +36,9 @@ export class ProjectController {
     @Body(ValidationPipe) projectData: CreateProjectDto,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.projects.createProject(req.user.id, projectData);
+    const result = await this.projects.createProject(req.user.id, projectData);
+    console.log('ProjectController.create result:', result);
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)

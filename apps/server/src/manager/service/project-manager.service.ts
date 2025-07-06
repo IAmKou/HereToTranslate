@@ -26,7 +26,6 @@ import {
 import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
-import { fileService } from '#LocalProject/Managers/service/file-manager.service';
 
 @Injectable()
 export class ProjectManagerService extends CommonHttpServiceImpl {
@@ -404,7 +403,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       delete updateData.addTags;
       delete updateData.removeTags;
 
-      let category: CategoryEntity | undefined;
+      let category: CategoryEntity | null | undefined = undefined;
       if (updateData.categoryId !== undefined) {
         category = await queryRunner.manager.findOne(CategoryEntity, {
           where: { id: BigInt(updateData.categoryId) },
@@ -457,17 +456,28 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     const repoName = `project-${projectId}`;
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
       await this.githubService.deleteRepository(repoName);
 
-      await this.projectRepository.remove(project);
+      await queryRunner.manager.remove(project);
+
+      await queryRunner.commitTransaction();
 
       this.logger.debug(`Project [${projectId}] and repo deleted successfully`);
       return { message: `Project deleted successfully` };
     } catch (error) {
-      this.unknownErrorHanlder(error, 'Failed to delete project');
+      await queryRunner.rollbackTransaction();
+      this.logger.error('Failed to delete project:', error);
+      throw new InternalServerErrorException('Failed to delete project');
+    } finally {
+      await queryRunner.release();
     }
   }
+
 
   async findUserToProject(
     projectId: bigint,

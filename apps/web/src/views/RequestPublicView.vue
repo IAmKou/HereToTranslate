@@ -1,11 +1,12 @@
 <template>
   <div class="layout-wrapper">
+    <Navbar />
     <div class="main-content">
       <div class="content">
         <div class="requests-container">
           <!-- Header & Filters -->
           <div class="header-filters-wrapper">
-            <!-- Animated Header -->
+            <!-- Simplified Header -->
             <div class="requests-header" :class="{ 'header-animated': isHeaderVisible }">
               <div class="header-content">
                 <div class="header-left">
@@ -13,39 +14,22 @@
                     <div class="icon-inner">
                       <i class="pi pi-send header-icon" />
                     </div>
-                    <div class="icon-glow"></div>
                   </div>
                   <div class="header-text">
                     <h1 class="requests-title">Public Requests</h1>
-                    <p class="requests-desc">
-                      Browse and discover all public translation requests. Use filters to find requests that match your skills!
-                    </p>
-                    <div class="header-stats">
-
-                      <div class="stat-item">
-                        <i class="pi pi-clock stat-icon"></i>
-                        <span>Active now</span>
-                      </div>
+                  </div>
+                </div>
+                <!-- Search and Filter moved here -->
+                <div class="header-controls">
+                  <div class="search-container">
+                    <div class="search-wrapper">
+                      <i class="pi pi-search search-icon"></i>
+                      <InputText v-model="search" placeholder="Search by title..." class="search-input" @focus="searchFocus = true" @blur="searchFocus = false" />
                     </div>
                   </div>
-                </div>
-                <router-link to="/userhome" class="back-home-label" title="Back to Home">
-                  <i class="pi pi-home"></i>
-                  <span>Back to Home</span>
-                </router-link>
-              </div>
-            </div>
-            <!-- Animated Filters -->
-            <div class="filters-container" :class="{ 'filters-animated': isFiltersVisible }">
-              <div class="filters">
-                <div class="search-container">
-                  <div class="search-wrapper">
-                    <i class="pi pi-search search-icon"></i>
-                    <InputText v-model="search" placeholder="Search by title..." class="search-input" @focus="searchFocus = true" @blur="searchFocus = false" />
+                  <div class="filter-options">
+                    <Dropdown v-model="selectedCategory" :options="categoryOptions" optionLabel="name" optionValue="id" placeholder="All Categories" class="filter-select" @focus="categoryFocus = true" @blur="categoryFocus = false" />
                   </div>
-                </div>
-                <div class="filter-options">
-                  <Dropdown v-model="selectedCategory" :options="categoryOptions" optionLabel="name" optionValue="id" placeholder="All Categories" class="filter-select" @focus="categoryFocus = true" @blur="categoryFocus = false" />
                 </div>
               </div>
             </div>
@@ -108,6 +92,9 @@
                   </div>
                 </div>
                 <div class="card-title improved-title" :title="req.title">{{ req.title }}</div>
+                <div class="card-description" v-if="req.description">
+                  {{ truncateDescription(req.description) }}
+                </div>
                 <div class="deal improved-deal"><i class="pi pi-wallet"></i> {{ formatDeal(req.dealAmount) }}</div>
                 <div class="meta-row">
                   <span><i class="pi pi-user-edit"></i> {{ req.requester?.username }}</span>
@@ -143,6 +130,7 @@ import Badge from 'primevue/badge'
 import Paginator from 'primevue/paginator'
 import axios from 'axios'
 import AppFooter from '../components/AppFooter.vue'
+import Navbar from '../components/Navbar.vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
 
@@ -168,8 +156,7 @@ const currentUser = ref(null)
 
 onMounted(async () => {
   setTimeout(() => { isHeaderVisible.value = true }, 100)
-  setTimeout(() => { isFiltersVisible.value = true }, 300)
-  setTimeout(() => { isGridVisible.value = true }, 500)
+  setTimeout(() => { isGridVisible.value = true }, 300)
   currentUser.value = await authService.getCurrentUser();
   loadRequests()
 })
@@ -235,9 +222,15 @@ function formatDate(dateStr) {
   const d = new Date(dateStr)
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
+
 function formatDeal(amount) {
   if (amount == null) return '-'
   return '$' + amount.toLocaleString()
+}
+
+function truncateDescription(description) {
+  if (!description) return ''
+  return description.length > 120 ? description.substring(0, 120) + '...' : description
 }
 
 function badgeClass(status) {
@@ -301,8 +294,7 @@ function goToDetail(id) {
   overflow: hidden;
 }
 .requests-header {
-  padding: 1.75rem 2rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+  padding: 1.5rem 2rem;
   opacity: 0;
   transform: translateY(30px);
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
@@ -314,109 +306,58 @@ function goToDetail(id) {
 .header-content {
   display: flex;
   align-items: center;
-  gap: 40px;
+  justify-content: space-between;
+  gap: 20px;
 }
 .header-left {
   display: flex;
-  align-items: flex-start;
-  gap: 28px;
-  flex: 1;
+  align-items: center;
+  gap: 20px;
 }
 .icon-circle {
   position: relative;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
-  width: 80px;
-  height: 80px;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
-  animation: pulse 2s infinite;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
 }
 .icon-inner {
   background: white;
   border-radius: 50%;
-  width: 60px;
-  height: 60px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.icon-glow {
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  right: -10px;
-  bottom: -10px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  opacity: 0.3;
-  animation: glow 3s ease-in-out infinite alternate;
-}
 .header-icon {
-  font-size: 2.5rem;
+  font-size: 1.5rem;
   color: #667eea;
-  z-index: 1;
 }
 .header-text {
   flex: 1;
 }
 .requests-title {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-weight: 800;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 12px;
+  margin: 0;
   line-height: 1.2;
 }
-.requests-desc {
-  color: #64748b;
-  font-size: 1.2rem;
-  margin-bottom: 24px;
-  line-height: 1.6;
-}
-.header-stats {
+.header-controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(102, 126, 234, 0.1);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  color: #667eea;
-  font-weight: 500;
-}
-.stat-icon {
-  font-size: 1rem;
-  color: #10b981;
-}
-.filters-container {
-  padding: 1.25rem 2rem;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  transition-delay: 0.2s;
-}
-.filters-animated {
-  opacity: 1;
-  transform: translateY(0);
-}
-.filters {
-  display: flex;
-  gap: 20px;
+  gap: 15px;
   align-items: center;
 }
 .search-container {
-  flex: 1;
-  max-width: 400px;
+  width: 300px;
 }
 .search-wrapper {
   position: relative;
@@ -425,10 +366,10 @@ function goToDetail(id) {
 }
 .search-input {
   width: 100%;
-  padding: 12px 16px 12px 48px;
+  padding: 10px 16px 10px 40px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   background: white;
   transition: all 0.3s ease;
 }
@@ -439,22 +380,23 @@ function goToDetail(id) {
 }
 .search-icon {
   position: absolute;
-  left: 16px;
+  left: 12px;
   color: #a0aec0;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 .filter-options {
   display: flex;
   gap: 12px;
 }
 .filter-select {
-  padding: 12px 16px;
+  padding: 10px 16px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   background: white;
   cursor: pointer;
   transition: all 0.3s ease;
+  min-width: 150px;
 }
 .filter-select:focus {
   outline: none;
@@ -511,7 +453,7 @@ function goToDetail(id) {
   opacity: 0;
   transform: translateY(20px);
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  transition-delay: 0.4s;
+  transition-delay: 0.2s;
   margin-bottom: 15px;
 }
 .grid-animated {
@@ -520,24 +462,24 @@ function goToDetail(id) {
 }
 .requests-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 15px;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 20px;
 }
 .improved-request-card {
   background: #fff;
-  border-radius: 28px;
-  box-shadow: 0 4px 24px rgba(37,99,235,0.10), 0 1.5px 6px rgba(0,0,0,0.04);
-  padding: 32px 32px 28px 32px;
-  transition: box-shadow 0.25s, transform 0.18s;
-  border: 1.5px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(37,99,235,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  padding: 28px 28px 24px 28px;
+  transition: all 0.3s ease;
+  border: 1px solid #e5e7eb;
   position: relative;
-  min-height: 240px;
-  padding-top: 70px;
+  min-height: 280px;
+  padding-top: 80px;
   overflow: visible;
 }
 .improved-request-card:hover {
-  box-shadow: 0 12px 40px rgba(37,99,235,0.18), 0 2px 8px rgba(102,126,234,0.10);
-  transform: translateY(-4px) scale(1.018);
+  box-shadow: 0 16px 48px rgba(37,99,235,0.20), 0 4px 12px rgba(102,126,234,0.15);
+  transform: translateY(-6px) scale(1.02);
 }
 .card-badges {
   display: flex;
@@ -547,16 +489,16 @@ function goToDetail(id) {
   position: absolute;
   top: 0;
   left: 0;
-  padding: 0 24px;
+  padding: 0 20px;
   box-sizing: border-box;
   z-index: 2;
   margin-bottom: 0;
 }
 .status-badge {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 6px 18px 6px 14px;
-  border-radius: 18px;
+  padding: 8px 16px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   text-transform: uppercase;
@@ -564,25 +506,25 @@ function goToDetail(id) {
   background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
   color: #fff;
   border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(37,99,235,0.10);
-  gap: 8px;
-  transition: box-shadow 0.2s, transform 0.2s;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.15);
+  gap: 6px;
+  transition: all 0.2s ease;
 }
 .status-badge:hover {
-  box-shadow: 0 4px 16px rgba(37,99,235,0.18);
-  transform: scale(1.03);
+  box-shadow: 0 6px 20px rgba(37,99,235,0.25);
+  transform: scale(1.05);
 }
 .status-icon {
   background: #fff;
   color: #2563eb;
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1em;
-  margin-right: 6px;
+  font-size: 0.9em;
+  margin-right: 4px;
 }
 .p-badge-info.status-badge {
   background: #2563eb !important;
@@ -599,35 +541,42 @@ function goToDetail(id) {
 .registered-badge {
   background: #22c55e;
   color: #fff;
-  padding: 5px 14px;
+  padding: 6px 12px;
   border-radius: 999px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  box-shadow: 0 1px 4px rgba(34,197,94,0.10);
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(34,197,94,0.15);
 }
 .registered-badge i {
   color: #fff;
-  font-size: 1.1em;
+  font-size: 1em;
 }
 .card-title.improved-title {
-  font-size: 1.35rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: #1e293b;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   letter-spacing: 0.01em;
-  line-height: 1.2;
+  line-height: 1.3;
+}
+.card-description {
+  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  font-weight: 400;
 }
 .improved-deal {
   color: #2563eb;
-  font-size: 1.18rem;
+  font-size: 1.25rem;
   font-weight: 800;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -637,40 +586,26 @@ function goToDetail(id) {
   display: flex;
   justify-content: space-between;
   color: #64748b;
-  font-size: 1em;
-  margin-bottom: 4px;
-  gap: 18px;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+  gap: 16px;
 }
 .meta-row i {
   margin-right: 0.3em;
-  font-size: 1em;
+  font-size: 0.9em;
   color: #6366f1;
-}
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-@keyframes glow {
-  0% { opacity: 0.3; transform: scale(1); }
-  100% { opacity: 0.6; transform: scale(1.1); }
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-@keyframes card-fade-in {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 .paginator {
-  margin-top: 1.5rem;
+  margin-top: 2rem;
   display: flex;
   justify-content: center;
 }
 .request-card .p-badge {
-  font-size: 1rem;
-  padding: 0.35em 1em;
+  font-size: 0.9rem;
+  padding: 0.4em 1em;
   border-radius: 12px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -679,84 +614,7 @@ function goToDetail(id) {
   align-items: center;
   justify-content: center;
   line-height: 1.2;
-  height: 2.1em;
-}
-.back-home-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #667eea;
-  color: #fff;
-  font-weight: 600;
-  border-radius: 20px;
-  padding: 0.5em 1.2em;
-  font-size: 1.05rem;
-  text-decoration: none;
-  box-shadow: 0 2px 8px rgba(102,126,234,0.08);
-  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-  margin-left: auto;
-}
-.back-home-label:hover {
-  background: #4338ca;
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(67,56,202,0.12);
-}
-.registered-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: #22c55e;
-  color: #fff;
-  padding: 6px 16px;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  z-index: 2;
-  box-shadow: 0 2px 8px rgba(34,197,94,0.12);
-}
-.status-badge {
-  margin-top: 6px;
-  margin-bottom: 8px;
-  margin-left: 0;
-  font-size: 0.95em;
-  padding: 4px 16px;
-  border-radius: 999px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  height: auto;
-  min-width: 0;
-  background: #2563eb !important;
-  color: #fff !important;
-  z-index: 1;
-  position: relative;
-}
-/* Badge màu xanh dương cho Pending */
-.p-badge-info.status-badge {
-  background: #2563eb !important;
-  color: #fff !important;
-}
-.top-left-badge {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 3;
-  margin: 0;
-}
-.header-icon,
-.deal i,
-.meta i,
-.registered-badge i {
-  font-size: 1.3em;
-  color: #6366f1;
-  vertical-align: middle;
-}
-.registered-badge i {
-  color: #fff;
-  font-size: 1.2em;
+  height: 2em;
 }
 @media (max-width: 1024px) {
   .content {
@@ -764,10 +622,6 @@ function goToDetail(id) {
   }
   .requests-header {
     padding: 20px;
-    margin-bottom: 12px;
-  }
-  .filters-container {
-    padding: 12px;
     margin-bottom: 12px;
   }
   .loading-container,
@@ -780,24 +634,23 @@ function goToDetail(id) {
     margin-bottom: 12px;
   }
   .requests-grid {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 15px;
   }
   .header-content {
     flex-direction: column;
-    text-align: center;
-    gap: 32px;
+    gap: 20px;
   }
-  .header-left {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  .header-stats {
+  .header-controls {
+    width: 100%;
     justify-content: center;
   }
+  .search-container {
+    width: 100%;
+    max-width: 400px;
+  }
   .requests-title {
-    font-size: 2rem;
+    font-size: 1.8rem;
   }
 }
 @media (max-width: 768px) {
@@ -807,10 +660,6 @@ function goToDetail(id) {
   }
   .requests-header {
     padding: 18px 15px;
-    margin-bottom: 10px;
-  }
-  .filters-container {
-    padding: 10px;
     margin-bottom: 10px;
   }
   .loading-container,
@@ -824,9 +673,9 @@ function goToDetail(id) {
   }
   .requests-grid {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 15px;
   }
-  .filters {
+  .header-controls {
     flex-direction: column;
     align-items: stretch;
   }
@@ -837,14 +686,18 @@ function goToDetail(id) {
     flex-direction: column;
   }
   .requests-title {
-    font-size: 1.75rem;
+    font-size: 1.6rem;
   }
-  .requests-desc {
-    font-size: 1rem;
+  .icon-circle {
+    width: 40px;
+    height: 40px;
   }
-  .header-stats {
-    flex-direction: column;
-    align-items: center;
+  .icon-inner {
+    width: 30px;
+    height: 30px;
+  }
+  .header-icon {
+    font-size: 1.2rem;
   }
 }
 @media (max-width: 480px) {
@@ -853,10 +706,6 @@ function goToDetail(id) {
   }
   .requests-header {
     padding: 15px 12px;
-    margin-bottom: 8px;
-  }
-  .filters-container {
-    padding: 8px;
     margin-bottom: 8px;
   }
   .loading-container,
@@ -869,21 +718,21 @@ function goToDetail(id) {
     margin-bottom: 8px;
   }
   .requests-grid {
-    gap: 8px;
-  }
-  .icon-circle {
-    width: 60px;
-    height: 60px;
-  }
-  .icon-inner {
-    width: 45px;
-    height: 45px;
-  }
-  .header-icon {
-    font-size: 2rem;
+    gap: 12px;
   }
   .requests-title {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
+  }
+  .icon-circle {
+    width: 35px;
+    height: 35px;
+  }
+  .icon-inner {
+    width: 25px;
+    height: 25px;
+  }
+  .header-icon {
+    font-size: 1rem;
   }
 }
 </style>

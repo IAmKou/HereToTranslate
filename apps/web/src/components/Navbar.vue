@@ -2,12 +2,15 @@
   <nav class="navbar">
     <div class="navbar-container">
       <div class="navbar-brand">
-        <span v-if="currentUser" class="username">{{ currentUser.username }}</span>
-        <span v-else class="username">Guest</span>
+        <router-link to="/" class="brand-link">
+
+
+          <span class="brand-name">HereToTranslate</span>
+        </router-link>
       </div>
       <div class="navbar-menu">
         <div class="navbar-start">
-          <router-link to="/" class="navbar-item" aria-label="Home">
+          <router-link to="/userhome" class="navbar-item" aria-label="Home">
             <i class="pi pi-home nav-icon"></i> Home
           </router-link>
           <router-link to="/projects" class="navbar-item" aria-label="Projects">
@@ -20,21 +23,23 @@
             <router-link to="/login" class="button is-primary">Sign In</router-link>
           </div>
           <div v-else class="user-menu" style="position: relative;">
-            <Button
-              v-if="currentUser"
-              @click="menuVisible = !menuVisible"
-              aria-haspopup="menu"
-              :aria-expanded="menuVisible"
-              class="avatar-button"
-              aria-label="Open user menu"
-            >
-              <Avatar
-                :label="getInitials(currentUser.fullName)"
-                size="large"
-                shape="circle"
-                :style="{ backgroundColor: getRandomColor(currentUser.username), boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '2px solid #e0e7ef' }"
-              />
-            </Button>
+            <div class="user-info-display">
+              <span class="username-display">{{ currentUser.username }}</span>
+              <Button
+                @click="menuVisible = !menuVisible"
+                aria-haspopup="menu"
+                :aria-expanded="menuVisible"
+                class="avatar-button"
+                aria-label="Open user menu"
+              >
+                <Avatar
+                  :label="getInitials(currentUser.fullName)"
+                  size="large"
+                  shape="circle"
+                  :style="{ backgroundColor: getRandomColor(currentUser.username), boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '2px solid #e0e7ef' }"
+                />
+              </Button>
+            </div>
             <transition name="fade-scale">
               <div
                 v-if="menuVisible"
@@ -200,6 +205,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin-left: 4rem;
 }
 
 .logo {
@@ -269,11 +275,17 @@ onMounted(() => {
   background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
 }
 
-.username {
+.user-info-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.username-display {
   font-size: 15px;
   font-weight: 500;
   color: #475569;
-  margin-left: 5rem;
+  margin-right: 8px;
 }
 
 .user-menu {
@@ -384,5 +396,12 @@ onMounted(() => {
 @media (max-width: 600px) {
   .user-dropdown-menu { min-width: 100vw; border-radius: 0; left: 0 !important; right: 0 !important; }
   .user-info { border-radius: 0; }
+  .user-info-display {
+    gap: 8px;
+  }
+  .username-display {
+    font-size: 14px;
+    margin-right: 4px;
+  }
 }
 </style>

@@ -18,15 +18,11 @@
                   </div>
                   <div class="header-text">
                     <h1 class="projects-title">Projects</h1>
-                    <p class="projects-desc">
-                      Manage and collaborate on your translation projects
-                    </p>
                     <div class="header-stats">
                       <div class="stat-item">
-                        <i class="pi pi-users stat-icon"></i>
+                        <i class="pi pi-folder stat-icon"></i>
                         <span>{{ projects.length }} Projects</span>
                       </div>
-
                     </div>
                   </div>
                 </div>
@@ -42,8 +38,8 @@
               </div>
             </div>
 
-            <!-- Enhanced Filters -->
-            <div class="filters-container" :class="{ 'filters-animated': isFiltersVisible }">
+            <!-- Filters sát tiêu đề -->
+            <div class="filters-container filters-tight" :class="{ 'filters-animated': isFiltersVisible }">
               <div class="filters">
                 <div class="search-container">
                   <div class="search-wrapper">
@@ -65,8 +61,11 @@
                   <select v-model="sortBy" class="filter-select">
                     <option value="createdAt">Sort by Date</option>
                     <option value="name">Sort by Name</option>
-                    <option value="updatedAt">Sort by Updated</option>
                   </select>
+                  <button class="btn clear-filter-btn" @click.prevent="clearFilter">
+                    <i class="pi pi-filter-slash"></i>
+                    Clear Filter
+                  </button>
                 </div>
               </div>
             </div>
@@ -129,15 +128,15 @@
           >
             <div class="projects-grid">
               <div
-                v-for="(project, index) in filteredProjects"
-                :key="String(project.id)"
-                class="project-card"
+                v-for="(project, index) in paginatedProjects"
+                :key="String((project as Project).id)"
+                class="project-card project-card-highlight"
                 :class="{ 'card-animated': true }"
                 :style="{ animationDelay: `${index * 0.1}s` }"
-                @click="viewProject(project.id)"
+                @click="viewProject((project as Project).id)"
               >
                 <div class="project-header">
-                  <h3>{{ project.name }}</h3>
+                  <h3 :title="(project as Project).name" class="project-title-strong">{{ (project as Project).name }}</h3>
                   <div class="project-badges">
                     <span v-if="!project.isPrivate" class="badge badge-public">
                       <i class="pi pi-globe"></i>
@@ -152,32 +151,41 @@
 
                 <p
                   v-if="project.description"
-                  class="description"
+                  class="description description-truncate"
+                  :title="project.description"
                 >
-                  {{ project.description }}
+                  {{ project.description.length > 120 ? project.description.substring(0, 120) + '...' : project.description }}
                 </p>
 
                 <div v-if="project.tags && project.tags.length > 0" class="tags">
                   <span
-                    v-for="tag in project.tags.slice(0, 3)"
+                    v-for="tag in (project as Project).tags"
                     :key="tag.id"
                     class="tag"
                   >
                     {{ tag.name }}
                   </span>
-                  <span v-if="project.tags.length > 3" class="tag-more">
-                    +{{ project.tags.length - 3 }} more
-                  </span>
+                </div>
+                <div v-if="project.tags && project.tags.length > 5" class="tag-more">
+                  ({{ project.tags.length }} tags)
                 </div>
 
                 <div class="project-meta">
-                  <div class="meta-item">
-                    <i class="pi pi-user meta-icon"></i>
+                  <div class="meta-item" v-if="project.createdBy">
+                    <i class="pi pi-user-edit meta-icon"></i>
                     <span class="meta-value">{{ project.createdBy.username }}</span>
                   </div>
                   <div class="meta-item">
-                    <i class="pi pi-calendar meta-icon"></i>
+                    <i class="pi pi-calendar-plus meta-icon"></i>
                     <span class="meta-value">{{ formatDate(project.createdAt) }}</span>
+                  </div>
+                  <div class="meta-item" v-if="project.category">
+                    <i class="pi pi-tag meta-icon"></i>
+                    <span class="meta-value">{{ project.category.name }}</span>
+                  </div>
+                  <div class="meta-item" v-if="project.updatedAt">
+                    <i class="pi pi-refresh meta-icon"></i>
+                    <span class="meta-value">Updated: {{ formatDate(project.updatedAt) }}</span>
                   </div>
                 </div>
 
@@ -191,8 +199,21 @@
                     Manage
                   </button>
                 </div>
+
+                <div class="project-status" v-if="project.status">
+                  <span class="status-badge" :class="`status-${project.status}`">
+                    {{ project.status === 'archived' ? 'Archived' : 'Active' }}
+                  </span>
+                </div>
               </div>
             </div>
+            <Paginator
+              :rows="pageSize"
+              :totalRecords="filteredProjects.length"
+              v-model:first="currentPage"
+              @page="onPageChange"
+              class="paginator paginator-spaced"
+            />
           </div>
         </div>
       </div>
@@ -207,6 +228,7 @@ import { useRouter } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import AppFooter from '../components/AppFooter.vue';
+import Paginator from 'primevue/paginator';
 import { isSidebarCollapsed } from '../store/sidebar';
 import axiosInstance from '../api';
 
@@ -223,6 +245,10 @@ interface Project {
     fullName?: string;
   };
   tags?: Array<{ id: string; name: string }>;
+  members?: Array<{ id: string; username: string }>;
+  category?: { id: string; name: string };
+  updatedAt?: string;
+  status?: string;
 }
 
 export default defineComponent({
@@ -231,6 +257,7 @@ export default defineComponent({
     Sidebar,
     TopNavbar,
     AppFooter,
+    Paginator,
   },
   setup() {
     const router = useRouter();
@@ -243,6 +270,8 @@ export default defineComponent({
     const isHeaderVisible = ref(false);
     const isFiltersVisible = ref(false);
     const isGridVisible = ref(false);
+    const pageSize = 9;
+    const currentPage = ref(0);
 
     // Animation triggers
     onMounted(() => {
@@ -271,8 +300,8 @@ export default defineComponent({
       }
     };
 
-    const filteredProjects = computed(() => {
-      let filtered = projects.value;
+    const filteredProjects = computed<Project[]>(() => {
+      let filtered: Project[] = projects.value;
 
       // Apply search filter
       if (searchQuery.value) {
@@ -286,24 +315,29 @@ export default defineComponent({
 
       // Apply visibility filter
       if (visibilityFilter.value === 'public') {
-        filtered = filtered.filter(project => project.isPrivate);
-      } else if (visibilityFilter.value === 'private') {
         filtered = filtered.filter(project => !project.isPrivate);
+      } else if (visibilityFilter.value === 'private') {
+        filtered = filtered.filter(project => project.isPrivate);
       }
 
       // Apply sorting
-      filtered.sort((a, b) => {
+      filtered.sort((a: Project, b: Project) => {
         switch (sortBy.value) {
           case 'name':
             return a.name.localeCompare(b.name);
           case 'updatedAt':
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            return new Date((b.updatedAt || b.createdAt)).getTime() - new Date((a.updatedAt || a.createdAt)).getTime();
           default:
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
       });
 
       return filtered;
+    });
+
+    const paginatedProjects = computed(() => {
+      const start = currentPage.value * pageSize;
+      return filteredProjects.value.slice(start, start + pageSize);
     });
 
     const formatDate = (date: string) => {
@@ -326,6 +360,16 @@ export default defineComponent({
       router.push(`/projects/${projectId}/manage`);
     };
 
+    const clearFilter = () => {
+      searchQuery.value = '';
+      visibilityFilter.value = '';
+      sortBy.value = 'createdAt';
+    };
+
+    const onPageChange = (e: { page: number }) => {
+      currentPage.value = e.page;
+    };
+
     onMounted(loadProjects);
 
     return {
@@ -345,6 +389,12 @@ export default defineComponent({
       isFiltersVisible,
       isGridVisible,
       isSidebarCollapsed,
+      clearFilter,
+      pageSize,
+      currentPage,
+      paginatedProjects,
+      onPageChange,
+      Paginator,
     };
   },
 });
@@ -1028,5 +1078,83 @@ export default defineComponent({
   .projects-title {
     font-size: 1.5rem;
   }
+}
+
+/* Làm nổi bật card project */
+.project-card.project-card-highlight {
+  border: 2px solid #764ba2;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25), 0 2px 8px rgba(118, 75, 162, 0.15);
+  background: #f8f6ff;
+}
+
+/* Mô tả rút gọn 2 dòng */
+.description-truncate {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+/* Trạng thái project */
+.project-status {
+  margin-top: 8px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: #e0e7ff;
+  color: #3730a3;
+  margin-right: 8px;
+}
+
+.status-archived {
+  background: #fca5a5;
+  color: #991b1b;
+}
+
+.status-active {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.project-title-strong {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #3b3663;
+  line-height: 1.2;
+  margin-bottom: 0.5rem;
+  word-break: break-word;
+}
+
+.clear-filter-btn {
+  margin-left: 8px;
+  padding: 8px 20px;
+  border: 1.5px solid #e53e3e;
+  color: #e53e3e;
+  background: #fff0f1;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(229, 62, 62, 0.08);
+  transition: all 0.2s;
+}
+
+.clear-filter-btn:hover {
+  background: #e53e3e;
+  color: #fff;
+  border-color: #e53e3e;
+}
+
+.paginator-spaced {
+  margin-top: 32px;
+  margin-bottom: 8px;
 }
 </style>

@@ -210,8 +210,9 @@ export class PaypalService {
         }
 
         const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
-        adminWallet.balance += Number(transaction.amount);
+        adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
         await queryRunner.manager.save(adminWallet);
+
 
         await queryRunner.commitTransaction();
 

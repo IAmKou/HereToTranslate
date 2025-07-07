@@ -77,12 +77,6 @@
           <div class="divider">
             <span>or</span>
           </div>
-
-          <div class="google-signin">
-            <div id="g_id_onload"></div>
-            <div id="g_id_signin"></div>
-          </div>
-
           <div class="register-section">
             <p>Don't have an account?</p>
             <button type="button" class="register-button" @click="goToRegister">
@@ -91,6 +85,12 @@
             </button>
           </div>
         </form>
+        <div class="google-signin">
+          <button @click="signInWithGoogleRedirect" class="submit-button">
+            <i class="pi pi-google"></i>
+            Sign in with Google
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -140,55 +140,13 @@ const goToRegister = () => {
   router.push('/register');
 };
 
-onMounted(() => {
-  // Load Google Sign-In script
-  const script = document.createElement('script');
-  script.src = 'https://accounts.google.com/gsi/client';
-  script.async = true;
-  script.defer = true;
-  script.onload = () => {
-    // Initialize Google Sign-In after script loads
-    window.google.accounts.id.initialize({
-      client_id:
-        '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com',
-      callback: handleGoogleSignIn,
-    });
-    window.google.accounts.id.renderButton(
-      document.getElementById('g_id_signin'),
-      {
-        type: 'standard',
-        size: 'large',
-        theme: 'outline',
-        text: 'signin_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-      }
-    );
-  };
-  document.head.appendChild(script);
-});
+const signInWithGoogleRedirect = () => {
+  const clientId = '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com';
+  const redirectUri = 'http://localhost:4200/oauth-callback';
 
-const handleGoogleSignIn = async (response) => {
-  try {
-    isSubmitting.value = true;
-    error.value = '';
-    await authService.loginWithGoogle(response.credential);
+  const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token id_token&scope=openid%20email%20profile&nonce=secure_nonce`;
 
-    const user = authService.getUser();
-    if (user?.role?.name === 'SUPER_ADMIN') {
-      await router.push('/adminhome');
-    } else if (user?.role?.name === 'ADMIN') {
-      await router.push('/adminhome');
-    } else {
-      await router.push('/userhome');
-    }
-
-  } catch (err) {
-    error.value =
-      err.response?.data?.message || err.message || 'Google sign-in failed.';
-  } finally {
-    isSubmitting.value = false;
-  }
+  window.location.href = googleOAuthUrl;
 };
 </script>
 

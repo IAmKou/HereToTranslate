@@ -48,10 +48,13 @@ class AuthService {
   }
 
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
-    const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/google`, { idToken });
+    const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/google`, { idToken }, {
+      withCredentials: true,
+    });
     this.user = response.data.user as User;
     return response.data;
   }
+
 
   async refreshTokens(): Promise<AuthResponse> {
     try {
@@ -76,7 +79,9 @@ class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const response = await axios.get<User>(`${BASE_URL}/auth/me`);
+      const response = await axios.get<User>(`${BASE_URL}/auth/me`, {
+        withCredentials: true,
+      });
 
       const user = response.data;
       if (typeof user.role === 'number') {

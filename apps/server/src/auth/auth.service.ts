@@ -164,10 +164,9 @@ export class AuthService {
       idToken,
       audience: this.configService.get<string>('GOOGLE_OAUTH2_CLIENT'),
     });
+
     const payload = ticket.getPayload();
-    if (!payload) {
-      throw new UnauthorizedException('Invalid Google token');
-    }
+    if (!payload) throw new UnauthorizedException('Invalid Google token');
 
     const { email, name } = payload;
 
@@ -177,25 +176,21 @@ export class AuthService {
     });
 
     if (!user?.isActive) {
-      throw new UnauthorizedException('Your account have been deactivated');
+      throw new UnauthorizedException('Your account has been deactivated');
     }
 
     if (!user) {
       const username = email;
-      const existingUser = await this.userRepository.findOne({
-        where: { username },
-      });
-      if (existingUser) {
-        throw new BadRequestException('User with this email already exists');
-      }
+      const existingUser = await this.userRepository.findOne({ where: { username } });
+      if (existingUser) throw new BadRequestException('User with this email already exists');
 
       user = this.userRepository.create({
         username,
         email,
         passwordHash: '',
         fullName: name,
-        phone: '', // Empty phone for Google users
-        role: { id: BigInt(UserRole.Member) }, // Default to member role
+        phone: '',
+        role: { id: BigInt(UserRole.Member) },
       });
       await this.userRepository.save(user);
     }
@@ -207,6 +202,7 @@ export class AuthService {
 
     return this.generateTokenPair(user);
   }
+
 
   async logout(token: string, allSessions = false) {
     const meta = await this.authRepository.findOne({

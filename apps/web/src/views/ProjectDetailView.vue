@@ -54,272 +54,112 @@
           <!-- Project Content -->
           <div v-else-if="project" class="project-content">
             <!-- Enhanced Project Header -->
-            <div class="project-header">
-              <div class="project-info">
-                <div class="project-title-section">
-                  <h1 class="project-title">{{ project.name }}</h1>
-                  <div class="project-badges">
-                    <span v-if="!project.isPrivate" class="badge badge-public">
-                      <span class="badge-icon">🌍</span>
-                      Public
-                    </span>
-                    <span v-else class="badge badge-private">
-                      <span class="badge-icon">🔒</span>
-                      Private
-                    </span>
+            <div class="project-header glassy-header">
+              <div class="project-header-left">
+                <div class="creator-avatar">
+                  <template v-if="project.createdBy.avatarUrl">
+                    <img :src="project.createdBy.avatarUrl" alt="Avatar" class="avatar-img" />
+                  </template>
+                  <template v-else>
+                    <svg class="avatar-placeholder" width="48" height="48" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="url(#avatarGradient)"/><path d="M24 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm0 3c-4.418 0-13 2.238-13 6.667V39h26v-4.333C37 30.238 28.418 28 24 28z" fill="#fff" fill-opacity=".7"/></svg>
+                    <svg width="0" height="0">
+                      <defs>
+                        <linearGradient id="avatarGradient" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stop-color="#7f53ac"/>
+                          <stop offset="100%" stop-color="#4299e1"/>
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </template>
+                </div>
+                <div class="creator-info-block">
+                  <div class="project-title-row">
+                    <h1 class="project-title">{{ project.name }}
+                      <span v-if="project.isPrivate" class="badge badge-private-new" title="Private">
+                        <span class="badge-icon"><svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M6 9V7a4 4 0 118 0v2" stroke="#b7791f" stroke-width="1.5"/><rect x="4" y="9" width="12" height="7" rx="2" fill="#fefcbf" stroke="#b7791f" stroke-width="1.5"/><circle cx="10" cy="13" r="1.5" fill="#b7791f"/></svg></span>
+                        <span class="badge-text">Private</span>
+                      </span>
+                      <span v-else class="badge badge-public-new" title="Public">
+                        <span class="badge-icon">🌍</span>
+                        <span class="badge-text">Public</span>
+                      </span>
+                    </h1>
                   </div>
-                </div>
-                <div class="project-meta">
-                  <div class="meta-item">
-                    <span class="meta-icon">👤</span>
-                    <span class="meta-text"
-                    >Created by
-                      <strong>{{ project.createdBy.username }}</strong></span
-                    >
-                  </div>
-                  <div class="meta-item">
-                    <span class="meta-icon">📅</span>
-                    <span class="meta-text">{{
-                        formatDate(project.createdAt)
-                      }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="project-actions">
-                <router-link
-                  :to="`/projects/${project.id}/manage`"
-                  class="btn btn-primary btn-manage"
-                >
-                  <span class="icon">⚙️</span>
-                  Manage Project
-                </router-link>
-                <button @click="editProject" class="btn btn-outline">
-                  <span class="icon">✏️</span>
-                  Edit Project
-                </button>
-                <button @click="openDeleteModal" class="btn btn-danger">
-                  <span class="icon">🗑️</span>
-                  Delete Project
-                </button>
-              </div>
-            </div>
-
-            <!-- Project Description -->
-            <div class="project-section description-section">
-              <div class="section-header">
-                <h2 class="section-title">
-                  <span class="title-icon">📝</span>
-                  Description
-                </h2>
-              </div>
-              <div class="description-content">
-                <p v-if="project.description" class="description">
-                  {{ project.description }}
-                </p>
-                <div v-else class="no-description">
-                  <span class="no-content-icon">📄</span>
-                  <p>No description provided for this project.</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Project Tags -->
-            <div
-              v-if="project.tags && project.tags.length > 0"
-              class="project-section tags-section"
-            >
-              <div class="section-header">
-                <h2 class="section-title">
-                  <span class="title-icon">🏷️</span>
-                  Tags
-                </h2>
-              </div>
-              <div class="tags-container">
-                <span v-for="tag in project.tags" :key="tag.id" class="tag">
-                  {{ tag.name }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Project Files -->
-            <div class="project-section files-section">
-              <div class="section-header">
-                <h2 class="section-title">
-                  <span class="title-icon">📁</span>
-                  Files
-                </h2>
-
-              </div>
-              <div class="files-content">
-                <div v-if="filesLoading" class="files-loading">
-                  <div class="loading-spinner-small"></div>
-                  <span>Loading files...</span>
-                </div>
-                <div v-else-if="filesError" class="files-error">
-                  <span class="error-icon">⚠️</span>
-                  <span>{{ filesError }}</span>
-                  <button @click="loadFiles" class="btn btn-outline btn-sm">Retry</button>
-                </div>
-                <div v-else-if="projectFiles && projectFiles.length > 0" class="files-list">
-                  <div v-for="file in projectFiles" :key="file.id" class="file-item">
-                    <div class="file-info">
-                      <div class="file-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                      </div>
-                      <div class="file-details">
-                        <span class="file-name">{{ file.fileName }}</span>
-                      </div>
+                  <div class="project-meta-row">
+                    <div class="meta-item">
+                      <span class="meta-icon">👤</span>
+                      <span class="meta-text">
+                        {{ project.createdBy.fullName || project.createdBy.username }}
+                      </span>
                     </div>
-                    <div class="file-actions">
-                      <button @click="downloadFile(file)" class="btn btn-outline btn-sm">
-                        <span class="icon">⬇️</span>
-                        Download
-                      </button>
+                    <div class="meta-item">
+                      <span class="meta-icon">📅</span>
+                      <span class="meta-text">{{ formatDate(project.createdAt) }}</span>
                     </div>
                   </div>
                 </div>
-                <div v-else class="no-files">
-                  <div class="no-content-icon">📄</div>
-                  <p>No files uploaded to this project yet.</p>
+              </div>
+              <div class="project-actions actions-dropdown-wrapper">
+                <div class="actions-dropdown" v-if="!showActionsMenu">
+                  <button class="btn btn-outline icon-btn" @click="showActionsMenu = true">
+                    <span class="icon">⋮</span>
+                  </button>
+                </div>
+                <div class="actions-dropdown-menu" v-if="showActionsMenu">
+                  <button class="dropdown-action" @click="goToManage"><span class="icon">⚙️</span> Manage Project</button>
+                  <button class="dropdown-action" @click="editProject"><span class="icon">✏️</span> Edit Project</button>
+                  <button class="dropdown-action danger" @click="openDeleteModal"><span class="icon">🗑️</span> Delete Project</button>
+                  <button class="dropdown-action close" @click="showActionsMenu = false">Close</button>
+                </div>
+                <div class="actions-desktop" v-if="!isMobile">
+                  <router-link :to="`/projects/${project.id}/manage`" class="btn btn-primary btn-manage">
+                    <span class="icon">⚙️</span> Manage Project
+                  </router-link>
+                  <button @click="editProject" class="btn btn-outline">
+                    <span class="icon">✏️</span> Edit Project
+                  </button>
+                  <button @click="openDeleteModal" class="btn btn-danger">
+                    <span class="icon">🗑️</span> Delete Project
+                  </button>
                 </div>
               </div>
             </div>
 
-            <!-- Project Discussions -->
-            <DiscussionSection
-              :project-id="Number(project.id)"
-              :can-create-discussion="canCreateDiscussion"
-              :can-manage-discussions="canManageDiscussions"
-            />
-
-            <!-- Enhanced Project Statistics -->
+            <!-- Stat Cards ngay sau Header -->
             <div class="project-stats">
-              <div class="stat-card">
-                <div class="stat-icon">👥</div>
+              <div class="stat-card stat-card-clickable" @click="activeTab = 'members'" title="View Roles & Members">
+                <div class="stat-icon stat-icon-circle">👥</div>
                 <div class="stat-number">
                   {{ project.projectRoles?.length || 0 }}
                 </div>
                 <div class="stat-label">Roles</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-icon">👨‍👩‍👧‍👦</div>
+              <div class="stat-card stat-card-clickable" @click="activeTab = 'groups'" title="View Groups">
+                <div class="stat-icon stat-icon-circle">👨‍👩‍👧‍👦</div>
                 <div class="stat-number">{{ project.groups?.length || 0 }}</div>
                 <div class="stat-label">Groups</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-icon">📁</div>
-                <div class="stat-number">0</div>
+              <div class="stat-card stat-card-clickable" @click="scrollToFiles" title="View Files">
+                <div class="stat-icon stat-icon-circle">📁</div>
+                <div class="stat-number">{{ projectFiles.length }}</div>
                 <div class="stat-label">Files</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-icon">🌿</div>
+              <div class="stat-card stat-card-clickable" @click="alert('Branch detail coming soon!')" title="Branches">
+                <div class="stat-icon stat-icon-circle">🌿</div>
                 <div class="stat-number">0</div>
                 <div class="stat-label">Branches</div>
               </div>
             </div>
 
-            <!-- Enhanced Management Sections -->
+            <!-- Project Members + Add User lên ngay sau Stat Cards -->
             <div class="management-sections">
-              <!-- Add User to Project Section -->
-              <div class="management-section user-section">
-                <div class="section-header">
-                  <h2 class="section-title">
-                    <span class="title-icon">➕</span>
-                    Add User to Project
-                  </h2>
-                </div>
-                <div class="section-content">
-                  <form @submit.prevent="searchUser" class="add-user-form">
-                    <div class="form-row">
-                      <div class="form-group" style="flex: 1; margin-bottom: 0">
-                        <label for="userIdentifier" class="form-label">
-                          <span class="label-icon">🔍</span>
-                          Search by Email or Name
-                        </label>
-                        <input
-                          id="userIdentifier"
-                          v-model="userSearch.identifier"
-                          type="text"
-                          required
-                          class="form-control"
-                          placeholder="Enter email or full name"
-                        />
-                      </div>
-                      <div
-                        class="form-actions"
-                        style="margin-bottom: 0; align-self: flex-end"
-                      >
-                        <button
-                          type="submit"
-                          class="btn btn-primary"
-                          :disabled="userSearch.loading"
-                        >
-                          <span
-                            v-if="userSearch.loading"
-                            class="loading-spinner-small"
-                          ></span>
-                          <span v-else class="icon">🔍</span>
-                          {{
-                            userSearch.loading ? 'Searching...' : 'Search User'
-                          }}
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-
-                  <div v-if="userSearch.error" class="error-message">
-                    <span class="error-icon">❌</span>
-                    <p>{{ userSearch.error }}</p>
-                  </div>
-
-                  <div v-if="userSearch.result" class="found-user">
-                    <div class="user-info">
-                      <div class="user-avatar">
-                        <span class="avatar-text">{{
-                            (
-                              userSearch.result.fullName ||
-                              userSearch.result.username
-                            )
-                              .charAt(0)
-                              .toUpperCase()
-                          }}</span>
-                      </div>
-                      <div class="user-details">
-                        <h4>
-                          {{
-                            userSearch.result.fullName ||
-                            userSearch.result.username
-                          }}
-                        </h4>
-                        <p>{{ userSearch.result.email }}</p>
-                      </div>
-                    </div>
-                    <button
-                      class="btn btn-primary btn-sm"
-                      @click="addUserToProject"
-                      :disabled="userSearch.adding"
-                    >
-                      <span
-                        v-if="userSearch.adding"
-                        class="loading-spinner-small"
-                      ></span>
-                      <span v-else class="icon">➕</span>
-                      {{ userSearch.adding ? 'Adding...' : 'Add to Project' }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Tabs for Details, Members and Discussions -->
+              <!-- Tabs Navigation giữ nguyên -->
               <div class="tabs">
                 <button
-                  :class="['tab', { active: activeTab === 'details' }]"
-                  @click="activeTab = 'details'"
+                  :class="['tab', { active: activeTab === 'description' }]"
+                  @click="activeTab = 'description'"
                 >
-                  Details
+                  Description
                 </button>
                 <button
                   :class="['tab', { active: activeTab === 'members' }]"
@@ -328,251 +168,319 @@
                   Members
                 </button>
                 <button
+                  :class="['tab', { active: activeTab === 'groups' }]"
+                  @click="activeTab = 'groups'"
+                >
+                  Groups
+                </button>
+                <button
                   :class="['tab', { active: activeTab === 'discussions' }]"
                   @click="activeTab = 'discussions'"
                 >
                   Discussions
                 </button>
+                <button
+                  :class="['tab', { active: activeTab === 'files' }]"
+                  @click="activeTab = 'files'"
+                >
+                  Files
+                </button>
               </div>
-
-              <div v-if="activeTab === 'details'">
-                <!-- Management Sections -->
-                <div class="management-sections">
-                  <!-- Add User to Project Section -->
-                  <div class="management-section">
+              <transition name="fade-tab" mode="out-in">
+                <div v-if="activeTab === 'members'" key="members">
+                  <!-- Add User to Project Section (moved up) -->
+                  <div class="management-section user-section">
                     <div class="section-header">
-                      <h2>Add User to Project</h2>
+                      <h2 class="section-title">
+                        <span class="title-icon">➕</span>
+                        Add User to Project
+                      </h2>
                     </div>
-                    <form @submit.prevent="searchUser" class="add-user-form">
-                      <div class="form-group">
-                        <label for="userIdentifier"
-                        >Search by Email or Name</label
-                        >
-                        <input
-                          id="userIdentifier"
-                          v-model="userSearch.identifier"
-                          type="text"
-                          required
-                          class="form-control"
-                          placeholder="Enter email or full name"
-                        />
+                    <div class="section-content">
+                      <form @submit.prevent="searchUser" class="add-user-form" autocomplete="off">
+                        <div class="form-row">
+                          <div class="form-group" style="flex: 1; margin-bottom: 0; position:relative;">
+                            <label for="userIdentifier" class="form-label">
+                              <span class="label-icon">🔍</span>
+                              Search by Email or Name
+                            </label>
+                            <input
+                              id="userIdentifier"
+                              v-model="userSearch.identifier"
+                              type="text"
+                              required
+                              class="form-control"
+                              placeholder="Enter email or full name"
+                              @input="handleUserSuggest"
+                              @keydown.down.prevent="moveSuggest(1)"
+                              @keydown.up.prevent="moveSuggest(-1)"
+                              @keydown.enter.prevent="selectUserSuggest"
+                              autocomplete="off"
+                            />
+                            <ul v-if="userSuggestList.length > 0" class="user-suggest-dropdown">
+                              <li v-for="(suggest, idx) in userSuggestList" :key="suggest.id"
+                                  :class="{active: idx === userSuggestActiveIdx}"
+                                  @mousedown.prevent="selectUserSuggest(idx)">
+                                <span class="avatar-text">{{ (suggest.fullName || suggest.username).charAt(0).toUpperCase() }}</span>
+                                <span class="suggest-name">{{ suggest.fullName || suggest.username }}</span>
+                                <span class="suggest-email">{{ suggest.email }}</span>
+                              </li>
+                            </ul>
+                          </div>
+                          <div class="form-actions" style="margin-bottom: 0; align-self: flex-end">
+                            <button
+                              type="submit"
+                              class="btn btn-primary"
+                              :disabled="!userSearch.identifier || userSearch.loading"
+                              :title="!userSearch.identifier ? 'Please enter a name or email to search' : ''"
+                            >
+                              <span v-if="userSearch.loading" class="loading-spinner-small"></span>
+                              <span v-else class="icon">🔍</span>
+                              {{ userSearch.loading ? 'Searching...' : 'Search User' }}
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                      <div v-if="userSearch.error" class="error-message">
+                        <span class="error-icon">❌</span>
+                        <p>{{ userSearch.error }}</p>
                       </div>
-                      <div class="modal-actions">
-                        <button
-                          type="submit"
-                          class="btn btn-primary"
-                          :disabled="userSearch.loading"
-                        >
-                          {{
-                            userSearch.loading ? 'Searching...' : 'Search User'
-                          }}
-                        </button>
-                      </div>
-                    </form>
-                    <div
-                      v-if="userSearch.error"
-                      class="error"
-                      style="margin-top: 1rem"
-                    >
-                      <p>{{ userSearch.error }}</p>
-                    </div>
-                    <div
-                      v-if="userSearch.result"
-                      class="found-user"
-                      style="margin-top: 1rem"
-                    >
-                      <div class="user-info">
-                        <span
-                        ><b>{{
-                            userSearch.result.fullName ||
-                            userSearch.result.username
-                          }}</b>
-                          ({{ userSearch.result.email }})</span
-                        >
+                      <div v-if="userSearch.result" class="found-user">
+                        <div class="user-info">
+                          <div class="user-avatar">
+                            <span class="avatar-text">{{ (userSearch.result.fullName || userSearch.result.username).charAt(0).toUpperCase() }}</span>
+                          </div>
+                          <div class="user-details">
+                            <h4>{{ userSearch.result.fullName || userSearch.result.username }}</h4>
+                            <p>{{ userSearch.result.email }}</p>
+                          </div>
+                        </div>
                         <button
                           class="btn btn-primary btn-sm"
                           @click="addUserToProject"
                           :disabled="userSearch.adding"
                         >
-                          {{
-                            userSearch.adding ? 'Adding...' : 'Add to Project'
-                          }}
+                          <span v-if="userSearch.adding" class="loading-spinner-small"></span>
+                          <span v-else class="icon">➕</span>
+                          {{ userSearch.adding ? 'Adding...' : 'Add to Project' }}
                         </button>
                       </div>
                     </div>
                   </div>
-                  <!-- Enhanced Groups Management -->
-                  <div class="management-section groups-section">
+                  <!-- Project Members Section (moved down) -->
+                  <div class="members-section">
+                    <div class="section-header">
+                      <h2 class="section-title">
+                        <span class="title-icon">👥</span>
+                        Project Members
+                      </h2>
+                    </div>
+                    <div class="members-content">
+                      <div v-if="membersLoading" class="members-loading">
+                        <div class="loading-spinner-small"></div>
+                        <span>Loading members...</span>
+                      </div>
+                      <div v-else-if="membersError" class="members-error">
+                        <span class="error-icon">⚠️</span>
+                        <span>{{ membersError }}</span>
+                        <button @click="loadMembers" class="btn btn-outline btn-sm">Retry</button>
+                      </div>
+                      <div v-else-if="members && members.length > 0" class="members-list members-table-responsive">
+                        <table class="members-table">
+                          <thead>
+                          <tr>
+                            <th @click="sortBy('name')">User</th>
+                            <th @click="sortBy('roles')">Roles</th>
+                            <th>Actions</th>
+                          </tr>
+                          </thead>
+                          <tbody>
+                          <tr v-for="member in members" :key="member.id">
+                            <td>
+                              <div class="user-cell" :title="member.fullName + ' - ' + member.email">
+                                <div class="user-avatar">
+                                  {{ (member.fullName || member.username).charAt(0).toUpperCase() }}
+                                </div>
+                                <div class="user-info">
+                                  <div class="user-name">{{ member.fullName || member.username }}</div>
+                                  <div class="user-email">{{ member.email }}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                                <span
+                                  v-for="role in member.roles"
+                                  :key="role.id"
+                                  class="role-badge"
+                                  :title="getRoleDescription(role.name)"
+                                >
+                                  {{ role.name }}
+                                </span>
+                            </td>
+                            <td>
+                              <button class="edit-role-btn" title="Edit Roles" @click="editRoles(member)">
+                                <i class="pi pi-pencil"></i>
+                              </button>
+                            </td>
+                          </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div v-else class="empty-members">
+                        <div class="empty-icon">👥</div>
+                        <h3>No Members</h3>
+                        <p>No members have been added to this project yet.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else-if="activeTab === 'groups'" key="groups">
+                  <!-- Project Groups Section -->
+                  <div class="groups-section">
                     <div class="section-header">
                       <h2 class="section-title">
                         <span class="title-icon">👨‍👩‍👧‍👦</span>
                         Project Groups
                       </h2>
-                      <button
-                        @click="showCreateGroupModal = true"
-                        class="btn btn-primary btn-add"
-                      >
-                        <span class="icon">➕</span>
-                        Add Group
+                      <button class="btn btn-primary btn-sm" @click="showCreateGroupModal = true">
+                        <span class="icon">➕</span> Create Group
                       </button>
                     </div>
-                    <div class="section-content">
-                      <div
-                        v-if="project.groups && project.groups.length > 0"
-                        class="groups-list"
-                      >
-                        <div
-                          v-for="group in project.groups"
-                          :key="group.id"
-                          class="group-item"
-                        >
+                    <div class="groups-content">
+                      <div v-if="!project.groups || project.groups.length === 0" class="empty-section">
+                        <div class="empty-icon">👨‍👩‍👧‍👦</div>
+                        <h3>No Groups</h3>
+                        <p>No groups have been created for this project yet.</p>
+                      </div>
+                      <div v-else class="groups-list">
+                        <div v-for="group in project.groups" :key="group.id" class="group-item">
                           <div class="group-info">
                             <div class="group-header">
-                              <h3 class="group-name">{{ group.name }}</h3>
-                              <span class="group-badge">Group</span>
+                              <span class="group-name">{{ group.name }}</span>
+                              <span class="group-badge">{{ group.permissionFlags }}</span>
                             </div>
-                            <p class="permissions">
-                              Permissions:
-                              {{ formatPermissions(group.permissionFlags) }}
-                            </p>
-                            <div v-if="group.members" class="members-info">
+                            <div class="members-info">
                               <span class="members-count">
-                                <span class="count-icon">👥</span>
-                                {{ group.members.length }} member{{
-                                  group.members.length !== 1 ? 's' : ''
-                                }}
+                                <span class="count-icon">👤</span>
+                                {{ group.members?.length || 0 }} members
                               </span>
                             </div>
                           </div>
                           <div class="group-actions">
-                            <div class="dropdown">
-                              <button
-                                class="btn btn-sm btn-outline dropdown-toggle"
-                                @click="toggleGroupDropdown(group.id)"
-                              >
-                                <span class="icon">⚙️</span>
-                                Actions
-                                <span class="dropdown-arrow">▼</span>
-                              </button>
-                              <div
-                                v-if="activeGroupDropdown === group.id"
-                                class="dropdown-menu"
-                                @click.stop
-                              >
-                                <button
-                                  @click="editGroup(group)"
-                                  class="dropdown-item"
-                                >
-                                  <span class="icon">✏️</span>
-                                  Edit Group
-                                </button>
-                                <button
-                                  @click="deleteGroup(group.id)"
-                                  class="dropdown-item dropdown-item-danger"
-                                >
-                                  <span class="icon">🗑️</span>
-                                  Delete Group
-                                </button>
-                              </div>
-                            </div>
+                            <button class="btn btn-outline btn-sm" @click="editGroup(group)"><span class="icon">✏️</span> Edit</button>
+                            <button class="btn btn-danger btn-sm" @click="deleteGroup(group.id)"><span class="icon">🗑️</span> Delete</button>
                           </div>
                         </div>
-                      </div>
-                      <div v-else class="empty-section">
-                        <div class="empty-icon">👨‍👩‍👧‍👦</div>
-                        <h3>No Groups Defined</h3>
-                        <p>
-                          Create groups to organize users and manage permissions
-                          collectively.
-                        </p>
-                        <button
-                          @click="showCreateGroupModal = true"
-                          class="btn btn-primary"
-                        >
-                          Create First Group
-                        </button>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Discussions Tab Content -->
-          <div v-if="activeTab === 'discussions'">
-            <DiscussionSection
-              :project-id="Number(project.id)"
-              :can-create-discussion="canCreateDiscussion"
-              :can-manage-discussions="canManageDiscussions"
-            />
-          </div>
-
-          <!-- Members Tab Content -->
-          <div v-if="activeTab === 'members'">
-            <div class="members-section">
-              <div class="section-header">
-                <h2 class="section-title">
-                  <span class="title-icon">👥</span>
-                  Project Members
-                </h2>
-              </div>
-              <div class="members-content">
-                <div v-if="membersLoading" class="members-loading">
-                  <div class="loading-spinner-small"></div>
-                  <span>Loading members...</span>
+                <div v-else-if="activeTab === 'discussions'" key="discussions">
+                  <DiscussionSection
+                    :project-id="Number(project.id)"
+                    :can-create-discussion="canCreateDiscussion"
+                    :can-manage-discussions="canManageDiscussions"
+                  />
                 </div>
-                <div v-else-if="membersError" class="members-error">
-                  <span class="error-icon">⚠️</span>
-                  <span>{{ membersError }}</span>
-                  <button @click="loadMembers" class="btn btn-outline btn-sm">Retry</button>
-                </div>
-                <div v-else-if="members && members.length > 0" class="members-list">
-                  <table class="members-table">
-                    <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Roles</th>
-                      <th>Actions</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr v-for="member in members" :key="member.id">
-                      <td>
-                        <div class="member-info">
-                          <span class="member-name">{{ member.fullName || member.username }}</span>
-                          <span class="member-email">{{ member.email }}</span>
+                <div v-else-if="activeTab === 'description'" key="description">
+                  <!-- Project Description Section -->
+                  <div class="project-section description-section">
+                    <div class="section-header">
+                      <h2 class="section-title">
+                        <span class="title-icon">📝</span>
+                        Description
+                      </h2>
+                      <button v-if="canEditDescription && !editingDescription" class="edit-desc-btn" @click="startEditDescription">
+                        <span class="icon">✏️</span>
+                      </button>
+                    </div>
+                    <div class="description-content improved-desc-box">
+                      <template v-if="editingDescription">
+                        <textarea v-model="editedDescription" class="desc-textarea" rows="3" :maxlength="maxDescriptionLength" @input="updateCharCount" />
+                        <div class="desc-char-count" :class="{ 'over-limit': descriptionOverLimit }">
+                          {{ descriptionCharCount }}/{{ maxDescriptionLength }} characters
                         </div>
-                      </td>
-                      <td>
-                        <div class="member-roles">
-                            <span
-                              v-for="role in member.roles"
-                              :key="role.id"
-                              class="role-badge"
-                            >
-                              {{ role.name }}
-                            </span>
+                        <div class="desc-edit-actions">
+                          <button class="btn btn-primary btn-sm" @click="saveDescription" :disabled="descriptionOverLimit">Save</button>
+                          <button class="btn btn-secondary btn-sm" @click="cancelEditDescription">Cancel</button>
                         </div>
-                      </td>
-                      <td>
-                        <div class="member-actions">
-                          <button class="btn btn-outline btn-sm">
+                      </template>
+                      <template v-else>
+                        <div v-if="project.description" class="description desc-plain">
+                          <span v-html="project.description"></span>
+                          <button v-if="canEditDescription" class="edit-desc-btn" @click="startEditDescription" title="Edit description">
                             <span class="icon">✏️</span>
-                            Edit Roles
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                    </tbody>
-                  </table>
+                        <div v-else class="no-description">
+                          <span class="no-content-icon">📄</span>
+                          <p>No description provided for this project.</p>
+                          <button v-if="canEditDescription" class="edit-desc-btn" @click="startEditDescription" title="Edit description">
+                            <span class="icon">✏️</span>
+                          </button>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
                 </div>
-                <div v-else class="empty-members">
-                  <div class="empty-icon">👥</div>
-                  <h3>No Members</h3>
-                  <p>No members have been added to this project yet.</p>
+                <div v-else-if="activeTab === 'files'" key="files">
+                  <!-- Project Files Section -->
+                  <div class="project-section files-section">
+                    <div class="section-header">
+                      <h2 class="section-title">
+                        <span class="title-icon">📁</span>
+                        Files
+                      </h2>
+                    </div>
+                    <div class="files-content">
+                      <div v-if="filesLoading" class="files-loading">
+                        <div class="loading-spinner-small"></div>
+                        <span>Loading files...</span>
+                      </div>
+                      <div v-else-if="filesError" class="files-error">
+                        <span class="error-icon">⚠️</span>
+                        <span>{{ filesError }}</span>
+                        <button @click="loadFiles" class="btn btn-outline btn-sm">Retry</button>
+                      </div>
+                      <div v-else-if="projectFiles && projectFiles.length > 0" class="files-list">
+                        <div v-for="file in projectFiles" :key="file.id" class="file-item file-hoverable" @click="downloadFile(file)" :title="'Click to download'">
+                          <div class="file-info">
+                            <div class="file-icon file-thumb">
+                              <template v-if="isImage(file)">
+                                <img :src="`/api/files/${file.id}/download`" alt="Image" class="file-thumbnail" />
+                              </template>
+                              <template v-else-if="isPDF(file)">
+                                <span class="pdf-icon">PDF</span>
+                              </template>
+                              <template v-else>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                  <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                              </template>
+                            </div>
+                            <div class="file-details">
+                              <span class="file-name" :title="file.fileName">
+                                {{ file.fileName.length > 30 ? file.fileName.slice(0, 27) + '...' : file.fileName }}
+                              </span>
+                            </div>
+                          </div>
+                          <span class="file-download-icon" title="Download">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M12 3V17M12 17L7 12M12 17L17 12" stroke="#3182ce" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                              <rect x="4" y="19" width="16" height="2" rx="1" fill="#3182ce"/>
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+                      <div v-else class="no-files">
+                        <div class="no-content-icon">📄</div>
+                        <p>No files uploaded to this project yet.</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </transition>
             </div>
           </div>
         </div>
@@ -688,13 +596,19 @@
             </div>
           </div>
         </div>
+
+        <!-- Toast Success -->
+        <div v-if="showSavedSnackbar" class="toast-success">
+          <span class="toast-icon">✅</span>
+          <span>Saved successfully!</span>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, watch, computed, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axiosInstance from '../api';
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
@@ -717,6 +631,7 @@ interface Project {
     id: string;
     username: string;
     fullName?: string;
+    avatarUrl?: string;
   };
   tags?: Array<{ id: string; name: string }>;
   projectRoles?: ProjectRole[];
@@ -803,7 +718,7 @@ const members = ref<
 const membersLoading = ref(false);
 const membersError = ref('');
 
-const activeTab = ref<'details' | 'members' | 'discussions'>('details');
+const activeTab = ref<'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files'>('description');
 
 const isAllSelected = ref(false);
 
@@ -1096,9 +1011,127 @@ const canManageDiscussions = computed(() => {
   return true; // For now, allow all authenticated users
 });
 
+const editingDescription = ref(false);
+const editedDescription = ref('');
+const maxDescriptionLength = 500;
+const descriptionCharCount = computed(() => editedDescription.value.length);
+const descriptionOverLimit = computed(() => descriptionCharCount.value > maxDescriptionLength);
+// For demo, allow editing always. Replace with real permission check.
+const canEditDescription = computed(() => true);
+
+function startEditDescription() {
+  editedDescription.value = project.value?.description || '';
+  editingDescription.value = true;
+}
+function cancelEditDescription() {
+  editingDescription.value = false;
+}
+function updateCharCount() {
+  if (editedDescription.value.length > maxDescriptionLength) {
+    editedDescription.value = editedDescription.value.slice(0, maxDescriptionLength);
+  }
+}
+async function saveDescription() {
+  if (!project.value) return;
+  try {
+    await axiosInstance.patch(`/projects/${project.value.id}`, { description: editedDescription.value });
+    project.value.description = editedDescription.value;
+    editingDescription.value = false;
+    showSavedSnackbar.value = true;
+    setTimeout(() => { showSavedSnackbar.value = false; }, 2500);
+  } catch (err: any) {
+    alert('Failed to update description: ' + err.message);
+  }
+}
+
+const fileMenuOpen = ref<string | null>(null);
+function toggleFileMenu(fileId: string) {
+  fileMenuOpen.value = fileMenuOpen.value === fileId ? null : fileId;
+}
+function closeFileMenus() {
+  fileMenuOpen.value = null;
+}
+function isImage(file: ProjectFile) {
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(file.fileName);
+}
+function isPDF(file: ProjectFile) {
+  return /\.pdf$/i.test(file.fileName);
+}
+function previewFile(file: ProjectFile) {
+  // Mở xem trước ảnh hoặc PDF
+  window.open(`/api/files/${file.id}/preview`, '_blank');
+}
+
+const showActionsMenu = ref(false);
+const isMobile = computed(() => window.innerWidth < 768);
+function goToManage() {
+  router.push(`/projects/${project.value?.id}/manage`);
+  showActionsMenu.value = false;
+}
+
+const showSavedSnackbar = ref(false);
+
+const inputFocused = ref(false)
+
+function getRoleDescription(roleName: string) {
+  if (roleName === 'Admin') return 'Full permissions: manage project, members, settings.'
+  if (roleName === 'Editor') return 'Can edit content, but not manage members.'
+  if (roleName === 'Viewer') return 'Read-only access.'
+  return 'Project role';
+}
+function editRoles(member: any) {
+  // TODO: Open edit roles dialog/modal
+  alert('Edit roles for: ' + (member.fullName || member.username));
+}
+function sortBy(field: string) {
+  // TODO: Implement sorting logic
+}
+
+function scrollToFiles() {
+  const el = document.querySelector('.files-section');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+const userSuggestList = ref<any[]>([]);
+const userSuggestActiveIdx = ref(-1);
+
+async function handleUserSuggest() {
+  userSuggestActiveIdx.value = -1;
+  userSuggestList.value = [];
+  if (!userSearch.value.identifier || userSearch.value.identifier.length < 2) return;
+  try {
+    const { data } = await axiosInstance.post(`/users/suggest`, { q: userSearch.value.identifier });
+    userSuggestList.value = data.users || [];
+  } catch (e) {
+    userSuggestList.value = [];
+  }
+}
+function moveSuggest(dir: number) {
+  if (!userSuggestList.value.length) return;
+  let idx = userSuggestActiveIdx.value + dir;
+  if (idx < 0) idx = userSuggestList.value.length - 1;
+  if (idx >= userSuggestList.value.length) idx = 0;
+  userSuggestActiveIdx.value = idx;
+}
+function selectUserSuggest(idx?: number) {
+  if (typeof idx !== 'number') idx = userSuggestActiveIdx.value;
+  if (idx < 0 || idx >= userSuggestList.value.length) return;
+  const user = userSuggestList.value[idx];
+  userSearch.value.identifier = user.email;
+  userSuggestList.value = [];
+  userSuggestActiveIdx.value = -1;
+  nextTick(() => {
+    // Tự động submit form khi chọn suggest
+    searchUser();
+  });
+}
+
 </script>
 
 <style scoped>
+:root {
+  --color-secondary: #38b2ac;
+}
 /* Page Layout */
 .project-detail-page {
   min-height: 100vh;
@@ -1201,9 +1234,104 @@ const canManageDiscussions = computed(() => {
   margin: 0 auto;
   background: white;
   border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 24px 64px rgba(76, 34, 128, 0.18), 0 2px 8px rgba(49,130,206,0.10);
   overflow: hidden;
   margin-bottom: 2rem;
+  position: relative;
+}
+.project-detail-view::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(120deg, #f3f0ff 0%, #e6f0fa 100%);
+  opacity: 0.7;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 20px;
+}
+.project-detail-view > * {
+  position: relative;
+  z-index: 1;
+}
+.project-content {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(49,130,206,0.13), 0 2px 8px rgba(76, 34, 128, 0.10);
+  overflow: hidden;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+/* Nút chính */
+.btn-manage {
+  background: linear-gradient(135deg, #7f53ac 0%, var(--color-secondary) 100%);
+  border: 2.5px solid #7f53ac;
+  color: white;
+  box-shadow: 0 4px 16px #7f53ac33;
+  font-weight: 700;
+  transition: all 0.22s cubic-bezier(.4,1,.7,1.2);
+}
+.btn-manage:hover {
+  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
+  border-color: #4299e1;
+  color: #fff;
+  box-shadow: 0 8px 32px #4299e133;
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.08);
+}
+.btn-outline {
+  background: #fff;
+  color: #2563eb;
+  border: 2.5px solid #2563eb;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #2563eb22;
+  transition: all 0.18s;
+}
+.btn-outline:hover {
+  background: #2563eb;
+  color: #fff;
+  border-color: #1e40af;
+  box-shadow: 0 6px 24px #2563eb33;
+}
+.btn-danger {
+  background: linear-gradient(135deg, #e53e3e 0%, #b91c1c 100%);
+  color: #fff;
+  border: 2.5px solid #b91c1c;
+  font-weight: 700;
+  box-shadow: 0 4px 16px #e53e3e33;
+  transition: all 0.18s;
+}
+.btn-danger:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+  color: #fff;
+  border-color: #7f1d1d;
+  box-shadow: 0 8px 32px #e53e3e44;
+  transform: scale(1.04);
+}
+
+/* Badge Public/Private */
+.badge-public {
+  background: linear-gradient(135deg, #38a169 0%, #22543d 100%);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #38a16933;
+  border: 1.5px solid #22543d;
+}
+.badge-private {
+  background: linear-gradient(135deg, #e53e3e 0%, #7f1d1d 100%);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #e53e3e33;
+  border: 1.5px solid #7f1d1d;
+}
+.badge-icon {
+  filter: drop-shadow(0 2px 4px #0002);
+}
+
+/* Header icon contrast */
+.page-icon, .title-icon, .meta-icon, .icon {
+  color: #4f2c8c !important;
+  filter: drop-shadow(0 2px 4px #7f53ac22);
 }
 
 /* Loading and Error States */
@@ -1275,93 +1403,158 @@ const canManageDiscussions = computed(() => {
 .project-content {
   background: white;
   border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 24px 64px rgba(49,130,206,0.13), 0 2px 8px rgba(76, 34, 128, 0.10);
   overflow: hidden;
   margin-bottom: 2rem;
+  position: relative;
 }
 
 /* Enhanced Project Header */
 .project-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  background: linear-gradient(135deg, #4f2c8c 0%, #764ba2 100%);
   color: white;
-  padding: 1.5rem 1rem;
+  padding: 2.5rem 2rem 2rem 2rem;
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  gap: 2rem;
+  gap: 2.5rem;
+  border-radius: 0 0 32px 32px;
+  box-shadow: 0 10px 40px rgba(76, 34, 128, 0.18);
+  overflow: visible;
 }
 
-.project-title-section {
+.glassy-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.10);
+  backdrop-filter: blur(8px);
+  border-radius: 0 0 32px 32px;
+  z-index: 0;
+}
+
+.project-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.project-header-left {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  margin-right: 1.5rem;
+}
+
+.creator-avatar {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #fff;
+  border: 3px solid rgba(255,255,255,0.5);
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-placeholder {
+  width: 48px;
+  height: 48px;
+  display: block;
+}
+
+.creator-info-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-left: 1.2rem;
+}
+
+.project-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
 }
 
 .project-title {
   margin: 0;
   color: white;
-  font-size: 1.7rem;
-  font-weight: 700;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 2.2rem;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.10);
 }
 
 .project-badges {
+  margin-top: 0.5rem;
   display: flex;
   gap: 0.75rem;
 }
 
-.badge {
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.875rem;
-  font-weight: 600;
+.project-meta-row {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.badge-public {
-  background: rgba(72, 187, 120, 0.9);
-  color: white;
-}
-
-.badge-private {
-  background: rgba(245, 101, 101, 0.9);
-  color: white;
-}
-
-.badge-icon {
+  gap: 2.5rem;
+  margin-top: 0.5rem;
   font-size: 1rem;
-}
-
-.project-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  color: rgba(255,255,255,0.85);
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   font-size: 1rem;
+  opacity: 0.85;
 }
 
 .meta-icon {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   opacity: 0.8;
 }
 
 .meta-text {
+  font-size: 1rem;
   opacity: 0.9;
 }
 
 .meta-text strong {
-  color: white;
-  font-weight: 600;
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .project-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 2rem 1rem 1.5rem 1rem;
+    gap: 1.5rem;
+  }
+  .project-header-left {
+    justify-content: center;
+    margin-right: 0;
+    margin-bottom: 1rem;
+  }
+  .project-header-main {
+    align-items: center;
+    text-align: center;
+  }
+  .project-title-section {
+    align-items: center;
+  }
+  .project-meta-row {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+  }
 }
 
 .project-actions {
@@ -1372,17 +1565,21 @@ const canManageDiscussions = computed(() => {
 }
 
 .btn-manage {
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, #7f53ac 0%, var(--color-secondary) 100%);
+  border: 2.5px solid #7f53ac;
   color: white;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px #7f53ac33;
+  font-weight: 700;
+  transition: all 0.22s cubic-bezier(.4,1,.7,1.2);
 }
 
 .btn-manage:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
+  border-color: #4299e1;
+  color: #fff;
+  box-shadow: 0 8px 32px #4299e133;
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.08);
 }
 
 /* Project Sections */
@@ -1468,7 +1665,7 @@ const canManageDiscussions = computed(() => {
 
 .tag {
   padding: 0.75rem 1.25rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
   color: white;
   border-radius: 25px;
   font-size: 0.9rem;
@@ -1608,34 +1805,40 @@ const canManageDiscussions = computed(() => {
 .stat-card {
   background: white;
   padding: 1rem;
-  border-radius: 16px;
+  border-radius: 2rem;
   text-align: center;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
   border: 1px solid #e2e8f0;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(.4,1,.7,1.2);
   position: relative;
   overflow: hidden;
+  cursor: default;
 }
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.stat-card-clickable {
+  cursor: pointer;
 }
-
-.stat-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+.stat-card-clickable:hover {
+  transform: scale(1.045) translateY(-6px);
+  box-shadow: 0 18px 40px rgba(49,130,206,0.18), 0 2px 8px rgba(76, 34, 128, 0.10);
+  z-index: 2;
 }
-
 .stat-icon {
-  font-size: 1.5rem;
+  font-size: 2.2rem;
   margin-bottom: 1rem;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat-icon-circle {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f3f6fa 0%, #e6f0fa 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem auto;
+  box-shadow: 0 2px 8px #3182ce11;
 }
 
 .stat-number {
@@ -2123,15 +2326,27 @@ const canManageDiscussions = computed(() => {
   left: 100%;
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-  color: white;
+.btn-primary,
+.btn-primary:active,
+.btn-primary:focus {
+  background: linear-gradient(135deg, #38a169 0%, #48bb78 100%) !important;
+  color: #fff !important;
+  border: none;
+  box-shadow: 0 4px 16px #38a16933;
 }
-
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #3182ce 0%, #2c5aa0 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(66, 153, 225, 0.3);
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
+  color: #fff !important;
+  filter: brightness(1.08);
+  box-shadow: 0 8px 20px #38a16944;
+}
+.btn-primary:disabled, .btn[disabled].btn-primary {
+  background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%) !important;
+  color: #a0aec0 !important;
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .btn-secondary {
@@ -2152,8 +2367,9 @@ const canManageDiscussions = computed(() => {
 
 .btn-outline:hover {
   background: #4299e1;
-  color: white;
-  transform: translateY(-2px);
+  color: #fff;
+  border-color: #1e40af;
+  box-shadow: 0 6px 24px #2563eb33;
 }
 
 .btn-danger {
@@ -2368,7 +2584,7 @@ const canManageDiscussions = computed(() => {
 }
 
 .form-control:disabled {
-  background: #f7fafc;
+  background-color: #f7fafc;
   color: #a0aec0;
   cursor: not-allowed;
 }
@@ -2768,21 +2984,57 @@ const canManageDiscussions = computed(() => {
   display: flex;
   gap: 1rem;
   margin-bottom: 2rem;
+  position: relative;
+  background: #f8fafc;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 2px 8px #3182ce11;
+  padding: 0.5rem 1rem 0 1rem;
 }
 .tab {
+  position: relative;
   padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 8px 8px 0 0;
+  border-radius: 12px 12px 0 0;
   font-size: 1rem;
   font-weight: 500;
-  cursor: pointer;
   background: #e2e8f0;
   color: #4a5568;
-  transition: background 0.2s;
+  cursor: pointer;
+  transition: background 0.22s, color 0.22s, box-shadow 0.22s;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  overflow: visible;
+  z-index: 1;
 }
 .tab.active {
-  background: #4299e1;
-  color: white;
+  background: #fff;
+  color: #3182ce;
+  font-weight: 700;
+  z-index: 2;
+}
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4299e1 0%, #7f53ac 100%);
+  box-shadow: 0 2px 8px #3182ce33;
+  transition: all 0.3s;
+  animation: tabUnderlineIn 0.3s;
+}
+@keyframes tabUnderlineIn {
+  from { width: 0; opacity: 0; }
+  to { width: 64%; opacity: 1; }
+}
+.tab:hover:not(.active) {
+  background: #dbeafe;
+  color: #2563eb;
+  box-shadow: 0 4px 16px #3182ce22;
+  z-index: 2;
 }
 .members-table {
   width: 100%;
@@ -2909,4 +3161,672 @@ const canManageDiscussions = computed(() => {
   font-size: 1rem;
   line-height: 1.6;
 }
+
+.improved-desc-box {
+  background: #f9fafb;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem 1.5rem 1.5rem;
+  position: relative;
+  min-height: 80px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.edit-desc-btn {
+  background: none;
+  border: none;
+  color: #3182ce;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.edit-desc-btn:hover {
+  background: #edf2f7;
+  color: #2b6cb0;
+  opacity: 1;
+}
+.description-content.improved-desc-box .edit-desc-btn {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.2rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.description-content.improved-desc-box:hover .edit-desc-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+.desc-textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 300px;
+  border: 1.5px solid #cbd5e0;
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fff;
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+  resize: vertical;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  transition: border 0.18s;
+}
+.desc-textarea:focus {
+  border-color: #3182ce;
+}
+.desc-char-count {
+  font-size: 0.95rem;
+  color: #718096;
+  margin-top: 0.2rem;
+  text-align: right;
+}
+.desc-char-count.over-limit {
+  color: #e53e3e;
+  font-weight: 600;
+}
+.desc-edit-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.file-hoverable {
+  transition: box-shadow 0.22s, border 0.22s, background 0.22s;
+  cursor: pointer;
+  position: relative;
+  background: #f8fafc;
+}
+.file-hoverable:hover {
+  box-shadow: 0 8px 32px rgba(49, 130, 206, 0.18);
+  border: 2.5px solid #3182ce;
+  background: #e6f0fa;
+  z-index: 2;
+}
+.file-hoverable:active {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+.file-download-icon {
+  position: absolute;
+  right: 1.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.85;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.file-hoverable:hover .file-download-icon {
+  opacity: 1;
+  filter: drop-shadow(0 2px 6px #3182ce33);
+}
+.file-thumb {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f3f6fa;
+}
+.file-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.pdf-icon {
+  font-weight: bold;
+  color: #e53e3e;
+  background: #fff5f5;
+  border: 1.5px solid #e53e3e;
+  border-radius: 6px;
+  padding: 0.25rem 0.7rem;
+  font-size: 1rem;
+  letter-spacing: 1px;
+}
+.file-name {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  vertical-align: middle;
+}
+.file-menu-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.file-menu-btn {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  color: #718096;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+.file-menu-btn:hover {
+  background: #edf2f7;
+  color: #2b6cb0;
+}
+.file-menu {
+  position: absolute;
+  top: 2.2rem;
+  right: 0;
+  min-width: 130px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+  z-index: 10;
+  padding: 0.5rem 0;
+}
+.file-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.file-menu li {
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  color: #2d3748;
+  transition: background 0.18s, color 0.18s;
+}
+.file-menu li:hover {
+  background: #f3f6fa;
+  color: #3182ce;
+}
+.file-menu li.danger {
+  color: #e53e3e;
+}
+.file-menu li.danger:hover {
+  background: #fff5f5;
+  color: #c53030;
+}
+
+.badge-private-new {
+  background: #fefcbf;
+  color: #b7791f;
+  border: 1.5px solid #b7791f;
+  font-weight: 700;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  padding: 0.18rem 0.7rem 0.18rem 0.5rem;
+  margin-left: 0.7rem;
+  box-shadow: 0 2px 8px #f6e05e33;
+}
+
+.badge-public-new {
+  background: linear-gradient(135deg, #38a169 0%, #22543d 100%);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  padding: 0.18rem 0.7rem 0.18rem 0.5rem;
+  margin-left: 0.7rem;
+  box-shadow: 0 2px 8px #38a16933;
+}
+
+.badge-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.1em;
+  margin-right: 0.2em;
+}
+
+.badge-text {
+  font-size: 0.98em;
+}
+
+.actions-dropdown-wrapper {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+}
+
+.actions-dropdown {
+  display: none;
+}
+
+.actions-dropdown-menu {
+  position: absolute;
+  top: 2.5rem;
+  right: 0;
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+  z-index: 10;
+  min-width: 180px;
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.dropdown-action {
+  background: none;
+  border: none;
+  color: #2d3748;
+  font-size: 1rem;
+  text-align: left;
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  border-radius: 6px;
+}
+
+.dropdown-action:hover {
+  background: #f3f6fa;
+  color: #3182ce;
+}
+
+.dropdown-action.danger {
+  color: #e53e3e;
+}
+
+.dropdown-action.danger:hover {
+  background: #fff5f5;
+  color: #c53030;
+}
+
+.dropdown-action.close {
+  color: #718096;
+  font-size: 0.95em;
+}
+
+.actions-desktop {
+  display: flex;
+  gap: 1rem;
+}
+
+.icon-btn {
+  padding: 0.5rem 0.7rem;
+  font-size: 1.3rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  color: #4a5568;
+  box-shadow: 0 2px 8px #2563eb22;
+  transition: all 0.18s;
+}
+
+.icon-btn:hover {
+  background: #f7fafc;
+  color: #3182ce;
+  border-color: #3182ce;
+}
+
+@media (max-width: 900px) {
+  .actions-desktop { display: none; }
+  .actions-dropdown { display: block; }
+}
+
+@media (min-width: 901px) {
+  .actions-dropdown { display: none; }
+  .actions-desktop { display: flex; }
+}
+
+/* Snackbar/Toast */
+.saved-snackbar {
+  position: fixed;
+  left: 50%;
+  bottom: 2.5rem;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, #38b2ac 0%, #7f53ac 100%);
+  color: #fff;
+  padding: 0.9rem 2.2rem;
+  border-radius: 2rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(56,178,172,0.18);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  animation: fadeInUp 0.3s;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.tabs-enhanced {
+  position: relative;
+  background: #f8fafc;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 2px 8px #3182ce11;
+  padding: 0.5rem 1rem 0 1rem;
+  margin-bottom: 2rem;
+}
+.tab {
+  position: relative;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 12px 12px 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  background: #e2e8f0;
+  color: #4a5568;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  overflow: visible;
+}
+.tab.active {
+  background: #fff;
+  color: #3182ce;
+  font-weight: 700;
+  z-index: 2;
+}
+.tab-icon {
+  font-size: 1.2em;
+}
+.tab-underline {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4299e1 0%, #7f53ac 100%);
+  border-radius: 2px;
+  transition: all 0.3s;
+  animation: tabUnderlineIn 0.3s;
+}
+@keyframes tabUnderlineIn {
+  from { width: 0; opacity: 0; }
+  to { width: 60%; opacity: 1; }
+}
+.add-user-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px #3182ce11;
+  padding: 2rem 1.5rem;
+  max-width: 480px;
+  margin: 0 auto 2rem auto;
+  border: 1.5px solid #e2e8f0;
+}
+.add-user-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1.5rem;
+}
+.add-user-icon {
+  font-size: 2.2rem;
+}
+.add-user-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+.add-user-form-enhanced {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+}
+.add-user-input-group {
+  display: flex;
+  align-items: center;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  padding: 0.5rem 1rem;
+  transition: border 0.2s, box-shadow 0.2s;
+  position: relative;
+  flex: 1;
+}
+.add-user-input-group.focused {
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px #4299e122;
+}
+.input-icon {
+  font-size: 1.2rem;
+  color: #a0aec0;
+  margin-right: 0.7rem;
+}
+.add-user-input-group input {
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-size: 1rem;
+  color: #2d3748;
+  padding: 0.5rem 0;
+}
+.btn[disabled] {
+  background: #e2e8f0 !important;
+  color: #a0aec0 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+}
+@media (max-width: 600px) {
+  .add-user-card {
+    padding: 1rem 0.5rem;
+    max-width: 100%;
+  }
+  .add-user-form-enhanced {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .add-user-input-group {
+    width: 100%;
+  }
+  .btn {
+    width: 100%;
+    margin-top: 0.7rem;
+  }
+}
+
+.members-table-responsive {
+  overflow-x: auto;
+  display: block;
+}
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+.members-table tr:nth-child(even) td {
+  background: #f8fafc;
+}
+.members-table tr:hover td {
+  background: #e0e7ef;
+}
+.members-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #2d3748;
+  padding: 1rem;
+  text-align: left;
+  position: relative;
+  cursor: pointer;
+}
+.members-table td {
+  padding: 1rem;
+  vertical-align: middle;
+}
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.user-avatar {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7f53ac 0%, #4299e1 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px #3182ce22;
+}
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+.user-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 1rem;
+}
+.user-email {
+  color: #a0aec0;
+  font-size: 0.92rem;
+  margin-top: 0.1rem;
+}
+.role-badge {
+  display: inline-block;
+  background: #ede9fe;
+  color: #7c3aed;
+  border-radius: 999px;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  margin-right: 0.3rem;
+  margin-bottom: 0.1rem;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.role-badge:hover {
+  background: #c7d2fe;
+}
+.edit-role-btn {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 50%;
+  color: #3182ce;
+  cursor: pointer;
+  transition: background 0.18s;
+  font-size: 1.1rem;
+}
+.edit-role-btn:hover {
+  background: #e0e7ef;
+}
+@media (max-width: 700px) {
+  .members-table {
+    min-width: 500px;
+  }
+}
+
+.btn-primary:disabled, .btn[disabled].btn-primary {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%) !important;
+  color: #a0aec0 !important;
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Toast Success */
+.toast-success {
+  position: fixed;
+  top: 2.5rem;
+  right: 2.5rem;
+  background: linear-gradient(90deg, #38a169 0%, #48bb78 100%);
+  color: #fff;
+  padding: 1rem 2.2rem;
+  border-radius: 2rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(56,178,172,0.18);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  animation: fadeInUp 0.3s;
+}
+.toast-icon {
+  font-size: 1.5em;
+}
+@media (max-width: 600px) {
+  .toast-success {
+    right: 0.7rem;
+    left: 0.7rem;
+    top: 1.2rem;
+    padding: 0.8rem 1.2rem;
+    font-size: 1rem;
+  }
+}
+
+.user-suggest-dropdown {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 8px 24px #3182ce22;
+  z-index: 20;
+  margin: 0;
+  padding: 0.2rem 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.user-suggest-dropdown li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #2d3748;
+  transition: background 0.18s, color 0.18s;
+}
+.user-suggest-dropdown li.active, .user-suggest-dropdown li:hover {
+  background: #f0f6ff;
+  color: #3182ce;
+}
+.suggest-name {
+  font-weight: 600;
+}
+.suggest-email {
+  color: #a0aec0;
+  font-size: 0.95em;
+  margin-left: 0.5rem;
+}
+
+/* Thêm hiệu ứng transition cho tab và list */
+.fade-tab-enter-active, .fade-tab-leave-active {
+  transition: opacity 0.28s cubic-bezier(.4,1,.7,1.2);
+}
+.fade-tab-enter-from, .fade-tab-leave-to {
+  opacity: 0;
+}
+.fade-list-enter-active, .fade-list-leave-active {
+  transition: all 0.25s cubic-bezier(.4,1,.7,1.2);
+}
+.fade-list-enter-from, .fade-list-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
 </style>

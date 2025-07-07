@@ -202,7 +202,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       const everyoneRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
-        permissionFlags: new Permission(PermissionFlags.ViewProject),
+        permissionFlags: new Permission(PermissionFlags.ViewProject | PermissionFlags.ManageDiscussions),
         name: 'Everyone',
       });
 
@@ -253,6 +253,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       .leftJoin('project.createdBy', 'createdBy')
       .leftJoin('project.members', 'member')
       .leftJoin('project.tags', 'tags')
+      .leftJoin('project.category', 'category')
       .where('createdBy.id = :userId', { userId })
       .orWhere('member.id = :userId', { userId })
       .select([
@@ -262,7 +263,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         'project.isPrivate',
         'project.createdAt',
         'createdBy.id',
+        'createdBy.username',
         'createdBy.fullName',
+        'category.id',
+        'category.name',
         'member.id',
         'member.fullName',
         'tags.id',

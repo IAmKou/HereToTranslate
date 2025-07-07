@@ -153,6 +153,12 @@ const router = createRouter({
       component: () => import('../views/PaypalSuccessView.vue'),
       meta: { requiresAuth: false }
     },
+    {
+      path: '/oauth-callback',
+      name: 'oauth-callback',
+      component: () => import('../components/OauthCallback.vue'),
+      meta: {requireAuth: false}
+    },
   ],
 });
 

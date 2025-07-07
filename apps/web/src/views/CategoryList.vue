@@ -635,7 +635,7 @@ const deleteCategory = async (category: Category) => {
   if (!category.id) return;
 
   try {
-    await axios.delete(`${API_BASE_URL}/category/delete/${category.id}`);
+    await axios.delete(`${API_BASE_URL}/categories/${category.id}/delete`);
     await fetchCategories();
     toast.add({
       severity: 'success',

@@ -220,6 +220,7 @@ onMounted(() => {
   font-weight: 700;
   color: #2d3748;
   letter-spacing: -0.5px;
+  margin-left: 2rem;
 }
 
 .navbar-menu {

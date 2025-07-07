@@ -112,13 +112,24 @@
 
     <!-- Empty State -->
     <div v-else class="empty-discussions">
-      <div class="empty-icon">💬</div>
+      <div class="empty-illustration" title="No discussions yet!">
+        <!-- SVG illustration: vui nhộn, teamwork -->
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+          <ellipse cx="60" cy="110" rx="40" ry="8" fill="#e0e7ef"/>
+          <circle cx="40" cy="60" r="18" fill="#90cdf4"/>
+          <circle cx="80" cy="60" r="18" fill="#fbb6ce"/>
+          <ellipse cx="40" cy="60" rx="10" ry="6" fill="#fff" opacity=".7"/>
+          <ellipse cx="80" cy="60" rx="10" ry="6" fill="#fff" opacity=".7"/>
+          <rect x="30" y="80" width="60" height="10" rx="5" fill="#c3dafe"/>
+          <text x="60" y="105" text-anchor="middle" fill="#a0aec0" font-size="12">Let's talk!</text>
+        </svg>
+      </div>
       <h3>No discussions yet</h3>
       <p>Start a discussion to collaborate with your team members.</p>
       <button
         v-if="canCreateDiscussion"
         @click="showCreateModal = true"
-        class="btn btn-primary"
+        class="btn btn-primary btn-big-cta"
       >
         <span class="icon">➕</span>
         Create First Discussion
@@ -128,9 +139,9 @@
     <!-- Create Discussion Modal -->
     <div v-if="showCreateModal" class="modal-overlay" @click="closeCreateModal">
       <div class="modal-content" @click.stop>
-        <div class="modal-header">
+        <div class="modal-header modal-header-enhanced">
           <h3 class="modal-title">
-            <span class="title-icon">💬</span>
+            <span class="title-icon gradient-icon">💬</span>
             Create New Discussion
           </h3>
           <button @click="closeCreateModal" class="btn-close">×</button>
@@ -138,41 +149,50 @@
         <div class="modal-body">
           <form @submit.prevent="createDiscussion" class="create-discussion-form">
             <div class="form-group">
-              <label for="discussionTitle" class="form-label">Title *</label>
+              <label for="discussionTitle" class="form-label form-label-enhanced">Title *</label>
               <input
                 id="discussionTitle"
                 v-model="newDiscussion.title"
+                :class="['form-control', { 'input-error': showTitleError }]"
                 type="text"
                 required
-                class="form-control"
                 placeholder="Enter discussion title"
                 minlength="3"
+                @blur="validateTitle"
+                @input="validateTitle"
               />
+              <div v-if="showTitleError" class="form-error">Title is required</div>
             </div>
             <div class="form-group">
-              <label for="discussionDescription" class="form-label">Description</label>
+              <label for="discussionDescription" class="form-label form-label-enhanced">Description</label>
               <textarea
                 id="discussionDescription"
                 v-model="newDiscussion.description"
                 class="form-control"
                 placeholder="Enter discussion description (optional)"
-                rows="4"
+                rows="2"
+                ref="descTextarea"
+                @input="autoGrow"
+                style="max-height: 120px; overflow-y: auto;"
               ></textarea>
             </div>
           </form>
         </div>
-        <div class="modal-footer">
-          <button @click="closeCreateModal" class="btn btn-outline">Cancel</button>
+        <div class="modal-footer modal-footer-enhanced">
+          <button @click="closeCreateModal" class="btn btn-outline btn-cancel">Cancel</button>
           <button
             @click="createDiscussion"
-            class="btn btn-primary"
+            class="btn btn-primary btn-create"
             :disabled="creating"
+            style="display: flex; align-items: center; gap: 0.5rem;"
           >
             <span v-if="creating" class="loading-spinner-small"></span>
             <span v-else class="icon">💬</span>
             {{ creating ? 'Creating...' : 'Create Discussion' }}
           </button>
         </div>
+        <div v-if="createError" class="form-error form-error-global">{{ createError }}</div>
+        <div v-if="createSuccess" class="form-success">Discussion created successfully!</div>
       </div>
     </div>
 
@@ -308,7 +328,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useAuthStore } from '../store/auth'
 import DeleteDiscussionDialog from './DeleteDiscussionDialog.vue'
 import EditDiscussionDialog from './EditDiscussionDialog.vue'
@@ -373,6 +393,10 @@ const newDiscussion = ref({
 const newComment = ref('')
 const creating = ref(false)
 const posting = ref(false)
+const showTitleError = ref(false)
+const createError = ref('')
+const createSuccess = ref(false)
+const descTextarea = ref<HTMLTextAreaElement | null>(null)
 
 // Methods
 const loadDiscussions = async () => {
@@ -389,21 +413,37 @@ const loadDiscussions = async () => {
   }
 }
 
-const createDiscussion = async () => {
-  if (!newDiscussion.value.title.trim()) return
+function validateTitle() {
+  showTitleError.value = !newDiscussion.value.title.trim()
+}
 
+function autoGrow() {
+  nextTick(() => {
+    if (descTextarea.value) {
+      descTextarea.value.style.height = 'auto'
+      descTextarea.value.style.height = Math.min(descTextarea.value.scrollHeight, 120) + 'px'
+    }
+  })
+}
+
+const createDiscussion = async () => {
+  validateTitle()
+  createError.value = ''
+  createSuccess.value = false
+  if (showTitleError.value) return
   creating.value = true
   try {
     const response = await axiosInstance.post(`/projects/${props.projectId}/discussions/create`, {
       title: newDiscussion.value.title,
       description: newDiscussion.value.description
     })
-
     discussions.value.unshift(response.data)
     closeCreateModal()
     newDiscussion.value = { title: '', description: '' }
+    createSuccess.value = true
+    setTimeout(() => createSuccess.value = false, 2000)
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Failed to create discussion'
+    createError.value = err.response?.data?.message || 'Failed to create discussion'
   } finally {
     creating.value = false
   }
@@ -728,27 +768,63 @@ onMounted(() => {
 /* Empty State */
 .empty-discussions {
   text-align: center;
-  padding: 3rem 2rem;
+  padding: 3.5rem 2rem 2.5rem 2rem;
   color: #718096;
+  background: #f7fafc;
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(66,153,225,0.07);
+  margin: 2rem auto 0 auto;
+  max-width: 520px;
+  position: relative;
 }
 
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
+.empty-illustration {
+  margin: 0 auto 1.5rem auto;
+  width: 120px;
+  height: 120px;
+  transition: transform 0.22s;
+  cursor: pointer;
 }
 
-.empty-discussions h3 {
-  color: #2d3748;
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem 0;
+.empty-illustration:hover {
+  transform: scale(1.07) rotate(-3deg);
+  filter: drop-shadow(0 4px 16px #90cdf4aa);
 }
 
-.empty-discussions p {
-  margin: 0 0 1.5rem 0;
+.discussion-sample {
+  background: #e6f0fa;
+  color: #2b6cb0;
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  margin: 1.2rem auto 1.5rem auto;
+  display: inline-block;
   font-size: 1rem;
-  line-height: 1.6;
+  box-shadow: 0 2px 8px rgba(49,130,206,0.07);
+}
+
+.sample-label {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.sample-content {
+  font-style: italic;
+  color: #4299e1;
+}
+
+.btn-big-cta {
+  font-size: 1.15rem;
+  padding: 0.9rem 2.2rem;
+  border-radius: 12px;
+  margin-top: 1.2rem;
+  box-shadow: 0 4px 16px #90cdf433;
+  transition: background 0.18s, box-shadow 0.18s;
+}
+
+.btn-big-cta:hover {
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+  color: #fff;
+  box-shadow: 0 8px 32px #3182ce33;
 }
 
 /* Modal Styles */
@@ -1091,5 +1167,88 @@ onMounted(() => {
   .comment-actions {
     justify-content: flex-start;
   }
+}
+
+.modal-header-enhanced {
+  border-bottom: 1px solid #e2e8f0;
+}
+.form-label-enhanced {
+  font-weight: 500;
+  color: #a0aec0;
+  font-size: 1rem;
+}
+.input-error {
+  border-color: #e53e3e !important;
+}
+.form-error {
+  color: #e53e3e;
+  font-size: 0.9em;
+  margin-top: 0.25rem;
+}
+.form-error-global {
+  margin-top: 0.5rem;
+  text-align: right;
+}
+.form-success {
+  color: #38a169;
+  font-size: 1em;
+  margin-top: 0.5rem;
+  text-align: right;
+}
+.gradient-icon {
+  background: linear-gradient(135deg, #4299e1 0%, #fbb6ce 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.modal-footer-enhanced {
+  justify-content: flex-end;
+  gap: 1rem;
+}
+.btn-cancel {
+  background: none;
+  border: 1.5px solid #e2e8f0;
+  color: #4a5568;
+  border-radius: 8px;
+  padding: 0.65rem 1.4rem;
+  font-size: 1rem;
+  font-weight: 500;
+  min-width: 100px;
+  transition: background 0.18s, border 0.18s, color 0.18s;
+  box-shadow: none;
+}
+.btn-cancel:hover {
+  background: #f7fafc;
+  border-color: #4299e1;
+  color: #3182ce;
+}
+.btn-create {
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem 1.7rem;
+  font-size: 1rem;
+  font-weight: 600;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  box-shadow: 0 2px 8px #3182ce22;
+  transition: background 0.18s, box-shadow 0.18s, color 0.18s;
+}
+.btn-create:disabled {
+  background: #e2e8f0;
+  color: #a0aec0;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.btn-create:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3182ce 0%, #4299e1 100%);
+  color: #fff;
+  box-shadow: 0 4px 16px #3182ce33;
+}
+.btn-create .icon {
+  font-size: 1.1em;
+  margin-right: 0.2em;
 }
 </style>

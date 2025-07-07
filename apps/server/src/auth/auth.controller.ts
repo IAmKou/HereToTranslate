@@ -17,6 +17,7 @@ import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from './types';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { logger } from 'nx/src/utils/logger';
 
 @Controller('auth')
 export class AuthController {
@@ -58,8 +59,28 @@ export class AuthController {
 
   @IsPublicEndpoint()
   @Post('google')
-  async loginWithGoogle(@Body('idToken') idToken: string) {
-    return this.authService.loginWithGoogle(idToken);
+  async loginWithGoogle(
+    @Body('idToken') idToken: string,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const { accessToken, refreshToken, user } =
+      await this.authService.loginWithGoogle(idToken);
+    logger.log(idToken);
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 15, // 15 mins
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    });
+    logger.log(user);
+    return { user };
   }
 
   @IsPublicEndpoint()

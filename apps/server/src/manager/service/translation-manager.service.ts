@@ -5,6 +5,7 @@ import { Model } from 'mongoose';
 import { Injectable } from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
+import * as mammoth from 'mammoth';
 
 @Injectable()
 export class TranslationService {
@@ -30,6 +31,11 @@ export class TranslationService {
         textBlocks.push(pdfData.text);
         break;
       }
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+        const result = await mammoth.extractRawText({ buffer: file.fileContent });
+        textBlocks.push(result.value);
+        break;
+      }
       case 'application/zip':
       case 'application/x-rar-compressed': {
         const files = await decompress(file.fileContent);
@@ -51,6 +57,9 @@ export class TranslationService {
       default:
         if (file.fileName.endsWith('.unity') || file.fileName.endsWith('.uasset')) {
           await this.extractFromAssetFile(file, textBlocks);
+        } else if (file.fileName.endsWith('.docx')) {
+          const result = await mammoth.extractRawText({ buffer: file.fileContent });
+          textBlocks.push(result.value);
         }
         break;
     }

@@ -5,7 +5,6 @@ import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import  { Express } from 'express';
 import  { Multer } from 'multer';
-import  slugify  from 'slugify';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 
 @Injectable()

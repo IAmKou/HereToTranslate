@@ -5,25 +5,58 @@
         <div class="form-section">
           <div class="section-header">
             <div class="section-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg
+                fill="none"
+                height="20"
+                viewBox="0 0 24 24"
+                width="20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M16 13H8"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M16 17H8"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M10 9H9H8"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
               </svg>
             </div>
             <h3>Request Information</h3>
-            <p class="section-subtitle">Fill in the information below to create your translation request</p>
+            <p class="section-subtitle">
+              Fill in the information below to create your translation request
+            </p>
           </div>
 
           <div class="form-grid">
-            <!-- Request Type -->
             <div class="form-group request-type-group">
               <label class="form-label">
                 Request Type <span class="required-mark">*</span>
               </label>
               <div class="radio-group">
-                <label class="radio-option" :class="{ active: requestType === 'public' }">
-                  <input type="radio" value="public" v-model="requestType" class="radio-input">
+                <label
+                  :class="{ active: requestType === 'public' }"
+                  class="radio-option"
+                >
+                  <input
+                    v-model="requestType"
+                    class="radio-input"
+                    type="radio"
+                    value="public"
+                  />
                   <div class="radio-custom">
                     <div class="radio-dot"></div>
                   </div>
@@ -31,12 +64,22 @@
                     <div class="radio-icon">🌍</div>
                     <div class="radio-text">
                       <div class="radio-title">Public Request</div>
-                      <div class="radio-description">Available to all translators in the community</div>
+                      <div class="radio-description">
+                        Available to all translators in the community
+                      </div>
                     </div>
                   </div>
                 </label>
-                <label class="radio-option" :class="{ active: requestType === 'private' }">
-                  <input type="radio" value="private" v-model="requestType" class="radio-input">
+                <label
+                  :class="{ active: requestType === 'private' }"
+                  class="radio-option"
+                >
+                  <input
+                    v-model="requestType"
+                    class="radio-input"
+                    type="radio"
+                    value="private"
+                  />
                   <div class="radio-custom">
                     <div class="radio-dot"></div>
                   </div>
@@ -44,7 +87,9 @@
                     <div class="radio-icon">🔒</div>
                     <div class="radio-text">
                       <div class="radio-title">Private Request</div>
-                      <div class="radio-description">Assigned to a specific translator</div>
+                      <div class="radio-description">
+                        Assigned to a specific translator
+                      </div>
                     </div>
                   </div>
                 </label>
@@ -63,21 +108,45 @@
                   type="email"
                   required
                   class="form-control"
-                  :class="{ 'error': assigneeTouched && !!assigneeError }"
+                  :class="{ error: assigneeTouched && !!assigneeError }"
                   placeholder="Enter assignee email address"
                   @input="assigneeTouched = true"
                   @blur="assigneeTouched = true"
-                >
+                />
                 <div class="input-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M12 14C8.13401 14 5 17.134 5 21H19C19 17.134 15.866 14 12 14Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg
+                    fill="none"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M12 14C8.13401 14 5 17.134 5 21H19C19 17.134 15.866 14 12 14Z"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
                   </svg>
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="assigneeTouched && assigneeError" class="error-message">{{ assigneeError }}</span>
-                <span v-else class="help-text">Enter the email of the translator you want to assign</span>
+                <span
+                  v-if="assigneeTouched && assigneeError"
+                  class="error-message"
+                  >{{ assigneeError }}</span
+                >
+                <span v-else class="help-text"
+                  >Enter the email of the translator you want to assign</span
+                >
               </div>
             </div>
 
@@ -93,23 +162,53 @@
                   type="text"
                   required
                   class="form-control"
-                  :class="{ 'error': titleTouched && !!titleError }"
+                  :class="{ error: titleTouched && !!titleError }"
                   placeholder="Enter a descriptive request title"
                   maxlength="255"
                   @input="titleTouched = true"
                   @blur="titleTouched = true"
-                >
+                />
                 <div class="input-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg
+                    fill="none"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 2L2 7L12 12L22 7L12 2Z"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M2 17L12 22L22 17"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M2 12L12 17L22 12"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
                   </svg>
                 </div>
               </div>
               <div class="input-info">
-                <span class="char-count" :class="{ 'warning': title.length > 200 }">{{ title.length }}/255</span>
-                <span v-if="titleTouched && titleError" class="error-message">{{ titleError }}</span>
+                <span
+                  :class="{ warning: title.length > 200 }"
+                  class="char-count"
+                  >{{ title.length }}/255</span
+                >
+                <span v-if="titleTouched && titleError" class="error-message">{{
+                  titleError
+                }}</span>
               </div>
             </div>
 
@@ -128,18 +227,62 @@
                   @blur="descTouched = true"
                 ></textarea>
                 <div class="textarea-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg
+                    fill="none"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M14 2V8H20"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M16 13H8"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M16 17H8"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M10 9H9H8"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
                   </svg>
                 </div>
               </div>
               <div class="input-info">
-                <span class="char-count" :class="{ 'warning': description.length > 800 }">{{ description.length }}/1000</span>
-                <span v-if="descTouched && descriptionError" class="error-message">{{ descriptionError }}</span>
+                <span
+                  :class="{ warning: description.length > 800 }"
+                  class="char-count"
+                  >{{ description.length }}/1000</span
+                >
+                <span
+                  v-if="descTouched && descriptionError"
+                  class="error-message"
+                  >{{ descriptionError }}</span
+                >
               </div>
             </div>
 
@@ -157,21 +300,45 @@
                   step="0.01"
                   required
                   class="form-control"
-                  :class="{ 'error': amountTouched && !!dealAmountError }"
+                  :class="{ error: amountTouched && !!dealAmountError }"
                   placeholder="0.00"
                   @input="amountTouched = true"
                   @blur="amountTouched = true"
-                >
+                />
                 <div class="input-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 1V23" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M17 5H9.5C7.01472 5 5 7.01472 5 9.5C5 11.9853 7.01472 14 9.5 14H14.5C16.9853 14 19 16.0147 19 18.5C19 20.9853 16.9853 23 14.5 23H7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg
+                    fill="none"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 1V23"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M17 5H9.5C7.01472 5 5 7.01472 5 9.5C5 11.9853 7.01472 14 9.5 14H14.5C16.9853 14 19 16.0147 19 18.5C19 20.9853 16.9853 23 14.5 23H7"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
                   </svg>
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="amountTouched && dealAmountError" class="error-message">{{ dealAmountError }}</span>
-                <span v-else class="help-text">Set the budget for this translation request</span>
+                <span
+                  v-if="amountTouched && dealAmountError"
+                  class="error-message"
+                  >{{ dealAmountError }}</span
+                >
+                <span v-else class="help-text"
+                  >Set the budget for this translation request</span
+                >
               </div>
             </div>
 
@@ -188,19 +355,37 @@
                   :min="minDateString"
                   required
                   class="form-control"
-                  :class="{ 'error': deadlineTouched && !!deadlineError }"
+                  :class="{ error: deadlineTouched && !!deadlineError }"
                   @input="deadlineTouched = true"
                   @blur="deadlineTouched = true"
-                >
+                />
                 <div class="input-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 7V3M16 7V3M3 11H21M5 19H19C20.1046 19 21 18.1046 21 17V7C21 5.89543 20.1046 5 19 5H5C3.89543 5 3 5.89543 3 7V17C3 18.1046 3.89543 19 5 19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg
+                    fill="none"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M8 7V3M16 7V3M3 11H21M5 19H19C20.1046 19 21 18.1046 21 17V7C21 5.89543 20.1046 5 19 5H5C3.89543 5 3 5.89543 3 7V17C3 18.1046 3.89543 19 5 19Z"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
                   </svg>
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="deadlineTouched && deadlineError" class="error-message">{{ deadlineError }}</span>
-                <span v-else class="help-text">Deadline must be at least 7 days from now</span>
+                <span
+                  v-if="deadlineTouched && deadlineError"
+                  class="error-message"
+                  >{{ deadlineError }}</span
+                >
+                <span v-else class="help-text"
+                  >Deadline must be at least 7 days from now</span
+                >
               </div>
             </div>
 
@@ -214,21 +399,30 @@
                   id="category"
                   v-model="categoryId"
                   class="form-control"
-                  :class="{ 'error': categoryTouched && !!categoryError }"
+                  :class="{ error: categoryTouched && !!categoryError }"
                   required
                   @change="categoryTouched = true"
                   @blur="categoryTouched = true"
                 >
                   <option value="">Choose a category</option>
-                  <option v-for="category in categories" :key="category.id" :value="category.id">
+                  <option
+                    v-for="category in categories"
+                    :key="category.id"
+                    :value="category.id"
+                  >
                     {{ category.name }}
                   </option>
                 </select>
-
               </div>
               <div class="input-info">
-                <span v-if="categoryTouched && categoryError" class="error-message">{{ categoryError }}</span>
-                <span v-else class="help-text">Select the most appropriate category for your request</span>
+                <span
+                  v-if="categoryTouched && categoryError"
+                  class="error-message"
+                  >{{ categoryError }}</span
+                >
+                <span v-else class="help-text"
+                  >Select the most appropriate category for your request</span
+                >
               </div>
             </div>
 
@@ -250,8 +444,13 @@
                 track-by="id"
               />
               <div class="input-info">
-                <span v-if="tagError" class="error-message">{{ tagError }}</span>
-                <span v-else class="help-text">Select one or many tags to help others find your request</span>
+                <span v-if="tagError" class="error-message">{{
+                  tagError
+                }}</span>
+                <span v-else class="help-text"
+                  >Select one or many tags to help others find your
+                  request</span
+                >
               </div>
             </div>
 
@@ -259,23 +458,57 @@
             <div class="form-group full-width">
               <label for="files" class="form-label">Files (Optional)</label>
               <div class="file-upload-container">
-                <div class="file-upload-area"
-                     :class="{ 'drag-over': isDragOver, 'has-files': uploadedFiles.length > 0 }"
-                     @drop="handleFileDrop"
-                     @dragover.prevent="isDragOver = true"
-                     @dragleave.prevent="isDragOver = false"
-                     @click="triggerFileInput">
+                <div
+                  :class="{
+                    'drag-over': isDragOver,
+                    'has-files': uploadedFiles.length > 0,
+                  }"
+                  class="file-upload-area"
+                  @click="triggerFileInput"
+                  @drop="handleFileDrop"
+                  @dragover.prevent="isDragOver = true"
+                  @dragleave.prevent="isDragOver = false"
+                >
                   <div class="file-upload-content">
                     <div class="file-upload-icon">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M17 8L12 3L7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M12 3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <svg
+                        fill="none"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
+                        <path
+                          d="M17 8L12 3L7 8"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
+                        <path
+                          d="M12 3V15"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
                       </svg>
                     </div>
                     <div class="file-upload-text">
-                      <p class="upload-title">Drop files here or click to browse</p>
-                      <p class="upload-subtitle">Support: PDF, DOC, DOCX, TXT, RTF (Max 10MB each) - Files will be uploaded with request</p>
+                      <p class="upload-title">
+                        Drop files here or click to browse
+                      </p>
+                      <p class="upload-subtitle">
+                        Support: PDF, DOC, DOCX, TXT, RTF (Max 10MB each) -
+                        Files will be uploaded with request
+                      </p>
                     </div>
                   </div>
                   <input
@@ -285,40 +518,88 @@
                     accept=".pdf,.doc,.docx,.txt,.rtf"
                     @change="handleFileSelect"
                     class="file-input-hidden"
-                  >
+                  />
                 </div>
 
                 <!-- File List -->
                 <div v-if="uploadedFiles.length > 0" class="file-list">
-                  <div v-for="(file, index) in uploadedFiles" :key="index" class="file-item">
+                  <div
+                    v-for="(file, index) in uploadedFiles"
+                    :key="index"
+                    class="file-item"
+                  >
                     <div class="file-info">
                       <div class="file-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <svg
+                          fill="none"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          width="16"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                          />
+                          <path
+                            d="M14 2V8H20"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                          />
                         </svg>
                       </div>
                       <div class="file-details">
                         <span class="file-name">{{ file.name }}</span>
-                        <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                        <span class="file-size">{{
+                          formatFileSize(file.size)
+                        }}</span>
                       </div>
                     </div>
                     <button
                       type="button"
                       class="file-remove-btn"
                       @click="removeFile(index)"
-                      title="Remove file">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      title="Remove file"
+                    >
+                      <svg
+                        fill="none"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        width="14"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M18 6L6 18"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
+                        <path
+                          d="M6 6L18 18"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
                       </svg>
                     </button>
                   </div>
                 </div>
               </div>
               <div class="input-info">
-                <span v-if="fileError" class="error-message">{{ fileError }}</span>
-                <span v-else class="help-text">Upload files related to your translation request (optional). Files will be uploaded with the request.</span>
+                <span v-if="fileError" class="error-message">{{
+                  fileError
+                }}</span>
+                <span v-else class="help-text"
+                  >Upload files related to your translation request (optional).
+                  Files will be uploaded with the request.</span
+                >
               </div>
             </div>
           </div>
@@ -332,17 +613,57 @@
           >
             <span v-if="loading" class="loading-spinner"></span>
             <span v-else class="btn-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 5V19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg
+                fill="none"
+                height="18"
+                viewBox="0 0 24 24"
+                width="18"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 5V19"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M5 12H19"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
               </svg>
             </span>
             {{ loading ? 'Creating Request...' : 'Create Request' }}
           </button>
-          <button type="button" class="btn btn-secondary" @click.prevent="onCancel">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <button
+            class="btn btn-secondary"
+            type="button"
+            @click.prevent="onCancel"
+          >
+            <svg
+              fill="none"
+              height="18"
+              viewBox="0 0 24 24"
+              width="18"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+              />
+              <path
+                d="M6 6L18 18"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+              />
             </svg>
             Cancel
           </button>
@@ -354,102 +675,112 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, defineEmits } from 'vue'
-import axios from 'axios'
-import { useToast } from 'primevue/usetoast'
-import Multiselect from 'vue-multiselect'
-import 'vue-multiselect/dist/vue-multiselect.min.css'
+import { computed, defineEmits, onMounted, ref } from 'vue';
+import axios from 'axios';
+import { useToast } from 'primevue/usetoast';
+import Multiselect from 'vue-multiselect';
+import 'vue-multiselect/dist/vue-multiselect.min.css';
 
-const emit = defineEmits(['success', 'cancel'])
+const emit = defineEmits(['success', 'cancel']);
 
-const title = ref('')
-const description = ref('')
-const dealAmount = ref(null)
-const deadline = ref('')
-const categoryId = ref('')
-const loading = ref(false)
-const minDate = ref(new Date())
+const title = ref('');
+const description = ref('');
+const dealAmount = ref(null);
+const deadline = ref('');
+const categoryId = ref('');
+const loading = ref(false);
+const minDate = ref(new Date());
 // Set minDate to 7 days from now to match backend validation
-minDate.value.setDate(minDate.value.getDate() + 7)
-const toast = useToast()
+minDate.value.setDate(minDate.value.getDate() + 7);
+const toast = useToast();
 
-const categories = ref([])
+const categories = ref([]);
 
-const titleTouched = ref(false)
-const descTouched = ref(false)
-const amountTouched = ref(false)
-const deadlineTouched = ref(false)
-const categoryTouched = ref(false)
-const assigneeEmail = ref('')
-const assigneeTouched = ref(false)
+const titleTouched = ref(false);
+const descTouched = ref(false);
+const amountTouched = ref(false);
+const deadlineTouched = ref(false);
+const categoryTouched = ref(false);
+const assigneeEmail = ref('');
+const assigneeTouched = ref(false);
 
-const requestType = ref('public')
+const requestType = ref('public');
 
-const currentUserId = ref(null)
+const currentUserId = ref(null);
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const userEmail = ref('')
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const userEmail = ref('');
 
 // Tags handling
-const selectedTags = ref([])
-const tagInput = ref('')
+const selectedTags = ref([]);
+const tagInput = ref('');
 
-const allTags = ref([])
-const tagError = ref('')
+const allTags = ref([]);
+const tagError = ref('');
 
 // File upload variables
-const uploadedFiles = ref([])
-const fileInput = ref(null)
-const isDragOver = ref(false)
-const fileError = ref('')
+const uploadedFiles = ref([]);
+const fileInput = ref(null);
+const isDragOver = ref(false);
+const fileError = ref('');
 
-const isDealAmountValid = computed(() => dealAmount.value !== null && dealAmount.value > 0)
+const isDealAmountValid = computed(
+  () => dealAmount.value !== null && dealAmount.value > 0
+);
 
 const minDateString = computed(() => {
-  const d = minDate.value
-  return d.toISOString().split('T')[0]
-})
+  const d = minDate.value;
+  return d.toISOString().split('T')[0];
+});
 
 const titleError = computed(() => {
-  if (!titleTouched.value) return ''
-  if (!title.value) return 'Title is required'
-  if (title.value.length < 3) return 'Title must be at least 3 characters'
-  if (title.value.length > 255) return 'Title is too long (max 255 characters)'
-  return ''
-})
+  if (!titleTouched.value) return '';
+  if (!title.value) return 'Title is required';
+  if (title.value.length < 3) return 'Title must be at least 3 characters';
+  if (title.value.length > 255) return 'Title is too long (max 255 characters)';
+  return '';
+});
 const descriptionError = computed(() => {
-  if (!descTouched.value) return ''
-  if (description.value.length > 1000) return 'Description too long (max 1000 characters)'
-  return ''
-})
+  if (!descTouched.value) return '';
+  if (description.value.length > 1000)
+    return 'Description too long (max 1000 characters)';
+  return '';
+});
 const dealAmountError = computed(() => {
-  if (!amountTouched.value) return ''
-  if (dealAmount.value === null || dealAmount.value === '' || isNaN(dealAmount.value)) return 'Deal amount is required'
-  if (dealAmount.value <= 0) return 'Deal amount must be greater than 0'
-  return ''
-})
+  if (!amountTouched.value) return '';
+  if (
+    dealAmount.value === null ||
+    dealAmount.value === '' ||
+    isNaN(dealAmount.value)
+  )
+    return 'Deal amount is required';
+  if (dealAmount.value <= 0) return 'Deal amount must be greater than 0';
+  return '';
+});
 const deadlineError = computed(() => {
-  if (!deadlineTouched.value) return ''
-  if (!deadline.value) return 'Please select a deadline'
-  const deadlineDate = new Date(deadline.value)
-  const sevenDaysFromNow = new Date()
-  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
-  if (deadlineDate < sevenDaysFromNow) return 'Deadline must be at least 7 days from now'
-  return ''
-})
+  if (!deadlineTouched.value) return '';
+  if (!deadline.value) return 'Please select a deadline';
+  const deadlineDate = new Date(deadline.value);
+  const sevenDaysFromNow = new Date();
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  if (deadlineDate < sevenDaysFromNow)
+    return 'Deadline must be at least 7 days from now';
+  return '';
+});
 const categoryError = computed(() => {
-  if (!categoryTouched.value) return ''
-  if (!categoryId.value) return 'Please select a category'
-  return ''
-})
+  if (!categoryTouched.value) return '';
+  if (!categoryId.value) return 'Please select a category';
+  return '';
+});
 const assigneeError = computed(() => {
-  if (requestType.value !== 'private') return ''
-  if (!assigneeTouched.value) return ''
-  if (!assigneeEmail.value) return 'Please enter assignee email'
-  if (!emailRegex.test(assigneeEmail.value)) return 'Invalid email format'
-  if (userEmail.value && assigneeEmail.value === userEmail.value) return 'You cannot assign the request to yourself'
-  return ''
-})
+  if (requestType.value !== 'private') return '';
+  if (!assigneeTouched.value) return '';
+  if (!assigneeEmail.value) return 'Please enter assignee email';
+  if (!emailRegex.test(assigneeEmail.value)) return 'Invalid email format';
+  if (userEmail.value && assigneeEmail.value === userEmail.value)
+    return 'You cannot assign the request to yourself';
+  return '';
+});
 
 const isFormValid = computed(() => {
   if (requestType.value === 'private') {
@@ -460,7 +791,7 @@ const isFormValid = computed(() => {
       !deadlineError.value &&
       !categoryError.value &&
       !assigneeError.value
-    )
+    );
   } else {
     return (
       !titleError.value &&
@@ -468,114 +799,140 @@ const isFormValid = computed(() => {
       !dealAmountError.value &&
       !deadlineError.value &&
       !categoryError.value
-    )
+    );
   }
-})
+});
 
 onMounted(async () => {
   try {
-    const categoriesRes = await axios.get('/api/categories/all')
-    categories.value = categoriesRes.data
+    const categoriesRes = await axios.get('/api/categories/all');
+    categories.value = categoriesRes.data;
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch categories', life: 3000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to fetch categories',
+      life: 3000,
+    });
   }
 
   try {
-    const tagsRes = await axios.get('/api/project-tag/all')
-    allTags.value = tagsRes.data
+    const tagsRes = await axios.get('/api/project-tag/all');
+    allTags.value = tagsRes.data;
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch tags', life: 3000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to fetch tags',
+      life: 3000,
+    });
   }
 
-  const storedId = localStorage.getItem('userId')
+  const storedId = localStorage.getItem('userId');
   if (storedId) {
-    currentUserId.value = storedId
+    currentUserId.value = storedId;
   }
-  const storedEmail = localStorage.getItem('email')
+  const storedEmail = localStorage.getItem('email');
   if (storedEmail) {
-    userEmail.value = storedEmail
+    userEmail.value = storedEmail;
   }
-})
+});
 
 async function handleSubmit() {
-  titleTouched.value = true
-  descTouched.value = true
-  amountTouched.value = true
-  deadlineTouched.value = true
-  assigneeTouched.value = true
-  categoryTouched.value = true
+  titleTouched.value = true;
+  descTouched.value = true;
+  amountTouched.value = true;
+  deadlineTouched.value = true;
+  assigneeTouched.value = true;
+  categoryTouched.value = true;
   if (!isFormValid.value) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fix all validation errors', life: 3000 })
-    return
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Please fix all validation errors',
+      life: 3000,
+    });
+    return;
   }
-  loading.value = true
+  loading.value = true;
   try {
-    const deadlineDate = new Date(deadline.value)
-    const sevenDaysFromNow = new Date()
-    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
+    const deadlineDate = new Date(deadline.value);
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
 
     if (deadlineDate < sevenDaysFromNow) {
       toast.add({
         severity: 'error',
         summary: 'Error',
         detail: 'Deadline must be at least 7 days from now',
-        life: 3000
-      })
-      loading.value = false
-      return
+        life: 3000,
+      });
+      loading.value = false;
+      return;
     }
 
     // Map requestType to backend fields
-    let isPublic = false
-    let assigneeId = undefined
+    let isPublic = false;
+    let assigneeId = undefined;
 
     if (requestType.value === 'public') {
-      isPublic = true
-      assigneeId = undefined
+      isPublic = true;
+      assigneeId = undefined;
     } else if (requestType.value === 'private') {
-      isPublic = false
+      isPublic = false;
       // Find assigneeId from email
       try {
-        console.log('Searching for user with email:', assigneeEmail.value)
-        const response = await axios.get(`/api/requests/search?keyword=${encodeURIComponent(assigneeEmail.value)}`)
-        console.log('Search response:', response.data)
+        console.log('Searching for user with email:', assigneeEmail.value);
+        const response = await axios.get(
+          `/api/requests/search?keyword=${encodeURIComponent(
+            assigneeEmail.value
+          )}`
+        );
+        console.log('Search response:', response.data);
         if (response.data && response.data.length > 0) {
           // Find exact email match
-          const user = response.data.find(u => u.email === assigneeEmail.value)
-          console.log('Found user:', user)
+          const user = response.data.find(
+            (u) => u.email === assigneeEmail.value
+          );
+          console.log('Found user:', user);
           if (user) {
-            assigneeId = Number(user.id)
-            console.log('Assignee ID converted:', assigneeId, 'Type:', typeof assigneeId)
+            assigneeId = Number(user.id);
+            console.log(
+              'Assignee ID converted:',
+              assigneeId,
+              'Type:',
+              typeof assigneeId
+            );
           } else {
             toast.add({
               severity: 'error',
               summary: 'Error',
               detail: 'No user found with this email',
-              life: 3000
-            })
-            loading.value = false
-            return
+              life: 3000,
+            });
+            loading.value = false;
+            return;
           }
         } else {
           toast.add({
             severity: 'error',
             summary: 'Error',
             detail: 'No user found with this email',
-            life: 3000
-          })
-          loading.value = false
-          return
+            life: 3000,
+          });
+          loading.value = false;
+          return;
         }
       } catch (error) {
-        console.error('Error searching for user:', error)
+        console.error('Error searching for user:', error);
         toast.add({
           severity: 'error',
           summary: 'Error',
           detail: 'No user found with this email',
-          life: 3000
-        })
-        loading.value = false
-        return
+          life: 3000,
+        });
+        loading.value = false;
+        return;
       }
     }
 
@@ -586,32 +943,35 @@ async function handleSubmit() {
       deadline: deadline.value,
       isPublic: Boolean(isPublic),
       categoryId: categoryId.value,
-      tags: selectedTags.value.map(tag => tag.name)
-    }
+      tags: selectedTags.value.map((tag) => tag.name),
+    };
 
     // Only add assigneeId if it's defined
     if (assigneeId !== undefined) {
-      requestData.assigneeId = assigneeId
+      requestData.assigneeId = assigneeId;
     }
 
-    console.log('=== DEBUG INFO ===')
-    console.log('Request type selected:', requestType.value)
-    console.log('isPublic value:', isPublic, 'Type:', typeof isPublic)
-    console.log('assigneeId value:', assigneeId, 'Type:', typeof assigneeId)
-    console.log('Full request data being sent:', JSON.stringify(requestData, null, 2))
-    console.log('=== END DEBUG ===')
+    console.log('=== DEBUG INFO ===');
+    console.log('Request type selected:', requestType.value);
+    console.log('isPublic value:', isPublic, 'Type:', typeof isPublic);
+    console.log('assigneeId value:', assigneeId, 'Type:', typeof assigneeId);
+    console.log(
+      'Full request data being sent:',
+      JSON.stringify(requestData, null, 2)
+    );
+    console.log('=== END DEBUG ===');
 
     // Create request first
-    const response = await axios.post('/api/requests/create', requestData)
-    console.log('Backend response:', response.data)
+    const response = await axios.post('/api/requests/create', requestData);
+    console.log('Backend response:', response.data);
 
     // If there are files to upload, upload them using the existing file upload endpoint
     if (uploadedFiles.value.length > 0) {
       try {
         // Try to create a project first, then upload files
         // If project creation fails, use default values
-        let projectId = '1'
-        let branchId = '1'
+        let projectId = '1';
+        let branchId = '1';
 
         try {
           // Create a project for this request
@@ -619,173 +979,197 @@ async function handleSubmit() {
             name: `Project for Request: ${title.value}`,
             description: `Auto-generated project for request: ${title.value}`,
             isPublic: false,
-            categoryId: categoryId.value
-          }
+            categoryId: categoryId.value,
+          };
 
-          const projectResponse = await axios.post('/api/projects/create', projectData)
-          projectId = projectResponse.data.id.toString()
-          branchId = '1' // Use default branch
+          const projectResponse = await axios.post(
+            '/api/projects/create',
+            projectData
+          );
+          projectId = projectResponse.data.id.toString();
+          branchId = '1'; // Use default branch
 
-          console.log('Created project for request:', projectResponse.data)
+          console.log('Created project for request:', projectResponse.data);
         } catch (projectError) {
-          console.warn('Failed to create project, using defaults:', projectError)
+          console.warn(
+            'Failed to create project, using defaults:',
+            projectError
+          );
           // Use default values if project creation fails
-          projectId = '1'
-          branchId = '1'
+          projectId = '1';
+          branchId = '1';
         }
 
         // Upload each file using the existing /api/files/upload endpoint
         for (const file of uploadedFiles.value) {
-          const formData = new FormData()
-          formData.append('file', file)
-          formData.append('projectId', projectId)
-          formData.append('branchId', branchId)
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('projectId', projectId);
+          formData.append('branchId', branchId);
 
-          console.log('Uploading file:', file.name, 'to project:', projectId, 'branch:', branchId)
+          console.log(
+            'Uploading file:',
+            file.name,
+            'to project:',
+            projectId,
+            'branch:',
+            branchId
+          );
 
-          const uploadResponse = await axios.post('/api/files/upload', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data'
+          const uploadResponse = await axios.post(
+            '/api/files/upload',
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
             }
-          })
+          );
 
-          console.log('File upload response:', uploadResponse.data)
+          console.log('File upload response:', uploadResponse.data);
         }
 
         toast.add({
           severity: 'success',
           summary: 'Success',
           detail: `Request created successfully with ${uploadedFiles.value.length} file(s) uploaded.`,
-          life: 3000
-        })
+          life: 3000,
+        });
       } catch (fileError) {
-        console.error('File upload error:', fileError)
-        console.error('Error details:', fileError.response?.data)
+        console.error('File upload error:', fileError);
+        console.error('Error details:', fileError.response?.data);
         toast.add({
           severity: 'warn',
           summary: 'Warning',
-          detail: `Request created but file upload failed: ${fileError.response?.data?.message || 'Unknown error'}. You can upload files later.`,
-          life: 3000
-        })
+          detail: `Request created but file upload failed: ${
+            fileError.response?.data?.message || 'Unknown error'
+          }. You can upload files later.`,
+          life: 3000,
+        });
       }
     } else {
       toast.add({
         severity: 'success',
         summary: 'Success',
         detail: 'Request created successfully!',
-        life: 3000
-      })
+        life: 3000,
+      });
     }
 
-    emit('success')
+    emit('success');
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || 'Failed to create request', life: 3000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: e.response?.data?.message || 'Failed to create request',
+      life: 3000,
+    });
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 function onCancel() {
-  emit('cancel')
+  emit('cancel');
 }
 
 // Tag handling methods
 function addTag() {
-  const tag = tagInput.value.trim()
+  const tag = tagInput.value.trim();
   if (tag && !selectedTags.value.includes(tag)) {
-    selectedTags.value.push(tag)
-    tagInput.value = ''
+    selectedTags.value.push(tag);
+    tagInput.value = '';
   }
 }
 
 function removeTag(index) {
-  selectedTags.value.splice(index, 1)
+  selectedTags.value.splice(index, 1);
 }
 
 function validateTags() {
   if (selectedTags.value.length > 10) {
-    tagError.value = 'You can only select up to 10 tags'
-    return false
+    tagError.value = 'You can only select up to 10 tags';
+    return false;
   }
-  tagError.value = ''
-  return true
+  tagError.value = '';
+  return true;
 }
 
 function handleTagCreate(newTagName) {
   // Nếu tag chưa tồn tại, thêm vào allTags và chọn luôn
-  if (!allTags.value.some(tag => tag.name === newTagName)) {
-    const newTag = { id: `new-${Date.now()}`, name: newTagName }
-    allTags.value.push(newTag)
-    selectedTags.value.push(newTag)
+  if (!allTags.value.some((tag) => tag.name === newTagName)) {
+    const newTag = { id: `new-${Date.now()}`, name: newTagName };
+    allTags.value.push(newTag);
+    selectedTags.value.push(newTag);
   }
 }
 
 // File upload functions
 function triggerFileInput() {
-  fileInput.value.click()
+  fileInput.value.click();
 }
 
 function handleFileSelect(event) {
-  const files = Array.from(event.target.files)
-  addFiles(files)
-  event.target.value = '' // Reset input
+  const files = Array.from(event.target.files);
+  addFiles(files);
+  event.target.value = ''; // Reset input
 }
 
 function handleFileDrop(event) {
-  event.preventDefault()
-  isDragOver.value = false
-  const files = Array.from(event.dataTransfer.files)
-  addFiles(files)
+  event.preventDefault();
+  isDragOver.value = false;
+  const files = Array.from(event.dataTransfer.files);
+  addFiles(files);
 }
 
 function addFiles(files) {
-  fileError.value = ''
+  fileError.value = '';
 
   for (const file of files) {
     // Validate file type
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf']
-    const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf'];
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
     if (!allowedTypes.includes(fileExtension)) {
-      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`
-      continue
+      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`;
+      continue;
     }
 
     // Validate file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
     if (file.size > maxSize) {
-      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`
-      continue
+      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`;
+      continue;
     }
 
     // Check if file already exists
-    const existingFile = uploadedFiles.value.find(f => f.name === file.name)
+    const existingFile = uploadedFiles.value.find((f) => f.name === file.name);
     if (existingFile) {
-      fileError.value = `File ${file.name} is already uploaded.`
-      continue
+      fileError.value = `File ${file.name} is already uploaded.`;
+      continue;
     }
 
     // Check total number of files (max 5 files)
     if (uploadedFiles.value.length >= 5) {
-      fileError.value = 'Maximum 5 files allowed.'
-      continue
+      fileError.value = 'Maximum 5 files allowed.';
+      continue;
     }
 
-    uploadedFiles.value.push(file)
+    uploadedFiles.value.push(file);
   }
 }
 
 function removeFile(index) {
-  uploadedFiles.value.splice(index, 1)
-  fileError.value = ''
+  uploadedFiles.value.splice(index, 1);
+  fileError.value = '';
 }
 
 function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 </script>
 

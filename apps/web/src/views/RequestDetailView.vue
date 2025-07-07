@@ -10,7 +10,6 @@
         <div class="page-header">
           <div class="page-title">
             <h1>Request Details Information</h1>
-
           </div>
         </div>
 
@@ -29,15 +28,21 @@
                     <i class="pi pi-tag"></i>
                     Title
                   </span>
-                  <span class="overview-value">{{ request?.title || 'N/A' }}</span>
+                  <span class="overview-value">{{
+                    request?.title || 'N/A'
+                  }}</span>
                 </div>
                 <div class="overview-row">
                   <span class="overview-label">
-                    <i class="pi pi-dollar" style="font-size: 16px;">💰</i>
+                    <i class="pi pi-dollar" style="font-size: 16px">💰</i>
                     Amount
                   </span>
-                  <span class="overview-value amount" :title="'Total amount for this request'">
-                    {{ formatAmount(request?.dealAmount) }} <span class="currency">USD</span>
+                  <span
+                    :title="'Total amount for this request'"
+                    class="overview-value amount"
+                  >
+                    {{ formatAmount(request?.dealAmount) }}
+                    <span class="currency">USD</span>
                   </span>
                 </div>
                 <div class="overview-row">
@@ -46,14 +51,35 @@
                     Deadline
                   </span>
                   <span class="overview-value deadline">
-                    <div class="deadline-info" :title="`${timeRemaining} days left (out of ${totalDays})`">
+                    <div
+                      :title="`${timeRemaining} days left (out of ${totalDays})`"
+                      class="deadline-info"
+                    >
                       <i class="pi pi-clock"></i>
                       {{ formatDate(request?.deadline) }}
-                      <span v-if="timeRemaining >= 0" class="time-remaining"> ({{ timeRemaining }} days left)</span>
+                      <span
+                        v-if="timeRemaining >= 0"
+                        :class="[
+                          'time-remaining',
+                          timeRemaining < 4
+                            ? 'urgent'
+                            : timeRemaining < 8
+                            ? 'warning'
+                            : 'safe',
+                        ]"
+                      >
+                        ({{ timeRemaining }} days left)
+                      </span>
                     </div>
                     <div v-if="timeRemaining >= 0" class="deadline-progress">
                       <div class="progress-bar">
-                        <div class="progress-fill" :style="{ width: deadlineProgressPercent + '%', background: deadlineProgressColor }"></div>
+                        <div
+                          :style="{
+                            width: deadlineProgressPercent + '%',
+                            background: deadlineProgressColor,
+                          }"
+                          class="progress-fill"
+                        ></div>
                       </div>
                     </div>
                   </span>
@@ -64,20 +90,36 @@
                     Status
                   </span>
                   <span class="overview-value">
-                                         <span class="status-badge" :class="statusClass(request?.status)">
-                       <i class="pi" :class="getStatusIcon(request?.status)"></i>
-                       {{ formatStatus(request?.status) }}
-                     </span>
+                    <span
+                      :class="statusClass(request?.status)"
+                      class="status-badge"
+                    >
+                      <i :class="getStatusIcon(request?.status)" class="pi"></i>
+                      {{ formatStatus(request?.status) }}
+                    </span>
                   </span>
                 </div>
                 <div class="overview-row" v-if="request?.status === 'PENDING'">
                   <span class="overview-label">
-                    <i class="pi pi-eye" v-tooltip.top="request?.isPublic ? 'This request is visible to everyone' : 'This request is private'"></i>
+                    <i
+                      v-tooltip.top="
+                        request?.isPublic
+                          ? 'This request is visible to everyone'
+                          : 'This request is private'
+                      "
+                      class="pi pi-eye"
+                    ></i>
                     Visibility
                   </span>
                   <span class="overview-value">
-                    <span class="visibility-badge" :class="request?.isPublic ? 'public' : 'private'">
-                      <i class="pi" :class="request?.isPublic ? 'pi-globe' : 'pi-lock'"></i>
+                    <span
+                      :class="request?.isPublic ? 'public' : 'private'"
+                      class="visibility-badge"
+                    >
+                      <i
+                        :class="request?.isPublic ? 'pi-globe' : 'pi-lock'"
+                        class="pi"
+                      ></i>
                       {{ request?.isPublic ? 'Public' : 'Private' }}
                     </span>
                   </span>
@@ -88,9 +130,15 @@
                     Visibility
                   </span>
                   <span class="overview-value">
-                    <span class="visibility-badge private">
-                      <i class="pi pi-lock"></i>
-                      Private
+                    <span
+                      :class="request?.isPublic ? 'public' : 'private'"
+                      class="visibility-badge"
+                    >
+                      <i
+                        :class="request?.isPublic ? 'pi-globe' : 'pi-lock'"
+                        class="pi"
+                      ></i>
+                      {{ request?.isPublic ? 'Public' : 'Private' }}
                     </span>
                   </span>
                 </div>
@@ -99,7 +147,9 @@
                     <i class="pi pi-user"></i>
                     Requester
                   </span>
-                  <span class="overview-value">{{ request?.requester?.username || 'N/A' }}</span>
+                  <span class="overview-value">{{
+                    request?.requester?.username || 'N/A'
+                  }}</span>
                 </div>
                 <div class="overview-row">
                   <span class="overview-label">
@@ -107,7 +157,9 @@
                     Category
                   </span>
                   <span class="overview-value">
-                    <span class="category-badge">{{ request?.category?.name || 'N/A' }}</span>
+                    <span class="category-badge">{{
+                      request?.category?.name || 'N/A'
+                    }}</span>
                   </span>
                 </div>
                 <div class="overview-row">
@@ -117,11 +169,19 @@
                   </span>
                   <span class="overview-value">
                     <template v-if="request?.tags && request.tags.length">
-                      <span v-for="tag in request.tags" :key="tag.id" class="tag-badge">{{ tag.name }}</span>
+                      <span
+                        v-for="tag in request.tags"
+                        :key="tag.id"
+                        class="tag-badge"
+                        >{{ tag.name }}</span
+                      >
                     </template>
                     <template v-else>
                       <span class="no-tags">
-                        <i class="pi pi-tag" style="margin-right: 4px; color: #999;"></i>
+                        <i
+                          class="pi pi-tag"
+                          style="margin-right: 4px; color: #999"
+                        ></i>
                         No tags
                       </span>
                     </template>
@@ -132,7 +192,9 @@
                     <i class="pi pi-calendar"></i>
                     Created At
                   </span>
-                  <span class="overview-value">{{ formatDate(request?.createdAt) }}</span>
+                  <span class="overview-value">{{
+                    formatDate(request?.createdAt)
+                  }}</span>
                 </div>
               </div>
             </div>
@@ -151,20 +213,29 @@
               </div>
             </div>
             <!-- Attached Files Card -->
-            <div v-if="request?.files && request.files.length > 0" class="info-card info-card-hover">
+            <div
+              v-if="request?.files && request.files.length > 0"
+              class="info-card info-card-hover"
+            >
               <div class="info-card-title">
                 <i class="pi pi-paperclip"></i>
                 Attached Files ({{ request.files.length }})
               </div>
               <div class="files-list">
-                <div v-for="file in request.files" :key="file.id" class="file-item file-item-hover">
+                <div
+                  v-for="file in request.files"
+                  :key="file.id"
+                  class="file-item file-item-hover"
+                >
                   <div class="file-info">
                     <div class="file-icon">
                       <i class="pi pi-file"></i>
                     </div>
                     <div class="file-details">
                       <span class="file-name">{{ file.fileName }}</span>
-                      <span class="file-size">{{ formatFileSize(file.fileSize) }}</span>
+                      <span class="file-size">{{
+                        formatFileSize(file.fileSize)
+                      }}</span>
                     </div>
                   </div>
                   <Button
@@ -178,26 +249,42 @@
             </div>
 
             <!-- Status History Card -->
-            <div v-if="request?.statusHistory && request.statusHistory.length > 0" class="info-card info-card-hover">
+            <div
+              v-if="request?.statusHistory && request.statusHistory.length > 0"
+              class="info-card info-card-hover"
+            >
               <div class="info-card-title">
                 <i class="pi pi-history"></i>
                 Status History
               </div>
               <div class="status-history-list">
-                <div v-for="(history, index) in request.statusHistory" :key="index" class="status-history-item">
+                <div
+                  v-for="(history, index) in request.statusHistory"
+                  :key="index"
+                  class="status-history-item"
+                >
                   <div class="history-icon">
                     <i class="pi" :class="getStatusIcon(history.status)"></i>
                   </div>
                   <div class="history-content">
                     <div class="history-status">
-                      <span class="status-text">{{ formatStatus(history.status) }}</span>
-                      <span class="status-badge-small" :class="statusClass(history.status)">
+                      <span class="status-text">{{
+                        formatStatus(history.status)
+                      }}</span>
+                      <span
+                        :class="statusClass(history.status)"
+                        class="status-badge-small"
+                      >
                         {{ formatStatus(history.status) }}
                       </span>
                     </div>
                     <div class="history-details">
-                      <span v-if="history.actor" class="actor">{{ history.actor }}</span>
-                      <span class="timestamp">{{ formatDateTime(history.timestamp) }}</span>
+                      <span v-if="history.actor" class="actor">{{
+                        history.actor
+                      }}</span>
+                      <span class="timestamp">{{
+                        formatDateTime(history.timestamp)
+                      }}</span>
                     </div>
                     <div v-if="history.comment" class="history-comment">
                       {{ history.comment }}
@@ -208,7 +295,10 @@
             </div>
 
             <!-- Reliability Ratings Card -->
-            <div v-if="request?.requester?.rating || request?.assignee?.rating" class="info-card info-card-hover">
+            <div
+              v-if="request?.requester?.rating || request?.assignee?.rating"
+              class="info-card info-card-hover"
+            >
               <div class="info-card-title">
                 <i class="pi pi-star"></i>
                 Reliability Ratings
@@ -221,15 +311,32 @@
                   </div>
                   <div class="rating-display">
                     <div class="stars">
-                      <i v-for="i in 5" :key="i"
-                         class="pi"
-                         :class="i <= Math.floor(request.requester.rating) ? 'pi-star-fill' :
-                                 i <= request.requester.rating ? 'pi-star-half' : 'pi-star'"
-                         :style="{ color: i <= request.requester.rating ? '#fbbf24' : '#d1d5db' }">
+                      <i
+                        v-for="i in 5"
+                        :key="i"
+                        :class="
+                          i <= Math.floor(request.requester.rating)
+                            ? 'pi-star-fill'
+                            : i <= request.requester.rating
+                            ? 'pi-star-half'
+                            : 'pi-star'
+                        "
+                        :style="{
+                          color:
+                            i <= request.requester.rating
+                              ? '#fbbf24'
+                              : '#d1d5db',
+                        }"
+                        class="pi"
+                      >
                       </i>
                     </div>
-                    <span class="rating-score">{{ request.requester.rating.toFixed(1) }}</span>
-                    <span class="rating-count">({{ request.requester.reviewCount || 0 }} reviews)</span>
+                    <span class="rating-score">{{
+                      request.requester.rating.toFixed(1)
+                    }}</span>
+                    <span class="rating-count"
+                      >({{ request.requester.reviewCount || 0 }} reviews)</span
+                    >
                   </div>
                 </div>
 
@@ -240,15 +347,32 @@
                   </div>
                   <div class="rating-display">
                     <div class="stars">
-                      <i v-for="i in 5" :key="i"
-                         class="pi"
-                         :class="i <= Math.floor(request.assignee.rating) ? 'pi-star-fill' :
-                                 i <= request.assignee.rating ? 'pi-star-half' : 'pi-star'"
-                         :style="{ color: i <= request.assignee.rating ? '#fbbf24' : '#d1d5db' }">
+                      <i
+                        v-for="i in 5"
+                        :key="i"
+                        :class="
+                          i <= Math.floor(request.assignee.rating)
+                            ? 'pi-star-fill'
+                            : i <= request.assignee.rating
+                            ? 'pi-star-half'
+                            : 'pi-star'
+                        "
+                        :style="{
+                          color:
+                            i <= request.assignee.rating
+                              ? '#fbbf24'
+                              : '#d1d5db',
+                        }"
+                        class="pi"
+                      >
                       </i>
                     </div>
-                    <span class="rating-score">{{ request.assignee.rating.toFixed(1) }}</span>
-                    <span class="rating-count">({{ request.assignee.reviewCount || 0 }} reviews)</span>
+                    <span class="rating-score">{{
+                      request.assignee.rating.toFixed(1)
+                    }}</span>
+                    <span class="rating-count"
+                      >({{ request.assignee.reviewCount || 0 }} reviews)</span
+                    >
                   </div>
                 </div>
               </div>
@@ -262,21 +386,34 @@
               </div>
               <div class="activity-timeline">
                 <div class="timeline-step">
-                  <div class="timeline-icon created"><i class="pi pi-plus-circle"></i></div>
+                  <div class="timeline-icon created">
+                    <i class="pi pi-plus-circle"></i>
+                  </div>
                   <div class="timeline-content">
                     <div class="timeline-title">Created</div>
-                    <div class="timeline-date">{{ formatDateTime(request?.createdAt) }}</div>
+                    <div class="timeline-date">
+                      {{ formatDateTime(request?.createdAt) }}
+                    </div>
                   </div>
                 </div>
                 <div v-if="isApprovedOrAssigned" class="timeline-step">
-                  <div class="timeline-icon approved"><i class="pi pi-check-circle"></i></div>
+                  <div class="timeline-icon approved">
+                    <i class="pi pi-check-circle"></i>
+                  </div>
                   <div class="timeline-content">
                     <div class="timeline-title">Approved</div>
                     <div class="timeline-date">
-                      {{ request?.approvedAt ? formatDateTime(request.approvedAt) : '-' }}
+                      {{
+                        request?.approvedAt
+                          ? formatDateTime(request.approvedAt)
+                          : '-'
+                      }}
                     </div>
                     <div v-if="request?.assignee" class="timeline-user">
-                      To: {{ request.assignee.fullName || request.assignee.username }}
+                      To:
+                      {{
+                        request.assignee.fullName || request.assignee.username
+                      }}
                     </div>
                   </div>
                 </div>
@@ -292,10 +429,19 @@
                 Requester Information
               </div>
               <div class="requester-block">
-                <div class="avatar-container" @click="viewProfile(request?.requester?.id)" title="View Profile">
+                <div
+                  class="avatar-container"
+                  title="View Profile"
+                  @click="viewProfile(request?.requester?.id)"
+                >
                   <Avatar
                     :image="request?.requester?.avatar"
-                    :label="getInitial(request?.requester?.fullName || request?.requester?.username)"
+                    :label="
+                      getInitial(
+                        request?.requester?.fullName ||
+                          request?.requester?.username
+                      )
+                    "
                     shape="circle"
                     size="large"
                     class="avatar-bordered"
@@ -307,29 +453,50 @@
                 <div class="requester-details">
                   <span class="username">
                     <i class="pi pi-user"></i>
-                    {{ request?.requester?.fullName || request?.requester?.username || 'N/A' }}
+                    {{
+                      request?.requester?.fullName ||
+                      request?.requester?.username ||
+                      'N/A'
+                    }}
                   </span>
                   <span class="user-email">
                     <i class="pi pi-envelope"></i>
-                    <a v-if="request?.requester?.email" :href="`mailto:${request.requester.email}`" class="email-link">{{ request.requester.email }}</a>
+                    <a
+                      v-if="request?.requester?.email"
+                      :href="`mailto:${request.requester.email}`"
+                      class="email-link"
+                      >{{ request.requester.email }}</a
+                    >
                     <span v-else>N/A</span>
                   </span>
                   <span class="user-phone">
                     <i class="pi pi-phone"></i>
-                    <a v-if="request?.requester?.phone" :href="`tel:${request.requester.phone}`" class="phone-link">{{ request.requester.phone }}</a>
+                    <a
+                      v-if="request?.requester?.phone"
+                      :href="`tel:${request.requester.phone}`"
+                      class="phone-link"
+                      >{{ request.requester.phone }}</a
+                    >
                     <span v-else>N/A</span>
                   </span>
                 </div>
               </div>
             </div>
             <!-- Assigned Translator Card (only if exists) -->
-            <div v-if="request && request.assignee" class="info-card info-card-hover">
+            <div
+              v-if="request && request.assignee"
+              class="info-card info-card-hover"
+            >
               <div class="info-card-title">
                 <i class="pi pi-user-plus"></i>
                 Assigned Translator
               </div>
               <div class="requester-block">
-                <div class="avatar-container" @click="viewProfile(request?.assignee?.id)" title="View Profile">
+                <div
+                  class="avatar-container"
+                  title="View Profile"
+                  @click="viewProfile(request?.assignee?.id)"
+                >
                   <Avatar
                     :image="request.assignee?.avatar"
                     :label="getInitial(request.assignee?.username)"
@@ -348,12 +515,22 @@
                   </span>
                   <span class="user-email">
                     <i class="pi pi-envelope"></i>
-                    <a v-if="request.assignee?.email" :href="`mailto:${request.assignee.email}`" class="email-link">{{ request.assignee.email }}</a>
+                    <a
+                      v-if="request.assignee?.email"
+                      :href="`mailto:${request.assignee.email}`"
+                      class="email-link"
+                      >{{ request.assignee.email }}</a
+                    >
                     <span v-else>N/A</span>
                   </span>
                   <span class="user-phone">
                     <i class="pi pi-phone"></i>
-                    <a v-if="request.assignee?.phone" :href="`tel:${request.assignee.phone}`" class="phone-link">{{ request.assignee.phone }}</a>
+                    <a
+                      v-if="request.assignee?.phone"
+                      :href="`tel:${request.assignee.phone}`"
+                      class="phone-link"
+                      >{{ request.assignee.phone }}</a
+                    >
                     <span v-else>N/A</span>
                   </span>
                 </div>
@@ -367,49 +544,96 @@
               </div>
               <div class="actions">
                 <button
-                  v-if="request && request.assignee && request.requester && userId !== null && request.requester.id === userId"
+                  v-if="
+                    request &&
+                    request.assignee &&
+                    request.requester &&
+                    userId !== null &&
+                    request.requester.id === userId
+                  "
                   class="action-btn primary"
                   @click="contactTranslator"
                 >
                   <i class="pi pi-comments"></i> Contact Translator
                 </button>
                 <button
-                  v-if="request && request.requester && userId !== null && request.requester.id !== userId"
+                  v-if="
+                    request &&
+                    request.requester &&
+                    userId !== null &&
+                    request.requester.id !== userId
+                  "
                   class="action-btn info"
                   @click="contactRequester"
                 >
                   <i class="pi pi-envelope"></i> Contact Requester
                 </button>
                 <button
-                  v-if="request && request.requester && userId !== null && request.requester.id === userId && !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.status)"
+                  v-if="
+                    request &&
+                    request.requester &&
+                    userId !== null &&
+                    request.requester.id === userId &&
+                    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(
+                      request.status
+                    )
+                  "
                   class="action-btn edit"
                   @click="showEdit = true"
                 >
                   <i class="pi pi-pencil"></i> Edit Request
                 </button>
                 <button
-                  v-if="request && request.requester && userId !== null && request.requester.id === userId && !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.status)"
+                  v-if="
+                    request &&
+                    request.requester &&
+                    userId !== null &&
+                    request.requester.id === userId &&
+                    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(
+                      request.status
+                    )
+                  "
                   class="action-btn danger"
-                  @click="cancelRequest"
+                  @click="confirmCancelVisible = true"
                 >
                   <i class="pi pi-times"></i> Cancel Request
                 </button>
                 <button
-                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
+                  v-if="
+                    request &&
+                    request.isPublic === false &&
+                    request.requester &&
+                    userId !== null &&
+                    request.requester.id !== userId
+                  "
                   class="action-btn approve"
                   @click="approveRequest"
                 >
                   <i class="pi pi-check"></i> Approve
                 </button>
                 <button
-                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
+                  v-if="
+                    request &&
+                    request.isPublic === false &&
+                    request.requester &&
+                    userId !== null &&
+                    request.requester.id !== userId
+                  "
                   class="action-btn reject"
                   @click="rejectRequest"
                 >
                   <i class="pi pi-times"></i> Reject
                 </button>
                 <button
-                  v-if="request && request.isPublic && !request.assignee && userId !== null && request.requester && request.requester.id !== userId && request.status === 'PENDING'"
+                  v-if="
+                    request &&
+                    request.isPublic &&
+                    !request.assignee &&
+                    userId !== null &&
+                    request.requester &&
+                    request.requester.id !== userId &&
+                    request.status === 'PENDING'
+                  "
                   class="action-btn primary"
                   @click="registerForRequest"
                   :disabled="request?.isRegistered"
@@ -432,13 +656,48 @@
       </div>
     </div>
     <Footer />
+    <Dialog
+      v-model:visible="confirmCancelVisible"
+      :closable="true"
+      :style="{ width: '700px', maxWidth: '100vw' }"
+      class="custom-confirm-dialog"
+      header="⚠️ Confirm Cancellation"
+      modal
+    >
+      <div class="confirm-content">
+        <p class="confirm-message">
+          Are you sure you want to cancel this request?<br />
+          <strong>This action cannot be undone.</strong>
+        </p>
+      </div>
+
+      <template #footer>
+        <Button
+          class="p-button-outlined p-button-secondary cancel-btn"
+          icon="pi pi-times"
+          label="No"
+          @click="confirmCancelVisible = false"
+        />
+        <Button
+          class="p-button-danger confirm-btn"
+          icon="pi pi-check"
+          label="Yes, Cancel"
+          @click="handleConfirmedCancel"
+        />
+      </template>
+    </Dialog>
     <!-- Edit Request Modal -->
-    <RequestEditView v-if="showEdit" :request="request" @close="showEdit = false" @updated="onRequestUpdated" />
+    <RequestEditView
+      v-if="showEdit"
+      :request="request"
+      @close="showEdit = false"
+      @updated="onRequestUpdated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
@@ -448,10 +707,11 @@ import Avatar from 'primevue/avatar';
 import 'primeicons/primeicons.css';
 import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
-import RequestEditView from './RequestEditView.vue'
-import { nextTick } from 'vue';
+import RequestEditView from './RequestEditView.vue';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
+import Dialog from 'primevue/dialog';
+
 // import { useUserStore } from '../store/user'; // Nếu có store user
 
 interface UserInfo {
@@ -527,14 +787,21 @@ const router = useRouter();
 const request = ref<RequestDetail | null>(null);
 const loading = ref<boolean>(true);
 const userId = ref<number | null>(null);
-const showEdit = ref(false)
+const showEdit = ref(false);
 const toast = useToast();
+const confirmCancelVisible = ref(false);
+const handleConfirmedCancel = async () => {
+  confirmCancelVisible.value = false;
+  await cancelRequest(); // existing function
+};
 
 const timeRemaining = computed(() => {
   if (!request.value?.deadline) return null;
   const now = new Date();
   const deadline = new Date(request.value.deadline);
-  const diff = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const diff = Math.ceil(
+    (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  );
   return diff;
 });
 
@@ -553,19 +820,27 @@ const totalDays = computed(() => {
   if (!request.value?.deadline || !request.value?.createdAt) return 0;
   const created = new Date(request.value.createdAt);
   const deadline = new Date(request.value.deadline);
-  return Math.ceil((deadline.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.ceil(
+    (deadline.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
+  );
 });
 
 const deadlineProgressColor = computed(() => {
   if (timeRemaining.value == null) return '#3b82f6';
-  if (timeRemaining.value > 7) return 'linear-gradient(90deg, #22d3ee 0%, #3b82f6 100%)'; // xanh
-  if (timeRemaining.value > 3) return 'linear-gradient(90deg, #fde68a 0%, #f59e42 100%)'; // vàng
+  if (timeRemaining.value > 7)
+    return 'linear-gradient(90deg, #22d3ee 0%, #3b82f6 100%)'; // xanh
+  if (timeRemaining.value > 3)
+    return 'linear-gradient(90deg, #fde68a 0%, #f59e42 100%)'; // vàng
   return 'linear-gradient(90deg, #fecaca 0%, #ef4444 100%)'; // đỏ
 });
 
 function formatDate(date: string | Date) {
   if (!date) return '-';
-  return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 function formatDateTime(date: string | Date) {
@@ -581,18 +856,21 @@ function formatDateTime(date: string | Date) {
 
 function getStatusIcon(status: string) {
   const iconMap: Record<string, string> = {
-    'PENDING': 'pi-clock',
-    'APPROVED': 'pi-check-circle',
-    'REJECTED': 'pi-times-circle',
-    'COMPLETED': 'pi-check-square',
-    'CANCELLED': 'pi-ban',
-    'IN_PROGRESS': 'pi-play-circle',
+    PENDING: 'pi-clock',
+    APPROVED: 'pi-check-circle',
+    REJECTED: 'pi-times-circle',
+    COMPLETED: 'pi-check-square',
+    CANCELLED: 'pi-ban',
+    IN_PROGRESS: 'pi-play-circle'
   };
   return iconMap[status] || 'pi-info-circle';
 }
 function formatAmount(amount: number) {
   if (amount == null) return '-';
-  return Number(amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  return Number(amount).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  });
 }
 
 function formatFileSize(bytes: number) {
@@ -604,24 +882,26 @@ function formatFileSize(bytes: number) {
 }
 function formatStatus(status: string) {
   const statusMap: Record<string, string> = {
-    'PENDING': 'Pending',
-    'APPROVED': 'Approved',
-    'REJECTED': 'Rejected',
-    'COMPLETED': 'Completed',
-    'CANCELLED': 'Cancelled',
-    'IN_PROGRESS': 'In Progress',
+    PENDING: 'Pending',
+    APPROVED: 'Approved',
+    REJECTED: 'Rejected',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+    IN_PROGRESS: 'In Progress'
   };
   return statusMap[status] || status;
 }
 function statusClass(status: string) {
-  return {
-    'PENDING': 'pending',
-    'APPROVED': 'approved',
-    'REJECTED': 'rejected',
-    'COMPLETED': 'completed',
-    'CANCELLED': 'cancelled',
-    'IN_PROGRESS': 'inprogress',
-  }[status] || 'pending';
+  return (
+    {
+      PENDING: 'pending',
+      APPROVED: 'approved',
+      REJECTED: 'rejected',
+      COMPLETED: 'completed',
+      CANCELLED: 'cancelled',
+      IN_PROGRESS: 'inprogress'
+    }[status] || 'pending'
+  );
 }
 function getInitial(name: string | undefined) {
   return name ? name.charAt(0).toUpperCase() : '?';
@@ -635,20 +915,33 @@ function contactRequester() {
   if (request.value?.requester?.email) {
     window.open(`mailto:${request.value.requester.email}`);
   } else {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Requester email not available', life: 3000 });
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Requester email not available',
+      life: 3000
+    });
   }
 }
 function contactTranslator() {
   if (request.value?.assignee?.email) {
     window.open(`mailto:${request.value.assignee.email}`);
   } else {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator email not available', life: 3000 });
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Translator email not available',
+      life: 3000
+    });
   }
 }
 function viewProfile(userId: number | undefined) {
   if (userId) {
     // Navigate to user profile page
-    router.push({ name: 'user-profile', params: { userId: userId.toString() } });
+    router.push({
+      name: 'user-profile',
+      params: { userId: userId.toString() }
+    });
   }
 }
 function viewFiles() {
@@ -669,15 +962,18 @@ const canEdit = computed(() => {
     !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.value.status)
   );
 });
-const canContact = computed(() => !!request.value?.assignee && request.value?.requester?.id !== userId.value);
+const canContact = computed(
+  () =>
+    !!request.value?.assignee && request.value?.requester?.id !== userId.value
+);
 
 function onRequestUpdated() {
   // Refetch request details after update
-  fetchRequestDetail()
+  fetchRequestDetail();
 }
 
 async function fetchRequestDetail() {
-  loading.value = true
+  loading.value = true;
   try {
     const requestId = route.params.requestId;
     const res = await axiosInstance.get(`/requests/${requestId}/detail`);
@@ -693,13 +989,23 @@ async function cancelRequest() {
   if (!request.value?.id) return;
   try {
     await axiosInstance.post(`/requests/${request.value.id}/cancel`);
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Request cancelled successfully!', life: 3000 });
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Request cancelled successfully!',
+      life: 3000
+    });
     await nextTick();
     setTimeout(() => {
       router.push({ name: 'my-requests' });
     }, 1500);
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Failed', detail: 'Failed to cancel request.', life: 3000 });
+    toast.add({
+      severity: 'error',
+      summary: 'Failed',
+      detail: 'Failed to cancel request.',
+      life: 3000
+    });
   }
 }
 
@@ -714,10 +1020,21 @@ async function registerForRequest() {
   if (!request.value?.id) return;
   try {
     await axiosInstance.post(`/requests/${request.value.id}/register`);
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Successfully registered for this request! Please check your chat or email.', life: 3000 });
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail:
+        'Successfully registered for this request! Please check your chat or email.',
+      life: 3000
+    });
     await fetchRequestDetail();
   } catch (e: any) {
-    toast.add({ severity: 'error', summary: 'Failed', detail: e?.response?.data?.message || 'Registration failed.', life: 3000 });
+    toast.add({
+      severity: 'error',
+      summary: 'Failed',
+      detail: e?.response?.data?.message || 'Registration failed.',
+      life: 3000
+    });
   }
 }
 
@@ -742,10 +1059,12 @@ onMounted(async () => {
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 :root {
   --main-radius: 18px;
-  --main-shadow: 0 4px 24px rgba(59,130,246,0.08);
+  --main-shadow: 0 4px 24px rgba(59, 130, 246, 0.08);
   --main-font: 'Inter', 'Roboto', Arial, sans-serif;
 }
-body, .request-detail-wrapper {
+
+body,
+.request-detail-wrapper {
   font-family: var(--main-font);
 }
 .request-detail-wrapper {
@@ -908,10 +1227,17 @@ body, .request-detail-wrapper {
   gap: 4px;
   flex-wrap: nowrap;
 }
-.time-remaining {
-  color: #f59e42;
-  font-size: 13px;
-  margin-left: 6px;
+
+.time-remaining.safe {
+  color: #10b981; /* green */
+}
+
+.time-remaining.warning {
+  color: #f59e0b; /* yellow */
+}
+
+.time-remaining.urgent {
+  color: #ef4444; /* red */
 }
 .deadline-progress {
   width: 100%;
@@ -936,7 +1262,7 @@ body, .request-detail-wrapper {
   padding: 6px 16px;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(251,191,36,0.08);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.08);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
@@ -967,8 +1293,8 @@ body, .request-detail-wrapper {
   color: #0369a1;
 }
 .visibility-badge.private {
-  background: #FDEAEA;
-  color: #D93025;
+  background: #fdeaea;
+  color: #d93025;
   border-radius: 999px;
   padding: 5px 18px;
   font-size: 15px;
@@ -977,6 +1303,11 @@ body, .request-detail-wrapper {
   align-items: center;
   gap: 4px;
   border: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  word-wrap: break-word;
 }
 .visibility-badge.public {
   background: linear-gradient(90deg, #dbeafe 60%, #a5b4fc 100%);
@@ -1012,6 +1343,9 @@ body, .request-detail-wrapper {
   color: #1e293b;
   line-height: 1.6;
   font-weight: 500;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 .no-description {
   display: flex;
@@ -1023,6 +1357,9 @@ body, .request-detail-wrapper {
   background: #f8fafc;
   border-radius: 12px;
   border: 1px dashed #cbd5e1;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 .no-tags {
   color: #999;
@@ -1075,10 +1412,8 @@ body, .request-detail-wrapper {
   color: #1e293b;
   font-size: 15px;
   font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
+  word-break: break-word;
+  white-space: normal;
 }
 .file-size {
   color: #64748b;
@@ -1109,11 +1444,11 @@ body, .request-detail-wrapper {
 }
 .avatar-bordered {
   border: 3px solid #e0e7ff;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.10);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 .translator-avatar {
   border-color: #d1fae5;
-  box-shadow: 0 2px 8px rgba(16,185,129,0.10);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
 }
 .avatar-overlay {
   position: absolute;
@@ -1144,7 +1479,9 @@ body, .request-detail-wrapper {
   font-size: 18px;
   line-height: 1.2;
 }
-.user-email, .user-phone {
+
+.user-email,
+.user-phone {
   color: #64748b;
   font-size: 15px;
   display: flex;
@@ -1152,13 +1489,17 @@ body, .request-detail-wrapper {
   gap: 6px;
   line-height: 1.2;
 }
-.email-link, .phone-link {
+
+.email-link,
+.phone-link {
   color: #2563eb;
   text-decoration: none;
   transition: color 0.2s, text-decoration 0.2s;
   font-weight: 600;
 }
-.email-link:hover, .phone-link:hover {
+
+.email-link:hover,
+.phone-link:hover {
   color: #1d4ed8;
   text-decoration: underline;
 }
@@ -1181,7 +1522,7 @@ body, .request-detail-wrapper {
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.08);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
   position: relative;
   overflow: hidden;
 }
@@ -1192,7 +1533,12 @@ body, .request-detail-wrapper {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
   transition: left 0.5s;
 }
 .action-btn:hover::before {
@@ -1205,7 +1551,7 @@ body, .request-detail-wrapper {
 }
 .action-btn.primary:hover:enabled {
   background: linear-gradient(90deg, #1d4ed8 60%, #3b82f6 100%);
-  box-shadow: 0 4px 16px rgba(59,130,246,0.16);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.16);
   transform: translateY(-1px);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1526,9 +1872,17 @@ body, .request-detail-wrapper {
     gap: 24px;
     max-width: 100%;
   }
-  .left-column, .right-column {
+
+  .left-column,
+  .right-column {
     max-width: 100%;
     min-width: 0;
+  }
+
+  .visibility-badge {
+    font-size: 13px;
+    padding: 4px 12px;
+    line-height: 1.2;
   }
 }
 @media (max-width: 900px) {
@@ -1556,7 +1910,9 @@ body, .request-detail-wrapper {
   .info-card-title {
     font-size: 18px;
   }
-  .overview-label, .overview-value {
+
+  .overview-label,
+  .overview-value {
     font-size: 14px;
   }
   .action-btn {
@@ -1567,5 +1923,61 @@ body, .request-detail-wrapper {
     grid-template-columns: 1fr;
     gap: 12px;
   }
+}
+
+.custom-confirm-dialog .p-dialog-content {
+  padding: 1.5rem;
+  background-color: #f9fafb;
+  font-family: 'Inter', sans-serif;
+  border-radius: 12px;
+}
+
+.custom-confirm-dialog .p-dialog-header {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #1f2937;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem 0.5rem;
+}
+
+.confirm-message {
+  max-width: 100%;
+  font-size: 1rem;
+  padding: 0.2rem 0;
+  color: #374151;
+}
+
+.confirm-btn:hover {
+  background-color: #dc2626 !important;
+}
+
+.custom-confirm-dialog .p-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem 1.5rem;
+  gap: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.p-dialog-footer .p-button .pi {
+  margin-right: 0.4rem;
+}
+
+.cancel-btn {
+  padding: 0.5rem 1.2rem !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.cancel-btn:hover {
+  background-color: #f3f4f6 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.confirm-btn {
+  padding: 0.6rem 1.4rem;
+  font-weight: 700;
+  border-radius: 10px;
 }
 </style>

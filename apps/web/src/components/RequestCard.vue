@@ -4,12 +4,22 @@
     <p class="mb-2">{{ request.description }}</p>
 
     <div class="text-sm text-gray-600 mb-2">
+      <div><strong>Project:</strong> {{ request.project?.name || '-' }}</div>
+      <div><strong>Category:</strong> {{ request.category?.name || '-' }}</div>
+      <div><strong>Status:</strong> {{ request.status }}</div>
+      <div><strong>Deal Amount:</strong> {{ request.dealAmount ?? 'N/A' }}</div>
+      <div><strong>Deadline:</strong> {{ formattedDeadline }}</div>
       <div><strong>Status:</strong> {{ request.status }}</div>
       <div><strong>Deal Amount:</strong> {{ request.dealAmount ?? 'N/A' }}</div>
       <div><strong>Deadline:</strong> {{ formattedDeadline }}</div>
       <div v-if="request.fileUrl">
         <strong>Attachment:</strong>
-        <a :href="request.fileUrl" target="_blank" class="text-blue-600 underline">View File</a>
+        <a
+          :href="request.fileUrl"
+          class="text-blue-600 underline"
+          target="_blank"
+          >View File</a
+        >
       </div>
     </div>
 
@@ -61,7 +71,9 @@ export default {
   methods: {
     confirmAction(action) {
       const actionText = action === 'reject' ? 'reject' : 'cancel';
-      const confirmed = confirm(`Are you sure you want to ${actionText} this request?`);
+      const confirmed = confirm(
+        `Are you sure you want to ${actionText} this request?`
+      );
       if (confirmed) {
         this.$emit(action, this.request.id);
       }

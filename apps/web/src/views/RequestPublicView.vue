@@ -7,7 +7,10 @@
           <!-- Header & Filters -->
           <div class="header-filters-wrapper">
             <!-- Simplified Header -->
-            <div class="requests-header" :class="{ 'header-animated': isHeaderVisible }">
+            <div
+              :class="{ 'header-animated': isHeaderVisible }"
+              class="requests-header"
+            >
               <div class="header-content">
                 <div class="header-left">
                   <div class="icon-circle">
@@ -24,11 +27,26 @@
                   <div class="search-container">
                     <div class="search-wrapper">
                       <i class="pi pi-search search-icon"></i>
-                      <InputText v-model="search" placeholder="Search by title..." class="search-input" @focus="searchFocus = true" @blur="searchFocus = false" />
+                      <InputText
+                        v-model="search"
+                        class="search-input"
+                        placeholder="Search by title..."
+                        @blur="searchFocus = false"
+                        @focus="searchFocus = true"
+                      />
                     </div>
                   </div>
                   <div class="filter-options">
-                    <Dropdown v-model="selectedCategory" :options="categoryOptions" optionLabel="name" optionValue="id" placeholder="All Categories" class="filter-select" @focus="categoryFocus = true" @blur="categoryFocus = false" />
+                    <Dropdown
+                      v-model="selectedCategory"
+                      :options="categoryOptions"
+                      class="filter-select"
+                      optionLabel="name"
+                      optionValue="id"
+                      placeholder="All Categories"
+                      @blur="categoryFocus = false"
+                      @focus="categoryFocus = true"
+                    />
                   </div>
                 </div>
               </div>
@@ -51,28 +69,38 @@
               </div>
               <h3>Oops! Something went wrong</h3>
               <p>{{ error }}</p>
-              <Button label="Try Again" @click="loadRequests" class="btn btn-secondary" />
+              <Button
+                class="btn btn-secondary"
+                label="Try Again"
+                @click="loadRequests"
+              />
             </div>
           </div>
 
           <!-- Empty State -->
-          <div v-else-if="filteredRequests.length === 0" class="empty-container">
+          <div
+            v-else-if="filteredRequests.length === 0"
+            class="empty-container"
+          >
             <div class="empty-content">
               <div class="empty-icon">
                 <i class="pi pi-inbox"></i>
               </div>
               <h3>No public requests found</h3>
               <p v-if="search || selectedCategory">
-                No requests match your current filters. Try adjusting your search criteria.
+                No requests match your current filters. Try adjusting your
+                search criteria.
               </p>
-              <p v-else>
-                There are no public requests yet. Check back later!
-              </p>
+              <p v-else>There are no public requests yet. Check back later!</p>
             </div>
           </div>
 
           <!-- Requests Grid -->
-          <div v-else class="requests-grid-container" :class="{ 'grid-animated': isGridVisible }">
+          <div
+            v-else
+            :class="{ 'grid-animated': isGridVisible }"
+            class="requests-grid-container"
+          >
             <div class="requests-grid">
               <div
                 v-for="(req, index) in paginatedRequests"
@@ -80,7 +108,7 @@
                 class="request-card improved-request-card"
                 :style="{ animationDelay: `${index * 0.1}s` }"
                 @click="goToDetail(req.id)"
-                style="cursor: pointer; position: relative;"
+                style="cursor: pointer; position: relative"
               >
                 <div class="card-badges">
                   <Badge :class="badgeClass(req.status) + ' status-badge'">
@@ -91,18 +119,34 @@
                     <i class="pi pi-check-circle"></i> Registered
                   </div>
                 </div>
-                <div class="card-title improved-title" :title="req.title">{{ req.title }}</div>
+                <div :title="req.title" class="card-title improved-title">
+                  {{ req.title }}
+                </div>
                 <div class="card-description" v-if="req.description">
                   {{ truncateDescription(req.description) }}
                 </div>
-                <div class="deal improved-deal"><i class="pi pi-wallet"></i> {{ formatDeal(req.dealAmount) }}</div>
-                <div class="meta-row">
-                  <span><i class="pi pi-user-edit"></i> {{ req.requester?.username }}</span>
-                  <span><i class="pi pi-calendar-plus"></i> <b>Created:</b> {{ formatDate(req.createdAt) }}</span>
+                <div class="deal improved-deal">
+                  <i class="pi pi-wallet"></i> {{ formatDeal(req.dealAmount) }}
                 </div>
                 <div class="meta-row">
-                  <span><i class="pi pi-hourglass"></i> <b>Deadline:</b> {{ formatDate(req.deadline) }}</span>
-                  <span><i class="pi pi-bookmark"></i> {{ req.category?.name }}</span>
+                  <span
+                    ><i class="pi pi-user-edit"></i>
+                    {{ req.requester?.username }}</span
+                  >
+                  <span
+                    ><i class="pi pi-calendar-plus"></i> <b>Created:</b>
+                    {{ formatDate(req.createdAt) }}</span
+                  >
+                </div>
+                <div class="meta-row">
+                  <span
+                    ><i class="pi pi-hourglass"></i> <b>Deadline:</b>
+                    {{ formatDate(req.deadline) }}</span
+                  >
+                  <span
+                    ><i class="pi pi-bookmark"></i>
+                    {{ req.category?.name }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -122,141 +166,167 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import InputText from 'primevue/inputtext'
-import Dropdown from 'primevue/dropdown'
-import Button from 'primevue/button'
-import Badge from 'primevue/badge'
-import Paginator from 'primevue/paginator'
-import axios from 'axios'
-import AppFooter from '../components/AppFooter.vue'
-import Navbar from '../components/Navbar.vue'
-import { useRouter } from 'vue-router'
-import { authService } from '../services/auth.service'
+import { computed, onMounted, ref } from 'vue';
+import InputText from 'primevue/inputtext';
+import Dropdown from 'primevue/dropdown';
+import Button from 'primevue/button';
+import Badge from 'primevue/badge';
+import Paginator from 'primevue/paginator';
+import axios from 'axios';
+import AppFooter from '../components/AppFooter.vue';
+import Navbar from '../components/Navbar.vue';
+import { useRouter } from 'vue-router';
+import { authService } from '../services/auth.service';
 
-const requests = ref([])
-const loading = ref(true)
-const error = ref(null)
-const categories = ref([])
-const search = ref('')
-const selectedCategory = ref(null)
-const searchFocus = ref(false)
-const categoryFocus = ref(false)
+const requests = ref([]);
+const loading = ref(true);
+const error = ref(null);
+const categories = ref([]);
+const search = ref('');
+const selectedCategory = ref(null);
+const searchFocus = ref(false);
+const categoryFocus = ref(false);
 
 // Animation triggers
-const isHeaderVisible = ref(false)
-const isFiltersVisible = ref(false)
-const isGridVisible = ref(false)
+const isHeaderVisible = ref(false);
+const isFiltersVisible = ref(false);
+const isGridVisible = ref(false);
 
-const pageSize = 8
-const currentPage = ref(0)
+const pageSize = 8;
+const currentPage = ref(0);
 
-const router = useRouter()
-const currentUser = ref(null)
+const router = useRouter();
+const currentUser = ref(null);
 
 onMounted(async () => {
-  setTimeout(() => { isHeaderVisible.value = true }, 100)
-  setTimeout(() => { isGridVisible.value = true }, 300)
+  setTimeout(() => {
+    isHeaderVisible.value = true;
+  }, 100);
+  setTimeout(() => {
+    isGridVisible.value = true;
+  }, 300);
   currentUser.value = await authService.getCurrentUser();
-  loadRequests()
-})
+  loadRequests();
+});
 
 async function loadRequests() {
-  loading.value = true
-  error.value = null
+  loading.value = true;
+  error.value = null;
   try {
     const [reqRes, catRes] = await Promise.all([
       axios.get('/api/requests/all'),
-      axios.get('/api/categories/all')
-    ])
-    categories.value = catRes.data
-    requests.value = reqRes.data.map(req => {
-      const cat = categories.value.find(cat => cat.name === req.category?.name)
+      axios.get('/api/categories/all'),
+    ]);
+    categories.value = catRes.data;
+    requests.value = reqRes.data.map((req) => {
+      const cat = categories.value.find(
+        (cat) => cat.name === req.category?.name
+      );
       return {
         ...req,
-        category: cat || req.category
-      }
-    })
+        category: cat || req.category,
+      };
+    });
   } catch (e) {
-    requests.value = []
-    categories.value = []
-    error.value = 'Failed to load public requests.'
+    requests.value = [];
+    categories.value = [];
+    error.value = 'Failed to load public requests.';
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 const categoryOptions = computed(() => [
   { id: null, name: 'All Categories' },
-  ...categories.value
-])
+  ...categories.value,
+]);
 
 const filteredRequests = computed(() => {
-  let list = requests.value
+  let list = requests.value;
   if (search.value) {
-    const s = search.value.toLowerCase()
-    list = list.filter(r => r.title?.toLowerCase().includes(s))
+    const s = search.value.toLowerCase();
+    list = list.filter((r) => r.title?.toLowerCase().includes(s));
   }
   if (selectedCategory.value !== null) {
-    list = list.filter(r => String(r.category?.id) === String(selectedCategory.value))
+    list = list.filter(
+      (r) => String(r.category?.id) === String(selectedCategory.value)
+    );
   }
   if (currentUser.value) {
-    list = list.filter(r => r.requester?.id !== currentUser.value.id)
+    list = list.filter((r) => r.requester?.id !== currentUser.value.id);
   }
-  list = list.filter(r => r.status !== 'APPROVED')
-  list = list.filter(r => r.status !== 'CANCELLED')
-  return list
-})
+  list = list.filter((r) => r.status !== 'APPROVED');
+  list = list.filter((r) => r.status !== 'CANCELLED');
+  return list;
+});
 
 const paginatedRequests = computed(() => {
-  const start = currentPage.value * pageSize
-  return filteredRequests.value.slice(start, start + pageSize)
-})
+  const start = currentPage.value * pageSize;
+  return filteredRequests.value.slice(start, start + pageSize);
+});
 
 function onPageChange(e) {
-  currentPage.value = e.page
+  currentPage.value = e.page;
 }
 
 function formatDate(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 function formatDeal(amount) {
-  if (amount == null) return '-'
-  return '$' + amount.toLocaleString()
+  if (amount == null) return '-';
+  return '$' + amount.toLocaleString();
 }
 
 function truncateDescription(description) {
-  if (!description) return ''
-  return description.length > 120 ? description.substring(0, 120) + '...' : description
+  if (!description) return '';
+  return description.length > 120
+    ? description.substring(0, 120) + '...'
+    : description;
 }
 
 function badgeClass(status) {
   switch ((status || '').toLowerCase()) {
-    case 'pending': return 'p-badge-info';
-    case 'cancelled': return 'p-badge-danger';
-    case 'approved': return 'p-badge-success';
-    case 'completed': return 'p-badge-success';
-    case 'rejected': return 'p-badge-warning';
-    default: return 'p-badge-info';
+    case 'pending':
+      return 'p-badge-info';
+    case 'cancelled':
+      return 'p-badge-danger';
+    case 'approved':
+      return 'p-badge-success';
+    case 'completed':
+      return 'p-badge-success';
+    case 'rejected':
+      return 'p-badge-warning';
+    default:
+      return 'p-badge-info';
   }
 }
 
 function statusIconClass(status) {
   switch ((status || '').toLowerCase()) {
-    case 'pending': return 'pi pi-clock';
-    case 'approved': return 'pi pi-check-circle';
-    case 'completed': return 'pi pi-check';
-    case 'cancelled': return 'pi pi-times-circle';
-    case 'rejected': return 'pi pi-ban';
-    default: return 'pi pi-info-circle';
+    case 'pending':
+      return 'pi pi-clock';
+    case 'approved':
+      return 'pi pi-check-circle';
+    case 'completed':
+      return 'pi pi-check';
+    case 'cancelled':
+      return 'pi pi-times-circle';
+    case 'rejected':
+      return 'pi pi-ban';
+    default:
+      return 'pi pi-info-circle';
   }
 }
 
 function goToDetail(id) {
-  router.push(`/requests/${id}`)
+  router.push(`/requests/${id}`);
 }
 </script>
 
@@ -468,7 +538,7 @@ function goToDetail(id) {
 .improved-request-card {
   background: #fff;
   border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(37,99,235,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
   padding: 28px 28px 24px 28px;
   transition: all 0.3s ease;
   border: 1px solid #e5e7eb;
@@ -478,7 +548,8 @@ function goToDetail(id) {
   overflow: visible;
 }
 .improved-request-card:hover {
-  box-shadow: 0 16px 48px rgba(37,99,235,0.20), 0 4px 12px rgba(102,126,234,0.15);
+  box-shadow: 0 16px 48px rgba(37, 99, 235, 0.2),
+    0 4px 12px rgba(102, 126, 234, 0.15);
   transform: translateY(-6px) scale(1.02);
 }
 .card-badges {
@@ -506,12 +577,12 @@ function goToDetail(id) {
   background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
   color: #fff;
   border: 2px solid #fff;
-  box-shadow: 0 4px 12px rgba(37,99,235,0.15);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
   gap: 6px;
   transition: all 0.2s ease;
 }
 .status-badge:hover {
-  box-shadow: 0 6px 20px rgba(37,99,235,0.25);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.25);
   transform: scale(1.05);
 }
 .status-icon {
@@ -548,7 +619,7 @@ function goToDetail(id) {
   display: flex;
   align-items: center;
   gap: 4px;
-  box-shadow: 0 2px 8px rgba(34,197,94,0.15);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
 }
 .registered-badge i {
   color: #fff;
@@ -568,6 +639,10 @@ function goToDetail(id) {
   line-height: 1.5;
   margin-bottom: 16px;
   font-weight: 400;
+
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 .improved-deal {
   color: #2563eb;
@@ -596,7 +671,9 @@ function goToDetail(id) {
   color: #6366f1;
 }
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .paginator {
   margin-top: 2rem;

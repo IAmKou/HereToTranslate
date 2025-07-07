@@ -14,9 +14,18 @@
       <div class="edit-header">
         <div class="edit-header-icon">
           <!-- Pencil/Edit SVG Icon -->
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="24" height="24" rx="12" fill="#4299e1"/>
-            <path d="M7 17.25V19H8.75L15.81 11.94L14.06 10.19L7 17.25ZM17.71 9.04C18.1 8.65 18.1 8.02 17.71 7.63L16.37 6.29C15.98 5.9 15.35 5.9 14.96 6.29L13.13 8.12L15.88 10.87L17.71 9.04Z" fill="white"/>
+          <svg
+            fill="none"
+            height="36"
+            viewBox="0 0 24 24"
+            width="36"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect fill="#4299e1" height="24" rx="12" width="24" />
+            <path
+              d="M7 17.25V19H8.75L15.81 11.94L14.06 10.19L7 17.25ZM17.71 9.04C18.1 8.65 18.1 8.02 17.71 7.63L16.37 6.29C15.98 5.9 15.35 5.9 14.96 6.29L13.13 8.12L15.88 10.87L17.71 9.04Z"
+              fill="white"
+            />
           </svg>
         </div>
         <div>
@@ -30,10 +39,16 @@
           <h2 class="section-title">
             <span class="section-icon">
               <!-- Info SVG Icon -->
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="10" cy="10" r="10" fill="#3182ce"/>
-                <rect x="9" y="7" width="2" height="6" rx="1" fill="white"/>
-                <rect x="9" y="5" width="2" height="2" rx="1" fill="white"/>
+              <svg
+                fill="none"
+                height="20"
+                viewBox="0 0 20 20"
+                width="20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="10" cy="10" fill="#3182ce" r="10" />
+                <rect fill="white" height="6" rx="1" width="2" x="9" y="7" />
+                <rect fill="white" height="2" rx="1" width="2" x="9" y="5" />
               </svg>
             </span>
             Basic Information
@@ -52,8 +67,10 @@
               placeholder="Enter project name"
               maxlength="100"
               @blur="nameTouched = true"
-            >
-            <span v-if="nameError" class="error-text">Project name is required.</span>
+            />
+            <span v-if="nameErrorMessage" class="error-text">
+              {{ nameErrorMessage }}
+            </span>
           </div>
 
           <div class="form-group">
@@ -66,7 +83,9 @@
               placeholder="Provide details about your project"
               maxlength="500"
             ></textarea>
-            <span class="char-count">{{ form.description?.length || 0 }}/500</span>
+            <span class="char-count"
+              >{{ form.description?.length || 0 }}/500</span
+            >
           </div>
         </section>
 
@@ -74,29 +93,60 @@
           <h2 class="section-title">
             <span class="section-icon">
               <!-- Category SVG Icon -->
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="4" width="16" height="12" rx="3" fill="#38a169"/>
-                <rect x="6" y="8" width="8" height="4" rx="1" fill="white"/>
+              <svg
+                fill="none"
+                height="20"
+                viewBox="0 0 20 20"
+                width="20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  fill="#38a169"
+                  height="12"
+                  rx="3"
+                  width="16"
+                  x="2"
+                  y="4"
+                />
+                <rect fill="white" height="4" rx="1" width="8" x="6" y="8" />
               </svg>
             </span>
             Category & Tags
           </h2>
-          <div class="form-group">
-            <label for="category">Category</label>
+          <div class="form-group mt-4">
+            <label for="category"
+              >Category
+              <span class="help-text"
+                >Choose the appropriate project category.</span
+              >
+            </label>
             <select
               id="category"
               v-model="form.categoryId"
               class="form-control"
+              @blur="categoryTouched = true"
             >
               <option value="">Select a category</option>
-              <option v-for="category in categories" :key="category.id" :value="category.id">
+              <option
+                v-for="category in categories"
+                :key="category.id"
+                :value="category.id"
+              >
                 {{ category.name }}
               </option>
             </select>
+            <span v-if="categoryError" class="error-text">
+              Category is required.
+            </span>
           </div>
 
-          <div class="form-group">
-            <label for="tags">Tags</label>
+          <div class="form-group mt-4">
+            <label for="tags"
+              >Tags
+              <span class="help-text"
+                >Tags help categorize and search your project.</span
+              ></label
+            >
             <Multiselect
               v-model="form.tags"
               :options="allTags"
@@ -116,9 +166,15 @@
           <h2 class="section-title">
             <span class="section-icon">
               <!-- Visibility SVG Icon -->
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <ellipse cx="10" cy="10" rx="8" ry="5" fill="#ecc94b"/>
-                <circle cx="10" cy="10" r="2.5" fill="white"/>
+              <svg
+                fill="none"
+                height="20"
+                viewBox="0 0 20 20"
+                width="20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <ellipse cx="10" cy="10" fill="#ecc94b" rx="8" ry="5" />
+                <circle cx="10" cy="10" fill="white" r="2.5" />
               </svg>
             </span>
             Visibility
@@ -130,14 +186,18 @@
                 type="checkbox"
                 class="switch-input"
                 @change="() => {}"
-              >
+              />
               <span class="switch-slider"></span>
               <span class="switch-text">
                 {{ form.isPrivate ? 'Private' : 'Public' }}
               </span>
             </label>
             <span class="help-text">
-              {{ form.isPrivate ? 'Only you and collaborators can see this project.' : 'Public projects are visible to all users.' }}
+              {{
+                form.isPrivate
+                  ? 'Only you and collaborators can see this project.'
+                  : 'Public projects are visible to all users.'
+              }}
             </span>
           </div>
         </section>
@@ -146,7 +206,11 @@
           <button type="button" @click="cancelEdit" class="btn btn-secondary">
             Cancel
           </button>
-          <button type="submit" class="btn btn-primary" :disabled="isSubmitting">
+          <button
+            :disabled="isSubmitting"
+            class="btn btn-primary"
+            type="submit"
+          >
             <span v-if="isSubmitting" class="loading-spinner small"></span>
             {{ isSubmitting ? 'Updating...' : 'Update Project' }}
           </button>
@@ -157,28 +221,28 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import axiosInstance from '../api'
-import Multiselect from 'vue-multiselect'
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import axiosInstance from '../api';
+import Multiselect from 'vue-multiselect';
 
 // Toast notification
 const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-  const toast = document.createElement('div')
-  toast.className = `custom-toast ${type}`
-  toast.innerText = msg
-  document.body.appendChild(toast)
+  const toast = document.createElement('div');
+  toast.className = `custom-toast ${type}`;
+  toast.innerText = msg;
+  document.body.appendChild(toast);
   setTimeout(() => {
-    toast.classList.add('show')
-  }, 10)
+    toast.classList.add('show');
+  }, 10);
   setTimeout(() => {
-    toast.classList.remove('show')
-    setTimeout(() => document.body.removeChild(toast), 300)
-  }, 2200)
-}
+    toast.classList.remove('show');
+    setTimeout(() => document.body.removeChild(toast), 300);
+  }, 2200);
+};
 
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 
 // Interfaces
 interface Project {
@@ -212,33 +276,42 @@ interface Category {
   description?: string;
 }
 
-const project = ref<Project | null>(null)
-const loading = ref(true)
-const error = ref<string | null>(null)
-const isSubmitting = ref(false)
-const newTag = ref('')
-const allTags = ref<string[]>([])
-const tagInputFocused = ref(false)
-const nameTouched = ref(false)
-const categories = ref<Category[]>([])
+const project = ref<Project | null>(null);
+const loading = ref(true);
+const error = ref<string | null>(null);
+const isSubmitting = ref(false);
+const newTag = ref('');
+const allTags = ref<string[]>([]);
+const tagInputFocused = ref(false);
+const nameTouched = ref(false);
+const categories = ref<Category[]>([]);
+const categoryTouched = ref(false);
 
 const form = ref<UpdateProjectData>({
   name: '',
   description: '',
   categoryId: '',
   tags: [],
-  isPrivate: false
-})
+  isPrivate: false,
+});
 
-const nameError = computed(() => !form.value.name && nameTouched.value)
+const nameErrorMessage = computed(() => {
+  if (!form.value.name) return 'Project name is required.';
+  if (form.value.name.length < 3)
+    return 'Project name must be at least 3 characters.';
+  return null;
+});
+const categoryError = computed(
+  () => categoryTouched.value && !form.value.categoryId
+);
 
 const loadProject = async () => {
   try {
-    loading.value = true
-    error.value = null
-    const projectId = route.params.projectId as string
-    const { data } = await axiosInstance.get(`/projects/${projectId}`)
-    project.value = data
+    loading.value = true;
+    error.value = null;
+    const projectId = route.params.projectId as string;
+    const { data } = await axiosInstance.get(`/projects/${projectId}`);
+    project.value = data;
 
     // Populate form
     if (project.value) {
@@ -246,70 +319,70 @@ const loadProject = async () => {
         name: project.value.name,
         description: project.value.description || '',
         categoryId: project.value.category?.id || '',
-        tags: project.value.tags?.map(tag => tag.name) || [],
+        tags: project.value.tags?.map((tag) => tag.name) || [],
         isPrivate: project.value.isPrivate,
-      }
+      };
     }
   } catch (err: any) {
-    error.value = err.message || 'Failed to load project'
-    console.error('Error loading project:', err)
+    error.value = err.message || 'Failed to load project';
+    console.error('Error loading project:', err);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const fetchTags = async () => {
   try {
-    const res = await axiosInstance.get('/project-tag/all')
-    allTags.value = res.data.map((tag: any) => tag.name)
+    const res = await axiosInstance.get('/project-tag/all');
+    allTags.value = res.data.map((tag: any) => tag.name);
   } catch (err) {
-    console.error('Error fetching tags:', err)
+    console.error('Error fetching tags:', err);
   }
-}
+};
 
 const fetchCategories = async () => {
   try {
-    const response = await fetch('/api/categories/all')
-    categories.value = await response.json()
+    const response = await fetch('/api/categories/all');
+    categories.value = await response.json();
   } catch (error) {
-    console.error('Error fetching categories:', error)
+    console.error('Error fetching categories:', error);
   }
-}
+};
 
 const handleSubmit = async () => {
-  nameTouched.value = true
-  if (!project.value || !form.value.name) return
-  isSubmitting.value = true
+  nameTouched.value = true;
+  if (!project.value || !form.value.name) return;
+  isSubmitting.value = true;
   try {
     // Tính toán addTags và removeTags
-    const oldTags = project.value?.tags?.map(tag => tag.name) || [];
+    const oldTags = project.value?.tags?.map((tag) => tag.name) || [];
     const newTags = form.value.tags || [];
-    const addTags = newTags.filter(tag => !oldTags.includes(tag));
-    const removeTags = oldTags.filter(tag => !newTags.includes(tag));
+    const addTags = newTags.filter((tag) => !oldTags.includes(tag));
+    const removeTags = oldTags.filter((tag) => !newTags.includes(tag));
 
     await axiosInstance.patch(`/projects/${project.value.id}`, {
       ...form.value,
       addTags,
-      removeTags
+      removeTags,
     });
-    showToast('Project updated successfully!', 'success')
-    setTimeout(() => router.push(`/projects/${project.value.id}`), 1200)
+    showToast('Project updated successfully!', 'success');
+    setTimeout(() => router.push(`/projects/${project.value.id}`), 1200);
   } catch (err: any) {
-    showToast('Failed to update project: ' + err.message, 'error')
+    showToast('Failed to update project: ' + err.message, 'error');
   } finally {
-    isSubmitting.value = false
+    isSubmitting.value = false;
   }
-}
+};
 
 const cancelEdit = () => {
-  router.push(`/projects/${project.value?.id}`)
-}
+  router.push(`/projects/${project.value?.id}`);
+};
 
 onMounted(() => {
-  loadProject()
-  fetchCategories()
-  fetchTags()
-})
+  loadProject();
+  fetchCategories();
+  fetchTags();
+});
 </script>
 
 <style scoped>
@@ -321,6 +394,25 @@ onMounted(() => {
   min-height: 100vh;
 }
 
+.multiselect-custom .multiselect__tags {
+  min-height: 48px;
+  padding: 0.85rem 1.1rem;
+  font-size: 1.05rem;
+  background-color: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  box-shadow: none;
+}
+
+.multiselect__input {
+  font-size: 1.05rem;
+}
+
+.multiselect-custom .multiselect__placeholder {
+  margin-bottom: 0;
+}
 .loading,
 .error {
   text-align: center;
@@ -419,16 +511,23 @@ onMounted(() => {
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  margin-bottom: 1rem;
 }
+
 .form-group label {
   color: #2d3748;
   font-weight: 500;
   margin-bottom: 0.2rem;
   font-size: 1rem;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  vertical-align: middle;
 }
 .required-mark {
   color: #e53e3e;
@@ -495,7 +594,7 @@ textarea.form-control {
   background: #4299e1;
 }
 .switch-slider::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 3px;
   top: 3px;
@@ -549,7 +648,7 @@ textarea.form-control {
 .btn-primary {
   background-color: #4299e1;
   color: white;
-  box-shadow: 0 2px 8px rgba(66,153,225,0.07);
+  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.07);
 }
 .btn-primary:hover:not(:disabled) {
   background-color: #3182ce;
@@ -583,7 +682,7 @@ textarea.form-control {
   pointer-events: none;
   transform: translateY(-30px);
   transition: all 0.3s;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.13);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.13);
 }
 .custom-toast.show {
   opacity: 1;

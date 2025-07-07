@@ -5,12 +5,48 @@
         <div class="form-section">
           <div class="section-header">
             <div class="section-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg
+                fill="none"
+                height="20"
+                viewBox="0 0 24 24"
+                width="20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M14 2V8H20"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M16 13H8"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M16 17H8"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M10 9H9H8"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
               </svg>
             </div>
             <h3>Project Information</h3>
@@ -28,25 +64,55 @@
                 type="text"
                 required
                 class="form-control"
-                :class="{ 'error': errors.name }"
+                :class="{ error: errors.name }"
                 placeholder="Enter a descriptive project name"
                 maxlength="50"
                 @input="validateName"
                 @blur="validateName"
-              >
+              />
               <div class="input-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <svg
+                  fill="none"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M12 2L2 7L12 12L22 7L12 2Z"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M2 17L12 22L22 17"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M2 12L12 17L22 12"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
                 </svg>
               </div>
             </div>
             <div class="input-info">
               <span class="char-count">{{ form.name.length }}/50</span>
-              <span v-if="errors.name" class="error-message">{{ errors.name }}</span>
-              <span v-if="nameCheckLoading" class="help-text">Checking name...</span>
-              <span v-if="nameCheckError" class="error-message">{{ nameCheckError }}</span>
+              <span v-if="errors.name" class="error-message">{{
+                errors.name
+              }}</span>
+              <span v-if="nameCheckLoading" class="help-text"
+                >Checking name...</span
+              >
+              <span v-if="nameCheckError" class="error-message">{{
+                nameCheckError
+              }}</span>
             </div>
           </div>
 
@@ -57,7 +123,7 @@
                 id="description"
                 v-model="form.description"
                 class="form-control"
-                :class="{ 'error': errors.description }"
+                :class="{ error: errors.description }"
                 rows="4"
                 placeholder="Provide details about your project (optional)"
                 maxlength="500"
@@ -65,28 +131,69 @@
                 @blur="validateDescription"
               ></textarea>
               <div class="textarea-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <svg
+                  fill="none"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M14 2V8H20"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M16 13H8"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M16 17H8"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M10 9H9H8"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  />
                 </svg>
               </div>
             </div>
             <div class="input-info">
-              <span class="char-count">{{ (form.description || '').length }}/500</span>
-              <span v-if="errors.description" class="error-message">{{ errors.description }}</span>
-              <span v-else class="help-text">A good description helps others understand your project better</span>
+              <span class="char-count"
+                >{{ (form.description || '').length }}/500</span
+              >
+              <span v-if="errors.description" class="error-message">{{
+                errors.description
+              }}</span>
+              <span v-else class="help-text"
+                >A good description helps others understand your project
+                better</span
+              >
             </div>
           </div>
 
           <!-- Project Visibility Toggle -->
           <div class="form-group">
-            <label for="isPublic">
-              Project Visibility
-            </label>
-            <div style="display: flex; align-items: center; gap: 1rem;">
+            <label for="isPublic"> Project Visibility </label>
+            <div style="display: flex; align-items: center; gap: 1rem">
               <InputSwitch
                 id="isPublic"
                 v-model="form.isPublic"
@@ -99,9 +206,7 @@
 
           <!-- Project Tags -->
           <div class="form-group">
-            <label for="tags">
-              Project Tags
-            </label>
+            <label for="tags"> Project Tags </label>
             <Multiselect
               v-model="form.tags"
               :options="allTags"
@@ -116,8 +221,12 @@
               track-by="id"
             />
             <div class="input-info">
-              <span v-if="errors.tags" class="error-message">{{ errors.tags }}</span>
-              <span v-else class="help-text">Select one or many tags to help others find your project</span>
+              <span v-if="errors.tags" class="error-message">{{
+                errors.tags
+              }}</span>
+              <span v-else class="help-text"
+                >Select one or many tags to help others find your project</span
+              >
             </div>
           </div>
 
@@ -127,23 +236,57 @@
               Files <span class="required-mark">*</span>
             </label>
             <div class="file-upload-container">
-              <div class="file-upload-area"
-                   :class="{ 'drag-over': isDragOver, 'has-files': uploadedFiles.length > 0 }"
-                   @drop="handleFileDrop"
-                   @dragover.prevent="isDragOver = true"
-                   @dragleave.prevent="isDragOver = false"
-                   @click="triggerFileInput">
+              <div
+                :class="{
+                  'drag-over': isDragOver,
+                  'has-files': uploadedFiles.length > 0,
+                }"
+                class="file-upload-area"
+                @click="triggerFileInput"
+                @drop="handleFileDrop"
+                @dragover.prevent="isDragOver = true"
+                @dragleave.prevent="isDragOver = false"
+              >
                 <div class="file-upload-content">
                   <div class="file-upload-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <path d="M17 8L12 3L7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <path d="M12 3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <svg
+                      fill="none"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                      />
+                      <path
+                        d="M17 8L12 3L7 8"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                      />
+                      <path
+                        d="M12 3V15"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                      />
                     </svg>
                   </div>
                   <div class="file-upload-text">
-                    <p class="upload-title">Drop files here or click to browse</p>
-                    <p class="upload-subtitle">Support: PDF, DOC, DOCX, TXT, RTF - At least one file is required</p>
+                    <p class="upload-title">
+                      Drop files here or click to browse
+                    </p>
+                    <p class="upload-subtitle">
+                      Support: PDF, DOC, DOCX, TXT, RTF - At least one file is
+                      required
+                    </p>
                   </div>
                 </div>
                 <input
@@ -153,41 +296,91 @@
                   accept=".pdf,.doc,.docx,.txt,.rtf"
                   @change="handleFileSelect"
                   class="file-input-hidden"
-                >
+                />
               </div>
 
               <!-- File List -->
               <div v-if="uploadedFiles.length > 0" class="file-list">
-                <div v-for="(file, index) in uploadedFiles" :key="index" class="file-item">
+                <div
+                  v-for="(file, index) in uploadedFiles"
+                  :key="index"
+                  class="file-item"
+                >
                   <div class="file-info">
                     <div class="file-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <svg
+                        fill="none"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        width="16"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
+                        <path
+                          d="M14 2V8H20"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
                       </svg>
                     </div>
                     <div class="file-details">
                       <span class="file-name">{{ file.name }}</span>
-                      <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                      <span class="file-size">{{
+                        formatFileSize(file.size)
+                      }}</span>
                     </div>
                   </div>
                   <button
                     type="button"
                     class="file-remove-btn"
                     @click="removeFile(index)"
-                    title="Remove file">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    title="Remove file"
+                  >
+                    <svg
+                      fill="none"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M18 6L6 18"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                      />
+                      <path
+                        d="M6 6L18 18"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                      />
                     </svg>
                   </button>
                 </div>
               </div>
             </div>
             <div class="input-info">
-              <span v-if="fileError" class="error-message">{{ fileError }}</span>
-              <span v-else-if="uploadedFiles.length === 0" class="error-message">At least one file is required</span>
-              <span v-else class="help-text">Upload files related to your project. At least one file is required.</span>
+              <span v-if="fileError" class="error-message">{{
+                fileError
+              }}</span>
+              <span v-else-if="uploadedFiles.length === 0" class="error-message"
+                >At least one file is required</span
+              >
+              <span v-else class="help-text"
+                >Upload files related to your project. At least one file is
+                required.</span
+              >
             </div>
           </div>
         </div>
@@ -195,12 +388,48 @@
         <div class="form-section">
           <div class="section-header">
             <div class="section-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 3H21V5H3V3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 7H21V9H3V7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 11H21V13H3V11Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 15H21V17H3V15Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 19H21V21H3V19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg
+                fill="none"
+                height="20"
+                viewBox="0 0 24 24"
+                width="20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 3H21V5H3V3Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M3 7H21V9H3V7Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M3 11H21V13H3V11Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M3 15H21V17H3V15Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M3 19H21V21H3V19Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
               </svg>
             </div>
             <h3>Category</h3>
@@ -216,20 +445,25 @@
                 id="category"
                 v-model="form.categoryId"
                 class="form-control"
-                :class="{ 'error': errors.categoryId }"
+                :class="{ error: errors.categoryId }"
                 required
                 @change="validateCategory"
                 @blur="validateCategory"
               >
                 <option value="">Choose a category for your project</option>
-                <option v-for="category in categories" :key="category.id" :value="category.id">
+                <option
+                  v-for="category in categories"
+                  :key="category.id"
+                  :value="category.id"
+                >
                   {{ category.name }}
                 </option>
               </select>
-
             </div>
             <div class="input-info">
-              <span v-if="errors.categoryId" class="error-message">{{ errors.categoryId }}</span>
+              <span v-if="errors.categoryId" class="error-message">{{
+                errors.categoryId
+              }}</span>
             </div>
           </div>
         </div>
@@ -243,9 +477,27 @@
           >
             <span v-if="isSubmitting" class="loading-spinner"></span>
             <span v-else class="btn-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 5V19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg
+                fill="none"
+                height="18"
+                viewBox="0 0 24 24"
+                width="18"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 5V19"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+                <path
+                  d="M5 12H19"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
               </svg>
             </span>
             {{ isSubmitting ? 'Creating Project...' : 'Create Project' }}
@@ -268,11 +520,11 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { authService } from '../services/auth.service'
-import InputSwitch from 'primevue/inputswitch'
-import Multiselect from 'vue-multiselect'
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { authService } from '../services/auth.service';
+import InputSwitch from 'primevue/inputswitch';
+import Multiselect from 'vue-multiselect';
 
 interface Category {
   id: string;
@@ -300,188 +552,196 @@ interface FormErrors {
   tags?: string;
 }
 
-const router = useRouter()
+const router = useRouter();
 
 const form = ref<CreateProjectData>({
   name: '',
   description: '',
   categoryId: '',
   tags: [],
-  isPublic: false
-})
+  isPublic: false,
+});
 
-const errors = ref<FormErrors>({})
-const isSubmitting = ref(false)
-const hasSubmitted = ref(false)
-const categories = ref<Category[]>([])
-const allTags = ref<Tag[]>([])
+const errors = ref<FormErrors>({});
+const isSubmitting = ref(false);
+const hasSubmitted = ref(false);
+const categories = ref<Category[]>([]);
+const allTags = ref<Tag[]>([]);
 
 // File upload variables
-const uploadedFiles = ref<File[]>([])
-const fileInput = ref<HTMLInputElement | null>(null)
-const isDragOver = ref(false)
-const fileError = ref('')
+const uploadedFiles = ref<File[]>([]);
+const fileInput = ref<HTMLInputElement | null>(null);
+const isDragOver = ref(false);
+const fileError = ref('');
 
-const showLoadingOverlay = ref(false)
-const showSuccessScreen = ref(false)
+const showLoadingOverlay = ref(false);
+const showSuccessScreen = ref(false);
 
-const nameExists = ref(false)
-const nameCheckLoading = ref(false)
-const nameCheckError = ref('')
+const nameExists = ref(false);
+const nameCheckLoading = ref(false);
+const nameCheckError = ref('');
 
 // Validation functions
 const validateName = () => {
-  const name = form.value.name.trim()
+  const name = form.value.name.trim();
 
   if (!name) {
-    errors.value.name = 'Project name is required'
-    return false
+    errors.value.name = 'Project name is required';
+    return false;
   }
 
   if (name.length < 3) {
-    errors.value.name = 'Project name must be at least 3 characters long'
-    return false
+    errors.value.name = 'Project name must be at least 3 characters long';
+    return false;
   }
 
   if (name.length > 50) {
-    errors.value.name = 'Project name cannot exceed 50 characters'
-    return false
+    errors.value.name = 'Project name cannot exceed 50 characters';
+    return false;
   }
 
   // Check for special characters that might cause issues
-  const specialCharRegex = /[<>:"/\\|?*]/
+  const specialCharRegex = /[<>:"/\\|?*]/;
   if (specialCharRegex.test(name)) {
-    errors.value.name = 'Project name cannot contain special characters: < > : " / \\ | ? *'
-    return false
+    errors.value.name =
+      'Project name cannot contain special characters: < > : " / \\ | ? *';
+    return false;
   }
 
-  errors.value.name = undefined
-  return true
-}
+  errors.value.name = undefined;
+  return true;
+};
 
 const validateDescription = () => {
-  const description = form.value.description || ''
+  const description = form.value.description || '';
 
   if (description.length > 500) {
-    errors.value.description = 'Description cannot exceed 500 characters'
-    return false
+    errors.value.description = 'Description cannot exceed 500 characters';
+    return false;
   }
 
-  errors.value.description = undefined
-  return true
-}
+  errors.value.description = undefined;
+  return true;
+};
 
 const validateCategory = () => {
   if (!form.value.categoryId) {
-    errors.value.categoryId = 'Please select a category'
-    return false
+    errors.value.categoryId = 'Please select a category';
+    return false;
   }
 
-  errors.value.categoryId = undefined
-  return true
-}
+  errors.value.categoryId = undefined;
+  return true;
+};
 
 const validateTags = () => {
   if (form.value.tags && form.value.tags.length > 10) {
-    errors.value.tags = 'You can only select up to 10 tags'
-    return false
+    errors.value.tags = 'You can only select up to 10 tags';
+    return false;
   }
 
-  errors.value.tags = undefined
-  return true
-}
+  errors.value.tags = undefined;
+  return true;
+};
 
 const validateFiles = () => {
   if (uploadedFiles.value.length === 0) {
-    fileError.value = 'At least one file is required'
-    return false
+    fileError.value = 'At least one file is required';
+    return false;
   }
-  fileError.value = ''
-  return true
-}
+  fileError.value = '';
+  return true;
+};
 
 const validateForm = () => {
-  const isNameValid = validateName()
-  const isDescriptionValid = validateDescription()
-  const isCategoryValid = validateCategory()
-  const isTagsValid = validateTags()
-  const isFileValid = validateFiles()
+  const isNameValid = validateName();
+  const isDescriptionValid = validateDescription();
+  const isCategoryValid = validateCategory();
+  const isTagsValid = validateTags();
+  const isFileValid = validateFiles();
 
-  return isNameValid && isDescriptionValid && isCategoryValid && isTagsValid && isFileValid
-}
+  return (
+    isNameValid &&
+    isDescriptionValid &&
+    isCategoryValid &&
+    isTagsValid &&
+    isFileValid
+  );
+};
 
 // File upload functions
 const triggerFileInput = () => {
-  fileInput.value?.click()
-}
+  fileInput.value?.click();
+};
 
 const handleFileSelect = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const files = Array.from(target.files || [])
-  addFiles(files)
-  target.value = '' // Reset input
-}
+  const target = event.target as HTMLInputElement;
+  const files = Array.from(target.files || []);
+  addFiles(files);
+  target.value = ''; // Reset input
+};
 
 const handleFileDrop = (event: DragEvent) => {
-  event.preventDefault()
-  isDragOver.value = false
-  const files = Array.from(event.dataTransfer?.files || [])
-  addFiles(files)
-}
+  event.preventDefault();
+  isDragOver.value = false;
+  const files = Array.from(event.dataTransfer?.files || []);
+  addFiles(files);
+};
 
 const addFiles = (files: File[]) => {
-  fileError.value = ''
+  fileError.value = '';
 
   for (const file of files) {
     // Validate file type
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf']
-    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf'];
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
 
     if (!fileExtension || !allowedTypes.includes(fileExtension)) {
-      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`
-      continue
+      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`;
+      continue;
     }
 
     // Validate file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
     if (file.size > maxSize) {
-      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`
-      continue
+      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`;
+      continue;
     }
 
     // Check if file already exists
-    const existingFile = uploadedFiles.value.find(f => f.name === file.name)
+    const existingFile = uploadedFiles.value.find((f) => f.name === file.name);
     if (existingFile) {
-      fileError.value = `File ${file.name} is already uploaded.`
-      continue
+      fileError.value = `File ${file.name} is already uploaded.`;
+      continue;
     }
 
     // Check total number of files (max 5 files)
     if (uploadedFiles.value.length >= 5) {
-      fileError.value = 'Maximum 5 files allowed.'
-      continue
+      fileError.value = 'Maximum 5 files allowed.';
+      continue;
     }
 
-    uploadedFiles.value.push(file)
+    uploadedFiles.value.push(file);
   }
-}
+};
 
 const removeFile = (index: number) => {
-  uploadedFiles.value.splice(index, 1)
-  fileError.value = ''
-}
+  uploadedFiles.value.splice(index, 1);
+  fileError.value = '';
+};
 
 const formatFileSize = (bytes: number) => {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 // Computed property to check if form is valid
 const isFormValid = computed(() => {
-  return form.value.name.trim().length >= 3 &&
+  return (
+    form.value.name.trim().length >= 3 &&
     form.value.name.trim().length <= 50 &&
     form.value.categoryId &&
     !errors.value.name &&
@@ -491,7 +751,8 @@ const isFormValid = computed(() => {
     uploadedFiles.value.length > 0 &&
     !fileError.value &&
     !nameExists.value
-})
+  );
+});
 
 // API helper function
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {
@@ -500,8 +761,8 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
     credentials: 'include', // ✅ Important for cookies
     headers: {
       'Content-Type': 'application/json',
-      ...(options.headers || {})
-    }
+      ...(options.headers || {}),
+    },
   });
 
   if (response.status === 401) {
@@ -513,8 +774,8 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(options.headers || {})
-        }
+          ...(options.headers || {}),
+        },
       });
 
       if (!retryResponse.ok) {
@@ -542,7 +803,7 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
 const fetchCategories = async () => {
   try {
     const response = await fetch('/api/categories/all', {
-      credentials: 'include'
+      credentials: 'include',
     });
 
     if (response.ok) {
@@ -558,7 +819,7 @@ const fetchCategories = async () => {
 const fetchTags = async () => {
   try {
     const response = await fetch('/api/project-tag/all', {
-      credentials: 'include'
+      credentials: 'include',
     });
 
     if (response.ok) {
@@ -573,42 +834,42 @@ const fetchTags = async () => {
 
 // Prevent double submission
 const handleSubmitClick = (event: Event) => {
-  event.preventDefault()
+  event.preventDefault();
 
   // Prevent multiple submissions
   if (isSubmitting.value || hasSubmitted.value) {
-    console.log('Form submission already in progress or completed')
-    return
+    console.log('Form submission already in progress or completed');
+    return;
   }
 
-  handleSubmit()
-}
+  handleSubmit();
+};
 
 const handleSubmit = async () => {
   // Additional guard to prevent double submission
   if (isSubmitting.value || hasSubmitted.value) {
-    console.log('Form submission already in progress or completed')
-    return
+    console.log('Form submission already in progress or completed');
+    return;
   }
 
   // Validate form before submission
   if (!validateForm()) {
-    return
+    return;
   }
 
   // Validate that at least one file is uploaded
   if (uploadedFiles.value.length === 0) {
-    fileError.value = 'At least one file is required'
-    return
+    fileError.value = 'At least one file is required';
+    return;
   }
 
   // Set submission flags
-  isSubmitting.value = true
-  hasSubmitted.value = true
-  showLoadingOverlay.value = true
+  isSubmitting.value = true;
+  hasSubmitted.value = true;
+  showLoadingOverlay.value = true;
 
   try {
-    console.log('Submitting project creation request...')
+    console.log('Submitting project creation request...');
 
     // Convert tags to string array for backend
     const payload = {
@@ -617,19 +878,25 @@ const handleSubmit = async () => {
       tags: form.value.tags ? form.value.tags.map((tag: Tag) => tag.name) : [],
       isPrivate: !form.value.isPublic,
       categoryId: String(form.value.categoryId),
-    }
+    };
 
     const result = await apiCall('/projects/create', {
       method: 'POST',
-      body: JSON.stringify(payload)
-    })
+      body: JSON.stringify(payload),
+    });
 
-    console.log('Project create response:', result)
+    console.log('Project create response:', result);
     // Lấy branchId từ response (thử cả 2 cách)
     const branchId = result.branchId || (result.data && result.data.branchId);
     console.log('branchId:', branchId);
-    const projectId = result.projectId || (result.data && result.data.projectId);
-    console.log('Uploading files with projectId:', projectId, 'branchId:', branchId)
+    const projectId =
+      result.projectId || (result.data && result.data.projectId);
+    console.log(
+      'Uploading files with projectId:',
+      projectId,
+      'branchId:',
+      branchId
+    );
 
     // Upload từng file với đúng projectId và branchId
     for (const file of uploadedFiles.value) {
@@ -638,16 +905,27 @@ const handleSubmit = async () => {
       formData.append('projectId', projectId);
       formData.append('branchId', branchId);
 
-      console.log('Uploading file:', file.name, 'to project:', projectId, 'branch:', branchId);
+      console.log(
+        'Uploading file:',
+        file.name,
+        'to project:',
+        projectId,
+        'branch:',
+        branchId
+      );
 
       const uploadResponse = await fetch('/api/files/upload', {
         method: 'POST',
         body: formData,
-        credentials: 'include'
+        credentials: 'include',
       });
 
       if (!uploadResponse.ok) {
-        console.error('File upload failed:', file.name, uploadResponse.statusText)
+        console.error(
+          'File upload failed:',
+          file.name,
+          uploadResponse.statusText
+        );
         throw new Error(`File upload failed: ${uploadResponse.statusText}`);
       }
 
@@ -680,74 +958,85 @@ const handleSubmit = async () => {
       router.push(`/projects/${result.projectId}`);
     }, 3000);
 
-    showLoadingOverlay.value = false
-    showSuccessScreen.value = true
+    showLoadingOverlay.value = false;
+    showSuccessScreen.value = true;
     setTimeout(() => {
-      router.push('/projects')
-    }, 2500)
+      router.push('/projects');
+    }, 2500);
   } catch (error: any) {
-    console.error('Project creation error:', error)
+    console.error('Project creation error:', error);
 
     // Reset submission flags on error
-    hasSubmitted.value = false
+    hasSubmitted.value = false;
 
-    if (error.message.includes('Authentication required') || error.message.includes('Session expired')) {
-      alert('Please log in to create a project')
-      router.push('/login')
+    if (
+      error.message.includes('Authentication required') ||
+      error.message.includes('Session expired')
+    ) {
+      alert('Please log in to create a project');
+      router.push('/login');
     } else {
-      alert('Failed to create project: ' + error.message)
+      alert('Failed to create project: ' + error.message);
     }
   } finally {
-    isSubmitting.value = false
-    showLoadingOverlay.value = false
+    isSubmitting.value = false;
+    showLoadingOverlay.value = false;
   }
-}
+};
 
 const checkProjectName = async (name: string) => {
   if (!name || name.length < 3) {
-    nameExists.value = false
-    nameCheckError.value = ''
-    return
+    nameExists.value = false;
+    nameCheckError.value = '';
+    return;
   }
-  nameCheckLoading.value = true
+  nameCheckLoading.value = true;
   try {
-    const res = await fetch(`/api/projects/check-name?name=${encodeURIComponent(name)}`, { credentials: 'include' })
-    const data = await res.json()
-    nameExists.value = data.exists
-    nameCheckError.value = nameExists.value ? 'Project name already exists. Please choose another.' : ''
+    const res = await fetch(
+      `/api/projects/check-name?name=${encodeURIComponent(name)}`,
+      { credentials: 'include' }
+    );
+    const data = await res.json();
+    nameExists.value = data.exists;
+    nameCheckError.value = nameExists.value
+      ? 'Project name already exists. Please choose another.'
+      : '';
   } catch (e) {
-    nameCheckError.value = 'Could not check project name.'
+    nameCheckError.value = 'Could not check project name.';
   } finally {
-    nameCheckLoading.value = false
+    nameCheckLoading.value = false;
   }
-}
+};
 
 // Debounce project name check on input
-let nameCheckTimeout: any
-watch(() => form.value.name, (newName: string) => {
-  clearTimeout(nameCheckTimeout)
-  nameCheckTimeout = setTimeout(() => {
-    checkProjectName(newName)
-  }, 500)
-})
+let nameCheckTimeout: any;
+watch(
+  () => form.value.name,
+  (newName: string) => {
+    clearTimeout(nameCheckTimeout);
+    nameCheckTimeout = setTimeout(() => {
+      checkProjectName(newName);
+    }, 500);
+  }
+);
 
 onMounted(() => {
   // Check if user is authenticated before fetching data
   if (!authService.isAuthenticated()) {
-    router.push('/login')
-    return
+    router.push('/login');
+    return;
   }
 
-  fetchCategories()
-  fetchTags()
-})
+  fetchCategories();
+  fetchTags();
+});
 </script>
 
 <style scoped>
 .create-project-container {
   min-height: 100vh;
   padding: 2rem 0 2rem 0;
-  padding-left: 0 !important;
+  padding-left: 0;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -1364,8 +1653,11 @@ textarea.form-control {
 .loading-overlay {
   position: fixed;
   z-index: 2000;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(255,255,255,0.85);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.85);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1383,7 +1675,9 @@ textarea.form-control {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-text {
@@ -1395,7 +1689,10 @@ textarea.form-control {
 .success-screen {
   position: fixed;
   z-index: 3000;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(30, 41, 59, 0.5);
   display: flex;
   align-items: center;
@@ -1405,7 +1702,7 @@ textarea.form-control {
   background: #fff;
   border-radius: 24px;
   padding: 2.5rem 3rem;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   text-align: center;
   min-width: 340px;
 }
@@ -1426,4 +1723,3 @@ textarea.form-control {
 </style>
 
 <style src="vue-multiselect/dist/vue-multiselect.min.css"></style>
-

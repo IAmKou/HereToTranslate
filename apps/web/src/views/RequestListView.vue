@@ -5,15 +5,51 @@
 
       <div class="text-center mb-6">
         <router-link to="/createrequest">
-          <button class="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          <button
+            class="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
             + Create New Request
           </button>
         </router-link>
       </div>
 
-      <div v-if="requests.length">
+      <!-- Sortable Headers -->
+      <div class="grid grid-cols-5 gap-4 font-semibold text-gray-700 mb-3 px-2">
+        <div class="cursor-pointer" @click="setSort('title')">
+          Title
+          <span v-if="sortKey === 'title'">{{
+            sortOrder === 1 ? '▲' : '▼'
+          }}</span>
+        </div>
+        <div class="cursor-pointer" @click="setSort('project')">
+          Project
+          <span v-if="sortKey === 'project'">{{
+            sortOrder === 1 ? '▲' : '▼'
+          }}</span>
+        </div>
+        <div class="cursor-pointer" @click="setSort('category')">
+          Category
+          <span v-if="sortKey === 'category'">{{
+            sortOrder === 1 ? '▲' : '▼'
+          }}</span>
+        </div>
+        <div class="cursor-pointer" @click="setSort('dealAmount')">
+          Amount
+          <span v-if="sortKey === 'dealAmount'">{{
+            sortOrder === 1 ? '▲' : '▼'
+          }}</span>
+        </div>
+        <div class="cursor-pointer" @click="setSort('deadline')">
+          Deadline
+          <span v-if="sortKey === 'deadline'">{{
+            sortOrder === 1 ? '▲' : '▼'
+          }}</span>
+        </div>
+      </div>
+
+      <div v-if="requests.length" class="space-y-4">
         <RequestCard
-          v-for="req in requests"
+          v-for="req in sortedRequests"
           :key="req.id"
           :request="req"
           @approve="handleReview($event, 'APPROVED')"
@@ -28,7 +64,6 @@
   </div>
 </template>
 
-
 <script>
 import axios from 'axios';
 import RequestCard from '../components/RequestCard.vue';
@@ -37,7 +72,9 @@ export default {
   components: { RequestCard },
   data() {
     return {
-      requests: []
+      requests: [],
+      sortKey: '',
+      sortOrder: 1,
     };
   },
   created() {
@@ -45,34 +82,80 @@ export default {
   },
   methods: {
     fetchRequests() {
-      axios.get('http://localhost:3000/api/requests').then(res => {
+      axios.get('http://localhost:3000/api/requests').then((res) => {
         this.requests = res.data;
       });
     },
     handleReview(id, status) {
-      axios.patch('http://localhost:3000/api/requests/review', { id, status })
+      axios
+        .patch('http://localhost:3000/api/requests/review', { id, status })
         .then(() => this.fetchRequests());
     },
     handleEdit(request) {
       const updated = prompt('Edit description:', request.description);
       if (updated !== null) {
-        axios.patch('http://localhost:3000/api/requests', {
-          id: request.id,
-          description: updated
-        }).then(() => this.fetchRequests());
+        axios
+          .patch('http://localhost:3000/api/requests', {
+            id: request.id,
+            description: updated,
+          })
+          .then(() => this.fetchRequests());
       }
     },
     handleView(id) {
-      axios.get(`http://localhost:3000/api/requests/${id}`)
-        .then(res => alert(JSON.stringify(res.data, null, 2)));
+      axios
+        .get(`http://localhost:3000/api/requests/${id}`)
+        .then((res) => alert(JSON.stringify(res.data, null, 2)));
     },
     handleCancel(id) {
       if (confirm('Are you sure you want to cancel this request?')) {
-        axios.delete(`http://localhost:3000/api/requests/${id}`)
+        axios
+          .delete(`http://localhost:3000/api/requests/${id}`)
           .then(() => this.fetchRequests());
       }
-    }
-  }
+    },
+    setSort(key) {
+      if (this.sortKey === key) {
+        this.sortOrder *= -1;
+      } else {
+        this.sortKey = key;
+        this.sortOrder = 1;
+      }
+    ,
+  },
+  computed: {
+    sortedRequests() {
+      const getValue = (req, key) => {
+        switch (key) {
+          case 'title':
+            return req.title || '';
+          case 'project':
+            return req.project?.name || '';
+          case 'category':
+            return req.category?.name || '';
+          case 'dealAmount':
+            return parseFloat(req.dealAmount) || 0;
+          case 'deadline':
+            return new Date(req.deadline).getTime();
+          default:
+            return '';
+        }
+      };
+
+      if (!this.sortKey) return this.requests;
+
+      return [...this.requests].sort((a, b) => {
+        const valA = getValue(a, this.sortKey);
+        const valB = getValue(b, this.sortKey);
+
+        if (typeof valA === 'string') {
+          return this.sortOrder * valA.localeCompare(valB);
+        } else {
+          return this.sortOrder * (valA - valB);
+        }
+      });
+    },
+  },
 };
 </script>
 

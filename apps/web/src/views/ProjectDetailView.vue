@@ -17,7 +17,9 @@
                 <span class="page-icon">📋</span>
                 Project Details
               </h1>
-              <p class="page-subtitle">View and manage project information, members, and settings</p>
+              <p class="page-subtitle">
+                View and manage project information, members, and settings
+              </p>
             </div>
             <div class="page-actions">
               <router-link to="/projects" class="btn btn-outline btn-back">
@@ -58,15 +60,43 @@
               <div class="project-header-left">
                 <div class="creator-avatar">
                   <template v-if="project.createdBy.avatarUrl">
-                    <img :src="project.createdBy.avatarUrl" alt="Avatar" class="avatar-img" />
+                    <img
+                      :src="project.createdBy.avatarUrl"
+                      alt="Avatar"
+                      class="avatar-img"
+                    />
                   </template>
                   <template v-else>
-                    <svg class="avatar-placeholder" width="48" height="48" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="url(#avatarGradient)"/><path d="M24 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm0 3c-4.418 0-13 2.238-13 6.667V39h26v-4.333C37 30.238 28.418 28 24 28z" fill="#fff" fill-opacity=".7"/></svg>
+                    <svg
+                      class="avatar-placeholder"
+                      fill="none"
+                      height="48"
+                      viewBox="0 0 48 48"
+                      width="48"
+                    >
+                      <circle
+                        cx="24"
+                        cy="24"
+                        fill="url(#avatarGradient)"
+                        r="24"
+                      />
+                      <path
+                        d="M24 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm0 3c-4.418 0-13 2.238-13 6.667V39h26v-4.333C37 30.238 28.418 28 24 28z"
+                        fill="#fff"
+                        fill-opacity=".7"
+                      />
+                    </svg>
                     <svg width="0" height="0">
                       <defs>
-                        <linearGradient id="avatarGradient" x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stop-color="#7f53ac"/>
-                          <stop offset="100%" stop-color="#4299e1"/>
+                        <linearGradient
+                          id="avatarGradient"
+                          x1="0"
+                          x2="1"
+                          y1="0"
+                          y2="1"
+                        >
+                          <stop offset="0%" stop-color="#7f53ac" />
+                          <stop offset="100%" stop-color="#4299e1" />
                         </linearGradient>
                       </defs>
                     </svg>
@@ -74,12 +104,49 @@
                 </div>
                 <div class="creator-info-block">
                   <div class="project-title-row">
-                    <h1 class="project-title">{{ project.name }}
-                      <span v-if="project.isPrivate" class="badge badge-private-new" title="Private">
-                        <span class="badge-icon"><svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M6 9V7a4 4 0 118 0v2" stroke="#b7791f" stroke-width="1.5"/><rect x="4" y="9" width="12" height="7" rx="2" fill="#fefcbf" stroke="#b7791f" stroke-width="1.5"/><circle cx="10" cy="13" r="1.5" fill="#b7791f"/></svg></span>
+                    <h1 class="project-title">
+                      {{ project.name }}
+                      <span
+                        v-if="project.isPrivate"
+                        class="badge badge-private-new"
+                        title="Private"
+                      >
+                        <span class="badge-icon"
+                          ><svg
+                            fill="none"
+                            height="16"
+                            viewBox="0 0 20 20"
+                            width="16"
+                          >
+                            <path
+                              d="M6 9V7a4 4 0 118 0v2"
+                              stroke="#b7791f"
+                              stroke-width="1.5"
+                            />
+                            <rect
+                              fill="#fefcbf"
+                              height="7"
+                              rx="2"
+                              stroke="#b7791f"
+                              stroke-width="1.5"
+                              width="12"
+                              x="4"
+                              y="9"
+                            />
+                            <circle
+                              cx="10"
+                              cy="13"
+                              fill="#b7791f"
+                              r="1.5"
+                            /></svg
+                        ></span>
                         <span class="badge-text">Private</span>
                       </span>
-                      <span v-else class="badge badge-public-new" title="Public">
+                      <span
+                        v-else
+                        class="badge badge-public-new"
+                        title="Public"
+                      >
                         <span class="badge-icon">🌍</span>
                         <span class="badge-text">Public</span>
                       </span>
@@ -89,30 +156,55 @@
                     <div class="meta-item">
                       <span class="meta-icon">👤</span>
                       <span class="meta-text">
-                        {{ project.createdBy.fullName || project.createdBy.username }}
+                        {{
+                          project.createdBy.fullName ||
+                          project.createdBy.username
+                        }}
                       </span>
                     </div>
                     <div class="meta-item">
                       <span class="meta-icon">📅</span>
-                      <span class="meta-text">{{ formatDate(project.createdAt) }}</span>
+                      <span class="meta-text">{{
+                        formatDate(project.createdAt)
+                      }}</span>
                     </div>
                   </div>
                 </div>
               </div>
               <div class="project-actions actions-dropdown-wrapper">
                 <div class="actions-dropdown" v-if="!showActionsMenu">
-                  <button class="btn btn-outline icon-btn" @click="showActionsMenu = true">
+                  <button
+                    class="btn btn-outline icon-btn"
+                    @click="showActionsMenu = true"
+                  >
                     <span class="icon">⋮</span>
                   </button>
                 </div>
                 <div class="actions-dropdown-menu" v-if="showActionsMenu">
-                  <button class="dropdown-action" @click="goToManage"><span class="icon">⚙️</span> Manage Project</button>
-                  <button class="dropdown-action" @click="editProject"><span class="icon">✏️</span> Edit Project</button>
-                  <button class="dropdown-action danger" @click="openDeleteModal"><span class="icon">🗑️</span> Delete Project</button>
-                  <button class="dropdown-action close" @click="showActionsMenu = false">Close</button>
+                  <button class="dropdown-action" @click="goToManage">
+                    <span class="icon">⚙️</span> Manage Project
+                  </button>
+                  <button class="dropdown-action" @click="editProject">
+                    <span class="icon">✏️</span> Edit Project
+                  </button>
+                  <button
+                    class="dropdown-action danger"
+                    @click="openDeleteModal"
+                  >
+                    <span class="icon">🗑️</span> Delete Project
+                  </button>
+                  <button
+                    class="dropdown-action close"
+                    @click="showActionsMenu = false"
+                  >
+                    Close
+                  </button>
                 </div>
                 <div class="actions-desktop" v-if="!isMobile">
-                  <router-link :to="`/projects/${project.id}/manage`" class="btn btn-primary btn-manage">
+                  <router-link
+                    :to="`/projects/${project.id}/manage`"
+                    class="btn btn-primary btn-manage"
+                  >
                     <span class="icon">⚙️</span> Manage Project
                   </router-link>
                   <button @click="editProject" class="btn btn-outline">
@@ -127,24 +219,40 @@
 
             <!-- Stat Cards ngay sau Header -->
             <div class="project-stats">
-              <div class="stat-card stat-card-clickable" @click="activeTab = 'members'" title="View Roles & Members">
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Roles & Members"
+                @click="activeTab = 'members'"
+              >
                 <div class="stat-icon stat-icon-circle">👥</div>
                 <div class="stat-number">
                   {{ project.projectRoles?.length || 0 }}
                 </div>
                 <div class="stat-label">Roles</div>
               </div>
-              <div class="stat-card stat-card-clickable" @click="activeTab = 'groups'" title="View Groups">
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Groups"
+                @click="activeTab = 'groups'"
+              >
                 <div class="stat-icon stat-icon-circle">👨‍👩‍👧‍👦</div>
                 <div class="stat-number">{{ project.groups?.length || 0 }}</div>
                 <div class="stat-label">Groups</div>
               </div>
-              <div class="stat-card stat-card-clickable" @click="scrollToFiles" title="View Files">
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Files"
+                @click="scrollToFiles"
+              >
                 <div class="stat-icon stat-icon-circle">📁</div>
                 <div class="stat-number">{{ projectFiles.length }}</div>
                 <div class="stat-label">Files</div>
               </div>
-              <div class="stat-card stat-card-clickable" @click="alert('Branch detail coming soon!')" title="Branches">
+              <div
+                class="stat-card stat-card-clickable"
+                title="Branches"
+                @click="alert('Branch detail coming soon!')"
+              >
                 <div class="stat-icon stat-icon-circle">🌿</div>
                 <div class="stat-number">0</div>
                 <div class="stat-label">Branches</div>
@@ -197,9 +305,20 @@
                       </h2>
                     </div>
                     <div class="section-content">
-                      <form @submit.prevent="searchUser" class="add-user-form" autocomplete="off">
+                      <form
+                        autocomplete="off"
+                        class="add-user-form"
+                        @submit.prevent="searchUser"
+                      >
                         <div class="form-row">
-                          <div class="form-group" style="flex: 1; margin-bottom: 0; position:relative;">
+                          <div
+                            class="form-group"
+                            style="
+                              flex: 1;
+                              margin-bottom: 0;
+                              position: relative;
+                            "
+                          >
                             <label for="userIdentifier" class="form-label">
                               <span class="label-icon">🔍</span>
                               Search by Email or Name
@@ -217,26 +336,58 @@
                               @keydown.enter.prevent="selectUserSuggest"
                               autocomplete="off"
                             />
-                            <ul v-if="userSuggestList.length > 0" class="user-suggest-dropdown">
-                              <li v-for="(suggest, idx) in userSuggestList" :key="suggest.id"
-                                  :class="{active: idx === userSuggestActiveIdx}"
-                                  @mousedown.prevent="selectUserSuggest(idx)">
-                                <span class="avatar-text">{{ (suggest.fullName || suggest.username).charAt(0).toUpperCase() }}</span>
-                                <span class="suggest-name">{{ suggest.fullName || suggest.username }}</span>
-                                <span class="suggest-email">{{ suggest.email }}</span>
+                            <ul
+                              v-if="userSuggestList.length > 0"
+                              class="user-suggest-dropdown"
+                            >
+                              <li
+                                v-for="(suggest, idx) in userSuggestList"
+                                :key="suggest.id"
+                                :class="{
+                                  active: idx === userSuggestActiveIdx,
+                                }"
+                                @mousedown.prevent="selectUserSuggest(idx)"
+                              >
+                                <span class="avatar-text">{{
+                                  (suggest.fullName || suggest.username)
+                                    .charAt(0)
+                                    .toUpperCase()
+                                }}</span>
+                                <span class="suggest-name">{{
+                                  suggest.fullName || suggest.username
+                                }}</span>
+                                <span class="suggest-email">{{
+                                  suggest.email
+                                }}</span>
                               </li>
                             </ul>
                           </div>
-                          <div class="form-actions" style="margin-bottom: 0; align-self: flex-end">
+                          <div
+                            class="form-actions"
+                            style="margin-bottom: 0; align-self: flex-end"
+                          >
                             <button
                               type="submit"
                               class="btn btn-primary"
-                              :disabled="!userSearch.identifier || userSearch.loading"
-                              :title="!userSearch.identifier ? 'Please enter a name or email to search' : ''"
+                              :disabled="
+                                !userSearch.identifier || userSearch.loading
+                              "
+                              :title="
+                                !userSearch.identifier
+                                  ? 'Please enter a name or email to search'
+                                  : ''
+                              "
                             >
-                              <span v-if="userSearch.loading" class="loading-spinner-small"></span>
+                              <span
+                                v-if="userSearch.loading"
+                                class="loading-spinner-small"
+                              ></span>
                               <span v-else class="icon">🔍</span>
-                              {{ userSearch.loading ? 'Searching...' : 'Search User' }}
+                              {{
+                                userSearch.loading
+                                  ? 'Searching...'
+                                  : 'Search User'
+                              }}
                             </button>
                           </div>
                         </div>
@@ -248,10 +399,22 @@
                       <div v-if="userSearch.result" class="found-user">
                         <div class="user-info">
                           <div class="user-avatar">
-                            <span class="avatar-text">{{ (userSearch.result.fullName || userSearch.result.username).charAt(0).toUpperCase() }}</span>
+                            <span class="avatar-text">{{
+                              (
+                                userSearch.result.fullName ||
+                                userSearch.result.username
+                              )
+                                .charAt(0)
+                                .toUpperCase()
+                            }}</span>
                           </div>
                           <div class="user-details">
-                            <h4>{{ userSearch.result.fullName || userSearch.result.username }}</h4>
+                            <h4>
+                              {{
+                                userSearch.result.fullName ||
+                                userSearch.result.username
+                              }}
+                            </h4>
                             <p>{{ userSearch.result.email }}</p>
                           </div>
                         </div>
@@ -260,9 +423,14 @@
                           @click="addUserToProject"
                           :disabled="userSearch.adding"
                         >
-                          <span v-if="userSearch.adding" class="loading-spinner-small"></span>
+                          <span
+                            v-if="userSearch.adding"
+                            class="loading-spinner-small"
+                          ></span>
                           <span v-else class="icon">➕</span>
-                          {{ userSearch.adding ? 'Adding...' : 'Add to Project' }}
+                          {{
+                            userSearch.adding ? 'Adding...' : 'Add to Project'
+                          }}
                         </button>
                       </div>
                     </div>
@@ -283,31 +451,52 @@
                       <div v-else-if="membersError" class="members-error">
                         <span class="error-icon">⚠️</span>
                         <span>{{ membersError }}</span>
-                        <button @click="loadMembers" class="btn btn-outline btn-sm">Retry</button>
+                        <button
+                          class="btn btn-outline btn-sm"
+                          @click="loadMembers"
+                        >
+                          Retry
+                        </button>
                       </div>
-                      <div v-else-if="members && members.length > 0" class="members-list members-table-responsive">
+                      <div
+                        v-else-if="members && members.length > 0"
+                        class="members-list members-table-responsive"
+                      >
                         <table class="members-table">
                           <thead>
-                          <tr>
-                            <th @click="sortBy('name')">User</th>
-                            <th @click="sortBy('roles')">Roles</th>
-                            <th>Actions</th>
-                          </tr>
+                            <tr>
+                              <th @click="sortBy('name')">User</th>
+                              <th @click="sortBy('roles')">Roles</th>
+                              <th>Actions</th>
+                            </tr>
                           </thead>
                           <tbody>
-                          <tr v-for="member in members" :key="member.id">
-                            <td>
-                              <div class="user-cell" :title="member.fullName + ' - ' + member.email">
-                                <div class="user-avatar">
-                                  {{ (member.fullName || member.username).charAt(0).toUpperCase() }}
+                            <tr v-for="member in members" :key="member.id">
+                              <td>
+                                <div
+                                  :title="
+                                    member.fullName + ' - ' + member.email
+                                  "
+                                  class="user-cell"
+                                >
+                                  <div class="user-avatar">
+                                    {{
+                                      (member.fullName || member.username)
+                                        .charAt(0)
+                                        .toUpperCase()
+                                    }}
+                                  </div>
+                                  <div class="user-info">
+                                    <div class="user-name">
+                                      {{ member.fullName || member.username }}
+                                    </div>
+                                    <div class="user-email">
+                                      {{ member.email }}
+                                    </div>
+                                  </div>
                                 </div>
-                                <div class="user-info">
-                                  <div class="user-name">{{ member.fullName || member.username }}</div>
-                                  <div class="user-email">{{ member.email }}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
+                              </td>
+                              <td>
                                 <span
                                   v-for="role in member.roles"
                                   :key="role.id"
@@ -316,13 +505,17 @@
                                 >
                                   {{ role.name }}
                                 </span>
-                            </td>
-                            <td>
-                              <button class="edit-role-btn" title="Edit Roles" @click="editRoles(member)">
-                                <i class="pi pi-pencil"></i>
-                              </button>
-                            </td>
-                          </tr>
+                              </td>
+                              <td>
+                                <button
+                                  class="edit-role-btn"
+                                  title="Edit Roles"
+                                  @click="editRoles(member)"
+                                >
+                                  <i class="pi pi-pencil"></i>
+                                </button>
+                              </td>
+                            </tr>
                           </tbody>
                         </table>
                       </div>
@@ -342,22 +535,34 @@
                         <span class="title-icon">👨‍👩‍👧‍👦</span>
                         Project Groups
                       </h2>
-                      <button class="btn btn-primary btn-sm" @click="showCreateGroupModal = true">
+                      <button
+                        class="btn btn-primary btn-sm"
+                        @click="showCreateGroupModal = true"
+                      >
                         <span class="icon">➕</span> Create Group
                       </button>
                     </div>
                     <div class="groups-content">
-                      <div v-if="!project.groups || project.groups.length === 0" class="empty-section">
+                      <div
+                        v-if="!project.groups || project.groups.length === 0"
+                        class="empty-section"
+                      >
                         <div class="empty-icon">👨‍👩‍👧‍👦</div>
                         <h3>No Groups</h3>
                         <p>No groups have been created for this project yet.</p>
                       </div>
                       <div v-else class="groups-list">
-                        <div v-for="group in project.groups" :key="group.id" class="group-item">
+                        <div
+                          v-for="group in project.groups"
+                          :key="group.id"
+                          class="group-item"
+                        >
                           <div class="group-info">
                             <div class="group-header">
                               <span class="group-name">{{ group.name }}</span>
-                              <span class="group-badge">{{ group.permissionFlags }}</span>
+                              <span class="group-badge">{{
+                                group.permissionFlags
+                              }}</span>
                             </div>
                             <div class="members-info">
                               <span class="members-count">
@@ -367,8 +572,18 @@
                             </div>
                           </div>
                           <div class="group-actions">
-                            <button class="btn btn-outline btn-sm" @click="editGroup(group)"><span class="icon">✏️</span> Edit</button>
-                            <button class="btn btn-danger btn-sm" @click="deleteGroup(group.id)"><span class="icon">🗑️</span> Delete</button>
+                            <button
+                              class="btn btn-outline btn-sm"
+                              @click="editGroup(group)"
+                            >
+                              <span class="icon">✏️</span> Edit
+                            </button>
+                            <button
+                              class="btn btn-danger btn-sm"
+                              @click="deleteGroup(group.id)"
+                            >
+                              <span class="icon">🗑️</span> Delete
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -390,32 +605,70 @@
                         <span class="title-icon">📝</span>
                         Description
                       </h2>
-                      <button v-if="canEditDescription && !editingDescription" class="edit-desc-btn" @click="startEditDescription">
+                      <button
+                        v-if="canEditDescription && !editingDescription"
+                        class="edit-desc-btn"
+                        @click="startEditDescription"
+                      >
                         <span class="icon">✏️</span>
                       </button>
                     </div>
                     <div class="description-content improved-desc-box">
                       <template v-if="editingDescription">
-                        <textarea v-model="editedDescription" class="desc-textarea" rows="3" :maxlength="maxDescriptionLength" @input="updateCharCount" />
-                        <div class="desc-char-count" :class="{ 'over-limit': descriptionOverLimit }">
-                          {{ descriptionCharCount }}/{{ maxDescriptionLength }} characters
+                        <textarea
+                          v-model="editedDescription"
+                          :maxlength="maxDescriptionLength"
+                          class="desc-textarea"
+                          rows="3"
+                          @input="updateCharCount"
+                        />
+                        <div
+                          :class="{ 'over-limit': descriptionOverLimit }"
+                          class="desc-char-count"
+                        >
+                          {{ descriptionCharCount }}/{{ maxDescriptionLength }}
+                          characters
                         </div>
                         <div class="desc-edit-actions">
-                          <button class="btn btn-primary btn-sm" @click="saveDescription" :disabled="descriptionOverLimit">Save</button>
-                          <button class="btn btn-secondary btn-sm" @click="cancelEditDescription">Cancel</button>
+                          <button
+                            :disabled="descriptionOverLimit"
+                            class="btn btn-primary btn-sm"
+                            @click="saveDescription"
+                          >
+                            Save
+                          </button>
+                          <button
+                            class="btn btn-secondary btn-sm"
+                            @click="cancelEditDescription"
+                          >
+                            Cancel
+                          </button>
                         </div>
                       </template>
                       <template v-else>
-                        <div v-if="project.description" class="description desc-plain">
+                        <div
+                          v-if="project.description"
+                          class="description desc-plain"
+                        >
                           <span v-html="project.description"></span>
-                          <button v-if="canEditDescription" class="edit-desc-btn" @click="startEditDescription" title="Edit description">
+                          <button
+                            v-if="canEditDescription"
+                            class="edit-desc-btn"
+                            title="Edit description"
+                            @click="startEditDescription"
+                          >
                             <span class="icon">✏️</span>
                           </button>
                         </div>
                         <div v-else class="no-description">
                           <span class="no-content-icon">📄</span>
                           <p>No description provided for this project.</p>
-                          <button v-if="canEditDescription" class="edit-desc-btn" @click="startEditDescription" title="Edit description">
+                          <button
+                            v-if="canEditDescription"
+                            class="edit-desc-btn"
+                            title="Edit description"
+                            @click="startEditDescription"
+                          >
                             <span class="icon">✏️</span>
                           </button>
                         </div>
@@ -440,35 +693,94 @@
                       <div v-else-if="filesError" class="files-error">
                         <span class="error-icon">⚠️</span>
                         <span>{{ filesError }}</span>
-                        <button @click="loadFiles" class="btn btn-outline btn-sm">Retry</button>
+                        <button
+                          class="btn btn-outline btn-sm"
+                          @click="loadFiles"
+                        >
+                          Retry
+                        </button>
                       </div>
-                      <div v-else-if="projectFiles && projectFiles.length > 0" class="files-list">
-                        <div v-for="file in projectFiles" :key="file.id" class="file-item file-hoverable" @click="downloadFile(file)" :title="'Click to download'">
+                      <div
+                        v-else-if="projectFiles && projectFiles.length > 0"
+                        class="files-list"
+                      >
+                        <div
+                          v-for="file in projectFiles"
+                          :key="file.id"
+                          :title="'Click to download'"
+                          class="file-item file-hoverable"
+                          @click="downloadFile(file)"
+                        >
                           <div class="file-info">
                             <div class="file-icon file-thumb">
                               <template v-if="isImage(file)">
-                                <img :src="`/api/files/${file.id}/download`" alt="Image" class="file-thumbnail" />
+                                <img
+                                  :src="`/api/files/${file.id}/download`"
+                                  alt="Image"
+                                  class="file-thumbnail"
+                                />
                               </template>
                               <template v-else-if="isPDF(file)">
                                 <span class="pdf-icon">PDF</span>
                               </template>
                               <template v-else>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                  <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <svg
+                                  fill="none"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  width="16"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                  />
+                                  <path
+                                    d="M14 2V8H20"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                  />
                                 </svg>
                               </template>
                             </div>
                             <div class="file-details">
                               <span class="file-name" :title="file.fileName">
-                                {{ file.fileName.length > 30 ? file.fileName.slice(0, 27) + '...' : file.fileName }}
+                                {{
+                                  file.fileName.length > 30
+                                    ? file.fileName.slice(0, 27) + '...'
+                                    : file.fileName
+                                }}
                               </span>
                             </div>
                           </div>
                           <span class="file-download-icon" title="Download">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M12 3V17M12 17L7 12M12 17L17 12" stroke="#3182ce" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-                              <rect x="4" y="19" width="16" height="2" rx="1" fill="#3182ce"/>
+                            <svg
+                              fill="none"
+                              height="22"
+                              viewBox="0 0 24 24"
+                              width="22"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12 3V17M12 17L7 12M12 17L17 12"
+                                stroke="#3182ce"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2.2"
+                              />
+                              <rect
+                                fill="#3182ce"
+                                height="2"
+                                rx="1"
+                                width="16"
+                                x="4"
+                                y="19"
+                              />
                             </svg>
                           </span>
                         </div>
@@ -552,17 +864,31 @@
         </div>
 
         <!-- Delete Project Modal -->
-        <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
+        <div
+          v-if="showDeleteModal"
+          class="modal-overlay"
+          @click.self="showDeleteModal = false"
+        >
           <div class="modal-content">
             <div class="modal-header">
               <h3>Delete Project</h3>
             </div>
             <div class="modal-body">
-              <p>Are you sure you want to delete this project? This action cannot be undone.</p>
+              <p>
+                Are you sure you want to delete this project? This action cannot
+                be undone.
+              </p>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-secondary" @click="showDeleteModal = false">Cancel</button>
-              <button class="btn btn-danger" @click="confirmDeleteProject">Delete</button>
+              <button
+                class="btn btn-secondary"
+                @click="showDeleteModal = false"
+              >
+                Cancel
+              </button>
+              <button class="btn btn-danger" @click="confirmDeleteProject">
+                Delete
+              </button>
             </div>
           </div>
         </div>
@@ -577,7 +903,9 @@
               <p>Project deleted successfully!</p>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-primary" @click="handleSuccessModalOk">OK</button>
+              <button class="btn btn-primary" @click="handleSuccessModalOk">
+                OK
+              </button>
             </div>
           </div>
         </div>
@@ -592,7 +920,12 @@
               <p>User added to project!</p>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-primary" @click="showAddUserSuccessModal = false">OK</button>
+              <button
+                class="btn btn-primary"
+                @click="showAddUserSuccessModal = false"
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>
@@ -608,7 +941,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, watch, computed, nextTick } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axiosInstance from '../api';
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
@@ -718,7 +1051,9 @@ const members = ref<
 const membersLoading = ref(false);
 const membersError = ref('');
 
-const activeTab = ref<'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files'>('description');
+const activeTab = ref<
+  'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files'
+>('description');
 
 const isAllSelected = ref(false);
 
@@ -839,7 +1174,9 @@ const deleteGroup = async (groupId: string) => {
   }
 
   try {
-    await axiosInstance.delete(`/projects/${project.value.id}/groups/${groupId}`);
+    await axiosInstance.delete(
+      `/projects/${project.value.id}/groups/${groupId}`
+    );
     await loadProject(); // Reload project to get updated groups
   } catch (err: any) {
     alert('Failed to delete group: ' + err.message);
@@ -871,10 +1208,9 @@ const addUserToProject = async () => {
   if (!project.value || !userSearch.value.result) return;
   userSearch.value.adding = true;
   try {
-    await axiosInstance.post(
-      `/projects/${project.value.id}/add-user`,
-      { identifier: userSearch.value.result.email }
-    );
+    await axiosInstance.post(`/projects/${project.value.id}/add-user`, {
+      identifier: userSearch.value.result.email,
+    });
     await loadProject();
     showAddUserSuccessModal.value = true;
     userSearch.value.result = null;
@@ -970,10 +1306,17 @@ const loadFiles = async () => {
     filesLoading.value = true;
     filesError.value = null;
     console.log('Call API: /files/project/' + project.value.id);
-    const { data } = await axiosInstance.get(`/files/project/${project.value.id}`);
+    const { data } = await axiosInstance.get(
+      `/files/project/${project.value.id}`
+    );
     console.log('API /files/project response:', data);
     projectFiles.value = data;
-    console.log('Files loaded for project', project.value.id, ':', projectFiles.value);
+    console.log(
+      'Files loaded for project',
+      project.value.id,
+      ':',
+      projectFiles.value
+    );
   } catch (err: any) {
     filesError.value = err.message || 'Failed to load files';
     console.error('Error loading files:', err);
@@ -1015,7 +1358,9 @@ const editingDescription = ref(false);
 const editedDescription = ref('');
 const maxDescriptionLength = 500;
 const descriptionCharCount = computed(() => editedDescription.value.length);
-const descriptionOverLimit = computed(() => descriptionCharCount.value > maxDescriptionLength);
+const descriptionOverLimit = computed(
+  () => descriptionCharCount.value > maxDescriptionLength
+);
 // For demo, allow editing always. Replace with real permission check.
 const canEditDescription = computed(() => true);
 
@@ -1028,17 +1373,24 @@ function cancelEditDescription() {
 }
 function updateCharCount() {
   if (editedDescription.value.length > maxDescriptionLength) {
-    editedDescription.value = editedDescription.value.slice(0, maxDescriptionLength);
+    editedDescription.value = editedDescription.value.slice(
+      0,
+      maxDescriptionLength
+    );
   }
 }
 async function saveDescription() {
   if (!project.value) return;
   try {
-    await axiosInstance.patch(`/projects/${project.value.id}`, { description: editedDescription.value });
+    await axiosInstance.patch(`/projects/${project.value.id}`, {
+      description: editedDescription.value,
+    });
     project.value.description = editedDescription.value;
     editingDescription.value = false;
     showSavedSnackbar.value = true;
-    setTimeout(() => { showSavedSnackbar.value = false; }, 2500);
+    setTimeout(() => {
+      showSavedSnackbar.value = false;
+    }, 2500);
   } catch (err: any) {
     alert('Failed to update description: ' + err.message);
   }
@@ -1071,12 +1423,13 @@ function goToManage() {
 
 const showSavedSnackbar = ref(false);
 
-const inputFocused = ref(false)
+const inputFocused = ref(false);
 
 function getRoleDescription(roleName: string) {
-  if (roleName === 'Admin') return 'Full permissions: manage project, members, settings.'
-  if (roleName === 'Editor') return 'Can edit content, but not manage members.'
-  if (roleName === 'Viewer') return 'Read-only access.'
+  if (roleName === 'Admin')
+    return 'Full permissions: manage project, members, settings.';
+  if (roleName === 'Editor') return 'Can edit content, but not manage members.';
+  if (roleName === 'Viewer') return 'Read-only access.';
   return 'Project role';
 }
 function editRoles(member: any) {
@@ -1098,9 +1451,12 @@ const userSuggestActiveIdx = ref(-1);
 async function handleUserSuggest() {
   userSuggestActiveIdx.value = -1;
   userSuggestList.value = [];
-  if (!userSearch.value.identifier || userSearch.value.identifier.length < 2) return;
+  if (!userSearch.value.identifier || userSearch.value.identifier.length < 2)
+    return;
   try {
-    const { data } = await axiosInstance.post(`/users/suggest`, { q: userSearch.value.identifier });
+    const { data } = await axiosInstance.post(`/users/suggest`, {
+      q: userSearch.value.identifier,
+    });
     userSuggestList.value = data.users || [];
   } catch (e) {
     userSuggestList.value = [];
@@ -1125,7 +1481,6 @@ function selectUserSuggest(idx?: number) {
     searchUser();
   });
 }
-
 </script>
 
 <style scoped>
@@ -1234,7 +1589,8 @@ function selectUserSuggest(idx?: number) {
   margin: 0 auto;
   background: white;
   border-radius: 20px;
-  box-shadow: 0 24px 64px rgba(76, 34, 128, 0.18), 0 2px 8px rgba(49,130,206,0.10);
+  box-shadow: 0 24px 64px rgba(76, 34, 128, 0.18),
+    0 2px 8px rgba(49, 130, 206, 0.1);
   overflow: hidden;
   margin-bottom: 2rem;
   position: relative;
@@ -1242,7 +1598,10 @@ function selectUserSuggest(idx?: number) {
 .project-detail-view::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: linear-gradient(120deg, #f3f0ff 0%, #e6f0fa 100%);
   opacity: 0.7;
   z-index: 0;
@@ -1256,7 +1615,8 @@ function selectUserSuggest(idx?: number) {
 .project-content {
   background: white;
   border-radius: 20px;
-  box-shadow: 0 24px 64px rgba(49,130,206,0.13), 0 2px 8px rgba(76, 34, 128, 0.10);
+  box-shadow: 0 24px 64px rgba(49, 130, 206, 0.13),
+    0 2px 8px rgba(76, 34, 128, 0.1);
   overflow: hidden;
   margin-bottom: 2rem;
   position: relative;
@@ -1269,7 +1629,7 @@ function selectUserSuggest(idx?: number) {
   color: white;
   box-shadow: 0 4px 16px #7f53ac33;
   font-weight: 700;
-  transition: all 0.22s cubic-bezier(.4,1,.7,1.2);
+  transition: all 0.22s cubic-bezier(0.4, 1, 0.7, 1.2);
 }
 .btn-manage:hover {
   background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
@@ -1329,7 +1689,10 @@ function selectUserSuggest(idx?: number) {
 }
 
 /* Header icon contrast */
-.page-icon, .title-icon, .meta-icon, .icon {
+.page-icon,
+.title-icon,
+.meta-icon,
+.icon {
   color: #4f2c8c !important;
   filter: drop-shadow(0 2px 4px #7f53ac22);
 }
@@ -1403,7 +1766,8 @@ function selectUserSuggest(idx?: number) {
 .project-content {
   background: white;
   border-radius: 20px;
-  box-shadow: 0 24px 64px rgba(49,130,206,0.13), 0 2px 8px rgba(76, 34, 128, 0.10);
+  box-shadow: 0 24px 64px rgba(49, 130, 206, 0.13),
+    0 2px 8px rgba(76, 34, 128, 0.1);
   overflow: hidden;
   margin-bottom: 2rem;
   position: relative;
@@ -1426,8 +1790,11 @@ function selectUserSuggest(idx?: number) {
 .glassy-header::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(255,255,255,0.10);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(8px);
   border-radius: 0 0 32px 32px;
   z-index: 0;
@@ -1456,7 +1823,7 @@ function selectUserSuggest(idx?: number) {
   font-size: 2.2rem;
   font-weight: 700;
   color: #fff;
-  border: 3px solid rgba(255,255,255,0.5);
+  border: 3px solid rgba(255, 255, 255, 0.5);
   overflow: hidden;
 }
 
@@ -1491,7 +1858,7 @@ function selectUserSuggest(idx?: number) {
   color: white;
   font-size: 2.2rem;
   font-weight: 800;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .project-badges {
@@ -1505,7 +1872,7 @@ function selectUserSuggest(idx?: number) {
   gap: 2.5rem;
   margin-top: 0.5rem;
   font-size: 1rem;
-  color: rgba(255,255,255,0.85);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .meta-item {
@@ -1570,7 +1937,7 @@ function selectUserSuggest(idx?: number) {
   color: white;
   box-shadow: 0 4px 16px #7f53ac33;
   font-weight: 700;
-  transition: all 0.22s cubic-bezier(.4,1,.7,1.2);
+  transition: all 0.22s cubic-bezier(0.4, 1, 0.7, 1.2);
 }
 
 .btn-manage:hover {
@@ -1809,7 +2176,7 @@ function selectUserSuggest(idx?: number) {
   text-align: center;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
   border: 1px solid #e2e8f0;
-  transition: all 0.3s cubic-bezier(.4,1,.7,1.2);
+  transition: all 0.3s cubic-bezier(0.4, 1, 0.7, 1.2);
   position: relative;
   overflow: hidden;
   cursor: default;
@@ -1819,7 +2186,8 @@ function selectUserSuggest(idx?: number) {
 }
 .stat-card-clickable:hover {
   transform: scale(1.045) translateY(-6px);
-  box-shadow: 0 18px 40px rgba(49,130,206,0.18), 0 2px 8px rgba(76, 34, 128, 0.10);
+  box-shadow: 0 18px 40px rgba(49, 130, 206, 0.18),
+    0 2px 8px rgba(76, 34, 128, 0.1);
   z-index: 2;
 }
 .stat-icon {
@@ -2340,7 +2708,8 @@ function selectUserSuggest(idx?: number) {
   filter: brightness(1.08);
   box-shadow: 0 8px 20px #38a16944;
 }
-.btn-primary:disabled, .btn[disabled].btn-primary {
+.btn-primary:disabled,
+.btn[disabled].btn-primary {
   background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%) !important;
   color: #a0aec0 !important;
   opacity: 1 !important;
@@ -3027,8 +3396,14 @@ function selectUserSuggest(idx?: number) {
   animation: tabUnderlineIn 0.3s;
 }
 @keyframes tabUnderlineIn {
-  from { width: 0; opacity: 0; }
-  to { width: 64%; opacity: 1; }
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 64%;
+    opacity: 1;
+  }
 }
 .tab:hover:not(.active) {
   background: #dbeafe;
@@ -3169,7 +3544,7 @@ function selectUserSuggest(idx?: number) {
   padding: 1.25rem 1.5rem 1.5rem 1.5rem;
   position: relative;
   min-height: 80px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 .section-header {
   display: flex;
@@ -3219,7 +3594,7 @@ function selectUserSuggest(idx?: number) {
   color: #2d3748;
   margin-bottom: 0.5rem;
   resize: vertical;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   transition: border 0.18s;
 }
 .desc-textarea:focus {
@@ -3285,7 +3660,7 @@ function selectUserSuggest(idx?: number) {
   height: 100%;
   object-fit: cover;
   border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 .pdf-icon {
   font-weight: bold;
@@ -3331,7 +3706,7 @@ function selectUserSuggest(idx?: number) {
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
   z-index: 10;
   padding: 0.5rem 0;
 }
@@ -3415,7 +3790,7 @@ function selectUserSuggest(idx?: number) {
   background: white;
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
   z-index: 10;
   min-width: 180px;
   padding: 0.5rem 0;
@@ -3478,13 +3853,21 @@ function selectUserSuggest(idx?: number) {
 }
 
 @media (max-width: 900px) {
-  .actions-desktop { display: none; }
-  .actions-dropdown { display: block; }
+  .actions-desktop {
+    display: none;
+  }
+  .actions-dropdown {
+    display: block;
+  }
 }
 
 @media (min-width: 901px) {
-  .actions-dropdown { display: none; }
-  .actions-desktop { display: flex; }
+  .actions-dropdown {
+    display: none;
+  }
+  .actions-desktop {
+    display: flex;
+  }
 }
 
 /* Snackbar/Toast */
@@ -3499,7 +3882,7 @@ function selectUserSuggest(idx?: number) {
   border-radius: 2rem;
   font-size: 1.1rem;
   font-weight: 700;
-  box-shadow: 0 8px 32px rgba(56,178,172,0.18);
+  box-shadow: 0 8px 32px rgba(56, 178, 172, 0.18);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -3507,8 +3890,14 @@ function selectUserSuggest(idx?: number) {
   animation: fadeInUp 0.3s;
 }
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .tabs-enhanced {
@@ -3556,8 +3945,14 @@ function selectUserSuggest(idx?: number) {
   animation: tabUnderlineIn 0.3s;
 }
 @keyframes tabUnderlineIn {
-  from { width: 0; opacity: 0; }
-  to { width: 60%; opacity: 1; }
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 60%;
+    opacity: 1;
+  }
 }
 .add-user-card {
   background: #fff;
@@ -3737,7 +4132,8 @@ function selectUserSuggest(idx?: number) {
   }
 }
 
-.btn-primary:disabled, .btn[disabled].btn-primary {
+.btn-primary:disabled,
+.btn[disabled].btn-primary {
   background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%) !important;
   color: #a0aec0 !important;
   opacity: 1 !important;
@@ -3757,7 +4153,7 @@ function selectUserSuggest(idx?: number) {
   border-radius: 2rem;
   font-size: 1.1rem;
   font-weight: 700;
-  box-shadow: 0 8px 32px rgba(56,178,172,0.18);
+  box-shadow: 0 8px 32px rgba(56, 178, 172, 0.18);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -3779,7 +4175,9 @@ function selectUserSuggest(idx?: number) {
 
 .user-suggest-dropdown {
   position: absolute;
-  left: 0; right: 0; top: 100%;
+  left: 0;
+  right: 0;
+  top: 100%;
   background: #fff;
   border: 1.5px solid #e2e8f0;
   border-radius: 0 0 10px 10px;
@@ -3801,7 +4199,8 @@ function selectUserSuggest(idx?: number) {
   color: #2d3748;
   transition: background 0.18s, color 0.18s;
 }
-.user-suggest-dropdown li.active, .user-suggest-dropdown li:hover {
+.user-suggest-dropdown li.active,
+.user-suggest-dropdown li:hover {
   background: #f0f6ff;
   color: #3182ce;
 }
@@ -3815,18 +4214,28 @@ function selectUserSuggest(idx?: number) {
 }
 
 /* Thêm hiệu ứng transition cho tab và list */
-.fade-tab-enter-active, .fade-tab-leave-active {
-  transition: opacity 0.28s cubic-bezier(.4,1,.7,1.2);
+.fade-tab-enter-active,
+.fade-tab-leave-active {
+  transition: opacity 0.28s cubic-bezier(0.4, 1, 0.7, 1.2);
 }
-.fade-tab-enter-from, .fade-tab-leave-to {
+.fade-tab-enter-from,
+.fade-tab-leave-to {
   opacity: 0;
 }
-.fade-list-enter-active, .fade-list-leave-active {
-  transition: all 0.25s cubic-bezier(.4,1,.7,1.2);
+.fade-list-enter-active,
+.fade-list-leave-active {
+  transition: all 0.25s cubic-bezier(0.4, 1, 0.7, 1.2);
 }
-.fade-list-enter-from, .fade-list-leave-to {
+.fade-list-enter-from,
+.fade-list-leave-to {
   opacity: 0;
   transform: translateY(10px);
 }
 
+.description,
+.desc-plain {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
 </style>

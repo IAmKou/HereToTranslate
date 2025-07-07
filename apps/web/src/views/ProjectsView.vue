@@ -1,20 +1,26 @@
 <template>
   <div class="layout-wrapper">
     <TopNavbar />
-    <div class="main-content" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+    <div
+      :class="{ 'sidebar-collapsed': isSidebarCollapsed }"
+      class="main-content"
+    >
       <Sidebar />
       <div class="content">
         <div class="projects-container">
           <div class="header-filters-wrapper">
             <!-- Enhanced Header -->
-            <div class="projects-header" :class="{ 'header-animated': isHeaderVisible }">
+            <div
+              :class="{ 'header-animated': isHeaderVisible }"
+              class="projects-header"
+            >
               <div class="header-content">
                 <div class="header-left">
                   <div class="icon-circle">
                     <div class="icon-inner">
                       <i class="pi pi-folder header-icon" />
                     </div>
-                    <div class="icon-glow"></div>
+                    <div class="icon"></div>
                   </div>
                   <div class="header-text">
                     <h1 class="projects-title">Projects</h1>
@@ -39,7 +45,10 @@
             </div>
 
             <!-- Filters sát tiêu đề -->
-            <div class="filters-container filters-tight" :class="{ 'filters-animated': isFiltersVisible }">
+            <div
+              :class="{ 'filters-animated': isFiltersVisible }"
+              class="filters-container filters-tight"
+            >
               <div class="filters">
                 <div class="search-container">
                   <div class="search-wrapper">
@@ -49,7 +58,7 @@
                       type="text"
                       placeholder="Search projects..."
                       class="search-input"
-                    >
+                    />
                   </div>
                 </div>
                 <div class="filter-options">
@@ -62,7 +71,10 @@
                     <option value="createdAt">Sort by Date</option>
                     <option value="name">Sort by Name</option>
                   </select>
-                  <button class="btn clear-filter-btn" @click.prevent="clearFilter">
+                  <button
+                    class="btn clear-filter-btn"
+                    @click.prevent="clearFilter"
+                  >
                     <i class="pi pi-filter-slash"></i>
                     Clear Filter
                   </button>
@@ -72,10 +84,7 @@
           </div>
 
           <!-- Loading State -->
-          <div
-            v-if="loading"
-            class="loading-container"
-          >
+          <div v-if="loading" class="loading-container">
             <div class="loading-content">
               <div class="loading-spinner"></div>
               <p>Loading projects...</p>
@@ -83,17 +92,16 @@
           </div>
 
           <!-- Error State -->
-          <div
-            v-else-if="error"
-            class="error-container"
-          >
+          <div v-else-if="error" class="error-container">
             <div class="error-content">
               <div class="error-icon">
                 <i class="pi pi-exclamation-triangle"></i>
               </div>
               <h3>Oops! Something went wrong</h3>
               <p>{{ error }}</p>
-              <button @click="loadProjects" class="btn btn-secondary">Try Again</button>
+              <button class="btn btn-secondary" @click="loadProjects">
+                Try Again
+              </button>
             </div>
           </div>
 
@@ -108,11 +116,10 @@
               </div>
               <h3>No projects found</h3>
               <p v-if="searchQuery || visibilityFilter">
-                No projects match your current filters. Try adjusting your search criteria.
+                No projects match your current filters. Try adjusting your
+                search criteria.
               </p>
-              <p v-else>
-                Get started by creating your first project!
-              </p>
+              <p v-else>Get started by creating your first project!</p>
               <router-link to="/projects/create" class="btn btn-primary">
                 <i class="pi pi-plus"></i>
                 Create Your First Project
@@ -136,7 +143,12 @@
                 @click="viewProject((project as Project).id)"
               >
                 <div class="project-header">
-                  <h3 :title="(project as Project).name" class="project-title-strong">{{ (project as Project).name }}</h3>
+                  <h3
+                    :title="(project as Project).name"
+                    class="project-title-strong"
+                  >
+                    {{ (project as Project).name }}
+                  </h3>
                   <div class="project-badges">
                     <span v-if="!project.isPrivate" class="badge badge-public">
                       <i class="pi pi-globe"></i>
@@ -154,10 +166,17 @@
                   class="description description-truncate"
                   :title="project.description"
                 >
-                  {{ project.description.length > 120 ? project.description.substring(0, 120) + '...' : project.description }}
+                  {{
+                    project.description.length > 120
+                      ? project.description.substring(0, 120) + '...'
+                      : project.description
+                  }}
                 </p>
 
-                <div v-if="project.tags && project.tags.length > 0" class="tags">
+                <div
+                  v-if="project.tags && project.tags.length > 0"
+                  class="tags"
+                >
                   <span
                     v-for="tag in (project as Project).tags"
                     :key="tag.id"
@@ -166,18 +185,25 @@
                     {{ tag.name }}
                   </span>
                 </div>
-                <div v-if="project.tags && project.tags.length > 5" class="tag-more">
+                <div
+                  v-if="project.tags && project.tags.length > 5"
+                  class="tag-more"
+                >
                   ({{ project.tags.length }} tags)
                 </div>
 
                 <div class="project-meta">
                   <div class="meta-item" v-if="project.createdBy">
                     <i class="pi pi-user-edit meta-icon"></i>
-                    <span class="meta-value">{{ project.createdBy.username }}</span>
+                    <span class="meta-value">{{
+                      project.createdBy.username
+                    }}</span>
                   </div>
                   <div class="meta-item">
                     <i class="pi pi-calendar-plus meta-icon"></i>
-                    <span class="meta-value">{{ formatDate(project.createdAt) }}</span>
+                    <span class="meta-value">{{
+                      formatDate(project.createdAt)
+                    }}</span>
                   </div>
                   <div class="meta-item" v-if="project.category">
                     <i class="pi pi-tag meta-icon"></i>
@@ -185,23 +211,34 @@
                   </div>
                   <div class="meta-item" v-if="project.updatedAt">
                     <i class="pi pi-refresh meta-icon"></i>
-                    <span class="meta-value">Updated: {{ formatDate(project.updatedAt) }}</span>
+                    <span class="meta-value"
+                      >Updated: {{ formatDate(project.updatedAt) }}</span
+                    >
                   </div>
                 </div>
 
                 <div class="project-actions">
-                  <button class="btn btn-outline" @click.stop="editProject(project.id)">
+                  <button
+                    class="btn btn-outline"
+                    @click.stop="editProject(project.id)"
+                  >
                     <i class="pi pi-pencil"></i>
                     Edit
                   </button>
-                  <button class="btn btn-outline" @click.stop="manageProject(project.id)">
+                  <button
+                    class="btn btn-outline"
+                    @click.stop="manageProject(project.id)"
+                  >
                     <i class="pi pi-cog"></i>
                     Manage
                   </button>
                 </div>
 
                 <div class="project-status" v-if="project.status">
-                  <span class="status-badge" :class="`status-${project.status}`">
+                  <span
+                    :class="`status-${project.status}`"
+                    class="status-badge"
+                  >
                     {{ project.status === 'archived' ? 'Archived' : 'Active' }}
                   </span>
                 </div>
@@ -223,7 +260,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted } from 'vue';
+import { computed, defineComponent, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
@@ -306,18 +343,19 @@ export default defineComponent({
       // Apply search filter
       if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase();
-        filtered = filtered.filter(project =>
-          project.name.toLowerCase().includes(query) ||
-          project.description?.toLowerCase().includes(query) ||
-          project.tags?.some(tag => tag.name.toLowerCase().includes(query))
+        filtered = filtered.filter(
+          (project) =>
+            project.name.toLowerCase().includes(query) ||
+            project.description?.toLowerCase().includes(query) ||
+            project.tags?.some((tag) => tag.name.toLowerCase().includes(query))
         );
       }
 
       // Apply visibility filter
       if (visibilityFilter.value === 'public') {
-        filtered = filtered.filter(project => !project.isPrivate);
+        filtered = filtered.filter((project) => !project.isPrivate);
       } else if (visibilityFilter.value === 'private') {
-        filtered = filtered.filter(project => project.isPrivate);
+        filtered = filtered.filter((project) => project.isPrivate);
       }
 
       // Apply sorting
@@ -326,9 +364,14 @@ export default defineComponent({
           case 'name':
             return a.name.localeCompare(b.name);
           case 'updatedAt':
-            return new Date((b.updatedAt || b.createdAt)).getTime() - new Date((a.updatedAt || a.createdAt)).getTime();
+            return (
+              new Date(b.updatedAt || b.createdAt).getTime() -
+              new Date(a.updatedAt || a.createdAt).getTime()
+            );
           default:
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            return (
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
         }
       });
 
@@ -344,7 +387,7 @@ export default defineComponent({
       return new Date(date).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
       });
     };
 
@@ -493,18 +536,6 @@ export default defineComponent({
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.icon-glow {
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  right: -10px;
-  bottom: -10px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  opacity: 0.3;
-  animation: glow 3s ease-in-out infinite alternate;
 }
 
 .header-icon {
@@ -769,13 +800,17 @@ export default defineComponent({
 }
 
 .badge-public {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  background: #d1fae5;
+  color: #065f46;
+  font-weight: 700;
+  border: 1px solid #34d399;
 }
 
 .badge-private {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 700;
+  border: 1px solid #f87171;
 }
 
 .description {
@@ -877,17 +912,30 @@ export default defineComponent({
 
 /* Animations */
 @keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 @keyframes glow {
-  0% { opacity: 0.3; transform: scale(1); }
-  100% { opacity: 0.6; transform: scale(1.1); }
+  0% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes card-fade-in {
@@ -1083,7 +1131,8 @@ export default defineComponent({
 /* Làm nổi bật card project */
 .project-card.project-card-highlight {
   border: 2px solid #764ba2;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25), 0 2px 8px rgba(118, 75, 162, 0.15);
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25),
+    0 2px 8px rgba(118, 75, 162, 0.15);
   background: #f8f6ff;
 }
 

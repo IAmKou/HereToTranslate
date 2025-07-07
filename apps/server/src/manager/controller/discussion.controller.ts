@@ -80,6 +80,16 @@ export class DiscussionController {
     return this.discussions.archiveDiscussion(req.user.id, projectId, threadId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Delete(':threadId')
+  async deleteDiscussion(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('threadId', BigIntTransformPipe) threadId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.discussions.deleteDiscussion(req.user.id, projectId, threadId);
+  }
+
   @UseGuards(JwtFallthroughGuard)
   @IsPublicEndpoint()
   @Get(':threadId')

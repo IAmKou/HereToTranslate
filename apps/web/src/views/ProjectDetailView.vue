@@ -188,6 +188,13 @@
               </div>
             </div>
 
+            <!-- Project Discussions -->
+            <DiscussionSection
+              :project-id="Number(project.id)"
+              :can-create-discussion="canCreateDiscussion"
+              :can-manage-discussions="canManageDiscussions"
+            />
+
             <!-- Enhanced Project Statistics -->
             <div class="project-stats">
               <div class="stat-card">
@@ -306,7 +313,7 @@
                 </div>
               </div>
 
-              <!-- Tabs for Details and Members -->
+              <!-- Tabs for Details, Members and Discussions -->
               <div class="tabs">
                 <button
                   :class="['tab', { active: activeTab === 'details' }]"
@@ -319,6 +326,12 @@
                   @click="activeTab = 'members'"
                 >
                   Members
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'discussions' }]"
+                  @click="activeTab = 'discussions'"
+                >
+                  Discussions
                 </button>
               </div>
 
@@ -485,6 +498,83 @@
               </div>
             </div>
           </div>
+
+          <!-- Discussions Tab Content -->
+          <div v-if="activeTab === 'discussions'">
+            <DiscussionSection
+              :project-id="Number(project.id)"
+              :can-create-discussion="canCreateDiscussion"
+              :can-manage-discussions="canManageDiscussions"
+            />
+          </div>
+
+          <!-- Members Tab Content -->
+          <div v-if="activeTab === 'members'">
+            <div class="members-section">
+              <div class="section-header">
+                <h2 class="section-title">
+                  <span class="title-icon">👥</span>
+                  Project Members
+                </h2>
+              </div>
+              <div class="members-content">
+                <div v-if="membersLoading" class="members-loading">
+                  <div class="loading-spinner-small"></div>
+                  <span>Loading members...</span>
+                </div>
+                <div v-else-if="membersError" class="members-error">
+                  <span class="error-icon">⚠️</span>
+                  <span>{{ membersError }}</span>
+                  <button @click="loadMembers" class="btn btn-outline btn-sm">Retry</button>
+                </div>
+                <div v-else-if="members && members.length > 0" class="members-list">
+                  <table class="members-table">
+                    <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Roles</th>
+                      <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr v-for="member in members" :key="member.id">
+                      <td>
+                        <div class="member-info">
+                          <span class="member-name">{{ member.fullName || member.username }}</span>
+                          <span class="member-email">{{ member.email }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="member-roles">
+                            <span
+                              v-for="role in member.roles"
+                              :key="role.id"
+                              class="role-badge"
+                            >
+                              {{ role.name }}
+                            </span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="member-actions">
+                          <button class="btn btn-outline btn-sm">
+                            <span class="icon">✏️</span>
+                            Edit Roles
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-else class="empty-members">
+                  <div class="empty-icon">👥</div>
+                  <h3>No Members</h3>
+                  <p>No members have been added to this project yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <!-- Footer -->
         <AppFooter />
@@ -604,13 +694,14 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axiosInstance from '../api';
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
+import DiscussionSection from '../components/DiscussionSection.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -712,7 +803,7 @@ const members = ref<
 const membersLoading = ref(false);
 const membersError = ref('');
 
-const activeTab = ref<'details' | 'members'>('details');
+const activeTab = ref<'details' | 'members' | 'discussions'>('details');
 
 const isAllSelected = ref(false);
 
@@ -993,6 +1084,17 @@ const formatFileSize = (bytes: number) => {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
+
+// Computed properties for discussion permissions
+const canCreateDiscussion = computed(() => {
+  // TODO: Implement proper permission checking based on user roles
+  return true; // For now, allow all authenticated users
+});
+
+const canManageDiscussions = computed(() => {
+  // TODO: Implement proper permission checking based on user roles
+  return true; // For now, allow all authenticated users
+});
 
 </script>
 
@@ -2701,5 +2803,110 @@ const formatFileSize = (bytes: number) => {
   padding: 0.25rem 0.75rem;
   margin-right: 0.25rem;
   font-size: 0.9em;
+}
+
+/* Members Section Styles */
+.members-section {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.members-content {
+  margin-top: 1.5rem;
+}
+
+.members-loading,
+.members-error {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+  color: #718096;
+}
+
+.members-list {
+  background: #f7fafc;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.members-table th {
+  background: #edf2f7;
+  color: #2d3748;
+  font-weight: 600;
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.members-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+}
+
+.members-table tr:hover td {
+  background: #f7fafc;
+}
+
+.member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.member-name {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.member-email {
+  font-size: 0.875rem;
+  color: #718096;
+}
+
+.member-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.member-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.empty-members {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
+}
+
+.empty-members .empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-members h3 {
+  color: #2d3748;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-members p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
 }
 </style>

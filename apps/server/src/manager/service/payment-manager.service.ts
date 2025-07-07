@@ -3,7 +3,6 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  NotFoundException,
 } from '@nestjs/common';
 import {
   ProjectEntity,
@@ -25,6 +24,7 @@ import { WalletManagerService } from './wallet-manager.service';
 export class PaypalService {
   private readonly api = process.env.PAYPAL_API;
   private accessToken: string;
+  private readonly ADMIN_USER_ID = 1n; // use config/env if preferred
 
   constructor(
     @InjectRepository(TransactionEntity)
@@ -76,12 +76,13 @@ export class PaypalService {
     user: UserEntity,
     request: RequestEntity
   ): Promise<string> {
-    const parsedAmount =
-      typeof amount === 'number' ? amount : parseFloat(amount as any);
-
-    if (isNaN(parsedAmount)) {
+    const baseAmount = typeof amount === 'number' ? amount : parseFloat(amount as any);
+    if (isNaN(baseAmount)) {
       throw new BadRequestException('Invalid amount for PayPal deposit');
     }
+
+    const totalWithFee = parseFloat((baseAmount * 1.05).toFixed(2));
+    const depositAmount = parseFloat((totalWithFee * 0.5).toFixed(2));
 
     const accessToken = await this.getAccessToken();
 
@@ -94,9 +95,9 @@ export class PaypalService {
             {
               amount: {
                 currency_code: 'USD',
-                value: parsedAmount.toFixed(2),
+                value: depositAmount.toFixed(2),
               },
-              description: `Deposit for request ID ${request.id}`,
+              description: `50% Deposit (5% fee included) for request ID ${request.id}`,
             },
           ],
           application_context: {
@@ -112,25 +113,22 @@ export class PaypalService {
         }
       );
 
-      const approvalUrl = data.links?.find(
-        (link: { rel: string }) => link.rel === 'approve'
-      )?.href;
+      const approvalUrl = data.links?.find((link: { rel: string }) => link.rel === 'approve')?.href;
 
       if (!approvalUrl) {
         throw new InternalServerErrorException('No approval URL returned by PayPal.');
       }
 
-      // Save transaction
       await this.transactionRepo.save({
         user,
         request,
-        amount: parsedAmount,
+        amount: depositAmount,
         status: TransactionStatus.Pending,
         paypalOrderId: data.id,
       });
 
       return approvalUrl;
-    } catch (err: unknown) {
+    } catch (err) {
       if (axios.isAxiosError(err)) {
         console.error('PayPal API error:', {
           status: err.response?.status,
@@ -145,20 +143,7 @@ export class PaypalService {
     }
   }
 
-  async capturePaymentAndCreateProject(
-    orderId: string
-  ): Promise<{
-    success: boolean;
-    projectId?: bigint;
-    requestId?: bigint;
-    amount?: number;
-    currency?: string;
-    payerEmail?: string;
-    receiver?: string;
-    date?: Date;
-    description?: string;
-    error?: string;
-  }> {
+  async capturePaymentAndCreateProject(orderId: string) {
     const accessToken = await this.getAccessToken();
 
     try {
@@ -174,9 +159,7 @@ export class PaypalService {
       );
 
       if (captureRes.status !== 201) {
-        throw new Error(
-          'Payment capture failed with status: ' + captureRes.status
-        );
+        throw new Error('Payment capture failed with status: ' + captureRes.status);
       }
 
       const transaction = await this.transactionRepo.findOneOrFail({
@@ -204,7 +187,7 @@ export class PaypalService {
         if (request.category?.id) {
           createProjectDto.categoryId = request.category.id.toString();
         }
-        console.log('createProjectDto:', createProjectDto);
+
         const createResult = await this.projectService.createProject(
           selectedUser.id,
           createProjectDto
@@ -218,20 +201,17 @@ export class PaypalService {
         request.registrants = [];
         request.project = newProject;
         request.status = RequestStatus.Approved;
-        if (request.status !== RequestStatus.Pending) {
-          request.isPublic = false;
-        }
         transaction.status = TransactionStatus.Completed;
 
         await queryRunner.manager.save([request, transaction]);
 
         if (otherUserIds.length > 0) {
-          await this.mailService.notifyAllOthersRequestTaken(
-            Number(request.id),
-            otherUserIds
-          );
-          // await this.notificationService.notifyAllOthers(request.id, otherUserIds);
+          await this.mailService.notifyAllOthersRequestTaken(Number(request.id), otherUserIds);
         }
+
+        const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+        adminWallet.balance += Number(transaction.amount);
+        await queryRunner.manager.save(adminWallet);
 
         await queryRunner.commitTransaction();
 
@@ -249,9 +229,6 @@ export class PaypalService {
       } catch (err) {
         await queryRunner.rollbackTransaction();
         console.error('Project creation failed:', err);
-        if (err instanceof Error) {
-          console.error('Error stack:', err.stack);
-        }
         return { success: false, error: (err as any)?.message || 'Project creation failed' };
       } finally {
         await queryRunner.release();
@@ -262,6 +239,69 @@ export class PaypalService {
     }
   }
 
+  async withdraw(userId: bigint, amount: number, paypalEmail: string): Promise<WalletEntity> {
+    if (amount <= 0) throw new BadRequestException('Amount must be positive');
+    if (!paypalEmail || !paypalEmail.includes('@')) {
+      throw new BadRequestException('Invalid PayPal email address');
+    }
+
+    const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+    if (Number(adminWallet.balance) < amount) {
+      throw new BadRequestException('Admin wallet has insufficient funds');
+    }
+
+    const accessToken = await this.getAccessToken();
+
+    const payoutData = {
+      sender_batch_header: {
+        sender_batch_id: `batch_${Date.now()}`,
+        email_subject: 'You have a payout!',
+        email_message: 'You have received a payout via PayPal.',
+      },
+      items: [
+        {
+          recipient_type: 'EMAIL',
+          amount: {
+            value: amount.toFixed(2),
+            currency: 'USD',
+          },
+          note: 'Withdrawal from Translation Platform',
+          sender_item_id: `user_${userId}_${Date.now()}`,
+          receiver: paypalEmail,
+        },
+      ],
+    };
+
+    try {
+      const res = await axios.post(
+        'https://api-m.paypal.com/v1/payments/payouts',
+        payoutData,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const payoutBatchId = res.data.batch_header?.payout_batch_id ?? null;
+
+      const transaction = this.transactionRepo.create({
+        user: { id: userId } as UserEntity,
+        amount,
+        status: TransactionStatus.Completed,
+        paypalOrderId: payoutBatchId,
+      });
+
+      await this.transactionRepo.save(transaction);
+
+      adminWallet.balance -= amount;
+      return await this.walletRepository.save(adminWallet);
+    } catch (err) {
+      console.error('PayPal payout failed:', err);
+      throw new InternalServerErrorException('Payout failed.');
+    }
+  }
   async finalizeTranslation(requestId: bigint): Promise<boolean> {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
@@ -363,97 +403,4 @@ export class PaypalService {
     await this.translationApprovalRepository.save(approval);
     return true;
   }
-
-  async withdraw(
-    userId: bigint,
-    amount: number,
-    paypalEmail: string,
-    requestId?: bigint
-  ): Promise<WalletEntity> {
-    if (amount <= 0) throw new BadRequestException('Amount must be positive');
-    if (!paypalEmail || !paypalEmail.includes('@')) {
-      throw new BadRequestException('Invalid PayPal email address');
-    }
-
-    const wallet = await this.walletManagerService.getOrCreateWallet(userId);
-    if (Number(wallet.balance) < amount) {
-      throw new BadRequestException('Insufficient balance');
-    }
-
-    let request: RequestEntity | undefined;
-    if (requestId) {
-      const found = await this.requestRepository.findOneBy({ id: requestId });
-      if (!found) {
-        throw new NotFoundException(`Request with ID ${requestId} not found.`);
-      }
-      request = found;
-    }
-
-    const accessToken = await this.getAccessToken();
-
-    const payoutData = {
-      sender_batch_header: {
-        sender_batch_id: `batch_${Date.now()}`,
-        email_subject: 'You have a payout!',
-        email_message: 'You have received a payout via PayPal.',
-      },
-      items: [
-        {
-          recipient_type: 'EMAIL',
-          amount: {
-            value: amount.toFixed(2),
-            currency: 'USD',
-          },
-          note: 'Withdrawal from Translation Platform',
-          sender_item_id: `user_${userId}_${Date.now()}`,
-          receiver: paypalEmail,
-        },
-      ],
-    };
-
-    try {
-      const res = await axios.post(
-        'https://api-m.paypal.com/v1/payments/payouts',
-        payoutData,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const payoutBatchId = res.data.batch_header?.payout_batch_id ?? null;
-
-      const transaction = this.transactionRepo.create({
-        user: { id: userId } as UserEntity,
-        amount,
-        status: TransactionStatus.Completed,
-        paypalOrderId: payoutBatchId,
-      });
-
-      if (request) {
-        transaction.request = request;
-      }
-
-      await this.transactionRepo.save(transaction);
-
-      wallet.balance = Number(wallet.balance) - Number(amount);
-      return await this.walletRepository.save(wallet);
-    } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        const status = err.response?.status;
-        const data = err.response?.data;
-
-        console.error('PayPal API error:');
-        console.error('Status:', status);
-        console.error('Data:', JSON.stringify(data, null, 2));
-        console.error('Message:', err.message);
-      } else {
-        console.error('Unexpected error:', err);
-      }
-      throw new InternalServerErrorException('Payout failed.');
-    }
-  }
 }
-

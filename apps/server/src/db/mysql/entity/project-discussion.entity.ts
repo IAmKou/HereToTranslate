@@ -28,8 +28,8 @@ export class ProjectDiscussionThreadEntity {
   @OneToMany(() => ProjectDiscussionCommentEntity, comment => comment.thread, { cascade: true })
   comments: ProjectDiscussionCommentEntity[];
 
-  @ManyToOne(() => DiscussionAccessPolicyEntity, { cascade: true })
-  accessPolicy: DiscussionAccessPolicyEntity[];
+  @OneToMany(() => DiscussionAccessPolicyEntity, policy => policy.thread, { cascade: true })
+  accessPolicies: DiscussionAccessPolicyEntity[];
 }
 
 @Entity('comments')
@@ -63,18 +63,17 @@ export class ProjectDiscussionCommentEntity {
   downvotes: UserEntity[];
 }
 
-
 @Entity('thread_access_policies')
 @Unique(['thread', 'role'])
 export class DiscussionAccessPolicyEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @OneToOne(() => ProjectDiscussionThreadEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ProjectDiscussionThreadEntity, thread => thread.accessPolicies, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'threadId', referencedColumnName: 'id' })
   thread: ProjectDiscussionThreadEntity;
 
-  @OneToOne(() => ProjectRoleEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ProjectRoleEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'roleId', referencedColumnName: 'id' })
   role: ProjectRoleEntity;
 

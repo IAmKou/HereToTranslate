@@ -3,6 +3,7 @@ import App from './App.vue';
 import router from './router';
 import axios from 'axios';
 import { authService } from './services/auth.service';
+import { createPinia } from 'pinia';
 
 // PrimeVue
 import PrimeVue from 'primevue/config';
@@ -28,6 +29,10 @@ async function bootstrap() {
   }
 
   const app = createApp(App);
+
+  // Thêm Pinia
+  const pinia = createPinia();
+  app.use(pinia);
 
   app.use(PrimeVue);
   app.use(ConfirmationService);

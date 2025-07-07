@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
+import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { validateEmail } from '#LocalProject/Utils/validation';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -165,7 +166,7 @@ export class UserManagerService {
   async updateUserRole(
     userId: bigint,
     roleId: number,
-    currentUser: UserEntity
+    currentUser: AuthenticatedRequest
   ) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -176,33 +177,28 @@ export class UserManagerService {
       throw new NotFoundException('Unknown user');
     }
 
-    // Prevent users from changing their own role
-    if (user.id === currentUser.id) {
+    if (user.id === currentUser.user.id) {
       throw new BadRequestException('You cannot change your own role');
     }
 
-    // Only super admins can assign admin roles
     if (
       roleId === UserRole.Admin &&
-      currentUser.role.id !== BigInt(UserRole.SuperAdmin)
+      currentUser.user.role !== UserRole.SuperAdmin
     ) {
       throw new BadRequestException('Only super admins can assign admin roles');
     }
 
-    // Only super admins can modify admin roles
     if (
       user.role.id === BigInt(UserRole.Admin) &&
-      currentUser.role.id !== BigInt(UserRole.SuperAdmin)
+      currentUser.user.role !== UserRole.SuperAdmin
     ) {
       throw new BadRequestException('Only super admins can modify admin roles');
     }
 
-    // Prevent assigning super admin role
     if (roleId === UserRole.SuperAdmin) {
       throw new BadRequestException('Super admin role cannot be assigned');
     }
 
-    // Fetch the role entity (recommended instead of casting)
     const newRole = await this.roleRepository.findOneBy({ id: BigInt(roleId) });
     if (!newRole) {
       throw new NotFoundException('Role not found');
@@ -211,12 +207,12 @@ export class UserManagerService {
     user.role = newRole;
     await this.userRepository.save(user);
 
-    // Return updated user with populated role
     return this.userRepository.findOne({
       where: { id: userId },
       relations: ['role'],
     });
   }
+
 
   async toggleUserStatus(userId: bigint) {
     const user = await this.userRepository.findOne({

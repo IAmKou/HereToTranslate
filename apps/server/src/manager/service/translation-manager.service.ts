@@ -6,12 +6,14 @@ import { Injectable } from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import * as mammoth from 'mammoth';
+import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 
 @Injectable()
 export class TranslationService {
   constructor(
     @InjectModel(TranslationString.name)
     private translationModel: Model<TranslationStringDocument>,
+    private readonly githubService: GitHubService,
   ) {}
 
   async extractStrings(file: FileEntity): Promise<void> {
@@ -82,6 +84,54 @@ export class TranslationService {
     // const extracted = await this.externalAssetExtractor.extractStringsFrom(file);
     // result.push(...extracted);
   }
+  async getAllString(projectId: string, branchId: string) {
+    const strings = await this.translationModel.find({
+      projectId,
+      branchId,
+    }).lean();
+
+    return strings.map(str => ({
+      id: str._id,
+      originalText: str.originalText,
+      translatedText: str.translatedText || '',
+      fileId: str.fileId,
+    }));
+  }
+  async addTranslatedString(id: string, translatedText: string) {
+    const stringDoc = await this.translationModel.findById(id);
+    if (!stringDoc) {
+      throw new Error('Translation string not found');
+    }
+
+    stringDoc.translatedText = translatedText;
+    await stringDoc.save();
+
+    return stringDoc;
+  }
+
+  async commitTranslatedFileToGitHub(projectId: string, branchId: string, repo: string) {
+    const strings = await this.translationModel.find({
+      projectId,
+      branchId,
+      translatedText: { $exists: true, $ne: '' },
+    }).lean();
+
+    const translations: Record<string, string> = {};
+    strings.forEach(s => {
+      translations[s.originalText] = s.translatedText!;
+    });
+
+    const fileContent = JSON.stringify(translations, null, 2);
+    const filePath = `translations/${branchId}.json`;
+
+    await this.githubService.commitChange({
+      repo,
+      path: filePath,
+      content: fileContent,
+      message: `Update translations for branch ${branchId}`,
+    });
+  }
+
 }
 
 function extractJsonStrings(obj: any, result: string[], path = '') {
@@ -95,3 +145,4 @@ function extractJsonStrings(obj: any, result: string[], path = '') {
     }
   }
 }
+

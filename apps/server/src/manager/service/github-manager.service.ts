@@ -82,4 +82,45 @@ export class GitHubService {
     }
   }
 
+  async commitChange({
+    repo,
+    branch = 'main',
+    path,
+    content,
+    message,
+  }: {
+    repo: string;
+    branch?: string;
+    path: string;
+    content: string;
+    message: string;
+  }) {
+    const encodedContent = Buffer.from(content).toString('base64');
+
+    let sha: string | undefined;
+    try {
+      const { data } = await this.octokit.repos.getContent({
+        owner: this.username,
+        repo,
+        path,
+        ref: branch,
+      });
+
+      if (!Array.isArray(data)) {
+        sha = data.sha;
+      }
+    } catch (err: any) {
+      if (err.status !== 404) throw err;
+    }
+
+    await this.octokit.repos.createOrUpdateFileContents({
+      owner: this.username,
+      repo,
+      path,
+      message,
+      content: encodedContent,
+      branch,
+      sha, // needed for updating
+    });
+  }
 }

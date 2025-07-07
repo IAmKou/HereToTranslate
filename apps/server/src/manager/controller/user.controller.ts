@@ -77,7 +77,7 @@ export class UserController {
     @Param('rid') roleId: number,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.users.updateUserRole(userId, roleId, req.user as UserEntity);
+    return this.users.updateUserRole(userId, roleId, req.user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

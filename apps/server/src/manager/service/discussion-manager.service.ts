@@ -54,35 +54,79 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
    * @returns A `Permission` object representing the user's permissions for the thread.
    */
   async getUserPermissionForThread(uid: Maybe<bigint>, threadId: bigint) {
-    const userRoles = await this.projectRoleRepository.findBy({
-      users: { id: uid },
-      project: { discussions: { id: threadId } },
+    // First, get the project ID for this thread
+    const thread = await this.discussionThreadRepository.findOne({
+      where: { id: threadId },
+      select: ['project'],
+      relations: ['project'],
     });
+
+    if (!thread) {
+      throw new NotFoundException('Thread not found');
+    }
+
+    const projectId = thread.project.id;
+
+    // Get all user roles for this project
+    const userRoles = await this.projectRoleRepository.find({
+      where: {
+        users: { id: uid },
+        project: { id: projectId },
+      },
+      relations: ['users'],
+    });
+
+    // Get the Everyone role for this project
     const everyoneRole = await this.projectRoleRepository.findOne({
-      where: { name: 'Everyone', project: { discussions: { id: threadId } } },
-      select: ['id'],
+      where: {
+        name: 'Everyone',
+        project: { id: projectId }
+      },
+      select: ['id', 'permissionFlags'],
     });
-    // TODO: Guarantee that the Everyone role exists for every project
-    if (/* unreachable */ !everyoneRole) {
+
+    if (!everyoneRole) {
       throw new NotFoundException(
-        'Everyone role not found for this discussion thread'
+        'Everyone role not found for this project'
       );
     }
-    userRoles.unshift(everyoneRole);
+
+    // Add Everyone role to the list if user is not already in it
+    const userHasEveryoneRole = userRoles.some(role => role.id === everyoneRole.id);
+    if (!userHasEveryoneRole) {
+      userRoles.unshift(everyoneRole);
+    }
+
     let resultPermission = new Permission(PermissionFlags.None);
+
     for (const role of userRoles) {
+      // Start with the role's base permissions
+      let rolePermission = role.permissionFlags || new Permission(PermissionFlags.None);
+
+      // Check for access policy overrides
       const overrides = await this.discussionAccessPolicyRepository.findOne({
         where: {
           thread: { id: threadId },
           role: { id: role.id },
         },
       });
+
       if (overrides) {
-        resultPermission = resultPermission
+        // Apply overrides: add allowOverrides, remove denyOverrides
+        rolePermission = rolePermission
           .add(overrides.allowOverrides ?? PermissionFlags.None)
           .remove(overrides.denyOverrides ?? PermissionFlags.None);
       }
+
+      // Combine with overall result
+      resultPermission = resultPermission.add(rolePermission);
     }
+
+    // If user has ViewProject permission, they should also have ViewThread permission
+    if (resultPermission.has(PermissionFlags.ViewProject)) {
+      resultPermission = resultPermission.add(PermissionFlags.ViewThread);
+    }
+
     return resultPermission;
   }
 
@@ -93,8 +137,8 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
   ) {
     const threadAccessPolicy = await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
-      select: ['accessPolicy'],
-      relations: ['accessPolicy'],
+      select: ['accessPolicies'],
+      relations: ['accessPolicies'],
     });
 
     if (!threadAccessPolicy) {
@@ -160,22 +204,45 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       PermissionFlags.ManageDiscussions
     );
     const { title, description } = discussionData;
+
+    // 1. Tạo discussion trước (chưa có accessPolicies)
     const discussion = this.discussionThreadRepository.create({
       project: { id: projectId },
       title,
       description,
-      accessPolicy: [
-        {
-          role: { name: 'Everyone', project: { id: projectId } },
-        },
-      ],
     });
+    await this.discussionThreadRepository.save(discussion);
 
-    try {
-      return await this.discussionThreadRepository.save(discussion);
-    } catch (error) {
-      this.unknownErrorHanlder(error, 'Failed to create discussion');
+    // 2. Lấy entity role
+    const everyoneRole = await this.projectRoleRepository.findOne({
+      where: { name: 'Everyone', project: { id: projectId } },
+    });
+    if (!everyoneRole) {
+      throw new NotFoundException('Everyone role not found for this project');
     }
+
+    // 3. Kiểm tra accessPolicy đã tồn tại chưa
+    const existingPolicy = await this.discussionAccessPolicyRepository.findOne({
+      where: {
+        thread: { id: discussion.id },
+        role: { id: everyoneRole.id },
+      },
+    });
+    let accessPolicy;
+    if (!existingPolicy) {
+      accessPolicy = this.discussionAccessPolicyRepository.create({
+        role: everyoneRole,
+        thread: discussion,
+        allowOverrides: new Permission(PermissionFlags.None),
+        denyOverrides: new Permission(PermissionFlags.None),
+      });
+      await this.discussionAccessPolicyRepository.save(accessPolicy);
+    } else {
+      accessPolicy = existingPolicy;
+    }
+    // 4. Gán accessPolicies cho discussion (nếu muốn trả về đầy đủ)
+    discussion.accessPolicies = [accessPolicy];
+    return discussion;
   }
   async updateDiscussionMetadata(
     uid: bigint,
@@ -197,29 +264,40 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     const updateData: DeepPartial<ProjectDiscussionThreadEntity> = {};
     if (title) updateData.title = title;
     if (description) updateData.description = description;
-    if (accessPolicy)
-      updateData.accessPolicy = accessPolicy.map((policy) => {
-        const transformedPolicy: DeepPartial<DiscussionAccessPolicyEntity> = {
-          role: { id: BigInt(policy.roleId) },
-        };
-        if (typeof policy.allowOverrides === 'bigint') {
-          transformedPolicy.allowOverrides = new Permission(
-            policy.allowOverrides
-          );
+
+    if (accessPolicy) {
+      // Handle access policy updates properly to avoid duplicate entries
+      for (const policy of accessPolicy) {
+        // Check if policy already exists
+        const existingPolicy = await this.discussionAccessPolicyRepository.findOne({
+          where: {
+            thread: { id: threadId },
+            role: { id: policy.roleId },
+          },
+        });
+
+        if (existingPolicy) {
+          // Update existing policy
+          await this.discussionAccessPolicyRepository.save({
+            id: existingPolicy.id,
+            allowOverrides: policy.allowOverrides,
+            denyOverrides: policy.denyOverrides,
+          });
+        } else {
+          // Create new policy
+          await this.discussionAccessPolicyRepository.save({
+            thread: { id: threadId },
+            role: { id: policy.roleId },
+            allowOverrides: policy.allowOverrides,
+            denyOverrides: policy.denyOverrides,
+          });
         }
-        if (typeof policy.denyOverrides === 'bigint') {
-          transformedPolicy.denyOverrides = new Permission(
-            policy.denyOverrides
-          );
-        }
-        return transformedPolicy;
-      });
+      }
+    }
 
     try {
-      return await this.discussionThreadRepository.save({
-        id: threadId,
-        ...updateData,
-      });
+      await this.discussionThreadRepository.update(threadId, updateData);
+      return await this.discussionThreadRepository.findOne({ where: { id: threadId } });
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to update discussion metadata');
     }
@@ -237,19 +315,44 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       PermissionFlags.ManageDiscussions
     );
 
-    const isArchived = await this.discussionThreadRepository.exists({
-      where: { id: threadId, isArchived: true },
+    const discussion = await this.discussionThreadRepository.findOne({
+      where: { id: threadId },
+      select: ['isArchived'],
     });
-    if (isArchived) {
-      throw new BadRequestException('Discussion is already archived');
+
+    if (!discussion) {
+      throw new NotFoundException('Discussion not found');
     }
+
+    // Toggle archive status
+    const newArchiveStatus = !discussion.isArchived;
+
     try {
-      return await this.discussionThreadRepository.save({
-        id: threadId,
-        isArchived: true,
-      });
+      await this.discussionThreadRepository.update(threadId, { isArchived: newArchiveStatus });
+      return await this.discussionThreadRepository.findOne({ where: { id: threadId } });
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to archive discussion');
+    }
+  }
+
+  async deleteDiscussion(uid: bigint, projectId: bigint, threadId: bigint) {
+    const discussionExists = await this.discussionThreadRepository.exists({
+      where: { id: threadId },
+    });
+    if (!discussionExists) {
+      throw new NotFoundException('Unknown discussion thread');
+    }
+    await this.projectManager.testPermissions(
+      projectId,
+      uid,
+      PermissionFlags.ManageDiscussions
+    );
+
+    try {
+      await this.discussionThreadRepository.delete({ id: threadId });
+      return { message: 'Discussion deleted successfully' };
+    } catch (error) {
+      this.unknownErrorHanlder(error, 'Failed to delete discussion');
     }
   }
   async postComment(

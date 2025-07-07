@@ -47,6 +47,7 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdf-parse": "^1.1.1",
+    "pinia": "^3.0.3",
     "primeicons": "^6.0.1",
     "primevue": "^3.53.1",
     "reflect-metadata": "^0.1.13",

@@ -4,7 +4,7 @@ import { FileService } from '../service/file-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
-import { Response } from 'express';
+import type { Response } from 'express';
 
 @Controller('files')
 export class FileController {
@@ -53,4 +53,16 @@ export class FileController {
     });
     res.send(file.fileContent);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadRequestFile(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.fileService.uploadFileForRequest(file, req.user.id, requestId);
+  }
+
 }

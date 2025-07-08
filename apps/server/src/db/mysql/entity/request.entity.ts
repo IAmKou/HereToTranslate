@@ -1,8 +1,18 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, ManyToMany, JoinTable } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  ManyToMany,
+  JoinTable,
+  OneToMany
+} from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 import { CategoryEntity } from './category.entity';
 import { ProjectTagEntity } from './project-tag.entity';
+import { FileEntity } from './file.entity';
 
 export enum RequestStatus {
   Cancelled = 'CANCELLED',
@@ -64,4 +74,10 @@ export class RequestEntity {
     inverseJoinColumn: { name: 'tagId', referencedColumnName: 'id' }
   })
   tags: ProjectTagEntity[];
+
+  @OneToMany(() => FileEntity, file => file.request, {
+    cascade: true
+  })
+  files: FileEntity[];
+
 }

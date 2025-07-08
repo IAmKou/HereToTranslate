@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, Logger } from '@nestjs/common';
-import { BranchEntity, FileEntity, ProjectEntity, UserEntity } from '#LocalProject/Entities';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import  { Express } from 'express';
@@ -12,6 +12,8 @@ export class FileService {
   constructor(
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
+    @InjectRepository(RequestEntity)
+    private readonly requestRepository: Repository<RequestEntity>,
     private readonly githubService: GitHubService,
     private readonly translationService : TranslationService,
   ) {
@@ -25,19 +27,21 @@ export class FileService {
     fileName: string;
     fileType: string;
     fileContent: Buffer;
-    projectId: bigint;
-    branchId: bigint;
+    projectId?: bigint;
+    branchId?: bigint;
+    requestId?: bigint;
   }) {
     this.logger.log('===DEBUG FILE NAME saveFile===');
-    const { uid, fileName, fileType, fileContent, projectId, branchId } = params;
+    const { uid, fileName, fileType, fileContent, projectId, branchId, requestId } = params;
 
     const file = this.fileRepository.create({
       fileName,
       fileType,
       fileContent,
       uploader: { id: uid },
-      project: { id: projectId },
-      branch: { id: branchId },
+      project: projectId ? { id: projectId } : undefined,
+      branch: branchId ? { id: branchId } : undefined,
+      request: requestId ? { id: requestId } : undefined,
     });
 
     this.logger.log(`Saving file: ${fileName}, type: ${fileType}, projectId: ${projectId}, branchId: ${branchId}, uploader: ${uid}`);
@@ -67,8 +71,9 @@ export class FileService {
   async handleUpload(
     file: Express.Multer.File,
     uid: bigint,
-    projectId: bigint,
-    branchId: bigint,
+    projectId?: bigint,
+    branchId?: bigint,
+    requestId?: bigint,
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
     const saved = await this.saveFile({
@@ -78,6 +83,7 @@ export class FileService {
       fileContent: file.buffer,
       projectId,
       branchId,
+      requestId,
     });
 
     await this.translationService.extractStrings(saved);
@@ -132,4 +138,29 @@ export class FileService {
     if (!file) throw new Error('File not found');
     return file;
   }
+
+  async uploadFileForRequest(
+    file: Express.Multer.File,
+    uid: bigint,
+    requestId: bigint
+  ) {
+    const request = await this.requestRepository.findOne({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('Request not found');
+
+    const saved = await this.saveFile({
+      uid,
+      fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
+      fileType: file.mimetype,
+      fileContent: file.buffer,
+      requestId,
+    });
+
+    await this.translationService.extractStrings(saved);
+
+    return {
+      message: 'File uploaded and linked to request',
+      fileId: saved.id,
+    };
+  }
+
 }

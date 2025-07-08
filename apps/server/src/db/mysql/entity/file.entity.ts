@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, Up
 import { ProjectEntity } from './project.entity';
 import { BranchEntity } from './branch.entity';
 import { UserEntity } from './user.entity';
+import { RequestEntity } from './request.entity';
 
 @Entity('file')
 export class FileEntity {
@@ -34,4 +35,8 @@ export class FileEntity {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @ManyToOne(() => RequestEntity, {nullable: true})
+  request: RequestEntity;
+
 }

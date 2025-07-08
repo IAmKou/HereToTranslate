@@ -138,4 +138,5 @@ export class RequestController {
     @Param('requestId', BigIntTransformPipe) requestId: bigint) {
     return this.requests.declinePrivateRequest(requestId);
   }
+
 }

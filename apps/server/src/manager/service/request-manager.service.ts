@@ -4,7 +4,10 @@ import {
   RequestEntity,
   RequestStatus,
   UserEntity,
-  ProjectTagEntity, TransactionStatus, TransactionEntity, WalletEntity
+  ProjectTagEntity,
+  TransactionStatus,
+  TransactionEntity,
+  WalletEntity,
 } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
@@ -19,6 +22,7 @@ import { MailService } from '../../mailer/mailer.service';
 import { ChatService } from '../../chat/chat.service';
 import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
 import { WalletManagerService } from '#LocalProject/Managers/service/wallet-manager.service';
+import { FileService } from '#LocalProject/Managers/service/file-manager.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -39,23 +43,41 @@ export class RequestManagerService {
     private readonly walletService: WalletManagerService,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
-    private readonly paymentService: PaypalService
+    private readonly paymentService: PaypalService,
+    private readonly fileService: FileService,
   ) {}
 
-  async createRequest(dto: CreateRequestDto, uid: bigint): Promise<{ request: RequestEntity; approvalUrl?: string }> {
+  async createRequest(
+    dto: CreateRequestDto,
+    uid: bigint
+  ): Promise<{ request: RequestEntity; approvalUrl?: string }> {
     const DAY = 24 * 60 * 60 * 1000;
-    const { title, description, dealAmount, deadline: deadlineRaw, isPublic } = dto;
+    const {
+      title,
+      description,
+      dealAmount,
+      deadline: deadlineRaw,
+      isPublic,
+    } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
-      throw new BadRequestException(`Deadline must be at least 7 days from now`);
+      throw new BadRequestException(
+        `Deadline must be at least 7 days from now`
+      );
     }
 
     const request = this.requestRepository.create({
       requester: { id: uid } as any,
-      project: dto.projectId ? { id: BigInt(dto.projectId) } as any : undefined,
-      registrants: dto.assigneeId ? [{ id: BigInt(dto.assigneeId) }] as any : [],
-      assignee: dto.assigneeId ? { id: BigInt(dto.assigneeId) } as any : undefined,
+      project: dto.projectId
+        ? ({ id: BigInt(dto.projectId) } as any)
+        : undefined,
+      registrants: dto.assigneeId
+        ? ([{ id: BigInt(dto.assigneeId) }] as any)
+        : [],
+      assignee: dto.assigneeId
+        ? ({ id: BigInt(dto.assigneeId) } as any)
+        : undefined,
       title,
       description,
       dealAmount,
@@ -63,7 +85,9 @@ export class RequestManagerService {
       createdAt: new Date(),
       status: RequestStatus.Pending,
       isPublic,
-      category: dto.categoryId ? { id: BigInt(dto.categoryId) } as any : undefined,
+      category: dto.categoryId
+        ? ({ id: BigInt(dto.categoryId) } as any)
+        : undefined,
     });
 
     const savedRequest = await this.requestRepository.save(request);
@@ -71,23 +95,33 @@ export class RequestManagerService {
     let approvalUrl: string | undefined;
 
     if (!isPublic) {
-      const requesterUser = await this.userRepository.findOneOrFail({ where: { id: uid } });
-      const assigneeUser = await this.userRepository.findOne({ where: { id: BigInt(dto.assigneeId) } });
+      const requesterUser = await this.userRepository.findOneOrFail({
+        where: { id: uid },
+      });
+      const assigneeUser = await this.userRepository.findOne({
+        where: { id: BigInt(dto.assigneeId) },
+      });
 
       if (assigneeUser?.email) {
-        await this.mailService.sendPrivateRequestConfirmation(assigneeUser.email, {
-          title,
-          deadline,
-          username: requesterUser.username,
-        });
+        await this.mailService.sendPrivateRequestConfirmation(
+          assigneeUser.email,
+          {
+            title,
+            deadline,
+            username: requesterUser.username,
+          }
+        );
       }
 
-      approvalUrl = await this.paymentService.createDeposit(dealAmount, requesterUser, savedRequest);
+      approvalUrl = await this.paymentService.createDeposit(
+        dealAmount,
+        requesterUser,
+        savedRequest
+      );
     }
 
     return { request: savedRequest, approvalUrl };
   }
-
 
   async searchUsers(
     keyword: string,
@@ -175,8 +209,8 @@ export class RequestManagerService {
       ...r,
       isRegistered: r.registrants
         ? r.registrants.some(
-          (u: UserEntity) => u.id.toString() === userId.toString()
-        )
+            (u: UserEntity) => u.id.toString() === userId.toString()
+          )
         : false,
     }));
   }
@@ -225,42 +259,55 @@ export class RequestManagerService {
         'requests.status',
         'requests.createdAt',
         'requests.isPublic',
+
         'requester.id',
         'requester.username',
         'requester.fullName',
         'requester.email',
         'requester.phone',
+
         'assignee.id',
         'assignee.fullName',
         'assignee.email',
         'assignee.phone',
+
         'category.name',
+
         'tags.id',
         'tags.name',
+
+        'files.id',
+        'files.fileName',
+        'files.fileType',
+        'files.createdAt',
       ])
-      .where('requests.id = :requestId', { requestId: requestId })
+      .where('requests.id = :requestId', { requestId })
       .leftJoin('requests.requester', 'requester')
       .leftJoin('requests.assignee', 'assignee')
       .leftJoin('requests.category', 'category')
       .leftJoinAndSelect('requests.tags', 'tags')
-      .leftJoinAndSelect('requests.registrants', 'registrants');
+      .leftJoinAndSelect('requests.registrants', 'registrants')
+      .leftJoinAndSelect('requests.files', 'files');
 
     const request = await query.getOne();
+
     let isRegistered = false;
-    if (request && request.registrants) {
+    if (request?.registrants) {
       isRegistered = request.registrants.some(
         (u: UserEntity) => u.id.toString() === userId.toString()
       );
     }
+
     return { ...request, isRegistered };
   }
 
   async updateRequest(
     uid: bigint,
     requestId: bigint,
-    data: Partial<UpdateRequestDto>
+    data: Partial<UpdateRequestDto> & { files?: Express.Multer.File[] }
   ) {
-    const { title, description, dealAmount, deadline, categoryId, tags } = data;
+    const { title, description, dealAmount, deadline, categoryId, tags, files } = data;
+    const DAY = 24 * 60 * 60 * 1000;
 
     if (
       !title &&
@@ -268,7 +315,8 @@ export class RequestManagerService {
       !dealAmount &&
       !deadline &&
       !categoryId &&
-      !tags
+      !tags &&
+      (!files || files.length === 0)
     ) {
       throw new BadRequestException(`No fields to update`);
     }
@@ -278,17 +326,11 @@ export class RequestManagerService {
       relations: ['requester', 'category', 'tags'],
     });
 
-    if (!request) {
-      throw new NotFoundException(`Unknown request`);
-    }
-
-    if (request.requester.id !== uid) {
+    if (!request) throw new NotFoundException(`Unknown request`);
+    if (request.requester.id !== uid)
       throw new BadRequestException(`You are not the creator of this request`);
-    }
-
-    if (request.status !== RequestStatus.Pending) {
+    if (request.status !== RequestStatus.Pending)
       throw new BadRequestException(`Request is not in pending status`);
-    }
 
     if (deadline) {
       const datelineValue = new Date(deadline);
@@ -308,9 +350,7 @@ export class RequestManagerService {
       const category = await this.categoryRepository.findOne({
         where: { id: BigInt(categoryId) },
       });
-      if (!category) {
-        throw new BadRequestException(`Category not found`);
-      }
+      if (!category) throw new BadRequestException(`Category not found`);
       request.category = category;
     }
 
@@ -332,8 +372,22 @@ export class RequestManagerService {
 
       request.tags = requestTags;
     }
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        await this.fileService.saveFile({
+          uid,
+          fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
+          fileType: file.mimetype,
+          fileContent: file.buffer,
+          requestId,
+        });
+      }
+    }
+
     return this.requestRepository.save(request);
   }
+
 
   async cancelRequest(uid: bigint, requestId: bigint) {
     const request = await this.requestRepository.findOne({
@@ -412,7 +466,13 @@ export class RequestManagerService {
 
     return this.userRepository
       .createQueryBuilder('user')
-      .select(['user.id', 'user.fullName', 'user.email', 'user.phone', 'user.createdAt'])
+      .select([
+        'user.id',
+        'user.fullName',
+        'user.email',
+        'user.phone',
+        'user.createdAt',
+      ])
       .whereInIds(registrantIds)
       .getMany();
   }
@@ -453,7 +513,9 @@ export class RequestManagerService {
     });
 
     if (request.status !== RequestStatus.Pending || request.isPublic) {
-      throw new BadRequestException('Only private and pending requests can be declined');
+      throw new BadRequestException(
+        'Only private and pending requests can be declined'
+      );
     }
 
     const transaction = await this.transactionRepository.findOne({
@@ -468,7 +530,9 @@ export class RequestManagerService {
       throw new NotFoundException('No matching deposit transaction found');
     }
 
-    const wallet = await this.walletService.getOrCreateWallet(request.requester.id);
+    const wallet = await this.walletService.getOrCreateWallet(
+      request.requester.id
+    );
     wallet.balance = Number(wallet.balance) + Number(transaction.amount);
 
     transaction.status = TransactionStatus.Failed;
@@ -480,5 +544,4 @@ export class RequestManagerService {
 
     return true;
   }
-
 }

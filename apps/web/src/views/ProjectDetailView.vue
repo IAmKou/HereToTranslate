@@ -112,12 +112,12 @@
                         title="Private"
                       >
                         <span class="badge-icon"
-                          ><svg
-                            fill="none"
-                            height="16"
-                            viewBox="0 0 20 20"
-                            width="16"
-                          >
+                        ><svg
+                          fill="none"
+                          height="16"
+                          viewBox="0 0 20 20"
+                          width="16"
+                        >
                             <path
                               d="M6 9V7a4 4 0 118 0v2"
                               stroke="#b7791f"
@@ -165,8 +165,8 @@
                     <div class="meta-item">
                       <span class="meta-icon">📅</span>
                       <span class="meta-text">{{
-                        formatDate(project.createdAt)
-                      }}</span>
+                          formatDate(project.createdAt)
+                        }}</span>
                     </div>
                   </div>
                 </div>
@@ -349,16 +349,16 @@
                                 @mousedown.prevent="selectUserSuggest(idx)"
                               >
                                 <span class="avatar-text">{{
-                                  (suggest.fullName || suggest.username)
-                                    .charAt(0)
-                                    .toUpperCase()
-                                }}</span>
+                                    (suggest.fullName || suggest.username)
+                                      .charAt(0)
+                                      .toUpperCase()
+                                  }}</span>
                                 <span class="suggest-name">{{
-                                  suggest.fullName || suggest.username
-                                }}</span>
+                                    suggest.fullName || suggest.username
+                                  }}</span>
                                 <span class="suggest-email">{{
-                                  suggest.email
-                                }}</span>
+                                    suggest.email
+                                  }}</span>
                               </li>
                             </ul>
                           </div>
@@ -400,13 +400,13 @@
                         <div class="user-info">
                           <div class="user-avatar">
                             <span class="avatar-text">{{
-                              (
-                                userSearch.result.fullName ||
-                                userSearch.result.username
-                              )
-                                .charAt(0)
-                                .toUpperCase()
-                            }}</span>
+                                (
+                                  userSearch.result.fullName ||
+                                  userSearch.result.username
+                                )
+                                  .charAt(0)
+                                  .toUpperCase()
+                              }}</span>
                           </div>
                           <div class="user-details">
                             <h4>
@@ -442,6 +442,14 @@
                         <span class="title-icon">👥</span>
                         Project Members
                       </h2>
+                      <div style="margin-left:auto; display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" @click="showAddRoleModal = true">
+                          <span class="icon">➕</span> Add Role
+                        </button>
+                        <button class="btn btn-outline" @click="showRoleModal = true">
+                          <span class="icon">🛡️</span> Manage Roles
+                        </button>
+                      </div>
                     </div>
                     <div class="members-content">
                       <div v-if="membersLoading" class="members-loading">
@@ -464,58 +472,49 @@
                       >
                         <table class="members-table">
                           <thead>
-                            <tr>
-                              <th @click="sortBy('name')">User</th>
-                              <th @click="sortBy('roles')">Roles</th>
-                              <th>Actions</th>
-                            </tr>
+                          <tr>
+                            <th>No.</th>
+                            <th @click="sortBy('name')">User</th>
+                            <th @click="sortBy('roles')">Roles</th>
+                            <th>Actions</th>
+                          </tr>
                           </thead>
                           <tbody>
-                            <tr v-for="member in members" :key="member.id">
-                              <td>
-                                <div
-                                  :title="
-                                    member.fullName + ' - ' + member.email
-                                  "
-                                  class="user-cell"
-                                >
-                                  <div class="user-avatar">
-                                    {{
-                                      (member.fullName || member.username)
-                                        .charAt(0)
-                                        .toUpperCase()
-                                    }}
-                                  </div>
-                                  <div class="user-info">
-                                    <div class="user-name">
-                                      {{ member.fullName || member.username }}
-                                    </div>
-                                    <div class="user-email">
-                                      {{ member.email }}
-                                    </div>
-                                  </div>
+                          <tr v-for="(member, idx) in members" :key="member.id">
+                            <td>{{ idx + 1 }}</td>
+                            <td>
+                              <div :title="member.fullName + ' - ' + member.email" class="user-cell">
+                                <div class="user-avatar">
+                                  {{ (member.fullName || member.username).charAt(0).toUpperCase() }}
                                 </div>
-                              </td>
-                              <td>
-                                <span
-                                  v-for="role in member.roles"
-                                  :key="role.id"
-                                  class="role-badge"
-                                  :title="getRoleDescription(role.name)"
-                                >
-                                  {{ role.name }}
-                                </span>
-                              </td>
-                              <td>
-                                <button
-                                  class="edit-role-btn"
-                                  title="Edit Roles"
-                                  @click="editRoles(member)"
-                                >
-                                  <i class="pi pi-pencil"></i>
-                                </button>
-                              </td>
-                            </tr>
+                                <div class="user-info">
+                                  <div class="user-name">{{ member.fullName || member.username }}</div>
+                                  <div class="user-email">{{ member.email }}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span
+                                v-if="member.id === project.createdBy.id"
+                                class="role-badge owner-badge"
+                                title="Project Owner"
+                                style="background: #fefcbf; color: #b7791f; border: 1.5px solid #b7791f; font-weight: bold;"
+                              >
+                                Project Owner
+                              </span>
+                              <span
+                                v-for="role in displayRoles(member, project)"
+                                :key="role.id"
+                                class="role-badge"
+                                :title="getRoleDescription(role.name)"
+                              >
+                                {{ role.name }}
+                              </span>
+                            </td>
+                            <td>
+                              <!-- Xoá nút edit role ở đây, không render gì nữa -->
+                            </td>
+                          </tr>
                           </tbody>
                         </table>
                       </div>
@@ -561,8 +560,8 @@
                             <div class="group-header">
                               <span class="group-name">{{ group.name }}</span>
                               <span class="group-badge">{{
-                                group.permissionFlags
-                              }}</span>
+                                  group.permissionFlags
+                                }}</span>
                             </div>
                             <div class="members-info">
                               <span class="members-count">
@@ -935,6 +934,44 @@
           <span class="toast-icon">✅</span>
           <span>Saved successfully!</span>
         </div>
+
+        <ProjectRoleManagementView
+          v-if="showRoleModal"
+          :project-id="project?.id"
+          @close="showRoleModal = false"
+          @roles-updated="handleRolesUpdated"
+        />
+
+        <div v-if="showEditUserRoleModal" class="modal-overlay" @click.self="showEditUserRoleModal = false">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Edit Roles for {{ memberToEdit?.fullName || memberToEdit?.username }}</h3>
+            </div>
+            <div class="modal-body">
+              <div v-if="project && project.projectRoles">
+                <input v-model="roleSearch" placeholder="Search roles..." class="role-search-box" />
+                <div class="role-grid">
+                  <label v-for="role in filteredRoles" :key="role.id" class="role-card" :class="{ selected: selectedRoles.includes(role.id) }">
+                    <input type="checkbox" :value="role.id" v-model="selectedRoles" />
+                    <span class="role-name">{{ role.name }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="showEditUserRoleModal = false">Cancel</button>
+              <button class="btn btn-primary" @click="saveUserRoles" :disabled="!memberToEdit">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <ProjectRoleManagementView
+          v-if="showAddRoleModal"
+          :project-id="project?.id"
+          :show-create-role-modal="true"
+          @close="showAddRoleModal = false"
+          @roles-updated="handleRolesUpdated"
+        />
       </div>
     </div>
   </div>
@@ -949,6 +986,7 @@ import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
 import DiscussionSection from '../components/DiscussionSection.vue';
+import ProjectRoleManagementView from './ProjectRoleManagementView.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -1017,6 +1055,11 @@ const isCreatingGroup = ref(false);
 const showDeleteModal = ref(false);
 const showSuccessModal = ref(false);
 const showAddUserSuccessModal = ref(false);
+const showRoleModal = ref(false);
+const showEditUserRoleModal = ref(false);
+const memberToEdit = ref<any>(null);
+const selectedRoles = ref<string[]>([]);
+const showAddRoleModal = ref(false);
 
 // Form data
 const newGroup = ref<CreateGroupData>({
@@ -1211,6 +1254,14 @@ const addUserToProject = async () => {
     await axiosInstance.post(`/projects/${project.value.id}/add-user`, {
       identifier: userSearch.value.result.email,
     });
+    // Sau khi thêm user, gán role Everyone nếu có
+    const everyoneRole = project.value.projectRoles?.find((r: any) => r.name === 'Everyone');
+    if (everyoneRole) {
+      // Gọi API gán role cho user mới
+      await axiosInstance.post(`/projects/${project.value.id}/members/${userSearch.value.result.id}/update-roles`, {
+        roleIds: [everyoneRole.id]
+      });
+    }
     await loadProject();
     showAddUserSuccessModal.value = true;
     userSearch.value.result = null;
@@ -1243,25 +1294,16 @@ const loadMembers = async () => {
   try {
     const projectId = route.params.projectId as string;
     const { data } = await axiosInstance.get(`/projects/${projectId}/members`);
-
-    const memberMap: Record<
-      string,
-      {
-        id: string;
-        username: string;
-        fullName?: string;
-        email: string;
-        roles: Array<{ id: string; name: string }>;
-        selectedRole: string;
-      }
-    > = {};
-
+    // Map lại member.roles đúng chuẩn
+    const memberMap: Record<string, any> = {};
     if (data.members) {
       for (const m of data.members) {
-        memberMap[m.id] = { ...m, roles: [], selectedRole: '' };
+        // Nếu API trả về roles lồng trong user
+        let roles = Array.isArray(m.roles) ? m.roles.filter((r: any) => r && r.id && r.name) : [];
+        memberMap[m.id] = { ...m, roles, selectedRole: '' };
       }
     }
-
+    // Nếu API trả về projectRoles có users, map lại roles cho từng user
     if (data.projectRoles) {
       for (const role of data.projectRoles) {
         if (role.users) {
@@ -1269,12 +1311,20 @@ const loadMembers = async () => {
             if (!memberMap[user.id]) {
               memberMap[user.id] = { ...user, roles: [], selectedRole: '' };
             }
-            memberMap[user.id].roles.push({ id: role.id, name: role.name });
+            // Tránh trùng role
+            if (!memberMap[user.id].roles.some((r: any) => r.id === role.id)) {
+              memberMap[user.id].roles.push({ id: role.id, name: role.name });
+            }
           }
         }
       }
     }
-
+    // Log để debug nếu roles bị rỗng
+    Object.values(memberMap).forEach((m: any) => {
+      if (!m.roles || m.roles.length === 0) {
+        console.warn('User has no roles:', m);
+      }
+    });
     members.value = Object.values(memberMap);
   } catch (err: any) {
     membersError.value = err.message || 'Failed to load members.';
@@ -1433,8 +1483,9 @@ function getRoleDescription(roleName: string) {
   return 'Project role';
 }
 function editRoles(member: any) {
-  // TODO: Open edit roles dialog/modal
-  alert('Edit roles for: ' + (member.fullName || member.username));
+  memberToEdit.value = member;
+  selectedRoles.value = (member.roles || []).filter((r: any) => r && r.id && r.name).map((r: any) => r.id);
+  showEditUserRoleModal.value = true;
 }
 function sortBy(field: string) {
   // TODO: Implement sorting logic
@@ -1480,6 +1531,72 @@ function selectUserSuggest(idx?: number) {
     // Tự động submit form khi chọn suggest
     searchUser();
   });
+}
+
+function handleRolesUpdated() {
+  loadMembers();
+}
+
+async function saveUserRoles() {
+  if (!project.value || !memberToEdit.value) return;
+  // Lấy danh sách role hiện tại của user từ backend (chắc chắn)
+  const oldRoleIds: string[] = (memberToEdit.value.roles || []).filter((r: any) => r && r.id).map((r: any) => r.id);
+  const newRoleIds: string[] = selectedRoles.value;
+  // Chỉ add nếu user chưa có role đó
+  const rolesToAdd = newRoleIds.filter((id) => !oldRoleIds.includes(id));
+  // Chỉ remove nếu user thực sự có role đó
+  const rolesToRemove = oldRoleIds.filter((id) => !newRoleIds.includes(id));
+  console.log('oldRoleIds:', oldRoleIds);
+  console.log('newRoleIds:', newRoleIds);
+  console.log('rolesToAdd:', rolesToAdd);
+  console.log('rolesToRemove:', rolesToRemove);
+  try {
+    for (const roleId of rolesToAdd) {
+      await axiosInstance.post(`/projects/${project.value.id}/roles/${roleId}/users/add`, {
+        userIds: [memberToEdit.value.id],
+      });
+    }
+    for (const roleId of rolesToRemove) {
+      await axiosInstance.post(`/projects/${project.value.id}/roles/${roleId}/users/remove`, {
+        userIds: [memberToEdit.value.id],
+      });
+    }
+    showEditUserRoleModal.value = false;
+    await loadMembers();
+    showSavedSnackbar.value = true;
+    setTimeout(() => (showSavedSnackbar.value = false), 2000);
+  } catch (err: any) {
+    alert('Failed to update roles: ' + (err?.message || err));
+  }
+}
+
+const roleSearch = ref('');
+const filteredRoles = computed(() => {
+  if (!project.value?.projectRoles) return [];
+  // Log để debug dữ liệu roles
+  console.log('projectRoles:', project.value.projectRoles);
+  // Lọc role hợp lệ (có id và name)
+  const validRoles = project.value.projectRoles.filter((r: any) => r && r.id && r.name);
+  if (!roleSearch.value) return validRoles;
+  return validRoles.filter((r: any) => r.name.toLowerCase().includes(roleSearch.value.toLowerCase()));
+});
+
+// Thêm log để debug filteredRoles và selectedRoles khi mở modal edit roles
+watch(filteredRoles, (val: any[]) => {
+  console.log('filteredRoles:', val);
+});
+watch(selectedRoles, (val: string[]) => {
+  console.log('selectedRoles:', val);
+});
+
+function displayRoles(member: any, project: Project) {
+  if (!member.roles) return [];
+  return member.roles.filter(
+    (role: any) =>
+      role &&
+      role.name &&
+      !(member.id === project.createdBy.id && role.name === 'Project Owner')
+  );
 }
 </script>
 
@@ -1590,7 +1707,7 @@ function selectUserSuggest(idx?: number) {
   background: white;
   border-radius: 20px;
   box-shadow: 0 24px 64px rgba(76, 34, 128, 0.18),
-    0 2px 8px rgba(49, 130, 206, 0.1);
+  0 2px 8px rgba(49, 130, 206, 0.1);
   overflow: hidden;
   margin-bottom: 2rem;
   position: relative;
@@ -1616,7 +1733,7 @@ function selectUserSuggest(idx?: number) {
   background: white;
   border-radius: 20px;
   box-shadow: 0 24px 64px rgba(49, 130, 206, 0.13),
-    0 2px 8px rgba(76, 34, 128, 0.1);
+  0 2px 8px rgba(76, 34, 128, 0.1);
   overflow: hidden;
   margin-bottom: 2rem;
   position: relative;
@@ -1767,7 +1884,7 @@ function selectUserSuggest(idx?: number) {
   background: white;
   border-radius: 20px;
   box-shadow: 0 24px 64px rgba(49, 130, 206, 0.13),
-    0 2px 8px rgba(76, 34, 128, 0.1);
+  0 2px 8px rgba(76, 34, 128, 0.1);
   overflow: hidden;
   margin-bottom: 2rem;
   position: relative;
@@ -2187,7 +2304,7 @@ function selectUserSuggest(idx?: number) {
 .stat-card-clickable:hover {
   transform: scale(1.045) translateY(-6px);
   box-shadow: 0 18px 40px rgba(49, 130, 206, 0.18),
-    0 2px 8px rgba(76, 34, 128, 0.1);
+  0 2px 8px rgba(76, 34, 128, 0.1);
   z-index: 2;
 }
 .stat-icon {
@@ -4237,5 +4354,69 @@ function selectUserSuggest(idx?: number) {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: break-word;
+}
+
+.role-search-box {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.role-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  background: #f7fafc;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+  padding: 1rem 1rem 1rem 0.8rem;
+  cursor: pointer;
+  transition: box-shadow 0.18s, border 0.18s, background 0.18s;
+  position: relative;
+}
+.role-card.selected {
+  border-color: #4299e1;
+  background: #ebf8ff;
+  box-shadow: 0 2px 8px #3182ce22;
+}
+.role-card:hover {
+  border-color: #4299e1;
+  background: #e6f0fa;
+}
+.role-card input[type='checkbox'] {
+  margin-top: 3px;
+}
+.role-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.role-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 1rem;
+}
+.role-desc {
+  color: #718096;
+  font-size: 0.92rem;
+}
+@media (max-width: 600px) {
+  .role-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.owner-badge {
+  background: #fefcbf;
+  color: #b7791f;
+  border: 1.5px solid #b7791f;
+  margin-right: 0.3rem;
 }
 </style>

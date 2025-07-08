@@ -4,7 +4,7 @@ import {
   RequestEntity,
   RequestStatus,
   UserEntity,
-  ProjectTagEntity,
+  ProjectTagEntity, TransactionStatus, TransactionEntity, WalletEntity
 } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
@@ -18,6 +18,7 @@ import { DAY } from '#LocalProject/Utils/common';
 import { MailService } from '../../mailer/mailer.service';
 import { ChatService } from '../../chat/chat.service';
 import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
+import { WalletManagerService } from '#LocalProject/Managers/service/wallet-manager.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -31,37 +32,30 @@ export class RequestManagerService {
     private readonly categoryRepository: Repository<CategoryEntity>,
     @InjectRepository(ProjectTagEntity)
     private readonly projectTagRepository: Repository<ProjectTagEntity>,
+    @InjectRepository(TransactionEntity)
+    private readonly transactionRepository: Repository<TransactionEntity>,
+    @InjectRepository(WalletEntity)
+    private readonly walletRepository: Repository<WalletEntity>,
+    private readonly walletService: WalletManagerService,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
     private readonly paymentService: PaypalService
   ) {}
 
-  async createRequest(
-    dto: CreateRequestDto,
-    uid: bigint
-  ): Promise<RequestEntity> {
+  async createRequest(dto: CreateRequestDto, uid: bigint): Promise<{ request: RequestEntity; approvalUrl?: string }> {
     const DAY = 24 * 60 * 60 * 1000;
-    const {
-      title,
-      description,
-      dealAmount,
-      deadline: deadlineRaw,
-      isPublic,
-    } = dto;
-
+    const { title, description, dealAmount, deadline: deadlineRaw, isPublic } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
-      throw new BadRequestException(
-        `Deadline has to be at least 7 days from the current date`
-      );
+      throw new BadRequestException(`Deadline must be at least 7 days from now`);
     }
 
     const request = this.requestRepository.create({
-      requester: { id: BigInt(uid) },
-      project: dto.projectId ? { id: BigInt(dto.projectId) } : undefined,
-      registrants: dto.assigneeId ? [{ id: BigInt(dto.assigneeId) }] : [],
-      assignee: dto.assigneeId ? { id: BigInt(dto.assigneeId) } : undefined,
+      requester: { id: uid } as any,
+      project: dto.projectId ? { id: BigInt(dto.projectId) } as any : undefined,
+      registrants: dto.assigneeId ? [{ id: BigInt(dto.assigneeId) }] as any : [],
+      assignee: dto.assigneeId ? { id: BigInt(dto.assigneeId) } as any : undefined,
       title,
       description,
       dealAmount,
@@ -69,32 +63,31 @@ export class RequestManagerService {
       createdAt: new Date(),
       status: RequestStatus.Pending,
       isPublic,
-      category: dto.categoryId ? { id: BigInt(dto.categoryId) } : undefined,
+      category: dto.categoryId ? { id: BigInt(dto.categoryId) } as any : undefined,
     });
 
-    if (!isPublic) {
-      const requesterUser = await this.userRepository.findOneOrFail({
-        where: { id: BigInt(uid) },
-      });
-      const assigneeUser = await this.userRepository.findOne({
-        where: { id: BigInt(dto.assigneeId) },
-      });
+    const savedRequest = await this.requestRepository.save(request);
 
-      const username = requesterUser.username;
+    let approvalUrl: string | undefined;
+
+    if (!isPublic) {
+      const requesterUser = await this.userRepository.findOneOrFail({ where: { id: uid } });
+      const assigneeUser = await this.userRepository.findOne({ where: { id: BigInt(dto.assigneeId) } });
+
       if (assigneeUser?.email) {
-        await this.mailService.sendPrivateRequestConfirmation(
-          assigneeUser.email,
-          {
-            title,
-            deadline,
-            username,
-          }
-        );
+        await this.mailService.sendPrivateRequestConfirmation(assigneeUser.email, {
+          title,
+          deadline,
+          username: requesterUser.username,
+        });
       }
+
+      approvalUrl = await this.paymentService.createDeposit(dealAmount, requesterUser, savedRequest);
     }
 
-    return this.requestRepository.save(request);
+    return { request: savedRequest, approvalUrl };
   }
+
 
   async searchUsers(
     keyword: string,
@@ -362,29 +355,6 @@ export class RequestManagerService {
     return this.requestRepository.save(request);
   }
 
-  // async reviewRequest(uid: bigint, projectId: bigint, requestId: bigint, status: RequestStatus) {
-  //   await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ReviewRequests);
-  //   const request = await this.requestRepository.findOne({
-  //     where: {
-  //       id: BigInt(requestId),
-  //       project: { id: BigInt(projectId) }
-  //     },
-  //     relations: ['requester', 'project']
-  //   });
-  //   if (!request) {
-  //     throw new NotFoundException(`Unknown request`);
-  //   }
-  //   await this.projectManager.testPermissions(projectId, uid, PermissionFlags.ReviewRequests);
-  //   if (status === RequestStatus.Completed && request.status !== RequestStatus.Approved) {
-  //     throw new BadRequestException(`Request is not approved (currently ${request.status})`);
-  //   }
-  //   else if (request.status !== RequestStatus.Pending) {
-  //     throw new BadRequestException(`Request is not in pending status (currently ${request.status})`);
-  //   }
-  //   request.status = status;
-  //   return this.requestRepository.save(request);
-  // }
-
   async registerForPublicRequest(requestId: bigint, uid: number) {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
@@ -475,4 +445,40 @@ export class RequestManagerService {
     }
     return { approvalUrl };
   }
+
+  async declinePrivateRequest(requestId: bigint): Promise<boolean> {
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['requester'],
+    });
+
+    if (request.status !== RequestStatus.Pending || request.isPublic) {
+      throw new BadRequestException('Only private and pending requests can be declined');
+    }
+
+    const transaction = await this.transactionRepository.findOne({
+      where: {
+        request: { id: requestId },
+        user: { id: request.requester.id },
+        status: TransactionStatus.Pending,
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('No matching deposit transaction found');
+    }
+
+    const wallet = await this.walletService.getOrCreateWallet(request.requester.id);
+    wallet.balance = Number(wallet.balance) + Number(transaction.amount);
+
+    transaction.status = TransactionStatus.Failed;
+    request.status = RequestStatus.Rejected;
+
+    await this.transactionRepository.save(transaction);
+    await this.walletRepository.save(wallet);
+    await this.requestRepository.save(request);
+
+    return true;
+  }
+
 }

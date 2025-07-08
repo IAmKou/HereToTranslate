@@ -16,11 +16,15 @@ import {
 import { RequestManagerService } from '../service/request-manager.service';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
+import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
 
 @Controller('requests')
 @UseInterceptors(JsonSerializerInterceptor)
 export class RequestController {
-  constructor(private readonly requests: RequestManagerService) {}
+  constructor(
+    private readonly requests: RequestManagerService,
+    private readonly paymentService: PaypalService
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('create')
@@ -58,17 +62,6 @@ export class RequestController {
   ) {
     return this.requests.updateRequest(req.user.id, requestId, body);
   }
-
-  // @UseGuards(JwtAuthGuard)
-  // @Post(':requestId/review')
-  // async reviewRequest(
-  //   @Param('requestId', BigIntTransformPipe) requestId: bigint,
-  //   @Param('projectId', BigIntTransformPipe) projectId: bigint,
-  //   @Body(ValidationPipe) body: ReviewRequestDto,
-  //   @Req() req: AuthenticatedRequest
-  // ) {
-  //   return this.requests.reviewRequest(req.user.id, projectId, requestId, body.status);
-  // }
 
   @UseGuards(JwtAuthGuard)
   @Post(':requestId/cancel')
@@ -120,7 +113,29 @@ export class RequestController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':requestId/detail')
-  async getDetail(@Param('requestId', BigIntTransformPipe) requestId: number, @Req() req: AuthenticatedRequest) {
-    return this.requests.fetchRequestDetails(BigInt(requestId), BigInt(req.user.id));
+  async getDetail(
+    @Param('requestId', BigIntTransformPipe) requestId: number,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.requests.fetchRequestDetails(
+      BigInt(requestId),
+      BigInt(req.user.id)
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/private')
+  async acceptPrivateRequest(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.paymentService.acceptPrivateRequest(requestId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requesterId/decline')
+  async declinePrivateRequest(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint) {
+    return this.requests.declinePrivateRequest(requestId);
   }
 }

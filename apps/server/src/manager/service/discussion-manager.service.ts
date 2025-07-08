@@ -155,6 +155,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       );
     }
 
+    // Sửa: Không dùng select để tránh loại bỏ các trường author trong comments
     return await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       relations: [
@@ -163,7 +164,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
         'comments.upvotes',
         'comments.downvotes',
       ],
-      select: ['id', 'title', 'description', 'comments', 'isArchived'],
+      // Bỏ select để trả về đầy đủ thông tin author
     });
   }
   async fetchDiscussions(uid: Maybe<bigint>, projectId: bigint) {
@@ -178,14 +179,15 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     try {
       return (
         await Promise.all(
-          threads.map(async (thread) =>
-            Object.assign(thread, {
-              userPermission: await this.getUserPermissionForThread(
-                uid,
-                thread.id
-              ),
-            })
-          )
+          threads.map(async (thread) => {
+            const commentsCount = await this.discussionCommentRepository.count({
+              where: { thread: { id: thread.id } },
+            });
+            return Object.assign(thread, {
+              userPermission: await this.getUserPermissionForThread(uid, thread.id),
+              commentsCount,
+            });
+          })
         )
       ).filter((thread) =>
         thread.userPermission.has(PermissionFlags.ViewThread)

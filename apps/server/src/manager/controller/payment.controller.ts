@@ -56,5 +56,11 @@ export class PaymentController {
     return res.send('✅ Test route hit!');
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post(':transactionId/approve')
+  async approveTransaction(@Param('transactionId') transactionId: number){
+    return this.paymentService.approveWithdrawal(transactionId);
+  }
+
 
 }

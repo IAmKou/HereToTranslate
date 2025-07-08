@@ -29,7 +29,7 @@ export class ProjectDiscussionThreadEntity {
   description: string;
 
   @Column({ type: 'boolean', default: false })
-  isPinned: boolean;;
+  isPinned: boolean;
 
   @Column({ type: 'boolean', default: false })
   isArchived: boolean;

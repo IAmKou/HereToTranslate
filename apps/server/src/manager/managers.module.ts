@@ -42,6 +42,7 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
 import { FileService } from './service/file-manager.service';
 import { TranslationService } from './service/translation-manager.service';
 import { FileController } from './controller/file.controller';
+import { PermissionsController } from './controller/project-role.controller';
 
 @Global()
 @Module({
@@ -115,6 +116,7 @@ import { FileController } from './controller/file.controller';
     WalletController,
     PaymentController,
     FileController,
+    PermissionsController,
   ]
 })
 export class ManagersModule {

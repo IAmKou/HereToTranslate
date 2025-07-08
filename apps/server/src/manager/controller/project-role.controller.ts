@@ -21,6 +21,7 @@ import {
 } from '#LocalProject/Dtos';
 import { ProjectRoleManagerService } from '#LocalProject/Managers/service/project-role-manager.service';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
+import { PermissionFlags } from '@here-to-translate/common';
 
 @Controller('projects/:projectId/roles')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -122,5 +123,49 @@ export class ProjectRoleController {
       roleId,
       userIds.userIds
     );
+  }
+}
+
+// Controller mới cho permissions
+@Controller('permissions')
+export class PermissionsController {
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  async getAvailablePermissions() {
+    const permissions = Object.entries(PermissionFlags)
+      .filter(([key, value]) => key !== 'None' && key !== 'Owner' && typeof value === 'bigint')
+      .map(([key, value]) => ({
+        value: key,
+        label: key.replace(/([A-Z])/g, ' $1').trim(),
+        description: this.getPermissionDescription(key)
+      }));
+    return permissions;
+  }
+
+  private getPermissionDescription(permission: string): string {
+    const descriptions: Record<string, string> = {
+      'ProjectAdmin': 'Quản trị dự án - tất cả quyền',
+      'ManageMembers': 'Quản lý thành viên - thêm/xóa/đổi vai trò',
+      'ManageBranches': 'Quản lý nhánh dự án',
+      'ManageRoles': 'Quản lý vai trò trong dự án',
+      'ManageWorkspaces': 'Quản lý workspace',
+      'ManageGroups': 'Quản lý nhóm dự án',
+      'ManageProjectMetadata': 'Quản lý thông tin dự án',
+      'ManageDiscussions': 'Quản lý thảo luận',
+      'ViewAudit': 'Xem nhật ký audit',
+      'ReviewCommit': 'Duyệt commit trong workspace',
+      'PushCommit': 'Đẩy commit vào workspace',
+      'ReviewRequests': 'Duyệt request trong workspace',
+      'ViewRequest': 'Xem request trong workspace',
+      'ManageWorkspaceMetadata': 'Quản lý thông tin workspace',
+      'ViewWorkspace': 'Xem workspace',
+      'ManageComments': 'Quản lý bình luận trong thảo luận',
+      'PostComment': 'Đăng bình luận',
+      'Vote': 'Bình chọn trong thảo luận',
+      'AttachFiles': 'Đính kèm file trong thảo luận',
+      'ViewThread': 'Xem thảo luận',
+      'ViewProject': 'Xem thông tin dự án'
+    };
+    return descriptions[permission] || permission;
   }
 }

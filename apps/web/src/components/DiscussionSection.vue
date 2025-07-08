@@ -48,7 +48,7 @@
             <div class="discussion-meta">
               <span class="meta-item">
                 <span class="meta-icon">💬</span>
-                {{ discussion.comments?.length || 0 }} comments
+                {{ discussion.commentsCount || 0 }} comments
               </span>
               <span v-if="discussion.isArchived" class="meta-item archived-badge">
                 <span class="meta-icon">📦</span>
@@ -251,7 +251,7 @@
                       <span class="author-avatar">
                         {{ comment.author?.username?.charAt(0)?.toUpperCase() || 'U' }}
                       </span>
-                      <span class="author-name">{{ comment.author?.username || 'Unknown' }}</span>
+                      <span class="author-name">{{ comment.author?.fullName || 'Unknown' }}</span>
                     </div>
                     <div class="comment-meta">
                       <span class="comment-date">{{ formatDate(comment.createdAt) }}</span>
@@ -342,6 +342,7 @@ interface Discussion {
   isArchived: boolean
   comments?: Comment[]
   userPermission?: any
+  commentsCount?: number
 }
 
 interface Comment {
@@ -350,6 +351,7 @@ interface Comment {
   author?: {
     id: number
     username: string
+    fullName?: string
   }
   createdAt: string
   isEdited: boolean
@@ -464,16 +466,13 @@ const postComment = async () => {
 
   posting.value = true
   try {
-    const response = await axiosInstance.post(`/projects/${props.projectId}/discussions/${selectedDiscussion.value.id}/post`, {
+    await axiosInstance.post(`/projects/${props.projectId}/discussions/${selectedDiscussion.value.id}/post`, {
       content: newComment.value
     })
-
-    if (selectedDiscussion.value.comments) {
-      selectedDiscussion.value.comments.push(response.data)
-    } else {
-      selectedDiscussion.value.comments = [response.data]
-    }
-
+    // Sau khi post comment, reload lại discussion detail từ server
+    await viewDiscussion(selectedDiscussion.value)
+    // Reload lại danh sách discussions để cập nhật số comment ngoài list
+    await loadDiscussions()
     newComment.value = ''
   } catch (err: any) {
     error.value = err.response?.data?.message || 'Failed to post comment'

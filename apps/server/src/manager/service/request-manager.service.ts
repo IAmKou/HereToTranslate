@@ -17,7 +17,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DAY } from '#LocalProject/Utils/common';
 import { MailService } from '../../mailer/mailer.service';
 import { ChatService } from '../../chat/chat.service';
 import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';

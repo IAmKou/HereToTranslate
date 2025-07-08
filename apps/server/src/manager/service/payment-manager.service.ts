@@ -181,19 +181,9 @@ export class PaypalService {
       await queryRunner.startTransaction();
 
       try {
-        const createProjectDto: any = {
-          name: request.title,
-          description: request.description,
-          isPrivate: true,
-          tags: [],
-        };
-        if (request.category?.id) {
-          createProjectDto.categoryId = request.category.id.toString();
-        }
-
-        const createResult = await this.projectService.createProject(
-          selectedUser.id,
-          createProjectDto
+        const createResult = await this.projectService.createProjectFromRequest(
+          request,
+          selectedUser.id
         );
 
         const newProject = await this.projectRepository.findOneOrFail({

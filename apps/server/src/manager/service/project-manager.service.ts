@@ -247,6 +247,20 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
   }
 
+  async createProjectFromRequest(request: RequestEntity, uid: bigint) {
+    const tags = request.tags?.map(tag => tag.name) ?? [];
+
+    const createProjectDto: CreateProjectDto = {
+      name: request.title,
+      description: request.description,
+      isPrivate: true,
+      tags,
+      categoryId: request.category?.id?.toString(),
+    };
+
+    return this.createProject(uid, createProjectDto);
+  }
+
   async fetchAllUserProjects(userId: bigint): Promise<ProjectEntity[]> {
     const qb = this.projectRepository
       .createQueryBuilder('project')

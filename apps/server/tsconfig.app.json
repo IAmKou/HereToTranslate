@@ -5,7 +5,7 @@
     "outDir": "dist",
     "module": "nodenext",
     "types": ["node", "Multer"],
-    "typeRoots": ["./node_modules/@types", "./src/types"],
+    "typeRoots": ["./node_modules/@types", "./src/type"],
     "rootDir": "src",
     "sourceMap": true,
     "moduleResolution": "nodenext",

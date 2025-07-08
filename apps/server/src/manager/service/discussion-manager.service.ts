@@ -155,7 +155,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       );
     }
 
-    // Sửa: Không dùng select để tránh loại bỏ các trường author trong comments
     return await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       relations: [

@@ -155,7 +155,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       );
     }
 
-    // Sửa: Không dùng select để tránh loại bỏ các trường author trong comments
     return await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       relations: [
@@ -513,7 +512,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       relations: ['upvotes'],
     });
 
-    if (upvoted?.upvotes?.some(user => user.id === uid)) {
+    if (upvoted) {
       throw new BadRequestException('You have already upvoted this comment');
     }
 

@@ -243,6 +243,71 @@ export class PaypalService {
     }
   }
 
+  async acceptPrivateRequest(requestId: bigint, assigneeId: bigint): Promise<any> {
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['assignee', 'requester', 'category'],
+    });
+
+    if (!request || request.isPublic || request.status !== RequestStatus.Pending) {
+      throw new BadRequestException('Invalid request for acceptance');
+    }
+
+    if (Number(request.assignee?.id) !== Number(assigneeId)) {
+      throw new BadRequestException('You are not the assigned translator for this request');
+    }
+
+    const transaction = await this.transactionRepo.findOneOrFail({
+      where: {
+        request: { id: request.id },
+        user: { id: request.requester.id },
+        status: TransactionStatus.Pending,
+      },
+    });
+
+    const queryRunner = this.projectService['dataSource'].createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const createProjectDto: any = {
+        name: request.title,
+        description: request.description,
+        isPrivate: true,
+        tags: [],
+      };
+
+      if (request.category?.id) {
+        createProjectDto.categoryId = request.category.id.toString();
+      }
+
+      const { projectId } = await this.projectService.createProject(request.assignee.id, createProjectDto);
+      const newProject = await this.projectRepository.findOneOrFail({ where: { id: projectId } });
+
+      request.project = newProject;
+      request.status = RequestStatus.Approved;
+      transaction.status = TransactionStatus.Completed;
+
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
+
+      await queryRunner.manager.save([request, transaction, adminWallet]);
+      await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message: 'Private request accepted and project created.',
+        projectId,
+        requestId: request.id,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      console.error('Accept private request failed:', err);
+      throw new InternalServerErrorException('Failed to accept private request');
+    } finally {
+      await queryRunner.release();
+    }
+  }
 
 
   async withdraw(userId: bigint, dto: WithdrawDto): Promise<TransactionEntity> {
@@ -284,9 +349,6 @@ export class PaypalService {
     return transaction;
   }
 
-
-
-
   async approveWithdrawal(transactionId: number): Promise<TransactionEntity> {
     const transaction = await this.transactionRepo.findOneOrFail({
       where: { id: transactionId },
@@ -315,7 +377,7 @@ export class PaypalService {
             value: amount.toFixed(2),
             currency: 'USD',
           },
-          note: 'Withdrawal approved by admin.',
+          note: 'Withdrawal approved .',
           receiver: paypalEmail,
           sender_item_id: `txn_${transactionId}_${Date.now()}`,
         },

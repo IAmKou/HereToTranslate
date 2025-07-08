@@ -1,4 +1,13 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  JoinTable, ManyToMany,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  Unique
+} from 'typeorm';
 import { ProjectRoleEntity } from "./project-role.entity";
 import { BigIntColumnTransformer } from "#LocalProject/Utils/extensions/typeorm.extensions";
 import { Permission, PermissionFlags } from "@here-to-translate/common";
@@ -56,10 +65,12 @@ export class ProjectDiscussionCommentEntity {
   @Column({ type: 'timestamp', nullable: true, default: null })
   editedAt: Date | null;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToMany(() => UserEntity)
+  @JoinTable()
   upvotes: UserEntity[];
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToMany(() => UserEntity)
+  @JoinTable()
   downvotes: UserEntity[];
 }
 

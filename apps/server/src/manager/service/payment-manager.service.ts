@@ -14,11 +14,12 @@ import {
   WalletEntity,
 } from '#LocalProject/Entities';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { MailService } from '../../mailer/mailer.service';
 import { TranslationApprovalEntity } from '#LocalProject/Entities';
 import { WalletManagerService } from './wallet-manager.service';
+import { WithdrawDto } from '../../dto/withdraw.dto';
 
 @Injectable()
 export class PaypalService {
@@ -37,6 +38,8 @@ export class PaypalService {
     private translationApprovalRepository: Repository<TranslationApprovalEntity>,
     @InjectRepository(WalletEntity)
     private walletRepository: Repository<WalletEntity>,
+    @InjectRepository(UserEntity)
+    private userRepository: Repository<UserEntity>,
     private readonly projectService: ProjectManagerService,
     private readonly mailService: MailService,
     private readonly walletManagerService: WalletManagerService
@@ -240,8 +243,80 @@ export class PaypalService {
     }
   }
 
-  async withdraw(userId: bigint, amount: number, paypalEmail: string): Promise<WalletEntity> {
-    if (amount <= 0) throw new BadRequestException('Amount must be positive');
+  async acceptPrivateRequest(requestId: bigint, assigneeId: bigint): Promise<any> {
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['assignee', 'requester', 'category'],
+    });
+
+    if (!request || request.isPublic || request.status !== RequestStatus.Pending) {
+      throw new BadRequestException('Invalid request for acceptance');
+    }
+
+    if (Number(request.assignee?.id) !== Number(assigneeId)) {
+      throw new BadRequestException('You are not the assigned translator for this request');
+    }
+
+    const transaction = await this.transactionRepo.findOneOrFail({
+      where: {
+        request: { id: request.id },
+        user: { id: request.requester.id },
+        status: TransactionStatus.Pending,
+      },
+    });
+
+    const queryRunner = this.projectService['dataSource'].createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const createProjectDto: any = {
+        name: request.title,
+        description: request.description,
+        isPrivate: true,
+        tags: [],
+      };
+
+      if (request.category?.id) {
+        createProjectDto.categoryId = request.category.id.toString();
+      }
+
+      const { projectId } = await this.projectService.createProject(request.assignee.id, createProjectDto);
+      const newProject = await this.projectRepository.findOneOrFail({ where: { id: projectId } });
+
+      request.project = newProject;
+      request.status = RequestStatus.Approved;
+      transaction.status = TransactionStatus.Completed;
+
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
+
+      await queryRunner.manager.save([request, transaction, adminWallet]);
+      await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message: 'Private request accepted and project created.',
+        projectId,
+        requestId: request.id,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      console.error('Accept private request failed:', err);
+      throw new InternalServerErrorException('Failed to accept private request');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+
+  async withdraw(userId: bigint, dto: WithdrawDto): Promise<TransactionEntity> {
+    const { amount, paypalEmail, requestId, paypalOrderId } = dto;
+
+    if (amount <= 0) {
+      throw new BadRequestException('Amount must be positive');
+    }
+
     if (!paypalEmail || !paypalEmail.includes('@')) {
       throw new BadRequestException('Invalid PayPal email address');
     }
@@ -251,13 +326,49 @@ export class PaypalService {
       throw new BadRequestException('Admin wallet has insufficient funds');
     }
 
+    const user = await this.userRepository.findOneOrFail({ where: { id: userId } });
+
+    let request: RequestEntity | undefined = undefined;
+    if (requestId) {
+      request = await this.requestRepository.findOneOrFail({
+        where: { id: requestId },
+      });
+    }
+
+    const transactionPayload: DeepPartial<TransactionEntity> = {
+      user,
+      amount,
+      status: TransactionStatus.Pending,
+      paypalOrderId: paypalOrderId ?? undefined,
+      request,
+    };
+
+    const transaction = this.transactionRepo.create(transactionPayload);
+    await this.transactionRepo.save(transaction);
+
+    return transaction;
+  }
+
+  async approveWithdrawal(transactionId: number): Promise<TransactionEntity> {
+    const transaction = await this.transactionRepo.findOneOrFail({
+      where: { id: transactionId },
+      relations: ['user', 'request', 'request.assignee'],
+    });
+
+    if (transaction.status !== TransactionStatus.Pending) {
+      throw new BadRequestException('Transaction is not pending approval.');
+    }
+
+    const paypalEmail = transaction.user.email;
+    const amount = transaction.amount;
+
     const accessToken = await this.getAccessToken();
 
     const payoutData = {
       sender_batch_header: {
-        sender_batch_id: `batch_${Date.now()}`,
-        email_subject: 'You have a payout!',
-        email_message: 'You have received a payout via PayPal.',
+        sender_batch_id: `admin_payout_${Date.now()}`,
+        email_subject: 'Your withdrawal has been approved!',
+        email_message: 'You have received your payout via PayPal.',
       },
       items: [
         {
@@ -266,9 +377,9 @@ export class PaypalService {
             value: amount.toFixed(2),
             currency: 'USD',
           },
-          note: 'Withdrawal from Translation Platform',
-          sender_item_id: `user_${userId}_${Date.now()}`,
+          note: 'Withdrawal approved .',
           receiver: paypalEmail,
+          sender_item_id: `txn_${transactionId}_${Date.now()}`,
         },
       ],
     };
@@ -287,22 +398,56 @@ export class PaypalService {
 
       const payoutBatchId = res.data.batch_header?.payout_batch_id ?? null;
 
-      const transaction = this.transactionRepo.create({
-        user: { id: userId } as UserEntity,
-        amount,
-        status: TransactionStatus.Completed,
-        paypalOrderId: payoutBatchId,
-      });
+      // Update transaction
+      transaction.status = TransactionStatus.Completed;
+      transaction.paypalOrderId = payoutBatchId;
 
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      adminWallet.balance = Number(adminWallet.balance) - Number(amount);
+
+      await this.walletRepository.save(adminWallet);
       await this.transactionRepo.save(transaction);
 
-      adminWallet.balance -= amount;
-      return await this.walletRepository.save(adminWallet);
+      return transaction;
     } catch (err) {
-      console.error('PayPal payout failed:', err);
+      console.error('Admin payout error:', err);
       throw new InternalServerErrorException('Payout failed.');
     }
   }
+
+  async fetchAllTransactions(): Promise<
+    Array<{
+      id: number;
+      amount: number;
+      status: TransactionStatus;
+      sender: { id: bigint; email: string };
+      receiver?: { id: bigint; email: string };
+      createdAt: Date;
+    }>
+  > {
+    const transactions = await this.transactionRepo.find({
+      relations: ['user', 'request', 'request.assignee'],
+    });
+
+    return transactions.map((txn) => ({
+      id: txn.id,
+      amount: txn.amount,
+      status: txn.status,
+      sender: {
+        id: BigInt(txn.user.id),
+        email: txn.user.email,
+      },
+      receiver: txn.request?.assignee
+        ? {
+          id: BigInt(txn.request.assignee.id),
+          email: txn.request.assignee.email,
+        }
+        : undefined,
+      createdAt: txn.createdAt,
+    }));
+  }
+
+
   async finalizeTranslation(requestId: bigint): Promise<boolean> {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },

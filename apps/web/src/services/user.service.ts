@@ -76,18 +76,17 @@ export class UserService {
     };
   }
 
-  async updateProfile(data: UpdateProfileData, userId: string): Promise<UserProfile> {
-    const response = await this.api.put(`/users/${userId}/update`, data);
+  async updateProfile(data: UpdateProfileData): Promise<UserProfile> {
+    const response = await this.api.put(`/users/update`, data);
 
     return {
       ...response.data,
-      id: BigInt(userId),
       createdAt: new Date(response.data.createdAt),
     };
   }
 
-  async changePassword(data: ChangePasswordData, userId : string): Promise<void> {
-    await this.api.patch(`/users/${userId}/change-password`, data);
+  async changePassword(data: ChangePasswordData): Promise<void> {
+    await this.api.patch(`/users/change-password`, data);
   }
 
   async getAllUsers(): Promise<User[]> {

@@ -22,14 +22,12 @@ export class WalletController {
   }
 
   @Post('withdraw')
-  async withdraw(@Req() req: { user: UserEntity }, @Body() body: WithdrawDto) {
-    const { amount, paypalEmail, requestId } = body;
-    const transformedRequestId = requestId ? BigInt(requestId) : undefined;
-    return this.paypalService.withdraw(
-      req.user.id,
-      amount,
-      paypalEmail,
-      transformedRequestId
-    );
+  @UseGuards(JwtAuthGuard)
+  async withdraw(
+    @Req() req: { user: UserEntity },
+    @Body() dto: WithdrawDto
+  ) {
+    return this.paypalService.withdraw(req.user.id, dto);
   }
+
 }

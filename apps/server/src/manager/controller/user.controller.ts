@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -24,7 +23,6 @@ import { UserManagerService } from '../service/user-manager.service';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
-import { UserEntity } from '#LocalProject/Entities';
 
 @Controller('users')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -42,26 +40,22 @@ export class UserController {
     return this.users.getUserProfile(request.user.id);
   }
 
-  @Put('/:id/update')
+  @Put('update')
   @UseGuards(JwtAuthGuard)
   updateProfile(
-    @Body('id', BigIntTransformPipe) id: bigint,
     @Body(ValidationPipe) userUpdateData: UpdateUserProfileDto,
     @Req() request: AuthenticatedRequest
   ) {
-    if (request.user.id !== id) {
-      throw new BadRequestException('You can only update your own user data.');
-    }
-    return this.users.updateProfile(id, userUpdateData);
+
+    return this.users.updateProfile(request.user.id, userUpdateData);
   }
 
-  @Patch('/:id/change-password')
+  @Patch('/change-password')
   async changePassword(
-    @Param('id', BigIntTransformPipe) id: bigint,
     @Req() request: AuthenticatedRequest,
     @Body() dto: UpdateUserPasswordDto
   ) {
-    await this.users.changePassword(id, dto);
+    await this.users.changePassword(request.user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -77,7 +71,7 @@ export class UserController {
     @Param('rid') roleId: number,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.users.updateUserRole(userId, roleId, req.user);
+    return this.users.updateUserRole(userId, roleId, req);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

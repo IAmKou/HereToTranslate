@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique, ManyToMany, JoinTable } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique, ManyToMany, JoinTable } from "typeorm";
 import { ProjectRoleEntity } from "./project-role.entity";
 import { BigIntColumnTransformer } from "#LocalProject/Utils/extensions/typeorm.extensions";
 import { Permission, PermissionFlags } from "@here-to-translate/common";
@@ -56,7 +56,6 @@ export class ProjectDiscussionCommentEntity {
   @Column({ type: 'timestamp', nullable: true, default: null })
   editedAt: Date | null;
 
-  // Sửa từ ManyToOne sang ManyToMany cho upvotes/downvotes
   @ManyToMany(() => UserEntity)
   @JoinTable()
   upvotes: UserEntity[];

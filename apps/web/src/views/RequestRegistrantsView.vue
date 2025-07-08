@@ -45,7 +45,7 @@
                       shape="circle"
                       size="large"
                       class="candidate-avatar-table"
-                      :style="!user.avatar ? { background: getAvatarColor(user.fullName || user.username) } : {}"
+                      :style="!user.avatar ? { background: getAvatarColor(user.fullName || user.username), color: '#fff' } : {}"
                     />
                     <div class="candidate-name-email">
                       <span class="candidate-name-link" @click="viewUserProfile(user.id)">
@@ -617,8 +617,32 @@ onMounted(async () => {
 }
 .candidates-table th, .candidates-table td {
   padding: 12px 16px;
-  text-align: left;
+  text-align: center;
   vertical-align: middle;
+}
+.candidates-table th:nth-child(2),  /* Name */
+.candidates-table td:nth-child(2) {
+  min-width: 200px;
+}
+
+.candidates-table th:nth-child(3),  /* Email */
+.candidates-table td:nth-child(3) {
+  min-width: 220px;
+}
+
+.candidates-table th:nth-child(4),  /* Phone */
+.candidates-table td:nth-child(4) {
+  min-width: 140px;
+}
+
+.candidates-table th:nth-child(5),  /* Joined */
+.candidates-table td:nth-child(5) {
+  min-width: 140px;
+}
+
+.candidates-table th:nth-child(6),  /* Actions */
+.candidates-table td:nth-child(6) {
+  min-width: 200px;
 }
 .candidates-table th {
   background: #f1f5f9;
@@ -626,7 +650,7 @@ onMounted(async () => {
   font-weight: 700;
   font-size: 16px;
   border-bottom: 2.5px solid #e0e7ff;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   text-align: center;
   vertical-align: middle;
 }
@@ -634,6 +658,10 @@ onMounted(async () => {
   text-align: center;
   vertical-align: middle;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 .stt-td {
   text-align: center;
@@ -642,10 +670,10 @@ onMounted(async () => {
   min-width: 60px;
 }
 .candidate-name-td {
-  min-width: 220px;
+  min-width: 320px;
 }
 .candidate-email-td {
-  min-width: 180px;
+  min-width: 320px;
 }
 .candidate-phone-td {
   min-width: 120px;
@@ -685,14 +713,16 @@ onMounted(async () => {
 .candidate-avatar-table {
   width: 48px;
   height: 48px;
-  font-size: 22px;
   border: 2px solid #2563eb;
   color: #2563eb;
   flex-shrink: 0;
-  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  background-color: #2563eb;
 }
 .candidate-name-email {
   display: flex;
@@ -716,7 +746,7 @@ onMounted(async () => {
   text-decoration: underline wavy;
 }
 .email-text, .phone-text, .joined-text {
-  font-size: 14px;
+  font-size: 16px;
   color: #64748b;
   font-weight: 500;
 }
@@ -852,9 +882,12 @@ onMounted(async () => {
   .candidates-table {
     min-width: 800px;
     font-size: 15px;
+    overflow-x: auto;
   }
   .candidates-table th, .candidates-table td {
     padding: 12px 8px;
+    display: table-cell;
+    vertical-align: middle;
   }
   .pagination-wrapper {
     flex-direction: column;
@@ -1414,6 +1447,9 @@ onMounted(async () => {
   .profile-main-info {
     align-items: center;
     text-align: center;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 0 1.5rem;
   }
   .profile-stats {
     grid-template-columns: 1fr;
@@ -1422,5 +1458,14 @@ onMounted(async () => {
     flex-direction: column;
     gap: 8px;
   }
+}
+.candidates-table tbody tr:hover {
+  background-color: #f1f5f9;
+  transition: background 0.15s ease;
+}
+.email-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
 }
 </style>

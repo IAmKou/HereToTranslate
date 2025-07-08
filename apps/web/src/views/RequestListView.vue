@@ -15,6 +15,10 @@
 
       <!-- Sortable Headers -->
       <div class="grid grid-cols-5 gap-4 font-semibold text-gray-700 mb-3 px-2">
+        <div class="cursor-pointer" @click="setSort('id')">
+          ID
+          <span v-if="sortKey === 'id'">{{ sortOrder === 1 ? '▲' : '▼' }}</span>
+        </div>
         <div class="cursor-pointer" @click="setSort('title')">
           Title
           <span v-if="sortKey === 'title'">{{
@@ -121,39 +125,41 @@ export default {
         this.sortKey = key;
         this.sortOrder = 1;
       }
-    ,
-  },
-  computed: {
-    sortedRequests() {
-      const getValue = (req, key) => {
-        switch (key) {
-          case 'title':
-            return req.title || '';
-          case 'project':
-            return req.project?.name || '';
-          case 'category':
-            return req.category?.name || '';
-          case 'dealAmount':
-            return parseFloat(req.dealAmount) || 0;
-          case 'deadline':
-            return new Date(req.deadline).getTime();
-          default:
-            return '';
-        }
-      };
+    },
+    computed: {
+      sortedRequests() {
+        const getValue = (req, key) => {
+          switch (key) {
+            case 'id':
+              return Number(req.id);
+            case 'title':
+              return req.title || '';
+            case 'project':
+              return req.project?.name || '';
+            case 'category':
+              return req.category?.name || '';
+            case 'dealAmount':
+              return parseFloat(req.dealAmount) || 0;
+            case 'deadline':
+              return new Date(req.deadline).getTime();
+            default:
+              return '';
+          }
+        };
 
-      if (!this.sortKey) return this.requests;
+        if (!this.sortKey) return this.requests;
 
-      return [...this.requests].sort((a, b) => {
-        const valA = getValue(a, this.sortKey);
-        const valB = getValue(b, this.sortKey);
+        return [...this.requests].sort((a, b) => {
+          const valA = getValue(a, this.sortKey);
+          const valB = getValue(b, this.sortKey);
 
-        if (typeof valA === 'string') {
-          return this.sortOrder * valA.localeCompare(valB);
-        } else {
-          return this.sortOrder * (valA - valB);
-        }
-      });
+          if (typeof valA === 'string') {
+            return this.sortOrder * valA.localeCompare(valB);
+          } else {
+            return this.sortOrder * (valA - valB);
+          }
+        });
+      },
     },
   },
 };

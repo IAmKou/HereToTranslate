@@ -81,18 +81,92 @@
                 <table class="requests-table">
                   <thead>
                   <tr>
-                    <th>Title</th>
-                    <th>Project</th>
-                    <th>Category</th>
-                    <th>Deal Amount</th>
-                    <th>Deadline</th>
+                    <th @click="sortTable('id')" style="cursor: pointer;">
+                      ID
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'id'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('title')" style="cursor: pointer;">
+                      Title
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'title'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('project')" style="cursor: pointer;">
+                      Project
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'project'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('category')" style="cursor: pointer;">
+                      Category
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'category'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('dealAmount')" style="cursor: pointer;">
+                      Deal Amount
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'dealAmount'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('deadline')" style="cursor: pointer;">
+                      Deadline
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'deadline'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
                     <th>Status</th>
                     <th>Visibility</th>
                     <th>Actions</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="req in paginatedMyRequests" :key="req.id" class="request-row">
+                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row">
+                    <td>{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
                     <td class="request-title">
                       <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
                     </td>
@@ -185,22 +259,89 @@
                 <table class="requests-table">
                   <thead>
                   <tr>
-                    <th>Title</th>
-                    <th>Requester</th>
-                    <th>Category</th>
-                    <th>Deal Amount</th>
-                    <th>Deadline</th>
+                    <th @click="sortTable('id')" style="cursor: pointer;">
+                      ID
+                      <i :class="['sort-icon',sortKey === 'id'? sortOrder === 1? 'pi pi-sort-amount-up-alt'
+                       : 'pi pi-sort-amount-down'
+                       : 'pi pi-sort-alt']" />
+                    </th>
+                    <th @click="sortTable('title')" style="cursor: pointer;">
+                      Title
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'title'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('requester')" style="cursor: pointer;">
+                      Requester
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'requester'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('category')" style="cursor: pointer;">
+                      Category
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'category'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('dealAmount')" style="cursor: pointer;">
+                      Deal Amount
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'dealAmount'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('deadline')" style="cursor: pointer;">
+                      Deadline
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'deadline'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
                     <th>Status</th>
                     <th>Visibility</th>
                     <th>Actions</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="req in paginatedAssignedRequests" :key="req.id" class="request-row">
+                  <tr v-for="(req, index) in paginatedAssignedRequests" :key="req.id" class="request-row">
+                    <td>{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
                     <td class="request-title">
                       <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
                     </td>
-                    <td>{{ req.requester?.username || 'Unknown' }}</td>
+                    <td>{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
                     <td>{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount">${{ formatAmount(req.dealAmount) }}</td>
                     <td>{{ formatDate(req.deadline) }}</td>
@@ -323,6 +464,18 @@ const assignedItemsPerPage = ref(7)
 // Computed properties for counts
 const myRequestsCount = computed(() => myRequests.value.filter(req => req.status !== 'CANCELLED').length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
+//Sort
+const sortKey = ref('')
+const sortOrder = ref(1)
+
+function sortTable(key) {
+  if (sortKey.value === key) {
+    sortOrder.value *= -1
+  } else {
+    sortKey.value = key
+    sortOrder.value = 1
+  }
+}
 
 // Debug computed property
 const debugRequests = computed(() => {
@@ -336,8 +489,40 @@ const debugRequests = computed(() => {
 })
 
 // Thêm biến computed cho danh sách đã filter (không có CANCELLED)
-const filteredMyRequests = computed(() => debugRequests.value.filter(req => req.status !== 'CANCELLED'))
+const filteredMyRequests = computed(() => {
+  const list = debugRequests.value.filter(req => req.status !== 'CANCELLED')
 
+  if (!sortKey.value) return list
+
+  return [...list].sort((a, b) => {
+    const valA = getSortableValue(a, sortKey.value)
+    const valB = getSortableValue(b, sortKey.value)
+
+    if (typeof valA === 'string') {
+      return sortOrder.value * valA.localeCompare(valB)
+    }
+    return sortOrder.value * (valA - valB)
+  })
+})
+
+function getSortableValue(obj, key) {
+  switch (key) {
+    case 'title':
+      return obj.title || ''
+    case 'project':
+      return obj.project?.name || ''
+    case 'category':
+      return obj.category?.name || ''
+    case 'requester':
+      return obj.requester?.name || ''
+    case 'dealAmount':
+      return parseFloat(obj.dealAmount) || 0
+    case 'deadline':
+      return new Date(obj.deadline).getTime()
+    default:
+      return ''
+  }
+}
 // Pagination computed properties for My Requests
 const paginatedMyRequests = computed(() => {
   const filtered = filteredMyRequests.value
@@ -1263,5 +1448,13 @@ onMounted(fetchRequests)
 }
 .btn-candidate:hover:not(.disabled) {
   background: #1d4ed8;
+}
+.sort-icon {
+  margin-left: 6px;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+th:hover .sort-icon {
+  color: #1f2937;
 }
 </style>

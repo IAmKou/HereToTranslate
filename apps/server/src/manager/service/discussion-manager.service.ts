@@ -181,6 +181,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
           threads.map(async (thread) => {
             const commentsCount = await this.discussionCommentRepository.count({
               where: { thread: { id: thread.id } },
+              relations: ['author', 'upvotes', 'downvotes'],
             });
             return Object.assign(thread, {
               userPermission: await this.getUserPermissionForThread(uid, thread.id),

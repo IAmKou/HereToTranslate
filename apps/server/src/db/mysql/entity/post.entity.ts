@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, OneToMany } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { RatingEntity } from './rating.entity';
-import { CommentEntity } from './comment.entity';
+// import { CommentEntity } from './discussion.entity';
 
 export enum PostVisibility {
   Visible = 'VISIBLE',
@@ -27,6 +27,6 @@ export class PostEntity {
   @OneToMany(() => RatingEntity, rating => rating.post)
   ratings: RatingEntity[];
 
-  @OneToMany(() => CommentEntity, comment => comment.post)
-  comments: CommentEntity[];
-}
+//   @OneToMany(() => CommentEntity, comment => comment.post)
+//   comments: CommentEntity[];
+ }

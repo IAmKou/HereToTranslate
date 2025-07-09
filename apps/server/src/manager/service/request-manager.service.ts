@@ -305,7 +305,7 @@ export class RequestManagerService {
     requestId: bigint,
     data: Partial<UpdateRequestDto> & { files?: Express.Multer.File[] }
   ) {
-    const { title, description, dealAmount, deadline, categoryId, tags, files } = data;
+    const { title, description, dealAmount, deadline, categoryId, tags, files,status } = data;
     const DAY = 24 * 60 * 60 * 1000;
 
     if (
@@ -315,6 +315,7 @@ export class RequestManagerService {
       !deadline &&
       !categoryId &&
       !tags &&
+      status === undefined &&
       (!files || files.length === 0)
     ) {
       throw new BadRequestException(`No fields to update`);
@@ -452,6 +453,7 @@ export class RequestManagerService {
       );
     }
   }
+
 
   async getRequestRegistrants(requestId: bigint): Promise<UserEntity[]> {
     const request = await this.requestRepository.findOneOrFail({

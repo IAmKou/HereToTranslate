@@ -32,7 +32,7 @@ export class GitHubService {
     const exists = await this.repoExists(repoName);
     if (exists) {
       throw new BadRequestException(
-        'Tên project đã tồn tại trên GitHub. Vui lòng chọn tên khác.'
+        'Project name already existed on Github.'
       );
     }
     const res = await this.octokit.rest.repos.createForAuthenticatedUser({

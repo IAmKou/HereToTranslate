@@ -16,6 +16,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
+  RequestEntity,
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {

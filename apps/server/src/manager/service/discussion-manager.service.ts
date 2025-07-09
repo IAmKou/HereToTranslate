@@ -207,7 +207,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     );
     const { title, description } = discussionData;
 
-    // 1. Tạo discussion trước (chưa có accessPolicies)
     const discussion = this.discussionThreadRepository.create({
       project: { id: projectId },
       title,
@@ -215,7 +214,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     });
     await this.discussionThreadRepository.save(discussion);
 
-    // 2. Lấy entity role
     const everyoneRole = await this.projectRoleRepository.findOne({
       where: { name: 'Everyone', project: { id: projectId } },
     });
@@ -223,7 +221,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException('Everyone role not found for this project');
     }
 
-    // 3. Kiểm tra accessPolicy đã tồn tại chưa
     const existingPolicy = await this.discussionAccessPolicyRepository.findOne({
       where: {
         thread: { id: discussion.id },
@@ -242,10 +239,10 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     } else {
       accessPolicy = existingPolicy;
     }
-    // 4. Gán accessPolicies cho discussion (nếu muốn trả về đầy đủ)
     discussion.accessPolicies = [accessPolicy];
     return discussion;
   }
+
   async updateDiscussionMetadata(
     uid: bigint,
     projectId: bigint,
@@ -268,9 +265,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     if (description) updateData.description = description;
 
     if (accessPolicy) {
-      // Handle access policy updates properly to avoid duplicate entries
       for (const policy of accessPolicy) {
-        // Check if policy already exists
         const existingPolicy = await this.discussionAccessPolicyRepository.findOne({
           where: {
             thread: { id: threadId },
@@ -279,14 +274,12 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
         });
 
         if (existingPolicy) {
-          // Update existing policy
           await this.discussionAccessPolicyRepository.save({
             id: existingPolicy.id,
             allowOverrides: policy.allowOverrides,
             denyOverrides: policy.denyOverrides,
           });
         } else {
-          // Create new policy
           await this.discussionAccessPolicyRepository.save({
             thread: { id: threadId },
             role: { id: policy.roleId },
@@ -298,12 +291,13 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     }
 
     try {
-      await this.discussionThreadRepository.update(threadId, updateData);
+      await this.discussionThreadRepository.update(String(threadId), updateData);
       return await this.discussionThreadRepository.findOne({ where: { id: threadId } });
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to update discussion metadata');
     }
   }
+
   async archiveDiscussion(uid: bigint, projectId: bigint, threadId: bigint) {
     const discussionExists = await this.discussionThreadRepository.exists({
       where: { id: threadId },
@@ -330,7 +324,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     const newArchiveStatus = !discussion.isArchived;
 
     try {
-      await this.discussionThreadRepository.update(threadId, { isArchived: newArchiveStatus });
+      await this.discussionThreadRepository.update(String(threadId), { isArchived: newArchiveStatus });
       return await this.discussionThreadRepository.findOne({ where: { id: threadId } });
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to archive discussion');

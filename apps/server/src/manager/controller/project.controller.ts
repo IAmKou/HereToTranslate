@@ -12,7 +12,6 @@ import {
   UseGuards,
   UseInterceptors,
   ValidationPipe,
-  UploadedFiles,
 } from '@nestjs/common';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
@@ -23,12 +22,13 @@ import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.i
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { ProjectManagerService } from '../service/project-manager.service';
 import { UserEntity } from '#LocalProject/Entities';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 
 @Controller('projects')
 @UseInterceptors(JsonSerializerInterceptor)
 export class ProjectController {
-  constructor(private readonly projects: ProjectManagerService) {}
+  constructor(private readonly projects: ProjectManagerService,
+  private readonly gitHubService: GitHubService) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('create')
@@ -136,5 +136,88 @@ export class ProjectController {
   ) {
     const members = await this.projects.getProjectMembers(projectId);
     return { members };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/branches')
+  async createBranch(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { displayName: string; fromBranchId?: bigint }
+  ) {
+    return this.projects.createBranch(
+      projectId,
+      req.user.id,
+      body.displayName,
+      body.fromBranchId
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':projectId/:branchId/rename')
+  async editBranch(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('branchId', BigIntTransformPipe) branchId: bigint,
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { newName: string }
+  ) {
+    return this.projects.renameBranchName(
+      branchId,
+      req.user.id,
+      projectId,
+      body.newName
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':projectId/getBranches')
+  async getAllBranch(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.projects.listBranchesForProject(projectId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/:branchId/commit')
+  async submitCommit(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('branchId', BigIntTransformPipe) branchId: bigint,
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { filePath: string; content: string; message: string }
+  ) {
+    return this.projects.submitCommit(
+      projectId,
+      req.user.id,
+      branchId,
+      body.filePath,
+      body.content,
+      body.message
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/:commitId/review')
+  async reviewCommit(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('commitId', BigIntTransformPipe) commitId: bigint,
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { approve: boolean; reviewMessage?: string }
+  ) {
+    return this.projects.reviewCommit(
+      projectId,
+      commitId,
+      req.user.id,
+      body.approve,
+      body.reviewMessage
+    );
+  }
+
+  @Get(':projectId/:branchId/listCommit')
+  async getCommitsFromGitHub(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('branchId', BigIntTransformPipe) branchId: bigint
+  ) {
+    return this.gitHubService.listCommits(projectId, branchId);
   }
 }

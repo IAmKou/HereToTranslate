@@ -39,7 +39,7 @@
                   <div class="overview-item">
                     <div class="overview-label">Status</div>
                     <div class="overview-value">
-                      <span v-if="project.isPublic" class="badge badge-public">Public</span>
+                      <span v-if="!project.isPrivate" class="badge badge-public">Public</span>
                       <span v-else class="badge badge-private">Private</span>
                     </div>
                   </div>

@@ -155,7 +155,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       );
     }
 
-    // Sửa: Không dùng select để tránh loại bỏ các trường author trong comments
     return await this.discussionThreadRepository.findOne({
       where: { id: threadId, project: { id: projectId } },
       relations: [
@@ -170,6 +169,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
   async fetchDiscussions(uid: Maybe<bigint>, projectId: bigint) {
     const threads = await this.discussionThreadRepository.find({
       where: { project: { id: projectId } },
+      relations: ['comments'],
       select: ['id', 'title', 'description', 'isArchived'],
     });
     if (!threads || threads.length === 0) {
@@ -377,10 +377,14 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     const comment = this.discussionCommentRepository.create({
       thread: { id: threadId },
       content,
-      author: { id: uid }, // Gán author là user hiện tại
+      author: { id: uid },
     });
     try {
-      return await this.discussionCommentRepository.save(comment);
+      const savedComment = await this.discussionCommentRepository.save(comment);
+      return await this.discussionCommentRepository.findOne({
+        where: { id: savedComment.id },
+        relations: ['author', 'upvotes', 'downvotes'], // ✅ Populate đầy đủ
+      });
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to post comment');
     }

@@ -14,6 +14,13 @@
         New Discussion
       </button>
     </div>
+    <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+      <select v-model="sortBy" @change="sortDiscussions" class="form-control" style="max-width: 220px;">
+        <option value="createdAt">Newest</option>
+        <option value="commentsCount">Most Commented</option>
+        <option value="isPinned">Pinned First</option>
+      </select>
+    </div>
 
     <!-- Loading State -->
     <div v-if="loading" class="discussions-loading">
@@ -27,6 +34,7 @@
       <span>{{ error }}</span>
       <button @click="loadDiscussions" class="btn btn-outline btn-sm">Retry</button>
     </div>
+
 
     <!-- Discussions List -->
     <div v-else-if="discussions && discussions.length > 0" class="discussions-list">
@@ -48,13 +56,14 @@
             <div class="discussion-meta">
               <span class="meta-item">
                 <span class="meta-icon">💬</span>
-                {{ discussion.commentsCount || 0 }} comments
+               {{ discussion.comments?.length || 0 }} comments
               </span>
               <span v-if="discussion.isArchived" class="meta-item archived-badge">
                 <span class="meta-icon">📦</span>
                 Archived
               </span>
             </div>
+
           </div>
           <div class="discussion-actions">
             <button
@@ -428,6 +437,19 @@ function autoGrow() {
   })
 }
 
+const sortBy = ref<'createdAt' | 'commentsCount' | 'isPinned'>('createdAt')
+
+const sortDiscussions = () => {
+  if (sortBy.value === 'createdAt') {
+    discussions.value.sort((a, b) => b.id - a.id)
+  } else if (sortBy.value === 'commentsCount') {
+    discussions.value.sort((a, b) => (b.commentsCount || 0) - (a.commentsCount || 0))
+  } else if (sortBy.value === 'isPinned') {
+    discussions.value.sort((a, b) => Number(b.isPinned) - Number(a.isPinned))
+  }
+}
+
+
 const createDiscussion = async () => {
   validateTitle()
   createError.value = ''
@@ -582,6 +604,9 @@ const toggleDropdown = (discussionId: number) => {
 const closeCreateModal = () => {
   showCreateModal.value = false
   newDiscussion.value = { title: '', description: '' }
+  showTitleError.value = false
+  createError.value = ''
+  creating.value = false
 }
 
 const closeDetailModal = () => {

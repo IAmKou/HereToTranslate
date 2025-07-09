@@ -3,9 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
 import { Buffer } from 'buffer';
 import { BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { BranchEntity } from '#LocalProject/Entities';
 
 @Injectable()
 export class GitHubService {
+  @InjectRepository(BranchEntity)
+  private readonly branchRepository: Repository<BranchEntity>;
   private octokit: Octokit;
   private username: string;
 
@@ -31,9 +35,7 @@ export class GitHubService {
   async createRepository(repoName: string, isPrivate = true) {
     const exists = await this.repoExists(repoName);
     if (exists) {
-      throw new BadRequestException(
-        'Project name already existed on Github.'
-      );
+      throw new BadRequestException('Project name already existed on Github.');
     }
     const res = await this.octokit.rest.repos.createForAuthenticatedUser({
       name: repoName,
@@ -123,4 +125,57 @@ export class GitHubService {
       sha, // needed for updating
     });
   }
+
+  async createBranch(repo: string, branchName: string, fromBranch = 'main') {
+    const baseBranch = await this.octokit.rest.repos.getBranch({
+      owner: this.username,
+      repo,
+      branch: fromBranch,
+    });
+
+    await this.octokit.rest.git.createRef({
+      owner: this.username,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: baseBranch.data.commit.sha,
+    });
+  }
+
+  async mergeBranch({
+    repo,
+    base,
+    head,
+    commitMessage,
+  }: {
+    repo: string;
+    base: string;
+    head: string;
+    commitMessage: string;
+  }) {
+    const { data } = await this.octokit.rest.repos.merge({
+      owner: this.username,
+      repo,
+      base,
+      head,
+      commit_message: commitMessage,
+    });
+
+    return data;
+  }
+
+  async listCommits(projectId: bigint, branchId: bigint) {
+    const repo = `project-${projectId}`;
+    const branchName = `branch-${branchId}`;
+
+    const { data } = await this.octokit.rest.repos.listCommits({
+      owner: this.username,
+      repo,
+      sha: branchName,
+    });
+
+    return data;
+  }
+
+
+
 }

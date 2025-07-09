@@ -16,6 +16,7 @@ import { FileEntity } from './file.entity';
 import { ProjectGroupEntity } from './project-group.entity';
 import { UserTypeEntity } from './user-type.entity';
 import { RequestEntity } from './request.entity';
+import { ProjectDiscussionCommentEntity } from './project-discussion.entity';
 
 export enum UserRole {
   SuperAdmin = 1,
@@ -76,5 +77,11 @@ export class UserEntity {
 
   @ManyToMany(() => RequestEntity, request => request.registrants)
   registeredRequests: RequestEntity[];
+
+  @ManyToMany(() => ProjectDiscussionCommentEntity, upvote => upvote.upvotes, { cascade: true })
+  upvote: ProjectDiscussionCommentEntity[];
+
+  @ManyToMany(() => ProjectDiscussionCommentEntity, downvote => downvote.downvotes, { cascade: true })
+  downvote: ProjectDiscussionCommentEntity[];
 
 }

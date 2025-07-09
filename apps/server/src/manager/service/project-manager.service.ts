@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Like, Not, Repository } from 'typeorm';
+import { Brackets, DataSource, In, Like, Not, Repository } from 'typeorm';
 import {
   BranchEntity,
   CategoryEntity,
@@ -16,7 +16,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
-  RequestEntity,
+  RequestEntity, CommitStatus
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -41,6 +41,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(ProjectRoleEntity)
     private readonly projectRoleRepository: Repository<ProjectRoleEntity>,
+    @InjectRepository(BranchEntity)
+    private readonly branchRepository: Repository<BranchEntity>,
+    @InjectRepository(CommitEntity)
+    private readonly commitRepository: Repository<CommitEntity>,
     private readonly dataSource: DataSource,
     private readonly githubService: GitHubService
   ) {
@@ -203,7 +207,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       const everyoneRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
-        permissionFlags: new Permission(PermissionFlags.ViewProject | PermissionFlags.ManageDiscussions),
+        permissionFlags: new Permission(
+          PermissionFlags.ViewProject | PermissionFlags.ManageDiscussions
+        ),
         name: 'Everyone',
       });
 
@@ -249,7 +255,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   }
 
   async createProjectFromRequest(request: RequestEntity, uid: bigint) {
-    const tags = request.tags?.map(tag => tag.name) ?? [];
+    const tags = request.tags?.map((tag) => tag.name) ?? [];
 
     const createProjectDto: CreateProjectDto = {
       name: request.title,
@@ -497,7 +503,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
   }
 
-
   async findUserToProject(
     projectId: bigint,
     identifier: string
@@ -619,4 +624,171 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
     return Object.values(memberMap);
   }
+
+  async createBranch(
+    projectId: bigint,
+    userId: bigint,
+    displayName: string,
+    fromBranchId?: bigint,
+    visibleToRoleIds?: bigint[]
+  ): Promise<BranchEntity> {
+    await this.testPermissions(
+      projectId,
+      userId,
+      PermissionFlags.ManageBranches
+    );
+
+    if (!fromBranchId) {
+      const project = await this.projectRepository.findOneOrFail({
+        where: { id: projectId },
+        relations: ['defaultBranch'],
+      });
+
+      fromBranchId = project.defaultBranch.id;
+    }
+
+    const branch = this.branchRepository.create({
+      name: '',
+      project: { id: projectId } as any,
+      user: { id: userId } as any,
+    });
+
+    if (visibleToRoleIds?.length) {
+      const roles = await this.projectRoleRepository.find({
+        where: { id: In(visibleToRoleIds) },
+      });
+      branch.visibleToRoles = roles;
+    } else {
+      branch.visibleToRoles = [];
+    }
+
+    const savedBranch = await this.branchRepository.save(branch);
+
+    const githubBranchName = `branch-${savedBranch.id}`;
+    const baseBranchName = `branch-${fromBranchId}`;
+    await this.githubService.createBranch(
+      `project-${projectId}`,
+      githubBranchName,
+      baseBranchName
+    );
+
+    savedBranch.name = displayName;
+    return this.branchRepository.save(savedBranch);
+  }
+
+  async renameBranchName(
+    branchId: bigint,
+    userId: bigint,
+    projectId: bigint,
+    newName: string
+  ) {
+    await this.testPermissions(
+      projectId,
+      userId,
+      PermissionFlags.ManageBranches
+    );
+
+    const branch = await this.branchRepository.findOneOrFail({
+      where: { id: branchId },
+      relations: ['project'],
+    });
+
+    if (branch.project.id !== projectId) {
+      throw new ForbiddenException('Branch does not belong to this project');
+    }
+
+    branch.name = newName;
+    return this.branchRepository.save(branch);
+  }
+
+  async listBranchesForProject(
+    projectId: bigint,
+    userId: bigint
+  ): Promise<BranchEntity[]> {
+    await this.testPermissions(projectId, userId, PermissionFlags.ViewProject);
+
+    const userRoles = await this.projectRoleRepository
+      .createQueryBuilder('role')
+      .innerJoin('role.users', 'user')
+      .where('role.project = :projectId', { projectId })
+      .andWhere('user.id = :userId', { userId })
+      .select(['role.id'])
+      .getMany();
+
+    const userRoleIds = userRoles.map((r) => r.id);
+
+    return this.branchRepository
+      .createQueryBuilder('branch')
+      .leftJoinAndSelect('branch.visibleToRoles', 'role')
+      .where('branch.projectId = :projectId', { projectId })
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('role.id IS NULL');
+          if (userRoleIds.length > 0) {
+            qb.orWhere('role.id IN (:...userRoleIds)', { userRoleIds });
+          }
+        })
+      )
+      .getMany();
+  }
+
+  async submitCommit(
+    projectId: bigint,
+    userId: bigint,
+    branchId: bigint,
+    filePath: string,
+    content: string,
+    message: string
+  ): Promise<CommitEntity> {
+    await this.testPermissions(projectId, userId, PermissionFlags.PushCommit);
+
+    const commit = this.commitRepository.create({
+      project: { id: projectId } as any,
+      branch: { id: branchId } as any,
+      author: { id: userId } as any,
+      message,
+      contentSnapshot: content,
+      filePath,
+      status: CommitStatus.Pending,
+    });
+
+    return this.commitRepository.save(commit);
+  }
+
+  async reviewCommit(
+    projectId: bigint,
+    commitId: bigint,
+    reviewerId: bigint,
+    approve: boolean,
+    reviewMessage?: string
+  ) {
+    await this.testPermissions(projectId, reviewerId, PermissionFlags.ReviewCommit);
+
+    const commit = await this.commitRepository.findOneOrFail({
+      where: { id: commitId },
+      relations: ['project', 'branch'],
+    });
+
+    commit.status = approve ? CommitStatus.Approved : CommitStatus.Rejected;
+    commit.reviewedByUserId = reviewerId;
+    commit.reviewMessage = reviewMessage;
+
+    await this.commitRepository.save(commit);
+
+    if (approve) {
+      const githubRepo = `project-${commit.project.id}`;
+      const githubBranch = `branch-${commit.branch.id}`;
+
+      await this.githubService.commitChange({
+        repo: githubRepo,
+        branch: githubBranch,
+        path: commit.filePath,
+        content: commit.contentSnapshot,
+        message: commit.message,
+      });
+    }
+
+    return commit;
+  }
+
 }

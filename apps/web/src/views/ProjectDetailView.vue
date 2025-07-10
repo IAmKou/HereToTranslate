@@ -495,21 +495,33 @@
                             </td>
                             <td>
                               <span
-                                v-if="member.id === project.createdBy.id"
-                                class="role-badge owner-badge"
-                                title="Project Owner"
-                                style="background: #fefcbf; color: #b7791f; border: 1.5px solid #b7791f; font-weight: bold;"
+                                class="role-badges-group discord-badge-group"
+                                @mouseenter="showFullRoles = member.id"
+                                @mouseleave="showFullRoles = null"
+                                @click="showFullRoles = showFullRoles === member.id ? null : member.id"
+                                style="cursor:pointer;"
                               >
-                                Project Owner
+                                <span
+                                  v-for="(role, idx) in displayRoles(member, project).slice(0, 3)"
+                                  :key="role.id"
+                                  :class="['role-badge discord-role-badge', getRoleBadgeClass(role.name)]"
+                                >{{ role.name }}</span>
+                                <span v-if="getRoleCount(displayRoles(member, project)) > 3" class="discord-more-badge">
+                                  +{{ getRoleCount(displayRoles(member, project)) - 3 }} more
+                                </span>
                               </span>
-                              <span
-                                v-for="role in displayRoles(member, project)"
-                                :key="role.id"
-                                class="role-badge"
-                                :title="getRoleDescription(role.name)"
+                              <div
+                                v-if="showFullRoles === member.id && getRoleCount(displayRoles(member, project)) > 3"
+                                class="discord-role-tooltip"
+                                style="display:flex; flex-wrap:wrap; gap:0.4em; padding:0.7em 1.2em;"
                               >
-                                {{ role.name }}
-                              </span>
+                                <span
+                                  v-for="role in displayRoles(member, project)"
+                                  :key="role.id"
+                                  :class="['role-badge discord-role-badge', getRoleBadgeClass(role.name)]"
+                                  style="margin-bottom:0.2em;"
+                                >{{ role.name }}</span>
+                              </div>
                             </td>
                             <td>
                               <!-- Xoá nút edit role ở đây, không render gì nữa -->
@@ -1557,6 +1569,7 @@ function selectUserSuggest(idx?: number) {
 }
 
 function handleRolesUpdated() {
+  loadProject(); // Cập nhật lại project để số role mới được cập nhật lên card
   loadMembers();
 }
 
@@ -1620,6 +1633,20 @@ function displayRoles(member: any, project: Project) {
       role.name &&
       !(member.id === project.createdBy.id && role.name === 'Project Owner')
   );
+}
+
+function getRoleBadgeClass(roleName: string) {
+  if (!roleName) return 'role-badge-default';
+  const name = roleName.toLowerCase();
+  if (name.includes('owner')) return 'role-badge-owner';
+  if (name.includes('admin')) return 'role-badge-admin';
+  if (name.includes('mod')) return 'role-badge-mod';
+  if (name.includes('everyone')) return 'role-badge-everyone';
+  return 'role-badge-default';
+}
+const showFullRoles = ref<string | null>(null);
+function getRoleCount(roles: any[]): number {
+  return roles ? roles.length : 0;
 }
 </script>
 
@@ -4441,5 +4468,98 @@ function displayRoles(member: any, project: Project) {
   color: #b7791f;
   border: 1.5px solid #b7791f;
   margin-right: 0.3rem;
+}
+
+.role-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.18em 0.9em;
+  font-size: 0.95em;
+  font-weight: 700;
+  margin-right: 0.3em;
+  margin-bottom: 0.1em;
+  background: #f3f3f3;
+  color: #333;
+  border: 1.5px solid #e2e8f0;
+  letter-spacing: 0.04em;
+}
+.role-badge-owner { background: #fefcbf; color: #b7791f; border-color: #b7791f; }
+.role-badge-admin { background: #bee3f8; color: #2b6cb0; border-color: #2b6cb0; }
+.role-badge-mod { background: #c6f6d5; color: #276749; border-color: #276749; }
+.role-badge-everyone { background: #ede9fe; color: #7c3aed; border-color: #7c3aed; }
+.role-badge-default { background: #f3f3f3; color: #333; border-color: #e2e8f0; }
+.role-badges-group { display: inline-block; }
+.discord-role-tooltip {
+  position: absolute;
+  background: #23272a;
+  color: #fff;
+  padding: 0.7em 1.2em;
+  border-radius: 8px;
+  font-size: 0.98em;
+  z-index: 100;
+  box-shadow: 0 4px 16px #0005;
+  white-space: pre-line;
+  max-width: 320px;
+  left: 0;
+  top: 2.2em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+.discord-badge-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18em;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.discord-role-badge {
+  border-radius: 999px;
+  padding: 0.18em 0.85em;
+  font-size: 0.97em;
+  font-weight: 700;
+  margin-right: 0.13em;
+  margin-bottom: 0.08em;
+  background: #23272a;
+  color: #fff;
+  border: none;
+  box-shadow: 0 1px 4px #0002;
+  letter-spacing: 0.04em;
+  transition: background 0.18s, color 0.18s;
+  cursor: pointer;
+}
+.discord-role-badge:hover {
+  background: #5865f2;
+  color: #fff;
+}
+.role-badge-owner { background: #f9e076 !important; color: #b7791f !important; }
+.role-badge-admin { background: #6ba4f8 !important; color: #2b6cb0 !important; }
+.role-badge-mod { background: #6ee7b7 !important; color: #276749 !important; }
+.role-badge-everyone { background: #bdb5f7 !important; color: #7c3aed !important; }
+.role-badge-default { background: #4f545c !important; color: #fff !important; }
+.discord-more-badge {
+  color: #7289da;
+  font-weight: 700;
+  margin-left: 0.2em;
+  font-size: 0.97em;
+  cursor: pointer;
+}
+.discord-role-tooltip {
+  position: absolute;
+  background: #23272a;
+  color: #fff;
+  padding: 0.7em 1.2em;
+  border-radius: 8px;
+  font-size: 0.98em;
+  z-index: 100;
+  box-shadow: 0 4px 16px #0005;
+  white-space: pre-line;
+  max-width: 320px;
+  left: 0;
+  top: 2.2em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  min-width: 180px;
 }
 </style>

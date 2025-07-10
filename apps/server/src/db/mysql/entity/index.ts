@@ -7,7 +7,6 @@ export * from './project-discussion.entity';
 export * from './project-group.entity';
 export * from './project-role.entity';
 export * from './project-tag.entity';
-export * from './rating.entity';
 export * from './report.entity';
 export * from './request.entity';
 export * from './user-type.entity';

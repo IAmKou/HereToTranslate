@@ -13,7 +13,6 @@ import {
   ProjectDiscussionCommentEntity,
   ProjectDiscussionThreadEntity,
   DiscussionAccessPolicyEntity,
-  RatingEntity,
   ReportEntity,
   RequestEntity,
   TaskEntity,
@@ -45,7 +44,7 @@ export class MySqlConnection {
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
       entities: [UserEntity, BranchEntity, ProjectEntity, CategoryEntity, FileEntity,
-        ProjectGroupEntity, ProjectRoleEntity, RatingEntity, ReportEntity, RequestEntity, TaskEntity,
+        ProjectGroupEntity, ProjectRoleEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,
         ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity],
     });

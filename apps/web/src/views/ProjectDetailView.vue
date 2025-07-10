@@ -1118,6 +1118,16 @@ watch(
   { deep: true }
 );
 
+watch(
+  () => activeTab.value,
+  (newTab) => {
+    if (newTab === 'groups') {
+      loadGroups();
+    }
+  },
+  { immediate: true }
+);
+
 // Watch for changes in available permissions to update select all state
 watch(availablePermissions, () => {
   isAllSelected.value =
@@ -1184,15 +1194,15 @@ const handleSuccessModalOk = () => {
   showSuccessModal.value = false;
   router.push('/projects');
 };
-
+const groups = ref<ProjectGroup[]>([]);
+const groupsLoading = ref(false);
+const groupsError = ref<string | null>(null);
 const createGroup = async () => {
   if (!project.value) return;
 
   isCreatingGroup.value = true;
   try {
-    await axiosInstance.post(`/projects/${project.value.id}/groups/create`, {
-      body: JSON.stringify(newGroup.value),
-    });
+    await axiosInstance.post(`/projects/${project.value.id}/groups/create`, newGroup.value);
     await loadProject(); // Reload project to get updated groups
     showCreateGroupModal.value = false;
     newGroup.value = { name: '' };
@@ -1200,6 +1210,19 @@ const createGroup = async () => {
     alert('Failed to create group: ' + err.message);
   } finally {
     isCreatingGroup.value = false;
+  }
+};
+
+const loadGroups = async () => {
+  groupsLoading.value = true;
+  groupsError.value = null;
+  try {
+    const res = await axios.get(`/api/projects/${projectId}/groups`);
+    groups.value = res.data;
+  } catch (error: any) {
+    groupsError.value = error?.response?.data?.message || 'Failed to load groups.';
+  } finally {
+    groupsLoading.value = false;
   }
 };
 

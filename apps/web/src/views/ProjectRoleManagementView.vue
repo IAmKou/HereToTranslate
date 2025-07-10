@@ -33,7 +33,7 @@
                   <label for="selectAllPerms" class="select-all-label">Select All Permissions</label>
                 </div>
                 <multiselect
-                  v-model="roleForm.permissionFlags"
+                  v-model="permissionFlagsProxy"
                   :options="groupedPermissionOptions"
                   :group-label="'label'"
                   :group-values="'options'"
@@ -166,13 +166,24 @@
               <tbody>
               <tr v-for="role in roles" :key="role.id">
                 <td>{{ role.name }}</td>
-                <td>
+                <td style="position:relative;">
                     <span
                       class="permission-label"
-                      :title="role.permissionFlags"
+                      :title="formatPermissionLabel(role.permissionFlags)"
+                      @mouseenter="showFullPerms = role.id"
+                      @mouseleave="showFullPerms = null"
                     >
-                      {{ formatPermissionLabel(role.permissionFlags) }}
+                      {{ shortPermissionLabel(role.permissionFlags) }}
+                      <span v-if="getPermissionCount(role.permissionFlags) > 3" style="color:#3182ce;">
+                        +{{ getPermissionCount(role.permissionFlags) - 3 }} more
+                      </span>
                     </span>
+                  <div
+                    v-if="showFullPerms === role.id && getPermissionCount(role.permissionFlags) > 3"
+                    class="discord-perm-tooltip"
+                  >
+                    {{ formatPermissionLabel(role.permissionFlags) }}
+                  </div>
                 </td>
                 <td>
                   <div class="action-buttons">
@@ -195,7 +206,27 @@
             <div v-else-if="roles.length > 0 && isMobile" class="roles-card-list">
               <div v-for="role in roles" :key="role.id" class="role-card">
                 <div><strong>Role:</strong> {{ role.name }}</div>
-                <div><strong>Permissions:</strong> <span class="permission-label" :title="role.permissionFlags">{{ formatPermissionLabel(role.permissionFlags) }}</span></div>
+                <div style="position:relative;"><strong>Permissions:</strong>
+                  <span
+                    class="permission-label"
+                    :title="formatPermissionLabel(role.permissionFlags)"
+                    @mouseenter="showFullPerms = role.id"
+                    @mouseleave="showFullPerms = null"
+                    @click="showFullPerms = showFullPerms === role.id ? null : role.id"
+                    style="cursor:pointer;"
+                  >
+                    {{ shortPermissionLabel(role.permissionFlags) }}
+                    <span v-if="getPermissionCount(role.permissionFlags) > 3" style="color:#3182ce;">
+                      +{{ getPermissionCount(role.permissionFlags) - 3 }} more
+                    </span>
+                  </span>
+                  <div
+                    v-if="showFullPerms === role.id && getPermissionCount(role.permissionFlags) > 3"
+                    class="discord-perm-tooltip"
+                  >
+                    {{ formatPermissionLabel(role.permissionFlags) }}
+                  </div>
+                </div>
                 <div class="action-buttons">
                   <button class="btn btn-menu" @click="toggleActionMenu(role.id)">⋮</button>
                   <div v-if="actionMenuOpen === role.id" class="action-dropdown">
@@ -221,16 +252,47 @@
                 <tr>
                   <th>Name</th>
                   <th>Username</th>
+                  <th>Roles</th>
                   <th>Actions</th>
                 </tr>
                 </thead>
                 <tbody>
-                <tr v-for="user in roleUsers" :key="user.id">
-                  <td>{{ user.fullName || '-' }}</td>
-                  <td>{{ user.username }}</td>
+                <tr v-for="member in roleUsers" :key="member.id">
+                  <td>{{ member.fullName || '-' }}</td>
+                  <td>{{ member.username }}</td>
+                  <td style="position:relative;">
+                    <span
+                      class="role-badges-group"
+                      @mouseenter="showFullRoles = member.id"
+                      @mouseleave="showFullRoles = null"
+                      @click="showFullRoles = showFullRoles === member.id ? null : member.id"
+                      style="cursor:pointer;"
+                    >
+                      <span
+                        v-for="(role, idx) in member.roles.slice(0, 3)"
+                        :key="role.id"
+                        :class="['role-badge', getRoleBadgeClass(role.name)]"
+                      >{{ role.name }}</span>
+                      <span v-if="getRoleCount(member.roles) > 3" style="color:#3182ce; font-weight:600;">
+                        +{{ getRoleCount(member.roles) - 3 }} more
+                      </span>
+                    </span>
+                    <div
+                      v-if="showFullRoles === member.id && getRoleCount(member.roles) > 3"
+                      class="discord-role-tooltip"
+                      style="display:flex; flex-wrap:wrap; gap:0.5em;"
+                    >
+                      <span
+                        v-for="role in member.roles"
+                        :key="role.id"
+                        :class="['role-badge', getRoleBadgeClass(role.name)]"
+                        style="margin-bottom:0.2em;"
+                      >{{ role.name }}</span>
+                    </div>
+                  </td>
                   <td>
-                    <button class="btn btn-outline-danger btn-xs" @click="removeUserFromRole(user.id)" :disabled="removingUserId === user.id">
-                      <span v-if="removingUserId === user.id" class="loading-spinner-small"></span>
+                    <button class="btn btn-outline-danger btn-xs" @click="removeUserFromRole(member.id)" :disabled="removingUserId === member.id">
+                      <span v-if="removingUserId === member.id" class="loading-spinner-small"></span>
                       <span v-else><span class="icon">🗑️</span> Remove</span>
                     </button>
                   </td>
@@ -239,12 +301,12 @@
               </table>
               <!-- Card layout for mobile -->
               <div v-else-if="roleUsers.length > 0 && isMobile" class="users-card-list">
-                <div v-for="user in roleUsers" :key="user.id" class="user-card">
-                  <div><strong>Name:</strong> {{ user.fullName || '-' }}</div>
-                  <div><strong>Username:</strong> {{ user.username }}</div>
+                <div v-for="member in roleUsers" :key="member.id" class="user-card">
+                  <div><strong>Name:</strong> {{ member.fullName || '-' }}</div>
+                  <div><strong>Username:</strong> {{ member.username }}</div>
                   <div class="action-buttons">
-                    <button class="btn btn-outline-danger btn-xs" @click="removeUserFromRole(user.id)" :disabled="removingUserId === user.id">
-                      <span v-if="removingUserId === user.id" class="loading-spinner-small"></span>
+                    <button class="btn btn-outline-danger btn-xs" @click="removeUserFromRole(member.id)" :disabled="removingUserId === member.id">
+                      <span v-if="removingUserId === member.id" class="loading-spinner-small"></span>
                       <span v-else><span class="icon">🗑️</span> Remove</span>
                     </button>
                   </div>
@@ -255,16 +317,7 @@
                 <p>No users in this role.</p>
               </div>
             </div>
-            <div class="add-user-to-role">
-              <div class="input-group">
-                <span class="input-icon">👤</span>
-                <input v-model="addUserIdentifier" placeholder="Enter user email or ID to assign" />
-              </div>
-              <button class="btn btn-primary btn-sm" @click="addUserToRole" :disabled="addingUser">
-                <span v-if="addingUser" class="loading-spinner-small"></span>
-                <span v-else><span class="icon">➕</span> Add User</span>
-              </button>
-            </div>
+
             <div v-if="addUserError" class="input-error">{{ addUserError }}</div>
           </div>
         </template>
@@ -437,11 +490,49 @@ const addingUser = ref(false);
 const toastMessage = ref('');
 const showEditRoleModal = ref(false);
 const editingRoleData = ref(null);
+const showFullPerms = ref<string | null>(null);
+const showFullRoles = ref<string | null>(null);
+
+function parsePermissionFlags(raw) {
+  // Nếu là reactive object có _value hoặc value
+  if (raw && typeof raw === 'object') {
+    if ('_value' in raw) return parsePermissionFlags(raw._value);
+    if ('value' in raw) return parsePermissionFlags(raw.value);
+  }
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (!isNaN(Number(raw))) {
+        const num = BigInt(raw);
+        return Object.keys(PermissionFlags).filter(
+          (k) => typeof PermissionFlags[k] === 'bigint' && (num & PermissionFlags[k]) !== BigInt(0)
+        );
+      }
+    } catch {
+      if (!isNaN(Number(raw))) {
+        const num = BigInt(raw);
+        return Object.keys(PermissionFlags).filter(
+          (k) => typeof PermissionFlags[k] === 'bigint' && (num & PermissionFlags[k]) !== BigInt(0)
+        );
+      }
+    }
+  }
+  return [];
+}
 
 function openEditRole(role: any) {
   showCreateRoleModal.value = false;
   editingRoleData.value = role;
   showEditRoleModal.value = true;
+  // Log permissionFlags để debug
+  console.log('role.permissionFlags:', role.permissionFlags);
+  roleForm.value = {
+    name: role.name,
+    permissionFlags: parsePermissionFlags(role.permissionFlags),
+    id: role.id
+  };
 }
 function handleEditRoleClose(reload = false) {
   showEditRoleModal.value = false;
@@ -471,143 +562,56 @@ const loadRoles = async () => {
 const loadPermissions = async () => {
   permissionsLoading.value = true;
   try {
-    const { data } = await axiosInstance.get(`/permissions`); // Đổi endpoint mới
-    availablePermissions.value = data;
-  } catch (err: any) {
-    console.error('Failed to load permissions:', err);
-    // Fallback to default permissions if API fails
+    // Hardcode các quyền đúng key với PermissionFlags để test
     availablePermissions.value = [
-      { value: 'READ', label: 'Read', description: 'Quyền đọc' },
-      { value: 'WRITE', label: 'Write', description: 'Quyền ghi' },
-      { value: 'DELETE', label: 'Delete', description: 'Quyền xóa' },
-      { value: 'ADMIN', label: 'Admin', description: 'Quyền quản trị' }
+      { value: 'ProjectAdmin', label: 'Project Admin' },
+      { value: 'ManageRoles', label: 'Manage Roles' },
+      { value: 'ManageMembers', label: 'Manage Members' },
+      { value: 'ManageBranches', label: 'Manage Branches' },
+      { value: 'ManageGroups', label: 'Manage Groups' },
+      { value: 'ManageProjectMetadata', label: 'Manage Project Metadata' },
+      { value: 'ManageWorkspaces', label: 'Manage Workspaces' },
+      { value: 'ManageDiscussions', label: 'Manage Discussions' },
+      { value: 'ViewAudit', label: 'View Audit' },
+      { value: 'ReviewCommit', label: 'Review Commit' },
+      { value: 'PushCommit', label: 'Push Commit' },
+      { value: 'ReviewRequests', label: 'Review Requests' },
+      { value: 'ViewRequest', label: 'View Request' },
+      { value: 'ManageWorkspaceMetadata', label: 'Manage Workspace Metadata' },
+      { value: 'ViewWorkspace', label: 'View Workspace' },
+      { value: 'ViewProject', label: 'View Project' },
+      { value: 'ManageComments', label: 'Manage Comments' },
+      { value: 'PostComment', label: 'Post Comment' },
+      { value: 'Vote', label: 'Vote' },
+      { value: 'AttachFiles', label: 'Attach Files' },
+      { value: 'ViewThread', label: 'View Thread' }
     ];
+    console.log('Hardcoded availablePermissions:', availablePermissions.value);
+  } catch (err) {
+    console.error('Failed to load permissions:', err);
   } finally {
     permissionsLoading.value = false;
   }
 };
 
-const createRole = async () => {
-  creatingOrUpdatingRole.value = true;
-  try {
-    await axiosInstance.post(`/projects/${props.projectId}/roles/create`, {
-      ...roleForm.value,
-      permissionFlags: JSON.stringify(roleForm.value.permissionFlags),
-    });
-    showCreateRoleModal.value = false;
-    roleForm.value = { name: '', permissionFlags: [] };
-    await loadRoles();
-    emit('roles-updated');
-    showToast('Role created!');
-  } catch (err: any) {
-    alert('Failed to create role: ' + err.message);
-  } finally {
-    creatingOrUpdatingRole.value = false;
+const permissionFlagsProxy = computed({
+  get() {
+    return availablePermissions.value.filter(p => roleForm.value.permissionFlags.includes(p.value));
+  },
+  set(val) {
+    // Convert mọi object option thành string key
+    roleForm.value.permissionFlags = (val || []).map((item: any) => {
+      let v = item;
+      let depth = 0;
+      while (v && typeof v === 'object' && 'value' in v && depth < 10) {
+        v = v.value;
+        depth++;
+      }
+      return typeof v === 'string' ? v : '';
+    }).filter(Boolean);
   }
-};
+});
 
-const updateRole = async () => {
-  creatingOrUpdatingRole.value = true;
-  try {
-    await axiosInstance.patch(`/projects/${props.projectId}/roles/${roleForm.value.id}`, {
-      ...roleForm.value,
-      permissionFlags: JSON.stringify(roleForm.value.permissionFlags),
-    });
-    showCreateRoleModal.value = false;
-    editingRole.value = false;
-    roleForm.value = { name: '', permissionFlags: [] };
-    await loadRoles();
-    emit('roles-updated');
-    showToast('Role updated!');
-  } catch (err: any) {
-    alert('Failed to update role: ' + err.message);
-  } finally {
-    creatingOrUpdatingRole.value = false;
-  }
-};
-
-const deleteRole = async (roleId: string) => {
-  if (!confirm('Are you sure you want to delete this role?')) return;
-  deletingRoleId.value = roleId;
-  try {
-    await axiosInstance.delete(`/projects/${props.projectId}/roles/${roleId}`);
-    await loadRoles();
-    emit('roles-updated');
-    showToast('Role deleted!');
-  } catch (err: any) {
-    alert('Failed to delete role: ' + err.message);
-  } finally {
-    deletingRoleId.value = null;
-  }
-};
-
-const viewRoleUsers = async (role: any) => {
-  selectedRole.value = role;
-  roleUsersLoading.value = true;
-  roleUsersError.value = '';
-  try {
-    const { data } = await axiosInstance.get(`/projects/${props.projectId}/roles/${role.id}/users`);
-    roleUsers.value = data;
-  } catch (err: any) {
-    roleUsersError.value = err.message || 'Failed to load users in role';
-  } finally {
-    roleUsersLoading.value = false;
-  }
-};
-
-const addUserToRole = async () => {
-  addUserError.value = '';
-  if (!addUserIdentifier.value) {
-    addUserError.value = 'Please enter a user email or ID';
-    return;
-  }
-  addingUser.value = true;
-  try {
-    await axiosInstance.post(`/projects/${props.projectId}/roles/${selectedRole.value.id}/users/add`, { userIds: [addUserIdentifier.value] });
-    addUserIdentifier.value = '';
-    await viewRoleUsers(selectedRole.value);
-    emit('roles-updated');
-    showToast('User added!');
-  } catch (err: any) {
-    addUserError.value = err.message || 'Failed to add user';
-  } finally {
-    addingUser.value = false;
-  }
-};
-
-const removeUserFromRole = async (userId: string) => {
-  removingUserId.value = userId;
-  try {
-    await axiosInstance.post(`/projects/${props.projectId}/roles/${selectedRole.value.id}/users/remove`, { userIds: [userId] });
-    await viewRoleUsers(selectedRole.value);
-    emit('roles-updated');
-    showToast('User removed!');
-  } catch (err: any) {
-    alert('Failed to remove user: ' + err.message);
-  } finally {
-    removingUserId.value = null;
-  }
-};
-
-function formatPermissionLabel(flags: string): string {
-  let arr: string[] = [];
-  try {
-    arr = Array.isArray(flags) ? flags : JSON.parse(flags);
-  } catch (e) {
-    arr = [];
-  }
-  if (arr.includes('ADMIN')) return 'Full Access';
-  if (arr.includes('READ') && arr.length === 1) return 'Limited Access';
-  if (arr.length === 0) return 'None';
-  return arr.map((p: string) => availablePermissions.value.find((ap: any) => ap.value === p)?.label || p).join(', ');
-}
-
-function showToast(msg: string) {
-  toastMessage.value = msg;
-  setTimeout(() => toastMessage.value = '', 2500);
-}
-
-// Chuẩn bị options cho multiselect dạng nhóm
 const groupedPermissionOptions = computed(() => {
   return Object.values(groupedPermissions.value).map((group: any) => ({
     label: group.label,
@@ -627,13 +631,20 @@ function customPermissionLabel(option: any) {
 }
 
 function calculatePermissionFlags(selected: string[]): string {
-  // OR các quyền lại thành bigint, trả về string để backend nhận đúng
-  const flags = selected.reduce((acc, key) => {
+  let flags = BigInt(0);
+  selected.forEach((key) => {
     const val = PermissionFlags[key];
-    if (typeof val === 'bigint') return acc | val;
-    if (typeof val === 'number') return acc | BigInt(val);
-    return acc;
-  }, BigInt(0));
+    console.log('[CALC FLAG] key:', key, 'val:', val, 'typeof:', typeof val);
+    if (val === undefined) {
+      console.warn('[CALC FLAG] WARNING: PermissionFlags[' + key + '] is undefined!');
+    } else {
+      flags = flags | BigInt(val);
+      console.log('[CALC FLAG] flags after OR:', flags.toString());
+    }
+  });
+  if (selected.length === 0) {
+    console.warn('[CALC FLAG] WARNING: selectedKeys is empty!');
+  }
   return flags.toString();
 }
 
@@ -676,6 +687,11 @@ watch(() => formError.value && !roleForm.value.name, (hasError: boolean) => {
   }
 });
 
+// Thêm watch log cho roleForm.permissionFlags
+watch(() => roleForm.value.permissionFlags, (val) => {
+  console.log('permissionFlags changed:', val);
+});
+
 onMounted(() => {
   if (props.showCreateRoleModal) {
     showCreateRoleModal.value = true;
@@ -688,10 +704,169 @@ onMounted(() => {
   if (keys.length) {
     collapsedGroups.value = Object.fromEntries(keys.map((k, i) => [k, i !== 0]));
   }
+  console.log('=== DEBUG PermissionFlags at FE ===');
+  console.log('PermissionFlags object:', PermissionFlags);
+  console.log('typeof PermissionFlags:', typeof PermissionFlags);
+  console.log('PermissionFlags keys:', Object.keys(PermissionFlags));
 });
 
 function toggleGroupCollapse(groupKey: string) {
   openedGroupKey.value = openedGroupKey.value === groupKey ? '' : groupKey;
+}
+
+// Định nghĩa lại hàm formatPermissionLabel để dùng cho table
+function formatPermissionLabel(flags: any): string {
+  // Nếu là reactive object có _value hoặc value
+  if (flags && typeof flags === 'object') {
+    if ('_value' in flags) return formatPermissionLabel(flags._value);
+    if ('value' in flags) return formatPermissionLabel(flags.value);
+  }
+  let arr: string[] = [];
+  if (Array.isArray(flags)) arr = flags;
+  else if (!isNaN(Number(flags))) {
+    const num = BigInt(flags);
+    arr = Object.keys(PermissionFlags).filter(
+      (k) => typeof PermissionFlags[k] === 'bigint' && (num & PermissionFlags[k]) !== BigInt(0)
+    );
+  } else {
+    try {
+      arr = JSON.parse(flags);
+    } catch {
+      arr = [];
+    }
+  }
+  if (arr.length === 0) return 'None';
+  return arr.map((p: string) => availablePermissions.value.find((ap: any) => ap.value === p)?.label || p).join(', ');
+}
+
+function shortPermissionLabel(flags: any): string {
+  let arr = formatPermissionLabel(flags).split(', ');
+  return arr.slice(0, 3).join(', ');
+}
+function getPermissionCount(flags: any): number {
+  return formatPermissionLabel(flags).split(', ').length;
+}
+function shortRoleLabel(roles: any[]): string {
+  if (!roles || !roles.length) return '';
+  return roles.slice(0, 3).map(r => r.name).join(', ');
+}
+function getRoleCount(roles: any[]): number {
+  return roles ? roles.length : 0;
+}
+
+function getRoleBadgeClass(roleName: string) {
+  if (!roleName) return 'role-badge-default';
+  const name = roleName.toLowerCase();
+  if (name.includes('owner')) return 'role-badge-owner';
+  if (name.includes('admin')) return 'role-badge-admin';
+  if (name.includes('mod')) return 'role-badge-mod';
+  if (name.includes('everyone')) return 'role-badge-everyone';
+  return 'role-badge-default';
+}
+
+// Expose đúng các hàm cần thiết
+function addUserToRole(identifier: string) {
+  addingUser.value = true;
+  addUserError.value = '';
+  if (!identifier) {
+    addUserError.value = 'User identifier is required.';
+    addingUser.value = false;
+    return;
+  }
+  axiosInstance.post(`/projects/${props.projectId}/roles/${editingRoleData.value.id}/add-user`, { identifier })
+    .then(() => {
+      showToast('User added to role successfully!');
+      loadRoleUsers();
+    })
+    .catch((err: any) => {
+      addUserError.value = err.message || 'Failed to add user to role.';
+    })
+    .finally(() => {
+      addingUser.value = false;
+    });
+}
+
+function removeUserFromRole(userId: string) {
+  removingUserId.value = userId;
+  axiosInstance.delete(`/projects/${props.projectId}/roles/${editingRoleData.value.id}/remove-user/${userId}`)
+    .then(() => {
+      showToast('User removed from role successfully!');
+      loadRoleUsers();
+    })
+    .catch((err: any) => {
+      alert('Failed to remove user from role: ' + err.message);
+    })
+    .finally(() => {
+      removingUserId.value = null;
+    });
+}
+
+function deleteRole(roleId: string) {
+  deletingRoleId.value = roleId;
+  axiosInstance.delete(`/projects/${props.projectId}/roles/${roleId}`)
+    .then(() => {
+      showToast('Role deleted successfully!');
+      loadRoles();
+      selectedRole.value = null;
+    })
+    .catch((err: any) => {
+      alert('Failed to delete role: ' + err.message);
+    })
+    .finally(() => {
+      deletingRoleId.value = null;
+    });
+}
+
+function viewRoleUsers(role: any) {
+  selectedRole.value = role;
+  loadRoleUsers();
+}
+
+async function loadRoleUsers() {
+  roleUsersLoading.value = true;
+  roleUsersError.value = '';
+  try {
+    const { data } = await axiosInstance.get(`/projects/${props.projectId}/roles/${selectedRole.value.id}/users`);
+    roleUsers.value = data;
+  } catch (err: any) {
+    roleUsersError.value = err.message || 'Failed to load users for this role.';
+  } finally {
+    roleUsersLoading.value = false;
+  }
+}
+
+function createRole() {
+  showCreateRoleModal.value = true;
+  editingRole.value = false;
+  roleForm.value = { name: '', permissionFlags: [] };
+  formError.value = false;
+  // Mở lại modal quản lý vai trò sau khi đóng modal nhỏ
+  setTimeout(() => { showCreateRoleModal.value = false; }, 0); // Đảm bảo không bị flicker
+}
+
+function updateRole() {
+  if (!editingRoleData.value || !editingRoleData.value.id) return;
+  creatingOrUpdatingRole.value = true;
+  axiosInstance.put(`/projects/${props.projectId}/roles/${editingRoleData.value.id}`, {
+    name: roleForm.value.name,
+    permissionFlags: calculatePermissionFlags(roleForm.value.permissionFlags)
+  })
+    .then(() => {
+      showToast('Role updated successfully!');
+      handleEditRoleClose(true);
+    })
+    .catch((err: any) => {
+      alert('Failed to update role: ' + err.message);
+    })
+    .finally(() => {
+      creatingOrUpdatingRole.value = false;
+    });
+}
+
+// Định nghĩa hàm showToast để hiển thị thông báo thành công/thất bại
+function showToast(msg: string) {
+  toastMessage.value = msg;
+  setTimeout(() => { toastMessage.value = ''; }, 2500);
 }
 
 defineExpose({
@@ -700,7 +875,7 @@ defineExpose({
   error,
   roles,
   showCreateRoleModal,
-  formatPermissions: formatPermissionLabel,
+  formatPermissionLabel,
   openEditRole,
   deleteRole,
   viewRoleUsers,
@@ -746,7 +921,16 @@ defineExpose({
 .action-dropdown button:hover { background: #f0f6ff; color: #3182ce; }
 .empty-section { text-align: center; padding: 2rem; color: #718096; }
 .empty-icon { font-size: 2.2rem; margin-bottom: 0.5rem; display: block; }
-.permission-label { background: #f0fff4; color: #276749; border-radius: 8px; padding: 0.2rem 0.7rem; font-size: 0.98em; font-weight: 600; cursor: pointer; }
+.permission-label {
+  background: #f0fff4;
+  color: #276749;
+  border-radius: 8px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.98em;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+}
 .input-group { display: flex; align-items: center; background: #f7fafc; border-radius: 8px; border: 2px solid #e2e8f0; padding: 0.5rem 1rem; transition: border 0.2s, box-shadow 0.2s; position: relative; flex: 1; }
 .input-icon { font-size: 1.2rem; color: #a0aec0; margin-right: 0.1rem; }
 .input-group input { border: none; background: transparent; outline: none; flex: 1; font-size: 1rem; color: #2d3748; padding: 0.9rem 1.1rem 0.9rem 0.1rem; }
@@ -981,4 +1165,61 @@ defineExpose({
   color: #a0aec0 !important; /* text-gray-400 */
   font-style: italic;
 }
+.discord-perm-tooltip {
+  position: absolute;
+  background: #23272a;
+  color: #fff;
+  padding: 0.7em 1.2em;
+  border-radius: 8px;
+  font-size: 0.98em;
+  z-index: 100;
+  box-shadow: 0 4px 16px #0005;
+  white-space: pre-line;
+  max-width: 320px;
+  left: 0;
+  top: 2.2em;
+}
+.discord-role-tooltip {
+  position: absolute;
+  background: #23272a;
+  color: #fff;
+  padding: 0.7em 1.2em;
+  border-radius: 8px;
+  font-size: 0.98em;
+  z-index: 100;
+  box-shadow: 0 4px 16px #0005;
+  white-space: pre-line;
+  max-width: 320px;
+  left: 0;
+  top: 2.2em;
+}
+.role-label {
+  background: #f0f4ff;
+  color: #2563eb;
+  border-radius: 8px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.98em;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+}
+.role-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.18em 0.9em;
+  font-size: 0.95em;
+  font-weight: 700;
+  margin-right: 0.3em;
+  margin-bottom: 0.1em;
+  background: #f3f3f3;
+  color: #333;
+  border: 1.5px solid #e2e8f0;
+  letter-spacing: 0.04em;
+}
+.role-badge-owner { background: #fefcbf; color: #b7791f; border-color: #b7791f; }
+.role-badge-admin { background: #bee3f8; color: #2b6cb0; border-color: #2b6cb0; }
+.role-badge-mod { background: #c6f6d5; color: #276749; border-color: #276749; }
+.role-badge-everyone { background: #ede9fe; color: #7c3aed; border-color: #7c3aed; }
+.role-badge-default { background: #f3f3f3; color: #333; border-color: #e2e8f0; }
+.role-badges-group { display: inline-block; }
 </style>

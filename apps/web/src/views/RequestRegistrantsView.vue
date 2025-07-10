@@ -10,7 +10,6 @@
           </button>
           <div>
             <h1 class="page-title">Request Registrants</h1>
-            <div class="page-desc">List of candidates who have registered for this request.</div>
           </div>
         </div>
         <div class="info-card">
@@ -186,6 +185,7 @@
               <div v-for="project in selectedUser.projects" :key="project.id" class="project-item">
                 <div class="project-header">
                   <span class="project-name">{{ project.name }}</span>
+                  <span class="project-request-name">in request: {{ project.requestName }}</span>
                   <span class="project-status" :class="project.status">{{ project.status }}</span>
                 </div>
                 <div class="project-details">
@@ -436,6 +436,13 @@ async function confirmApproveRegistrant() {
     pendingApproveUserId.value = null;
   }
 }
+
+watch(currentPage, () => {
+  loading.value = true;
+  setTimeout(() => {
+    loading.value = false;
+  }, 300);
+});
 
 async function reloadRegistrants() {
   loading.value = true;
@@ -1468,4 +1475,5 @@ onMounted(async () => {
   text-overflow: ellipsis;
   max-width: 180px;
 }
+
 </style>

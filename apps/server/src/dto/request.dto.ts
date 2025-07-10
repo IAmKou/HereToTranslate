@@ -42,26 +42,43 @@ export class CreateRequestDto {
 }
 
 export class UpdateRequestDto {
+  @IsOptional()
   @IsString()
   title?: string;
+
+  @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
   @IsNumber()
   dealAmount?: number;
-  @MaxLength(10)
+
+  @IsOptional()
   @IsDateString({ strict: true })
+  @MaxLength(10)
   deadline?: string;
-  @Optional()
-  categoryId:string;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   @MinLength(1, { each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsEnum(RequestStatus)
+  status?: RequestStatus;
 }
 
+
 export class ReviewRequestDto {
-  @IsString()
-  @IsEnum(RequestStatus)
+  @IsEnum(RequestStatus, {
+    message: 'Invalid status. Must be APPROVED or REJECTED.',
+  })
   status: RequestStatus;
 }
+

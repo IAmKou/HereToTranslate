@@ -490,7 +490,7 @@ const debugRequests = computed(() => {
 
 // Thêm biến computed cho danh sách đã filter (không có CANCELLED)
 const filteredMyRequests = computed(() => {
-  const list = debugRequests.value.filter(req => req.status !== 'CANCELLED')
+  const list = debugRequests.value
 
   if (!sortKey.value) return list
 

@@ -293,321 +293,62 @@
                 >
                   Files
                 </button>
+                <button
+                  :class="['tab', { active: activeTab === 'translation' }]"
+                  @click="activeTab = 'translation'"
+                >
+                  Translations
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'task' }]"
+                  @click="activeTab = 'task'"
+                >
+                  Tasks
+                </button>
               </div>
               <transition name="fade-tab" mode="out-in">
-                <div v-if="activeTab === 'members'" key="members">
-                  <!-- Add User to Project Section (moved up) -->
-                  <div class="management-section user-section">
-                    <div class="section-header">
-                      <h2 class="section-title">
-                        <span class="title-icon">➕</span>
-                        Add User to Project
-                      </h2>
-                    </div>
-                    <div class="section-content">
-                      <form
-                        autocomplete="off"
-                        class="add-user-form"
-                        @submit.prevent="searchUser"
-                      >
-                        <div class="form-row">
-                          <div
-                            class="form-group"
-                            style="
-                              flex: 1;
-                              margin-bottom: 0;
-                              position: relative;
-                            "
-                          >
-                            <label for="userIdentifier" class="form-label">
-                              <span class="label-icon">🔍</span>
-                              Search by Email or Name
-                            </label>
-                            <input
-                              id="userIdentifier"
-                              v-model="userSearch.identifier"
-                              type="text"
-                              required
-                              class="form-control"
-                              placeholder="Enter email or full name"
-                              @input="handleUserSuggest"
-                              @keydown.down.prevent="moveSuggest(1)"
-                              @keydown.up.prevent="moveSuggest(-1)"
-                              @keydown.enter.prevent="selectUserSuggest"
-                              autocomplete="off"
-                            />
-                            <ul
-                              v-if="userSuggestList.length > 0"
-                              class="user-suggest-dropdown"
-                            >
-                              <li
-                                v-for="(suggest, idx) in userSuggestList"
-                                :key="suggest.id"
-                                :class="{
-                                  active: idx === userSuggestActiveIdx,
-                                }"
-                                @mousedown.prevent="selectUserSuggest(idx)"
-                              >
-                                <span class="avatar-text">{{
-                                    (suggest.fullName || suggest.username)
-                                      .charAt(0)
-                                      .toUpperCase()
-                                  }}</span>
-                                <span class="suggest-name">{{
-                                    suggest.fullName || suggest.username
-                                  }}</span>
-                                <span class="suggest-email">{{
-                                    suggest.email
-                                  }}</span>
-                              </li>
-                            </ul>
-                          </div>
-                          <div
-                            class="form-actions"
-                            style="margin-bottom: 0; align-self: flex-end"
-                          >
-                            <button
-                              type="submit"
-                              class="btn btn-primary"
-                              :disabled="
-                                !userSearch.identifier || userSearch.loading
-                              "
-                              :title="
-                                !userSearch.identifier
-                                  ? 'Please enter a name or email to search'
-                                  : ''
-                              "
-                            >
-                              <span
-                                v-if="userSearch.loading"
-                                class="loading-spinner-small"
-                              ></span>
-                              <span v-else class="icon">🔍</span>
-                              {{
-                                userSearch.loading
-                                  ? 'Searching...'
-                                  : 'Search User'
-                              }}
-                            </button>
-                          </div>
-                        </div>
-                      </form>
-                      <div v-if="userSearch.error" class="error-message">
-                        <span class="error-icon">❌</span>
-                        <p>{{ userSearch.error }}</p>
-                      </div>
-                      <div v-if="userSearch.result" class="found-user">
-                        <div class="user-info">
-                          <div class="user-avatar">
-                            <span class="avatar-text">{{
-                                (
-                                  userSearch.result.fullName ||
-                                  userSearch.result.username
-                                )
-                                  .charAt(0)
-                                  .toUpperCase()
-                              }}</span>
-                          </div>
-                          <div class="user-details">
-                            <h4>
-                              {{
-                                userSearch.result.fullName ||
-                                userSearch.result.username
-                              }}
-                            </h4>
-                            <p>{{ userSearch.result.email }}</p>
-                          </div>
-                        </div>
-                        <button
-                          class="btn btn-primary btn-sm"
-                          @click="addUserToProject"
-                          :disabled="userSearch.adding"
-                        >
-                          <span
-                            v-if="userSearch.adding"
-                            class="loading-spinner-small"
-                          ></span>
-                          <span v-else class="icon">➕</span>
-                          {{
-                            userSearch.adding ? 'Adding...' : 'Add to Project'
-                          }}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <!-- Project Members Section (moved down) -->
-                  <div class="members-section">
-                    <div class="section-header">
-                      <h2 class="section-title">
-                        <span class="title-icon">👥</span>
-                        Project Members
-                      </h2>
-                      <div style="margin-left:auto; display: flex; gap: 0.5rem;">
-                        <button class="btn btn-primary" @click="showAddRoleModal = true">
-                          <span class="icon">➕</span> Add Role
-                        </button>
-                        <button class="btn btn-outline" @click="showRoleModal = true">
-                          <span class="icon">🛡️</span> Manage Roles
-                        </button>
-                      </div>
-                    </div>
-                    <div class="members-content">
-                      <div v-if="membersLoading" class="members-loading">
-                        <div class="loading-spinner-small"></div>
-                        <span>Loading members...</span>
-                      </div>
-                      <div v-else-if="membersError" class="members-error">
-                        <span class="error-icon">⚠️</span>
-                        <span>{{ membersError }}</span>
-                        <button
-                          class="btn btn-outline btn-sm"
-                          @click="loadMembers"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                      <div
-                        v-else-if="members && members.length > 0"
-                        class="members-list members-table-responsive"
-                      >
-                        <table class="members-table">
-                          <thead>
-                          <tr>
-                            <th>No.</th>
-                            <th @click="sortBy('name')">User</th>
-                            <th @click="sortBy('roles')">Roles</th>
-                            <th>Actions</th>
-                          </tr>
-                          </thead>
-                          <tbody>
-                          <tr v-for="(member, idx) in members" :key="member.id">
-                            <td>{{ idx + 1 }}</td>
-                            <td>
-                              <div :title="member.fullName + ' - ' + member.email" class="user-cell">
-                                <div class="user-avatar">
-                                  {{ (member.fullName || member.username).charAt(0).toUpperCase() }}
-                                </div>
-                                <div class="user-info">
-                                  <div class="user-name">{{ member.fullName || member.username }}</div>
-                                  <div class="user-email">{{ member.email }}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <span
-                                class="role-badges-group discord-badge-group"
-                                @mouseenter="showFullRoles = member.id"
-                                @mouseleave="showFullRoles = null"
-                                @click="showFullRoles = showFullRoles === member.id ? null : member.id"
-                                style="cursor:pointer;"
-                              >
-                                <span
-                                  v-for="(role, idx) in displayRoles(member, project).slice(0, 3)"
-                                  :key="role.id"
-                                  :class="['role-badge discord-role-badge', getRoleBadgeClass(role.name)]"
-                                >{{ role.name }}</span>
-                                <span v-if="getRoleCount(displayRoles(member, project)) > 3" class="discord-more-badge">
-                                  +{{ getRoleCount(displayRoles(member, project)) - 3 }} more
-                                </span>
-                              </span>
-                              <div
-                                v-if="showFullRoles === member.id && getRoleCount(displayRoles(member, project)) > 3"
-                                class="discord-role-tooltip"
-                                style="display:flex; flex-wrap:wrap; gap:0.4em; padding:0.7em 1.2em;"
-                              >
-                                <span
-                                  v-for="role in displayRoles(member, project)"
-                                  :key="role.id"
-                                  :class="['role-badge discord-role-badge', getRoleBadgeClass(role.name)]"
-                                  style="margin-bottom:0.2em;"
-                                >{{ role.name }}</span>
-                              </div>
-                            </td>
-                            <td>
-                              <!-- Xoá nút edit role ở đây, không render gì nữa -->
-                            </td>
-                          </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                      <div v-else class="empty-members">
-                        <div class="empty-icon">👥</div>
-                        <h3>No Members</h3>
-                        <p>No members have been added to this project yet.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else-if="activeTab === 'groups'" key="groups">
-                  <!-- Project Groups Section -->
-                  <div class="groups-section">
-                    <div class="section-header">
-                      <h2 class="section-title">
-                        <span class="title-icon">👨‍👩‍👧‍👦</span>
-                        Project Groups
-                      </h2>
-                      <button
-                        class="btn btn-primary btn-sm"
-                        @click="showCreateGroupModal = true"
-                      >
-                        <span class="icon">➕</span> Create Group
-                      </button>
-                    </div>
-                    <div class="groups-content">
-                      <div
-                        v-if="!project.groups || project.groups.length === 0"
-                        class="empty-section"
-                      >
-                        <div class="empty-icon">👨‍👩‍👧‍👦</div>
-                        <h3>No Groups</h3>
-                        <p>No groups have been created for this project yet.</p>
-                      </div>
-                      <div v-else class="groups-list">
-                        <div
-                          v-for="group in project.groups"
-                          :key="group.id"
-                          class="group-item"
-                        >
-                          <div class="group-info">
-                            <div class="group-header">
-                              <span class="group-name">{{ group.name }}</span>
-                              <span class="group-badge">{{
-                                  group.permissionFlags
-                                }}</span>
-                            </div>
-                            <div class="members-info">
-                              <span class="members-count">
-                                <span class="count-icon">👤</span>
-                                {{ group.members?.length || 0 }} members
-                              </span>
-                            </div>
-                          </div>
-                          <div class="group-actions">
-                            <button
-                              class="btn btn-outline btn-sm"
-                              @click="editGroup(group)"
-                            >
-                              <span class="icon">✏️</span> Edit
-                            </button>
-                            <button
-                              class="btn btn-danger btn-sm"
-                              @click="deleteGroup(group.id)"
-                            >
-                              <span class="icon">🗑️</span> Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else-if="activeTab === 'discussions'" key="discussions">
-                  <DiscussionSection
-                    :project-id="Number(project.id)"
-                    :can-create-discussion="canCreateDiscussion"
-                    :can-manage-discussions="canManageDiscussions"
-                  />
-                </div>
+                <ProjectMemberTab
+                  v-if="activeTab === 'members'"
+                  :project="project"
+                />
+                <ProjectGroupTab
+                  v-else-if="activeTab === 'groups'"
+                  :project="project"
+                />
+                <ProjectDisscusionTab
+                  v-else-if="activeTab === 'discussions'"
+                  :project-id="Number(project.id)"
+                  :can-create-discussion="canCreateDiscussion"
+                  :can-manage-discussions="canManageDiscussions"
+                />
+                <ProjectFileTab
+                  v-else-if="activeTab === 'files'"
+                  :project-files="projectFiles"
+                  :files-loading="filesLoading"
+                  :files-error="filesError"
+                  :is-image="isImage"
+                  :is-p-d-f="isPDF"
+                  :download-file="downloadFile"
+                  :load-files="loadFiles"
+                  key="files"
+                />
+                <ProjectTranslationTab
+                  v-else-if="activeTab === 'translation'"
+                  :translations="translations"
+                  :loading="translationsLoading"
+                  :error="translationsError"
+                  :on-reload="loadTranslations"
+                  custom-title="Translations"
+                />
+                <ProjectTaskTab
+                  v-else-if="activeTab === 'task'"
+                  :tasks="tasks"
+                  :loading="tasksLoading"
+                  :error="tasksError"
+                  :on-reload="loadTasks"
+                  custom-title="Tasks"
+                />
+                <!-- Tab Description giữ nguyên như cũ -->
                 <div v-else-if="activeTab === 'description'" key="description">
                   <!-- Project Description Section -->
                   <div class="project-section description-section">
@@ -684,122 +425,6 @@
                           </button>
                         </div>
                       </template>
-                    </div>
-                  </div>
-                </div>
-                <div v-else-if="activeTab === 'files'" key="files">
-                  <!-- Project Files Section -->
-                  <div class="project-section files-section">
-                    <div class="section-header">
-                      <h2 class="section-title">
-                        <span class="title-icon">📁</span>
-                        Files
-                      </h2>
-                    </div>
-                    <div class="files-content">
-                      <div v-if="filesLoading" class="files-loading">
-                        <div class="loading-spinner-small"></div>
-                        <span>Loading files...</span>
-                      </div>
-                      <div v-else-if="filesError" class="files-error">
-                        <span class="error-icon">⚠️</span>
-                        <span>{{ filesError }}</span>
-                        <button
-                          class="btn btn-outline btn-sm"
-                          @click="loadFiles"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                      <div
-                        v-else-if="projectFiles && projectFiles.length > 0"
-                        class="files-list"
-                      >
-                        <div
-                          v-for="file in projectFiles"
-                          :key="file.id"
-                          :title="'Click to download'"
-                          class="file-item file-hoverable"
-                          @click="downloadFile(file)"
-                        >
-                          <div class="file-info">
-                            <div class="file-icon file-thumb">
-                              <template v-if="isImage(file)">
-                                <img
-                                  :src="`/api/files/${file.id}/download`"
-                                  alt="Image"
-                                  class="file-thumbnail"
-                                />
-                              </template>
-                              <template v-else-if="isPDF(file)">
-                                <span class="pdf-icon">PDF</span>
-                              </template>
-                              <template v-else>
-                                <svg
-                                  fill="none"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  width="16"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                >
-                                  <path
-                                    d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
-                                    stroke="currentColor"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                  />
-                                  <path
-                                    d="M14 2V8H20"
-                                    stroke="currentColor"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                  />
-                                </svg>
-                              </template>
-                            </div>
-                            <div class="file-details">
-                              <span class="file-name" :title="file.fileName">
-                                {{
-                                  file.fileName.length > 30
-                                    ? file.fileName.slice(0, 27) + '...'
-                                    : file.fileName
-                                }}
-                              </span>
-                            </div>
-                          </div>
-                          <span class="file-download-icon" title="Download">
-                            <svg
-                              fill="none"
-                              height="22"
-                              viewBox="0 0 24 24"
-                              width="22"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M12 3V17M12 17L7 12M12 17L17 12"
-                                stroke="#3182ce"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2.2"
-                              />
-                              <rect
-                                fill="#3182ce"
-                                height="2"
-                                rx="1"
-                                width="16"
-                                x="4"
-                                y="19"
-                              />
-                            </svg>
-                          </span>
-                        </div>
-                      </div>
-                      <div v-else class="no-files">
-                        <div class="no-content-icon">📄</div>
-                        <p>No files uploaded to this project yet.</p>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -997,8 +622,13 @@ import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
-import DiscussionSection from '../components/DiscussionSection.vue';
+import ProjectDisscusionTab from '../components/ProjectDisscusionTab.vue';
 import ProjectRoleManagementView from './ProjectRoleManagementView.vue';
+import ProjectMemberTab from '../components/ProjectMemberTab.vue';
+import ProjectGroupTab from '../components/ProjectGroupTab.vue';
+import ProjectTranslationTab from '../components/ProjectTranslationTab.vue';
+import ProjectTaskTab from '../components/ProjectTaskTab.vue';
+import ProjectFileTab from '../components/ProjectFileTab.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -1107,7 +737,7 @@ const membersLoading = ref(false);
 const membersError = ref('');
 
 const activeTab = ref<
-  'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files'
+  'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'task'
 >('description');
 
 const isAllSelected = ref(false);

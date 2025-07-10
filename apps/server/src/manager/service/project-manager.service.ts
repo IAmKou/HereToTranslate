@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, In, Like, Not, Repository } from 'typeorm';
+import { Brackets, DataSource, In, Repository } from 'typeorm';
 import {
   BranchEntity,
   CategoryEntity,
@@ -16,7 +16,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
-  RequestEntity, CommitStatus
+  RequestEntity, CommitStatus, UserRole
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -506,7 +506,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   async findUserToProject(
     projectId: bigint,
     identifier: string
-  ): Promise<UserEntity | null> {
+  ): Promise<Array<{ id: bigint; fullName: string; email: string; phone: string }>> {
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
@@ -518,23 +518,25 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     const existingMemberIds = project.members.map((m) => m.id);
 
-    const user = await this.userRepository.find({
-      where: [
-        {
-          email: identifier,
-          id: existingMemberIds.length ? Not(In(existingMemberIds)) : undefined,
-          role: Not(In(['ADMIN', 'SUPER_ADMIN'])),
-        },
-        {
-          fullName: Like(`%${identifier}%`),
-          id: existingMemberIds.length ? Not(In(existingMemberIds)) : undefined,
-          role: Not(In(['ADMIN', 'SUPER_ADMIN'])),
-        },
-      ],
-    });
+    const users = await this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.fullName', 'user.email', 'user.phone'])
+      .where(
+        `(user.email = :identifier OR user.fullName LIKE :likeIdentifier)`,
+        { identifier, likeIdentifier: `%${identifier}%` }
+      )
+      .andWhere(existingMemberIds.length ? 'user.id NOT IN (:...existingMemberIds)' : '1=1', {
+        existingMemberIds,
+      })
+      .andWhere(`user.roleId NOT IN (:...excludedRoles)`, {
+        excludedRoles: [UserRole.Admin, UserRole.SuperAdmin],
+      })
+      .limit(10)
+      .getRawMany();
 
-    return user || null;
+    return users;
   }
+
 
   async addUserToProject(
     projectId: bigint,

@@ -22,6 +22,7 @@ import { ChatService } from '../../chat/chat.service';
 import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
 import { WalletManagerService } from '#LocalProject/Managers/service/wallet-manager.service';
 import { FileService } from '#LocalProject/Managers/service/file-manager.service';
+import { logger } from 'nx/src/utils/logger';
 
 @Injectable()
 export class RequestManagerService {
@@ -393,19 +394,53 @@ export class RequestManagerService {
       where: { id: BigInt(requestId) },
       relations: ['requester'],
     });
+
     if (!request) {
       throw new NotFoundException(`Unknown request`);
     }
+
     if (request.requester.id !== uid) {
-      throw new BadRequestException(
-        `You are not the requester of this request`
-      );
+      throw new BadRequestException(`You are not the requester of this request`);
     }
+
     if (request.status !== RequestStatus.Pending) {
       throw new BadRequestException(`Request is not in pending status`);
     }
+
+    // If it's a private request, refund the deposit
+    if (!request.isPublic) {
+      const transaction = await this.transactionRepository.findOne({
+        where: {
+          request: { id: requestId },
+          user: { id: request.requester.id },
+          status: TransactionStatus.Pending,
+        },
+      });
+
+      if (transaction) {
+        const wallet = await this.walletService.getOrCreateWallet(request.requester.id);
+        wallet.balance = Number(wallet.balance) + Number(transaction.amount);
+        transaction.status = TransactionStatus.Failed;
+
+        await this.transactionRepository.save(transaction);
+        await this.walletRepository.save(wallet);
+
+        logger.log(
+          `Refunded $${transaction.amount} to user ID ${request.requester.id} for canceled private request ID ${request.id}`
+        );
+      } else {
+        logger.warn(
+          `No pending deposit transaction found for private request ID ${request.id} and user ID ${request.requester.id}`
+        );
+      }
+    }
+
     request.status = RequestStatus.Cancelled;
-    return this.requestRepository.save(request);
+    await this.requestRepository.save(request);
+
+    logger.log(`Request ID ${request.id} cancelled by user ID ${uid}`);
+
+    return request;
   }
 
   async registerForPublicRequest(requestId: bigint, uid: number) {

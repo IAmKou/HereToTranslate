@@ -40,8 +40,6 @@ export class CreateProjectDto implements ICreateProjectDto {
   @IsNotEmpty()
   @IsNumberString()
   categoryId: string;
-  @IsOptional()
-  files?: Express.Multer.File[];
 }
 
 export class UpdateProjectMetadataDto implements IUpdateProjectDto {

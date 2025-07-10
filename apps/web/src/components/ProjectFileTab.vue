@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue';
+import { useToast } from 'primevue/usetoast';
+
+const toast = useToast();
+
 const props = defineProps({
   projectFiles: {
     type: Array,
@@ -27,8 +32,60 @@ const props = defineProps({
   loadFiles: {
     type: Function,
     required: true
+  },
+  projectId: {
+    type: String,
+    required: true
   }
 });
+
+const uploading = ref(false);
+const uploadError = ref('');
+const uploadInput = ref<HTMLInputElement|null>(null);
+
+function triggerUpload() {
+  uploadInput.value?.click();
+}
+
+async function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (!input.files || input.files.length === 0) return;
+  const file = input.files[0];
+  uploading.value = true;
+  uploadError.value = '';
+  try {
+    // Giả sử có prop projectId hoặc lấy từ route
+    const projectId = props.projectId || (typeof window !== 'undefined' ? window.location.pathname.split('/').find(x => x.match(/^\d+$/)) : null);
+    if (!projectId) throw new Error('Missing projectId');
+    const formData = new FormData();
+    formData.append('file', file);
+    // Gọi API upload file
+    const res = await fetch(`/api/projects/${projectId}/files`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (e) {}
+    const fileId = data?.fileId || data?.id;
+    if (!res.ok || !data || !fileId) {
+      throw new Error('Upload failed');
+    }
+    // Upload thành công, reset lỗi
+    uploadError.value = '';
+    // Reload danh sách file
+    props.loadFiles();
+    toast.add({ severity: 'success', summary: 'Success', detail: 'File uploaded successfully!', life: 3000 });
+  } catch (e: any) {
+    uploadError.value = e.message || 'Upload failed';
+    toast.add({ severity: 'error', summary: 'Error', detail: 'File upload failed!', life: 3000 });
+  } finally {
+    uploading.value = false;
+    if (uploadInput.value) uploadInput.value.value = '';
+  }
+}
 </script>
 <template>
   <div class="project-section files-section">
@@ -37,6 +94,15 @@ const props = defineProps({
         <span class="title-icon">📁</span>
         Files
       </h2>
+    </div>
+    <!-- Upload file button -->
+    <div style="margin-bottom:1rem;display:flex;align-items:center;gap:1rem">
+      <button class="btn btn-primary" @click="triggerUpload" :disabled="uploading">
+        <span v-if="uploading" class="loading-spinner-small"></span>
+        <span v-else>Upload File</span>
+      </button>
+      <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" />
+      <span v-if="uploadError" style="color:#e53e3e">{{ uploadError }}</span>
     </div>
     <div class="files-content">
       <div v-if="props.filesLoading" class="files-loading">
@@ -87,7 +153,7 @@ const props = defineProps({
       </div>
       <div v-else class="no-files">
         <div class="no-content-icon">📄</div>
-        <p>No files uploaded to this project yet.</p>
+        <p>No files have been uploaded to this project yet.</p>
       </div>
     </div>
   </div>

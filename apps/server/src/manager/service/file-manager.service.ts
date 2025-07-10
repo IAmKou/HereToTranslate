@@ -55,17 +55,31 @@ export class FileService {
     const timestamped = `${Date.now()}_${safeFileName}`;
     const repoName = `project-${projectId}`;
 
-    await this.githubService.pushInitialFile({
-      repo: repoName,
-      path: `uploads/${timestamped}`,
-      content: fileContent.toString('base64'),
-      message: `Uploaded ${fileName}`,
-    });
+    try {
+      await this.githubService.pushInitialFile({
+        repo: repoName,
+        path: `uploads/${timestamped}`,
+        content: fileContent.toString('base64'),
+        message: `Uploaded ${fileName}`,
+      });
+    } catch (err) {
+      this.logger.error('pushInitialFile error:', err);
+    }
 
-    this.logger.log(`Saved FileEntity: ${JSON.stringify(savedFile)}`);
+    // this.logger.log(`Saved FileEntity: ${JSON.stringify(savedFile)}`); // XÓA hoặc comment dòng này để tránh lỗi BigInt
     this.logger.log(`Pushed file to repo: ${repoName}, path: uploads/${timestamped}`);
 
-    return savedFile;
+    return {
+      fileId: savedFile.id.toString(),
+      fileName: savedFile.fileName,
+      fileType: savedFile.fileType,
+      createdAt: savedFile.createdAt,
+      updatedAt: savedFile.updatedAt,
+      uploaderId: savedFile.uploader?.id ? savedFile.uploader.id.toString() : undefined,
+      projectId: savedFile.project?.id ? savedFile.project.id.toString() : undefined,
+      branchId: savedFile.branch?.id ? savedFile.branch.id.toString() : undefined,
+      requestId: savedFile.request?.id ? savedFile.request.id.toString() : undefined,
+    };
   }
 
   async handleUpload(
@@ -86,10 +100,17 @@ export class FileService {
       requestId,
     });
 
-    await this.translationService.extractStrings(saved);
+    try {
+      await this.translationService.extractStrings(saved);
+    } catch (err) {
+      this.logger.error('extractStrings error:', err);
+    }
     this.logger.log(`handleUpload called with file: ${file.originalname}, mimetype: ${file.mimetype}, size: ${file.size}`);
-    this.logger.log(`File uploaded and processed, fileId: ${saved.id}`);
-    return { message: 'File uploaded and processed', fileId: saved.id };
+    this.logger.log(`File uploaded and processed, fileId: ${saved.fileId}`);
+    return {
+      message: 'File uploaded and processed',
+      fileId: saved.fileId,
+    };
   }
 
   async saveTempFile(file: Express.Multer.File, uid: bigint) {
@@ -103,7 +124,7 @@ export class FileService {
     } as DeepPartial<FileEntity>);
 
     const saved = await this.fileRepository.save(fileEntity);
-    return { fileId: saved.id, fileName: saved.fileName };
+    return { fileId: saved.id.toString(), fileName: saved.fileName };
   }
 
 
@@ -117,13 +138,13 @@ export class FileService {
     });
 
     return files.map(file => ({
-      id: file.id,
+      fileId: file.id.toString(),
       fileName: file.fileName,
       fileType: file.fileType,
       fileSize: file.fileContent ? file.fileContent.length : 0,
       createdAt: file.createdAt,
       uploader: {
-        id: file.uploader.id,
+        uploaderId: file.uploader.id.toString(),
         username: file.uploader.username,
         fullName: file.uploader.fullName
       }
@@ -136,7 +157,12 @@ export class FileService {
       select: ['id', 'fileName', 'fileType', 'fileContent'],
     });
     if (!file) throw new Error('File not found');
-    return file;
+    return {
+      fileId: file.id.toString(),
+      fileName: file.fileName,
+      fileType: file.fileType,
+      fileContent: file.fileContent,
+    };
   }
 
   async uploadFileForRequest(
@@ -159,7 +185,7 @@ export class FileService {
 
     return {
       message: 'File uploaded and linked to request',
-      fileId: saved.id,
+      fileId: saved.fileId,
     };
   }
 

@@ -12,6 +12,8 @@ import {
   UseGuards,
   UseInterceptors,
   ValidationPipe,
+  UploadedFile,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
@@ -23,12 +25,17 @@ import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.
 import { ProjectManagerService } from '../service/project-manager.service';
 import { UserEntity } from '#LocalProject/Entities';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { FileService } from '../service/file-manager.service';
 
 @Controller('projects')
 @UseInterceptors(JsonSerializerInterceptor)
 export class ProjectController {
-  constructor(private readonly projects: ProjectManagerService,
-  private readonly gitHubService: GitHubService) {}
+  constructor(
+    private readonly projects: ProjectManagerService,
+    private readonly gitHubService: GitHubService,
+    private readonly fileService: FileService
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('create')
@@ -219,5 +226,25 @@ export class ProjectController {
     @Param('branchId', BigIntTransformPipe) branchId: bigint
   ) {
     return this.gitHubService.listCommits(projectId, branchId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/files')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProjectFile(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: AuthenticatedRequest
+  ) {
+    try {
+      console.log('File received at controller:', file);
+      if (!file) throw new InternalServerErrorException('No file received at controller');
+      const result = await this.fileService.handleUpload(file, req.user.id, projectId);
+      console.log('Upload result:', result);
+      return result;
+    } catch (error) {
+      console.error('Upload file error:', error);
+      throw new InternalServerErrorException('Upload failed: ' + (error?.message || error));
+    }
   }
 }

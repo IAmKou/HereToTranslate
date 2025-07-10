@@ -105,14 +105,14 @@
             <div class="input-info">
               <span class="char-count">{{ form.name.length }}/50</span>
               <span v-if="errors.name" class="error-message">{{
-                errors.name
-              }}</span>
+                  errors.name
+                }}</span>
               <span v-if="nameCheckLoading" class="help-text"
-                >Checking name...</span
+              >Checking name...</span
               >
               <span v-if="nameCheckError" class="error-message">{{
-                nameCheckError
-              }}</span>
+                  nameCheckError
+                }}</span>
             </div>
           </div>
 
@@ -178,13 +178,13 @@
             </div>
             <div class="input-info">
               <span class="char-count"
-                >{{ (form.description || '').length }}/500</span
+              >{{ (form.description || '').length }}/500</span
               >
               <span v-if="errors.description" class="error-message">{{
-                errors.description
-              }}</span>
+                  errors.description
+                }}</span>
               <span v-else class="help-text"
-                >A good description helps others understand your project
+              >A good description helps others understand your project
                 better</span
               >
             </div>
@@ -222,167 +222,16 @@
             />
             <div class="input-info">
               <span v-if="errors.tags" class="error-message">{{
-                errors.tags
-              }}</span>
+                  errors.tags
+                }}</span>
               <span v-else class="help-text"
-                >Select one or many tags to help others find your project</span
+              >Select one or many tags to help others find your project</span
               >
             </div>
           </div>
 
           <!-- File Upload -->
-          <div class="form-group">
-            <label for="files">
-              Files <span class="required-mark">*</span>
-            </label>
-            <div class="file-upload-container">
-              <div
-                :class="{
-                  'drag-over': isDragOver,
-                  'has-files': uploadedFiles.length > 0,
-                }"
-                class="file-upload-area"
-                @click="triggerFileInput"
-                @drop="handleFileDrop"
-                @dragover.prevent="isDragOver = true"
-                @dragleave.prevent="isDragOver = false"
-              >
-                <div class="file-upload-content">
-                  <div class="file-upload-icon">
-                    <svg
-                      fill="none"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      width="24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                      />
-                      <path
-                        d="M17 8L12 3L7 8"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                      />
-                      <path
-                        d="M12 3V15"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                      />
-                    </svg>
-                  </div>
-                  <div class="file-upload-text">
-                    <p class="upload-title">
-                      Drop files here or click to browse
-                    </p>
-                    <p class="upload-subtitle">
-                      Support: PDF, DOC, DOCX, TXT, RTF - At least one file is
-                      required
-                    </p>
-                  </div>
-                </div>
-                <input
-                  ref="fileInput"
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx,.txt,.rtf"
-                  @change="handleFileSelect"
-                  class="file-input-hidden"
-                />
-              </div>
-
-              <!-- File List -->
-              <div v-if="uploadedFiles.length > 0" class="file-list">
-                <div
-                  v-for="(file, index) in uploadedFiles"
-                  :key="index"
-                  class="file-item"
-                >
-                  <div class="file-info">
-                    <div class="file-icon">
-                      <svg
-                        fill="none"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        width="16"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
-                          stroke="currentColor"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                        />
-                        <path
-                          d="M14 2V8H20"
-                          stroke="currentColor"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                        />
-                      </svg>
-                    </div>
-                    <div class="file-details">
-                      <span class="file-name">{{ file.name }}</span>
-                      <span class="file-size">{{
-                        formatFileSize(file.size)
-                      }}</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    class="file-remove-btn"
-                    @click="removeFile(index)"
-                    title="Remove file"
-                  >
-                    <svg
-                      fill="none"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M18 6L6 18"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                      />
-                      <path
-                        d="M6 6L18 18"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="input-info">
-              <span v-if="fileError" class="error-message">{{
-                fileError
-              }}</span>
-              <span v-else-if="uploadedFiles.length === 0" class="error-message"
-                >At least one file is required</span
-              >
-              <span v-else class="help-text"
-                >Upload files related to your project. At least one file is
-                required.</span
-              >
-            </div>
-          </div>
+          <!-- ĐÃ XÓA: Toàn bộ khối <div class="form-group"> ... </div> cho phần upload file -->
         </div>
 
         <div class="form-section">
@@ -462,8 +311,8 @@
             </div>
             <div class="input-info">
               <span v-if="errors.categoryId" class="error-message">{{
-                errors.categoryId
-              }}</span>
+                  errors.categoryId
+                }}</span>
             </div>
           </div>
         </div>
@@ -569,10 +418,7 @@ const categories = ref<Category[]>([]);
 const allTags = ref<Tag[]>([]);
 
 // File upload variables
-const uploadedFiles = ref<File[]>([]);
-const fileInput = ref<HTMLInputElement | null>(null);
-const isDragOver = ref(false);
-const fileError = ref('');
+// ĐÃ XÓA: Toàn bộ biến, ref, method, validation, computed liên quan đến file upload trong <script setup> (uploadedFiles, fileInput, isDragOver, fileError, triggerFileInput, handleFileDrop, handleFileSelect, removeFile, formatFileSize, validate file, ...)
 
 const showLoadingOverlay = ref(false);
 const showSuccessScreen = ref(false);
@@ -644,99 +490,7 @@ const validateTags = () => {
   return true;
 };
 
-const validateFiles = () => {
-  if (uploadedFiles.value.length === 0) {
-    fileError.value = 'At least one file is required';
-    return false;
-  }
-  fileError.value = '';
-  return true;
-};
-
-const validateForm = () => {
-  const isNameValid = validateName();
-  const isDescriptionValid = validateDescription();
-  const isCategoryValid = validateCategory();
-  const isTagsValid = validateTags();
-  const isFileValid = validateFiles();
-
-  return (
-    isNameValid &&
-    isDescriptionValid &&
-    isCategoryValid &&
-    isTagsValid &&
-    isFileValid
-  );
-};
-
-// File upload functions
-const triggerFileInput = () => {
-  fileInput.value?.click();
-};
-
-const handleFileSelect = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const files = Array.from(target.files || []);
-  addFiles(files);
-  target.value = ''; // Reset input
-};
-
-const handleFileDrop = (event: DragEvent) => {
-  event.preventDefault();
-  isDragOver.value = false;
-  const files = Array.from(event.dataTransfer?.files || []);
-  addFiles(files);
-};
-
-const addFiles = (files: File[]) => {
-  fileError.value = '';
-
-  for (const file of files) {
-    // Validate file type
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf'];
-    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-
-    if (!fileExtension || !allowedTypes.includes(fileExtension)) {
-      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`;
-      continue;
-    }
-
-    // Validate file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
-    if (file.size > maxSize) {
-      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`;
-      continue;
-    }
-
-    // Check if file already exists
-    const existingFile = uploadedFiles.value.find((f) => f.name === file.name);
-    if (existingFile) {
-      fileError.value = `File ${file.name} is already uploaded.`;
-      continue;
-    }
-
-    // Check total number of files (max 5 files)
-    if (uploadedFiles.value.length >= 5) {
-      fileError.value = 'Maximum 5 files allowed.';
-      continue;
-    }
-
-    uploadedFiles.value.push(file);
-  }
-};
-
-const removeFile = (index: number) => {
-  uploadedFiles.value.splice(index, 1);
-  fileError.value = '';
-};
-
-const formatFileSize = (bytes: number) => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
+// ĐÃ XÓA: Toàn bộ biến, ref, method, validation, computed liên quan đến file upload trong <script setup> (uploadedFiles, fileInput, isDragOver, fileError, triggerFileInput, handleFileDrop, handleFileSelect, removeFile, formatFileSize, validate file, ...)
 
 // Computed property to check if form is valid
 const isFormValid = computed(() => {
@@ -748,8 +502,6 @@ const isFormValid = computed(() => {
     !errors.value.description &&
     !errors.value.categoryId &&
     (form.value.tags || []).length <= 10 &&
-    uploadedFiles.value.length > 0 &&
-    !fileError.value &&
     !nameExists.value
   );
 });
@@ -853,15 +605,11 @@ const handleSubmit = async () => {
   }
 
   // Validate form before submission
-  if (!validateForm()) {
+  if (!validateName() || !validateDescription() || !validateCategory() || !validateTags()) {
     return;
   }
 
-  // Validate that at least one file is uploaded
-  if (uploadedFiles.value.length === 0) {
-    fileError.value = 'At least one file is required';
-    return;
-  }
+  // ĐÃ XÓA: Toàn bộ biến, ref, method, validation, computed liên quan đến file upload trong <script setup> (uploadedFiles, fileInput, isDragOver, fileError, triggerFileInput, handleFileDrop, handleFileSelect, removeFile, formatFileSize, validate file, ...)
 
   // Set submission flags
   isSubmitting.value = true;
@@ -898,66 +646,9 @@ const handleSubmit = async () => {
       branchId
     );
 
-    // Upload từng file với đúng projectId và branchId
-    for (const file of uploadedFiles.value) {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('projectId', projectId);
-      formData.append('branchId', branchId);
+    // ĐÃ XÓA: upload file sau khi tạo project
 
-      console.log(
-        'Uploading file:',
-        file.name,
-        'to project:',
-        projectId,
-        'branch:',
-        branchId
-      );
-
-      const uploadResponse = await fetch('/api/files/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-
-      if (!uploadResponse.ok) {
-        console.error(
-          'File upload failed:',
-          file.name,
-          uploadResponse.statusText
-        );
-        throw new Error(`File upload failed: ${uploadResponse.statusText}`);
-      }
-
-      const uploadResult = await uploadResponse.json();
-      console.log('File upload response for', file.name, ':', uploadResult);
-    }
-
-    // Show success message with file upload info
-    const successMessage = document.createElement('div');
-    successMessage.className = 'success-message';
-    successMessage.innerHTML = `
-      <div class="success-content">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.76488 14.1003 1.98232 16.07 2.85999" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>Project created successfully with ${uploadedFiles.value.length} file(s) uploaded!</span>
-      </div>
-    `;
-    document.body.appendChild(successMessage);
-
-    // Wait 3 seconds before redirecting
-    setTimeout(() => {
-      // Remove success message
-      const existingMessage = document.querySelector('.success-message');
-      if (existingMessage && existingMessage.parentNode) {
-        existingMessage.parentNode.removeChild(existingMessage);
-      }
-      // Redirect to project page
-      router.push(`/projects/${result.projectId}`);
-    }, 3000);
-
+    // Show success message (không còn liên quan đến số file upload)
     showLoadingOverlay.value = false;
     showSuccessScreen.value = true;
     setTimeout(() => {

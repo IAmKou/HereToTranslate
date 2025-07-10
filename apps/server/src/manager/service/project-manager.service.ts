@@ -506,7 +506,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   async findUserToProject(
     projectId: bigint,
     identifier: string
-  ): Promise<{ id: bigint; fullName: string; email: string; phone: string } | null> {
+  ): Promise<UserEntity | null> {
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
@@ -518,25 +518,23 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     const existingMemberIds = project.members.map((m) => m.id);
 
-    const qb = this.userRepository.createQueryBuilder('user')
-      .select(['user.id', 'user.fullName', 'user.email', 'user.phone'])
-      .where(
-        `(user.email = :identifier OR user.fullName LIKE :likeName)`,
-        { identifier, likeName: `%${identifier}%` }
-      )
-      .andWhere(existingMemberIds.length ? 'user.id NOT IN (:...existingMemberIds)' : '1=1', {
-        existingMemberIds,
-      })
-      .andWhere(`user.roleId NOT IN (:...excludedRoles)`, {
-        excludedRoles: [UserRole.Admin, UserRole.SuperAdmin],
-      })
-      .limit(1);
-
-    const user = await qb.getRawOne();
+    const user = await this.userRepository.find({
+      where: [
+        {
+          email: identifier,
+          id: existingMemberIds.length ? Not(In(existingMemberIds)) : undefined,
+          role: Not(In(['ADMIN', 'SUPER_ADMIN'])),
+        },
+        {
+          fullName: Like(`%${identifier}%`),
+          id: existingMemberIds.length ? Not(In(existingMemberIds)) : undefined,
+          role: Not(In(['ADMIN', 'SUPER_ADMIN'])),
+        },
+      ],
+    });
 
     return user || null;
   }
-
 
   async addUserToProject(
     projectId: bigint,

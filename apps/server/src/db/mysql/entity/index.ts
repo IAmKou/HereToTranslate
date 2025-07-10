@@ -1,9 +1,7 @@
 export * from './branch.entity';
 export * from './category.entity';
-// export * from './comment.entity';
 export * from './commit.entity';
 export * from './file.entity';
-export * from './post.entity';
 export * from './project.entity';
 export * from './project-discussion.entity';
 export * from './project-group.entity';

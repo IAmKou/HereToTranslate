@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors, Get, Param, Res } from '@nestjs/common';
+import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors, Get, Param, Res, Delete } from '@nestjs/common';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { FileService } from '../service/file-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
@@ -63,6 +63,15 @@ export class FileController {
     @Req() req: AuthenticatedRequest
   ) {
     return this.fileService.uploadFileForRequest(file, req.user.id, requestId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':fileId')
+  async deleteFile(
+    @Param('fileId') fileId: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.fileService.deleteFile(fileId, req.user.id);
   }
 
 }

@@ -189,4 +189,15 @@ export class FileService {
     };
   }
 
+  async deleteFile(fileId: string, userId: string | bigint) {
+    const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader'] });
+    if (!file) throw new NotFoundException('File not found');
+    // Chỉ cho phép uploader hoặc admin xóa (ở đây chỉ check uploader)
+    if (file.uploader.id.toString() !== userId.toString()) {
+      throw new Error('You do not have permission to delete this file');
+    }
+    await this.fileRepository.delete(file.id);
+    return { success: true, message: 'File deleted' };
+  }
+
 }

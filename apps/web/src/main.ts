@@ -17,6 +17,8 @@ import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
+import Menu from 'primevue/menu';
+import Dialog from 'primevue/dialog';
 
 import ConfirmationService from 'primevue/confirmationservice';
 import ToastService from 'primevue/toastservice';
@@ -44,6 +46,8 @@ async function bootstrap() {
   app.component('InputText', InputText);
   app.component('ConfirmDialog', ConfirmDialog);
   app.component('Toast', Toast);
+  app.component('Menu', Menu);
+  app.component('Dialog', Dialog);
 
   axios.interceptors.response.use(
     response => response,

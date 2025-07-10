@@ -323,6 +323,7 @@
                 />
                 <ProjectFileTab
                   v-else-if="activeTab === 'files'"
+                  :project-id="project.id"
                   :project-files="projectFiles"
                   :files-loading="filesLoading"
                   :files-error="filesError"
@@ -1021,11 +1022,13 @@ const loadFiles = async () => {
     filesLoading.value = true;
     filesError.value = null;
     console.log('Call API: /files/project/' + project.value.id);
+    // Thêm query string random để tránh cache
     const { data } = await axiosInstance.get(
-      `/files/project/${project.value.id}`
+      `/files/project/${project.value.id}?t=${Date.now()}`
     );
     console.log('API /files/project response:', data);
-    projectFiles.value = data;
+    // Luôn gán lại mảng mới để Vue nhận ra thay đổi
+    projectFiles.value = Array.isArray(data) ? [...data] : [];
     console.log(
       'Files loaded for project',
       project.value.id,
@@ -1046,8 +1049,8 @@ const refreshFiles = () => {
 };
 
 const downloadFile = (file) => {
-  // Mở link download ở tab mới
-  window.open(`/api/files/${file.id}/download`, '_blank');
+  const id = file.fileId || file.id;
+  window.open(`/api/files/${id}/download`, '_blank');
 };
 
 const formatFileSize = (bytes: number) => {

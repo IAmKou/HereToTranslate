@@ -251,10 +251,10 @@
               <div
                 class="stat-card stat-card-clickable"
                 title="Branches"
-                @click="alert('Branch detail coming soon!')"
+                @click="window.alert('Branch detail coming soon!')"
               >
                 <div class="stat-icon stat-icon-circle">🌿</div>
-                <div class="stat-number">0</div>
+                <div class="stat-number">{{ branches.length }}</div>
                 <div class="stat-label">Branches</div>
               </div>
             </div>
@@ -324,9 +324,10 @@
                 <ProjectFileTab
                   v-else-if="activeTab === 'files'"
                   :project-id="project.id"
+                  :branch-id="selectedBranchId"
                   :project-files="projectFiles"
                   :files-loading="filesLoading"
-                  :files-error="filesError"
+                  :files-error="filesError || ''"
                   :is-image="isImage"
                   :is-p-d-f="isPDF"
                   :download-file="downloadFile"
@@ -335,10 +336,9 @@
                 />
                 <ProjectTranslationTab
                   v-else-if="activeTab === 'translation'"
-                  :project-id="project?.id"
-                  :branch-id="project?.defaultBranchId || 'main'"
-                  :repo="project?.repo || ''"
-                  custom-title="Translations"
+                  :project-id="project.id"
+                  :branch-id="selectedBranchId"
+                  key="translation"
                 />
                 <ProjectTaskTab
                   v-else-if="activeTab === 'task'"
@@ -649,8 +649,6 @@ interface Project {
   tags?: Array<{ id: string; name: string }>;
   projectRoles?: ProjectRole[];
   groups?: ProjectGroup[];
-  defaultBranchId?: string;
-  repo?: string;
 }
 
 interface ProjectRole {
@@ -780,9 +778,10 @@ watch(availablePermissions, () => {
 
 // Watch project, tự động gọi loadFiles khi project có dữ liệu
 watch(project, (newProject) => {
-  if (newProject) {
-    console.log('project.value changed, calling loadFiles');
+  if (newProject && newProject.id) {
+    console.log('project.value changed, calling loadFiles & loadBranches');
     loadFiles();
+    loadBranches();
   }
 });
 
@@ -1008,6 +1007,7 @@ watch(activeTab, (tab) => {
 
 onMounted(() => {
   loadProject();
+  loadBranches();
 });
 
 defineExpose({ closeDropdowns });
@@ -1282,6 +1282,34 @@ const showFullRoles = ref<string | null>(null);
 function getRoleCount(roles: any[]): number {
   return roles ? roles.length : 0;
 }
+
+const branches = ref<any[]>([]);
+const selectedBranchId = ref<string | number | null>(null);
+
+async function loadBranches() {
+  if (!project.value?.id) return;
+  try {
+    // Gọi đúng API backend lấy branch cho project
+    const res = await axiosInstance.get(`/projects/${project.value.id}/branches`);
+    console.log('API /branches response:', res.data);
+    branches.value = Array.isArray(res.data) ? res.data : (res.data.branches || []);
+    selectedBranchId.value = branches.value.length > 0 ? String(branches.value[0].id) : null;
+    console.log('Branches:', branches.value, 'Selected:', selectedBranchId.value, typeof selectedBranchId.value, 'Count:', branches.value.length);
+    if (branches.value.length === 0) {
+      // Hiển thị log chi tiết nếu không có branch
+      window.alert('Branches array is empty! Response: ' + JSON.stringify(res.data));
+    }
+  } catch (e) {
+    branches.value = [];
+    selectedBranchId.value = null;
+    console.error('Error loading branches:', e);
+  }
+}
+
+onMounted(() => {
+  loadProject();
+  loadBranches();
+});
 </script>
 
 <style scoped>

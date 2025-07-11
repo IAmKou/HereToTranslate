@@ -19,6 +19,13 @@ export class TranslationService {
   async extractStrings(file: FileEntity): Promise<void> {
     const textBlocks: string[] = [];
 
+    console.log('[extractStrings] fileId:', file.id, 'fileName:', file.fileName, 'fileType:', file.fileType);
+    if (file.fileContent) {
+      console.log('[extractStrings] fileContent length:', file.fileContent.length);
+    } else {
+      console.warn('[extractStrings] fileContent is null or undefined!');
+    }
+
     switch (file.fileType) {
       case 'text/plain':
         textBlocks.push(file.fileContent.toString());
@@ -34,6 +41,10 @@ export class TranslationService {
         break;
       }
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+        if (!file.fileContent) {
+          console.error('[extractStrings] DOCX fileContent is empty or missing! fileId:', file.id, 'fileName:', file.fileName);
+          throw new Error('File content is empty or missing for DOCX');
+        }
         const result = await mammoth.extractRawText({ buffer: file.fileContent });
         textBlocks.push(result.value);
         break;
@@ -60,12 +71,20 @@ export class TranslationService {
         if (file.fileName.endsWith('.unity') || file.fileName.endsWith('.uasset')) {
           await this.extractFromAssetFile(file, textBlocks);
         } else if (file.fileName.endsWith('.docx')) {
+          if (!file.fileContent) {
+            console.error('[extractStrings] DOCX (default) fileContent is empty or missing! fileId:', file.id, 'fileName:', file.fileName);
+            throw new Error('File content is empty or missing for DOCX');
+          }
           const result = await mammoth.extractRawText({ buffer: file.fileContent });
           textBlocks.push(result.value);
         }
         break;
     }
 
+    // Kiểm tra project và branch
+    if (!file.project || !file.branch) {
+      throw new Error('File is missing project or branch information');
+    }
 
     const inserts = textBlocks
       .flatMap(text => text.split('\n').map(line => line.trim()))
@@ -84,14 +103,12 @@ export class TranslationService {
     // const extracted = await this.externalAssetExtractor.extractStringsFrom(file);
     // result.push(...extracted);
   }
-  async getAllString(projectId: string, branchId: string) {
-    const strings = await this.translationModel.find({
-      projectId,
-      branchId,
-    }).lean();
-
+  async getAllString(projectId: string, branchId: string, fileId?: string) {
+    const query: any = { projectId, branchId };
+    if (fileId) query.fileId = fileId;
+    const strings = await this.translationModel.find(query).lean();
     return strings.map(str => ({
-      id: str._id,
+      id: str._id.toString(),
       originalText: str.originalText,
       translatedText: str.translatedText || '',
       fileId: str.fileId,

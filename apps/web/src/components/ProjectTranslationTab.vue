@@ -1,546 +1,832 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, defineProps, watch, onMounted, computed, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import Textarea from 'primevue/textarea';
-import Dialog from 'primevue/dialog';
-import { TranslationService, type TranslationString } from '../services/translation.service';
+import Button from 'primevue/button';
+import axiosInstance from '../api';
 
-const props = defineProps<{
-  projectId: string;
-  branchId?: string;
-  repo?: string;
-  customTitle?: string;
-}>();
+interface TranslationString {
+  id: string;
+  originalText: string;
+  translatedText: string;
+  fileId: string;
+}
 
-const toast = useToast();
+const props = defineProps<{ projectId: string | number; branchId: string | number | null }>();
 
-// State
-const translations = ref<TranslationString[]>([]);
+const files = ref<any[]>([]);
+const translationStrings = ref<any[]>([]);
 const loading = ref(false);
 const error = ref('');
-const searchQuery = ref('');
-const editingTranslation = ref<TranslationString | null>(null);
-const showEditDialog = ref(false);
-const showCommitDialog = ref(false);
-const committing = ref(false);
-const saving = ref(false);
+const expandedFileIds = ref<(string|number)[]>([]);
 
-// Computed
-const filteredTranslations = computed(() => {
-  if (!searchQuery.value) return translations.value;
-  const query = searchQuery.value.toLowerCase();
-  return translations.value.filter(t =>
-    t.originalText.toLowerCase().includes(query) ||
-    t.translatedText.toLowerCase().includes(query)
-  );
-});
+// Thay vì searchQuery/filterStatus toàn cục, dùng map cho từng file
+const searchQueryMap = ref<Record<string, string>>({});
+const filterStatusMap = ref<Record<string, 'all' | 'translated' | 'untranslated'>>({});
+const highlightUntranslated = ref(true);
+const sideBySide = ref(false);
+const viewMode = ref<'single' | 'side'>('single');
+const focusUntranslated = ref(false);
 
-const hasUntranslated = computed(() =>
-  translations.value.some(t => !t.translatedText || t.translatedText.trim() === '')
-);
-
-const hasTranslated = computed(() =>
-  translations.value.some(t => t.translatedText && t.translatedText.trim() !== '')
-);
-
-// Methods
-async function loadTranslations() {
-  if (!props.projectId || !props.branchId) {
-    error.value = 'Project ID and Branch ID are required';
-    return;
+async function loadFiles() {
+  if (!props.projectId || !props.branchId) return;
+  try {
+    const res = await axiosInstance.get(`/files/project/${props.projectId}?branchId=${props.branchId}`);
+    files.value = Array.isArray(res.data) ? res.data : [];
+  } catch (e) {
+    files.value = [];
   }
+}
 
+async function loadTranslationStrings() {
+  if (!props.projectId || !props.branchId) return;
   loading.value = true;
   error.value = '';
-
   try {
-    translations.value = await TranslationService.getTranslationStrings(props.projectId, props.branchId);
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load translations';
-    toast.add({ severity: 'error', summary: 'Error', detail: error.value, life: 3000 });
+    const res = await axiosInstance.get('/translation/strings', {
+      params: {
+        projectId: props.projectId,
+        branchId: props.branchId,
+      },
+    });
+    translationStrings.value = Array.isArray(res.data)
+      ? res.data.map(str => {
+        let id = '';
+        if (typeof str.id === 'string') {
+          id = str.id;
+        } else if (typeof str._id === 'string') {
+          id = str._id;
+        }
+        return { ...str, id };
+      })
+      : [];
+  } catch (e: any) {
+    error.value = e.message || 'Failed to load translation strings';
+    translationStrings.value = [];
   } finally {
     loading.value = false;
   }
 }
 
-async function saveTranslation() {
-  if (!editingTranslation.value) return;
-
-  saving.value = true;
-  try {
-    await TranslationService.updateTranslation(
-      editingTranslation.value.id,
-      editingTranslation.value.translatedText
-    );
-
-    // Update local state
-    const index = translations.value.findIndex(t => t.id === editingTranslation.value!.id);
-    if (index !== -1) {
-      translations.value[index] = { ...editingTranslation.value };
-    }
-
-    showEditDialog.value = false;
-    editingTranslation.value = null;
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Translation saved successfully!', life: 3000 });
-  } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.message || 'Failed to save translation', life: 3000 });
-  } finally {
-    saving.value = false;
+const stringsByFile = computed(() => {
+  const map: Record<string, any[]> = {};
+  for (const str of translationStrings.value) {
+    if (!map[str.fileId]) map[str.fileId] = [];
+    map[str.fileId].push(str);
   }
-}
-
-async function commitTranslations() {
-  if (!props.projectId || !props.branchId || !props.repo) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Missing project, branch, or repo information', life: 3000 });
-    return;
-  }
-
-  committing.value = true;
-  try {
-    await TranslationService.commitTranslations(props.projectId, props.branchId, props.repo);
-    showCommitDialog.value = false;
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Translations committed to GitHub successfully!', life: 3000 });
-  } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.message || 'Failed to commit translations', life: 3000 });
-  } finally {
-    committing.value = false;
-  }
-}
-
-function editTranslation(translation: TranslationString) {
-  editingTranslation.value = { ...translation };
-  showEditDialog.value = true;
-}
-
-function cancelEdit() {
-  editingTranslation.value = null;
-  showEditDialog.value = false;
-}
-
-// Lifecycle
-onMounted(() => {
-  loadTranslations();
+  return map;
 });
+
+const fileProgress = computed(() => {
+  const progress: Record<string, { total: number; translated: number }> = {};
+  for (const file of files.value) {
+    const fileId = file.fileId || file.id;
+    const arr = stringsByFile.value[fileId] || [];
+    progress[fileId] = {
+      total: arr.length,
+      translated: arr.filter(s => s.translatedText && s.translatedText.trim().length > 0).length,
+    };
+  }
+  return progress;
+});
+
+// Computed: Lọc chuỗi dịch theo file, search, filter
+const filteredStringsByFile = computed(() => {
+  const map: Record<string, any[]> = {};
+  for (const str of translationStrings.value) {
+    // Lọc theo search
+    const q = (searchQueryMap.value[str.fileId] || '').trim().toLowerCase();
+    let match = true;
+    if (q) {
+      match = ((str.originalText || '').toLowerCase().includes(q)) ||
+        ((str.translatedText || '').toLowerCase().includes(q));
+    }
+    // Lọc theo trạng thái
+    let statusMatch = true;
+    const status = filterStatusMap.value[str.fileId] || 'all';
+    if (status === 'translated') {
+      statusMatch = !!(str.translatedText && str.translatedText.trim().length > 0);
+    } else if (status === 'untranslated') {
+      statusMatch = !str.translatedText || str.translatedText.trim().length === 0;
+    }
+    if (match && statusMatch) {
+      if (!map[str.fileId]) map[str.fileId] = [];
+      map[str.fileId].push(str);
+    }
+  }
+  return map;
+});
+
+function toggleFileAccordion(fileId: string|number) {
+  if (expandedFileIds.value.includes(fileId)) {
+    expandedFileIds.value = expandedFileIds.value.filter(id => id !== fileId);
+  } else {
+    expandedFileIds.value.push(fileId);
+  }
+}
+
+// Hàm lọc chuỗi dịch cho từng file
+function getFilteredStrings(fileId: string | number) {
+  const arr = stringsByFile.value[fileId] || [];
+  const q = (searchQueryMap.value[fileId] || '').trim().toLowerCase();
+  // Nếu bật focusUntranslated thì chỉ lấy untranslated
+  const status = focusUntranslated.value ? 'untranslated' : (filterStatusMap.value[fileId] || 'all');
+  return arr.filter((str: any) => {
+    let match = true;
+    if (q) {
+      match = ((str.originalText || '').toLowerCase().includes(q)) ||
+        ((str.translatedText || '').toLowerCase().includes(q));
+    }
+    let statusMatch = true;
+    if (status === 'translated') {
+      statusMatch = !!(str.translatedText && str.translatedText.trim().length > 0);
+    } else if (status === 'untranslated') {
+      statusMatch = !str.translatedText || str.translatedText.trim().length === 0;
+    }
+    return match && statusMatch;
+  });
+}
+
+// Thêm hàm chọn icon theo loại file
+function getFileIconClass(fileName: string) {
+  if (!fileName) return 'pi pi-file';
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (["doc", "docx"].includes(ext)) return "pi pi-file-word";
+  if (["xls", "xlsx"].includes(ext)) return "pi pi-file-excel";
+  if (["pdf"].includes(ext)) return "pi pi-file-pdf";
+  if (["txt"].includes(ext)) return "pi pi-file";
+  if (["csv"].includes(ext)) return "pi pi-table";
+  if (["ppt", "pptx"].includes(ext)) return "pi pi-file-ppt";
+  return "pi pi-file";
+}
+
+// Hàm icon trạng thái dịch
+function getStatusIcon(progress: { total: number; translated: number }) {
+  if (!progress) return '';
+  if (progress.translated === 0) return 'pi pi-ban text-red'; // ⛔
+  if (progress.translated === progress.total && progress.total > 0) return 'pi pi-check-circle text-green';
+  return 'pi pi-exclamation-circle text-yellow';
+}
+const filterOptions = [
+  { value: 'all', label: 'All', icon: 'pi pi-list', tooltip: 'Show all segments' },
+  { value: 'translated', label: 'Translated', icon: 'pi pi-check', tooltip: 'Show only translated' },
+  { value: 'untranslated', label: 'Untranslated', icon: 'pi pi-times', tooltip: 'Show only untranslated' },
+];
+
+watch(() => [props.projectId, props.branchId], () => {
+  loadFiles();
+  loadTranslationStrings();
+}, { immediate: true });
+
+onMounted(() => {
+  loadFiles();
+  loadTranslationStrings();
+});
+
+// Autosize textarea
+const textareaRefs = ref<Record<string, HTMLTextAreaElement | null>>({});
+function setTextareaRef(id: string, el: HTMLTextAreaElement | null) {
+  if (el) textareaRefs.value[id] = el;
+}
+function autoResize(e: Event) {
+  const el = e.target as HTMLTextAreaElement;
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight) + 'px';
+}
+
+// Thêm trạng thái dirty/saved cho từng chuỗi
+function onInput(str: any) {
+  str._dirty = true;
+  str._saved = false;
+}
+const toast = useToast();
+async function saveTranslation(str: any) {
+  console.log('saveTranslation str:', str);
+  const id = str.id;
+  try {
+    await axiosInstance.post(`/translation/translate/${id}`, {
+      translatedText: str.translatedText
+    });
+    str._dirty = false;
+    str._saved = true;
+    toast.add({ severity: 'success', summary: 'Saved', detail: 'Translation saved successfully', life: 2000 });
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.message || 'Failed to save translation', life: 3000 });
+  }
+}
 </script>
 
 <template>
-  <div class="translation-tab-wrapper">
-    <div class="translation-header">
-      <h2 v-if="customTitle" class="translation-title">{{ customTitle }}</h2>
-      <div class="translation-actions">
-        <InputText
-          v-model="searchQuery"
-          placeholder="Search translations..."
-          class="search-input"
-        />
-        <Button
-          v-if="hasTranslated"
-          label="Commit to GitHub"
-          icon="pi pi-github"
-          class="p-button-success"
-          @click="showCommitDialog = true"
-          :disabled="committing"
-        />
-        <Button
-          label="Refresh"
-          icon="pi pi-refresh"
-          class="p-button-outlined"
-          @click="loadTranslations"
-          :disabled="loading"
-        />
-      </div>
-    </div>
-
-    <div class="translation-section">
-      <div v-if="loading" class="translation-loading">
-        <div class="loading-spinner-small"></div>
-        <span>Loading translations...</span>
-      </div>
-
-      <div v-else-if="error" class="translation-error">
-        <span class="error-icon">⚠️</span>
-        <span>{{ error }}</span>
-        <Button label="Retry" class="p-button-outlined p-button-sm" @click="loadTranslations" />
-      </div>
-
-      <div v-else-if="filteredTranslations.length > 0" class="translation-list">
-        <div class="translation-stats">
-          <span class="stat-item">
-            <i class="pi pi-list"></i>
-            Total: {{ translations.length }}
+  <div>
+    <div v-if="loading">Loading translation strings...</div>
+    <div v-else-if="error" style="color:red">{{ error }}</div>
+    <div v-else>
+      <div v-if="files.length === 0">No files found for this branch.</div>
+      <div v-for="file in files" :key="file.fileId || file.id" class="file-accordion">
+        <div class="file-header" @click="toggleFileAccordion(file.fileId || file.id)">
+          <span class="file-name">
+            <i :class="getFileIconClass(file.fileName)" style="font-size:1.25em;margin-right:0.2em;"></i>
+            {{ file.fileName }}
           </span>
-          <span class="stat-item">
-            <i class="pi pi-check-circle"></i>
-            Translated: {{ translations.filter(t => t.translatedText && t.translatedText.trim()).length }}
-          </span>
-          <span class="stat-item">
-            <i class="pi pi-clock"></i>
-            Pending: {{ translations.filter(t => !t.translatedText || t.translatedText.trim() === '').length }}
+          <div class="progress-bar-wrapper"
+               :title="`${fileProgress[file.fileId || file.id]?.translated || 0} / ${fileProgress[file.fileId || file.id]?.total || 0} translated segments` +
+              ` (${((fileProgress[file.fileId || file.id]?.total || 0) === 0 ? 0 : Math.round((fileProgress[file.fileId || file.id]?.translated || 0) / (fileProgress[file.fileId || file.id]?.total || 1) * 100))}% translated)`">
+            <div
+              class="progress-bar"
+              :data-empty="(fileProgress[file.fileId || file.id]?.translated || 0) === 0"
+            >
+              <div
+                class="progress"
+                :style="{width: ((fileProgress[file.fileId || file.id]?.translated || 0) / (fileProgress[file.fileId || file.id]?.total || 1) * 100) + '%'}"
+              ></div>
+            </div>
+            <span class="progress-label"
+                  :title="`${fileProgress[file.fileId || file.id]?.translated || 0} / ${fileProgress[file.fileId || file.id]?.total || 0} translated segments` +
+                ` (${((fileProgress[file.fileId || file.id]?.total || 0) === 0 ? 0 : Math.round((fileProgress[file.fileId || file.id]?.translated || 0) / (fileProgress[file.fileId || file.id]?.total || 1) * 100))}% translated)`">
+              <i v-if="getStatusIcon(fileProgress[file.fileId || file.id])" :class="getStatusIcon(fileProgress[file.fileId || file.id])" class="status-icon"></i>
+              {{ fileProgress[file.fileId || file.id]?.translated || 0 }}/{{ fileProgress[file.fileId || file.id]?.total || 0 }}
+            </span>
+          </div>
+          <span class="accordion-arrow" :class="{ open: expandedFileIds.includes(file.fileId || file.id) }">
+            <i class="pi" :class="expandedFileIds.includes(file.fileId || file.id) ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
           </span>
         </div>
-
-        <div class="translation-items">
-          <div
-            v-for="translation in filteredTranslations"
-            :key="translation.id"
-            class="translation-item"
-            :class="{ 'has-translation': translation.translatedText && translation.translatedText.trim() }"
-          >
-            <div class="translation-content">
-              <div class="original-text">
-                <label>Original Text:</label>
-                <p>{{ translation.originalText }}</p>
+        <transition name="fade">
+          <div v-if="expandedFileIds.includes(file.fileId || file.id)" class="file-strings-list">
+            <!-- Improved search & filter bar -->
+            <div class="search-filter-bar">
+              <span class="search-icon"><i class="pi pi-search"></i></span>
+              <InputText v-model="searchQueryMap[file.fileId || file.id]" placeholder="Search strings..." class="search-input" />
+              <div class="filter-group-btn">
+                <button
+                  v-for="opt in filterOptions"
+                  :key="opt.value"
+                  :class="['filter-btn', { active: filterStatusMap[file.fileId || file.id] === opt.value }]"
+                  @click="filterStatusMap[file.fileId || file.id] = opt.value"
+                  :title="opt.tooltip"
+                  type="button"
+                >
+                  <i v-if="opt.icon" :class="opt.icon" style="margin-right:0.4em;"></i>{{ opt.label }}
+                </button>
+                <span class="filter-help" title="Filter translation status">
+                  <i class="pi pi-filter"></i>
+                </span>
               </div>
-              <div class="translated-text">
-                <label>Translation:</label>
-                <div v-if="translation.translatedText && translation.translatedText.trim()" class="translation-display">
-                  <p>{{ translation.translatedText }}</p>
-                  <Button
-                    icon="pi pi-pencil"
-                    class="p-button-text p-button-sm"
-                    @click="editTranslation(translation)"
-                  />
+            </div>
+            <div class="advanced-options">
+              <div class="view-mode-toggle">
+                <label>
+                  <input type="radio" value="single" v-model="viewMode" /> Single Column
+                </label>
+                <label>
+                  <input type="radio" value="side" v-model="viewMode" /> Side by Side
+                </label>
+              </div>
+              <label class="highlight-toggle">
+                <input type="checkbox" v-model="highlightUntranslated" />
+                Highlight untranslated
+              </label>
+              <label class="focus-toggle">
+                <input type="checkbox" v-model="focusUntranslated" />
+                Focus on untranslated
+              </label>
+            </div>
+            <div class="translation-scroll-area">
+              <div v-if="getFilteredStrings(file.fileId || file.id).length === 0" class="no-strings">No matching strings.</div>
+              <div
+                v-for="str in getFilteredStrings(file.fileId || file.id)"
+                :key="str.id"
+                class="string-card"
+                :class="{
+                  untranslated: highlightUntranslated && (!str.translatedText || !str.translatedText.trim()),
+                  translated: str.translatedText && str.translatedText.trim(),
+                  'side-by-side': viewMode === 'side'
+                }"
+              >
+                <div v-if="viewMode === 'side'" class="side-by-side-row">
+                  <div class="side-original">
+                    <div class="original-label">Original Text:</div>
+                    <div class="original-text">{{ str.originalText }}</div>
+                  </div>
+                  <div class="side-translation">
+                    <div class="translation-label">Translation:</div>
+                    <textarea
+                      class="translation-input"
+                      v-model="str.translatedText"
+                      placeholder="Enter translation..."
+                      @input="e => { autoResize(e); onInput(str); }"
+                      rows="1"
+                      :ref="el => setTextareaRef(str.id, el)"
+                    ></textarea>
+                    <div class="card-actions">
+                      <button
+                        v-if="str.translatedText && str.translatedText.trim()"
+                        class="save-btn"
+                        @click="saveTranslation(str)"
+                        :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim()"
+                        title="Save"
+                        type="button"
+                      >💾 Save</button>
+                    </div>
+                  </div>
                 </div>
-                <div v-else class="no-translation">
-                  <span class="no-translation-text">No translation yet</span>
-                  <Button
-                    label="Add Translation"
-                    icon="pi pi-plus"
-                    class="p-button-outlined p-button-sm"
-                    @click="editTranslation(translation)"
-                  />
-                </div>
+                <template v-else>
+                  <div class="original-label">Original Text:</div>
+                  <div class="original-text">{{ str.originalText }}</div>
+                  <div class="translation-label">Translation:</div>
+                  <textarea
+                    class="translation-input"
+                    v-model="str.translatedText"
+                    placeholder="Enter translation..."
+                    @input="e => { autoResize(e); onInput(str); }"
+                    rows="1"
+                    :ref="el => setTextareaRef(str.id, el)"
+                  ></textarea>
+                  <div class="card-actions">
+                    <button
+                      v-if="str.translatedText && str.translatedText.trim()"
+                      class="save-btn"
+                      @click="saveTranslation(str)"
+                      :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim()"
+                      title="Save"
+                      type="button"
+                    >💾 Save</button>
+                  </div>
+                </template>
+                <span
+                  v-if="highlightUntranslated && (!str.translatedText || !str.translatedText.trim())"
+                  class="untranslated-badge"
+                  :title="'This segment is not yet translated'"
+                >
+                  <i class="pi pi-exclamation-triangle"></i>
+                </span>
+                <span
+                  v-else-if="str.translatedText && str.translatedText.trim()"
+                  class="translated-badge"
+                  :title="'This segment is translated'"
+                >
+                  <i class="pi pi-check-circle"></i>
+                </span>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div v-else-if="searchQuery" class="no-results">
-        <div class="no-content-icon">🔍</div>
-        <p>No translations found for "{{ searchQuery }}"</p>
-        <Button label="Clear Search" class="p-button-outlined" @click="searchQuery = ''" />
-      </div>
-
-      <div v-else class="no-translation">
-        <div class="no-content-icon">🌐</div>
-        <p>No translations available for this project yet.</p>
-        <p class="sub-text">Upload files to extract translatable strings.</p>
+        </transition>
       </div>
     </div>
-
-    <!-- Edit Translation Dialog -->
-    <Dialog
-      v-model:visible="showEditDialog"
-      header="Edit Translation"
-      :modal="true"
-      :closable="true"
-      class="translation-dialog"
-    >
-      <div v-if="editingTranslation" class="edit-form">
-        <div class="form-group">
-          <label>Original Text:</label>
-          <div class="original-display">{{ editingTranslation.originalText }}</div>
-        </div>
-        <div class="form-group">
-          <label>Translation:</label>
-          <Textarea
-            v-model="editingTranslation.translatedText"
-            rows="4"
-            placeholder="Enter your translation..."
-            class="translation-textarea"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" class="p-button-text" @click="cancelEdit" />
-        <Button
-          label="Save"
-          class="p-button-primary"
-          @click="saveTranslation"
-          :disabled="saving"
-          :loading="saving"
-        />
-      </template>
-    </Dialog>
-
-    <!-- Commit Dialog -->
-    <Dialog
-      v-model:visible="showCommitDialog"
-      header="Commit Translations to GitHub"
-      :modal="true"
-      :closable="true"
-    >
-      <div class="commit-content">
-        <p>This will commit all translated strings to the GitHub repository.</p>
-        <div class="commit-info">
-          <strong>Repository:</strong> {{ repo || 'Not specified' }}<br>
-          <strong>Branch:</strong> {{ branchId || 'Not specified' }}<br>
-          <strong>Files to commit:</strong> {{ translations.filter(t => t.translatedText && t.translatedText.trim()).length }} translations
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" class="p-button-text" @click="showCommitDialog = false" />
-        <Button
-          label="Commit to GitHub"
-          class="p-button-success"
-          @click="commitTranslations"
-          :disabled="committing"
-          :loading="committing"
-        />
-      </template>
-    </Dialog>
   </div>
 </template>
 
 <style scoped>
-.translation-tab-wrapper {
-  padding: 1.5em 0;
+.file-accordion {
+  border: 2px solid #e0e7ff;
+  border-radius: 20px;
+  margin-bottom: 2.2em;
+  background: #f7f8fd;
+  box-shadow: 0 4px 18px #b3b3e622;
+  transition: box-shadow 0.22s, border 0.22s;
+  overflow: hidden;
 }
-
-.translation-header {
+.file-accordion:hover {
+  box-shadow: 0 10px 32px #6366f122;
+  border-color: #6366f1;
+}
+.file-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5em;
-  gap: 1em;
+  padding: 1.3em 2em 1.3em 2.2em;
+  font-weight: 700;
+  font-size: 1.15em;
+  cursor: pointer;
+  background: linear-gradient(90deg, #f8fafc 60%, #e0e7ff 100%);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 2px 8px #b3b3e611;
+  transition: background 0.18s, box-shadow 0.18s;
+  position: relative;
+  min-height: 64px;
 }
-
-.translation-title {
-  font-size: 1.3em;
+.file-header:hover {
+  background: linear-gradient(90deg, #e0e7ff 60%, #ececff 100%);
+  box-shadow: 0 4px 16px #6366f122;
+}
+.file-name {
+  flex: 1;
+  color: #4f46e5;
+  font-size: 1.13em;
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+}
+.file-folder-icon {
+  color: #6366f1;
+  font-size: 1.25em;
+  margin-right: 0.2em;
+}
+.progress-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  min-width: 140px;
+}
+.progress-bar {
+  width: 140px;
+  height: 18px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 1px 4px #6366f122;
+  transition: background 0.18s, border 0.18s;
+}
+.progress-bar[data-empty='true'] {
+  background: repeating-linear-gradient(135deg, #f1f5f9, #f1f5f9 8px, #e0e7ef 8px, #e0e7ef 16px);
+  border: 1.5px dashed #cbd5e1;
+}
+.progress {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1 0%, #7c3aed 100%);
+  border-radius: 10px;
+  transition: width 0.22s;
+  min-width: 2px;
+}
+.progress-label {
+  color: #6366f1;
+  font-size: 1em;
+  min-width: 60px;
+  text-align: right;
   font-weight: 600;
-  color: #2b6cb0;
-  margin: 0;
+  letter-spacing: 0.01em;
+  margin-left: 0.7em;
 }
-
-.translation-actions {
-  display: flex;
-  gap: 0.8em;
-  align-items: center;
-}
-
-.search-input {
-  min-width: 250px;
-}
-
-.translation-section {
-  margin-top: 1em;
-}
-
-.translation-stats {
-  display: flex;
-  gap: 1.5em;
-  margin-bottom: 1.5em;
-  padding: 1em;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.stat-item {
+.accordion-arrow {
+  font-size: 1.5em;
+  color: #888;
+  margin-left: 0.7em;
+  transition: transform 0.22s;
   display: flex;
   align-items: center;
-  gap: 0.5em;
-  font-size: 0.9em;
-  color: #64748b;
 }
-
-.stat-item i {
+.accordion-arrow.open {
+  transform: rotate(180deg);
   color: #6366f1;
 }
-
-.translation-items {
-  display: flex;
-  flex-direction: column;
-  gap: 1em;
+.file-strings-list {
+  padding: 2em 2.5em 1.5em 2.5em;
+  background: #fafdff;
+  border-radius: 0 0 20px 20px;
 }
-
-.translation-item {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.5em;
-  transition: all 0.2s;
+@media (max-width: 700px) {
+  .file-header {
+    padding: 1.1em 1em 1.1em 1.2em;
+    font-size: 1em;
+    min-height: 48px;
+  }
+  .file-strings-list {
+    padding: 1.2em 0.5em 1em 0.5em;
+  }
 }
-
-.translation-item:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+.string-card {
+  background: #f7f9fc;
+  border-radius: 18px;
+  padding: 1.5em 1.5em 1.2em 1.5em;
+  border: 2px solid #d1d5fa;
+  position: relative;
+  margin-bottom: 1.5em;
+  transition: background 0.18s, border 0.18s, box-shadow 0.18s;
+  box-shadow: 0 2px 8px #b3b3e622;
 }
-
-.translation-item.has-translation {
-  border-left: 4px solid #10b981;
-}
-
-.translation-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1em;
-}
-
-.original-text, .translated-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-}
-
-.original-text label, .translated-text label {
-  font-weight: 600;
-  color: #374151;
-  font-size: 0.9em;
-}
-
-.original-text p {
-  margin: 0;
-  padding: 0.8em;
+.string-card:hover {
+  box-shadow: 0 6px 20px #6366f122;
+  border-color: #6366f1;
   background: #f8fafc;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9em;
-  line-height: 1.4;
 }
-
-.translation-display {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.8em;
+.string-card.untranslated {
+  border: 2px solid #e0f7fa;
+  background: #f0f4ff;
+  box-shadow: 0 2px 12px #b3e5fc33;
 }
-
-.translation-display p {
-  flex: 1;
-  margin: 0;
-  padding: 0.8em;
-  background: #f0fdf4;
-  border-radius: 6px;
-  border: 1px solid #bbf7d0;
-  color: #166534;
-  line-height: 1.4;
+.string-card.translated {
+  border: 2px solid #38a169;
+  background: #e6fffa;
+  box-shadow: 0 2px 12px #38a16922;
 }
-
-.no-translation {
+.untranslated-badge {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  background: #e0f7fa;
+  color: #039be5;
+  font-size: 1em;
+  border-radius: 8px;
+  padding: 2px 8px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.8em;
-  background: #fef2f2;
-  border-radius: 6px;
-  border: 1px solid #fecaca;
+  z-index: 2;
+  cursor: help;
+  box-shadow: 0 1px 4px #b3e5fc44;
 }
-
-.no-translation-text {
-  color: #dc2626;
-  font-style: italic;
-}
-
-.translation-loading, .translation-error, .no-translation, .no-results {
-  text-align: center;
-  padding: 3em 0;
-}
-
-.loading-spinner-small {
-  border: 2px solid #f3f4f6;
-  border-top: 2px solid #6366f1;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1em;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.error-icon {
-  font-size: 2em;
-  margin-bottom: 0.5em;
-  display: block;
-}
-
-.no-content-icon {
-  font-size: 3em;
-  margin-bottom: 0.5em;
-}
-
-.sub-text {
-  color: #6b7280;
-  font-size: 0.9em;
-  margin-top: 0.5em;
-}
-
-/* Dialog Styles */
-.translation-dialog ::v-deep .p-dialog {
-  min-width: 600px;
-}
-
-.edit-form {
+.translated-badge {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  background: #38a169;
+  color: #fff;
+  font-size: 1em;
+  border-radius: 8px;
+  padding: 2px 8px;
   display: flex;
-  flex-direction: column;
-  gap: 1.5em;
+  align-items: center;
+  z-index: 2;
+  box-shadow: 0 1px 4px #38a16944;
 }
-
-.form-group {
+.original-label, .translation-label {
+  font-size: 1em;
+  color: #6366f1;
+  font-weight: 600;
+  margin-bottom: 0.1em;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 0.4em;
+}
+.original-label::before {
+  content: '\f15c';
+  font-family: 'PrimeIcons';
+  font-size: 1.1em;
+  color: #a0aec0;
+  margin-right: 0.3em;
+}
+.translation-label::before {
+  content: '\f040';
+  font-family: 'PrimeIcons';
+  font-size: 1.1em;
+  color: #38a169;
+  margin-right: 0.3em;
+}
+.original-text {
+  font-size: 1.08em;
+  color: #22223b;
+  margin-bottom: 0.5em;
+  background: #f3f4fa;
+  border-radius: 8px;
+  padding: 0.7em 1.1em;
+  border: 1.5px solid #e0e7ff;
+  word-break: break-word;
+}
+.translation-input {
+  width: 100%;
+  border-radius: 10px;
+  border: 2px solid #b3b3e6;
+  padding: 0.9em 1.1em;
+  font-size: 1.07em;
+  min-height: 38px;
+  resize: none;
+  transition: border 0.18s, box-shadow 0.18s, background 0.18s;
+  font-family: inherit;
+}
+.translation-input:focus {
+  border: 2px solid #6366f1;
+  box-shadow: 0 2px 8px #6366f122;
+  background: #fff;
+}
+@media (max-width: 600px) {
+  .string-card {
+    padding: 1em 0.7em 0.7em 0.7em;
+    border-radius: 12px;
+    font-size: 1em;
+  }
+  .original-text, .translation-input {
+    font-size: 1em;
+    padding: 0.6em 0.7em;
+  }
+}
+.search-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.2em;
+  background: #f8fafc;
+  padding: 0.7em 1.2em;
+  border-radius: 10px;
+  margin-bottom: 1.2em;
+  flex-wrap: wrap;
+}
+.search-icon {
+  color: #6366f1;
+  font-size: 1.2em;
+  margin-right: -0.5em;
+}
+.search-input {
+  min-width: 180px;
+  border-radius: 8px;
+  border: 1.5px solid #e5e7eb;
+  padding: 8px 14px 8px 32px;
+  font-size: 1em;
+}
+.filter-group {
+  display: flex;
+  gap: 0.7em;
+  margin-left: 1em;
+  flex-wrap: wrap;
+}
+.filter-radio {
+  font-size: 1em;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+.filter-radio input[type='radio'] {
+  accent-color: #6366f1;
+}
+.filter-group-btn {
+  display: flex;
+  align-items: center;
   gap: 0.5em;
 }
-
-.form-group label {
-  font-weight: 600;
+.filter-btn {
+  border: none;
+  background: #e0e7ff;
   color: #374151;
+  padding: 0.5em 1.2em;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  outline: none;
+  font-size: 1em;
+  box-shadow: 0 1px 4px #6366f111;
 }
-
-.original-display {
-  padding: 1em;
-  background: #f8fafc;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  font-family: 'Courier New', monospace;
-  line-height: 1.4;
+.filter-btn.active {
+  background: linear-gradient(90deg, #6366f1 0%, #7c3aed 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px #6366f122;
 }
-
-.translation-textarea {
-  font-family: inherit;
-  resize: vertical;
+.filter-btn:focus {
+  outline: 2px solid #6366f1;
 }
-
-.commit-content {
-  padding: 1em 0;
+.filter-help {
+  color: #6366f1;
+  margin-left: 0.5em;
+  cursor: help;
+  font-size: 1.2em;
 }
-
-.commit-info {
-  margin-top: 1em;
-  padding: 1em;
-  background: #f8fafc;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  font-size: 0.9em;
-  line-height: 1.6;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .translation-header {
+@media (max-width: 600px) {
+  .search-filter-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.7em;
+    padding: 0.7em 0.5em;
+  }
+  .filter-group {
+    margin-left: 0;
+    gap: 0.5em;
+  }
+  .search-input {
+    min-width: 100px;
+    width: 100%;
+  }
+  .filter-group-btn {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3em;
+  }
+  .filter-btn {
+    width: 100%;
+    padding: 0.7em 1em;
+  }
+}
+.status-icon {
+  margin-right: 0.3em;
+  font-size: 1.1em;
+  vertical-align: middle;
+}
+.text-green { color: #38a169; }
+.text-yellow { color: #fbbf24; }
+.text-red { color: #e53e3e; }
+.save-btn {
+  position: static;
+  margin: 0;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.3em 0.7em;
+  font-size: 1.1em;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #6366f122;
+  transition: background 0.18s;
+  z-index: 3;
+}
+.save-btn:hover {
+  background: #38a169;
+}
+.saved-check {
+  position: static;
+  margin: 0;
+  color: #38a169;
+  font-size: 1.2em;
+  z-index: 3;
+}
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 0.5em;
+  gap: 0.5em;
+}
+.translation-scroll-area {
+  max-height: 75vh;
+  min-height: 200px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #b3b3e6 #f7f9fc;
+  border-top: 1.5px solid #e0e7ef;
+  margin-top: 1.2em;
+}
+.translation-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  background: #f7f9fc;
+}
+.translation-scroll-area::-webkit-scrollbar-thumb {
+  background: #b3b3e6;
+  border-radius: 8px;
+}
+.advanced-options {
+  display: flex;
+  align-items: center;
+  gap: 1.5em;
+  margin-bottom: 1.2em;
+  margin-top: 0.5em;
+}
+.highlight-toggle {
+  font-size: 1em;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.side-by-side-btn {
+  background: #e0e7ff;
+  color: #374151;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5em 1.2em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  font-size: 1em;
+  box-shadow: 0 1px 4px #6366f111;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.side-by-side-btn.active {
+  background: linear-gradient(90deg, #6366f1 0%, #7c3aed 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px #6366f122;
+}
+.string-card.side-by-side {
+  display: flex;
+  flex-direction: row;
+  gap: 2em;
+  align-items: flex-start;
+}
+.side-by-side-row {
+  display: flex;
+  flex-direction: row;
+  gap: 2em;
+  width: 100%;
+}
+.side-original, .side-translation {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+}
+@media (max-width: 900px) {
+  .string-card.side-by-side, .side-by-side-row {
+    flex-direction: column;
     gap: 1em;
   }
-
-  .translation-actions {
-    flex-direction: column;
-  }
-
-  .search-input {
-    min-width: auto;
-  }
-
-  .translation-stats {
-    flex-direction: column;
-    gap: 0.8em;
-  }
+}
+.view-mode-toggle {
+  display: inline-flex;
+  gap: 1.2em;
+  align-items: center;
+  margin-right: 1.5em;
+}
+.view-mode-toggle label {
+  font-weight: 500;
+  color: #6366f1;
+  cursor: pointer;
+  margin-right: 0.7em;
+}
+.focus-toggle {
+  margin-left: 1.5em;
+  font-weight: 500;
+  color: #039be5;
+  cursor: pointer;
 }
 </style>

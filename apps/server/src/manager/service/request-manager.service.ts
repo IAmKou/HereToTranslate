@@ -1,5 +1,5 @@
 import {
-  CategoryEntity,
+  CategoryEntity, FileEntity,
   ProjectEntity,
   ProjectTagEntity,
   RequestEntity,
@@ -7,7 +7,7 @@ import {
   TransactionEntity,
   TransactionStatus,
   UserEntity,
-  WalletEntity,
+  WalletEntity
 } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
@@ -40,6 +40,8 @@ export class RequestManagerService {
     private readonly transactionRepository: Repository<TransactionEntity>,
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
+    @InjectRepository(FileEntity)
+    private readonly fileRepository: Repository<FileEntity>,
     private readonly walletService: WalletManagerService,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
@@ -49,21 +51,24 @@ export class RequestManagerService {
 
   async createRequest(
     dto: CreateRequestDto,
-    uid: bigint
+    uid: bigint,
+    uploadedFiles: Express.Multer.File[] = [],
   ): Promise<RequestEntity> {
     const DAY = 24 * 60 * 60 * 1000;
-    const {
-      title,
-      description,
-      dealAmount,
-      deadline: deadlineRaw,
-      isPublic,
-      files,
-    } = dto;
+    const { title, description, dealAmount, deadline: deadlineRaw, isPublic } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
-      throw new BadRequestException(`Deadline must be at least 7 days from now`);
+      throw new BadRequestException('Deadline must be at least 7 days from now');
+    }
+
+    const fileEntities: FileEntity[] = [];
+    for (const file of uploadedFiles) {
+      const { fileId } = await this.fileService.handleUpload(file, uid, dto.projectId ? BigInt(dto.projectId) : undefined);
+      const entity = await this.fileRepository.findOneOrFail({
+        where: { id: BigInt(fileId) },
+      });
+      fileEntities.push(entity);
     }
 
     const request = this.requestRepository.create({
@@ -79,7 +84,7 @@ export class RequestManagerService {
       status: RequestStatus.Pending,
       isPublic,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
-      files: files ?? [],
+      files: fileEntities,
     });
 
     return await this.requestRepository.save(request);
@@ -87,21 +92,24 @@ export class RequestManagerService {
 
   async createPrivateRequest(
     dto: CreateRequestDto,
-    uid: bigint
+    uid: bigint,
+    uploadedFiles: Express.Multer.File[] = [],
   ): Promise<{ request: RequestEntity; approvalUrl?: string }> {
     const DAY = 24 * 60 * 60 * 1000;
-    const {
-      title,
-      description,
-      dealAmount,
-      deadline: deadlineRaw,
-      isPublic,
-      files,
-    } = dto;
+    const { title, description, dealAmount, deadline: deadlineRaw, isPublic } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
-      throw new BadRequestException(`Deadline must be at least 7 days from now`);
+      throw new BadRequestException('Deadline must be at least 7 days from now');
+    }
+
+    const fileEntities: FileEntity[] = [];
+    for (const file of uploadedFiles) {
+      const { fileId } = await this.fileService.handleUpload(file, uid, dto.projectId ? BigInt(dto.projectId) : undefined);
+      const entity = await this.fileRepository.findOneOrFail({
+        where: { id: BigInt(fileId) },
+      });
+      fileEntities.push(entity);
     }
 
     const request = this.requestRepository.create({
@@ -117,7 +125,7 @@ export class RequestManagerService {
       status: RequestStatus.Pending,
       isPublic,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
-      files: files ?? [],
+      files: fileEntities,
     });
 
     const requesterUser = await this.userRepository.findOneOrFail({
@@ -128,12 +136,11 @@ export class RequestManagerService {
       where: { id: BigInt(dto.assigneeId) },
     });
 
-    const username = requesterUser.username;
     if (assigneeUser?.email) {
       await this.mailService.sendPrivateRequestConfirmation(assigneeUser.email, {
         title,
         deadline,
-        username,
+        username: requesterUser.username,
       });
     }
 
@@ -147,6 +154,7 @@ export class RequestManagerService {
 
     return { request: savedRequest, approvalUrl };
   }
+
 
 
   async searchUsers(

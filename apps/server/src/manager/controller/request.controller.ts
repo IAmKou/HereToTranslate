@@ -8,15 +8,16 @@ import {
   Param,
   Post,
   Query,
-  Req,
+  Req, UploadedFiles,
   UseGuards,
   UseInterceptors,
-  ValidationPipe,
+  ValidationPipe
 } from '@nestjs/common';
 import { RequestManagerService } from '../service/request-manager.service';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('requests')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -26,22 +27,24 @@ export class RequestController {
     private readonly paymentService: PaypalService
   ) {}
 
-  @UseGuards(JwtAuthGuard)
   @Post('create')
+  @UseInterceptors(FilesInterceptor('files'))
   async createRequest(
     @Body(ValidationPipe) body: CreateRequestDto,
+    @UploadedFiles() files: Express.Multer.File[],
     @Req() req: AuthenticatedRequest
   ) {
-    return this.requests.createRequest(body, req.user.id);
+    return this.requests.createRequest(body, req.user.id, files);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('create/private')
+  @UseInterceptors(FilesInterceptor('files'))
   async createPrivateRequest(
     @Body(ValidationPipe) body: CreateRequestDto,
+    @UploadedFiles() files: Express.Multer.File[],
     @Req() req: AuthenticatedRequest
   ) {
-    return this.requests.createPrivateRequest(body, req.user.id);
+    return this.requests.createPrivateRequest(body, req.user.id, files);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -20,6 +20,7 @@ import { MailService } from '../../mailer/mailer.service';
 import { TranslationApprovalEntity } from '#LocalProject/Entities';
 import { WalletManagerService } from './wallet-manager.service';
 import { WithdrawDto } from '../../dto/withdraw.dto';
+import { logger } from 'nx/src/utils/logger';
 
 @Injectable()
 export class PaypalService {
@@ -105,6 +106,78 @@ export class PaypalService {
           ],
           application_context: {
             return_url: `http://localhost:3000/api/payment/paypal/success`,
+            cancel_url: `http://localhost:4200/paypal/cancel`,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const approvalUrl = data.links?.find((link: { rel: string }) => link.rel === 'approve')?.href;
+
+      if (!approvalUrl) {
+        throw new InternalServerErrorException('No approval URL returned by PayPal.');
+      }
+
+      await this.transactionRepo.save({
+        user,
+        request,
+        amount: depositAmount,
+        status: TransactionStatus.Pending,
+        paypalOrderId: data.id,
+      });
+
+      return approvalUrl;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        console.error('PayPal API error:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+        });
+      } else {
+        console.error('Unexpected error:', err);
+      }
+
+      throw new InternalServerErrorException('Failed to create PayPal deposit');
+    }
+  }
+
+  async createPrivateDeposit(
+    amount: number,
+    user: UserEntity,
+    request: RequestEntity
+  ): Promise<string> {
+    const baseAmount = typeof amount === 'number' ? amount : parseFloat(amount as any);
+    if (isNaN(baseAmount)) {
+      throw new BadRequestException('Invalid amount for PayPal deposit');
+    }
+
+    const totalWithFee = parseFloat((baseAmount * 1.05).toFixed(2));
+    const depositAmount = parseFloat((totalWithFee * 0.5).toFixed(2));
+
+    const accessToken = await this.getAccessToken();
+
+    try {
+      const { data } = await axios.post(
+        `${this.api}/v2/checkout/orders`,
+        {
+          intent: 'CAPTURE',
+          purchase_units: [
+            {
+              amount: {
+                currency_code: 'USD',
+                value: depositAmount.toFixed(2),
+              },
+              description: `50% Deposit (5% fee included) for request ID ${request.id}`,
+            },
+          ],
+          application_context: {
+            return_url: `http://localhost:3000/api/payment/paypal/private/success`,
             cancel_url: `http://localhost:4200/paypal/cancel`,
           },
         },
@@ -232,6 +305,65 @@ export class PaypalService {
       return { success: false, error: (err as any)?.message || 'PayPal capture failed' };
     }
   }
+
+  async capturePayment(orderId: string) {
+    const accessToken = await this.getAccessToken();
+
+    try {
+      const captureRes = await axios.post(
+        `${this.api}/v2/checkout/orders/${orderId}/capture`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (captureRes.status !== 201) {
+        throw new Error('Payment capture failed with status: ' + captureRes.status);
+      }
+
+      const transaction = await this.transactionRepo.findOneOrFail({
+        where: { paypalOrderId: orderId },
+        relations: ['user', 'request'],
+      });
+
+      const { user, request } = transaction;
+
+      if (!request || !user) {
+        throw new Error('Invalid request or user information.');
+      }
+
+      // Mark transaction and request status
+      transaction.status = TransactionStatus.Completed;
+      await this.transactionRepo.save(transaction);
+
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
+      await this.walletRepository.save(adminWallet);
+
+      logger.log(`Payment captured for order ${orderId}, request ID ${request.id}, user ID ${user.id}`);
+
+      return {
+        success: true,
+        requestId: request.id,
+        amount: transaction.amount,
+        currency: 'USD',
+        payerEmail: user.email,
+        date: transaction.createdAt,
+        description: request.description,
+      };
+    } catch (err) {
+      console.error('PayPal capture failed:', err);
+      return {
+        success: false,
+        error: (err as any)?.message || 'PayPal capture failed',
+      };
+    }
+  }
+
 
   async acceptPrivateRequest(requestId: bigint, assigneeId: bigint): Promise<any> {
     const request = await this.requestRepository.findOneOrFail({

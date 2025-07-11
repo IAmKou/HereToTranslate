@@ -23,7 +23,6 @@ import { JwtFallthroughGuard } from '#LocalProject/Auth/guards/jwt-fallthrough.g
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { ProjectManagerService } from '../service/project-manager.service';
-import { UserEntity } from '#LocalProject/Entities';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileService } from '../service/file-manager.service';
@@ -92,34 +91,30 @@ export class ProjectController {
   async searchUserToAdd(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @Body('identifier') identifier: string
-  ): Promise<{ user: UserEntity | null }> {
+  ): Promise<{ users: Array<{ id: bigint; fullName: string; email: string; phone: string }> }> {
     if (!identifier?.trim()) {
       throw new BadRequestException('Identifier is required');
     }
 
-    const user = await this.projects.findUserToProject(
+    const users = await this.projects.findUserToProject(
       projectId,
       identifier.trim()
     );
-    return {
-      user,
-    };
+
+    return { users };
   }
+
 
   @UseGuards(JwtAuthGuard)
   @Post(':projectId/add-user')
   async addUserToProject(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body('identifier') identifier: string
+    @Body('userId', BigIntTransformPipe) userId: bigint
   ) {
-    if (!identifier?.trim()) {
-      throw new BadRequestException('Identifier is required');
-    }
-
     try {
       const updatedProject = await this.projects.addUserToProject(
         projectId,
-        identifier.trim()
+        userId
       );
       return {
         message: 'User added successfully',

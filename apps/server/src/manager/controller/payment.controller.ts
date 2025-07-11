@@ -50,6 +50,17 @@ export class PaymentController {
     }
   }
 
+  @Get('/paypal/private/success')
+  async handlePrivatePayPalSuccess(@Query('token') orderId: string, @Res() res: Response) {
+    const result = await this.paymentService.capturePayment(orderId);
+
+    if (result.success) {
+      return res.redirect(`http://localhost:4200/my-requests`);
+    } else {
+      return res.redirect('/payment-failed');
+    }
+  }
+
   @UseGuards()
   @Get('/paypal/test')
   getTestRoute(@Res() res: Response) {

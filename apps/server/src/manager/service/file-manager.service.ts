@@ -30,7 +30,17 @@ export class FileService {
     projectId?: bigint;
     branchId?: bigint;
     requestId?: bigint;
-  }) {
+  }): Promise<{
+    fileId: string;
+    fileName: string;
+    fileType: string;
+    createdAt: Date;
+    updatedAt: Date;
+    uploaderId?: string;
+    projectId?: string;
+    branchId?: string;
+    requestId?: string;
+  }> {
     this.logger.log('===DEBUG FILE NAME saveFile===');
     const { uid, fileName, fileType, fileContent, projectId, branchId, requestId } = params;
 
@@ -191,7 +201,12 @@ export class FileService {
       requestId,
     });
 
-    await this.translationService.extractStrings(saved);
+    const fullFile = await this.fileRepository.findOneOrFail({
+      where: { id: BigInt(saved.fileId) },
+      relations: ['project', 'branch'],
+    });
+
+    await this.translationService.extractStrings(fullFile);
 
     return {
       message: 'File uploaded and linked to request',
@@ -199,14 +214,15 @@ export class FileService {
     };
   }
 
-  async deleteFile(fileId: string, userId: string | bigint) {
+
+  async deleteFile(fileId: bigint, userId: string | bigint) {
     const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader'] });
     if (!file) throw new NotFoundException('File not found');
     // Chỉ cho phép uploader hoặc admin xóa (ở đây chỉ check uploader)
     if (file.uploader.id.toString() !== userId.toString()) {
       throw new Error('You do not have permission to delete this file');
     }
-    await this.fileRepository.delete(file.id);
+    await this.fileRepository.delete(String(file.id));
     return { success: true, message: 'File deleted' };
   }
 

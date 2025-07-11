@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, defineProps, computed, watch, nextTick } from 'vue';
+import { ref, defineProps, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import type { Ref } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import TreeTable from 'primevue/treetable';
@@ -43,13 +43,42 @@ const searchLoading = ref(false);
 const searchResults = ref<any[]>([]);
 const searchQuery = ref('');
 
-const actionMenuVisible = ref<Record<string, boolean>>({});
-const actionMenuRef = ref<Record<string, any>>({});
-function setMenuRef(key: string) {
-  return (el: any) => {
-    if (el) actionMenuRef.value[key] = el;
+const dropdownOpenId = ref<string | number | null>(null);
+const dropdownMenuRefs = ref<Record<string, HTMLElement | null>>({});
+const ellipsisBtnRefs = ref<Record<string, HTMLElement | null>>({});
+
+function toggleDropdown(id: string | number) {
+  dropdownOpenId.value = dropdownOpenId.value === id ? null : id;
+}
+
+function setDropdownMenuRef(id: string | number) {
+  return (el: HTMLElement | null) => {
+    dropdownMenuRefs.value[id] = el;
   };
 }
+function setEllipsisBtnRef(id: string | number) {
+  return (el: HTMLElement | null) => {
+    ellipsisBtnRefs.value[id] = el;
+  };
+}
+
+function handleClickOutside(event: MouseEvent) {
+  if (!dropdownOpenId.value) return;
+  const menuEl = dropdownMenuRefs.value[dropdownOpenId.value];
+  const btnEl = ellipsisBtnRefs.value[dropdownOpenId.value];
+  if (menuEl && menuEl.contains(event.target as Node)) return;
+  if (btnEl && btnEl.contains(event.target as Node)) return;
+  dropdownOpenId.value = null;
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleClickOutside);
+  window.addEventListener('scroll', () => { dropdownOpenId.value = null; }, true);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleClickOutside);
+  window.removeEventListener('scroll', () => { dropdownOpenId.value = null; }, true);
+});
 const renamingFile = ref<any>(null);
 const renameInput = ref('');
 const showRenameDialog = ref(false);
@@ -223,23 +252,6 @@ watch(searchValue, (val) => {
   }, 350); // Giả lập loading
 }, { immediate: true });
 
-function openMenu(fileId: string, event: Event) {
-  nextTick(() => {
-    const menu = actionMenuRef.value[fileId];
-    if (menu) menu.toggle(event);
-  });
-}
-function onMenuHide(fileId: string) {
-  actionMenuVisible.value[fileId] = false;
-}
-function getMenuModel(file: ProjectFile) {
-  return [
-    { label: 'Download', icon: 'pi pi-download', command: () => { console.log('Menu Download for fileId:', file.id); handleAction('download', file.id); }, pt: { root: { title: 'Download file' } } },
-    { label: 'Rename', icon: 'pi pi-pencil', command: () => { console.log('Menu Rename for fileId:', file.id); handleAction('rename', file.id); }, pt: { root: { title: 'Rename file' } } },
-    { label: 'Delete', icon: 'pi pi-trash', command: () => { console.log('Menu Delete for fileId:', file.id); handleAction('delete', file.id); }, pt: { root: { title: 'Delete file' } } }
-  ];
-}
-
 function handleAction(action: string, fileId: string | number) {
   const file = props.projectFiles.find(f => f.id === fileId || f.fileId === fileId);
   if (!file) {
@@ -261,6 +273,7 @@ function handleAction(action: string, fileId: string | number) {
     revisionFile.value = file;
     showRevisionDialog.value = true;
   }
+  dropdownOpenId.value = null; // Close dropdown after action
 }
 function confirmRename() {
   // Mock: chỉ log, chưa gọi backend
@@ -310,15 +323,30 @@ async function confirmDelete() {
       </tr>
       </thead>
       <tbody>
-      <tr v-for="file in filteredFiles" :key="file.id">
+      <tr v-for="file in filteredFiles" :key="file.id || file.fileId">
         <td class="file-name-cell">
           <i :class="getFileIcon(file.fileName)" style="color:#6366f1" />
           <span class="file-base-name">{{ file.fileName }}</span>
         </td>
         <td class="file-strings-cell">{{ file.strings ?? '--' }}</td>
-        <td class="file-actions-cell">
-          <Button icon="pi pi-ellipsis-v" class="p-button-rounded p-button-text p-button-sm" @click="openMenu(file.id, $event)" />
-          <Menu :ref="setMenuRef(file.id)" :model="getMenuModel(file)" :popup="true" @hide="onMenuHide(file.id)" />
+        <td class="file-actions-cell" style="position:relative;">
+          <Button icon="pi pi-ellipsis-v" class="p-button-rounded p-button-text p-button-sm" @click="toggleDropdown(file.id || file.fileId)" :ref="setEllipsisBtnRef(file.id || file.fileId)" />
+          <transition name="fade">
+            <div v-if="dropdownOpenId === (file.id || file.fileId)" class="custom-dropdown-menu" :ref="setDropdownMenuRef(file.id || file.fileId)">
+              <div class="dropdown-item" @click="handleAction('download', file.id || file.fileId)" title="Download file">
+                <i class="pi pi-download"></i>
+                <span>Download</span>
+              </div>
+              <div class="dropdown-item" @click="handleAction('rename', file.id || file.fileId)" title="Rename file">
+                <i class="pi pi-pencil"></i>
+                <span>Rename</span>
+              </div>
+              <div class="dropdown-item delete" @click="handleAction('delete', file.id || file.fileId)" title="Delete file">
+                <i class="pi pi-trash"></i>
+                <span>Delete</span>
+              </div>
+            </div>
+          </transition>
         </td>
       </tr>
       </tbody>
@@ -701,5 +729,64 @@ async function confirmDelete() {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+.custom-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  min-width: 170px;
+  background: rgba(255,255,255,0.98);
+  box-shadow: 0 12px 32px 0 rgba(49,130,206,0.16), 0 2px 8px rgba(76,34,128,0.10);
+  border-radius: 18px;
+  padding: 0.6rem 0;
+  z-index: 10;
+  animation: fadeScaleIn 0.18s;
+  border: 1.5px solid #f1f5f9;
+}
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1.3rem;
+  border-radius: 14px;
+  font-size: 1.09em;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+  user-select: none;
+}
+.dropdown-item:hover {
+  background: #f1f5f9;
+  color: #3730a3;
+}
+.dropdown-item i {
+  font-size: 1.18em;
+  color: #64748b;
+  transition: color 0.16s;
+}
+.dropdown-item:hover i {
+  color: #3730a3;
+}
+.dropdown-item.delete:hover,
+.dropdown-item.delete:hover span {
+  color: #ef4444 !important;
+}
+.dropdown-item.delete:hover i {
+  color: #ef4444 !important;
+}
+.dropdown-item.delete span {
+  color: #ef4444;
+}
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.18s, transform 0.18s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+@keyframes fadeScaleIn {
+  from { opacity: 0; transform: scale(0.98) translateY(-8px);}
+  to { opacity: 1; transform: scale(1) translateY(0);}
 }
 </style>

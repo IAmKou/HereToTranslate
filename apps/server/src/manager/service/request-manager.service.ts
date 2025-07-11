@@ -58,26 +58,19 @@ export class RequestManagerService {
       dealAmount,
       deadline: deadlineRaw,
       isPublic,
+      files,
     } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
-      throw new BadRequestException(
-        `Deadline must be at least 7 days from now`
-      );
+      throw new BadRequestException(`Deadline must be at least 7 days from now`);
     }
 
     const request = this.requestRepository.create({
       requester: { id: uid } as any,
-      project: dto.projectId
-        ? ({ id: BigInt(dto.projectId) } as any)
-        : undefined,
-      registrants: dto.assigneeId
-        ? ([{ id: BigInt(dto.assigneeId) }] as any)
-        : [],
-      assignee: dto.assigneeId
-        ? ({ id: BigInt(dto.assigneeId) } as any)
-        : undefined,
+      project: dto.projectId ? ({ id: BigInt(dto.projectId) } as any) : undefined,
+      registrants: dto.assigneeId ? ([{ id: BigInt(dto.assigneeId) }] as any) : [],
+      assignee: dto.assigneeId ? ({ id: BigInt(dto.assigneeId) } as any) : undefined,
       title,
       description,
       dealAmount,
@@ -85,9 +78,8 @@ export class RequestManagerService {
       createdAt: new Date(),
       status: RequestStatus.Pending,
       isPublic,
-      category: dto.categoryId
-        ? ({ id: BigInt(dto.categoryId) } as any)
-        : undefined,
+      category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
+      files: files ?? [],
     });
 
     return await this.requestRepository.save(request);
@@ -104,26 +96,19 @@ export class RequestManagerService {
       dealAmount,
       deadline: deadlineRaw,
       isPublic,
+      files,
     } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
-      throw new BadRequestException(
-        `Deadline must be at least 7 days from now`
-      );
+      throw new BadRequestException(`Deadline must be at least 7 days from now`);
     }
 
     const request = this.requestRepository.create({
       requester: { id: uid } as any,
-      project: dto.projectId
-        ? ({ id: BigInt(dto.projectId) } as any)
-        : undefined,
-      registrants: dto.assigneeId
-        ? ([{ id: BigInt(dto.assigneeId) }] as any)
-        : [],
-      assignee: dto.assigneeId
-        ? ({ id: BigInt(dto.assigneeId) } as any)
-        : undefined,
+      project: dto.projectId ? ({ id: BigInt(dto.projectId) } as any) : undefined,
+      registrants: dto.assigneeId ? ([{ id: BigInt(dto.assigneeId) }] as any) : [],
+      assignee: dto.assigneeId ? ({ id: BigInt(dto.assigneeId) } as any) : undefined,
       title,
       description,
       dealAmount,
@@ -131,27 +116,25 @@ export class RequestManagerService {
       createdAt: new Date(),
       status: RequestStatus.Pending,
       isPublic,
-      category: dto.categoryId
-        ? ({ id: BigInt(dto.categoryId) } as any)
-        : undefined,
+      category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
+      files: files ?? [],
     });
+
     const requesterUser = await this.userRepository.findOneOrFail({
       where: { id: BigInt(uid) },
     });
+
     const assigneeUser = await this.userRepository.findOne({
       where: { id: BigInt(dto.assigneeId) },
     });
 
     const username = requesterUser.username;
     if (assigneeUser?.email) {
-      await this.mailService.sendPrivateRequestConfirmation(
-        assigneeUser.email,
-        {
-          title,
-          deadline,
-          username,
-        }
-      );
+      await this.mailService.sendPrivateRequestConfirmation(assigneeUser.email, {
+        title,
+        deadline,
+        username,
+      });
     }
 
     const savedRequest = await this.requestRepository.save(request);
@@ -164,6 +147,7 @@ export class RequestManagerService {
 
     return { request: savedRequest, approvalUrl };
   }
+
 
   async searchUsers(
     keyword: string,

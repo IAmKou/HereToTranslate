@@ -1,4 +1,4 @@
-import { RequestStatus } from "#LocalProject/Entities";
+import { FileEntity, RequestStatus } from '#LocalProject/Entities';
 import {
   IsDateString,
   IsEnum,
@@ -39,6 +39,9 @@ export class CreateRequestDto {
   @IsString({ each: true })
   @MinLength(1, { each: true })
   tags?: string[];
+  @IsOptional()
+  @IsArray()
+  files?: FileEntity[];
 }
 
 export class UpdateRequestDto {

@@ -16,7 +16,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
-  RequestEntity, CommitStatus, UserRole
+  RequestEntity, CommitStatus
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -529,7 +529,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         existingMemberIds,
       })
       .andWhere(`user.roleId NOT IN (:...excludedRoles)`, {
-        excludedRoles: [UserRole.Admin, UserRole.SuperAdmin],
+        excludedRoles: [2, 1],
       })
       .limit(10)
       .getRawMany();
@@ -540,7 +540,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
   async addUserToProject(
     projectId: bigint,
-    identifier: string
+    userId: bigint
   ): Promise<ProjectEntity> {
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
@@ -551,11 +551,17 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException('Project not found');
     }
 
-    const user = await this.findUserToProject(projectId, identifier);
+    const isAlreadyMember = project.members.some((m) => m.id === userId);
+    if (isAlreadyMember) {
+      throw new BadRequestException('User is already a member of the project');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
     if (!user) {
-      throw new BadRequestException(
-        `User "${identifier}" not found or already a member of the project`
-      );
+      throw new BadRequestException('User not found');
     }
 
     project.members.push(user);
@@ -570,15 +576,13 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     });
 
     if (memberRole) {
-      const existingUserIds = new Set(
-        memberRole.users.map((u) => u.id.toString())
-      );
+      const existingUserIds = new Set(memberRole.users.map((u) => u.id.toString()));
       if (!existingUserIds.has(user.id.toString())) {
         memberRole.users.push(user);
         await this.projectRoleRepository.save(memberRole);
       }
     } else {
-      this.logger.warn(`'member' role not found for project ${projectId}`);
+      this.logger.warn(`'Everyone' role not found for project ${projectId}`);
     }
 
     return updatedProject;

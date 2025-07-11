@@ -1,6 +1,6 @@
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
-import { CreateRequestDto, UpdateRequestDto, ChangeStatusDto } from '#LocalProject/Dtos';
+import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import {
   Body,
   Controller,
@@ -33,6 +33,15 @@ export class RequestController {
     @Req() req: AuthenticatedRequest
   ) {
     return this.requests.createRequest(body, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('create/private')
+  async createPrivateRequest(
+    @Body(ValidationPipe) body: CreateRequestDto,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.requests.createPrivateRequest(body, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -137,15 +146,6 @@ export class RequestController {
   async declinePrivateRequest(
     @Param('requestId', BigIntTransformPipe) requestId: bigint) {
     return this.requests.declinePrivateRequest(requestId);
-  }
-  @UseGuards(JwtAuthGuard)
-  @Post(':requestId/status')
-  async changeStatus(
-    @Param('requestId', BigIntTransformPipe) requestId: bigint,
-    @Body(ValidationPipe) body: ChangeStatusDto,
-    @Req() req: AuthenticatedRequest
-  ) {
-    return this.requests.changeStatus(requestId, body.status, req.user.id);
   }
 
 }

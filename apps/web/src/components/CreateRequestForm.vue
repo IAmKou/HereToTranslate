@@ -690,7 +690,6 @@ const deadline = ref('');
 const categoryId = ref('');
 const loading = ref(false);
 const minDate = ref(new Date());
-// Set minDate to 7 days from now to match backend validation
 minDate.value.setDate(minDate.value.getDate() + 7);
 const toast = useToast();
 
@@ -962,7 +961,18 @@ async function handleSubmit() {
     console.log('=== END DEBUG ===');
 
     // Create request first
-    const response = await axios.post('/api/requests/create', requestData);
+    const endpoint =
+      requestType.value === 'private'
+        ? '/api/requests/create/private'
+        : '/api/requests/create';
+
+    const response = await axios.post(endpoint, requestData);
+
+    if (requestType.value === 'private' && response.data?.approvalUrl) {
+      // Redirect to PayPal approval URL
+      window.location.href = response.data.approvalUrl;
+      return;
+    }
     console.log('Backend response:', response.data);
 
     // If there are files to upload, upload them using the existing file upload endpoint

@@ -1,12 +1,12 @@
 import {
   CategoryEntity,
   ProjectEntity,
+  ProjectTagEntity,
   RequestEntity,
   RequestStatus,
-  UserEntity,
-  ProjectTagEntity,
-  TransactionStatus,
   TransactionEntity,
+  TransactionStatus,
+  UserEntity,
   WalletEntity,
 } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
@@ -44,10 +44,56 @@ export class RequestManagerService {
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
     private readonly paymentService: PaypalService,
-    private readonly fileService: FileService,
+    private readonly fileService: FileService
   ) {}
 
   async createRequest(
+    dto: CreateRequestDto,
+    uid: bigint
+  ): Promise<RequestEntity> {
+    const DAY = 24 * 60 * 60 * 1000;
+    const {
+      title,
+      description,
+      dealAmount,
+      deadline: deadlineRaw,
+      isPublic,
+    } = dto;
+    const deadline = new Date(deadlineRaw);
+
+    if (deadline.getTime() - Date.now() < 7 * DAY) {
+      throw new BadRequestException(
+        `Deadline must be at least 7 days from now`
+      );
+    }
+
+    const request = this.requestRepository.create({
+      requester: { id: uid } as any,
+      project: dto.projectId
+        ? ({ id: BigInt(dto.projectId) } as any)
+        : undefined,
+      registrants: dto.assigneeId
+        ? ([{ id: BigInt(dto.assigneeId) }] as any)
+        : [],
+      assignee: dto.assigneeId
+        ? ({ id: BigInt(dto.assigneeId) } as any)
+        : undefined,
+      title,
+      description,
+      dealAmount,
+      deadline,
+      createdAt: new Date(),
+      status: RequestStatus.Pending,
+      isPublic,
+      category: dto.categoryId
+        ? ({ id: BigInt(dto.categoryId) } as any)
+        : undefined,
+    });
+
+    return await this.requestRepository.save(request);
+  }
+
+  async createPrivateRequest(
     dto: CreateRequestDto,
     uid: bigint
   ): Promise<{ request: RequestEntity; approvalUrl?: string }> {
@@ -89,36 +135,32 @@ export class RequestManagerService {
         ? ({ id: BigInt(dto.categoryId) } as any)
         : undefined,
     });
+    const requesterUser = await this.userRepository.findOneOrFail({
+      where: { id: BigInt(uid) },
+    });
+    const assigneeUser = await this.userRepository.findOne({
+      where: { id: BigInt(dto.assigneeId) },
+    });
+
+    const username = requesterUser.username;
+    if (assigneeUser?.email) {
+      await this.mailService.sendPrivateRequestConfirmation(
+        assigneeUser.email,
+        {
+          title,
+          deadline,
+          username,
+        }
+      );
+    }
 
     const savedRequest = await this.requestRepository.save(request);
 
-    let approvalUrl: string | undefined;
-
-    if (!isPublic) {
-      const requesterUser = await this.userRepository.findOneOrFail({
-        where: { id: uid },
-      });
-      const assigneeUser = await this.userRepository.findOne({
-        where: { id: BigInt(dto.assigneeId) },
-      });
-
-      if (assigneeUser?.email) {
-        await this.mailService.sendPrivateRequestConfirmation(
-          assigneeUser.email,
-          {
-            title,
-            deadline,
-            username: requesterUser.username,
-          }
-        );
-      }
-
-      approvalUrl = await this.paymentService.createDeposit(
-        dealAmount,
-        requesterUser,
-        savedRequest
-      );
-    }
+    const approvalUrl = await this.paymentService.createDeposit(
+      dealAmount,
+      requesterUser,
+      savedRequest
+    );
 
     return { request: savedRequest, approvalUrl };
   }
@@ -306,7 +348,16 @@ export class RequestManagerService {
     requestId: bigint,
     data: Partial<UpdateRequestDto> & { files?: Express.Multer.File[] }
   ) {
-    const { title, description, dealAmount, deadline, categoryId, tags, files,status } = data;
+    const {
+      title,
+      description,
+      dealAmount,
+      deadline,
+      categoryId,
+      tags,
+      files,
+      status,
+    } = data;
     const DAY = 24 * 60 * 60 * 1000;
 
     if (
@@ -389,7 +440,6 @@ export class RequestManagerService {
     return this.requestRepository.save(request);
   }
 
-
   async cancelRequest(uid: bigint, requestId: bigint) {
     const request = await this.requestRepository.findOne({
       where: { id: BigInt(requestId) },
@@ -401,7 +451,9 @@ export class RequestManagerService {
     }
 
     if (request.requester.id !== uid) {
-      throw new BadRequestException(`You are not the requester of this request`);
+      throw new BadRequestException(
+        `You are not the requester of this request`
+      );
     }
 
     if (request.status !== RequestStatus.Pending) {
@@ -419,7 +471,9 @@ export class RequestManagerService {
       });
 
       if (transaction) {
-        const wallet = await this.walletService.getOrCreateWallet(request.requester.id);
+        const wallet = await this.walletService.getOrCreateWallet(
+          request.requester.id
+        );
         wallet.balance = Number(wallet.balance) + Number(transaction.amount);
         transaction.status = TransactionStatus.Failed;
 
@@ -488,7 +542,6 @@ export class RequestManagerService {
       );
     }
   }
-
 
   async getRequestRegistrants(requestId: bigint): Promise<UserEntity[]> {
     const request = await this.requestRepository.findOneOrFail({

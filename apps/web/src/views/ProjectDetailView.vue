@@ -335,10 +335,9 @@
                 />
                 <ProjectTranslationTab
                   v-else-if="activeTab === 'translation'"
-                  :translations="translations"
-                  :loading="translationsLoading"
-                  :error="translationsError"
-                  :on-reload="loadTranslations"
+                  :project-id="project?.id"
+                  :branch-id="project?.defaultBranchId || 'main'"
+                  :repo="project?.repo || ''"
                   custom-title="Translations"
                 />
                 <ProjectTaskTab
@@ -650,6 +649,8 @@ interface Project {
   tags?: Array<{ id: string; name: string }>;
   projectRoles?: ProjectRole[];
   groups?: ProjectGroup[];
+  defaultBranchId?: string;
+  repo?: string;
 }
 
 interface ProjectRole {

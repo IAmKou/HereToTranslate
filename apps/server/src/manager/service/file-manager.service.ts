@@ -100,10 +100,20 @@ export class FileService {
       requestId,
     });
 
-    try {
-      await this.translationService.extractStrings(saved);
-    } catch (err) {
-      this.logger.error('extractStrings error:', err);
+    // Lấy lại entity đầy đủ từ DB để truyền vào extractStrings
+    const fullFile = await this.fileRepository.findOne({
+      where: { id: BigInt(saved.fileId) },
+      relations: ['project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
+    });
+    if (fullFile) {
+      try {
+        await this.translationService.extractStrings(fullFile);
+      } catch (err) {
+        this.logger.error('extractStrings error:', err);
+      }
+    } else {
+      this.logger.error('Cannot find full file entity for extractStrings');
     }
     this.logger.log(`handleUpload called with file: ${file.originalname}, mimetype: ${file.mimetype}, size: ${file.size}`);
     this.logger.log(`File uploaded and processed, fileId: ${saved.fileId}`);

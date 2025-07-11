@@ -711,31 +711,15 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     projectId: bigint,
     userId: bigint
   ): Promise<BranchEntity[]> {
+    console.log('listBranchesForProject called with projectId:', projectId, 'userId:', userId);
     await this.testPermissions(projectId, userId, PermissionFlags.ViewProject);
 
-    const userRoles = await this.projectRoleRepository
-      .createQueryBuilder('role')
-      .innerJoin('role.users', 'user')
-      .where('role.project = :projectId', { projectId })
-      .andWhere('user.id = :userId', { userId })
-      .select(['role.id'])
-      .getMany();
-
-    const userRoleIds = userRoles.map((r) => r.id);
-
-    return this.branchRepository
+    const result = await this.branchRepository
       .createQueryBuilder('branch')
-      .leftJoinAndSelect('branch.visibleToRoles', 'role')
       .where('branch.projectId = :projectId', { projectId })
-      .andWhere(
-        new Brackets((qb) => {
-          qb.where('role.id IS NULL');
-          if (userRoleIds.length > 0) {
-            qb.orWhere('role.id IN (:...userRoleIds)', { userRoleIds });
-          }
-        })
-      )
       .getMany();
+    console.log('Branches for project', projectId, ':', result);
+    return result;
   }
 
   async submitCommit(

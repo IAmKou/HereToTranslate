@@ -10,9 +10,10 @@ export class TranslationController {
   @Get('strings')
   async getAllTranslationStrings(
     @Query('projectId') projectId: string,
-    @Query('branchId') branchId: string
+    @Query('branchId') branchId: string,
+    @Query('fileId') fileId?: string
   ) {
-    return this.translationService.getAllString(projectId, branchId);
+    return this.translationService.getAllString(projectId, branchId, fileId);
   }
 
   @Post('translate/:id')

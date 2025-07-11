@@ -100,20 +100,16 @@ export class FileService {
       requestId,
     });
 
-    // Lấy lại entity đầy đủ từ DB để truyền vào extractStrings
-    const fullFile = await this.fileRepository.findOne({
+    // Lấy lại file từ DB, có đủ fileContent, id, fileName, fileType, project, branch
+    const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(saved.fileId) },
       relations: ['project', 'branch'],
       select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
     });
-    if (fullFile) {
-      try {
-        await this.translationService.extractStrings(fullFile);
-      } catch (err) {
-        this.logger.error('extractStrings error:', err);
-      }
+    if (fileEntity) {
+      await this.translationService.extractStrings(fileEntity);
     } else {
-      this.logger.error('Cannot find full file entity for extractStrings');
+      this.logger.error('Cannot find fileEntity after save for extractStrings');
     }
     this.logger.log(`handleUpload called with file: ${file.originalname}, mimetype: ${file.mimetype}, size: ${file.size}`);
     this.logger.log(`File uploaded and processed, fileId: ${saved.fileId}`);
@@ -208,6 +204,34 @@ export class FileService {
     }
     await this.fileRepository.delete(file.id);
     return { success: true, message: 'File deleted' };
+  }
+
+  async extractStringsFromFile(fileId: string, userId: string | bigint) {
+    const file = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['uploader', 'project', 'branch']
+    });
+
+    if (!file) throw new NotFoundException('File not found');
+
+    // Check permission - chỉ uploader mới có thể extract strings
+    if (file.uploader.id.toString() !== userId.toString()) {
+      throw new Error('You do not have permission to extract strings from this file');
+    }
+
+    try {
+      await this.translationService.extractStrings(file);
+      this.logger.log(`Successfully extracted strings from file: ${file.fileName}`);
+      return {
+        success: true,
+        message: 'Strings extracted successfully',
+        fileId: file.id.toString(),
+        fileName: file.fileName
+      };
+    } catch (error) {
+      this.logger.error(`Error extracting strings from file ${file.fileName}:`, error);
+      throw new Error(`Failed to extract strings: ${error.message}`);
+    }
   }
 
 }

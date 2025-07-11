@@ -74,4 +74,13 @@ export class FileController {
     return this.fileService.deleteFile(fileId, req.user.id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post(':fileId/extract-strings')
+  async extractStringsFromFile(
+    @Param('fileId') fileId: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.fileService.extractStringsFromFile(fileId, req.user.id);
+  }
+
 }

@@ -177,6 +177,15 @@ export class ProjectController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get(':projectId/branches')
+  async getBranches(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.projects.listBranchesForProject(projectId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':projectId/getBranches')
   async getAllBranch(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,

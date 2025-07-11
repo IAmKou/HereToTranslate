@@ -21,6 +21,7 @@ interface ProjectFile {
 
 const props = defineProps<{
   projectId: string | number;
+  branchId: string | number | null;
   filesLoading: boolean;
   filesError: string;
   projectFiles: ProjectFile[];
@@ -106,9 +107,13 @@ async function handleFileChange(event: Event) {
     const formData = new FormData();
     formData.append('file', file);
     const projectId = props.projectId;
+    const branchId = props.branchId;
     if (!projectId) throw new Error('Project ID not found');
-    console.log('Uploading file:', file.name, 'to project:', projectId);
-    const response = await fetch(`/api/projects/${projectId}/files`, {
+    if (!branchId) throw new Error('Branch ID not found');
+    formData.append('projectId', projectId.toString());
+    formData.append('branchId', branchId.toString());
+    console.log('Uploading file:', file.name, 'to project:', projectId, 'branch:', branchId);
+    const response = await fetch('/api/files/upload', {
       method: 'POST',
       body: formData,
     });
@@ -117,14 +122,47 @@ async function handleFileChange(event: Event) {
     if (!response.ok) {
       throw new Error('File upload failed: ' + respText);
     }
+
+    // Parse response to get fileId
+    let fileId;
+    try {
+      const respData = JSON.parse(respText);
+      fileId = respData.fileId;
+    } catch (e) {
+      console.warn('Could not parse upload response:', e);
+    }
+
     // Tăng delay lên 2500ms để backend ghi file xong
     await new Promise(r => setTimeout(r, 2500));
+
+    // Trigger extract strings if we have fileId
+    if (fileId) {
+      try {
+        console.log('Triggering extract strings for file:', fileId);
+        const extractResponse = await axiosInstance.post(`/files/${fileId}/extract-strings`);
+        console.log('Extract strings response:', extractResponse.data);
+        toast.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'File uploaded and strings extracted successfully!',
+          life: 3000
+        });
+      } catch (extractError) {
+        console.error('Extract strings error:', extractError);
+        toast.add({
+          severity: 'warn',
+          summary: 'Warning',
+          detail: 'File uploaded but string extraction failed. You can retry later.',
+          life: 3000
+        });
+      }
+    }
+
     // Reload file list
     const result = props.loadFiles();
     if (result instanceof Promise) {
       await result;
     }
-    toast.add({ severity: 'success', summary: 'Success', detail: 'File uploaded successfully!', life: 3000 });
   } catch (e: any) {
     uploadError.value = e.message || 'Upload failed';
     toast.add({ severity: 'error', summary: 'Error', detail: uploadError.value, life: 3000 });
@@ -222,7 +260,6 @@ function fuzzyMatch(str: string, query: string) {
   if (!query) return true;
   const q = query.toLowerCase();
   const s = str.toLowerCase();
-  // Fuzzy: tất cả ký tự query xuất hiện theo thứ tự trong str
   let i = 0;
   for (let c of q) {
     i = s.indexOf(c, i);
@@ -233,27 +270,25 @@ function fuzzyMatch(str: string, query: string) {
 }
 
 // Tìm kiếm và gợi ý gần đúng
-watch(searchValue, (val) => {
+watch(searchValue, (val: string) => {
   searchQuery.value = val;
   searchLoading.value = true;
   setTimeout(() => {
     if (!val) {
       searchResults.value = props.projectFiles;
     } else {
-      // Lọc theo tên file hoặc version fuzzy
-      searchResults.value = props.projectFiles.filter(f => {
+      searchResults.value = props.projectFiles.filter((f: ProjectFile) => {
         const base = f.fileName;
         if (fuzzyMatch(base, val)) return true;
-        // Kiểm tra version
-        return false; // No version in this simplified view
+        return false;
       });
     }
     searchLoading.value = false;
-  }, 350); // Giả lập loading
+  }, 350);
 }, { immediate: true });
 
 function handleAction(action: string, fileId: string | number) {
-  const file = props.projectFiles.find(f => f.id === fileId || f.fileId === fileId);
+  const file = props.projectFiles.find((f: ProjectFile) => f.id === fileId || (f as any).fileId === fileId);
   if (!file) {
     console.warn('File not found for id:', fileId);
     return;
@@ -299,15 +334,41 @@ async function confirmDelete() {
     deletingFile.value = false;
   }
 }
+defineExpose({
+  searchValue,
+  uploading,
+  triggerUpload,
+  handleFileChange,
+  uploadError,
+  searchLoading,
+  filteredFiles,
+  searchQuery,
+  getFileIcon,
+  setEllipsisBtnRef,
+  toggleDropdown,
+  dropdownOpenId,
+  setDropdownMenuRef,
+  handleAction,
+  showRenameDialog,
+  renameInput,
+  confirmRename,
+  showDeleteDialog,
+  fileToDelete,
+  confirmDelete,
+  deletingFile
+});
 </script>
 <template>
   <div class="project-section files-section">
+    <div v-if="!props.branchId" class="warning-message" style="color:#e53e3e; margin-bottom: 1em; font-weight:600;">
+      This project has no branch. Please create a branch before uploading files.
+    </div>
     <div class="toolbar">
       <div class="toolbar-left">
         <InputText v-model="searchValue" placeholder="Search files by name..." class="search-input custom-search-input" />
       </div>
       <div class="toolbar-right">
-        <Button label="Add File" icon="pi pi-upload" class="p-button-success p-button-lg add-file-btn" @click="triggerUpload" :disabled="uploading" />
+        <Button label="Add File" icon="pi pi-upload" class="p-button-success p-button-lg add-file-btn" @click="triggerUpload" :disabled="uploading || !props.branchId" />
         <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" />
       </div>
     </div>

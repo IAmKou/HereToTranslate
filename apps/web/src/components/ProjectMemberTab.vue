@@ -14,18 +14,9 @@ const userSearch = ref({
   identifier: '',
   loading: false,
   error: '',
-  result: null,
-  adding: false,
+  results: [], // now an array
+  addingId: null, // id of user being added
 });
-const userSuggestList = ref([]);
-const userSuggestActiveIdx = ref(-1);
-const showFullRoles = ref(null);
-const selectedRoles = ref([]);
-const showAddRoleModal = ref(false);
-const showRoleModal = ref(false);
-const showEditUserRoleModal = ref(false);
-const memberToEdit = ref(null);
-const roleSearch = ref('');
 
 // Fetch members
 const loadMembers = async () => {
@@ -73,17 +64,31 @@ const searchUser = async () => {
   if (!props.project) return;
   userSearch.value.loading = true;
   userSearch.value.error = '';
-  userSearch.value.result = null;
+  userSearch.value.results = [];
   try {
     const { data } = await axiosInstance.post(
       `/projects/${props.project.id}/search-user`,
       { identifier: userSearch.value.identifier }
     );
-    if (data.user) {
-      userSearch.value.result = data.user;
+    let rawResults = [];
+    if (Array.isArray(data.user) && data.user.length > 0) {
+      rawResults = data.user;
+    } else if (Array.isArray(data) && data.length > 0) {
+      rawResults = data;
+    } else if (data.user && typeof data.user === 'object') {
+      rawResults = [data.user];
     } else {
       userSearch.value.error = 'No user found.';
     }
+    // Map backend fields to frontend fields
+    userSearch.value.results = rawResults.map(u => ({
+      id: u.user_id || u.id,
+      email: u.user_email || u.email,
+      phone: u.user_phone || u.phone,
+      fullName: u.user_fullName || u.fullName,
+      username: u.user_username || u.username,
+    }));
+    console.log('Search results:', JSON.stringify(userSearch.value.results, null, 2));
   } catch (err) {
     userSearch.value.error = err.message || 'Failed to search user.';
   } finally {
@@ -91,61 +96,23 @@ const searchUser = async () => {
   }
 };
 
-const addUserToProject = async () => {
-  if (!props.project || !userSearch.value.result) return;
-  userSearch.value.adding = true;
+const addUserToProject = async (user) => {
+  if (!props.project || !user) return;
+  userSearch.value.addingId = user.id;
   try {
     await axiosInstance.post(`/projects/${props.project.id}/add-user`, {
-      identifier: userSearch.value.result.email,
+      identifier: user.id,
     });
-    // Gán role Everyone nếu có
-    const everyoneRole = props.project.projectRoles?.find((r) => r.name === 'Everyone');
-    if (everyoneRole) {
-      await axiosInstance.post(`/projects/${props.project.id}/members/${userSearch.value.result.id}/update-roles`, {
-        roleIds: [everyoneRole.id]
-      });
-    }
+    // BỎ QUA gọi update-roles
     await loadMembers();
-    userSearch.value.result = null;
+    userSearch.value.results = userSearch.value.results.filter(u => u.id !== user.id);
     userSearch.value.identifier = '';
   } catch (err) {
     alert('Failed to add user: ' + err.message);
   } finally {
-    userSearch.value.adding = false;
+    userSearch.value.addingId = null;
   }
 };
-
-const handleUserSuggest = async () => {
-  if (!userSearch.value.identifier || userSearch.value.identifier.length < 2)
-    return;
-  try {
-    const { data } = await axiosInstance.post(`/users/suggest`, {
-      q: userSearch.value.identifier,
-    });
-    userSuggestList.value = data.users || [];
-  } catch (e) {
-    userSuggestList.value = [];
-  }
-};
-
-function moveSuggest(dir) {
-  if (!userSuggestList.value.length) return;
-  let idx = userSuggestActiveIdx.value + dir;
-  if (idx < 0) idx = userSuggestList.value.length - 1;
-  if (idx >= userSuggestList.value.length) idx = 0;
-  userSuggestActiveIdx.value = idx;
-}
-function selectUserSuggest(idx) {
-  if (typeof idx !== 'number') idx = userSuggestActiveIdx.value;
-  if (idx < 0 || idx >= userSuggestList.value.length) return;
-  const user = userSuggestList.value[idx];
-  userSearch.value.identifier = user.email;
-  userSuggestList.value = [];
-  userSuggestActiveIdx.value = -1;
-  nextTick(() => {
-    searchUser();
-  });
-}
 
 function displayRoles(member, project) {
   if (!member.roles) return [];
@@ -180,6 +147,12 @@ function sortBy(key) {
     return 0;
   });
 }
+
+// Helper to get avatar text safely
+function getAvatarText(user) {
+  const name = user?.fullName || user?.username || user?.email || user?.phone || '';
+  return name ? name.charAt(0).toUpperCase() : '?';
+}
 </script>
 
 <template>
@@ -205,24 +178,8 @@ function sortBy(key) {
               required
               class="form-control"
               placeholder="Enter email or full name"
-              @input="handleUserSuggest"
-              @keydown.down.prevent="moveSuggest(1)"
-              @keydown.up.prevent="moveSuggest(-1)"
-              @keydown.enter.prevent="selectUserSuggest"
               autocomplete="off"
             />
-            <ul v-if="userSuggestList.length > 0" class="user-suggest-dropdown">
-              <li
-                v-for="(suggest, idx) in userSuggestList"
-                :key="suggest.id"
-                :class="{ active: idx === userSuggestActiveIdx }"
-                @mousedown.prevent="selectUserSuggest(idx)"
-              >
-                <span class="avatar-text">{{ (suggest.fullName || suggest.username).charAt(0).toUpperCase() }}</span>
-                <span class="suggest-name">{{ suggest.fullName || suggest.username }}</span>
-                <span class="suggest-email">{{ suggest.email }}</span>
-              </li>
-            </ul>
           </div>
           <div class="form-actions" style="margin-bottom: 0; align-self: flex-end">
             <button
@@ -242,21 +199,24 @@ function sortBy(key) {
         <span class="error-icon">❌</span>
         <p>{{ userSearch.error }}</p>
       </div>
-      <div v-if="userSearch.result" class="found-user">
-        <div class="user-info">
-          <div class="user-avatar">
-            <span class="avatar-text">{{ (userSearch.result.fullName || userSearch.result.username).charAt(0).toUpperCase() }}</span>
+      <div v-if="userSearch.results && userSearch.results.length > 0" class="found-user" style="flex-direction: column; align-items: stretch;">
+        <div v-for="user in userSearch.results" :key="user.id" class="user-info user-card">
+          <div class="user-card-left">
+            <div class="user-avatar big-avatar">
+              <span class="avatar-text">{{ getAvatarText(user) }}</span>
+            </div>
+            <div class="user-details">
+              <h4 class="user-name">{{ user.fullName || user.username || user.email || user.phone || 'Unknown' }}</h4>
+              <p v-if="user.email" class="user-meta">Email: {{ user.email }}</p>
+              <p v-if="user.phone" class="user-meta">Phone: {{ user.phone }}</p>
+            </div>
           </div>
-          <div class="user-details">
-            <h4>{{ userSearch.result.fullName || userSearch.result.username }}</h4>
-            <p>{{ userSearch.result.email }}</p>
-          </div>
+          <button class="btn btn-primary btn-sm user-add-btn" @click="addUserToProject(user)" :disabled="userSearch.addingId === user.id">
+            <span v-if="userSearch.addingId === user.id" class="loading-spinner-small"></span>
+            <span v-else class="icon">➕</span>
+            {{ userSearch.addingId === user.id ? 'Adding...' : 'Add to Project' }}
+          </button>
         </div>
-        <button class="btn btn-primary btn-sm" @click="addUserToProject" :disabled="userSearch.adding">
-          <span v-if="userSearch.adding" class="loading-spinner-small"></span>
-          <span v-else class="icon">➕</span>
-          {{ userSearch.adding ? 'Adding...' : 'Add to Project' }}
-        </button>
       </div>
     </div>
     <div class="members-section">
@@ -671,5 +631,55 @@ function sortBy(key) {
   color: #a0aec0;
   font-size: 0.95em;
   margin-left: 0.5rem;
+}
+.user-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.1em;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px #3182ce18;
+  padding: 1.2em 2em;
+  background: #fff;
+  transition: box-shadow 0.18s, border 0.18s;
+}
+.user-card:hover {
+  box-shadow: 0 8px 32px #3182ce33;
+  border-color: #4299e1;
+}
+.user-card-left {
+  display: flex;
+  align-items: center;
+  gap: 1.3em;
+}
+.big-avatar {
+  width: 3.2rem;
+  height: 3.2rem;
+  font-size: 1.7rem;
+  border: 2.5px solid #e2e8f0;
+  box-shadow: 0 2px 8px #3182ce22;
+}
+.user-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.user-name {
+  margin: 0;
+  font-size: 1.13rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+.user-meta {
+  margin: 0.1em 0 0 0;
+  font-size: 0.98em;
+  color: #6b7280;
+  font-weight: 500;
+}
+.user-add-btn {
+  margin-left: 2em;
+  min-width: 130px;
+  box-shadow: 0 2px 8px #3182ce11;
 }
 </style>

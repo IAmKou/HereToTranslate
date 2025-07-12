@@ -19,23 +19,33 @@ export class CreateRequestDto {
   @IsString()
   @MinLength(3)
   title: string;
+
   @IsString()
   description: string;
+
   @IsNumber()
   @Min(0)
   @Type(() => Number)
   dealAmount: number;
+
   @MaxLength(10)
   @IsDateString({ strict: true })
   deadline: string;
+
   isPublic: boolean;
-  @Optional()
-  assigneeId: number;
-  @Optional()
-  projectId: number;
+
+  @IsOptional()
+  @IsNumberString()
+  assigneeId?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  projectId?: string;
+
   @IsNotEmpty()
   @IsNumberString()
   categoryId: string;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -45,6 +55,8 @@ export class CreateRequestDto {
   @IsArray()
   files?: FileEntity[];
 }
+
+
 
 export class UpdateRequestDto {
   @IsOptional()

@@ -14,13 +14,14 @@
       <div><strong>Deadline:</strong> {{ formattedDeadline }}</div>
       <div v-if="request.fileUrl">
         <strong>Attachment:</strong>
-        <a
-          :href="request.fileUrl"
+        <button
           class="text-blue-600 underline"
-          target="_blank"
-          >View File</a
+          @click="downloadFile(request.fileUrl, request.fileName || 'file')"
         >
+          ⬇️ Download
+        </button>
       </div>
+
     </div>
 
     <div class="mt-4 flex flex-wrap gap-2">
@@ -68,6 +69,32 @@ export default {
         : 'None';
     },
   },
+  methods: {
+    confirmAction(action) {
+      const actionText = action === 'reject' ? 'reject' : 'cancel';
+      const confirmed = confirm(
+        `Are you sure you want to ${actionText} this request?`
+      );
+      if (confirmed) {
+        this.$emit(action, this.request.id);
+      }
+    },
+    async downloadFile(fileUrl, filename) {
+      try {
+        const res = await fetch(fileUrl);
+        const blob = await res.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } catch (err) {
+        alert('Download failed.');
+        console.error(err);
+      }
+    },
+
   methods: {
     confirmAction(action) {
       const actionText = action === 'reject' ? 'reject' : 'cancel';

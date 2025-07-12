@@ -276,6 +276,12 @@
                   Members
                 </button>
                 <button
+                  :class="['tab', { active: activeTab === 'roles' }]"
+                  @click="activeTab = 'roles'"
+                >
+                  Roles
+                </button>
+                <button
                   :class="['tab', { active: activeTab === 'groups' }]"
                   @click="activeTab = 'groups'"
                 >
@@ -309,6 +315,10 @@
               <transition name="fade-tab" mode="out-in">
                 <ProjectMemberTab
                   v-if="activeTab === 'members'"
+                  :project="project"
+                />
+                <ProjectRoleTab
+                  v-else-if="activeTab === 'roles'"
                   :project="project"
                 />
                 <ProjectGroupTab
@@ -629,6 +639,7 @@ import ProjectGroupTab from '../components/ProjectGroupTab.vue';
 import ProjectTranslationTab from '../components/ProjectTranslationTab.vue';
 import ProjectTaskTab from '../components/ProjectTaskTab.vue';
 import ProjectFileTab from '../components/ProjectFileTab.vue';
+import ProjectRoleTab from '../components/ProjectRoleTab.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -737,7 +748,7 @@ const membersLoading = ref(false);
 const membersError = ref('');
 
 const activeTab = ref<
-  'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'task'
+  'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'task' | 'roles'
 >('description');
 
 const isAllSelected = ref(false);

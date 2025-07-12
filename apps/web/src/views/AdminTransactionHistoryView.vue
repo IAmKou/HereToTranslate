@@ -152,10 +152,7 @@
               <table class="transactions-table">
                 <thead>
                 <tr>
-                  <th @click="sortBy('id')" class="sortable">
-                    ID
-                    <i :class="getSortIcon('id')"></i>
-                  </th>
+                  <th>No.</th>
                   <th @click="sortBy('user')" class="sortable">
                     User
                     <i :class="getSortIcon('user')"></i>
@@ -180,8 +177,8 @@
                 </tr>
                 </thead>
                 <tbody>
-                <tr v-for="transaction in paginatedTransactions" :key="transaction.id" class="transaction-row">
-                  <td class="transaction-id">#{{ transaction.id }}</td>
+                <tr v-for="(transaction, idx) in paginatedTransactions" :key="transaction.id" class="transaction-row">
+                  <td class="transaction-no">{{ startIndex + idx + 1 }}</td>
                   <td class="user-cell">
                     <div class="user-info">
                       <div class="user-avatar">
@@ -471,7 +468,7 @@ async function loadTransactions() {
   try {
     const [transactionsRes, usersRes] = await Promise.all([
       axios.get('/api/admin/transactions'),
-      axios.get('/api/admin/users')
+      axios.get('/api/admin/transactions/users')
     ]);
 
     transactions.value = transactionsRes.data || [];
@@ -604,6 +601,12 @@ onMounted(loadTransactions);
 .main-content {
   display: flex;
   flex: 1;
+  /* Add margin-left to avoid being covered by sidebar */
+  margin-left: 260px;
+  transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
+}
+.layout-wrapper.sidebar-collapsed .main-content {
+  margin-left: 72px;
 }
 
 .content {

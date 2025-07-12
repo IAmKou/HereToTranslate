@@ -21,6 +21,7 @@ import { TranslationApprovalEntity } from '#LocalProject/Entities';
 import { WalletManagerService } from './wallet-manager.service';
 import { WithdrawDto } from '../../dto/withdraw.dto';
 import { logger } from 'nx/src/utils/logger';
+import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 
 @Injectable()
 export class PaypalService {
@@ -43,7 +44,8 @@ export class PaypalService {
     private userRepository: Repository<UserEntity>,
     private readonly projectService: ProjectManagerService,
     private readonly mailService: MailService,
-    private readonly walletManagerService: WalletManagerService
+    private readonly walletManagerService: WalletManagerService,
+    private readonly translationService: TranslationService,
   ) {}
 
   private async getAccessToken(): Promise<string> {
@@ -80,7 +82,8 @@ export class PaypalService {
     user: UserEntity,
     request: RequestEntity
   ): Promise<string> {
-    const baseAmount = typeof amount === 'number' ? amount : parseFloat(amount as any);
+    const baseAmount =
+      typeof amount === 'number' ? amount : parseFloat(amount as any);
     if (isNaN(baseAmount)) {
       throw new BadRequestException('Invalid amount for PayPal deposit');
     }
@@ -117,10 +120,14 @@ export class PaypalService {
         }
       );
 
-      const approvalUrl = data.links?.find((link: { rel: string }) => link.rel === 'approve')?.href;
+      const approvalUrl = data.links?.find(
+        (link: { rel: string }) => link.rel === 'approve'
+      )?.href;
 
       if (!approvalUrl) {
-        throw new InternalServerErrorException('No approval URL returned by PayPal.');
+        throw new InternalServerErrorException(
+          'No approval URL returned by PayPal.'
+        );
       }
 
       await this.transactionRepo.save({
@@ -152,7 +159,8 @@ export class PaypalService {
     user: UserEntity,
     request: RequestEntity
   ): Promise<string> {
-    const baseAmount = typeof amount === 'number' ? amount : parseFloat(amount as any);
+    const baseAmount =
+      typeof amount === 'number' ? amount : parseFloat(amount as any);
     if (isNaN(baseAmount)) {
       throw new BadRequestException('Invalid amount for PayPal deposit');
     }
@@ -189,10 +197,14 @@ export class PaypalService {
         }
       );
 
-      const approvalUrl = data.links?.find((link: { rel: string }) => link.rel === 'approve')?.href;
+      const approvalUrl = data.links?.find(
+        (link: { rel: string }) => link.rel === 'approve'
+      )?.href;
 
       if (!approvalUrl) {
-        throw new InternalServerErrorException('No approval URL returned by PayPal.');
+        throw new InternalServerErrorException(
+          'No approval URL returned by PayPal.'
+        );
       }
 
       await this.transactionRepo.save({
@@ -235,12 +247,19 @@ export class PaypalService {
       );
 
       if (captureRes.status !== 201) {
-        throw new Error('Payment capture failed with status: ' + captureRes.status);
+        throw new Error(
+          'Payment capture failed with status: ' + captureRes.status
+        );
       }
 
       const transaction = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
-        relations: ['user', 'request', 'request.registrants', 'request.category'],
+        relations: [
+          'user',
+          'request',
+          'request.registrants',
+          'request.category',
+        ],
       });
 
       const { user: selectedUser, request } = transaction;
@@ -269,16 +288,23 @@ export class PaypalService {
         request.status = RequestStatus.Approved;
         transaction.status = TransactionStatus.Completed;
 
+        await this.translationService.extractStringsForRequestFiles(request.id);
+
         await queryRunner.manager.save([request, transaction]);
 
         if (otherUserIds.length > 0) {
-          await this.mailService.notifyAllOthersRequestTaken(Number(request.id), otherUserIds);
+          await this.mailService.notifyAllOthersRequestTaken(
+            Number(request.id),
+            otherUserIds
+          );
         }
 
-        const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
-        adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
+        const adminWallet = await this.walletManagerService.getOrCreateWallet(
+          this.ADMIN_USER_ID
+        );
+        adminWallet.balance =
+          Number(adminWallet.balance) + Number(transaction.amount);
         await queryRunner.manager.save(adminWallet);
-
 
         await queryRunner.commitTransaction();
 
@@ -296,13 +322,19 @@ export class PaypalService {
       } catch (err) {
         await queryRunner.rollbackTransaction();
         console.error('Project creation failed:', err);
-        return { success: false, error: (err as any)?.message || 'Project creation failed' };
+        return {
+          success: false,
+          error: (err as any)?.message || 'Project creation failed',
+        };
       } finally {
         await queryRunner.release();
       }
     } catch (err) {
       console.error('PayPal capture failed:', err);
-      return { success: false, error: (err as any)?.message || 'PayPal capture failed' };
+      return {
+        success: false,
+        error: (err as any)?.message || 'PayPal capture failed',
+      };
     }
   }
 
@@ -322,7 +354,9 @@ export class PaypalService {
       );
 
       if (captureRes.status !== 201) {
-        throw new Error('Payment capture failed with status: ' + captureRes.status);
+        throw new Error(
+          'Payment capture failed with status: ' + captureRes.status
+        );
       }
 
       const transaction = await this.transactionRepo.findOneOrFail({
@@ -340,11 +374,16 @@ export class PaypalService {
       transaction.status = TransactionStatus.Completed;
       await this.transactionRepo.save(transaction);
 
-      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
-      adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(
+        this.ADMIN_USER_ID
+      );
+      adminWallet.balance =
+        Number(adminWallet.balance) + Number(transaction.amount);
       await this.walletRepository.save(adminWallet);
 
-      logger.log(`Payment captured for order ${orderId}, request ID ${request.id}, user ID ${user.id}`);
+      logger.log(
+        `Payment captured for order ${orderId}, request ID ${request.id}, user ID ${user.id}`
+      );
 
       return {
         success: true,
@@ -364,74 +403,6 @@ export class PaypalService {
     }
   }
 
-
-  async acceptPrivateRequest(requestId: bigint, assigneeId: bigint): Promise<any> {
-    const request = await this.requestRepository.findOneOrFail({
-      where: { id: requestId },
-      relations: ['assignee', 'requester', 'category'],
-    });
-
-    if (!request || request.isPublic || request.status !== RequestStatus.Pending) {
-      throw new BadRequestException('Invalid request for acceptance');
-    }
-
-    if (Number(request.assignee?.id) !== Number(assigneeId)) {
-      throw new BadRequestException('You are not the assigned translator for this request');
-    }
-
-    const transaction = await this.transactionRepo.findOneOrFail({
-      where: {
-        request: { id: request.id },
-        user: { id: request.requester.id },
-        status: TransactionStatus.Pending,
-      },
-    });
-
-    const queryRunner = this.projectService['dataSource'].createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const createProjectDto: any = {
-        name: request.title,
-        description: request.description,
-        isPrivate: true,
-        tags: [],
-      };
-
-      if (request.category?.id) {
-        createProjectDto.categoryId = request.category.id.toString();
-      }
-
-      const { projectId } = await this.projectService.createProject(request.assignee.id, createProjectDto);
-      const newProject = await this.projectRepository.findOneOrFail({ where: { id: projectId } });
-
-      request.project = newProject;
-      request.status = RequestStatus.Approved;
-      transaction.status = TransactionStatus.Completed;
-
-      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
-      adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
-
-      await queryRunner.manager.save([request, transaction, adminWallet]);
-      await queryRunner.commitTransaction();
-
-      return {
-        success: true,
-        message: 'Private request accepted and project created.',
-        projectId,
-        requestId: request.id,
-      };
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      console.error('Accept private request failed:', err);
-      throw new InternalServerErrorException('Failed to accept private request');
-    } finally {
-      await queryRunner.release();
-    }
-  }
-
-
   async withdraw(userId: bigint, dto: WithdrawDto): Promise<TransactionEntity> {
     const { amount, paypalEmail, requestId, paypalOrderId } = dto;
 
@@ -443,12 +414,16 @@ export class PaypalService {
       throw new BadRequestException('Invalid PayPal email address');
     }
 
-    const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+    const adminWallet = await this.walletManagerService.getOrCreateWallet(
+      this.ADMIN_USER_ID
+    );
     if (Number(adminWallet.balance) < amount) {
       throw new BadRequestException('Admin wallet has insufficient funds');
     }
 
-    const user = await this.userRepository.findOneOrFail({ where: { id: userId } });
+    const user = await this.userRepository.findOneOrFail({
+      where: { id: userId },
+    });
 
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
@@ -524,7 +499,9 @@ export class PaypalService {
       transaction.status = TransactionStatus.Completed;
       transaction.paypalOrderId = payoutBatchId;
 
-      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(
+        this.ADMIN_USER_ID
+      );
       adminWallet.balance = Number(adminWallet.balance) - Number(amount);
 
       await this.walletRepository.save(adminWallet);
@@ -561,14 +538,13 @@ export class PaypalService {
       },
       receiver: txn.request?.assignee
         ? {
-          id: BigInt(txn.request.assignee.id),
-          email: txn.request.assignee.email,
-        }
+            id: BigInt(txn.request.assignee.id),
+            email: txn.request.assignee.email,
+          }
         : undefined,
       createdAt: txn.createdAt,
     }));
   }
-
 
   async finalizeTranslation(requestId: bigint): Promise<boolean> {
     const request = await this.requestRepository.findOneOrFail({

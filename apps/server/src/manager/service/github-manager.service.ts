@@ -5,6 +5,7 @@ import { Buffer } from 'buffer';
 import { BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BranchEntity } from '#LocalProject/Entities';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class GitHubService {
@@ -175,7 +176,5 @@ export class GitHubService {
 
     return data;
   }
-
-
 
 }

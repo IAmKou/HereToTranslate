@@ -844,6 +844,7 @@ async function handleSubmit() {
   deadlineTouched.value = true;
   assigneeTouched.value = true;
   categoryTouched.value = true;
+
   if (!isFormValid.value) {
     toast.add({
       severity: 'warn',
@@ -853,7 +854,9 @@ async function handleSubmit() {
     });
     return;
   }
+
   loading.value = true;
+
   try {
     const deadlineDate = new Date(deadline.value);
     const sevenDaysFromNow = new Date();
@@ -870,48 +873,22 @@ async function handleSubmit() {
       return;
     }
 
-    // Map requestType to backend fields
     let isPublic = false;
     let assigneeId = undefined;
 
     if (requestType.value === 'public') {
       isPublic = true;
-      assigneeId = undefined;
     } else if (requestType.value === 'private') {
       isPublic = false;
-      // Find assigneeId from email
+
       try {
-        console.log('Searching for user with email:', assigneeEmail.value);
         const response = await axios.get(
-          `/api/requests/search?keyword=${encodeURIComponent(
-            assigneeEmail.value
-          )}`
+          `/api/requests/search?keyword=${encodeURIComponent(assigneeEmail.value)}`
         );
-        console.log('Search response:', response.data);
-        if (response.data && response.data.length > 0) {
-          // Find exact email match
-          const user = response.data.find(
-            (u) => u.email === assigneeEmail.value
-          );
-          console.log('Found user:', user);
-          if (user) {
-            assigneeId = Number(user.id);
-            console.log(
-              'Assignee ID converted:',
-              assigneeId,
-              'Type:',
-              typeof assigneeId
-            );
-          } else {
-            toast.add({
-              severity: 'error',
-              summary: 'Error',
-              detail: 'No user found with this email',
-              life: 3000,
-            });
-            loading.value = false;
-            return;
-          }
+        const user = response.data.find((u) => u.email === assigneeEmail.value);
+
+        if (user) {
+          assigneeId = Number(user.id);
         } else {
           toast.add({
             severity: 'error',
@@ -923,7 +900,6 @@ async function handleSubmit() {
           return;
         }
       } catch (error) {
-        console.error('Error searching for user:', error);
         toast.add({
           severity: 'error',
           summary: 'Error',
@@ -940,131 +916,57 @@ async function handleSubmit() {
       description: description.value,
       dealAmount: dealAmount.value,
       deadline: deadline.value,
-      isPublic: Boolean(isPublic),
+      isPublic,
       categoryId: categoryId.value,
       tags: selectedTags.value.map((tag) => tag.name),
     };
 
-    // Only add assigneeId if it's defined
     if (assigneeId !== undefined) {
       requestData.assigneeId = assigneeId;
     }
 
-    console.log('=== DEBUG INFO ===');
-    console.log('Request type selected:', requestType.value);
-    console.log('isPublic value:', isPublic, 'Type:', typeof isPublic);
-    console.log('assigneeId value:', assigneeId, 'Type:', typeof assigneeId);
-    console.log(
-      'Full request data being sent:',
-      JSON.stringify(requestData, null, 2)
-    );
-    console.log('=== END DEBUG ===');
-
-    // Create request first
     const endpoint =
       requestType.value === 'private'
         ? '/api/requests/create/private'
         : '/api/requests/create';
 
-    const response = await axios.post(endpoint, requestData);
+    const formData = new FormData();
+    formData.append('title', title.value);
+    formData.append('description', description.value);
+    formData.append('dealAmount', dealAmount.value.toString());
+    formData.append('deadline', deadline.value);
+    formData.append('isPublic', isPublic.toString());
+    formData.append('categoryId', categoryId.value);
+
+    selectedTags.value.forEach(tag => {
+      formData.append('tags[]', tag.name);
+    });
+
+    if (assigneeId !== undefined) {
+      formData.append('assigneeId', assigneeId.toString());
+    }
+
+    uploadedFiles.value.forEach(file => {
+      formData.append('files', file);
+    });
+
+    const response = await axios.post(endpoint, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
 
     if (requestType.value === 'private' && response.data?.approvalUrl) {
-      // Redirect to PayPal approval URL
       window.location.href = response.data.approvalUrl;
       return;
     }
+
     console.log('Backend response:', response.data);
 
-    // If there are files to upload, upload them using the existing file upload endpoint
-    if (uploadedFiles.value.length > 0) {
-      try {
-        // Try to create a project first, then upload files
-        // If project creation fails, use default values
-        let projectId = '1';
-        let branchId = '1';
-
-        try {
-          // Create a project for this request
-          const projectData = {
-            name: `Project for Request: ${title.value}`,
-            description: `Auto-generated project for request: ${title.value}`,
-            isPublic: false,
-            categoryId: categoryId.value,
-          };
-
-          const projectResponse = await axios.post(
-            '/api/projects/create',
-            projectData
-          );
-          projectId = projectResponse.data.id.toString();
-          branchId = '1'; // Use default branch
-
-          console.log('Created project for request:', projectResponse.data);
-        } catch (projectError) {
-          console.warn(
-            'Failed to create project, using defaults:',
-            projectError
-          );
-          // Use default values if project creation fails
-          projectId = '1';
-          branchId = '1';
-        }
-
-        // Upload each file using the existing /api/files/upload endpoint
-        for (const file of uploadedFiles.value) {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('projectId', projectId);
-          formData.append('branchId', branchId);
-
-          console.log(
-            'Uploading file:',
-            file.name,
-            'to project:',
-            projectId,
-            'branch:',
-            branchId
-          );
-
-          const uploadResponse = await axios.post(
-            '/api/files/upload',
-            formData,
-            {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
-            }
-          );
-
-          console.log('File upload response:', uploadResponse.data);
-        }
-
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: `Request created successfully with ${uploadedFiles.value.length} file(s) uploaded.`,
-          life: 3000,
-        });
-      } catch (fileError) {
-        console.error('File upload error:', fileError);
-        console.error('Error details:', fileError.response?.data);
-        toast.add({
-          severity: 'warn',
-          summary: 'Warning',
-          detail: `Request created but file upload failed: ${
-            fileError.response?.data?.message || 'Unknown error'
-          }. You can upload files later.`,
-          life: 3000,
-        });
-      }
-    } else {
-      toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Request created successfully!',
-        life: 3000,
-      });
-    }
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Request created successfully!',
+      life: 3000,
+    });
 
     emit('success');
   } catch (e) {
@@ -1078,6 +980,7 @@ async function handleSubmit() {
     loading.value = false;
   }
 }
+
 
 function onCancel() {
   emit('cancel');

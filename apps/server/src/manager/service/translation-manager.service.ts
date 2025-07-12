@@ -7,12 +7,17 @@ import { FileEntity } from '#LocalProject/Entities';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import * as mammoth from 'mammoth';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
+import { logger } from 'nx/src/utils/logger';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class TranslationService {
   constructor(
     @InjectModel(TranslationString.name)
     private translationModel: Model<TranslationStringDocument>,
+    @InjectRepository(FileEntity)
+    private readonly fileRepository: Repository<FileEntity>,
     private readonly githubService: GitHubService,
   ) {}
 
@@ -149,6 +154,28 @@ export class TranslationService {
     });
   }
 
+  async extractStringsForRequestFiles(requestId: bigint) {
+    const files = await this.fileRepository.find({
+      where: { request: { id: requestId } },
+      relations: ['project', 'branch'],
+    });
+
+    for (const file of files) {
+      try {
+        if (file.project && file.branch) {
+          await this.extractStrings(file);
+          logger.log(`Strings extracted for file: ${file.fileName}`);
+        } else {
+          logger.warn(`Skipping extractStrings for ${file.fileName} due to missing project/branch`);
+        }
+      } catch (err) {
+        logger.error(`Failed to extract strings for file ${file.fileName}`);
+        logger.log(err);
+      }
+    }
+  }
+
+
 }
 
 function extractJsonStrings(obj: any, result: string[], path = '') {
@@ -161,5 +188,7 @@ function extractJsonStrings(obj: any, result: string[], path = '') {
       extractJsonStrings(obj[key], result, path + '.' + key);
     }
   }
+
+
 }
 

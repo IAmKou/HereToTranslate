@@ -110,7 +110,6 @@ export class FileService {
       requestId,
     });
 
-    // Lấy lại file từ DB, có đủ fileContent, id, fileName, fileType, project, branch
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(saved.fileId) },
       relations: ['project', 'branch'],
@@ -249,5 +248,68 @@ export class FileService {
       throw new Error(`Failed to extract strings: ${error.message}`);
     }
   }
+
+  async saveFileToDB(params: {
+    uid: bigint;
+    fileName: string;
+    fileType: string;
+    fileContent: Buffer;
+    projectId?: bigint;
+    branchId?: bigint;
+    requestId?: bigint;
+  }) {
+    const { uid, fileName, fileType, fileContent, projectId, branchId, requestId } = params;
+
+    const file = this.fileRepository.create({
+      fileName,
+      fileType,
+      fileContent,
+      uploader: { id: uid },
+      project: projectId ? { id: projectId } : undefined,
+      branch: branchId ? { id: branchId } : undefined,
+      request: requestId ? { id: requestId } : undefined,
+    });
+
+    const savedFile = await this.fileRepository.save(file);
+    return {
+      fileId: savedFile.id.toString(),
+      fileName: savedFile.fileName,
+      fileType: savedFile.fileType,
+      createdAt: savedFile.createdAt,
+      updatedAt: savedFile.updatedAt,
+      uploaderId: savedFile.uploader?.id?.toString(),
+      projectId: savedFile.project?.id?.toString(),
+      branchId: savedFile.branch?.id?.toString(),
+      requestId: savedFile.request?.id?.toString(),
+    };
+  }
+
+  async handleLocalUpload(
+    file: Express.Multer.File,
+    uid: bigint,
+    projectId?: bigint,
+    branchId?: bigint,
+    requestId?: bigint,
+  ) {
+    this.logger.log('===DEBUG FILE NAME handleUpload===');
+
+    const saved = await this.saveFileToDB({
+      uid,
+      fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
+      fileType: file.mimetype,
+      fileContent: file.buffer,
+      projectId,
+      branchId,
+      requestId,
+    });
+
+    this.logger.log(`File uploaded and saved. fileId: ${saved.fileId}`);
+    return {
+      message: 'File uploaded successfully',
+      fileId: saved.fileId,
+    };
+  }
+
+
 
 }

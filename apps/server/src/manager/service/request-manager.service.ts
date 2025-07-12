@@ -13,8 +13,8 @@ import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import {
   BadRequestException,
-  Injectable,
-  NotFoundException,
+  Injectable, InternalServerErrorException,
+  NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MailService } from '../../mailer/mailer.service';
@@ -23,6 +23,7 @@ import { PaypalService } from '#LocalProject/Managers/service/payment-manager.se
 import { WalletManagerService } from '#LocalProject/Managers/service/wallet-manager.service';
 import { FileService } from '#LocalProject/Managers/service/file-manager.service';
 import { logger } from 'nx/src/utils/logger';
+import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -42,11 +43,14 @@ export class RequestManagerService {
     private readonly walletRepository: Repository<WalletEntity>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectRepository: Repository<ProjectEntity>,
     private readonly walletService: WalletManagerService,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
     private readonly paymentService: PaypalService,
-    private readonly fileService: FileService
+    private readonly fileService: FileService,
+    private readonly projectService: ProjectManagerService,
   ) {}
 
   async createRequest(
@@ -55,7 +59,7 @@ export class RequestManagerService {
     uploadedFiles: Express.Multer.File[] = [],
   ): Promise<RequestEntity> {
     const DAY = 24 * 60 * 60 * 1000;
-    const { title, description, dealAmount, deadline: deadlineRaw, isPublic } = dto;
+    const { title, description, dealAmount, deadline: deadlineRaw } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
@@ -64,7 +68,7 @@ export class RequestManagerService {
 
     const fileEntities: FileEntity[] = [];
     for (const file of uploadedFiles) {
-      const { fileId } = await this.fileService.handleUpload(file, uid, dto.projectId ? BigInt(dto.projectId) : undefined);
+      const { fileId } = await this.fileService.handleLocalUpload(file, uid, dto.projectId ? BigInt(dto.projectId) : undefined);
       const entity = await this.fileRepository.findOneOrFail({
         where: { id: BigInt(fileId) },
       });
@@ -82,7 +86,7 @@ export class RequestManagerService {
       deadline,
       createdAt: new Date(),
       status: RequestStatus.Pending,
-      isPublic,
+      isPublic : true,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
       files: fileEntities,
     });
@@ -105,7 +109,7 @@ export class RequestManagerService {
 
     const fileEntities: FileEntity[] = [];
     for (const file of uploadedFiles) {
-      const { fileId } = await this.fileService.handleUpload(file, uid, dto.projectId ? BigInt(dto.projectId) : undefined);
+      const { fileId } = await this.fileService.handleLocalUpload(file, uid, dto.projectId ? BigInt(dto.projectId) : undefined);
       const entity = await this.fileRepository.findOneOrFail({
         where: { id: BigInt(fileId) },
       });
@@ -146,7 +150,7 @@ export class RequestManagerService {
 
     const savedRequest = await this.requestRepository.save(request);
 
-    const approvalUrl = await this.paymentService.createDeposit(
+    const approvalUrl = await this.paymentService.createPrivateDeposit(
       dealAmount,
       requesterUser,
       savedRequest
@@ -154,8 +158,6 @@ export class RequestManagerService {
 
     return { request: savedRequest, approvalUrl };
   }
-
-
 
   async searchUsers(
     keyword: string,
@@ -625,4 +627,71 @@ export class RequestManagerService {
 
     return true;
   }
+
+  async acceptPrivateRequest(
+    requestId: bigint,
+    assigneeId: bigint
+  ): Promise<any> {
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['assignee', 'requester', 'category', 'files'],
+    });
+
+    if (!request || request.isPublic || request.status !== RequestStatus.Pending) {
+      throw new BadRequestException('Invalid request for acceptance');
+    }
+
+    if (Number(request.assignee?.id) !== Number(assigneeId)) {
+      throw new BadRequestException('You are not the assigned translator for this request');
+    }
+
+    const queryRunner = this.projectService['dataSource'].createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const createProjectDto: any = {
+        name: request.title,
+        description: request.description,
+        isPrivate: true,
+        tags: [],
+      };
+
+      if (request.category?.id) {
+        createProjectDto.categoryId = request.category.id.toString();
+      }
+
+      const files = request.files || [];
+
+      const { projectId } = await this.projectService.createProject(
+        assigneeId,
+        createProjectDto,
+        files
+      );
+
+      const newProject = await this.projectRepository.findOneOrFail({
+        where: { id: projectId },
+      });
+
+      request.project = newProject;
+      request.status = RequestStatus.Approved;
+
+      await queryRunner.manager.save(request);
+      await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message: 'Private request accepted and project created.',
+        projectId,
+        requestId: request.id,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      console.error('Accept private request failed:', err);
+      throw new InternalServerErrorException('Failed to accept private request');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
 }

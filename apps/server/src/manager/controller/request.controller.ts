@@ -16,7 +16,6 @@ import {
 import { RequestManagerService } from '../service/request-manager.service';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
-import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
 import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('requests')
@@ -24,9 +23,9 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 export class RequestController {
   constructor(
     private readonly requests: RequestManagerService,
-    private readonly paymentService: PaypalService
   ) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post('create')
   @UseInterceptors(FilesInterceptor('files'))
   async createRequest(
@@ -37,6 +36,7 @@ export class RequestController {
     return this.requests.createRequest(body, req.user.id, files);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('create/private')
   @UseInterceptors(FilesInterceptor('files'))
   async createPrivateRequest(
@@ -141,7 +141,7 @@ export class RequestController {
     @Param('requestId', BigIntTransformPipe) requestId: bigint,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.paymentService.acceptPrivateRequest(requestId, req.user.id);
+    return this.requests.acceptPrivateRequest(requestId, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)

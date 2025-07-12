@@ -316,6 +316,7 @@ export class RequestManagerService {
         'files.fileName',
         'files.fileType',
         'files.createdAt',
+        'files.fileContent',
       ])
       .where('requests.id = :requestId', { requestId })
       .leftJoin('requests.requester', 'requester')

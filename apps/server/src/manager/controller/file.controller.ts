@@ -68,7 +68,7 @@ export class FileController {
   @UseGuards(JwtAuthGuard)
   @Delete(':fileId')
   async deleteFile(
-    @Param('fileId') fileId: string,
+    @Param('fileId', BigIntTransformPipe) fileId: bigint,
     @Req() req: AuthenticatedRequest
   ) {
     return this.fileService.deleteFile(fileId, req.user.id);

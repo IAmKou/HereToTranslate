@@ -62,6 +62,15 @@
           <span class="material-icons">analytics</span>
           <span class="menu-text">Analytics</span>
         </router-link>
+        <router-link to="/admin/withdrawals" class="menu-item" :title="isCollapsed ? 'Withdraw Approvals' : ''">
+          <span class="material-icons">account_balance_wallet</span>
+          <span class="menu-text">Withdraw Approvals</span>
+          <span v-if="pendingCount > 0" class="sidebar-badge">{{ pendingCount }}</span>
+        </router-link>
+        <router-link to="/admin/transactions" class="menu-item" :title="isCollapsed ? 'Transaction History' : ''">
+          <span class="material-icons">history</span>
+          <span class="menu-text">Transaction History</span>
+        </router-link>
       </div>
     </nav>
 
@@ -252,6 +261,19 @@ const toggleSidebar = () => {
 
 .profile-link {
   margin-bottom: 0.5rem;
+}
+
+.sidebar-badge {
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  margin-left: 8px;
+  display: inline-block;
+  min-width: 28px;
+  text-align: center;
 }
 
 /* Responsive adjustments */

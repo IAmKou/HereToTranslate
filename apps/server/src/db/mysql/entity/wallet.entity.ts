@@ -13,6 +13,7 @@ export class WalletEntity {
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   balance: number;
 
-  @Column()
-  paypal: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  paypalEmail?: string;
 }
+

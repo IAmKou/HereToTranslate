@@ -44,6 +44,7 @@ import { TranslationService } from './service/translation-manager.service';
 import { FileController } from './controller/file.controller';
 import { PermissionsController } from './controller/project-role.controller';
 import { TranslationController } from './controller/translation.controller';
+import { AdminTransactionController } from './controller/admin-transaction.controller';
 
 @Global()
 @Module({
@@ -119,6 +120,7 @@ import { TranslationController } from './controller/translation.controller';
     FileController,
     PermissionsController,
     TranslationController, // Đăng ký controller translation
+    AdminTransactionController,
   ]
 })
 export class ManagersModule {

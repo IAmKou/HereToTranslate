@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import { authService } from '../services/auth.service';
 import AdminUserManagement from '../views/AdminUserManagement.vue';
+import AdminWithdrawals from '../views/AdminWithdrawals.vue';
 
 
 const router = createRouter({
@@ -93,6 +94,11 @@ const router = createRouter({
       },
     },
     {
+      path: '/admin/withdrawals',
+      name: 'admin-withdrawals',
+      component: AdminWithdrawals,
+    },
+    {
       path: '/chat',
       name: 'chat',
       component: () => import('../views/ChatListView.vue'),
@@ -158,6 +164,24 @@ const router = createRouter({
       name: 'oauth-callback',
       component: () => import('../components/OauthCallback.vue'),
       meta: {requireAuth: false}
+    },
+    {
+      path: '/wallet',
+      name: 'wallet',
+      component: () => import('../views/WalletView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/transactions',
+      name: 'transaction-history',
+      component: () => import('../views/TransactionHistoryView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/transactions',
+      name: 'admin-transaction-history',
+      component: () => import('../views/AdminTransactionHistoryView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
   ],
 });

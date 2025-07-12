@@ -16,6 +16,9 @@
           <router-link to="/projects" class="navbar-item" aria-label="Projects">
             <i class="pi pi-briefcase nav-icon"></i> Projects
           </router-link>
+          <router-link to="/wallet" class="navbar-item" aria-label="Wallet">
+            <i class="pi pi-wallet nav-icon"></i> Wallet
+          </router-link>
 
         </div>
         <div class="navbar-end">

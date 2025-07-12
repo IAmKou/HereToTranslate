@@ -32,6 +32,9 @@ export class TransactionEntity {
   @Column({ nullable: true })
   paypalOrderId: string;
 
+  @Column({ nullable: true })
+  paypalEmail: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }

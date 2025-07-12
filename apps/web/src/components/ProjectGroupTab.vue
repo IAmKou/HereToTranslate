@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import axiosInstance from '../api';
+const showDeleteConfirmModal = ref(false);
+const groupToDelete = ref(null);
+const showEditGroupModal = ref(false);
+const groupToEdit = ref({ id: null, name: '' });
 
 const props = defineProps({
   project: Object,
@@ -47,19 +51,29 @@ const createGroup = async () => {
 };
 
 const editGroup = (group) => {
-  // Navigate to group edit page or open edit modal
-  console.log('Edit group:', group);
+  groupToEdit.value = { ...group }; // clone để không ảnh hưởng original
+  showEditGroupModal.value = true;
 };
 
-const deleteGroup = async (groupId) => {
-  if (!props.project || !confirm('Are you sure you want to delete this group?')) return;
+const confirmDeleteGroup = (group) => {
+  groupToDelete.value = group;
+  showDeleteConfirmModal.value = true;
+};
+
+const performEditGroup = async () => {
+  if (!props.project || !groupToEdit.value.id) return;
   try {
-    await axiosInstance.delete(`/projects/${props.project.id}/groups/${groupId}`);
+    await axiosInstance.put(`/projects/${props.project.id}/groups/${groupToEdit.value.id}`, {
+      name: groupToEdit.value.name,
+    });
     await loadGroups();
+    showEditGroupModal.value = false;
+    groupToEdit.value = { id: null, name: '' };
   } catch (err) {
-    alert('Failed to delete group: ' + err.message);
+    alert('Failed to update group: ' + err.message);
   }
 };
+
 </script>
 
 <template>
@@ -86,7 +100,7 @@ const deleteGroup = async (groupId) => {
           <h3>Error: {{ groupsError }}</h3>
           <p>Failed to load project groups. Please try again later.</p>
         </div>
-        <div v-else-if="!props.project || !props.project.groups || props.project.groups.length === 0" class="empty-section">
+        <div v-else-if="groups.length === 0" class="empty-section">
           <div class="empty-icon">👨‍👩‍👧‍👦</div>
           <h3>No Groups</h3>
           <p>No groups have been created for this project yet.</p>
@@ -109,7 +123,7 @@ const deleteGroup = async (groupId) => {
               <button class="btn btn-outline btn-sm" @click="editGroup(group)">
                 <span class="icon">✏️</span> Edit
               </button>
-              <button class="btn btn-danger btn-sm" @click="deleteGroup(group.id)">
+              <button class="btn btn-danger btn-sm" @click="confirmDeleteGroup(group)">
                 <span class="icon">🗑️</span> Delete
               </button>
             </div>
@@ -135,6 +149,33 @@ const deleteGroup = async (groupId) => {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+  <div v-if="showEditGroupModal" class="modal-overlay">
+    <div class="modal-content">
+      <h2>Edit Group</h2>
+      <form @submit.prevent="performEditGroup">
+        <div class="form-group">
+          <label for="editGroupName">Group Name:</label>
+          <input type="text" id="editGroupName" v-model="groupToEdit.name" required />
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <button type="button" class="btn btn-outline" @click="showEditGroupModal = false">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div v-if="showDeleteConfirmModal" class="modal-overlay">
+    <div class="modal-content">
+      <h2>Confirm Delete</h2>
+      <p>Are you sure you want to delete the group "<strong>{{ groupToDelete?.name }}</strong>"?</p>
+      <div class="form-actions">
+        <button class="btn btn-confirm" @click="performDeleteGroup">Confirm</button>
+
+        <button class="btn btn-outline" @click="showDeleteConfirmModal = false">Cancel</button>
       </div>
     </div>
   </div>
@@ -386,4 +427,30 @@ const deleteGroup = async (groupId) => {
   border-color: #cbd5e0;
   box-shadow: none;
 }
+/* Center buttons in confirmation modal */
+.form-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin: 2rem auto 0 auto;
+  width: fit-content;
+}
+
+/* Green Confirm button */
+.btn-confirm {
+  background: linear-gradient(135deg, #48bb78, #38a169); /* green gradient */
+  color: white;
+  border: none;
+  font-weight: 600;
+  padding: 0.8rem 1.5rem;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.btn-confirm:hover {
+  background: linear-gradient(135deg, #38a169, #2f855a);
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 6px 16px rgba(72, 187, 120, 0.3);
+}
+
 </style>

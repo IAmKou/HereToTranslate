@@ -50,18 +50,7 @@
           <span class="material-icons">settings</span>
           <span class="menu-text">Settings</span>
         </router-link>
-        <router-link to="/admin/backup" class="menu-item" :title="isCollapsed ? 'Backup & Restore' : ''">
-          <span class="material-icons">backup</span>
-          <span class="menu-text">Backup</span>
-        </router-link>
-        <router-link to="/admin/logs" class="menu-item" :title="isCollapsed ? 'System Logs' : ''">
-          <span class="material-icons">article</span>
-          <span class="menu-text">Logs</span>
-        </router-link>
-        <router-link to="/admin/analytics" class="menu-item" :title="isCollapsed ? 'Analytics' : ''">
-          <span class="material-icons">analytics</span>
-          <span class="menu-text">Analytics</span>
-        </router-link>
+
         <router-link to="/admin/withdrawals" class="menu-item" :title="isCollapsed ? 'Withdraw Approvals' : ''">
           <span class="material-icons">account_balance_wallet</span>
           <span class="menu-text">Withdraw Approvals</span>

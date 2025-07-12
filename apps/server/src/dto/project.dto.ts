@@ -4,7 +4,9 @@ import { IsArray, IsBoolean, IsNotEmpty, IsNumberString, IsOptional, IsString, M
 
 // Add Express types
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Multer {
       interface File {
         fieldname: string;

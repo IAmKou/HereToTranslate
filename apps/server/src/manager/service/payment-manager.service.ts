@@ -380,6 +380,15 @@ export class PaypalService {
       adminWallet.balance =
         Number(adminWallet.balance) + Number(transaction.amount);
       await this.walletRepository.save(adminWallet);
+      // Cộng tiền vào balance của user
+      const userWallet = await this.walletManagerService.getOrCreateWallet(user.id);
+      userWallet.balance = Number(userWallet.balance) + Number(transaction.amount);
+      await this.walletManagerService['walletRepository'].save(userWallet);
+
+      // Admin wallet logic giữ nguyên nếu cần
+      // const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      // adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
+      // await this.walletRepository.save(adminWallet);
 
       logger.log(
         `Payment captured for order ${orderId}, request ID ${request.id}, user ID ${user.id}`
@@ -414,16 +423,13 @@ export class PaypalService {
       throw new BadRequestException('Invalid PayPal email address');
     }
 
+    const userEntity = await this.userRepository.findOneOrFail({ where: { id: userId } });
     const adminWallet = await this.walletManagerService.getOrCreateWallet(
       this.ADMIN_USER_ID
     );
     if (Number(adminWallet.balance) < amount) {
       throw new BadRequestException('Admin wallet has insufficient funds');
     }
-
-    const user = await this.userRepository.findOneOrFail({
-      where: { id: userId },
-    });
 
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
@@ -432,16 +438,22 @@ export class PaypalService {
       });
     }
 
+    // Debug: log giá trị paypalEmail khi tạo transaction
+    console.log('Withdraw - paypalEmail:', paypalEmail, 'DTO:', dto);
     const transactionPayload: DeepPartial<TransactionEntity> = {
-      user,
-      amount,
+      user: userEntity,
+      amount: -Math.abs(amount),
       status: TransactionStatus.Pending,
       paypalOrderId: paypalOrderId ?? undefined,
       request,
+      paypalEmail,
     };
 
     const transaction = this.transactionRepo.create(transactionPayload);
     await this.transactionRepo.save(transaction);
+
+    // Debug: log transaction sau khi lưu
+    console.log('Saved transaction:', transaction);
 
     return transaction;
   }
@@ -457,9 +469,26 @@ export class PaypalService {
     }
 
     const paypalEmail = transaction.user.email;
-    const amount = transaction.amount;
+    const amount = Math.abs(Number(transaction.amount));
 
-    const accessToken = await this.getAccessToken();
+    // Luôn lấy access token mới cho payout
+    const auth = Buffer.from(
+      `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`
+    ).toString('base64');
+    const tokenRes = await axios.post(
+      `${process.env.PAYPAL_API}/v1/oauth2/token`,
+      'grant_type=client_credentials',
+      {
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+    const accessToken = tokenRes.data.access_token;
+    console.log('[PayPal] Access token:', accessToken.slice(0, 12) + '...');
+    console.log('[PayPal] Payout endpoint:', `${process.env.PAYPAL_API}/v1/payments/payouts`);
+    console.log('[PayPal] Payout to email:', paypalEmail);
 
     const payoutData = {
       sender_batch_header: {
@@ -483,7 +512,7 @@ export class PaypalService {
 
     try {
       const res = await axios.post(
-        'https://api-m.paypal.com/v1/payments/payouts',
+        `${process.env.PAYPAL_API}/v1/payments/payouts`,
         payoutData,
         {
           headers: {
@@ -521,7 +550,7 @@ export class PaypalService {
       status: TransactionStatus;
       sender: { id: bigint; email: string };
       receiver?: { id: bigint; email: string };
-      createdAt: Date;
+      createdAt: string;
     }>
   > {
     const transactions = await this.transactionRepo.find({
@@ -538,13 +567,27 @@ export class PaypalService {
       },
       receiver: txn.request?.assignee
         ? {
-            id: BigInt(txn.request.assignee.id),
-            email: txn.request.assignee.email,
-          }
+          id: BigInt(txn.request.assignee.id),
+          email: txn.request.assignee.email,
+        }
         : undefined,
-      createdAt: txn.createdAt,
+      createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
     }));
   }
+
+  async getAllPendingWithdrawals() {
+    const txns = await this.transactionRepo.createQueryBuilder('t')
+      .leftJoinAndSelect('t.user', 'user')
+      .where('t.amount < 0')
+      .andWhere('t.status = :status', { status: TransactionStatus.Pending })
+      .orderBy('t.createdAt', 'DESC')
+      .getMany();
+    return txns.map(txn => ({
+      ...txn,
+      createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
+    }));
+  }
+
 
   async finalizeTranslation(requestId: bigint): Promise<boolean> {
     const request = await this.requestRepository.findOneOrFail({

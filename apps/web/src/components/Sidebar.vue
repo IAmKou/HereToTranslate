@@ -23,6 +23,14 @@
         <span class="material-icons">public</span>
         <span class="menu-text">Public Requests</span>
       </router-link>
+      <router-link to="/wallet" class="menu-item" :title="isCollapsed ? 'Wallet' : ''">
+        <span class="material-icons">account_balance_wallet</span>
+        <span class="menu-text">Wallet</span>
+      </router-link>
+      <router-link to="/transactions" class="menu-item" :title="isCollapsed ? 'Transaction History' : ''">
+        <span class="material-icons">history</span>
+        <span class="menu-text">Transaction History</span>
+      </router-link>
       <div class="sidebar-divider"></div>
       <router-link to="/user-home/settings" class="menu-item" :title="isCollapsed ? 'Settings' : ''">
         <span class="material-icons">settings</span>

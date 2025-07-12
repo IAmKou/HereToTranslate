@@ -73,5 +73,12 @@ export class PaymentController {
     return this.paymentService.approveWithdrawal(transactionId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('withdrawals/pending')
+  async getAllPendingWithdrawals() {
+    // Lấy tất cả transaction rút tiền pending
+    return this.paymentService.getAllPendingWithdrawals();
+  }
+
 
 }

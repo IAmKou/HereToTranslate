@@ -59,21 +59,11 @@
           <div class="filters-section">
             <div class="filters-row">
               <div class="filter-group">
-                <label>User:</label>
-                <select v-model="filters.userId" class="filter-select">
-                  <option value="">All Users</option>
-                  <option v-for="user in users" :key="user.id" :value="user.id">
-                    {{ user.fullName || user.username || user.email }}
-                  </option>
-                </select>
-              </div>
-              <div class="filter-group">
                 <label>Type:</label>
                 <select v-model="filters.type" class="filter-select">
                   <option value="">All Types</option>
-                  <option value="deposit">Deposit</option>
-                  <option value="withdraw">Withdraw</option>
-                  <option value="transfer">Transfer</option>
+                  <option value="DEPOSIT">Deposit</option>
+                  <option value="WITHDRAW">Withdraw</option>
                 </select>
               </div>
               <div class="filter-group">
@@ -114,15 +104,9 @@
                   />
                 </div>
               </div>
-            </div>
-            <div class="filters-actions">
               <button @click="clearFilters" class="clear-filters-btn">
                 <i class="pi pi-refresh"></i>
                 Clear Filters
-              </button>
-              <button @click="exportTransactions" class="export-btn" :disabled="loading">
-                <i class="pi pi-download"></i>
-                Export
               </button>
             </div>
           </div>
@@ -227,37 +211,18 @@
               </table>
             </div>
 
-            <!-- Pagination -->
-            <div v-if="totalPages > 1" class="pagination">
+            <!-- Pagination giống MyRequestView.vue -->
+            <div class="pagination-controls">
               <div class="pagination-info">
-                Showing {{ startIndex + 1 }} to {{ endIndex }} of {{ filteredTransactions.length }} transactions
+                <span>Showing {{ startIndex + 1 }} to {{ endIndex }} of {{ filteredTransactions.length }} transactions</span>
               </div>
-              <div class="pagination-controls">
-                <button
-                  @click="prevPage"
-                  :disabled="currentPage === 1"
-                  class="pagination-btn"
-                >
-                  <i class="pi pi-chevron-left"></i>
+              <div class="pagination-buttons">
+                <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-secondary">
+                  <i class="pi pi-chevron-left"></i> Previous
                 </button>
-
-                <div class="page-numbers">
-                  <button
-                    v-for="page in visiblePages"
-                    :key="page"
-                    @click="goToPage(page)"
-                    :class="['page-btn', { active: page === currentPage }]"
-                  >
-                    {{ page }}
-                  </button>
-                </div>
-
-                <button
-                  @click="nextPage"
-                  :disabled="currentPage === totalPages"
-                  class="pagination-btn"
-                >
-                  <i class="pi pi-chevron-right"></i>
+                <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+                <button @click="nextPage" :disabled="currentPage === totalPages" class="btn btn-secondary">
+                  Next <i class="pi pi-chevron-right"></i>
                 </button>
               </div>
             </div>
@@ -265,6 +230,7 @@
         </div>
       </div>
     </div>
+    <AppFooter />
   </div>
 </template>
 
@@ -273,6 +239,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import AdminSidebar from '../components/AdminSidebar.vue';
+import AppFooter from '../components/AppFooter.vue';
 
 interface User {
   id: number;
@@ -307,7 +274,7 @@ const users = ref<User[]>([]);
 const loading = ref(true);
 const error = ref('');
 const currentPage = ref(1);
-const itemsPerPage = ref(20);
+const itemsPerPage = ref(10);
 const isSidebarCollapsed = ref(false);
 
 const filters = ref<Filters>({
@@ -322,21 +289,17 @@ const filters = ref<Filters>({
 const sortKey = ref('');
 const sortOrder = ref(1);
 
+// Xoá itemsPerPageOptions và selector
+
 // Computed properties
 const filteredTransactions = computed(() => {
   let filtered = [...transactions.value];
 
-  // Filter by user
-  if (filters.value.userId) {
-    filtered = filtered.filter(t => t.user.id.toString() === filters.value.userId);
-  }
-
   // Filter by type
   if (filters.value.type) {
-    filtered = filtered.filter(t => {
-      if (filters.value.type === 'deposit') return t.amount > 0;
-      if (filters.value.type === 'withdraw') return t.amount < 0;
-      if (filters.value.type === 'transfer') return t.type === 'transfer';
+    filtered = filtered.filter((t: any) => {
+      if (filters.value.type === 'DEPOSIT') return t.amount > 0;
+      if (filters.value.type === 'WITHDRAW') return t.amount < 0;
       return true;
     });
   }
@@ -442,18 +405,35 @@ const visiblePages = computed(() => {
 const startIndex = computed(() => (currentPage.value - 1) * itemsPerPage.value);
 const endIndex = computed(() => Math.min(startIndex.value + itemsPerPage.value, filteredTransactions.value.length));
 
+// Sidebar state (example, adjust as needed)
+// Xoá tất cả các khai báo isSidebarCollapsed trùng lặp, chỉ giữ lại một khai báo duy nhất ở đầu <script setup>
+
+// Format currency utility
+function formatCurrency(amount: number | string) {
+  const num = Number(amount);
+  if (isNaN(num)) return '$0.00';
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+
+// Total transactions
 const totalTransactions = computed(() => filteredTransactions.value.length);
 
 const totalDeposits = computed(() => {
   return filteredTransactions.value
-    .filter(t => t.amount > 0)
-    .reduce((sum, t) => sum + t.amount, 0);
+    .filter((t: any) => Number(t.amount) > 0)
+    .reduce((sum: number, t: any) => {
+      const amt = Number(t.amount);
+      return sum + (isNaN(amt) ? 0 : amt);
+    }, 0);
 });
 
 const totalWithdrawals = computed(() => {
   return filteredTransactions.value
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    .filter((t: any) => Number(t.amount) < 0)
+    .reduce((sum: number, t: any) => {
+      const amt = Math.abs(Number(t.amount));
+      return sum + (isNaN(amt) ? 0 : amt);
+    }, 0);
 });
 
 const pendingTransactions = computed(() => {
@@ -516,13 +496,6 @@ function formatStatus(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
-}
-
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', {
@@ -576,11 +549,6 @@ async function rejectTransaction(transactionId: number) {
   } catch (err: any) {
     console.error('Failed to reject transaction:', err);
   }
-}
-
-function exportTransactions() {
-  // TODO: Implement CSV export
-  console.log('Export transactions');
 }
 
 // Watch for filter changes to reset pagination
@@ -698,16 +666,19 @@ onMounted(loadTransactions);
 }
 
 .filters-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.filter-group {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.filter-group {
+  margin-right: 0;
+  margin-bottom: 0;
+}
+.clear-filters-btn {
+  margin-left: auto;
+  height: 40px;
+  align-self: center;
 }
 
 .filter-group label {
@@ -1013,100 +984,92 @@ onMounted(loadTransactions);
   background: #fecaca;
 }
 
-.pagination {
+.pagination-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 24px;
-  padding: 16px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
 }
-
-.pagination-info {
-  color: #6b7280;
-  font-size: 0.875rem;
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pagination-btn {
-  width: 40px;
-  height: 40px;
+.pagination-controls button {
+  padding: 0.5rem 1rem;
   border: 1px solid #d1d5db;
-  background: #fff;
+  background: white;
+  color: #374151;
   border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
+  gap: 0.25rem;
 }
-
-.pagination-btn:hover:not(:disabled) {
+.pagination-controls button:hover:not(:disabled) {
   background: #f3f4f6;
+  border-color: #9ca3af;
 }
-
-.pagination-btn:disabled {
+.pagination-controls button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-.page-numbers {
-  display: flex;
-  gap: 4px;
+.pagination-info {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
 }
-
-.page-btn {
-  width: 40px;
-  height: 40px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  border-radius: 6px;
+.pagination-buttons {
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
+  gap: 1rem;
 }
-
-.page-btn:hover {
-  background: #f3f4f6;
+.page-info {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0 0.5rem;
 }
-
-.page-btn.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-
 @media (max-width: 768px) {
+  .pagination-controls {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+  .pagination-info {
+    order: 1;
+  }
+  .pagination-buttons {
+    order: 2;
+    justify-content: center;
+  }
+}
+.filter-group .filter-select,
+.filter-group select,
+.filter-group input[type="text"],
+.filter-group input[type="number"] {
+  width: 160px;
+  max-width: 100%;
+}
+@media (max-width: 900px) {
   .filters-row {
-    grid-template-columns: 1fr;
-  }
-
-  .filters-actions {
     flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
-
-  .transactions-table {
-    font-size: 0.875rem;
+  .clear-filters-btn {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
   }
-
-  .user-info {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .pagination {
-    flex-direction: column;
-    gap: 16px;
+  .filter-group .filter-select,
+  .filter-group select,
+  .filter-group input[type="text"],
+  .filter-group input[type="number"] {
+    width: 120px;
   }
 }
 </style>

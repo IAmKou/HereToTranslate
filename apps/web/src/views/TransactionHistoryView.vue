@@ -152,7 +152,6 @@
                     <span :class="getSortIcon('date')"></span>
                   </th>
                   <th>PayPal Email</th>
-                  <th>Note</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -184,12 +183,6 @@
                         {{ transaction.paypalEmail }}
                       </span>
                     <span v-else class="paypal-email-empty">-</span>
-                  </td>
-                  <td>
-                      <span v-if="transaction.description && transaction.description.length > 24" class="note-tooltip" :title="transaction.description">
-                        {{ transaction.description.slice(0, 24) + '...' }}
-                      </span>
-                    <span v-else>{{ transaction.description || '-' }}</span>
                   </td>
                 </tr>
                 </tbody>

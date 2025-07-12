@@ -1,5 +1,6 @@
 <template>
   <div class="layout-wrapper">
+    <Sidebar />
     <Navbar />
     <div class="main-content">
       <div class="content">
@@ -130,21 +131,21 @@
                 </div>
                 <div class="meta-row">
                   <span
-                    ><i class="pi pi-user-edit"></i>
+                  ><i class="pi pi-user-edit"></i>
                     {{ req.requester?.username }}</span
                   >
                   <span
-                    ><i class="pi pi-calendar-plus"></i> <b>Created:</b>
+                  ><i class="pi pi-calendar-plus"></i> <b>Created:</b>
                     {{ formatDate(req.createdAt) }}</span
                   >
                 </div>
                 <div class="meta-row">
                   <span
-                    ><i class="pi pi-hourglass"></i> <b>Deadline:</b>
+                  ><i class="pi pi-hourglass"></i> <b>Deadline:</b>
                     {{ formatDate(req.deadline) }}</span
                   >
                   <span
-                    ><i class="pi pi-bookmark"></i>
+                  ><i class="pi pi-bookmark"></i>
                     {{ req.category?.name }}</span
                   >
                 </div>
@@ -175,6 +176,7 @@ import Paginator from 'primevue/paginator';
 import axios from 'axios';
 import AppFooter from '../components/AppFooter.vue';
 import Navbar from '../components/Navbar.vue';
+import Sidebar from '../components/Sidebar.vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 
@@ -340,7 +342,12 @@ function goToDetail(id) {
 .main-content {
   display: flex;
   flex: 1;
-  margin-left: 0;
+  margin-left: 240px; /* Ensure main content is not hidden behind sidebar */
+}
+@media (max-width: 900px) {
+  .main-content {
+    margin-left: 72px;
+  }
 }
 .content {
   flex: 1;
@@ -549,7 +556,7 @@ function goToDetail(id) {
 }
 .improved-request-card:hover {
   box-shadow: 0 16px 48px rgba(37, 99, 235, 0.2),
-    0 4px 12px rgba(102, 126, 234, 0.15);
+  0 4px 12px rgba(102, 126, 234, 0.15);
   transform: translateY(-6px) scale(1.02);
 }
 .card-badges {

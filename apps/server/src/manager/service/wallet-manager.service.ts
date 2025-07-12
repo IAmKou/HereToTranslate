@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, In } from 'typeorm';
 import { WalletEntity } from '#LocalProject/Entities';
 import { UserEntity } from '#LocalProject/Entities';
 import { TransactionEntity, TransactionStatus } from '#LocalProject/Entities';
@@ -42,47 +42,6 @@ export class WalletManagerService implements OnModuleInit {
     wallet.balance = Number(wallet.balance) + Number(amount);
     return this.walletRepository.save(wallet);
   }
-
-  // async testPermissions(
-  //   projectId: bigint,
-  //   uid: bigint,
-  //   against: IntoPermission | IntoPermission[], // can be single or multiple
-  //   requireAll: boolean = true // true: AND logic, false: OR logic
-  // ): Promise<Permission> {
-  //   const permissionsToCheck = Array.isArray(against) ? against.map(p => new Permission(p)) : [new Permission(against)];
-  //
-  //   this.logger.debug(
-  //     `Checking if user [${uid}] has ${permissionsToCheck.map(p => p.toString()).join(', ')} for project [${projectId}]`
-  //   );
-  //
-  //   const projectExists = await this.projectRepository.exists({ where: { id: BigInt(projectId) } });
-  //   if (!projectExists) throw new NotFoundException(`Unknown project`);
-  //
-  //   const userExists = await this.userRepository.exists({ where: { id: BigInt(uid) } });
-  //   if (!userExists) throw new NotFoundException(`Unknown user`);
-  //
-  //   const userPermissionFlags = await this.projectRoleRepository
-  //     .createQueryBuilder('role')
-  //     .innerJoin('role.users', 'user')
-  //     .where('role.project = :projectId', { projectId })
-  //     .andWhere('user.id = :userId', { userId: uid })
-  //     .select([`BIT_OR(role.permissionFlags) as userPermissionFlags`])
-  //     .getRawOne<{ userPermissionFlags: bigint }>()
-  //     .then(result => new Permission(result?.userPermissionFlags ?? PermissionFlags.None));
-  //
-  //   const hasPermission = requireAll
-  //     ? permissionsToCheck.every(p => p.applyMask(userPermissionFlags).value === p.value)
-  //     : permissionsToCheck.some(p => p.applyMask(userPermissionFlags).value === p.value);
-  //
-  //   if (!hasPermission) {
-  //     this.logger.debug(
-  //       `User [${uid}] does not have required permissions [${permissionsToCheck.map(p => p.toString()).join(', ')}] for project [${projectId}]`
-  //     );
-  //     throw new ForbiddenException(`You do not have permission to perform this action`);
-  //   }
-  //
-  //   return userPermissionFlags;
-  // }
 
   async updatePaypalEmailByWalletId(walletId: number, paypalEmail: string): Promise<WalletEntity> {
     const wallet = await this.walletRepository.findOneOrFail({ where: { id: walletId } });
@@ -136,10 +95,17 @@ export class WalletManagerService implements OnModuleInit {
   }
 
   async getLatestTransaction(userId: bigint) {
-    const txn = await this.transactionRepository.findOne({
-      where: { user: { id: userId } },
+    const txns = await this.transactionRepository.find({
+      where: {
+        user: { id: userId },
+        status: In([TransactionStatus.Completed, TransactionStatus.Approved]),
+      },
       order: { createdAt: 'DESC' },
+      relations: ['user'],
     });
+    console.log('All txns:', txns.map(t => ({ id: t.id, amount: t.amount, status: t.status, createdAt: t.createdAt })));
+    const txn = txns.find(t => Number(t.amount) !== 0);
+    console.log('Latest txn:', txn);
     if (!txn) return null;
     return {
       id: txn.id,
@@ -253,6 +219,10 @@ export class WalletManagerService implements OnModuleInit {
       queryBuilder.andWhere('t.createdAt <= :endDate', { endDate: filters.endDate });
     }
 
-    return queryBuilder.getMany();
+    const txns = await queryBuilder.getMany();
+    return txns.map(txn => ({
+      ...txn,
+      createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
+    }));
   }
 }

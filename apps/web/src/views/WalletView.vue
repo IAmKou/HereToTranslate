@@ -13,7 +13,6 @@
                 </div>
                 <div>
                   <h1>Wallet</h1>
-                  <div class="wallet-id">ID: {{ wallet?.id ?? '' }}</div>
                 </div>
               </div>
               <div v-if="loading" class="loading">Loading...</div>
@@ -23,6 +22,11 @@
                 <div class="wallet-balance">
                   <span class="money-icon">💵</span>
                   {{ formatCurrency(wallet.balance) }}
+                </div>
+                <div class="withdraw-fee-tip">
+                  <span v-if="wallet && wallet.balance > 0">
+                    If you withdraw all, you will receive: <b>{{ formatCurrency(wallet.balance * 0.95) }}</b> after 5% fee.
+                  </span>
                 </div>
                 <div class="user-info-block">
                   <div class="user-avatar user-avatar-upgrade">
@@ -62,13 +66,11 @@
                 </div>
                 <!-- Bỏ hoàn toàn phần liên kết PayPal/email PayPal -->
                 <div class="wallet-actions wallet-actions-upgrade">
-                  <button class="wallet-btn withdraw" title="Withdraw" @click="openWithdrawModal">
-                    <i class="pi pi-arrow-up action-icon withdraw"></i>
-                    <span>Withdraw</span>
+                  <button class="wallet-btn withdraw custom-withdraw-btn" title="Withdraw" @click="openWithdrawModal">
+                    ⬆ <span>Withdraw</span>
                   </button>
-                  <button class="wallet-btn history" title="View all transactions" @click="goToTransactionHistory">
-                    <i class="pi pi-list action-icon history"></i>
-                    <span>Transaction History</span>
+                  <button class="wallet-btn history custom-history-btn" title="View all transactions" @click="goToTransactionHistory">
+                    📄 <span>Transaction History</span>
                   </button>
                 </div>
               </div>
@@ -124,7 +126,7 @@
                     </svg>
                   </div>
                   <div class="mini-stat-label">Hold Amount</div>
-                  <div class="mini-stat-value" :class="currencyClass(wallet.holdAmount)">{{ formatCurrency(wallet.holdAmount) }}</div>
+                  <div class="mini-stat-value" :class="currencyClass(wallet.holdAmount)">{{ formatCurrency(Math.abs(wallet.holdAmount)) }}</div>
                 </div>
               </div>
               <div v-if="wallet.latestTransaction" class="latest-transaction-summary">
@@ -140,17 +142,17 @@
                       You deposited {{ formatCurrency(wallet.latestTransaction.amount) }} via PayPal.
                     </template>
                     <template v-else-if="wallet.latestTransaction.type === 'Withdrawal'">
-                      You withdrew {{ formatCurrency(wallet.latestTransaction.amount) }} to PayPal.
+                      You withdrew {{ formatCurrency(Math.abs(wallet.latestTransaction.amount)) }} to PayPal.
                     </template>
                     <template v-else>
-                      Transaction of {{ formatCurrency(wallet.latestTransaction.amount) }}.
+                      Transaction of {{ formatCurrency(Math.abs(wallet.latestTransaction.amount)) }}.
                     </template>
                   </span>
                 </div>
                 <div class="lts-row">
                   <span class="lts-label">Amount:</span>
                   <span :class="['lts-value', currencyClass(wallet.latestTransaction.amount), wallet.latestTransaction.type === 'Deposit' ? 'deposit' : 'withdraw']">
-                    {{ formatCurrency(wallet.latestTransaction.amount) }}
+                    {{ formatCurrency(Math.abs(wallet.latestTransaction.amount)) }}
                   </span>
                 </div>
                 <div class="lts-row">
@@ -159,7 +161,23 @@
                 </div>
                 <div class="lts-row">
                   <span class="lts-label">Status:</span>
-                  <span class="lts-value">{{ wallet.latestTransaction.status }}</span>
+                  <span class="lts-value" :class="['status-badge',
+                    wallet.latestTransaction.status === 'COMPLETED' ? 'completed' :
+                    wallet.latestTransaction.status === 'REJECTED' ? 'rejected' :
+                    ['HOLD', 'WAITING_APPROVAL', 'IN_PROGRESS'].includes(wallet.latestTransaction.status) ? 'hold' : 'pending']">
+                    <template v-if="wallet.latestTransaction.status === 'COMPLETED'">
+                      ✅ <span>Completed</span>
+                    </template>
+                    <template v-else-if="wallet.latestTransaction.status === 'REJECTED'">
+                      ❌ <span>Rejected</span>
+                    </template>
+                    <template v-else-if="['HOLD', 'WAITING_APPROVAL', 'IN_PROGRESS'].includes(wallet.latestTransaction.status)">
+                      ⏸ <span>Hold</span>
+                    </template>
+                    <template v-else>
+                      ⏳ <span>Pending</span>
+                    </template>
+                  </span>
                 </div>
                 <div class="lts-row">
                   <span class="lts-label">Time:</span>
@@ -191,13 +209,17 @@
             <input id="withdraw-amount" v-model.number="withdrawAmount" type="number" min="1" :max="wallet?.balance || 0" placeholder="Enter amount (e.g. 10)" @input="validateWithdrawAmount" :class="{'input-invalid': withdrawAmountError || withdrawAmount <= 0}" />
             <div v-if="withdrawAmountError" class="input-error">{{ withdrawAmountError }}</div>
             <div v-if="withdrawAmount > 0 && !withdrawAmountError" class="after-fee-tip">
-              You will receive <b>{{ formatCurrency(withdrawAmount * 0.95) }}</b> after fee (5%).
+              You will receive <b>{{ formatCurrency(withdrawAmount * 0.95) }}</b> after the 5% fee.
             </div>
           </div>
           <div class="form-group">
             <label for="withdraw-email"><span class="email-label-icon">📧</span> PayPal Email:</label>
             <input id="withdraw-email" v-model="withdrawEmail" type="email" placeholder="Enter your PayPal email" @input="validateWithdrawEmail" :class="{'input-invalid': withdrawEmailError}" />
             <div v-if="withdrawEmailError" class="input-error">{{ withdrawEmailError }}</div>
+            <div class="email-warning" style="color: #ef4444; font-size: 0.97rem; margin-top: 4px;">
+              <i class="pi pi-exclamation-triangle" style="margin-right: 4px;"></i>
+              <b>We are not responsible if you enter the wrong PayPal email. Please double-check before confirming!</b>
+            </div>
           </div>
           <div v-if="withdrawError" class="input-error">{{ withdrawError }}</div>
           <div class="modal-actions">
@@ -229,10 +251,6 @@
         </div>
       </div>
     </div>
-    <!-- Withdraw form: show success message -->
-    <div v-if="withdrawSuccessMsg" class="withdraw-success-msg">
-      <i class="pi pi-info-circle"></i> {{ withdrawSuccessMsg }}
-    </div>
   </div>
 </template>
 
@@ -243,7 +261,7 @@ import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
 import axios from 'axios';
-import { useToast } from 'vue-toastification';
+import { useToast } from 'primevue/usetoast';
 
 interface UserInfo {
   id: number | string;
@@ -269,7 +287,7 @@ interface Wallet {
     id: number;
     type: 'Deposit' | 'Withdrawal' | 'Transfer';
     amount: number;
-    status: 'Pending' | 'Completed' | 'Failed';
+    status: 'Pending' | 'Completed' | 'Failed' | 'HOLD' | 'WAITING_APPROVAL' | 'IN_PROGRESS';
     createdAt: string;
   };
 }
@@ -302,9 +320,10 @@ function formatDate(date: any): string {
     return d.toLocaleDateString();
   } catch { return ''; }
 }
-function formatCurrency(amount: number | undefined | null): string {
-  if (typeof amount !== 'number' || isNaN(amount)) return '$0';
-  return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+function formatCurrency(amount: number | string | undefined | null): string {
+  const num = Number(amount);
+  if (isNaN(num)) return '$0';
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
 function formatDateTime(date: any): string {
@@ -349,17 +368,17 @@ async function submitWithdraw() {
   withdrawSuccessMsg.value = '';
   if (!withdrawAmount.value || withdrawAmount.value <= 0) {
     withdrawError.value = 'Amount must be greater than 0';
-    toast.error(withdrawError.value);
+    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
     return;
   }
-  if (!withdrawEmail.value || !/^[^\s@]+@[^"]+\.[^\s@]+$/.test(withdrawEmail.value)) {
+  if (!withdrawEmail.value || !/^[^\s@]+@[^"\s]+\.[^\s@]+$/.test(withdrawEmail.value)) {
     withdrawError.value = 'Invalid PayPal email';
-    toast.error(withdrawError.value);
+    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
     return;
   }
   if (withdrawAmount.value > (wallet.value?.balance || 0)) {
     withdrawError.value = 'Insufficient balance';
-    toast.error(withdrawError.value);
+    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
     return;
   }
   withdrawLoading.value = true;
@@ -370,11 +389,11 @@ async function submitWithdraw() {
     });
     await loadPendingWithdrawals();
     withdrawSuccessMsg.value = 'Your withdrawal request has been submitted and is pending admin approval.';
-    toast.success(withdrawSuccessMsg.value);
+    toast.add({ severity: 'success', summary: 'Success', detail: withdrawSuccessMsg.value, life: 3000 });
     showWithdrawModal.value = false;
   } catch (e: any) {
     withdrawError.value = e?.response?.data?.message || 'Withdraw failed';
-    toast.error(withdrawError.value);
+    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
   } finally {
     withdrawLoading.value = false;
   }
@@ -1168,5 +1187,76 @@ onMounted(() => {
 .pending-empty-desc {
   font-size: 1.01rem;
   color: #888;
+}
+.status-badge.completed {
+  background: #e6f9ed;
+  color: #16a34a;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.status-badge.rejected {
+  background: #ffeaea;
+  color: #ef4444;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.status-badge.pending {
+  background: #fff7e0;
+  color: #f59e0b;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.custom-withdraw-btn {
+  background: #fef9c3;
+  color: #b45309;
+  font-weight: 600;
+  transition: background 0.18s, color 0.18s;
+}
+.custom-withdraw-btn:hover {
+  background: #fde68a;
+  color: #a16207;
+}
+.custom-history-btn {
+  background: #dbeafe;
+  color: #2563eb;
+  font-weight: 600;
+  transition: background 0.18s, color 0.18s;
+}
+.custom-history-btn:hover {
+  background: #bfdbfe;
+  color: #1d4ed8;
+}
+.withdraw-fee-tip {
+  margin-top: 4px;
+  color: #b45309;
+  font-size: 0.98rem;
+  font-weight: 500;
+}
+.status-badge.hold {
+  background: #e0e7ff;
+  color: #6366f1;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.hold-tip {
+  font-size: 0.95rem;
+  color: #6366f1;
+  margin-top: 2px;
 }
 </style>

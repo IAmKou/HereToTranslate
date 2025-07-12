@@ -64,37 +64,21 @@ function setEllipsisBtnRef(id: string | number) {
 }
 
 function handleClickOutside(event: MouseEvent) {
-  const target = event.target as Node;
-  const openId = dropdownOpenId.value;
-  if (!openId) return;
-
-  const menuEl = dropdownMenuRefs.value[openId];
-  const btnEl = ellipsisBtnRefs.value[openId];
-
-  if (!menuEl || !btnEl) return;
-
-  const clickedInsideMenu = menuEl.contains(target);
-  const clickedInsideButton = btnEl.contains(target);
-
-  if (!clickedInsideMenu && !clickedInsideButton) {
-    dropdownOpenId.value = null;
-  }
-}
-
-const handleScroll = () => {
+  if (!dropdownOpenId.value) return;
+  const menuEl = dropdownMenuRefs.value[dropdownOpenId.value];
+  const btnEl = ellipsisBtnRefs.value[dropdownOpenId.value];
+  if (menuEl && menuEl.contains(event.target as Node)) return;
+  if (btnEl && btnEl.contains(event.target as Node)) return;
   dropdownOpenId.value = null;
-};
+}
 
 onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside);
-  document.addEventListener('touchstart', handleClickOutside); // thêm cho mobile
-  window.addEventListener('scroll', handleScroll, true);
+  window.addEventListener('scroll', () => { dropdownOpenId.value = null; }, true);
 });
-
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', handleClickOutside);
-  document.removeEventListener('touchstart', handleClickOutside);
-  window.removeEventListener('scroll', handleScroll, true);
+  window.removeEventListener('scroll', () => { dropdownOpenId.value = null; }, true);
 });
 const renamingFile = ref<any>(null);
 const renameInput = ref('');
@@ -326,54 +310,11 @@ function handleAction(action: string, fileId: string | number) {
   }
   dropdownOpenId.value = null; // Close dropdown after action
 }
-async function confirmRename() {
-  if (!renamingFile.value || !renameInput.value.trim()) return;
-
-  const oldName = renamingFile.value.fileName;
-  const newName = renameInput.value.trim();
-
-  const oldExt = oldName.substring(oldName.lastIndexOf('.')).toLowerCase();
-  const newExt = newName.substring(newName.lastIndexOf('.')).toLowerCase();
-
-  if (oldExt !== newExt) {
-    toast.add({
-      severity: 'error',
-      summary: 'Cannot change file extension',
-      detail: `Please keep the format as is: ${oldExt}`,
-      life: 4000,
-    });
-    return;
-  }
-
-  const fileId = renamingFile.value.id || renamingFile.value.fileId;
-
-  try {
-    await axiosInstance.put(`/files/${fileId}/rename`, {
-      newName,
-    });
-
-    toast.add({
-      severity: 'success',
-      summary: 'Rename successful',
-      detail: '',
-      life: 3000,
-    });
-
-    showRenameDialog.value = false;
-    renamingFile.value = null;
-    renameInput.value = '';
-    props.loadFiles();
-  } catch (error: any) {
-    console.error('Rename error:', error?.response || error);
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error?.response?.data?.message || 'Rename failed',
-      life: 4000,
-    });
-  }
+function confirmRename() {
+  // Mock: chỉ log, chưa gọi backend
+  alert('Renamed to: ' + renameInput.value);
+  showRenameDialog.value = false;
 }
-
 async function confirmDelete() {
   const fileId = fileToDelete.value?.id || fileToDelete.value?.fileId;
   console.log('confirmDelete called', fileToDelete.value, 'id dùng để xóa:', fileId);
@@ -577,7 +518,6 @@ defineExpose({
   border: 1px solid #e5e7eb;
   background: #f9fafb;
   margin-top: 1em;
-  margin-bottom: 100px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -910,5 +850,4 @@ defineExpose({
   from { opacity: 0; transform: scale(0.98) translateY(-8px);}
   to { opacity: 1; transform: scale(1) translateY(0);}
 }
-
 </style>

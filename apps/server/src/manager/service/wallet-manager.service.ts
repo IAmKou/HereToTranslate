@@ -131,7 +131,6 @@ export class WalletManagerService implements OnModuleInit {
     await this.userRepository.save(user);
   }
 
-  // Đồng bộ balance cho tất cả ví dựa trên transaction deposit đã hoàn thành
   async syncAllWalletBalances() {
     const wallets = await this.walletRepository.find({ relations: ['user'] });
     for (const wallet of wallets) {

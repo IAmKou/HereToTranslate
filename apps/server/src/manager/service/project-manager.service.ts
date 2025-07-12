@@ -49,6 +49,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly commitRepository: Repository<CommitEntity>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
+    @InjectRepository(RequestEntity)
+    private readonly requestRepository: Repository<RequestEntity>,
     private readonly dataSource: DataSource,
     private readonly githubService: GitHubService
   ) {
@@ -492,6 +494,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.logger.debug(`Project [${projectId}] does not exist`);
       throw new NotFoundException(`Unknown project`);
     }
+
+    const request = await this.requestRepository.findOne({
+      where: {project : {id: projectId}},
+    });
+     if (request){
+       this.logger.warn(`Project [${projectId}] is linked to a request and cannot be deleted.`);
+       throw new BadRequestException('Project cannot be deleted because it is linked to a request.');
+     }
 
     const repoName = `project-${projectId}`;
 

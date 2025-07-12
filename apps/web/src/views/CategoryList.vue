@@ -91,6 +91,11 @@
                     <p class="mt-2">Loading categories...</p>
                   </div>
                 </template>
+                <Column header="STT" style="width: 60px">
+                  <template #body="slotProps">
+                    {{ categories.indexOf(slotProps.data) + 1 }}
+                  </template>
+                </Column>
 
                 <Column field="name" header="Name" sortable style="min-width: 200px">
                   <template #body="{ data }">
@@ -128,7 +133,7 @@
                   </template>
                 </Column>
 
-                <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
+                <Column field="updatedAt" header="Last Update Time" sortable style="min-width: 150px">
                   <template #body="slotProps">
                     <div class="flex items-center gap-2">
                       <i class="pi pi-clock text-gray-400"></i>
@@ -136,7 +141,7 @@
                     </div>
                   </template>
                 </Column>
-                <Column style="min-width: 150px">
+                <Column header="Action" style="min-width: 150px">
                   <template #body="slotProps">
                     <div class="flex gap-2">
                       <Button

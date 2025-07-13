@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, In } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { WalletEntity } from '#LocalProject/Entities';
 import { UserEntity } from '#LocalProject/Entities';
 import { TransactionEntity, TransactionStatus } from '#LocalProject/Entities';

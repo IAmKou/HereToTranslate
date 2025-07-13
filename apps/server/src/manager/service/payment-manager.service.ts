@@ -45,7 +45,7 @@ export class PaypalService {
     private readonly projectService: ProjectManagerService,
     private readonly mailService: MailService,
     private readonly walletManagerService: WalletManagerService,
-    private readonly translationService: TranslationService,
+    private readonly translationService: TranslationService
   ) {}
 
   private async getAccessToken(): Promise<string> {
@@ -381,11 +381,13 @@ export class PaypalService {
         Number(adminWallet.balance) + Number(transaction.amount);
       await this.walletRepository.save(adminWallet);
       // Cộng tiền vào balance của user
-      const userWallet = await this.walletManagerService.getOrCreateWallet(user.id);
-      userWallet.balance = Number(userWallet.balance) + Number(transaction.amount);
+      const userWallet = await this.walletManagerService.getOrCreateWallet(
+        user.id
+      );
+      userWallet.balance =
+        Number(userWallet.balance) + Number(transaction.amount);
       await this.walletManagerService['walletRepository'].save(userWallet);
 
-      // Admin wallet logic giữ nguyên nếu cần
       // const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
       // adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
       // await this.walletRepository.save(adminWallet);
@@ -423,13 +425,15 @@ export class PaypalService {
       throw new BadRequestException('Invalid PayPal email address');
     }
 
-    const userEntity = await this.userRepository.findOneOrFail({ where: { id: userId } });
+    const userEntity = await this.userRepository.findOneOrFail({
+      where: { id: userId },
+    });
     const adminWallet = await this.walletManagerService.getOrCreateWallet(
       this.ADMIN_USER_ID
     );
-    // if (Number(adminWallet.balance) < amount) {
-    //   throw new BadRequestException('Admin wallet has insufficient funds');
-    // }
+    if (Number(adminWallet.balance) < amount) {
+      throw new BadRequestException('Admin wallet has insufficient funds');
+    }
 
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
@@ -487,7 +491,10 @@ export class PaypalService {
     );
     const accessToken = tokenRes.data.access_token;
     console.log('[PayPal] Access token:', accessToken.slice(0, 12) + '...');
-    console.log('[PayPal] Payout endpoint:', `${process.env.PAYPAL_API}/v1/payments/payouts`);
+    console.log(
+      '[PayPal] Payout endpoint:',
+      `${process.env.PAYPAL_API}/v1/payments/payouts`
+    );
     console.log('[PayPal] Payout to email:', paypalEmail);
 
     const payoutData = {
@@ -543,51 +550,22 @@ export class PaypalService {
     }
   }
 
-  async fetchAllTransactions(): Promise<
-    Array<{
-      id: number;
-      amount: number;
-      status: TransactionStatus;
-      sender: { id: bigint; email: string };
-      receiver?: { id: bigint; email: string };
-      createdAt: string;
-    }>
-  > {
-    const transactions = await this.transactionRepo.find({
-      relations: ['user', 'request', 'request.assignee'],
-    });
-
-    return transactions.map((txn) => ({
-      id: txn.id,
-      amount: txn.amount,
-      status: txn.status,
-      sender: {
-        id: BigInt(txn.user.id),
-        email: txn.user.email,
-      },
-      receiver: txn.request?.assignee
-        ? {
-          id: BigInt(txn.request.assignee.id),
-          email: txn.request.assignee.email,
-        }
-        : undefined,
-      createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
-    }));
-  }
-
   async getAllPendingWithdrawals() {
-    const txns = await this.transactionRepo.createQueryBuilder('t')
+    const txns = await this.transactionRepo
+      .createQueryBuilder('t')
       .leftJoinAndSelect('t.user', 'user')
       .where('t.amount < 0')
       .andWhere('t.status = :status', { status: TransactionStatus.Pending })
       .orderBy('t.createdAt', 'DESC')
       .getMany();
-    return txns.map(txn => ({
+    return txns.map((txn) => ({
       ...txn,
-      createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
+      createdAt:
+        txn.createdAt instanceof Date
+          ? txn.createdAt.toISOString()
+          : txn.createdAt,
     }));
   }
-
 
   async finalizeTranslation(requestId: bigint): Promise<boolean> {
     const request = await this.requestRepository.findOneOrFail({

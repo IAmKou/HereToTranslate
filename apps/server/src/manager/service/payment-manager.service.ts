@@ -45,7 +45,7 @@ export class PaypalService {
     private readonly projectService: ProjectManagerService,
     private readonly mailService: MailService,
     private readonly walletManagerService: WalletManagerService,
-    private readonly translationService: TranslationService,
+    private readonly translationService: TranslationService
   ) {}
 
   private async getAccessToken(): Promise<string> {
@@ -435,8 +435,11 @@ export class PaypalService {
         Number(adminWallet.balance) + Number(transaction.amount);
       await this.walletRepository.save(adminWallet);
       // Cộng tiền vào balance của user
-      const userWallet = await this.walletManagerService.getOrCreateWallet(user.id);
-      userWallet.balance = Number(userWallet.balance) + Number(transaction.amount);
+      const userWallet = await this.walletManagerService.getOrCreateWallet(
+        user.id
+      );
+      userWallet.balance =
+        Number(userWallet.balance) + Number(transaction.amount);
       await this.walletManagerService['walletRepository'].save(userWallet);
 
       logger.log(
@@ -474,13 +477,15 @@ export class PaypalService {
       throw new BadRequestException('Invalid PayPal email address');
     }
 
-    const userEntity = await this.userRepository.findOneOrFail({ where: { id: userId } });
+    const userEntity = await this.userRepository.findOneOrFail({
+      where: { id: userId },
+    });
     const adminWallet = await this.walletManagerService.getOrCreateWallet(
       this.ADMIN_USER_ID
     );
-    // if (Number(adminWallet.balance) < amount) {
-    //   throw new BadRequestException('Admin wallet has insufficient funds');
-    // }
+    if (Number(adminWallet.balance) < amount) {
+      throw new BadRequestException('Admin wallet has insufficient funds');
+    }
 
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
@@ -538,7 +543,10 @@ export class PaypalService {
     );
     const accessToken = tokenRes.data.access_token;
     console.log('[PayPal] Access token:', accessToken.slice(0, 12) + '...');
-    console.log('[PayPal] Payout endpoint:', `${process.env.PAYPAL_API}/v1/payments/payouts`);
+    console.log(
+      '[PayPal] Payout endpoint:',
+      `${process.env.PAYPAL_API}/v1/payments/payouts`
+    );
     console.log('[PayPal] Payout to email:', paypalEmail);
 
     const payoutData = {
@@ -598,6 +606,110 @@ export class PaypalService {
       console.error('PayPal payout failed:', err);
       throw new InternalServerErrorException(
         'Failed to approve PayPal withdrawal'
+      console.error('Admin payout error:', err);
+      throw new InternalServerErrorException('Payout failed.');
+    }
+  }
+
+  async getAllPendingWithdrawals() {
+    const txns = await this.transactionRepo
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.user', 'user')
+      .where('t.amount < 0')
+      .andWhere('t.status = :status', { status: TransactionStatus.Pending })
+      .orderBy('t.createdAt', 'DESC')
+      .getMany();
+    return txns.map((txn) => ({
+      ...txn,
+      createdAt:
+        txn.createdAt instanceof Date
+          ? txn.createdAt.toISOString()
+          : txn.createdAt,
+    }));
+  }
+
+  async finalizeTranslation(requestId: bigint): Promise<boolean> {
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['assignee', 'requester'],
+    });
+
+    if (!request.assignee || !request.requester) {
+      throw new BadRequestException(
+        'Request must have both requester and assignee.'
+      );
+    }
+
+    await this.approveTranslation(requestId, request.requester.id);
+    await this.approveTranslation(requestId, request.assignee.id);
+
+    const [requesterApproval, assigneeApproval] = await Promise.all([
+      this.translationApprovalRepository.findOne({
+        where: {
+          request: { id: requestId },
+          user: { id: request.requester.id },
+        },
+      }),
+      this.translationApprovalRepository.findOne({
+        where: {
+          request: { id: requestId },
+          user: { id: request.assignee.id },
+        },
+      }),
+    ]);
+
+    if (!requesterApproval?.isApproved || !assigneeApproval?.isApproved) {
+      throw new BadRequestException(
+        'Both parties must approve before finalizing.'
+      );
+    }
+
+    const transaction = await this.transactionRepo.findOneOrFail({
+      where: { request: { id: requestId } },
+      relations: ['request', 'user'],
+    });
+
+    if (
+      transaction.status !== TransactionStatus.Pending &&
+      transaction.status !== TransactionStatus.Approved
+    ) {
+      throw new BadRequestException(
+        'Transaction already finalized or in invalid state.'
+      );
+    }
+
+    transaction.status = TransactionStatus.Approved;
+    await this.transactionRepo.save(transaction);
+
+    await this.walletManagerService.addToBalance(
+      request.assignee.id,
+      transaction.amount
+    );
+
+    request.status = RequestStatus.Completed;
+    await this.requestRepository.save(request);
+
+    return true;
+  }
+
+  async approveTranslation(
+    requestId: bigint,
+    userId: bigint
+  ): Promise<boolean> {
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['assignee', 'requester'],
+    });
+
+    if (!request.assignee || !request.requester) {
+      throw new BadRequestException(
+        'Request must have both requester and assignee.'
+      );
+    }
+
+    if (userId !== request.assignee.id && userId !== request.requester.id) {
+      throw new BadRequestException(
+        'Only requester or assignee can approve the translation.'
       );
     }
   }

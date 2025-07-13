@@ -108,6 +108,7 @@ export class TranslationService {
     // const extracted = await this.externalAssetExtractor.extractStringsFrom(file);
     // result.push(...extracted);
   }
+
   async getAllString(projectId: string, branchId: string, fileId?: string) {
     const query: any = { projectId, branchId };
     if (fileId) query.fileId = fileId;
@@ -119,6 +120,7 @@ export class TranslationService {
       fileId: str.fileId,
     }));
   }
+
   async addTranslatedString(id: string, translatedText: string) {
     const stringDoc = await this.translationModel.findById(id);
     if (!stringDoc) {

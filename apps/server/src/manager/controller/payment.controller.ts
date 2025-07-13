@@ -8,6 +8,7 @@ import {
   Res,
   Param,
   Get,
+  HttpException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
@@ -74,11 +75,30 @@ export class PaymentController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post(':transactionId/reject')
+  async rejectTransaction(@Param('transactionId') transactionId: number) {
+    return this.paymentService.rejectWithdrawal(transactionId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('withdrawals/pending')
   async getAllPendingWithdrawals() {
     // Lấy tất cả transaction rút tiền pending
     return this.paymentService.getAllPendingWithdrawals();
   }
 
+  @Post('paypal/capture')
+  async capturePaypalPayment(@Body('orderId') orderId: string) {
+    if (!orderId) {
+      throw new HttpException('Missing orderId', 400);
+    }
+    // Gọi capturePayment, có thể tuỳ chỉnh nếu cần phân biệt loại giao dịch
+    try {
+      const result = await this.paymentService.capturePayment(orderId);
+      return result || { success: true };
+    } catch (e) {
+      return { success: false, message: e?.message || 'Capture failed' };
+    }
+  }
 
 }

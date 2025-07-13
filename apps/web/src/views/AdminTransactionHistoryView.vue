@@ -43,15 +43,7 @@
                   <span class="stat-label">Total Withdrawals</span>
                 </div>
               </div>
-              <div class="stat-card stat-card-pending">
-                <div class="stat-icon pending">
-                  <i class="pi pi-clock"></i>
-                </div>
-                <div class="stat-info">
-                  <span class="stat-value">{{ pendingTransactions }}</span>
-                  <span class="stat-label">Pending</span>
-                </div>
-              </div>
+              <!-- Xoá card Pending -->
             </div>
           </div>
 
@@ -59,7 +51,7 @@
           <div class="filters-section">
             <div class="filters-row">
               <div class="filter-group">
-                <label>Type:</label>
+                <label class="filter-label">Type</label>
                 <select v-model="filters.type" class="filter-select">
                   <option value="">All Types</option>
                   <option value="DEPOSIT">Deposit</option>
@@ -67,17 +59,17 @@
                 </select>
               </div>
               <div class="filter-group">
-                <label>Status:</label>
+                <label class="filter-label">Status</label>
                 <select v-model="filters.status" class="filter-select">
                   <option value="">All Status</option>
-                  <option value="pending">Pending</option>
                   <option value="completed">Completed</option>
                   <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
                   <option value="failed">Failed</option>
                 </select>
               </div>
               <div class="filter-group">
-                <label>Date Range:</label>
+                <label class="filter-label">Date Range</label>
                 <select v-model="filters.dateRange" class="filter-select">
                   <option value="">All Time</option>
                   <option value="7">Last 7 days</option>
@@ -87,7 +79,7 @@
                 </select>
               </div>
               <div class="filter-group">
-                <label>Amount Range:</label>
+                <label class="filter-label">Amount Range</label>
                 <div class="amount-range">
                   <input
                     v-model="filters.minAmount"
@@ -104,10 +96,12 @@
                   />
                 </div>
               </div>
-              <button @click="clearFilters" class="clear-filters-btn">
-                <i class="pi pi-refresh"></i>
-                Clear Filters
-              </button>
+              <div class="filters-actions">
+                <button @click="clearFilters" class="clear-filters-btn">
+                  <i class="pi pi-refresh"></i>
+                  Clear Filters
+                </button>
+              </div>
             </div>
           </div>
 
@@ -195,8 +189,8 @@
                   <td class="date-cell">
                     {{ formatDate(transaction.createdAt) }}
                   </td>
-                  <td class="actions-cell">
-                    <button @click="viewTransactionDetails(transaction)" class="action-btn view-btn" title="View Details">
+                  <td class="actions-cell" @click.stop>
+                    <button @click="openDetailModal(transaction)" class="action-btn view-btn" title="View Details">
                       <i class="pi pi-eye"></i>
                     </button>
                     <button v-if="transaction.status === 'pending'" @click="approveTransaction(transaction.id)" class="action-btn approve-btn" title="Approve">
@@ -224,6 +218,64 @@
                 <button @click="nextPage" :disabled="currentPage === totalPages" class="btn btn-secondary">
                   Next <i class="pi pi-chevron-right"></i>
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transaction Detail Modal đặt ngoài table-section, ngay trước </template> -->
+          <div v-if="showDetailModal" class="modal-backdrop">
+            <div class="modal-content modal-detail">
+              <div class="modal-header">
+                <h3 class="modal-title-with-icon">
+                  <span class="modal-title-icon">💸</span> Transaction Details
+                </h3>
+                <button @click="closeDetailModal" class="close-btn">×</button>
+              </div>
+              <div class="detail-content" v-if="detailTarget">
+                <div class="detail-section">
+                  <h4 class="section-title-with-icon"><span>💰</span> Amount</h4>
+                  <div class="detail-value amount-value">{{ formatCurrency(Math.abs(detailTarget.amount)) }}</div>
+                </div>
+                <div class="detail-section">
+                  <h4 class="section-title-with-icon"><span>👤</span> User Information</h4>
+                  <div class="detail-grid">
+                    <div class="detail-item"><span class="detail-label">Name:</span><span class="detail-value">{{ detailTarget.user?.fullName || 'N/A' }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Username:</span><span class="detail-value">{{ detailTarget.user?.username || 'N/A' }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Email:</span><span class="detail-value">{{ detailTarget.user?.email || 'N/A' }}</span></div>
+                    <div class="detail-item"><span class="detail-label">User ID:</span><span class="detail-value">{{ detailTarget.user?.id || 'N/A' }}</span></div>
+                  </div>
+                </div>
+                <div class="detail-section">
+                  <h4 class="section-title-with-icon"><span>💳</span> PayPal Information</h4>
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <span class="detail-label">PayPal Email:</span>
+                      <span class="detail-value">{{ detailTarget.paypalEmail || 'Not provided' }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="detail-section">
+                  <h4 class="section-title-with-icon"><span>📊</span> Transaction Info</h4>
+                  <div class="detail-grid">
+                    <div class="detail-item"><span class="detail-label">Type:</span><span class="detail-value">{{ getTransactionType(detailTarget) }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Status:</span>
+                      <span :class="['detail-value', 'status-badge', badgeClass(detailTarget.status)]">
+                        <span v-if="detailTarget.status === 'COMPLETED'" class="status-icon">✅</span>
+                        <span v-else-if="detailTarget.status === 'APPROVED'" class="status-icon">✅</span>
+                        <span v-else-if="detailTarget.status === 'REJECTED'" class="status-icon">❌</span>
+                        <span v-else-if="detailTarget.status === 'FAILED'" class="status-icon">⚠️</span>
+                        <span v-else class="status-icon">🔄</span>
+                        <span class="status-text">{{ formatStatus(detailTarget.status) }}</span>
+                      </span>
+                    </div>
+                    <div class="detail-item"><span class="detail-label">Created:</span><span class="detail-value"><span style="font-size:1.1em;">📅</span> {{ formatDate(detailTarget.createdAt) }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Updated:</span><span class="detail-value">{{ formatDate(detailTarget.updatedAt) }}</span></div>
+                    <div class="detail-item" v-if="detailTarget.description"><span class="detail-label">Description:</span><span class="detail-value">{{ detailTarget.description }}</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button class="btn btn-secondary" @click="closeDetailModal">Close</button>
               </div>
             </div>
           </div>
@@ -258,6 +310,7 @@ interface Transaction {
   createdAt: string;
   updatedAt: string;
   user: User;
+  paypalEmail?: string; // Added for PayPal information
 }
 
 interface Filters {
@@ -294,6 +347,9 @@ const sortOrder = ref(1);
 // Computed properties
 const filteredTransactions = computed(() => {
   let filtered = [...transactions.value];
+
+  // Loại bỏ transaction pending khỏi Transaction History
+  filtered = filtered.filter(t => t.status.toLowerCase() !== 'pending');
 
   // Filter by type
   if (filters.value.type) {
@@ -493,6 +549,7 @@ function getTransactionType(transaction: Transaction): string {
 }
 
 function formatStatus(status: string): string {
+  if (!status) return '';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
@@ -548,6 +605,29 @@ async function rejectTransaction(transactionId: number) {
     await loadTransactions();
   } catch (err: any) {
     console.error('Failed to reject transaction:', err);
+  }
+}
+
+// Modal chi tiết transaction
+const showDetailModal = ref(false);
+const detailTarget = ref(null);
+function openDetailModal(transaction) {
+  detailTarget.value = transaction;
+  showDetailModal.value = true;
+}
+function closeDetailModal() {
+  showDetailModal.value = false;
+  detailTarget.value = null;
+}
+
+function badgeClass(status: string) {
+  switch (status?.toUpperCase()) {
+    case 'PENDING': return 'badge bg-yellow-100 text-yellow-700';
+    case 'APPROVED': return 'badge bg-green-100 text-green-700';
+    case 'REJECTED': return 'badge bg-red-100 text-red-700';
+    case 'FAILED': return 'badge bg-gray-100 text-gray-700';
+    case 'COMPLETED': return 'badge bg-green-100 text-green-700';
+    default: return 'badge';
   }
 }
 
@@ -667,18 +747,31 @@ onMounted(loadTransactions);
 
 .filters-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 8px;
 }
-.filter-group {
-  margin-right: 0;
+.filter-group,
+.filters-actions {
   margin-bottom: 0;
 }
+.filter-select,
+.amount-input,
 .clear-filters-btn {
-  margin-left: auto;
   height: 40px;
-  align-self: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  box-sizing: border-box;
+}
+.clear-filters-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 0;
+  border: 1px solid #d1d5db;
+  background: #f3f4f6;
+  color: #374151;
 }
 
 .filter-group label {
@@ -698,6 +791,7 @@ onMounted(loadTransactions);
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 120px;
 }
 
 .amount-input {
@@ -902,7 +996,7 @@ onMounted(loadTransactions);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .type-deposit {
@@ -1071,5 +1165,214 @@ onMounted(loadTransactions);
   .filter-group input[type="number"] {
     width: 120px;
   }
+}
+/* --- MODAL OVERLAY STYLES (copy từ AdminWithdrawals.vue) --- */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(30, 41, 59, 0.48);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.25s;
+  backdrop-filter: blur(4px);
+  animation: overlay-fade-in 0.22s cubic-bezier(.4,1.4,.6,1) 1;
+}
+@keyframes overlay-fade-in {
+  0% { background: rgba(30,41,59,0.01); opacity: 0; }
+  100% { background: rgba(30,41,59,0.48); opacity: 1; }
+}
+.modal-content.modal-detail {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 48px 0 rgba(37,99,235,0.18), 0 2px 8px rgba(0,0,0,0.08);
+  padding: 12px 16px 8px 16px;
+  min-width: 320px;
+  max-width: 420px;
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  margin: 0;
+  box-sizing: border-box;
+  z-index: 3100;
+  animation: modal-pop-detail 0.22s cubic-bezier(.4,1.4,.6,1) 1;
+  border: 2px solid #3b82f6;
+}
+@keyframes modal-pop-detail {
+  0% { transform: scale(0.88) translateY(40px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.modal-header h3 {
+  margin: 0;
+  color: #2563eb;
+  font-size: 1.25rem;
+}
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+.close-btn:hover {
+  color: #374151;
+}
+.detail-content {
+  margin-bottom: 8px;
+}
+.detail-section {
+  margin-bottom: 8px;
+}
+.detail-section h4 {
+  margin: 0 0 6px 0;
+  color: #374151;
+  font-size: 0.93rem;
+  font-weight: 600;
+}
+.detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 0.91rem;
+}
+.detail-item:last-child {
+  border-bottom: none;
+}
+.detail-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 0.91rem;
+}
+.detail-value {
+  color: #374151;
+  font-size: 0.91rem;
+}
+.amount-value {
+  font-size: 1.01rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 12px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.status-icon {
+  font-size: 0.9em;
+}
+.status-text {
+  font-weight: 600;
+}
+.badge.bg-yellow-100.text-yellow-700 {
+  background: #fef3c7 !important;
+  color: #d97706 !important;
+}
+.badge.bg-green-100.text-green-700 {
+  background: #d1fae5 !important;
+  color: #059669 !important;
+}
+.badge.bg-red-100.text-red-700 {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+}
+.badge.bg-gray-100.text-gray-700 {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.btn {
+  padding: 8px 22px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, opacity 0.18s, border 0.18s;
+  margin-right: 8px;
+  outline: none;
+}
+.btn-secondary {
+  background: #fff;
+  color: #2563eb;
+  border: 2px solid #2563eb;
+  border-radius: 10px;
+}
+.btn-secondary:disabled {
+  background: #e5e7eb;
+  color: #a5b4fc;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #1d4ed8;
+  border-color: #1d4ed8;
+}
+/* Thêm style cho header, title, section giống Withdrawal */
+.modal-title-with-icon {
+  color: #2563eb;
+  font-size: 1.35rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+}
+.modal-title-icon {
+  font-size: 1.6rem;
+  margin-right: 6px;
+}
+.section-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #374151;
+  font-size: 0.93rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+.filter-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
 }
 </style>

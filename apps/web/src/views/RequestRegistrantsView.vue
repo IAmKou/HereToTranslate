@@ -65,14 +65,17 @@
                 </td>
                 <td class="candidate-actions-td">
                   <template v-if="user.approved">
-                    <span class="approved-label"><i class="pi pi-check-circle"></i> Approved</span>
+                    <span class="approved-label upgraded">
+                      <i class="pi pi-check-circle"></i>
+                      <span class="approved-text">Approved</span>
+                    </span>
                   </template>
                   <template v-else>
                     <Button
                       :label="approvingUser === user.id ? 'Approving...' : 'Approve'"
                       :icon="approvingUser === user.id ? 'pi pi-spinner pi-spin' : 'pi pi-check'"
                       :disabled="approvingUser !== null"
-                      class="approve-btn"
+                      class="approve-btn upgraded"
                       @click="approveRegistrant(user.id)"
                       v-tooltip="'Approve this candidate'"
                     />
@@ -1474,6 +1477,50 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+}
+.approve-btn.upgraded {
+  background: linear-gradient(90deg, #22c55e 60%, #16a34a 100%) !important;
+  border: none !important;
+  color: white !important;
+  padding: 10px 22px !important;
+  border-radius: 12px !important;
+  font-weight: 800 !important;
+  font-size: 16px !important;
+  transition: all 0.22s !important;
+  min-width: 120px !important;
+  box-shadow: 0 2px 8px rgba(34,197,94,0.18) !important;
+  margin-right: 4px;
+  letter-spacing: 0.5px;
+}
+.approve-btn.upgraded:hover:not(:disabled) {
+  background: #16a34a !important;
+  transform: translateY(-2px) scale(1.05) !important;
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.22) !important;
+}
+.approved-label.upgraded {
+  background: #e6f9ed;
+  color: #16a34a;
+  font-size: 16px;
+  border-radius: 10px;
+  padding: 7px 22px;
+  font-weight: 900;
+  margin-left: 8px;
+  box-shadow: 0 2px 8px rgba(34,197,94,0.10);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 2px solid #16a34a;
+  letter-spacing: 0.5px;
+}
+.approved-label.upgraded i {
+  color: #16a34a;
+  font-size: 18px;
+  margin-right: 4px;
+}
+.approved-label.upgraded .approved-text {
+  font-weight: 900;
+  font-size: 16px;
+  color: #16a34a;
 }
 
 </style>

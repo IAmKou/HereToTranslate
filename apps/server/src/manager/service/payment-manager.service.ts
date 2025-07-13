@@ -108,7 +108,7 @@ export class PaypalService {
             },
           ],
           application_context: {
-            return_url: `http://localhost:3000/api/payment/paypal/success`,
+            return_url: `http://localhost:4200/paypal-success`,
             cancel_url: `http://localhost:4200/paypal/cancel`,
           },
         },
@@ -185,7 +185,7 @@ export class PaypalService {
             },
           ],
           application_context: {
-            return_url: `http://localhost:3000/api/payment/paypal/private/success`,
+            return_url: `http://localhost:4200/paypal-success`,
             cancel_url: `http://localhost:4200/paypal/cancel`,
           },
         },
@@ -363,8 +363,15 @@ export class PaypalService {
         where: { paypalOrderId: orderId },
         relations: ['user', 'request'],
       });
-
-      const { user, request } = transaction;
+      let user = transaction.user;
+      let request = transaction.request;
+      // Luôn load lại request với quan hệ category nếu là public
+      if (request.isPublic && !request.category) {
+        request = await this.requestRepository.findOneOrFail({
+          where: { id: request.id },
+          relations: ['category'],
+        });
+      }
 
       if (!request || !user) {
         throw new Error('Invalid request or user information.');
@@ -373,6 +380,53 @@ export class PaypalService {
       // Mark transaction and request status
       transaction.status = TransactionStatus.Completed;
       await this.transactionRepo.save(transaction);
+
+      let projectId = null;
+      let receiver = null;
+      // Nếu là public request, cập nhật trạng thái sang Approved và tạo project mới
+      if (request.isPublic && request.status !== RequestStatus.Approved) {
+        if (!request.category?.id) {
+          console.error('[PayPal] Request public thiếu category khi tạo project:', request);
+          return {
+            success: false,
+            error: 'Request public không có category, không thể tạo project',
+            requestId: request.id,
+            amount: transaction.amount,
+            payerEmail: user.email,
+            date: transaction.createdAt,
+            description: request.description,
+          };
+        }
+        request.status = RequestStatus.Approved;
+        // Tạo project mới từ request public
+        if (!request.project) {
+          try {
+            // Gán assignee là user vừa thanh toán
+            request.assignee = user;
+            // Gọi service tạo project từ request
+            const createResult = await this.projectService.createProjectFromRequest(request, user.id);
+            const newProject = await this.projectRepository.findOneOrFail({ where: { id: createResult.projectId } });
+            request.project = newProject;
+            projectId = newProject.id;
+            receiver = request.assignee?.fullName || request.assignee?.email;
+          } catch (err) {
+            console.error('[PayPal] Error creating project from public request:', err);
+            return {
+              success: false,
+              error: 'Payment succeeded but failed to create project: ' + (err?.message || err),
+              requestId: request.id,
+              amount: transaction.amount,
+              payerEmail: user.email,
+              date: transaction.createdAt,
+              description: request.description,
+            };
+          }
+        } else {
+          projectId = request.project.id;
+          receiver = request.assignee?.fullName || request.assignee?.email;
+        }
+        await this.requestRepository.save(request);
+      }
 
       const adminWallet = await this.walletManagerService.getOrCreateWallet(
         this.ADMIN_USER_ID
@@ -388,25 +442,23 @@ export class PaypalService {
         Number(userWallet.balance) + Number(transaction.amount);
       await this.walletManagerService['walletRepository'].save(userWallet);
 
-      // const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
-      // adminWallet.balance = Number(adminWallet.balance) + Number(transaction.amount);
-      // await this.walletRepository.save(adminWallet);
-
       logger.log(
-        `Payment captured for order ${orderId}, request ID ${request.id}, user ID ${user.id}`
+        `[PayPal] Payment captured for order ${orderId}, request ID ${request.id}, user ID ${user.id}, projectId: ${projectId}`
       );
 
       return {
         success: true,
         requestId: request.id,
+        projectId,
         amount: transaction.amount,
         currency: 'USD',
         payerEmail: user.email,
+        receiver,
         date: transaction.createdAt,
         description: request.description,
       };
     } catch (err) {
-      console.error('PayPal capture failed:', err);
+      console.error('[PayPal] capturePayment failed:', err);
       return {
         success: false,
         error: (err as any)?.message || 'PayPal capture failed',
@@ -529,22 +581,31 @@ export class PaypalService {
         }
       );
 
-      const payoutBatchId = res.data.batch_header?.payout_batch_id ?? null;
+      if (res.status !== 201) {
+        throw new Error(
+          'PayPal payout failed with status: ' + res.status
+        );
+      }
 
-      // Update transaction
       transaction.status = TransactionStatus.Completed;
-      transaction.paypalOrderId = payoutBatchId;
+      await this.transactionRepo.save(transaction);
 
       const adminWallet = await this.walletManagerService.getOrCreateWallet(
         this.ADMIN_USER_ID
       );
-      adminWallet.balance = Number(adminWallet.balance) - Number(amount);
-
+      adminWallet.balance =
+        Number(adminWallet.balance) + Number(transaction.amount);
       await this.walletRepository.save(adminWallet);
-      await this.transactionRepo.save(transaction);
+
+      logger.log(
+        `PayPal payout approved for transaction ID ${transactionId}, amount: ${amount}`
+      );
 
       return transaction;
     } catch (err) {
+      console.error('PayPal payout failed:', err);
+      throw new InternalServerErrorException(
+        'Failed to approve PayPal withdrawal'
       console.error('Admin payout error:', err);
       throw new InternalServerErrorException('Payout failed.');
     }
@@ -651,21 +712,5 @@ export class PaypalService {
         'Only requester or assignee can approve the translation.'
       );
     }
-
-    let approval = await this.translationApprovalRepository.findOne({
-      where: { request: { id: requestId }, user: { id: userId } },
-      relations: ['request', 'user'],
-    });
-    if (!approval) {
-      approval = this.translationApprovalRepository.create({
-        request,
-        user: { id: userId } as any,
-        isApproved: true,
-      });
-    } else {
-      approval.isApproved = true;
-    }
-    await this.translationApprovalRepository.save(approval);
-    return true;
   }
 }

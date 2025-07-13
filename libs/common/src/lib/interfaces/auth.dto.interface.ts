@@ -6,4 +6,5 @@ export interface ILoginDto {
 export interface IUserAuthMeta {
   id: bigint;
   username: string;
+  role: number;
 }

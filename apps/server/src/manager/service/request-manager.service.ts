@@ -136,7 +136,11 @@ export class RequestManagerService {
       where: { id: BigInt(uid) },
     });
 
-    const assigneeUser = await this.userRepository.findOne({
+    if (!dto.assigneeId) {
+      throw new BadRequestException('Assignee ID is required');
+    }
+
+    const assigneeUser = await this.userRepository.findOneOrFail({
       where: { id: BigInt(dto.assigneeId) },
     });
 

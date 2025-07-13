@@ -117,8 +117,8 @@
             <!-- Data Table Section -->
             <div class="table-section">
               <DataTable
-                :value="paginatedUsers"
-                :paginator="false"
+                :value="filteredUsers"
+                :paginator="true"
                 :rows="itemsPerPage"
                 :loading="loading"
                 filterDisplay="menu"
@@ -127,16 +127,15 @@
                 class="p-datatable-lg enhanced-table"
                 v-model:filters="filters"
                 dataKey="id"
-                :scrollable="true"
-                scrollHeight="calc(100vh - 400px)"
-                :virtualScrollerOptions="{ itemSize: 60 }"
+                :scrollable="false"
                 showGridlines
                 stripedRows
                 removableSort
                 sortMode="multiple"
                 @row-select="onRowSelect"
                 @row-unselect="onRowUnselect"
-                v-model:selection="selectedUsers"
+
+
               >
                 <template #loading>
                   <div class="skeleton-table">
@@ -166,7 +165,12 @@
                     <Button icon="pi pi-filter-slash" label="Clear Filters" class="p-button-lg p-button-success clear-empty-btn" @click="clearFilters" />
                   </div>
                 </template>
-                <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
+
+                <Column header="No">
+                  <template #body="{ index }">
+                    {{ (currentPage - 1) * itemsPerPage + index + 1 }}
+                  </template>
+                </Column>
                 <Column field="username" header="Username" sortable>
                   <template #body="{ data }">
                     <div class="user-info">
@@ -235,15 +239,16 @@
                 <Column field="isActive" header="Status" sortable>
                   <template #body="{ data }">
                     <Tag
-                      :severity="data.isActive ? 'success' : 'danger'"
-                      :value="data.isActive ? 'Active' : 'Inactive'"
                       class="status-tag enhanced-status-tag"
+                      :class="data.isActive ? 'custom-success' : 'custom-danger'"
                     >
-                      <i :class="data.isActive ? 'pi pi-check-circle' : 'pi pi-ban'" style="margin-right:4px"></i>
+                      <i :class="data.isActive ? 'pi pi-check-circle' : 'pi pi-ban'" style="margin-right:4px" />
                       {{ data.isActive ? 'Active' : 'Inactive' }}
                     </Tag>
+
                   </template>
                 </Column>
+
                 <Column field="createdAt" header="Created At" sortable>
                   <template #body="{ data }">
                     <div class="date-cell">
@@ -252,7 +257,7 @@
                     </div>
                   </template>
                 </Column>
-                <Column :exportable="false">
+                <Column header="Action" :exportable="false">
                   <template #body="slotProps">
                     <div class="action-buttons">
                       <Button
@@ -722,6 +727,7 @@ onMounted(loadUsers);
   transition: margin-left 0.2s;
   margin-left: 9rem;
 }
+
 .layout-wrapper.sidebar-collapsed .main-content {
   margin-left: 8rem;
 }
@@ -729,6 +735,44 @@ onMounted(loadUsers);
   min-height: 100vh;
   background-color: #f8fafc;
   padding: 1rem 1.5rem 0.5rem 1.5rem;
+
+  enhanced-status-tag {
+    border-radius: 0.5rem;
+    font-weight: 600;
+    padding: 0.2rem 0.9rem;
+    font-size: 0.98rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .custom-success {
+    background: #dcfce7;
+    color: #166534;
+  }
+  .custom-success {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .custom-danger {
+    background: #fee2e2 !important; // nền đỏ nhạt
+    color: #b91c1c !important;      // chữ đỏ
+    font-weight: 600;
+    border-radius: 0.5rem;
+    padding: 0.2rem 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.98rem;
+  }
+
+
+
+  .custom-danger {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
 
   .page-header {
     margin-bottom: 1rem;
@@ -1294,6 +1338,7 @@ body, .admin-user-management {
     border-bottom: 1px solid #e5e7eb;
     padding: 1.1rem 1rem;
     text-align: center;
+    white-space: nowrap;
   }
   :deep(.p-datatable-tbody > tr > td) {
     padding: 1.1rem 1rem;
@@ -1369,7 +1414,13 @@ body, .admin-user-management {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  i { color: #2563eb; }
+  &.custom-success i {
+    color: #22c55e; // xanh cho Active
+  }
+
+  &.custom-danger i {
+    color: #b91c1c; // đỏ cho Inactive
+  }
 }
 .enhanced-status-tag {
   background: #dcfce7;
@@ -1758,5 +1809,7 @@ body, .admin-user-management {
       }
     }
   }
+
 }
+
 </style>

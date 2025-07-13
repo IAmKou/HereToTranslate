@@ -65,17 +65,17 @@
                 </td>
                 <td class="candidate-actions-td">
                   <template v-if="user.approved">
-                    <span class="approved-label upgraded">
+                    <span class="approved-status-badge">
                       <i class="pi pi-check-circle"></i>
-                      <span class="approved-text">Approved</span>
+                      <span>Approved</span>
                     </span>
                   </template>
                   <template v-else>
                     <Button
-                      :label="approvingUser === user.id ? 'Approving...' : 'Approve'"
-                      :icon="approvingUser === user.id ? 'pi pi-spinner pi-spin' : 'pi pi-check'"
+                      :label="approvingUser === user.id ? 'Processing...' : 'Approve Candidate'"
+                      :icon="approvingUser === user.id ? 'pi pi-spinner pi-spin' : 'pi pi-thumbs-up'"
                       :disabled="approvingUser !== null"
-                      class="approve-btn upgraded"
+                      class="approve-candidate-btn"
                       @click="approveRegistrant(user.id)"
                       v-tooltip="'Approve this candidate'"
                     />
@@ -1478,49 +1478,62 @@ onMounted(async () => {
   text-overflow: ellipsis;
   max-width: 180px;
 }
-.approve-btn.upgraded {
-  background: linear-gradient(90deg, #22c55e 60%, #16a34a 100%) !important;
+.approve-candidate-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
   border: none !important;
   color: white !important;
-  padding: 10px 22px !important;
+  padding: 12px 24px !important;
   border-radius: 12px !important;
-  font-weight: 800 !important;
-  font-size: 16px !important;
-  transition: all 0.22s !important;
-  min-width: 120px !important;
-  box-shadow: 0 2px 8px rgba(34,197,94,0.18) !important;
-  margin-right: 4px;
-  letter-spacing: 0.5px;
+  font-weight: 700 !important;
+  font-size: 15px !important;
+  transition: all 0.25s !important;
+  min-width: 140px !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25) !important;
+  margin-right: 8px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-size: 13px !important;
 }
-.approve-btn.upgraded:hover:not(:disabled) {
-  background: #16a34a !important;
-  transform: translateY(-2px) scale(1.05) !important;
-  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.22) !important;
+
+.approve-candidate-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35) !important;
 }
-.approved-label.upgraded {
-  background: #e6f9ed;
-  color: #16a34a;
-  font-size: 16px;
-  border-radius: 10px;
-  padding: 7px 22px;
-  font-weight: 900;
-  margin-left: 8px;
-  box-shadow: 0 2px 8px rgba(34,197,94,0.10);
+
+.approve-candidate-btn:disabled {
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+}
+
+.approved-status-badge {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-size: 14px;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-weight: 600;
+  margin-right: 8px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
   display: flex;
   align-items: center;
-  gap: 8px;
-  border: 2px solid #16a34a;
+  gap: 6px;
+  border: 2px solid #10b981;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: 12px;
 }
-.approved-label.upgraded i {
-  color: #16a34a;
-  font-size: 18px;
-  margin-right: 4px;
+
+.approved-status-badge i {
+  color: white;
+  font-size: 14px;
+  margin-right: 2px;
 }
-.approved-label.upgraded .approved-text {
-  font-weight: 900;
-  font-size: 16px;
-  color: #16a34a;
+
+.approved-status-badge span {
+  font-weight: 700;
+  font-size: 12px;
+  color: white;
 }
 
 </style>

@@ -229,6 +229,21 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         content: `# ${name}\n\n${description || ''}`,
       });
 
+      // Tạo branch branch-{projectId} từ main và push file đầu tiên
+      const customBranch = `branch-${savedProject.id}`;
+      try {
+        await this.githubService.createBranch(githubRepoName, customBranch, 'main');
+        await this.githubService.pushInitialFile({
+          repo: githubRepoName,
+          path: 'README.md',
+          message: 'Initial commit on custom branch',
+          content: `# Branch ${customBranch}`,
+          branch: customBranch,
+        });
+      } catch (err) {
+        this.logger.error('Failed to create custom branch or push initial file:', err);
+      }
+
       await queryRunner.commitTransaction();
 
       this.logger.debug(
@@ -674,11 +689,51 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     const githubBranchName = `branch-${savedBranch.id}`;
     const baseBranchName = `branch-${fromBranchId}`;
-    await this.githubService.createBranch(
-      `project-${projectId}`,
-      githubBranchName,
-      baseBranchName
-    );
+    const repoName = `project-${projectId}`;
+    try {
+      await this.githubService.createBranch(
+        repoName,
+        githubBranchName,
+        baseBranchName
+      );
+      // Push initial file để branch tồn tại trên GitHub
+      await this.githubService.pushInitialFile({
+        repo: repoName,
+        path: 'README.md',
+        message: 'Initial commit on new branch',
+        content: `# Branch ${githubBranchName}`,
+        branch: githubBranchName,
+      });
+    } catch (err: any) {
+      // Nếu repo hoặc base branch chưa tồn tại, tạo repo và branch main trước
+      if (err.status === 404) {
+        // Tạo repo nếu chưa có
+        try {
+          await this.githubService.createRepository(repoName, true);
+        } catch (repoErr: any) {
+          if (repoErr.status !== 422) throw repoErr; // 422: repo đã tồn tại
+        }
+        // Tạo branch main nếu chưa có
+        try {
+          await this.githubService.createBranch(repoName, 'main', 'main');
+        } catch (mainErr: any) {
+          // Nếu branch main đã tồn tại thì bỏ qua
+          if (mainErr.status !== 422 && mainErr.status !== 404) throw mainErr;
+        }
+        // Thử lại tạo branch mới
+        await this.githubService.createBranch(repoName, githubBranchName, baseBranchName);
+        // Push initial file cho branch mới
+        await this.githubService.pushInitialFile({
+          repo: repoName,
+          path: 'README.md',
+          message: 'Initial commit on new branch',
+          content: `# Branch ${githubBranchName}`,
+          branch: githubBranchName,
+        });
+      } else {
+        throw err;
+      }
+    }
 
     savedBranch.name = displayName;
     return this.branchRepository.save(savedBranch);
@@ -771,16 +826,31 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       const githubRepo = `project-${commit.project.id}`;
       const githubBranch = `branch-${commit.branch.id}`;
 
-      await this.githubService.commitChange({
-        repo: githubRepo,
-        branch: githubBranch,
-        path: commit.filePath,
-        content: commit.contentSnapshot,
-        message: commit.message,
-      });
+      this.logger.log(`[GITHUB] Start pushing commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`);
+      try {
+        await this.githubService.commitChange({
+          repo: githubRepo,
+          branch: githubBranch,
+          path: commit.filePath,
+          content: commit.contentSnapshot,
+          message: commit.message,
+        });
+        this.logger.log(`[GITHUB] Successfully pushed commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`);
+      } catch (err) {
+        this.logger.error(`[GITHUB] Failed to push commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`, err);
+        throw err;
+      }
     }
 
     return commit;
+  }
+
+  async getLocalCommits(projectId: bigint, branchId: bigint) {
+    return this.commitRepository.find({
+      where: { project: { id: projectId }, branch: { id: branchId } },
+      relations: ['author'],
+      order: { createdAt: 'DESC' }
+    });
   }
 
 }

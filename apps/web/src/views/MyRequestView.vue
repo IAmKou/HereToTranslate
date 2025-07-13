@@ -23,24 +23,6 @@
             </router-link>
           </div>
 
-          <!-- Filter Bar -->
-          <div class="filter-bar">
-            <input v-model="searchTitle" class="filter-input" placeholder="🔍 Search by title..." />
-            <select v-model="statusFilter" class="filter-select">
-              <option value="">All Status</option>
-              <option value="APPROVED">Approved</option>
-              <option value="PENDING">Pending</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-            <select v-model="visibilityFilter" class="filter-select">
-              <option value="">All</option>
-              <option value="public">Public</option>
-              <option value="private">Private</option>
-            </select>
-          </div>
-
           <!-- Tabs -->
           <div class="tabs-container">
             <button
@@ -81,6 +63,36 @@
 
           <!-- My Requests Tab -->
           <div v-else-if="activeTab === 'my-requests'">
+            <!-- Search and Filter Bar for My Requests -->
+            <div class="filter-bar">
+              <div class="search-container">
+                <i class="pi pi-search search-icon"></i>
+                <input
+                  v-model="myRequestsSearch"
+                  type="text"
+                  placeholder="Search requests..."
+                  class="search-input"
+                />
+              </div>
+              <select v-model="myRequestsStatusFilter" class="filter-select">
+                <option value="">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select v-model="myRequestsVisibilityFilter" class="filter-select">
+                <option value="">All Visibility</option>
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+              </select>
+              <button @click="clearMyRequestsFilters" class="btn btn-secondary btn-small">
+                <i class="pi pi-times"></i>
+                Clear
+              </button>
+            </div>
+
             <!-- Empty State for My Requests -->
             <div v-if="debugRequests.length === 0" class="empty-container">
               <div class="empty-content">
@@ -214,6 +226,36 @@
 
           <!-- Assigned Requests Tab -->
           <div v-else-if="activeTab === 'assigned-requests'">
+            <!-- Search and Filter Bar for Assigned Requests -->
+            <div class="filter-bar">
+              <div class="search-container">
+                <i class="pi pi-search search-icon"></i>
+                <input
+                  v-model="assignedRequestsSearch"
+                  type="text"
+                  placeholder="Search assigned requests..."
+                  class="search-input"
+                />
+              </div>
+              <select v-model="assignedRequestsStatusFilter" class="filter-select">
+                <option value="">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select v-model="assignedRequestsVisibilityFilter" class="filter-select">
+                <option value="">All Visibility</option>
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+              </select>
+              <button @click="clearAssignedRequestsFilters" class="btn btn-secondary btn-small">
+                <i class="pi pi-times"></i>
+                Clear
+              </button>
+            </div>
+
             <!-- Empty State for Assigned Requests -->
             <div v-if="assignedRequests.length === 0" class="empty-container">
               <div class="empty-content">
@@ -309,7 +351,7 @@
                   </thead>
                   <tbody>
                   <tr v-for="(req, index) in paginatedAssignedRequests" :key="req.id" class="request-row">
-                    <td>{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
+                    <td>{{ (currentAssignedPage - 1) * assignedItemsPerPage + index + 1 }}</td>
                     <td class="request-title">
                       <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
                     </td>
@@ -364,7 +406,7 @@
               </div>
               <div class="pagination-controls">
                 <div class="pagination-info">
-                  <span>Showing {{ (currentAssignedPage - 1) * assignedItemsPerPage + 1 }} to {{ Math.min(currentAssignedPage * assignedItemsPerPage, assignedRequests.length) }} of {{ assignedRequests.length }} requests</span>
+                  <span>Showing {{ (currentAssignedPage - 1) * assignedItemsPerPage + 1 }} to {{ Math.min(currentAssignedPage * assignedItemsPerPage, filteredAssignedRequests.length) }} of {{ filteredAssignedRequests.length }} requests</span>
                 </div>
                 <div class="pagination-buttons">
                   <button @click="prevAssignedPage" :disabled="currentAssignedPage === 1" class="btn btn-secondary">
@@ -433,6 +475,14 @@ const itemsPerPage = ref(7)
 const currentAssignedPage = ref(1)
 const assignedItemsPerPage = ref(7)
 
+// Search and Filter state
+const myRequestsSearch = ref('')
+const myRequestsStatusFilter = ref('')
+const myRequestsVisibilityFilter = ref('')
+const assignedRequestsSearch = ref('')
+const assignedRequestsStatusFilter = ref('')
+const assignedRequestsVisibilityFilter = ref('')
+
 // Computed properties for counts
 const myRequestsCount = computed(() => myRequests.value.filter(req => req.status !== 'CANCELLED').length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
@@ -460,56 +510,76 @@ const debugRequests = computed(() => {
   return myRequests.value
 })
 
-// Thêm biến computed cho danh sách đã filter (không có CANCELLED)
-const searchTitle = ref('');
-const statusFilter = ref('');
-const visibilityFilter = ref('');
+// Filtered My Requests
 const filteredMyRequests = computed(() => {
-  let list = debugRequests.value;
-  if (searchTitle.value) {
-    list = list.filter(req => req.title?.toLowerCase().includes(searchTitle.value.toLowerCase()));
-  }
-  if (statusFilter.value) {
-    list = list.filter(req => req.status === statusFilter.value);
-  }
-  if (visibilityFilter.value) {
-    list = list.filter(req => visibilityFilter.value === 'public' ? isRequestPublic(req.isPublic) : !isRequestPublic(req.isPublic));
-  }
-  if (!sortKey.value) return list;
-  return [...list].sort((a, b) => {
-    const valA = getSortableValue(a, sortKey.value);
-    const valB = getSortableValue(b, sortKey.value);
-    if (typeof valA === 'string') {
-      return sortOrder.value * valA.localeCompare(valB);
-    }
-    return sortOrder.value * (valA - valB);
-  });
-});
+  let filtered = debugRequests.value
 
-function getSortableValue(obj, key) {
-  switch (key) {
-    case 'title':
-      return obj.title || ''
-    case 'project':
-      return obj.project?.name || ''
-    case 'category':
-      return obj.category?.name || ''
-    case 'requester':
-      return obj.requester?.name || ''
-    case 'dealAmount':
-      return parseFloat(obj.dealAmount) || 0
-    case 'deadline':
-      return new Date(obj.deadline).getTime()
-    default:
-      return ''
+  // Search filter
+  if (myRequestsSearch.value) {
+    const searchTerm = myRequestsSearch.value.toLowerCase()
+    filtered = filtered.filter(req =>
+      req.title?.toLowerCase().includes(searchTerm) ||
+      req.project?.name?.toLowerCase().includes(searchTerm) ||
+      req.category?.name?.toLowerCase().includes(searchTerm) ||
+      req.id?.toString().includes(searchTerm)
+    )
   }
-}
+
+  // Status filter
+  if (myRequestsStatusFilter.value) {
+    filtered = filtered.filter(req => req.status === myRequestsStatusFilter.value)
+  }
+
+  // Visibility filter
+  if (myRequestsVisibilityFilter.value) {
+    if (myRequestsVisibilityFilter.value === 'public') {
+      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+    } else if (myRequestsVisibilityFilter.value === 'private') {
+      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    }
+  }
+
+  return filtered
+})
+
+// Filtered Assigned Requests
+const filteredAssignedRequests = computed(() => {
+  let filtered = assignedRequests.value
+
+  // Search filter
+  if (assignedRequestsSearch.value) {
+    const searchTerm = assignedRequestsSearch.value.toLowerCase()
+    filtered = filtered.filter(req =>
+      req.title?.toLowerCase().includes(searchTerm) ||
+      req.requester?.name?.toLowerCase().includes(searchTerm) ||
+      req.requester?.email?.toLowerCase().includes(searchTerm) ||
+      req.category?.name?.toLowerCase().includes(searchTerm) ||
+      req.id?.toString().includes(searchTerm)
+    )
+  }
+
+  // Status filter
+  if (assignedRequestsStatusFilter.value) {
+    filtered = filtered.filter(req => req.status === assignedRequestsStatusFilter.value)
+  }
+
+  // Visibility filter
+  if (assignedRequestsVisibilityFilter.value) {
+    if (assignedRequestsVisibilityFilter.value === 'public') {
+      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+    } else if (assignedRequestsVisibilityFilter.value === 'private') {
+      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    }
+  }
+
+  return filtered.filter(req => req.status !== 'CANCELLED')
+})
+
 // Pagination computed properties for My Requests
 const paginatedMyRequests = computed(() => {
-  const filtered = filteredMyRequests.value
   const start = (currentPage.value - 1) * itemsPerPage.value
   const end = start + itemsPerPage.value
-  return filtered.slice(start, end)
+  return filteredMyRequests.value.slice(start, end)
 })
 
 const totalMyPages = computed(() => {
@@ -518,14 +588,13 @@ const totalMyPages = computed(() => {
 
 // Pagination computed properties for Assigned Requests
 const paginatedAssignedRequests = computed(() => {
-  const filtered = assignedRequests.value.filter(req => req.status !== 'CANCELLED')
   const start = (currentAssignedPage.value - 1) * assignedItemsPerPage.value
   const end = start + assignedItemsPerPage.value
-  return filtered.slice(start, end)
+  return filteredAssignedRequests.value.slice(start, end)
 })
 
 const totalAssignedPages = computed(() => {
-  return Math.ceil(assignedRequests.value.filter(req => req.status !== 'CANCELLED').length / assignedItemsPerPage.value)
+  return Math.ceil(filteredAssignedRequests.value.length / assignedItemsPerPage.value)
 })
 
 // Pagination methods
@@ -565,6 +634,21 @@ function prevAssignedPage() {
 function switchTab(tab) {
   activeTab.value = tab
   currentPage.value = 1
+  currentAssignedPage.value = 1
+}
+
+// Clear filter functions
+function clearMyRequestsFilters() {
+  myRequestsSearch.value = ''
+  myRequestsStatusFilter.value = ''
+  myRequestsVisibilityFilter.value = ''
+  currentPage.value = 1
+}
+
+function clearAssignedRequestsFilters() {
+  assignedRequestsSearch.value = ''
+  assignedRequestsStatusFilter.value = ''
+  assignedRequestsVisibilityFilter.value = ''
   currentAssignedPage.value = 1
 }
 
@@ -1359,20 +1443,55 @@ onMounted(fetchRequests)
   padding: 1rem 1.5rem;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  flex-wrap: wrap;
 }
-.filter-input {
+
+.search-container {
+  position: relative;
   flex: 1;
-  padding: 0.5rem 1rem;
+  min-width: 200px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem 1rem 0.5rem 2.5rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 1rem;
+  font-size: 0.875rem;
+  background: white;
+  transition: border-color 0.2s ease;
 }
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
 .filter-select {
   padding: 0.5rem 1rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 1rem;
-  background: #fff;
+  font-size: 0.875rem;
+  background: white;
+  color: #374151;
+  min-width: 120px;
+  transition: border-color 0.2s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 @media (max-width: 768px) {
@@ -1383,6 +1502,21 @@ onMounted(fetchRequests)
 
   .tab-button {
     justify-content: center;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .search-container {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .filter-select {
+    width: 100%;
+    min-width: unset;
   }
 
   .assigned-requests-grid {

@@ -606,8 +606,7 @@ export class PaypalService {
       console.error('PayPal payout failed:', err);
       throw new InternalServerErrorException(
         'Failed to approve PayPal withdrawal'
-      console.error('Admin payout error:', err);
-      throw new InternalServerErrorException('Payout failed.');
+      );
     }
   }
 

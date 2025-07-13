@@ -306,6 +306,12 @@
                   Translations
                 </button>
                 <button
+                  :class="['tab', { active: activeTab === 'commits' }]"
+                  @click="activeTab = 'commits'"
+                >
+                  Commits
+                </button>
+                <button
                   :class="['tab', { active: activeTab === 'task' }]"
                   @click="activeTab = 'task'"
                 >
@@ -349,6 +355,12 @@
                   :project-id="project.id"
                   :branch-id="selectedBranchId"
                   key="translation"
+                />
+                <ProjectCommitTab
+                  v-else-if="activeTab === 'commits'"
+                  :project-id="project.id"
+                  :branch-id="selectedBranchId"
+                  key="commits"
                 />
                 <ProjectTaskTab
                   v-else-if="activeTab === 'task'"
@@ -637,6 +649,7 @@ import ProjectRoleManagementView from './ProjectRoleManagementView.vue';
 import ProjectMemberTab from '../components/ProjectMemberTab.vue';
 import ProjectGroupTab from '../components/ProjectGroupTab.vue';
 import ProjectTranslationTab from '../components/ProjectTranslationTab.vue';
+import ProjectCommitTab from '../components/ProjectCommitTab.vue';
 import ProjectTaskTab from '../components/ProjectTaskTab.vue';
 import ProjectFileTab from '../components/ProjectFileTab.vue';
 import ProjectRoleTab from '../components/ProjectRoleTab.vue';
@@ -748,7 +761,7 @@ const membersLoading = ref(false);
 const membersError = ref('');
 
 const activeTab = ref<
-  'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'task' | 'roles'
+  'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'commits' | 'task' | 'roles'
 >('description');
 
 const isAllSelected = ref(false);

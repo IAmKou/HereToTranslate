@@ -232,6 +232,14 @@ export class ProjectController {
     return this.gitHubService.listCommits(projectId, branchId);
   }
 
+  @Get(':projectId/:branchId/local-commits')
+  async getLocalCommits(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('branchId', BigIntTransformPipe) branchId: bigint
+  ) {
+    return this.projects.getLocalCommits(projectId, branchId);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post(':projectId/files')
   @UseInterceptors(FileInterceptor('file'))

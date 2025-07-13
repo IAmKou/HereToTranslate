@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { Brackets, DataSource, In, Repository } from 'typeorm';
 import {
   BranchEntity,
   CategoryEntity,
@@ -16,9 +16,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
-  RequestEntity,
-  CommitStatus,
-  FileEntity,
+  RequestEntity, CommitStatus
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -47,10 +45,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly branchRepository: Repository<BranchEntity>,
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
-    @InjectRepository(FileEntity)
-    private readonly fileRepository: Repository<FileEntity>,
-    @InjectRepository(RequestEntity)
-    private readonly requestRepository: Repository<RequestEntity>,
     private readonly dataSource: DataSource,
     private readonly githubService: GitHubService
   ) {
@@ -117,11 +111,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     return new Permission(userPermissionFlags);
   }
 
-  async createProject(
-    uid: bigint,
-    data: CreateProjectDto,
-    files?: FileEntity[]
-  ) {
+  async createProject(uid: bigint, data: CreateProjectDto) {
     const { name, description, isPrivate, tags = [], categoryId } = data;
 
     this.logger.debug('Received project data:', data);
@@ -143,6 +133,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
+
+    if (!queryRunner) {
+      throw new InternalServerErrorException('Database connection error');
+    }
+
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -150,18 +145,22 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       // Handle tags
       const projectTags: Array<Partial<ProjectTagEntity>> = [];
       for (const tag of tags) {
-        const existingTag = await queryRunner.manager.findOne(ProjectTagEntity, {
-          where: { name: tag },
-        });
+        const existingTag = await queryRunner.manager.findOne(
+          ProjectTagEntity,
+          { where: { name: tag } }
+        );
         if (existingTag) {
           projectTags.push({ id: existingTag.id });
         } else {
-          const newTag = queryRunner.manager.create(ProjectTagEntity, { name: tag });
+          const newTag = queryRunner.manager.create(ProjectTagEntity, {
+            name: tag,
+          });
           const savedTag = await queryRunner.manager.save(newTag);
           projectTags.push({ id: savedTag.id });
         }
       }
 
+      // Create ProjectEntity (without defaultBranch yet)
       const project = this.projectRepository.create({
         name,
         description,
@@ -171,36 +170,20 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         createdAt: new Date(),
         category: { id: BigInt(categoryId) },
       });
+
       const savedProject = await queryRunner.manager.save(project);
 
+      // Create default 'main' branch
       const mainBranch = queryRunner.manager.create(BranchEntity, {
         name: 'main',
         project: savedProject,
         user: { id: uid },
         createdAt: new Date(),
       });
+
       const savedBranch = await queryRunner.manager.save(mainBranch);
 
-      if (files?.length) {
-        for (const file of files) {
-          file.project = savedProject;
-          file.branch = savedBranch;
-          await queryRunner.manager.save(file);
-
-          try {
-            await this.githubService.pushInitialFile({
-              repo: `project-${savedProject.id}`,
-              path: `uploads/${Date.now()}_${file.fileName.replace(/[\\/:*?"<>|]/g, '_')}`,
-              content: file.fileContent.toString('base64'),
-              message: `Uploaded ${file.fileName}`,
-            });
-          } catch (uploadErr) {
-            this.logger.error(`Failed to upload file ${file.fileName} to GitHub`, uploadErr);
-          }
-        }
-      }
-
-      // Initial commit
+      // Create initial commit
       const initialCommit = queryRunner.manager.create(CommitEntity, {
         branch: savedBranch,
         project: savedProject,
@@ -209,13 +192,13 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         contentSnapshot: '{}',
         createdAt: new Date(),
       });
+
       await queryRunner.manager.save(initialCommit);
 
-      // Set default branch
+      // Update project with defaultBranch
       savedProject.defaultBranch = savedBranch;
       await queryRunner.manager.save(savedProject);
 
-      // Roles
       const ownerRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
         permissionFlags: new Permission(PermissionFlags.Owner),
@@ -232,12 +215,13 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       const savedOwnerRole = await queryRunner.manager.save(ownerRole);
       await queryRunner.manager.save(everyoneRole);
+
       savedOwnerRole.users = [<UserEntity>{ id: uid }];
       await queryRunner.manager.save(savedOwnerRole);
-
-      // GitHub repo
       const githubRepoName = `project-${savedProject.id}`;
+
       await this.githubService.createRepository(githubRepoName, isPrivate);
+
       await this.githubService.pushInitialFile({
         repo: githubRepoName,
         path: 'README.md',
@@ -247,7 +231,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       await queryRunner.commitTransaction();
 
-      this.logger.debug(`Project created successfully with ID: ${savedProject.id}`);
+      this.logger.debug(
+        `Project created successfully with ID: ${savedProject.id}`
+      );
 
       return {
         message: 'Project created successfully',
@@ -258,30 +244,30 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.logger.debug('Rolling back transaction');
       await queryRunner.rollbackTransaction();
 
-      if (error instanceof BadRequestException) throw error;
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
       this.unknownErrorHanlder(error, 'Failed to create project');
     } finally {
       await queryRunner.release();
     }
   }
 
-
   async createProjectFromRequest(request: RequestEntity, uid: bigint) {
     const tags = request.tags?.map((tag) => tag.name) ?? [];
 
-    const createProjectDto: CreateProjectDto = {
-      name: request.title,
+    const createProjectDto: any = {
+      name: request.title, // Chỉ lưu tên gốc, không prefix
       description: request.description,
       isPrivate: true,
       tags,
-      categoryId: request.category?.id?.toString(),
     };
+    if (request.category?.id) {
+      createProjectDto.categoryId = request.category.id.toString();
+    }
 
-    const requestFiles = await this.fileRepository.find({
-      where: { request: { id: request.id } },
-    });
-
-    return this.createProject(uid, createProjectDto, requestFiles);
+    return this.createProject(uid, createProjectDto);
   }
 
   async fetchAllUserProjects(userId: bigint): Promise<ProjectEntity[]> {
@@ -495,14 +481,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException(`Unknown project`);
     }
 
-    const request = await this.requestRepository.findOne({
-      where: {project : {id: projectId}},
-    });
-     if (request){
-       this.logger.warn(`Project [${projectId}] is linked to a request and cannot be deleted.`);
-       throw new BadRequestException('Project cannot be deleted because it is linked to a request.');
-     }
-
     const repoName = `project-${projectId}`;
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -530,9 +508,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   async findUserToProject(
     projectId: bigint,
     identifier: string
-  ): Promise<
-    Array<{ id: bigint; fullName: string; email: string; phone: string }>
-  > {
+  ): Promise<Array<{ id: bigint; fullName: string; email: string; phone: string }>> {
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
@@ -551,14 +527,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         `(user.email = :identifier OR user.fullName LIKE :likeIdentifier)`,
         { identifier, likeIdentifier: `%${identifier}%` }
       )
-      .andWhere(
-        existingMemberIds.length
-          ? 'user.id NOT IN (:...existingMemberIds)'
-          : '1=1',
-        {
-          existingMemberIds,
-        }
-      )
+      .andWhere(existingMemberIds.length ? 'user.id NOT IN (:...existingMemberIds)' : '1=1', {
+        existingMemberIds,
+      })
       .andWhere(`user.roleId NOT IN (:...excludedRoles)`, {
         excludedRoles: [2, 1],
       })
@@ -567,6 +538,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     return users;
   }
+
 
   async addUserToProject(
     projectId: bigint,
@@ -606,9 +578,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     });
 
     if (memberRole) {
-      const existingUserIds = new Set(
-        memberRole.users.map((u) => u.id.toString())
-      );
+      const existingUserIds = new Set(memberRole.users.map((u) => u.id.toString()));
       if (!existingUserIds.has(user.id.toString())) {
         memberRole.users.push(user);
         await this.projectRoleRepository.save(memberRole);
@@ -743,12 +713,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     projectId: bigint,
     userId: bigint
   ): Promise<BranchEntity[]> {
-    console.log(
-      'listBranchesForProject called with projectId:',
-      projectId,
-      'userId:',
-      userId
-    );
+    console.log('listBranchesForProject called with projectId:', projectId, 'userId:', userId);
     await this.testPermissions(projectId, userId, PermissionFlags.ViewProject);
 
     const result = await this.branchRepository
@@ -789,11 +754,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     approve: boolean,
     reviewMessage?: string
   ) {
-    await this.testPermissions(
-      projectId,
-      reviewerId,
-      PermissionFlags.ReviewCommit
-    );
+    await this.testPermissions(projectId, reviewerId, PermissionFlags.ReviewCommit);
 
     const commit = await this.commitRepository.findOneOrFail({
       where: { id: commitId },
@@ -821,4 +782,5 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     return commit;
   }
+
 }

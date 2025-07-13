@@ -9,6 +9,7 @@ export enum TransactionStatus {
   Approved = 'APPROVED',         // Both parties approved the result
   Completed = 'COMPLETED',       // Payment released to translator
   Failed = 'FAILED',
+  Rejected = 'REJECTED',         // Admin/user actively rejected
 }
 
 

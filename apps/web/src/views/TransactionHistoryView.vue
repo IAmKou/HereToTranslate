@@ -39,15 +39,14 @@
 
           <!-- Filter Section (card) -->
           <div class="card filter-section">
-            <form class="filter-form" @submit.prevent="applyFilters">
+            <form class="filter-form" @submit.prevent="() => {}">
               <div class="filter-group">
                 <label>Type:</label>
                 <div class="custom-select-wrapper">
-                  <select v-model="filterDraft.type" class="filter-select custom-type-select">
+                  <select v-model="filterDraft.type" class="filter-select custom-type-select" @change="applyFilters">
                     <option value="">All Types</option>
                     <option value="deposit">💳 Deposit</option>
                     <option value="withdraw">💸 Withdraw</option>
-                    <option value="transfer">🔄 Transfer</option>
                   </select>
                   <span v-if="filterDraft.type" class="type-icon-preview">
                     <span v-if="filterDraft.type === 'deposit'">💳</span>
@@ -58,34 +57,36 @@
               </div>
               <div class="filter-group">
                 <label>Status:</label>
-                <select v-model="filterDraft.status" class="filter-select">
-                  <option value="">All Status</option>
-                  <option value="pending">🕒 Pending (Awaiting Admin Approval)</option>
-                  <option value="completed">✅ Completed</option>
-                  <option value="approved">✅ Approved</option>
-                  <option value="failed">❌ Failed</option>
-                </select>
+                <div class="custom-select-wrapper">
+                  <select v-model="filterDraft.status" class="filter-select custom-status-select" @change="applyFilters">
+                    <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                      <span :class="['status-badge', opt.color]">{{ opt.label }}</span>
+                    </option>
+                  </select>
+                  <span v-if="filterDraft.status" class="status-badge-preview">
+                    <span :class="['status-badge', statusOptions.find(o => o.value === filterDraft.status)?.color]">
+                      {{ statusOptions.find(o => o.value === filterDraft.status)?.label }}
+                    </span>
+                  </span>
+                </div>
               </div>
               <div class="filter-group date-range-group">
                 <label>Date Range:</label>
                 <div class="date-range-inputs">
-                  <input v-model="filterDraft.startDate" type="date" class="filter-input" />
+                  <input v-model="filterDraft.startDate" type="date" class="filter-input" @input="applyFilters" />
                   <span class="date-range-sep">-</span>
-                  <input v-model="filterDraft.endDate" type="date" class="filter-input" />
+                  <input v-model="filterDraft.endDate" type="date" class="filter-input" @input="applyFilters" />
                 </div>
               </div>
-              <div class="filter-group">
+              <div class="filter-group min-amount-group">
                 <label>Min Amount:</label>
-                <input v-model.number="filterDraft.minAmount" type="number" class="filter-input" placeholder="Min $" min="0" />
+                <input v-model.number="filterDraft.minAmount" type="number" class="filter-input" placeholder="Min $" min="0" @input="applyFilters" />
               </div>
               <div class="filter-group">
                 <label>Max Amount:</label>
-                <input v-model.number="filterDraft.maxAmount" type="number" class="filter-input" placeholder="Max $" min="0" />
+                <input v-model.number="filterDraft.maxAmount" type="number" class="filter-input" placeholder="Max $" min="0" @input="applyFilters" />
               </div>
-              <div class="filter-group filter-actions-group">
-                <button type="submit" class="apply-btn">Apply</button>
-                <button type="button" class="reset-btn" @click="resetFilters">Reset</button>
-              </div>
+              <!-- Remove Apply/Reset buttons for auto-apply filter -->
             </form>
           </div>
 
@@ -177,7 +178,14 @@
                         {{ formatStatus(transaction.status) }}
                       </span>
                   </td>
-                  <td>{{ formatDate(transaction.createdAt) }}</td>
+                  <td>
+                    <div>
+                      <span>📅 {{ formatDate(transaction.createdAt) }}</span>
+                    </div>
+                    <div style="color: #64748b; font-size: 0.93em; margin-top: 2px;">
+                      <span>🕒 {{ formatDateRelative(transaction.createdAt) }}</span>
+                    </div>
+                  </td>
                   <td>
                       <span v-if="transaction.paypalEmail && transaction.paypalEmail !== '-'" class="paypal-email">
                         {{ transaction.paypalEmail }}
@@ -233,6 +241,9 @@ import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
 import { useRouter } from 'vue-router';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+dayjs.extend(relativeTime);
 
 interface Transaction {
   id: number;
@@ -281,40 +292,40 @@ const hasActiveFilters = computed(() => {
 });
 
 // Computed properties
+// --- FILTERED TRANSACTIONS ---
 const filteredTransactions = computed(() => {
   let filtered = [...transactions.value];
 
   // Filter by type
-  if (filters.value.type) {
-    filtered = filtered.filter(t => {
-      if (filters.value.type === 'deposit') return t.amount > 0;
-      if (filters.value.type === 'withdraw') return t.amount < 0;
-      if (filters.value.type === 'transfer') return t.type === 'transfer';
-      return true;
-    });
+  if (filterDraft.value.type) {
+    if (filterDraft.value.type === 'deposit') {
+      filtered = filtered.filter(t => t.amount > 0);
+    } else if (filterDraft.value.type === 'withdraw') {
+      filtered = filtered.filter(t => t.amount < 0);
+    }
   }
 
   // Filter by status
-  if (filters.value.status) {
-    filtered = filtered.filter(t => t.status.toLowerCase() === filters.value.status.toLowerCase());
+  if (filterDraft.value.status) {
+    filtered = filtered.filter(t => t.status && t.status.toLowerCase() === filterDraft.value.status.toLowerCase());
   }
 
   // Filter by min amount
-  if (filters.value.minAmount !== '' && !isNaN(Number(filters.value.minAmount))) {
-    filtered = filtered.filter(t => Math.abs(t.amount) >= Number(filters.value.minAmount));
+  if (filterDraft.value.minAmount !== '' && !isNaN(Number(filterDraft.value.minAmount))) {
+    filtered = filtered.filter(t => Math.abs(Number(t.amount)) >= Number(filterDraft.value.minAmount));
   }
   // Filter by max amount
-  if (filters.value.maxAmount !== '' && !isNaN(Number(filters.value.maxAmount))) {
-    filtered = filtered.filter(t => Math.abs(t.amount) <= Number(filters.value.maxAmount));
+  if (filterDraft.value.maxAmount !== '' && !isNaN(Number(filterDraft.value.maxAmount))) {
+    filtered = filtered.filter(t => Math.abs(Number(t.amount)) <= Number(filterDraft.value.maxAmount));
   }
 
   // Filter by date range
-  if (filters.value.startDate) {
-    const start = new Date(filters.value.startDate);
+  if (filterDraft.value.startDate) {
+    const start = new Date(filterDraft.value.startDate);
     filtered = filtered.filter(t => new Date(t.createdAt) >= start);
   }
-  if (filters.value.endDate) {
-    const end = new Date(filters.value.endDate);
+  if (filterDraft.value.endDate) {
+    const end = new Date(filterDraft.value.endDate);
     filtered = filtered.filter(t => new Date(t.createdAt) <= end);
   }
 
@@ -469,14 +480,14 @@ function formatCurrency(amount: number): string {
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  if (!dateString) return '';
+  const date = dayjs(dateString);
+  return `${date.format('MMM DD, YYYY · hh:mm A')}`;
+}
+
+function formatDateRelative(dateString: string): string {
+  if (!dateString) return '';
+  return dayjs(dateString).fromNow();
 }
 
 function prevPage() {
@@ -517,9 +528,29 @@ function getStatusTooltip(status: string): string {
 
 // Watch for filter changes to reset pagination
 import { watch } from 'vue';
-watch(filters, () => {
-  currentPage.value = 1;
-}, { deep: true });
+const statusOptions = [
+  { label: 'All Status', value: '', color: '' },
+  { label: 'Pending', value: 'pending', color: 'status-pending' },
+  { label: 'Completed', value: 'completed', color: 'status-completed' },
+  { label: 'Approved', value: 'approved', color: 'status-approved' },
+  { label: 'Rejected', value: 'rejected', color: 'status-failed' },
+  { label: 'Failed', value: 'failed', color: 'status-failed' },
+];
+
+// --- WATCH FILTERS ---
+watch(
+  () => ({ ...filterDraft.value }),
+  () => {
+    currentPage.value = 1;
+  },
+  { deep: true }
+);
+
+// Automatically apply filter when status changes
+// watch(() => filterDraft.value.status, () => {
+//   filters.value.status = filterDraft.value.status;
+//   currentPage.value = 1;
+// });
 
 onMounted(() => {
   loadTransactions();
@@ -568,7 +599,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 8px;
   min-width: 100px;
-  flex: 0 1 120px;
+  flex: 1 1 0;
+  max-width: 220px;
 }
 
 .filter-group label {
@@ -855,20 +887,40 @@ onMounted(() => {
 .summary-cards {
   display: flex;
   gap: 24px;
-  justify-content: flex-start;
+  justify-content: space-between;
   flex-wrap: wrap;
+  width: 100%;
+}
+/* Add pulse animation for balance icon */
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.18); }
+  70% { box-shadow: 0 0 0 8px rgba(37,99,235,0.08); }
+  100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.18); }
 }
 .summary-card {
   background: linear-gradient(120deg, #f0f7ff 0%, #f7faff 100%);
   border-radius: 20px;
   padding: 20px 28px 18px 20px;
-  box-shadow: 0 6px 24px 0 rgba(60,60,60,0.10);
+  box-shadow: 0 2px 8px 0 rgba(60,60,60,0.08); /* subtle shadow-sm */
   display: flex;
   align-items: center;
   gap: 16px;
   min-width: 210px;
   min-height: 80px;
   transition: box-shadow 0.2s, background 0.2s;
+  cursor: pointer;
+  flex: 1 1 0;
+  max-width: 340px;
+}
+.summary-card:hover {
+  box-shadow: 0 8px 24px 0 rgba(60,60,60,0.16); /* hover:shadow-md */
+  background: linear-gradient(120deg, #e0e7ef 0%, #f1f5f9 100%);
+}
+.summary-card:hover {
+  background-color: #f9fafb;
+}
+.summary-card.balance .summary-icon {
+  animation: pulse 1.8s infinite;
 }
 .summary-card.deposit .summary-icon {
   background: #d1fae5;
@@ -938,6 +990,7 @@ onMounted(() => {
   .summary-card {
     min-width: 0;
     width: 100%;
+    max-width: 100%;
   }
 }
 .main-content-wrapper {
@@ -1075,6 +1128,10 @@ onMounted(() => {
 .transactions-table tr:last-child td {
   border-bottom: none;
 }
+.transactions-table tr:hover td {
+  background: #f3f4f6;
+  cursor: pointer;
+}
 .type-cell {
   display: flex;
   align-items: center;
@@ -1185,9 +1242,9 @@ onMounted(() => {
 }
 .filter-form {
   display: flex;
-  flex-direction: row;
   flex-wrap: nowrap;
-  gap: 18px 24px;
+  justify-content: space-between;
+  gap: 40px;
   align-items: flex-end;
 }
 .filter-group {
@@ -1195,11 +1252,15 @@ onMounted(() => {
   flex-direction: column;
   gap: 8px;
   min-width: 100px;
-  flex: 0 1 120px;
+  flex: 1 1 0;
+  max-width: 220px;
 }
 .date-range-group {
-  flex: 2 2 280px;
-  min-width: 240px;
+  min-width: 260px;
+}
+/* Add margin-left only to Min Amount filter group to separate from Date Range */
+.filter-group.min-amount-group {
+  margin-left: 40px;
 }
 .date-range-group .date-range-inputs {
   display: flex;
@@ -1273,5 +1334,22 @@ onMounted(() => {
 }
 .reset-btn:hover {
   background: #e0e7ef;
+}
+/* Add style for status badge in dropdown */
+.custom-status-select option {
+  padding-left: 28px;
+}
+.status-badge-preview {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.98em;
+  pointer-events: none;
+}
+.custom-type-select,
+.custom-status-select {
+  min-width: 170px;
+  width: 180px;
 }
 </style>

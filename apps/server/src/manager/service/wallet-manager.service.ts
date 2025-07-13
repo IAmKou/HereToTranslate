@@ -131,6 +131,7 @@ export class WalletManagerService implements OnModuleInit {
     await this.userRepository.save(user);
   }
 
+  // Đồng bộ balance cho tất cả ví dựa trên transaction deposit đã hoàn thành
   async syncAllWalletBalances() {
     const wallets = await this.walletRepository.find({ relations: ['user'] });
     for (const wallet of wallets) {
@@ -154,9 +155,12 @@ export class WalletManagerService implements OnModuleInit {
       relations: ['user'],
       order: { createdAt: 'DESC' },
     });
+    // Get user's wallet to check for wallet-level PayPal email
+    const wallet = await this.walletRepository.findOne({ where: { user: { id: userId } } });
     return txns.map(txn => ({
       ...txn,
       createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
+      paypalEmail: txn.paypalEmail || txn.user?.paypalEmail || wallet?.paypalEmail || null,
     }));
   }
 

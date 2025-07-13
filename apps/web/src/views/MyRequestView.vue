@@ -23,6 +23,24 @@
             </router-link>
           </div>
 
+          <!-- Filter Bar -->
+          <div class="filter-bar">
+            <input v-model="searchTitle" class="filter-input" placeholder="🔍 Search by title..." />
+            <select v-model="statusFilter" class="filter-select">
+              <option value="">All Status</option>
+              <option value="APPROVED">Approved</option>
+              <option value="PENDING">Pending</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+            <select v-model="visibilityFilter" class="filter-select">
+              <option value="">All</option>
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          </div>
+
           <!-- Tabs -->
           <div class="tabs-container">
             <button
@@ -81,115 +99,66 @@
                 <table class="requests-table">
                   <thead>
                   <tr>
-                    <th @click="sortTable('id')" style="cursor: pointer;">
+                    <th @click="sortTable('id')" style="cursor: pointer;" class="text-xs font-semibold text-center" width="60">
                       ID
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'id'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
                     </th>
-                    <th @click="sortTable('title')" style="cursor: pointer;">
+                    <th @click="sortTable('title')" style="cursor: pointer;" class="text-xs font-semibold text-left">
                       Title
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'title'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                      <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
                     </th>
-                    <th @click="sortTable('project')" style="cursor: pointer;">
+                    <th @click="sortTable('project')" style="cursor: pointer;" class="text-xs font-semibold text-left">
                       Project
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'project'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                      <i :class="[ 'sort-icon', sortKey === 'project' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
                     </th>
-                    <th @click="sortTable('category')" style="cursor: pointer;">
+                    <th @click="sortTable('category')" style="cursor: pointer;" class="text-xs font-semibold text-left">
                       Category
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'category'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
                     </th>
-                    <th @click="sortTable('dealAmount')" style="cursor: pointer;">
-                      Deal Amount
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'dealAmount'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                    <th @click="sortTable('dealAmount')" style="cursor: pointer;" class="text-xs font-semibold text-center th-flex" width="120">
+                      <span class="th-flex">Deal Amount <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" /></span>
                     </th>
-                    <th @click="sortTable('deadline')" style="cursor: pointer;">
+                    <th @click="sortTable('deadline')" style="cursor: pointer;" class="text-xs font-semibold text-left" width="130">
                       Deadline
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'deadline'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                      <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
                     </th>
-                    <th>Status</th>
-                    <th>Visibility</th>
-                    <th>Actions</th>
+                    <th class="text-xs font-semibold text-left">Status</th>
+                    <th class="text-xs font-semibold text-left">Visibility</th>
+                    <th class="text-xs font-semibold text-left">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row">
-                    <td>{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
-                    <td class="request-title">
-                      <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
-                    </td>
-                    <td>{{ req.project?.name || '-' }}</td>
-                    <td>{{ req.category?.name || '-' }}</td>
-                    <td class="deal-amount">${{ req.dealAmount }}</td>
-                    <td>{{ formatDate(req.deadline) }}</td>
+                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row table-row-hover">
+                    <td class="text-center text-sm text-gray-700" width="60">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
+                    <td class="request-title text-sm text-gray-700 text-left"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
+                    <td class="text-sm text-gray-700 text-left">{{ req.project?.name || '-' }}</td>
+                    <td class="text-sm text-gray-700 text-left">{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
+                    <td class="text-sm text-gray-500 italic text-left" width="130"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
                     <td>
-                        <span :class="['status-badge', `status-${req.status.toLowerCase()}`]">
+                        <span v-if="req.status === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
+                          ✅ Approved
+                        </span>
+                      <span v-else-if="req.status === 'PENDING'" class="status-badge status-pending custom-badge pending-badge">
+                          ⏳ Pending
+                        </span>
+                      <span v-else :class="['status-badge', `status-${req.status.toLowerCase()}`]">
                           {{ formatStatus(req.status) }}
                         </span>
                     </td>
                     <td>
-                      <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
-                        <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
-                        {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                      <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                        🌐 Public
                       </span>
-                      <span v-else class="visibility-badge visibility-private">
-                        <i class="pi pi-lock"></i>
-                        Private
+                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge custom-badge private-badge">
+                        🔒 Private
+                      </span>
+                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                        🌐 Public
+                      </span>
+                      <span v-else class="visibility-badge custom-badge private-badge">
+                        🔒 Private
                       </span>
                     </td>
-                    <td class="actions">
+                    <td class="actions text-left">
                       <button @click="onCancel(req)" class="btn btn-small btn-danger" v-if="!req.project">
                         <i class="pi pi-times"></i>
                       </button>
@@ -214,7 +183,10 @@
               </div>
               <div class="pagination-controls">
                 <div class="pagination-info">
-                  <span>Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredMyRequests.length) }} of {{ filteredMyRequests.length }} requests</span>
+                  <span>
+                    Showing {{ (currentPage - 1) * itemsPerPage + 1 }}–{{ Math.min(currentPage * itemsPerPage, filteredMyRequests.length) }} of {{ filteredMyRequests.length }} requests
+                    ({{ totalMyPages }} page{{ totalMyPages > 1 ? 's' : '' }})
+                  </span>
                 </div>
                 <div class="pagination-buttons">
                   <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-secondary">
@@ -489,21 +461,30 @@ const debugRequests = computed(() => {
 })
 
 // Thêm biến computed cho danh sách đã filter (không có CANCELLED)
+const searchTitle = ref('');
+const statusFilter = ref('');
+const visibilityFilter = ref('');
 const filteredMyRequests = computed(() => {
-  const list = debugRequests.value
-
-  if (!sortKey.value) return list
-
+  let list = debugRequests.value;
+  if (searchTitle.value) {
+    list = list.filter(req => req.title?.toLowerCase().includes(searchTitle.value.toLowerCase()));
+  }
+  if (statusFilter.value) {
+    list = list.filter(req => req.status === statusFilter.value);
+  }
+  if (visibilityFilter.value) {
+    list = list.filter(req => visibilityFilter.value === 'public' ? isRequestPublic(req.isPublic) : !isRequestPublic(req.isPublic));
+  }
+  if (!sortKey.value) return list;
   return [...list].sort((a, b) => {
-    const valA = getSortableValue(a, sortKey.value)
-    const valB = getSortableValue(b, sortKey.value)
-
+    const valA = getSortableValue(a, sortKey.value);
+    const valB = getSortableValue(b, sortKey.value);
     if (typeof valA === 'string') {
-      return sortOrder.value * valA.localeCompare(valB)
+      return sortOrder.value * valA.localeCompare(valB);
     }
-    return sortOrder.value * (valA - valB)
-  })
-})
+    return sortOrder.value * (valA - valB);
+  });
+});
 
 function getSortableValue(obj, key) {
   switch (key) {
@@ -627,6 +608,12 @@ function formatDate(dateString) {
     month: 'short',
     day: 'numeric'
   })
+}
+
+function formatDeadline(dateString) {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function onReview(req) {
@@ -1363,6 +1350,31 @@ onMounted(fetchRequests)
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  background: #f8fafc;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.filter-input {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+.filter-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: #fff;
+}
+
 @media (max-width: 768px) {
   .tabs-container {
     flex-direction: column;
@@ -1456,5 +1468,53 @@ onMounted(fetchRequests)
 }
 th:hover .sort-icon {
   color: #1f2937;
+}
+.deadline-icon {
+  margin-right: 4px;
+  font-size: 1.1em;
+  vertical-align: middle;
+}
+.custom-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.92em;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+.approved-badge {
+  background: #d1fae5;
+  color: #15803d;
+}
+.pending-badge {
+  background: #fef9c3;
+  color: #b45309;
+}
+.public-badge {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.private-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+.table-row-hover:hover {
+  background: #f9fafb;
+}
+.deal-amount {
+  color: #16a34a !important;
+  font-weight: bold;
+}
+.deal-icon {
+  margin-right: 3px;
+  font-size: 1.1em;
+  vertical-align: middle;
+}
+.th-flex {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 </style>

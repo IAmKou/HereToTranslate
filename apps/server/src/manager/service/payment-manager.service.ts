@@ -363,7 +363,7 @@ export class PaypalService {
         where: { paypalOrderId: orderId },
         relations: ['user', 'request'],
       });
-      let user = transaction.user;
+      const user = transaction.user;
       let request = transaction.request;
       // Luôn load lại request với quan hệ category nếu là public
       if (request.isPublic && !request.category) {
@@ -711,5 +711,27 @@ export class PaypalService {
         'Only requester or assignee can approve the translation.'
       );
     }
+
+    // Check if approval already exists
+    let approval = await this.translationApprovalRepository.findOne({
+      where: {
+        request: { id: requestId },
+        user: { id: userId },
+      },
+    });
+
+    if (!approval) {
+      approval = this.translationApprovalRepository.create({
+        request: { id: requestId },
+        user: { id: userId },
+        isApproved: true,
+      });
+    } else {
+      approval.isApproved = true;
+    }
+
+    await this.translationApprovalRepository.save(approval);
+    return true;
   }
+
 }

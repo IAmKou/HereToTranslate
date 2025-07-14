@@ -19,6 +19,10 @@
           <router-link to="/wallet" class="navbar-item" aria-label="Wallet">
             <i class="pi pi-wallet nav-icon"></i> Wallet
           </router-link>
+          <router-link to="/chat" class="navbar-item" aria-label="Chat" exact>
+            <i class="pi pi-comments nav-icon"></i> Chat
+          </router-link>
+
 
         </div>
         <div class="navbar-end">

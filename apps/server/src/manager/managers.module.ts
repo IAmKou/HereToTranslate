@@ -45,6 +45,8 @@ import { FileController } from './controller/file.controller';
 import { PermissionsController } from './controller/project-role.controller';
 import { TranslationController } from './controller/translation.controller';
 import { AdminTransactionController } from './controller/admin-transaction.controller';
+import { ChatController } from '../chat/chat.controller'; // hoặc đúng path của bạn
+
 
 @Global()
 @Module({
@@ -121,6 +123,7 @@ import { AdminTransactionController } from './controller/admin-transaction.contr
     PermissionsController,
     TranslationController, // Đăng ký controller translation
     AdminTransactionController,
+    ChatController
   ]
 })
 export class ManagersModule {

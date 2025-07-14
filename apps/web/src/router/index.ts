@@ -101,15 +101,8 @@ const router = createRouter({
     {
       path: '/chat',
       name: 'chat',
-      component: () => import('../views/ChatListView.vue'),
-      meta: { requiresAuth: true},
-      children: [
-        {
-          path: ':id',
-          name: 'chat-room',
-          component: () => import('../views/ChatRoomView.vue'),
-        },
-      ],
+      component: () => import('../views/ChatView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/forgot-password',
@@ -183,6 +176,7 @@ const router = createRouter({
       component: () => import('../views/AdminTransactionHistoryView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
     },
+
   ],
 });
 

@@ -10,7 +10,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { validateEmail } from '#LocalProject/Utils/validation';
@@ -107,6 +107,12 @@ export class UserManagerService {
       throw new NotFoundException('Unknown user');
     }
     return user;
+  }
+  async findUsersByIds(ids: number[]) {
+    return this.userRepository.find({
+      where: { id: In(ids) },
+      select: ['id', 'username'],
+    });
   }
 
   async deleteUser(uid: bigint) {
@@ -212,6 +218,16 @@ export class UserManagerService {
       relations: ['role'],
     });
   }
+  async searchByEmailOrUsername(identifier: string): Promise<UserEntity | null> {
+    return this.userRepository.findOne({
+      where: [
+        { email: identifier },
+        { username: identifier },
+      ],
+      select: ['id', 'username', 'email'],
+    });
+  }
+
 
 
   async toggleUserStatus(userId: bigint) {
@@ -226,6 +242,20 @@ export class UserManagerService {
     user.isActive = !user.isActive;
     return this.userRepository.save(user);
   }
+  async findUserById(userId: number): Promise<{ id: number; username: string } | null> {
+    const user = await this.userRepository.findOne({
+      where: { id: BigInt(userId) },
+      select: ['id', 'username'],
+    });
+
+    if (!user) return null;
+
+    return {
+      id: Number(user.id),
+      username: user.username,
+    };
+  }
+
 
   async searchUsers(search?: string): Promise<any[]> {
     const queryBuilder = this.userRepository

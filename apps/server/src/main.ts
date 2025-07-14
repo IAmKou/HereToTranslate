@@ -26,7 +26,7 @@ async function bootstrap() {
   app.enableCors({
     origin: 'http://localhost:4200', // Vue dev server
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTION'],
-    credentials: true, // Enable credentials for cookies
+    credentials: true,
   });
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);

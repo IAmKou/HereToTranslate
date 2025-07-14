@@ -13,6 +13,8 @@ export class ChatMessage extends Document {
 
   @Prop({ required: true })
   message: string;
+  @Prop({ type: Date, default: () => new Date() })
+  createdAt: Date;
 }
 
 export const ChatMessageSchema = SchemaFactory.createForClass(ChatMessage);

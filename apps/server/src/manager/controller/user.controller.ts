@@ -10,6 +10,8 @@ import {
   UseGuards,
   UseInterceptors,
   ValidationPipe,
+  Query,
+  NotFoundException
 } from '@nestjs/common';
 import {
   RegisterDto,
@@ -78,5 +80,14 @@ export class UserController {
   @Put('admin/:id/toggle-status')
   async toggleUserStatus(@Param('id', BigIntTransformPipe) userId: bigint) {
     return this.users.toggleUserStatus(userId);
+  }
+  @UseGuards(JwtAuthGuard)
+  @Get('search')
+  async searchUser(@Query('identifier') identifier: string) {
+    const users = await this.users.searchUsers(identifier);
+    if (!users || users.length === 0) {
+      throw new NotFoundException('User not found');
+    }
+    return users[0];
   }
 }

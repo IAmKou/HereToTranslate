@@ -5,13 +5,24 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  WebSocketServer,
 } from '@nestjs/websockets';
-import { Socket } from 'socket.io';
+import { Socket, Server } from 'socket.io';
 import { ChatService } from './chat.service';
 import { CreateMessageDto } from '#LocalProject/Dtos';
 
-@WebSocketGateway({ namespace: '/chat', cors: true })
+@WebSocketGateway({
+  namespace: '/chat',
+  path: '/api/chat/socket.io',
+  cors: {
+    origin: 'http://localhost:4200',
+    credentials: true,
+  },
+})
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  @WebSocketServer()
+  server: Server;
+
   constructor(private chatService: ChatService) {}
 
   handleConnection(client: Socket) {
@@ -23,7 +34,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('join_room')
-  async handleJoinRoom(@MessageBody() roomId: string, @ConnectedSocket() client: Socket) {
+  async handleJoinRoom(
+    @MessageBody() roomId: string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    console.log(`Joining room: ${roomId}`);
     client.join(roomId);
     client.emit('joined_room', roomId);
   }
@@ -33,8 +48,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: CreateMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
+    console.log('[GATEWAY] Received payload:', payload);
+
     const message = await this.chatService.createMessage(payload);
-    client.to(payload.roomId).emit('new_message', message);
+
+    this.server.in(payload.roomId).emit('new_message', message);
+
     return message;
   }
 }

@@ -120,7 +120,7 @@ export class TranslationService {
     if (!file.project || !file.branch) {
       throw new Error('File is missing project or branch information');
     }
-    const MAX_STRINGS_PER_PART = 5000;
+    const MAX_STRINGS_PER_PART = 250;
 
     const allLines = textBlocks
       .flatMap((text) => text.split('\n').map((line) => line.trim()))

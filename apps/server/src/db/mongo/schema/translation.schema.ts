@@ -19,6 +19,9 @@ export class TranslationString {
 
   @Prop()
   translatedText?: string;
+
+  @Prop({ type: Number, default: 0 })
+  filePart: number;
 }
 
 export const TranslationStringSchema = SchemaFactory.createForClass(TranslationString);

@@ -69,7 +69,7 @@ export class FileService {
       await this.githubService.pushInitialFile({
         repo: repoName,
         path: `uploads/${timestamped}`,
-        content: fileContent.toString('base64'),
+        content: fileContent,
         message: `Uploaded ${fileName}`,
       });
     } catch (err) {

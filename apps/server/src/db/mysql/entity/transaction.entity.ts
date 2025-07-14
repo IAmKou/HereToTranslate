@@ -4,7 +4,7 @@ import { RequestEntity } from './request.entity';
 
 export enum TransactionStatus {
   Pending = 'PENDING',           // Order placed, payment approved
-  InProgress = 'IN_PROGRESS',    // Translation is happening
+  InProgress = 'ON_HOLD',    // Translation is happening
   WaitingApproval = 'WAITING_APPROVAL', // Translation done, waiting confirmation
   Approved = 'APPROVED',         // Both parties approved the result
   Completed = 'COMPLETED',       // Payment released to translator

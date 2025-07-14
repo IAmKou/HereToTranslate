@@ -286,7 +286,7 @@ export class PaypalService {
         request.registrants = [];
         request.project = newProject;
         request.status = RequestStatus.Approved;
-        transaction.status = TransactionStatus.Completed;
+        transaction.status = TransactionStatus.On_Hold;
 
         await this.translationService.extractStringsForRequestFiles(request.id);
 
@@ -378,7 +378,7 @@ export class PaypalService {
       }
 
       // Mark transaction and request status
-      transaction.status = TransactionStatus.Completed;
+      transaction.status = TransactionStatus.On_Hold;
       await this.transactionRepo.save(transaction);
 
       let projectId = null;

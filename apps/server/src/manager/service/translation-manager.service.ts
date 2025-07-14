@@ -4,7 +4,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Injectable } from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
-import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
+import {
+  TranslationString,
+  TranslationStringDocument,
+} from '../../db/mongo/schema/translation.schema';
 import * as mammoth from 'mammoth';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { logger } from 'nx/src/utils/logger';
@@ -18,15 +21,25 @@ export class TranslationService {
     private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
-    private readonly githubService: GitHubService,
+    private readonly githubService: GitHubService
   ) {}
 
   async extractStrings(file: FileEntity): Promise<void> {
     const textBlocks: string[] = [];
 
-    console.log('[extractStrings] fileId:', file.id, 'fileName:', file.fileName, 'fileType:', file.fileType);
+    console.log(
+      '[extractStrings] fileId:',
+      file.id,
+      'fileName:',
+      file.fileName,
+      'fileType:',
+      file.fileType
+    );
     if (file.fileContent) {
-      console.log('[extractStrings] fileContent length:', file.fileContent.length);
+      console.log(
+        '[extractStrings] fileContent length:',
+        file.fileContent.length
+      );
     } else {
       console.warn('[extractStrings] fileContent is null or undefined!');
     }
@@ -47,10 +60,17 @@ export class TranslationService {
       }
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
         if (!file.fileContent) {
-          console.error('[extractStrings] DOCX fileContent is empty or missing! fileId:', file.id, 'fileName:', file.fileName);
+          console.error(
+            '[extractStrings] DOCX fileContent is empty or missing! fileId:',
+            file.id,
+            'fileName:',
+            file.fileName
+          );
           throw new Error('File content is empty or missing for DOCX');
         }
-        const result = await mammoth.extractRawText({ buffer: file.fileContent });
+        const result = await mammoth.extractRawText({
+          buffer: file.fileContent,
+        });
         textBlocks.push(result.value);
         break;
       }
@@ -73,14 +93,24 @@ export class TranslationService {
         break;
       }
       default:
-        if (file.fileName.endsWith('.unity') || file.fileName.endsWith('.uasset')) {
+        if (
+          file.fileName.endsWith('.unity') ||
+          file.fileName.endsWith('.uasset')
+        ) {
           await this.extractFromAssetFile(file, textBlocks);
         } else if (file.fileName.endsWith('.docx')) {
           if (!file.fileContent) {
-            console.error('[extractStrings] DOCX (default) fileContent is empty or missing! fileId:', file.id, 'fileName:', file.fileName);
+            console.error(
+              '[extractStrings] DOCX (default) fileContent is empty or missing! fileId:',
+              file.id,
+              'fileName:',
+              file.fileName
+            );
             throw new Error('File content is empty or missing for DOCX');
           }
-          const result = await mammoth.extractRawText({ buffer: file.fileContent });
+          const result = await mammoth.extractRawText({
+            buffer: file.fileContent,
+          });
           textBlocks.push(result.value);
         }
         break;
@@ -90,18 +120,25 @@ export class TranslationService {
     if (!file.project || !file.branch) {
       throw new Error('File is missing project or branch information');
     }
+    const MAX_STRINGS_PER_PART = 5000;
 
-    const inserts = textBlocks
-      .flatMap(text => text.split('\n').map(line => line.trim()))
-      .filter(line => line.length > 0)
-      .map(line => ({
+    const allLines = textBlocks
+      .flatMap((text) => text.split('\n').map((line) => line.trim()))
+      .filter((line) => line.length > 0);
+
+    let part = 0;
+    while (allLines.length > 0) {
+      const linesForPart = allLines.splice(0, MAX_STRINGS_PER_PART);
+      const inserts = linesForPart.map((line) => ({
         fileId: String(file.id),
         branchId: String(file.branch.id),
         projectId: String(file.project.id),
         originalText: line,
+        filePart: part, // new field
       }));
-
-    await this.translationModel.insertMany(inserts);
+      await this.translationModel.insertMany(inserts);
+      part++;
+    }
   }
 
   private async extractFromAssetFile(file: FileEntity, result: string[]) {
@@ -109,15 +146,27 @@ export class TranslationService {
     // result.push(...extracted);
   }
 
-  async getAllString(projectId: string, branchId: string, fileId?: string) {
+  async getAllString(
+    projectId: string,
+    branchId: string,
+    fileId?: string,
+    filePart?: number
+  ) {
     const query: any = { projectId, branchId };
     if (fileId) query.fileId = fileId;
-    const strings = await this.translationModel.find(query).lean();
-    return strings.map(str => ({
+    if (filePart !== undefined) query.filePart = filePart;
+
+    const strings = await this.translationModel
+      .find(query)
+      .sort({ filePart: 1, _id: 1 })
+      .lean();
+
+    return strings.map((str) => ({
       id: str._id.toString(),
       originalText: str.originalText,
       translatedText: str.translatedText || '',
       fileId: str.fileId,
+      filePart: str.filePart ?? 0,
     }));
   }
 
@@ -133,15 +182,22 @@ export class TranslationService {
     return stringDoc;
   }
 
-  async commitTranslatedFileToGitHub(projectId: string, branchId: string, repo: string) {
-    const strings = await this.translationModel.find({
-      projectId,
-      branchId,
-      translatedText: { $exists: true, $ne: '' },
-    }).lean();
+  async commitTranslatedFileToGitHub(
+    projectId: string,
+    branchId: string,
+    repo: string,
+    githubBranch: string
+  ) {
+    const strings = await this.translationModel
+      .find({
+        projectId,
+        branchId,
+        translatedText: { $exists: true, $ne: '' },
+      })
+      .lean();
 
     const translations: Record<string, string> = {};
-    strings.forEach(s => {
+    strings.forEach((s) => {
       translations[s.originalText] = s.translatedText!;
     });
 
@@ -152,7 +208,8 @@ export class TranslationService {
       repo,
       path: filePath,
       content: fileContent,
-      message: `Update translations for branch ${branchId}`,
+      message: `Export translated strings for branch ${branchId}`,
+      branch: githubBranch,
     });
   }
 
@@ -168,7 +225,9 @@ export class TranslationService {
           await this.extractStrings(file);
           logger.log(`Strings extracted for file: ${file.fileName}`);
         } else {
-          logger.warn(`Skipping extractStrings for ${file.fileName} due to missing project/branch`);
+          logger.warn(
+            `Skipping extractStrings for ${file.fileName} due to missing project/branch`
+          );
         }
       } catch (err) {
         logger.error(`Failed to extract strings for file ${file.fileName}`);
@@ -177,20 +236,16 @@ export class TranslationService {
     }
   }
 
-
 }
 
 function extractJsonStrings(obj: any, result: string[], path = '') {
   if (typeof obj === 'string') {
     result.push(obj);
   } else if (Array.isArray(obj)) {
-    obj.forEach(item => extractJsonStrings(item, result, path));
+    obj.forEach((item) => extractJsonStrings(item, result, path));
   } else if (typeof obj === 'object' && obj !== null) {
     for (const key of Object.keys(obj)) {
       extractJsonStrings(obj[key], result, path + '.' + key);
     }
   }
-
-
 }
-

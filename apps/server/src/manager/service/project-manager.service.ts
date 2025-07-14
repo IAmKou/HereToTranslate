@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import {
   BranchEntity,
   CategoryEntity,
@@ -116,27 +116,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     this.logger.debug('Received project data:', data);
 
-    const userExists = await this.userRepository.exists({
-      where: { id: BigInt(uid) },
-    });
+    const userExists = await this.userRepository.exists({ where: { id: BigInt(uid) } });
+    if (!userExists) throw new BadRequestException('Unknown user');
 
-    if (!userExists) {
-      throw new BadRequestException(`Unknown user`);
-    }
-
-    const categoryExists = await this.categoryRepository.exists({
-      where: { id: BigInt(categoryId) },
-    });
-
-    if (!categoryExists) {
-      throw new BadRequestException(`Unknown category`);
-    }
+    const categoryExists = await this.categoryRepository.exists({ where: { id: BigInt(categoryId) } });
+    if (!categoryExists) throw new BadRequestException('Unknown category');
 
     const queryRunner = this.dataSource.createQueryRunner();
-
-    if (!queryRunner) {
-      throw new InternalServerErrorException('Database connection error');
-    }
+    if (!queryRunner) throw new InternalServerErrorException('Database connection error');
 
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -145,22 +132,17 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       // Handle tags
       const projectTags: Array<Partial<ProjectTagEntity>> = [];
       for (const tag of tags) {
-        const existingTag = await queryRunner.manager.findOne(
-          ProjectTagEntity,
-          { where: { name: tag } }
-        );
+        const existingTag = await queryRunner.manager.findOne(ProjectTagEntity, { where: { name: tag } });
         if (existingTag) {
           projectTags.push({ id: existingTag.id });
         } else {
-          const newTag = queryRunner.manager.create(ProjectTagEntity, {
-            name: tag,
-          });
+          const newTag = queryRunner.manager.create(ProjectTagEntity, { name: tag });
           const savedTag = await queryRunner.manager.save(newTag);
           projectTags.push({ id: savedTag.id });
         }
       }
 
-      // Create ProjectEntity (without defaultBranch yet)
+      // Create project without defaultBranch yet
       const project = this.projectRepository.create({
         name,
         description,
@@ -173,7 +155,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       const savedProject = await queryRunner.manager.save(project);
 
-      // Create default 'main' branch
+      // Create 'main' branch in DB
       const mainBranch = queryRunner.manager.create(BranchEntity, {
         name: 'main',
         project: savedProject,
@@ -195,10 +177,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       await queryRunner.manager.save(initialCommit);
 
-      // Update project with defaultBranch
+      // Update defaultBranch reference in project
       savedProject.defaultBranch = savedBranch;
       await queryRunner.manager.save(savedProject);
 
+      // Create roles
       const ownerRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
         permissionFlags: new Permission(PermissionFlags.Owner),
@@ -218,37 +201,24 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       savedOwnerRole.users = [<UserEntity>{ id: uid }];
       await queryRunner.manager.save(savedOwnerRole);
+
       const githubRepoName = `project-${savedProject.id}`;
 
+      // Create GitHub repo without auto init
       await this.githubService.createRepository(githubRepoName, isPrivate);
 
+      // Push README to 'main' branch (create it in GitHub)
       await this.githubService.pushInitialFile({
         repo: githubRepoName,
         path: 'README.md',
         message: 'Initial commit',
         content: `# ${name}\n\n${description || ''}`,
+        branch: 'main', // ✅ must match DB
       });
-
-      // Tạo branch branch-{projectId} từ main và push file đầu tiên
-      const customBranch = `branch-${savedProject.id}`;
-      try {
-        await this.githubService.createBranch(githubRepoName, customBranch, 'main');
-        await this.githubService.pushInitialFile({
-          repo: githubRepoName,
-          path: 'README.md',
-          message: 'Initial commit on custom branch',
-          content: `# Branch ${customBranch}`,
-          branch: customBranch,
-        });
-      } catch (err) {
-        this.logger.error('Failed to create custom branch or push initial file:', err);
-      }
 
       await queryRunner.commitTransaction();
 
-      this.logger.debug(
-        `Project created successfully with ID: ${savedProject.id}`
-      );
+      this.logger.debug(`Project created successfully with ID: ${savedProject.id}`);
 
       return {
         message: 'Project created successfully',
@@ -259,10 +229,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.logger.debug('Rolling back transaction');
       await queryRunner.rollbackTransaction();
 
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
+      if (error instanceof BadRequestException) throw error;
       this.unknownErrorHanlder(error, 'Failed to create project');
     } finally {
       await queryRunner.release();

@@ -6,6 +6,7 @@ import { BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BranchEntity } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
+import * as console from 'node:console';
 
 @Injectable()
 export class GitHubService {
@@ -55,16 +56,20 @@ export class GitHubService {
   }: {
     repo: string;
     path: string;
-    content: string;
+    content: string | Buffer;
     message: string;
     branch?: string;
   }) {
+    const base64Content = Buffer.isBuffer(content)
+      ? content.toString('base64')
+      : Buffer.from(content, 'utf8').toString('base64');
+
     await this.octokit.rest.repos.createOrUpdateFileContents({
       owner: this.username,
       repo,
       path,
       message,
-      content: Buffer.from(content).toString('base64'),
+      content: base64Content,
       branch,
     });
   }
@@ -177,4 +182,13 @@ export class GitHubService {
     return data;
   }
 
+  async fetchAllBranch(projectId: bigint){
+    const branch = await this.branchRepository.find({
+      where: {project : {id: projectId}},
+    });
+    if (!branch){
+      console.log('no branch found');
+    }
+    return branch;
+  }
 }

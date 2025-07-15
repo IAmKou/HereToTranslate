@@ -9,8 +9,8 @@
         <div class="search-user">
           <input v-model="searchQuery" placeholder="Enter username or email" />
           <button @click="searchAndStartChat">Start Chat</button>
-          <p v-if="searchError" class="error">{{ searchError }}</p>
         </div>
+        <p v-if="searchError" class="error">{{ searchError }}</p>
 
         <!-- 🧾 Chat Rooms -->
         <div class="room-list">
@@ -20,9 +20,15 @@
               v-for="room in chatRooms"
               :key="getRoomId(room)"
               :class="{ active: selectedRoom && getRoomId(selectedRoom) === getRoomId(room) }"
-              @click="openRoom(room)"
             >
-              {{ room.name }} ({{ room.isGroupChat ? 'Group' : 'DM' }})
+              <div class="room-item" @click="openRoom(room)">
+                <span class="room-name">{{ room.name }}</span>
+                <span class="room-type">{{ room.isGroupChat ? 'Group' : 'DM' }}</span>
+              </div>
+              <div class="room-actions">
+                <button @click.stop="renameRoom(room)">✏️</button>
+                <button @click.stop="deleteRoom(room)">🗑️</button>
+              </div>
             </li>
           </ul>
         </div>
@@ -44,7 +50,6 @@
   </div>
 </template>
 
-
 <script setup lang="ts">
 import { onMounted, ref, toRaw } from 'vue';
 import axios from 'axios';
@@ -65,18 +70,12 @@ interface UserInfo {
 
 const accessToken = localStorage.getItem('accessToken');
 
-const currentUser = ref<UserInfo>({
-  id: 0,
-  username: '',
-  email: '',
-});
-
+const currentUser = ref<UserInfo>({ id: 0, username: '', email: '' });
 const chatRooms = ref<ChatRoomInfo[]>([]);
 const selectedRoom = ref<(ChatRoomInfo & { _id: string }) | null>(null);
 const searchQuery = ref('');
 const searchError = ref('');
 
-// ✅ Normalize _id for consistent string use
 function getRoomId(room: any): string {
   const rawRoom = toRaw(room);
   const id = rawRoom._id;
@@ -85,13 +84,7 @@ function getRoomId(room: any): string {
 
 function normalizeRoomId(room: any): ChatRoomInfo {
   const rawId = getRoomId(room);
-  if (typeof rawId !== 'string' || rawId.length !== 24) {
-    console.warn('⚠️ normalizeRoomId(): invalid _id received:', room._id);
-  }
-  return {
-    ...room,
-    _id: rawId,
-  };
+  return { ...room, _id: rawId };
 }
 
 const fetchCurrentUser = async () => {
@@ -110,25 +103,14 @@ const loadChatRooms = async () => {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   chatRooms.value = (res.data as ChatRoomInfo[]).map(normalizeRoomId);
-  console.log('✅ Rooms loaded:', chatRooms.value);
 };
 
 const openRoom = (room: ChatRoomInfo) => {
-  try {
-    const id = getRoomId(room);
-    if (!id || id.length !== 24) {
-      console.warn('❌ Invalid room ID:', id, room);
-      return;
-    }
-
-    console.log('🟢 Opening room:', id);
+  const id = getRoomId(room);
+  if (id && id.length === 24) {
     selectedRoom.value = { ...room, _id: id };
-  } catch (e) {
-    console.error('💥 openRoom error:', e);
   }
 };
-
-
 
 const searchAndStartChat = async () => {
   searchError.value = '';
@@ -144,31 +126,57 @@ const searchAndStartChat = async () => {
     const res = await axios.post(
       '/api/chat/open-dm',
       { targetIdentifier: target },
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }
+      { headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
     const room = res.data as ChatRoomInfo;
-
     if (room && String(room._id).length === 24) {
       const normalized = normalizeRoomId(room);
       selectedRoom.value = normalized;
-
-      const exists = chatRooms.value.find(
-        (r) => String(r._id) === String(normalized._id)
-      );
-      if (!exists) chatRooms.value.unshift(normalized);
-
+      if (!chatRooms.value.find(r => String(r._id) === String(normalized._id))) {
+        chatRooms.value.unshift(normalized);
+      }
       searchQuery.value = '';
-    }
-    else {
-      console.warn('⚠️ Invalid room received from server:', res.data);
+    } else {
       searchError.value = 'Failed to start chat — invalid room';
     }
   } catch (err: any) {
-    console.error('❌ Failed to open chat:', err);
     searchError.value = err.response?.data?.message || 'User not found';
+  }
+};
+
+/* ✏️ Rename chat room */
+const renameRoom = async (room: ChatRoomInfo) => {
+  const newName = prompt('Enter new name for this room:', room.name);
+  if (!newName || newName.trim() === '' || newName === room.name) return;
+
+  try {
+    await axios.patch(
+      `/api/chat/rooms/${getRoomId(room)}`,
+      { name: newName.trim() },
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    room.name = newName.trim();
+  } catch (err) {
+    alert('Failed to rename room');
+    console.error(err);
+  }
+};
+
+/* 🗑️ Delete chat room */
+const deleteRoom = async (room: ChatRoomInfo) => {
+  if (!confirm(`Are you sure you want to delete "${room.name}"?`)) return;
+  try {
+    await axios.delete(`/api/chat/rooms/${getRoomId(room)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    chatRooms.value = chatRooms.value.filter(r => getRoomId(r) !== getRoomId(room));
+    if (selectedRoom.value && getRoomId(selectedRoom.value) === getRoomId(room)) {
+      selectedRoom.value = null;
+    }
+  } catch (err) {
+    alert('Failed to delete room');
+    console.error(err);
   }
 };
 
@@ -194,25 +202,26 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+/* Sidebar */
 .chat-sidebar {
-  width: 300px;
   background: #f8f8f8;
   border-right: 1px solid #ddd;
-  padding: 16px;
+  padding: 12px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
 
 .welcome {
-  font-size: 18px;
+  font-size: 16px;
   margin-bottom: 12px;
+  font-weight: 600;
 }
 
 .search-user {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .search-user input {
@@ -223,12 +232,13 @@ onMounted(async () => {
 }
 
 .search-user button {
-  padding: 6px 12px;
+  padding: 6px 10px;
   background-color: #007bff;
   color: white;
   border: none;
   cursor: pointer;
   border-radius: 4px;
+  font-size: 13px;
 }
 
 .search-user button:hover {
@@ -241,7 +251,8 @@ onMounted(async () => {
 }
 
 .room-list h3 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  font-size: 14px;
 }
 
 .room-list ul {
@@ -251,10 +262,35 @@ onMounted(async () => {
 }
 
 .room-list li {
-  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px;
   border-bottom: 1px solid #ddd;
   cursor: pointer;
-  transition: background 0.2s;
+  font-size: 14px;
+}
+
+.room-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.room-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.room-actions button:hover {
+  color: #007bff;
 }
 
 .room-list li.active {
@@ -266,17 +302,31 @@ onMounted(async () => {
   background-color: #f0f0f0;
 }
 
+.room-name {
+  font-weight: 500;
+}
+
+.room-type {
+  font-size: 12px;
+  color: #777;
+}
+
 .chat-main {
   flex: 1;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: #ffffff;
+  border-left: 1px solid #eee;
+  border-right: 1px solid #eee;
 }
 
 .chat-placeholder {
   margin: auto;
   color: #aaa;
   font-size: 16px;
+  text-align: center;
+  padding: 20px;
 }
 
 .error {
@@ -285,4 +335,3 @@ onMounted(async () => {
   margin-top: 6px;
 }
 </style>
-

@@ -1,7 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Schema as MongooseSchema } from 'mongoose';
-import { Types } from 'mongoose';
-
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 @Schema({ timestamps: { createdAt: true, updatedAt: false } })
 export class ChatMessage extends Document {
@@ -13,9 +11,13 @@ export class ChatMessage extends Document {
 
   @Prop({ required: true })
   message: string;
-  @Prop({ type: Date, default: () => new Date() })
-  createdAt: Date;
-}
 
+  @Prop({ type: Boolean, default: false })
+  isEdited: boolean;
+
+   @Prop()
+   createdAt: Date;
+}
 export const ChatMessageSchema = SchemaFactory.createForClass(ChatMessage);
+
 ChatMessageSchema.index({ roomId: 1, createdAt: -1 });

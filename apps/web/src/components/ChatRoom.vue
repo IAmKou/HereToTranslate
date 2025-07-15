@@ -6,6 +6,8 @@
         v-for="(message, index) in messages"
         :key="message._id"
         :class="{ mine: message.senderId === currentUserId, theirs: message.senderId !== currentUserId }"
+        @mouseenter="hoveredMessageId = message._id"
+        @mouseleave="hoveredMessageId = null"
       >
         <div class="bubble" :title="formatFullTime(message.createdAt)">
           <div
@@ -18,6 +20,21 @@
           <div class="meta" @click="toggleTimestamp(message._id)">
             <span class="timestamp">{{ formatTime(message.createdAt, message._id) }}</span>
           </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div v-if="hoveredMessageId === message._id" class="toolbar">
+          <button class="toolbar-btn" @click="handleReply(message)">💬</button>
+          <button
+            v-if="message.senderId === currentUserId"
+            class="toolbar-btn"
+            @click="handleEdit(message)"
+          >✏️</button>
+          <button
+            v-if="message.senderId === currentUserId"
+            class="toolbar-btn delete"
+            @click="handleDelete(message)"
+          >🗑️</button>
         </div>
       </div>
     </div>
@@ -66,6 +83,26 @@ const formatFullTime = (timestamp: string): string => {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : 'Invalid Date';
 };
 const expandedMessages = ref<Set<string>>(new Set());
+const hoveredMessageId = ref<string | null>(null);
+
+const handleReply = (message: ChatMessage) => {
+  console.log('Reply to', message);
+};
+
+const handleEdit = (message: ChatMessage) => {
+  console.log('Edit message', message);
+};
+
+const handleDelete = async (message: ChatMessage) => {
+  if (!confirm('Delete this message?')) return;
+  try {
+    await axios.delete(`/api/chat/messages/${message._id}`);
+    messages.value = messages.value.filter(m => m._id !== message._id);
+  } catch (err: any) {
+    console.error('Failed to delete message:', err);
+  }
+};
+
 
 const toggleTimestamp = (id: string) => {
   if (expandedMessages.value.has(id)) {
@@ -171,103 +208,103 @@ onUnmounted(() => {
   height: 100%;
 }
 
-  .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
-  .message {
-    display: flex;
-    flex-direction: column;
+.message {
+  display: flex;
+  flex-direction: column;
 
-    &.mine {
-      align-items: flex-end;
-
-      .bubble {
-        background-color: #d1e7dd;
-        color: #0f5132;
-        border-radius: 15px 15px 0 15px;
-        text-align: right;
-        align-self: flex-end;
-      }
-    }
-
-    &.theirs {
-      align-items: flex-start;
-
-      .bubble {
-        background-color: #f1f1f1;
-        color: #333;
-        border-radius: 15px 15px 15px 0;
-        text-align: left;
-        align-self: flex-start;
-      }
-    }
+  &.mine {
+    align-items: flex-end;
 
     .bubble {
-      padding: 10px 14px;
-      max-width: 70%;
-      word-wrap: break-word;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      transition: background-color 0.2s ease;
-      cursor: default;
-    }
-
-    .username {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .meta {
-      font-size: 11px;
-      color: #666;
-      margin-top: 4px;
-      cursor: pointer;
-
-      &:hover {
-        text-decoration: underline;
-      }
+      background-color: #d1e7dd;
+      color: #0f5132;
+      border-radius: 15px 15px 0 15px;
+      text-align: right;
+      align-self: flex-end;
     }
   }
 
-  .input-container {
-    display: flex;
-    border-top: 1px solid #ddd;
+  &.theirs {
+    align-items: flex-start;
 
-    input {
-      flex: 1;
-      height: 40px;
-      font-size: 16px;
-      padding: 0 10px;
-      box-sizing: border-box;
-      border: none;
-      outline: none;
-    }
-
-    button {
-      width: 75px;
-      height: 40px;
-      border: none;
-      background-color: #007bff;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      transition: background 0.2s ease;
-    }
-
-    button:disabled {
-      background-color: #ccc;
-      cursor: not-allowed;
+    .bubble {
+      background-color: #f1f1f1;
+      color: #333;
+      border-radius: 15px 15px 15px 0;
+      text-align: left;
+      align-self: flex-start;
     }
   }
-  .timestamp {
-    display: inline;
-    color: #666;
+
+  .bubble {
+    padding: 10px 14px;
+    max-width: 70%;
+    word-wrap: break-word;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.2s ease;
+    cursor: default;
+  }
+
+  .username {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .meta {
     font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
   }
+}
+
+.input-container {
+  display: flex;
+  border-top: 1px solid #ddd;
+
+  input {
+    flex: 1;
+    height: 40px;
+    font-size: 16px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    border: none;
+    outline: none;
+  }
+
+  button {
+    width: 75px;
+    height: 40px;
+    border: none;
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+}
+.timestamp {
+  display: inline;
+  color: #666;
+  font-size: 11px;
+}
 </style>

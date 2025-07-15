@@ -3,7 +3,7 @@ import { Model, Types } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { CreateMessageDto } from '#LocalProject/Dtos';
 import { ChatRoom } from '../db/mongo/schema/chat-room.schema';
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { UserManagerService } from '#LocalProject/Managers/service/user-manager.service';
 
 @Injectable()
@@ -50,6 +50,13 @@ export class ChatService {
       createdAt: new Date(msg.createdAt).toISOString(),
     }));
   }
+  async renameRoom(id: string, name: string) {
+    return this.chatRoomModel.findByIdAndUpdate(id, { name }, { new: true });
+  }
+
+  async deleteRoom(id: string) {
+    return this.chatRoomModel.findByIdAndDelete(id);
+  }
 
   async getChatRoomsForUser(userId: number) {
     return this.chatRoomModel
@@ -83,7 +90,28 @@ export class ChatService {
 
       room = await this.chatRoomModel.findById(createdRoom._id).lean().exec();
     }
-
     return room;
   }
+  async editMessage(id: string, newContent: string) {
+    const message = await this.chatMessageModel.findById(id);
+    if (!message) throw new NotFoundException('Message not found');
+
+    message.message = newContent;
+    message.isEdited = true; // bạn đã thêm isEdited trong schema
+    await message.save();
+
+    return {
+      _id: message._id.toString(),
+      message: message.message,
+      isEdited: message.isEdited,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async deleteMessage(id: string) {
+    const result = await this.chatMessageModel.findByIdAndDelete(id);
+    if (!result) throw new NotFoundException('Message not found');
+    return { deleted: true };
+  }
+
 }

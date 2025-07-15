@@ -1,10 +1,10 @@
 import {
   BadRequestException,
   Body,
-  Controller,
+  Controller, Delete,
   Get,
   NotFoundException,
-  Param,
+  Param, Patch,
   Post,
   Req,
   UseGuards
@@ -70,5 +70,34 @@ import { Types } from 'mongoose';
     const objectId = new Types.ObjectId(roomId);
     return this.chatService.getMessages(objectId);
   }
+  @Patch('rooms/:id')
+  async renameRoom(@Param('id') id: string, @Body() body: { name: string }) {
+    return this.chatService.renameRoom(id, body.name);
+  }
+
+  @Delete('rooms/:id')
+  async deleteRoom(@Param('id') id: string) {
+    return this.chatService.deleteRoom(id);
+  }
+
+  @Patch('messages/:id')
+  async editMessage(
+    @Param('id') id: string,
+    @Body('message') message: string,
+  ) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid message ID');
+    }
+    return this.chatService.editMessage(id, message);
+  }
+
+  @Delete('messages/:id')
+  async deleteMessage(@Param('id') id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid message ID');
+    }
+    return this.chatService.deleteMessage(id);
+  }
+
 }
 

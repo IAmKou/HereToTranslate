@@ -299,8 +299,8 @@ onUnmounted(() => {
 }
 
 .meta {
-  font-size: 11px;
-  color: #65676b;
+  font-size: 12px;
+  color: #10192d;
   margin-top: 4px;
   align-self: flex-end;
   cursor: pointer;
@@ -308,7 +308,7 @@ onUnmounted(() => {
 
 .edited-tag {
   font-size: 10px;
-  color: #999;
+  color: #100f0f;
   margin-left: 4px;
 }
 
@@ -326,16 +326,16 @@ onUnmounted(() => {
 
 .message:hover .toolbar {
   opacity: 1;
-  pointer-events: auto;
+  pointer-events: all;
 }
 
 /* ôm sát bubble */
 .message.mine .toolbar {
-  right: 100px;
+  right: 100%;
 }
 
 .message.theirs .toolbar {
-  left: 100px;
+  left: 100%;
 }
 
 .toolbar-btn {

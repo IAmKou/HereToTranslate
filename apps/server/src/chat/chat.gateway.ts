@@ -10,6 +10,7 @@ import {
 import { Socket, Server } from 'socket.io';
 import { ChatService } from './chat.service';
 import { CreateMessageDto } from '#LocalProject/Dtos';
+import { UserManagerService } from '#LocalProject/Managers/service/user-manager.service';
 
 @WebSocketGateway({
   namespace: '/chat',
@@ -23,14 +24,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly userService: UserManagerService,
+  ) {}
 
   handleConnection(client: Socket) {
-    console.log(`Client connected ${client.id}`);
+    console.log(`✅ Client connected: ${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected ${client.id}`);
+    console.log(`❌ Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('join_room')
@@ -38,7 +42,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() roomId: string,
     @ConnectedSocket() client: Socket,
   ) {
-    console.log(`Joining room: ${roomId}`);
+    console.log(`👥 Client ${client.id} joining room: ${roomId}`);
     client.join(roomId);
     client.emit('joined_room', roomId);
   }
@@ -48,12 +52,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: CreateMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
-    console.log('[GATEWAY] Received payload:', payload);
+    console.log('[GATEWAY] 📩 Received payload:', payload);
+    const saved = await this.chatService.createMessage(payload);
 
-    const message = await this.chatService.createMessage(payload);
-
-    this.server.in(payload.roomId).emit('new_message', message);
-
-    return message;
+    let senderUsername = 'Unknown';
+    try {
+      const users = await this.userService.findUsersByIds([payload.senderId]);
+      if (users && users.length > 0) {
+        senderUsername = users[0].username;
+      }
+    } catch (err) {
+      console.error('⚠️ Failed to fetch username:', err);
+    }
+    const messageWithUsername = {
+      ...saved.toObject(),
+      senderUsername,
+    };
+    this.server.to(payload.roomId).emit('new_message', messageWithUsername);
+    return messageWithUsername;
   }
 }

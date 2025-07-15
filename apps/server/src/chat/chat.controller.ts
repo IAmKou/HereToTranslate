@@ -81,21 +81,13 @@ import { Types } from 'mongoose';
   }
 
   @Patch('messages/:id')
-  async editMessage(
-    @Param('id') id: string,
-    @Body('message') message: string,
-  ) {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new BadRequestException('Invalid message ID');
-    }
-    return this.chatService.editMessage(id, message);
+  async updateMessage(@Param('id') id: string, @Body() body: { message: string }) {
+    return this.chatService.editMessage(id, body.message);
   }
 
+// DELETE /api/chat/messages/:id
   @Delete('messages/:id')
   async deleteMessage(@Param('id') id: string) {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new BadRequestException('Invalid message ID');
-    }
     return this.chatService.deleteMessage(id);
   }
 

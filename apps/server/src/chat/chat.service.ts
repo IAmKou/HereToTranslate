@@ -32,11 +32,10 @@ export class ChatService {
     const messages = await this.chatMessageModel
       .find({ roomId })
       .sort({ createdAt: 1 })
-      .lean();
+      .lean(); // Lean trả về plain object
 
     const senderIds = [...new Set(messages.map((msg) => msg.senderId))];
 
-    // ✅ Use UserManagerService instead of userModel
     const users = await this.userService.findUsersByIds(senderIds);
 
     const userMap = new Map<number, string>();
@@ -44,10 +43,16 @@ export class ChatService {
       userMap.set(Number(user.id), user.username);
     }
 
-    return messages.map((msg) => ({
-      ...msg,
+    return messages.map((msg: any) => ({
+      _id: msg._id.toString(),
+      roomId: msg.roomId.toString(),
+      senderId: msg.senderId,
       senderUsername: userMap.get(msg.senderId) || 'Unknown',
-      createdAt: new Date(msg.createdAt).toISOString(),
+      message: msg.message,
+      isEdited: msg.isEdited ?? false,
+      createdAt: msg.createdAt
+        ? new Date(msg.createdAt).toISOString()
+        : null,
     }));
   }
   async renameRoom(id: string, name: string) {
@@ -97,21 +102,25 @@ export class ChatService {
     if (!message) throw new NotFoundException('Message not found');
 
     message.message = newContent;
-    message.isEdited = true; // bạn đã thêm isEdited trong schema
+    message.isEdited = true;
     await message.save();
 
     return {
       _id: message._id.toString(),
+      roomId: message.roomId.toString(),
+      senderId: message.senderId,
       message: message.message,
       isEdited: message.isEdited,
-      updatedAt: new Date().toISOString(),
+      createdAt: message.createdAt?.toISOString?.(),
     };
   }
 
   async deleteMessage(id: string) {
     const result = await this.chatMessageModel.findByIdAndDelete(id);
-    if (!result) throw new NotFoundException('Message not found');
-    return { deleted: true };
+    if (!result) {
+      throw new NotFoundException('Message not found');
+    }
+    return { deleted: true, _id: id };
   }
 
 }

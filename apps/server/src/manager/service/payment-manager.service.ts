@@ -286,7 +286,7 @@ export class PaypalService {
         request.registrants = [];
         request.project = newProject;
         request.status = RequestStatus.Approved;
-        transaction.status = TransactionStatus.Completed;
+        transaction.status = TransactionStatus.On_Hold;
 
         await this.translationService.extractStringsForRequestFiles(request.id);
 
@@ -363,7 +363,7 @@ export class PaypalService {
         where: { paypalOrderId: orderId },
         relations: ['user', 'request'],
       });
-      let user = transaction.user;
+      const user = transaction.user;
       let request = transaction.request;
       // Luôn load lại request với quan hệ category nếu là public
       if (request.isPublic && !request.category) {
@@ -378,7 +378,7 @@ export class PaypalService {
       }
 
       // Mark transaction and request status
-      transaction.status = TransactionStatus.Completed;
+      transaction.status = TransactionStatus.On_Hold;
       await this.transactionRepo.save(transaction);
 
       let projectId = null;
@@ -483,10 +483,6 @@ export class PaypalService {
     const adminWallet = await this.walletManagerService.getOrCreateWallet(
       this.ADMIN_USER_ID
     );
-    if (Number(adminWallet.balance) < amount) {
-      throw new BadRequestException('Admin wallet has insufficient funds');
-    }
-
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
       request = await this.requestRepository.findOneOrFail({
@@ -711,5 +707,27 @@ export class PaypalService {
         'Only requester or assignee can approve the translation.'
       );
     }
+
+    // Check if approval already exists
+    let approval = await this.translationApprovalRepository.findOne({
+      where: {
+        request: { id: requestId },
+        user: { id: userId },
+      },
+    });
+
+    if (!approval) {
+      approval = this.translationApprovalRepository.create({
+        request: { id: requestId },
+        user: { id: userId },
+        isApproved: true,
+      });
+    } else {
+      approval.isApproved = true;
+    }
+
+    await this.translationApprovalRepository.save(approval);
+    return true;
   }
+
 }

@@ -421,6 +421,7 @@ function formatDate(date: any): string {
   if (!date) return '';
   try {
     const d = typeof date === 'string' ? new Date(date) : date;
+    d.setHours(d.getHours() + 7); // Cộng thêm 7 tiếng để khớp múi giờ Việt Nam
     const formattedDate = d.toLocaleString('en-US', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: true
@@ -432,6 +433,7 @@ function formatDateRelative(date: any): string {
   if (!date) return '';
   try {
     const d = typeof date === 'string' ? new Date(date) : date;
+    d.setHours(d.getHours() + 7); // Cộng thêm 7 tiếng để khớp múi giờ Việt Nam
     return `⏱️ ${dayjs(d).fromNow()}`;
   } catch { return ''; }
 }

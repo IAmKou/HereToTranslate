@@ -481,13 +481,22 @@ function formatCurrency(amount: number): string {
 
 function formatDate(dateString: string): string {
   if (!dateString) return '';
-  const date = dayjs(dateString);
-  return `${date.format('MMM DD, YYYY · hh:mm A')}`;
+  const date = new Date(dateString);
+  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để fix lệch múi giờ
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 function formatDateRelative(dateString: string): string {
   if (!dateString) return '';
-  return dayjs(dateString).fromNow();
+  const date = new Date(dateString);
+  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để khớp với giờ hiển thị
+  return dayjs(date).fromNow();
 }
 
 function prevPage() {

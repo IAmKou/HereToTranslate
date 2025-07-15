@@ -483,10 +483,6 @@ export class PaypalService {
     const adminWallet = await this.walletManagerService.getOrCreateWallet(
       this.ADMIN_USER_ID
     );
-    if (Number(adminWallet.balance) < amount) {
-      throw new BadRequestException('Admin wallet has insufficient funds');
-    }
-
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
       request = await this.requestRepository.findOneOrFail({

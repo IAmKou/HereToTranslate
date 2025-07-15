@@ -28,6 +28,25 @@ const sideBySide = ref(false);
 const viewMode = ref<'single' | 'side'>('single');
 const focusUntranslated = ref(false);
 
+const PART_SIZE = 250;
+const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
+
+function getTotalParts(fileId: string | number) {
+  const arr = stringsByFile.value[fileId] || [];
+  return Math.ceil(arr.length / PART_SIZE);
+}
+function getStringsOfPart(fileId: string | number, part: number) {
+  const arr = stringsByFile.value[fileId] || [];
+  const start = part * PART_SIZE;
+  return arr.slice(start, start + PART_SIZE);
+}
+
+function getStringsCountOfPart(fileId: string | number, part: number) {
+  const arr = stringsByFile.value[fileId] || [];
+  const start = part * PART_SIZE;
+  return Math.min(PART_SIZE, arr.length - start);
+}
+
 async function loadFiles() {
   if (!props.projectId || !props.branchId) return;
   try {
@@ -253,6 +272,19 @@ async function saveTranslation(str: any) {
         </div>
         <transition name="fade">
           <div v-if="expandedFileIds.includes(file.fileId || file.id)" class="file-strings-list">
+            <!-- Part selector -->
+            <div v-if="getTotalParts(file.fileId || file.id) > 1" class="part-selector" style="margin-bottom: 1em; display: flex; gap: 0.5em; align-items: center;">
+              <span style="font-weight:600; color:#6366f1;">Part:</span>
+              <button
+                v-for="part in getTotalParts(file.fileId || file.id)"
+                :key="part"
+                :class="['part-btn', { active: (selectedPartMap[file.fileId || file.id] ?? 0) === (part-1) }]"
+                @click="selectedPartMap[file.fileId || file.id] = part-1"
+                style="padding: 0.3em 1em; border-radius: 8px; border: none; background: #e0e7ff; color: #374151; font-weight:600; cursor:pointer;"
+              >
+                {{ part }} ({{ getStringsCountOfPart(file.fileId || file.id, part-1) }})
+              </button>
+            </div>
             <!-- Improved search & filter bar -->
             <div class="search-filter-bar">
               <span class="search-icon"><i class="pi pi-search"></i></span>
@@ -292,9 +324,9 @@ async function saveTranslation(str: any) {
               </label>
             </div>
             <div class="translation-scroll-area">
-              <div v-if="getFilteredStrings(file.fileId || file.id).length === 0" class="no-strings">No matching strings.</div>
+              <div v-if="getStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>
               <div
-                v-for="str in getFilteredStrings(file.fileId || file.id)"
+                v-for="str in getStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0)"
                 :key="str.id"
                 class="string-card"
                 :class="{
@@ -828,5 +860,9 @@ async function saveTranslation(str: any) {
   font-weight: 500;
   color: #039be5;
   cursor: pointer;
+}
+.part-btn.active {
+  background: linear-gradient(90deg, #6366f1 0%, #7c3aed 100%) !important;
+  color: #fff !important;
 }
 </style>

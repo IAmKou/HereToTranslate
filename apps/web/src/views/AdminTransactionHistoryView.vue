@@ -554,7 +554,9 @@ function formatStatus(status: string): string {
 }
 
 function formatDate(dateString: string): string {
+  if (!dateString) return '';
   const date = new Date(dateString);
+  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để khớp múi giờ Việt Nam
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',

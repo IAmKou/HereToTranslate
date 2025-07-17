@@ -319,6 +319,7 @@
                 </button>
               </div>
               <transition name="fade-tab" mode="out-in">
+
                 <ProjectMemberTab
                   v-if="activeTab === 'members'"
                   :project="project"
@@ -370,6 +371,7 @@
                   :on-reload="loadTasks"
                   custom-title="Tasks"
                 />
+
                 <!-- Tab Description giữ nguyên như cũ -->
                 <div v-else-if="activeTab === 'description'" key="description">
                   <!-- Project Description Section -->
@@ -450,6 +452,7 @@
                     </div>
                   </div>
                 </div>
+
               </transition>
             </div>
           </div>
@@ -656,6 +659,7 @@ import ProjectRoleTab from '../components/ProjectRoleTab.vue';
 
 const route = useRoute();
 const router = useRouter();
+
 
 // Interfaces
 interface Project {

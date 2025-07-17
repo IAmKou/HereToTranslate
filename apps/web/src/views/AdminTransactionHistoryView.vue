@@ -182,7 +182,13 @@
                       </span>
                   </td>
                   <td class="status-cell">
-                      <span :class="['status-badge', `status-${transaction.status.toLowerCase()}`]">
+                      <span
+                        :class="[
+                          'status-badge',
+                          `status-${transaction.status.toLowerCase()}`,
+                          transaction.status === 'ON_HOLD' ? 'badge-on-hold' : ''
+                        ]"
+                      >
                         {{ formatStatus(transaction.status) }}
                       </span>
                   </td>
@@ -264,6 +270,7 @@
                         <span v-else-if="detailTarget.status === 'APPROVED'" class="status-icon">✅</span>
                         <span v-else-if="detailTarget.status === 'REJECTED'" class="status-icon">❌</span>
                         <span v-else-if="detailTarget.status === 'FAILED'" class="status-icon">⚠️</span>
+                        <span v-else-if="detailTarget.status === 'ON_HOLD'" class="status-icon">⏸</span>
                         <span v-else class="status-icon">🔄</span>
                         <span class="status-text">{{ formatStatus(detailTarget.status) }}</span>
                       </span>
@@ -507,7 +514,10 @@ async function loadTransactions() {
       axios.get('/api/admin/transactions/users')
     ]);
 
-    transactions.value = transactionsRes.data || [];
+    transactions.value = (transactionsRes.data || []).map((txn: any) => ({
+      ...txn,
+      status: typeof txn.status === 'string' ? txn.status.toUpperCase() : txn.status,
+    }));
     users.value = usersRes.data || [];
   } catch (err: any) {
     error.value = err?.response?.data?.message || 'Failed to load transactions.';
@@ -550,6 +560,7 @@ function getTransactionType(transaction: Transaction): string {
 
 function formatStatus(status: string): string {
   if (!status) return '';
+  if (status.toUpperCase() === 'ON_HOLD') return 'On Hold';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
@@ -629,6 +640,7 @@ function badgeClass(status: string) {
     case 'REJECTED': return 'badge bg-red-100 text-red-700';
     case 'FAILED': return 'badge bg-gray-100 text-gray-700';
     case 'COMPLETED': return 'badge bg-green-100 text-green-700';
+    case 'ON_HOLD': return 'badge bg-orange-100 text-orange-700 badge-on-hold'; // Badge vàng cam nổi bật cho On Hold
     default: return 'badge';
   }
 }
@@ -1376,5 +1388,13 @@ onMounted(loadTransactions);
   font-weight: 600;
   color: #374151;
   margin-bottom: 4px;
+}
+</style>
+<style scoped>
+.badge-on-hold {
+  background: #fef3c7 !important;
+  color: #d97706 !important;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 </style>

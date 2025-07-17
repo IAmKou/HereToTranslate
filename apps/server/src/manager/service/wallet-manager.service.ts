@@ -18,7 +18,6 @@ export class WalletManagerService implements OnModuleInit {
 
   async onModuleInit() {
     await this.syncAllWalletBalances();
-    console.log('Wallet balances synced on startup');
   }
 
   async getOrCreateWallet(userId: bigint): Promise<WalletEntity> {
@@ -51,12 +50,11 @@ export class WalletManagerService implements OnModuleInit {
 
   async getWalletDetails(userId: bigint) {
     const wallet = await this.getOrCreateWallet(userId);
-    // Tổng tiền đã nạp
+    // Tổng tiền đã nạp (tất cả transaction deposit, không lọc status)
     const totalDeposits = await this.transactionRepository
       .createQueryBuilder('t')
       .where('t.user = :userId', { userId })
       .andWhere('t.amount > 0')
-      .andWhere('t.status IN (:...statuses)', { statuses: [TransactionStatus.Completed, TransactionStatus.Approved] })
       .select('SUM(t.amount)', 'sum')
       .getRawOne();
     // Tổng tiền đã rút
@@ -79,10 +77,10 @@ export class WalletManagerService implements OnModuleInit {
     const holdAmount = await this.transactionRepository
       .createQueryBuilder('t')
       .where('t.user = :userId', { userId })
-      .andWhere('t.status IN (:...statuses)', { statuses: [TransactionStatus.Pending, TransactionStatus.InProgress, TransactionStatus.WaitingApproval] })
+      .andWhere('t.status IN (:...statuses)', { statuses: [TransactionStatus.Pending, TransactionStatus.WaitingApproval] })
       .select('SUM(t.amount)', 'sum')
       .getRawOne();
-    // Tính balance động
+    // Tính balance động (bao gồm cả ON_HOLD và APPROVED)
     const balance = Number(totalDeposits?.sum || 0) - Number(totalWithdrawn?.sum || 0);
     return {
       ...wallet,
@@ -103,9 +101,7 @@ export class WalletManagerService implements OnModuleInit {
       order: { createdAt: 'DESC' },
       relations: ['user'],
     });
-    console.log('All txns:', txns.map(t => ({ id: t.id, amount: t.amount, status: t.status, createdAt: t.createdAt })));
     const txn = txns.find(t => Number(t.amount) !== 0);
-    console.log('Latest txn:', txn);
     if (!txn) return null;
     return {
       id: txn.id,
@@ -139,7 +135,7 @@ export class WalletManagerService implements OnModuleInit {
         .createQueryBuilder('t')
         .where('t.user = :userId', { userId: wallet.user.id })
         .andWhere('t.amount > 0')
-        .andWhere('t.status IN (:...statuses)', { statuses: ['COMPLETED', 'APPROVED'] })
+        .andWhere('t.status IN (:...statuses)', { statuses: ['APPROVED'] }) // Only APPROVED deposits are released
         .select('SUM(t.amount)', 'sum')
         .getRawOne();
       wallet.balance = Number(totalDeposit?.sum || 0);
@@ -157,10 +153,12 @@ export class WalletManagerService implements OnModuleInit {
     });
     // Get user's wallet to check for wallet-level PayPal email
     const wallet = await this.walletRepository.findOne({ where: { user: { id: userId } } });
-    return txns.map(txn => ({
+    return txns.map((txn: any) => ({
       ...txn,
       createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
       paypalEmail: txn.paypalEmail || txn.user?.paypalEmail || wallet?.paypalEmail || null,
+      // If deposit and not APPROVED, force status to ON_HOLD for display
+      status: txn.amount > 0 && txn.status !== TransactionStatus.Approved ? TransactionStatus.On_Hold : txn.status,
     }));
   }
 
@@ -170,7 +168,7 @@ export class WalletManagerService implements OnModuleInit {
       relations: ['user'],
       order: { createdAt: 'DESC' },
     });
-    return txns.map(txn => ({
+    return txns.map((txn: any) => ({
       ...txn,
       createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
     }));

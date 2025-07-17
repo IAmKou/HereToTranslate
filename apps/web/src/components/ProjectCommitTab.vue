@@ -566,8 +566,60 @@ const autoFillSelectedFile = ref('');
 const autoFillTranslations = ref<Record<string, Record<string, string>>>({});
 const showAutoFillFileSelect = ref(false);
 
+// Thêm state cho fullscreen content
+const showFullscreenContent = ref(false);
+// Undo/Redo stacks cho fullscreen content
+const contentHistory = ref<string[]>([]);
+const redoStack = ref<string[]>([]);
+
+// Watcher: Khi mở fullscreen, reset history
+watch(showFullscreenContent, (val) => {
+  if (val) {
+    contentHistory.value = [];
+    redoStack.value = [];
+  }
+});
+
+// Watcher: Lưu history khi nội dung thay đổi trong fullscreen
+let lastContent = '';
+watch(
+  () => showFullscreenContent.value ? submitForm.value.content : null,
+  (newVal, oldVal) => {
+    if (showFullscreenContent.value && oldVal !== null && newVal !== oldVal) {
+      contentHistory.value.push(oldVal);
+      redoStack.value = [];
+    }
+    lastContent = newVal || '';
+  }
+);
+
+function handleUndo() {
+  if (contentHistory.value.length > 0) {
+    redoStack.value.push(submitForm.value.content);
+    const prev = contentHistory.value.pop();
+    if (prev !== undefined) submitForm.value.content = prev;
+  }
+}
+function handleRedo() {
+  if (redoStack.value.length > 0) {
+    contentHistory.value.push(submitForm.value.content);
+    const next = redoStack.value.pop();
+    if (next !== undefined) submitForm.value.content = next;
+  }
+}
+
+// Thêm state cho nút copy
+const copySuccess = ref(false);
+
+function handleCopyContent() {
+  navigator.clipboard.writeText(submitForm.value.content).then(() => {
+    copySuccess.value = true;
+    setTimeout(() => copySuccess.value = false, 1200);
+  });
+}
+
 // Watcher: Khi user chọn file khác trong dropdown, auto-fill lại content và filePath
-watch(autoFillSelectedFile, (file) => {
+watch(autoFillSelectedFile, (file: string) => {
   if (file && autoFillTranslations.value[file]) {
     submitForm.value.filePath = file;
     submitForm.value.content = JSON.stringify(autoFillTranslations.value[file], null, 2);
@@ -575,6 +627,18 @@ watch(autoFillSelectedFile, (file) => {
       submitForm.value.message = 'Update translations';
     }
   }
+});
+
+// Thêm computed property cho preview content
+const shortContentPreview = computed(() => {
+  if (!submitForm.value.content) return '';
+  const lines = submitForm.value.content.split('\n');
+  if (lines.length <= 6) return submitForm.value.content;
+  return lines.slice(0, 6).join('\n') + '\n...';
+});
+const isContentLong = computed(() => {
+  if (!submitForm.value.content) return false;
+  return submitForm.value.content.split('\n').length > 6;
 });
 </script>
 
@@ -810,58 +874,70 @@ watch(autoFillSelectedFile, (file) => {
     <Dialog
       v-model:visible="showSubmitDialog"
       header="Submit New Commit"
-      :style="{ width: '600px' }"
+      :style="{ width: '900px', maxWidth: '98vw' }"
       :modal="true"
+      class="commit-dialog-upgrade"
     >
-      <div class="submit-form">
-        <div class="form-group">
-          <label>File Path</label>
-          <InputText v-model="submitForm.filePath" placeholder="e.g., src/components/App.vue" />
+      <div class="submit-form commit-form-upgrade">
+        <div class="form-group file-path-group">
+          <label class="input-label"><span class="icon">📂</span> File Path</label>
+          <template v-if="showAutoFillFileSelect && autoFillFiles.length > 1">
+            <select v-model="autoFillSelectedFile" class="file-select-dropdown">
+              <option v-for="f in autoFillFiles" :key="f" :value="f">{{ f }}</option>
+            </select>
+          </template>
+          <template v-else>
+            <InputText v-model="submitForm.filePath" readonly />
+          </template>
         </div>
-
         <div class="form-group">
-          <label>Commit Message</label>
+          <label class="input-label"><span class="icon">📝</span> Commit Message</label>
           <InputText v-model="submitForm.message" placeholder="Describe your changes..." />
         </div>
-
-        <div class="form-group">
-          <label>Content</label>
-          <Textarea
-            v-model="submitForm.content"
-            placeholder="Enter file content..."
-            rows="8"
-            autoResize
-          />
+        <div class="form-group textarea-group content-area-group">
+          <label class="input-label"><span class="icon">📄</span> Content</label>
+          <div class="textarea-actions">
+            <Button :icon="copySuccess ? 'pi pi-check' : 'pi pi-copy'" class="copy-btn" :class="{ 'copied': copySuccess }" @click="handleCopyContent" v-tooltip="copySuccess ? 'Copied!' : 'Copy All Content'" />
+            <Button icon="pi pi-external-link" class="fullscreen-btn" @click="showFullscreenContent = true" v-tooltip="'Edit Fullscreen'" />
+          </div>
+          <pre class="content-textarea" style="min-height:120px;max-height:220px;overflow:auto;resize:vertical;white-space:pre-wrap;">{{ shortContentPreview }}</pre>
+          <div v-if="isContentLong" class="content-long-hint">(If content is long, click <b>Fullscreen</b> to view all content)</div>
         </div>
-        <Button
-          label="Auto-fill Translations"
-          icon="pi pi-download"
-          class="auto-translation-btn"
-          @click="autoFillTranslationContent"
-          style="margin-top: 1em; width: 100%;"
-        />
-        <div v-if="showAutoFillFileSelect" style="margin-top:1em;">
-          <label style="font-weight:600;">Select file to commit:</label>
-          <select v-model="autoFillSelectedFile" style="width:100%;padding:0.5em 1em;border-radius:8px;margin-top:0.5em;">
-            <option v-for="f in autoFillFiles" :key="f" :value="f">{{ f }}</option>
-          </select>
-        </div>
+        <!-- Xoá nút Auto-fill Translations ở phần trên form -->
       </div>
 
       <template #footer>
-        <Button
-          label="Cancel"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="showSubmitDialog = false"
-        />
-        <Button
-          label="Submit"
-          icon="pi pi-check"
-          :loading="submitting"
-          @click="submitCommit"
-        />
+        <div class="commit-dialog-footer">
+          <Button
+            label="Cancel"
+            icon="pi pi-times"
+            class="gray-btn"
+            @click="showSubmitDialog = false"
+          />
+          <Button
+            label="Auto-fill Translations"
+            icon="pi pi-download"
+            class="auto-translation-btn secondary-btn"
+            @click="autoFillTranslationContent"
+          />
+          <Button
+            label="Submit"
+            icon="pi pi-check"
+            :loading="submitting"
+            class="primary-btn"
+            @click="submitCommit"
+          />
+        </div>
       </template>
+    </Dialog>
+
+    <!-- Fullscreen Content Dialog -->
+    <Dialog v-model:visible="showFullscreenContent" :modal="true" :style="{ width: '98vw', maxWidth: '1100px', minHeight: '80vh' }">
+      <div class="fullscreen-title"><span class="icon">📝</span> View Content</div>
+      <div style="margin-bottom:1em; position:relative;">
+        <Button icon="pi pi-copy" class="copy-btn" style="position:absolute;top:0;right:0.5em;z-index:2;" @click="handleCopyContent" v-tooltip="'Copy All Content'" />
+      </div>
+      <pre class="fullscreen-textarea content-scrollable">{{ submitForm.content }}</pre>
     </Dialog>
 
     <!-- Review Commit Dialog -->
@@ -1743,6 +1819,109 @@ watch(autoFillSelectedFile, (file) => {
   flex: 1;
 }
 
+.commit-form-upgrade .input-label {
+  font-size: 0.97em;
+  color: #64748b;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.2em;
+}
+.commit-form-upgrade .icon {
+  font-size: 1.1em;
+}
+.textarea-group {
+  position: relative;
+}
+.textarea-actions {
+  position: absolute;
+  top: 0.2em;
+  right: 0.2em;
+  display: flex;
+  gap: 0.3em;
+  z-index: 2;
+}
+.copy-btn, .fullscreen-btn {
+  background: #f3f4f6;
+  color: #6366f1;
+  border: none;
+  border-radius: 6px;
+  padding: 0.2em 0.5em;
+  font-size: 1em;
+  transition: background 0.15s, color 0.15s;
+}
+.copy-btn:hover, .fullscreen-btn:hover {
+  background: #ede9fe;
+  color: #4f46e5;
+}
+.primary-btn {
+  background: #2563eb !important;
+  color: #fff !important;
+  border: none;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  margin-left: 0.5em;
+}
+.gray-btn {
+  background: #f3f4f6 !important;
+  color: #6b7280 !important;
+  border: none;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+}
+.secondary-btn {
+  background: #a78bfa !important;
+  color: #fff !important;
+  border: none;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  margin-bottom: 0.5em;
+}
+.file-path-group {
+  margin-bottom: 1.2em;
+}
+.file-select-wrapper {
+  margin-top: 0.3em;
+}
+.file-select-label {
+  font-size: 0.92em;
+  color: #a1a1aa;
+  margin-bottom: 0.1em;
+  display: block;
+  font-weight: 500;
+}
+.file-select-dropdown {
+  width: 100%;
+  padding: 0.5em 1em;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 1em;
+  margin-top: 0.1em;
+}
+.content-area-group .content-textarea {
+  background: #f3f4f6;
+  border-radius: 10px;
+  border: 1.5px solid #e5e7eb;
+  padding: 1em;
+  font-size: 1em;
+  transition: border 0.15s;
+}
+.content-area-group .content-textarea:focus {
+  border: 1.5px solid #6366f1;
+  background: #f1f5f9;
+}
+@media (max-width: 600px) {
+  .commit-form-upgrade, .form-group, .form-actions { flex-direction: column; }
+  .form-group, .form-actions { width: 100%; }
+  .commit-form-upgrade { padding: 0.5em; }
+  .form-group input, .form-group textarea, .form-actions button { width: 100%; }
+  .textarea-actions { right: 0.5em; }
+}
+
 @media (max-width: 768px) {
   .commits-header {
     flex-direction: column;
@@ -1780,5 +1959,287 @@ watch(autoFillSelectedFile, (file) => {
     flex-direction: column;
     gap: 0.5rem;
   }
+}
+.copy-btn {
+  transition: background 0.18s, color 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+.copy-btn.copied {
+  background: #4ade80 !important; /* xanh lá nhạt */
+  color: #fff !important;
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px #4ade8033;
+}
+.commit-dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1em;
+  margin-top: 0.5em;
+}
+.commit-dialog-footer .gray-btn {
+  order: 1;
+}
+.commit-dialog-footer .secondary-btn {
+  order: 2;
+}
+.commit-dialog-footer .primary-btn {
+  order: 3;
+}
+@media (max-width: 600px) {
+  .commit-dialog-footer {
+    flex-direction: column;
+    gap: 0.5em;
+    width: 100%;
+  }
+}
+.fullscreen-title {
+  font-size: 1.6em;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 0.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+}
+.fullscreen-title .icon {
+  font-size: 1.2em;
+}
+.fullscreen-toolbar {
+  display: flex;
+  gap: 1em;
+  justify-content: center;
+  margin-bottom: 0.7em;
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 0.5em 1em;
+}
+.fullscreen-textarea {
+  width: 100%;
+  border-radius: 14px;
+  background: #f9f9f9;
+  padding: 1em;
+  font-size: 0.95em;
+  border: 1.5px solid #e5e7eb;
+  margin-bottom: 1em;
+  resize: both;
+  min-height: 400px;
+  min-width: 300px;
+  box-sizing: border-box;
+}
+.close-btn {
+  background: #f3f4f6 !important;
+  color: #ef4444 !important;
+  border-radius: 8px;
+  font-weight: 600;
+  float: right;
+  margin-top: 0.5em;
+}
+.save-btn {
+  background: #2563eb !important;
+  color: #fff !important;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.undo-btn, .redo-btn {
+  background: #f3f4f6 !important;
+  color: #64748b !important;
+  border-radius: 8px;
+  font-weight: 600;
+}
+@media (max-width: 700px) {
+  .fullscreen-title { font-size: 1.2em; }
+  .fullscreen-toolbar { flex-direction: column; gap: 0.5em; }
+  .fullscreen-textarea { min-width: 0; }
+}
+.content-scrollable {
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* --- Modal Submit New Commit UI Upgrade --- */
+.commit-dialog-upgrade {
+  border-radius: 18px !important;
+  box-shadow: 0 8px 32px rgba(30,41,59,0.16) !important;
+  background: #f8fafc !important;
+  border: 1.5px solid #e0e7ff !important;
+  padding: 2.8em 1.5em 1.2em 1.5em !important;
+}
+.submit-form.commit-form-upgrade {
+  gap: 1.5em;
+  padding: 0.2em 0.2em 0.5em 0.2em;
+}
+.commit-form-upgrade .form-group {
+  background: #f3f4f6;
+  border-radius: 12px;
+  padding: 0.3em 0.5em;
+  margin-bottom: 0;
+  box-shadow: 0 2px 8px #e0e7ff33;
+}
+.commit-form-upgrade .input-label {
+  color: #64748b;
+  font-weight: 700;
+  font-size: 1.01em;
+  margin-bottom: 0.3em;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.commit-form-upgrade .icon {
+  font-size: 1.1em;
+  color: #6366f1;
+}
+.content-area-group .content-textarea {
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1.5px solid #e0e7ff;
+  padding: 1em;
+  font-size: 1em;
+  font-family: 'Fira Mono', 'Menlo', 'Consolas', monospace;
+  color: #334155;
+  margin-bottom: 0.3em;
+  transition: border 0.15s;
+}
+.content-area-group .content-textarea:focus {
+  border: 1.5px solid #6366f1;
+  background: #eef2ff;
+}
+.commit-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1em;
+  margin-top: 0.5em;
+  background: none;
+  border: none;
+}
+.commit-dialog-footer .gray-btn {
+  background: #f3f4f6 !important;
+  color: #6b7280 !important;
+  border: none;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  transition: background 0.18s, color 0.18s;
+}
+.commit-dialog-footer .gray-btn:hover {
+  background: #e5e7eb !important;
+  color: #334155 !important;
+}
+.commit-dialog-footer .secondary-btn {
+  background: linear-gradient(90deg, #a78bfa 0%, #6366f1 100%) !important;
+  color: #fff !important;
+  border: none;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  margin-bottom: 0.5em;
+  transition: background 0.18s, color 0.18s;
+}
+.commit-dialog-footer .secondary-btn:hover {
+  background: #7c3aed !important;
+  color: #fff !important;
+}
+.commit-dialog-footer .primary-btn {
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #fff !important;
+  border: none;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  margin-left: 0.5em;
+  transition: background 0.18s, color 0.18s;
+}
+.commit-dialog-footer .primary-btn:hover {
+  background: #1d4ed8 !important;
+  color: #fff !important;
+}
+@media (max-width: 600px) {
+  .commit-dialog-upgrade { padding: 0.5em !important; }
+  .submit-form.commit-form-upgrade { padding: 0.1em; }
+  .commit-form-upgrade .form-group { padding: 0.7em 0.5em; }
+  .commit-dialog-footer { flex-direction: column; gap: 0.5em; width: 100%; }
+}
+/* --- Input Field UI Upgrade --- */
+.commit-form-upgrade input[type="text"],
+.commit-form-upgrade input[type="search"],
+.commit-form-upgrade input[type="email"],
+.commit-form-upgrade input[type="password"],
+.commit-form-upgrade .p-inputtext,
+.commit-form-upgrade select,
+.commit-form-upgrade .file-select-dropdown {
+  border-radius: 10px;
+  border: 1.5px solid #e0e7ff;
+  background: #f8fafc;
+  padding: 0.7em 1em;
+  font-size: 1em;
+  color: #334155;
+  transition: border 0.18s, box-shadow 0.18s;
+  outline: none;
+  box-shadow: none;
+  margin-bottom: 0.1em;
+}
+.commit-form-upgrade input[type="text"]:focus,
+.commit-form-upgrade input[type="search"]:focus,
+.commit-form-upgrade input[type="email"]:focus,
+.commit-form-upgrade input[type="password"]:focus,
+.commit-form-upgrade .p-inputtext:focus,
+.commit-form-upgrade select:focus,
+.commit-form-upgrade .file-select-dropdown:focus {
+  border: 1.5px solid #6366f1;
+  background: #eef2ff;
+  box-shadow: 0 0 0 2px #6366f133;
+}
+.commit-form-upgrade label.input-label {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 1em;
+  margin-bottom: 0.3em;
+  display: block;
+}
+.commit-form-upgrade select,
+.commit-form-upgrade .file-select-dropdown {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg fill="%236366f1" height="20" viewBox="0 0 20 20" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M7.293 7.293a1 1 0 011.414 0L10 8.586l1.293-1.293a1 1 0 111.414 1.414l-2 2a1 1 0 01-1.414 0l-2-2a1 1 0 010-1.414z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 0.8em center;
+  background-size: 2em;
+}
+.commit-form-upgrade .file-select-dropdown {
+  min-width: 160px;
+}
+.commit-form-upgrade input:disabled,
+.commit-form-upgrade select:disabled,
+.commit-form-upgrade .file-select-dropdown:disabled {
+  background: #f1f5f9;
+  color: #a1a1aa;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+}
+@media (max-width: 600px) {
+  .commit-form-upgrade input,
+  .commit-form-upgrade select,
+  .commit-form-upgrade .file-select-dropdown {
+    font-size: 0.98em;
+    padding: 0.6em 0.7em;
+  }
+}
+
+.commit-dialog-upgrade .p-dialog-title {
+  padding-top: 1.2em !important;
+  padding-bottom: 0.7em !important;
+  padding-left: 1.5em !important;
+  padding-right: 1.5em !important;
+}
+
+/* Nổi bật dòng thông báo content dài */
+.content-area-group .content-long-hint {
+  color: #6366f1;
+  font-weight: 600;
+  font-size: 0.97em;
+  margin-top: 0.2em;
 }
 </style>

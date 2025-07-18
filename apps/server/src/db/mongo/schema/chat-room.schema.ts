@@ -17,11 +17,20 @@ export class ChatRoom {
 
   @Prop()
   createdAt?: Date;
+
+  @Prop({ type: String })
+  avatar?: string;
+
+  @Prop({ type: String })
+  description?: string;
+
+  @Prop()
+  updatedAt?: Date;
 }
 export type ChatRoomDocument = ChatRoom & Document & { _id: Types.ObjectId };
-
 export const ChatRoomSchema = SchemaFactory.createForClass(ChatRoom);
 
-// Indexes
-ChatRoomSchema.index({ participants: 1 });
-ChatRoomSchema.index({ name: 1 });
+ChatRoomSchema.index(
+  { participants: 1, isGroupChat: 1 },
+  { unique: true, partialFilterExpression: { isGroupChat: false } }
+);

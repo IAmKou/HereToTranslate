@@ -50,15 +50,13 @@ import { Types } from 'mongoose';
         username: target.username,
       }
     );
-
-    // ✅ Safe null check before accessing room._id
     if (!room) {
       throw new NotFoundException('Chat room could not be created');
     }
 
     return {
       ...room,
-      _id: room._id.toString(),
+      _id: room._id!.toString(),
     };
   }
   @Get('messages/:roomId')
@@ -90,6 +88,16 @@ import { Types } from 'mongoose';
   async deleteMessage(@Param('id') id: string) {
     return this.chatService.deleteMessage(id);
   }
-
+  @Patch('rooms/:id/add-member')
+  async addMember(
+    @Param('id') roomId: string,
+    @Body('userId') userId: number,
+  ) {
+    return this.chatService.addMemberToRoom(roomId, userId);
+  }
+  @Get('rooms/:roomId/participants')
+  async getRoomParticipants(@Param('roomId') roomId: string) {
+    return this.chatService.getParticipants(roomId);
+  }
 }
 

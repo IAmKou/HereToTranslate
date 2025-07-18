@@ -87,7 +87,6 @@
       <div class="actions nav-actions">
         <button class="paypal-btn home-btn" @click="goHome"><span class="btn-icon">🏠</span> Home</button>
         <button class="paypal-btn outline" v-if="details.requestId" @click="goRequest"><span class="btn-icon">📄</span> View Request</button>
-        <button class="paypal-btn outline" v-if="details.projectId" @click="goProject"><span class="btn-icon">📁</span> View Project</button>
       </div>
     </div>
   </div>
@@ -109,7 +108,7 @@ function goHome() {
   router.push('/userhome');
 }
 function goRequest() {
-  router.push('/myrequests');
+  router.push('/my-requests');
 }
 function goProject() {
   if (details.value.projectId) {

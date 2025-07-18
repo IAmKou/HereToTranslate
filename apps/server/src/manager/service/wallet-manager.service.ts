@@ -186,6 +186,8 @@ export class WalletManagerService implements OnModuleInit {
   }) {
     const queryBuilder = this.transactionRepository.createQueryBuilder('t')
       .leftJoinAndSelect('t.user', 'user')
+      .leftJoinAndSelect('t.request', 'request')
+      .leftJoinAndSelect('request.project', 'project')
       .orderBy('t.createdAt', 'DESC');
 
     if (filters.userId) {
@@ -224,6 +226,9 @@ export class WalletManagerService implements OnModuleInit {
     return txns.map(txn => ({
       ...txn,
       createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
+      requestId: txn.request?.id?.toString() || null,
+      projectId: txn.request?.project?.id?.toString() || null,
+      description: txn.request?.description || txn.description || null,
     }));
   }
 }

@@ -329,6 +329,7 @@ interface UserInfo {
       strings: number;
     };
   };
+  approved?: boolean; // Added for frontend display
 }
 
 const route = useRoute();
@@ -422,6 +423,9 @@ async function confirmApproveRegistrant() {
     const requestId = route.params.requestId;
     const response = await axiosInstance.post(`/requests/${requestId}/approve/${userId}`);
     if (response.data && response.data.approvalUrl) {
+      // Cập nhật trạng thái approved cho user vừa được approve
+      const idx = registrants.value.findIndex((u: UserInfo) => u.id === userId);
+      if (idx !== -1) registrants.value[idx].approved = true;
       showToastMsg('Approved successfully! Redirecting to PayPal...', 'success');
       setTimeout(() => {
         window.location.href = response.data.approvalUrl;

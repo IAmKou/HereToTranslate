@@ -192,7 +192,7 @@
                       <span v-if="transaction.paypalEmail && transaction.paypalEmail !== '-'" class="paypal-email">
                         {{ transaction.paypalEmail }}
                       </span>
-                    <span v-else class="paypal-email-empty">-</span>
+                    <span v-else class="paypal-email-system">System</span>
                   </td>
                 </tr>
                 </tbody>
@@ -386,8 +386,11 @@ const visiblePages = computed(() => {
 
 const totalDeposits = computed(() => {
   return filteredTransactions.value
-    .filter((t: any) => t.amount > 0)
-    .reduce((sum: number, t: any) => sum + t.amount, 0);
+    .filter((t: any) => Number(t.amount) > 0)
+    .reduce((sum: number, t: any) => {
+      const amt = Number(t.amount);
+      return sum + (isNaN(amt) ? 0 : amt);
+    }, 0);
 });
 
 const totalWithdrawals = computed(() => {
@@ -1375,5 +1378,12 @@ onMounted(() => {
   font-size: 0.98em;
   display: inline-block;
   text-align: center;
+}
+.paypal-email-system {
+  color: #2563eb;
+  font-weight: 600;
+  font-style: normal;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
 }
 </style>

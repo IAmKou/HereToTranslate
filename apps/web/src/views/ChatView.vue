@@ -41,6 +41,7 @@
           :roomId="getRoomId(selectedRoom)"
           :currentUserId="currentUser.id"
           :currentUsername="currentUser.username"
+          :roomName="selectedRoom.name"
         />
         <div v-else class="chat-placeholder">
           Select a chat room to start messaging.
@@ -60,7 +61,12 @@ interface ChatRoomInfo {
   name: string;
   isGroupChat: boolean;
   members: any[];
+  oppositeUser?: {
+    id: number;
+    username: string;
+  };
 }
+
 
 interface UserInfo {
   id: number;
@@ -108,7 +114,11 @@ const loadChatRooms = async () => {
 const openRoom = (room: ChatRoomInfo) => {
   const id = getRoomId(room);
   if (id && id.length === 24) {
-    selectedRoom.value = { ...room, _id: id };
+    selectedRoom.value = {
+      ...room,
+      _id: room._id,
+      oppositeUser: room.oppositeUser // ✅ make sure this is stored
+    };
   }
 };
 
@@ -131,7 +141,7 @@ const searchAndStartChat = async () => {
 
     const room = res.data as ChatRoomInfo;
     if (room && String(room._id).length === 24) {
-      const normalized = normalizeRoomId(room);
+      const normalized = { ...normalizeRoomId(room), oppositeUser: room.oppositeUser };
       selectedRoom.value = normalized;
       if (!chatRooms.value.find(r => String(r._id) === String(normalized._id))) {
         chatRooms.value.unshift(normalized);

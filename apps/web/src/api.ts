@@ -11,7 +11,7 @@ const BASE_URL = 'http://localhost:3000/api';
 
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true, // Send cookies
+  withCredentials: true,
 });
 
 axiosInstance.interceptors.response.use(

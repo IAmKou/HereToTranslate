@@ -1,8 +1,26 @@
+version: '3.8'
+
 services:
+  mysql:
+    image: mysql:8
+    container_name: shared-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: htt
+      MYSQL_USER: share
+      MYSQL_PASSWORD: 123456
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - mynetwork
 
   mongo:
     image: mongo:6.0
     container_name: mongo-container
+    restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: 123456
@@ -14,6 +32,7 @@ services:
       - mynetwork
 
 volumes:
+  mysql_data:
   mongo_data:
 
 networks:

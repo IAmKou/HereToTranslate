@@ -339,9 +339,11 @@ const connectSocket = () => {
     transports: ['websocket']
   })
   socket.value.on('connect', () => {
+    console.log('✅ Connected to socket');
     socket.value?.emit('join_room', props.roomId)
   })
   socket.value.on('new_message', (message: ChatMessage) => {
+    console.log('📥 new_message received', message);
     messages.value.push(message)
     scrollToBottom()
   })

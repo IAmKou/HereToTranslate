@@ -281,7 +281,7 @@ const branches = ref<Branch[]>([]);
 const branchLoading = ref(false);
 const emit = defineEmits(['update:branchId']);
 
-const activeTab = ref<'local' | 'github'>('local');
+const activeTab = ref<'local' | 'history'>('local');
 
 // Methods
 async function loadCommits() {
@@ -692,6 +692,25 @@ const isCommitContentLong = computed(() => {
   if (!selectedContent.value?.contentSnapshot) return false;
   return selectedContent.value.contentSnapshot.split('\n').length > 12;
 });
+
+// Thêm computed kiểm tra có phải commit mới nhất đã approve không
+const isLatestForFile = computed(() => {
+  if (!selectedCommit.value) return true;
+  // Tìm commit approved mới nhất cùng filePath
+  const latest = commits.value
+    .filter((c: Commit) => c.filePath === selectedCommit.value.filePath && c.status === 'approved')
+    .sort((a: Commit, b: Commit) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  // Nếu chưa có commit approved nào thì cho phép
+  if (!latest) return true;
+  // Nếu nội dung giống nhau thì KHÔNG cho approve (cảnh báo)
+  try {
+    const latestObj = JSON.parse(latest.contentSnapshot || '{}');
+    const currentObj = JSON.parse(selectedCommit.value.contentSnapshot || '{}');
+    if (JSON.stringify(latestObj) === JSON.stringify(currentObj)) return false;
+  } catch (e) {}
+  // Nếu khác nội dung thì cho approve
+  return true;
+});
 </script>
 
 <template>
@@ -699,13 +718,13 @@ const isCommitContentLong = computed(() => {
     <!-- Advanced filter bar -->
     <div style="display:flex;align-items:center;gap:2em;margin-bottom:1em;">
     </div>
-    <!-- Tabs for Local/GitHub Commits -->
+    <!-- Tabs for Local/Commit History -->
     <div class="commit-tabs" style="display:flex;gap:1em;margin-bottom:1.5em;">
-      <button :class="['tab-btn', {active: activeTab==='local'}]" @click="activeTab='local'" :disabled="showOnlyGithub" style="display:flex;align-items:center;gap:0.5em;">
+      <button :class="['tab-btn', {active: activeTab==='local'}]" @click="activeTab='local'" style="display:flex;align-items:center;gap:0.5em;">
         <span style="font-size:1.2em;">📄</span> Local Commits
       </button>
-      <button :class="['tab-btn', {active: activeTab==='github'}]" @click="activeTab='github'" style="display:flex;align-items:center;gap:0.5em;">
-        <span style="font-size:1.2em;">🌐</span> GitHub Commits
+      <button :class="['tab-btn', {active: activeTab==='history'}]" @click="activeTab='history'" style="display:flex;align-items:center;gap:0.5em;">
+        <span style="font-size:1.2em;">🕓</span> Commit History
       </button>
     </div>
     <!-- Branch select giữ nguyên -->
@@ -730,22 +749,26 @@ const isCommitContentLong = computed(() => {
         <p>Manage and review commits for this project</p>
       </div>
       <div class="commits-stats">
-        <div class="stat-item">
-          <div class="stat-number">{{ pendingCommits.length }}</div>
-          <div class="stat-label">Pending</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number">{{ approvedCommits.length }}</div>
-          <div class="stat-label">Approved</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number">{{ rejectedCommits.length }}</div>
-          <div class="stat-label">Rejected</div>
-        </div>
+        <template v-if="activeTab==='local'">
+          <div class="stat-item">
+            <div class="stat-number">{{ pendingCommits.length }}</div>
+            <div class="stat-label">Pending</div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="stat-item">
+            <div class="stat-number">{{ approvedCommits.length }}</div>
+            <div class="stat-label">Approved</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">{{ rejectedCommits.length }}</div>
+            <div class="stat-label">Rejected</div>
+          </div>
+        </template>
       </div>
     </div>
     <!-- Actions & Filters -->
-    <div v-if="activeTab==='local'">
+    <div v-if="activeTab==='local' || activeTab==='history'">
       <div class="commits-actions">
         <div class="filter-group">
           <div class="search-container">
@@ -756,9 +779,8 @@ const isCommitContentLong = computed(() => {
               class="search-input"
             />
           </div>
-          <select v-model="statusFilter" class="status-filter">
+          <select v-model="statusFilter" class="status-filter" v-if="activeTab==='history'">
             <option value="all">All Status</option>
-            <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
@@ -791,10 +813,11 @@ const isCommitContentLong = computed(() => {
           </select>
         </div>
         <Button
+          v-if="activeTab==='local'"
           label="Submit Commit"
           icon="pi pi-plus"
           class="submit-btn"
-          @click="showSubmitDialog = true"
+          @click="() => { console.log('Clicked Submit Commit'); showSubmitDialog = true; console.log('showSubmitDialog:', showSubmitDialog); }"
         />
       </div>
       <!-- Loading/Error/Commits list giữ nguyên, chỉ thay pagedCommits thành sortedFilteredCommits -->
@@ -809,10 +832,10 @@ const isCommitContentLong = computed(() => {
       </div>
       <div v-else class="commits-content">
         <div v-if="pagedCommits.length > 0" class="commits-section">
-          <h3>Local Commits</h3>
+          <h3>{{ activeTab==='local' ? 'Local Commits' : 'Commit History' }}</h3>
           <div class="commits-list">
             <div
-              v-for="commit in pagedCommits"
+              v-for="commit in (activeTab==='local' ? pendingCommits.slice((currentPage-1)*pageSize, currentPage*pageSize) : pagedCommits)"
               :key="commit.id"
               :class="['commit-card-upgrade', getStatusClass(commit.status)]"
             >
@@ -833,7 +856,7 @@ const isCommitContentLong = computed(() => {
                   </span>
                   <div class="commit-actions-upgrade">
                     <button class="action-btn view" @click="openContentDialog(commit)">View</button>
-                    <button v-if="commit.status === 'pending'" class="action-btn review" @click="openReviewDialog(commit)">Review</button>
+                    <button v-if="commit.status === 'pending' && activeTab==='local'" class="action-btn review" @click="openReviewDialog(commit)">Review</button>
                   </div>
                 </div>
               </div>
@@ -845,83 +868,13 @@ const isCommitContentLong = computed(() => {
           <!-- Pagination controls giữ nguyên -->
           <div class="pagination-controls" style="display:flex;gap:0.5em;align-items:center;justify-content:center;margin-top:1.5em;">
             <button :disabled="currentPage === 1" @click="currentPage--">« Prev</button>
-            <span>Page {{ currentPage }} / {{ Math.max(1, Math.ceil(totalCommits / pageSize)) }}</span>
-            <button :disabled="currentPage >= Math.ceil(totalCommits / pageSize)" @click="currentPage++">Next »</button>
+            <span>Page {{ currentPage }} / {{ Math.max(1, Math.ceil((activeTab==='local' ? pendingCommits.length : totalCommits) / pageSize)) }}</span>
+            <button :disabled="currentPage >= Math.ceil((activeTab==='local' ? pendingCommits.length : totalCommits) / pageSize)" @click="currentPage++">Next »</button>
           </div>
         </div>
       </div>
     </div>
-    <div v-else>
-      <div class="commits-section">
-        <h3>GitHub Commits</h3>
-        <div style="display:flex;align-items:center;gap:1em;margin-bottom:1em;">
-          <label for="github-page-size-select" style="font-weight:600;">Commits/page:</label>
-          <select id="github-page-size-select" v-model.number="githubPageSize" style="padding:0.3em 1em;border-radius:8px;">
-            <option v-for="opt in githubPageSizeOptions" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-          <select v-model="githubUserFilter" class="status-filter">
-            <option value="all">All users</option>
-            <option v-for="u in githubUsers" :key="u" :value="u">{{ u }}</option>
-          </select>
-          <div class="custom-date-range">
-            <button
-              class="date-range-btn"
-              :class="{ active: githubDateRange && githubDateRange[0] && githubDateRange[1] }"
-              @click="showGithubDatePopover = !showGithubDatePopover"
-              @blur="() => setTimeout(() => showGithubDatePopover = false, 200)"
-              type="button"
-            >
-              <i class="pi pi-calendar mr-1"></i>
-              <span>{{ formatRangeLabel(githubDateRange) }}</span>
-              <i v-if="githubDateRange && githubDateRange[0] && githubDateRange[1]" class="pi pi-times ml-2 clear-btn" @click.stop="clearGithubDateRange"></i>
-            </button>
-            <div v-if="showGithubDatePopover" class="date-range-popover">
-              <Calendar v-model="githubDateRange" selectionMode="range" inline :showIcon="false" dateFormat="M dd, yy" />
-              <button class="clear-date-btn" @click="clearGithubDateRange" type="button">Clear</button>
-            </div>
-          </div>
-          <select v-model="githubSortBy" class="status-filter">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="user">User</option>
-            <option value="file">File</option>
-          </select>
-        </div>
-        <div class="commits-list">
-          <div
-            v-for="commit in pagedGithubCommits"
-            :key="commit.sha"
-            class="commit-card-upgrade github-commit"
-          >
-            <div class="commit-card-main">
-              <div class="commit-card-left">
-                <div class="commit-message">{{ commit.commit.message }}</div>
-                <div class="commit-meta">
-                  <span><i class="pi pi-user mr-1"></i> {{ commit.author?.login || commit.commit.author.name }}</span>
-                  <span><i class="pi pi-calendar mr-1"></i> {{ formatDate(commit.commit.author.date) }}</span>
-                  <span><i class="pi pi-code mr-1"></i> {{ commit.sha.substring(0, 8) }}</span>
-                </div>
-              </div>
-              <div class="commit-card-right">
-                <span class="status-badge-upgrade status-synced">
-                  <i class="pi pi-check-circle mr-1"></i> SYNCED
-                </span>
-                <div class="commit-actions-upgrade">
-                  <button class="action-btn view">View</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Pagination controls for GitHub Commits giữ nguyên -->
-        <div class="pagination-controls" style="display:flex;gap:0.5em;align-items:center;justify-content:center;margin-top:1.5em;">
-          <button :disabled="githubCurrentPage === 1" @click="githubCurrentPage--">« Prev</button>
-          <span>Page {{ githubCurrentPage }} / {{ Math.max(1, Math.ceil(githubTotalCommits / githubPageSize)) }}</span>
-          <button :disabled="githubCurrentPage >= Math.ceil(githubTotalCommits / githubPageSize)" @click="githubCurrentPage++">Next »</button>
-        </div>
-      </div>
-    </div>
-
+    <!-- ... các dialog giữ nguyên ... -->
     <!-- Submit Commit Dialog -->
     <Dialog
       v-model:visible="showSubmitDialog"
@@ -955,9 +908,7 @@ const isCommitContentLong = computed(() => {
           <pre class="content-textarea" style="min-height:120px;max-height:220px;overflow:auto;resize:vertical;white-space:pre-wrap;">{{ shortContentPreview }}</pre>
           <div v-if="isContentLong" class="content-long-hint">(If content is long, click <b>Fullscreen</b> to view all content)</div>
         </div>
-        <!-- Xoá nút Auto-fill Translations ở phần trên form -->
       </div>
-
       <template #footer>
         <div class="commit-dialog-footer">
           <Button
@@ -982,42 +933,30 @@ const isCommitContentLong = computed(() => {
         </div>
       </template>
     </Dialog>
-
-    <!-- Fullscreen Content Dialog -->
-    <Dialog v-model:visible="showFullscreenContent" :modal="true" :style="{ width: '98vw', maxWidth: '1100px', minHeight: '80vh' }">
-      <div class="fullscreen-title"><span class="icon">📝</span> View Content</div>
-      <div style="margin-bottom:1em; position:relative;">
-        <Button icon="pi pi-copy" class="copy-btn" style="position:absolute;top:0;right:0.5em;z-index:2;" @click="handleCopyContent" v-tooltip="'Copy All Content'" />
-      </div>
-      <pre class="fullscreen-textarea content-scrollable">{{ submitForm.content }}</pre>
-    </Dialog>
-
     <!-- Review Commit Dialog -->
     <Dialog
       v-model:visible="showReviewDialog"
       header="Review Commit"
-      :style="{ width: '600px' }"
+      :style="{ width: '600px', maxWidth: '98vw', borderRadius: '16px', padding: '0 0 1.5em 0' }"
       :modal="true"
+      class="review-commit-dialog-upgrade"
     >
-      <div v-if="selectedCommit" class="review-form">
-        <div class="commit-preview">
-          <h4>Commit Details</h4>
-          <div class="preview-item">
-            <strong>Message:</strong> {{ selectedCommit.message }}
-          </div>
-          <div class="preview-item">
-            <strong>File:</strong> {{ selectedCommit.filePath }}
-          </div>
-          <div class="preview-item">
-            <strong>Author:</strong> {{ selectedCommit.author.fullName || selectedCommit.author.username }}
-          </div>
+      <div v-if="selectedCommit" class="review-form" style="padding: 1.2em 0.5em 0.5em 0.5em;">
+        <div class="commit-preview" style="margin-bottom:1.2em;">
+          <h4 style="margin-bottom:0.7em;">Commit Details</h4>
+          <div class="preview-item"><strong>Message:</strong> {{ selectedCommit.message }}</div>
+          <div class="preview-item"><strong>File:</strong> {{ selectedCommit.filePath }}</div>
+          <div class="preview-item"><strong>Author:</strong> {{ selectedCommit.author.fullName || selectedCommit.author.username }}</div>
         </div>
-
-        <div class="form-group">
+        <div v-if="!isLatestForFile" class="review-warning-box">
+          <i class="pi pi-exclamation-triangle warning-icon"></i>
+          <span class="warning-text">A newer commit for this file has already been approved.<br>Approving this commit is not allowed to prevent rollback.</span>
+        </div>
+        <div class="form-group" style="margin-top:1.2em;">
           <label>Review Decision</label>
           <div class="radio-group">
             <label>
-              <input type="radio" v-model="reviewForm.approve" :value="true" />
+              <input type="radio" v-model="reviewForm.approve" :value="true" :disabled="!isLatestForFile" />
               Approve
             </label>
             <label>
@@ -1026,7 +965,6 @@ const isCommitContentLong = computed(() => {
             </label>
           </div>
         </div>
-
         <div class="form-group">
           <label>Review Message (Optional)</label>
           <Textarea
@@ -1037,7 +975,6 @@ const isCommitContentLong = computed(() => {
           />
         </div>
       </div>
-
       <template #footer>
         <Button
           label="Cancel"
@@ -1046,14 +983,16 @@ const isCommitContentLong = computed(() => {
           @click="showReviewDialog = false"
         />
         <Button
-          :label="reviewForm.approve ? 'Approve' : 'Reject'"
-          :icon="reviewForm.approve ? 'pi pi-check' : 'pi pi-times'"
+          label="Confirm"
+          icon="pi pi-check"
           :loading="reviewing"
           @click="reviewCommit"
+          :disabled="reviewForm.approve && !isLatestForFile"
+          v-tooltip="reviewForm.approve && !isLatestForFile ? 'Cannot approve because a newer commit has already been approved.' : ''"
+          class="primary-btn"
         />
       </template>
     </Dialog>
-
     <!-- View Content Dialog -->
     <Dialog
       v-model:visible="showContentDialog"
@@ -1078,22 +1017,7 @@ const isCommitContentLong = computed(() => {
         </div>
       </div>
       <template #footer>
-        <Button
-          label="Close"
-          icon="pi pi-times"
-          class="close-btn"
-          @click="showContentDialog = false"
-        />
-      </template>
-    </Dialog>
-    <Dialog v-model:visible="showFullCommitContent" :modal="true" :style="{ width: '98vw', maxWidth: '1100px', minHeight: '80vh' }">
-      <div class="fullscreen-title"><span class="icon">📝</span> View Full File Content</div>
-      <div style="margin-bottom:1em; position:relative;">
-        <Button icon="pi pi-copy" class="copy-btn" style="position:absolute;top:0;right:0.5em;z-index:2;" @click="() => { navigator.clipboard.writeText(fullCommitContent) }" v-tooltip="'Copy All Content'" />
-      </div>
-      <pre class="fullscreen-textarea content-scrollable">{{ fullCommitContent }}</pre>
-      <template #footer>
-        <Button label="Close" icon="pi pi-times" class="close-btn" @click="showFullCommitContent = false" />
+        
       </template>
     </Dialog>
   </div>
@@ -2461,5 +2385,31 @@ pre.content-textarea {
 @media (max-width: 700px) {
   .fullscreen-title { font-size: 1.1em; }
   .fullscreen-textarea { min-width: 0; }
+}
+
+.review-commit-dialog-upgrade .review-warning-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1.5px solid #fde68a;
+  border-radius: 10px;
+  padding: 1em 1.2em;
+  margin-bottom: 1em;
+  font-weight: 600;
+  font-size: 1.05em;
+  text-align: center;
+  gap: 0.7em;
+}
+.review-commit-dialog-upgrade .warning-icon {
+  font-size: 1.7em;
+  color: #f59e0b;
+}
+.review-commit-dialog-upgrade .warning-text {
+  flex: 1;
+  color: #b45309;
+  font-size: 1.05em;
+  line-height: 1.5;
 }
 </style>

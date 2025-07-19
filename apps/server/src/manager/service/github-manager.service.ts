@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { BranchEntity } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import * as console from 'node:console';
+import { In } from 'typeorm';
 
 @Injectable()
 export class GitHubService {
@@ -48,12 +49,12 @@ export class GitHubService {
   }
 
   async pushInitialFile({
-    repo,
-    path,
-    content,
-    message,
-    branch = 'main',
-  }: {
+                          repo,
+                          path,
+                          content,
+                          message,
+                          branch = 'main',
+                        }: {
     repo: string;
     path: string;
     content: string | Buffer;
@@ -91,12 +92,12 @@ export class GitHubService {
   }
 
   async commitChange({
-    repo,
-    branch = 'main',
-    path,
-    content,
-    message,
-  }: {
+                       repo,
+                       branch = 'main',
+                       path,
+                       content,
+                       message,
+                     }: {
     repo: string;
     branch?: string;
     path: string;
@@ -148,11 +149,11 @@ export class GitHubService {
   }
 
   async mergeBranch({
-    repo,
-    base,
-    head,
-    commitMessage,
-  }: {
+                      repo,
+                      base,
+                      head,
+                      commitMessage,
+                    }: {
     repo: string;
     base: string;
     head: string;
@@ -170,21 +171,27 @@ export class GitHubService {
   }
 
   async listCommits(projectId: bigint, branchId: bigint) {
-    const repo = `project-${projectId}`;
-    // Lấy tên branch thực tế từ DB
-    const branchEntity = await this.branchRepository.findOne({
-      where: { id: branchId },
-    });
-    if (!branchEntity) throw new Error('Branch not found');
-    const branchName = branchEntity.name;
-
-    const { data } = await this.octokit.rest.repos.listCommits({
-      owner: this.username,
-      repo,
-      sha: branchName,
-    });
-
-    return data;
+    // Lấy tất cả local commits (không filter status)
+    const localCommits = await (this as any).commitRepository?.find ? await (this as any).commitRepository.find({
+      where: { project: { id: projectId }, branch: { id: branchId } },
+      relations: ['author'],
+      order: { createdAt: 'DESC' }
+    }) : [];
+    // Định dạng lại cho giống FE mong muốn
+    return localCommits.map((c: any) => ({
+      id: c.id,
+      message: c.message,
+      filePath: c.filePath,
+      status: c.status,
+      author: {
+        id: c.author?.id,
+        username: c.author?.username,
+        fullName: c.author?.fullName
+      },
+      createdAt: c.createdAt,
+      reviewMessage: c.reviewMessage,
+      contentSnapshot: c.contentSnapshot
+    }));
   }
 
   async fetchAllBranch(projectId: bigint) {

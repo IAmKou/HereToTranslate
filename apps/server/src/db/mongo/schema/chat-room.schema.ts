@@ -26,7 +26,9 @@ export class ChatRoom {
 
   @Prop()
   updatedAt?: Date;
+
 }
+
 export type ChatRoomDocument = ChatRoom & Document & { _id: Types.ObjectId };
 export const ChatRoomSchema = SchemaFactory.createForClass(ChatRoom);
 

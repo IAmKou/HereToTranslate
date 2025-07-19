@@ -111,7 +111,7 @@ export class UserManagerService {
   async findUsersByIds(ids: number[]) {
     return this.userRepository.find({
       where: { id: In(ids) },
-      select: ['id', 'username'],
+      select: ['id', 'username', 'email', 'phone'],
     });
   }
 

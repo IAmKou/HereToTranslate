@@ -48,12 +48,12 @@ export class GitHubService {
   }
 
   async pushInitialFile({
-                          repo,
-                          path,
-                          content,
-                          message,
-                          branch = 'main',
-                        }: {
+    repo,
+    path,
+    content,
+    message,
+    branch = 'main',
+  }: {
     repo: string;
     path: string;
     content: string | Buffer;
@@ -91,12 +91,12 @@ export class GitHubService {
   }
 
   async commitChange({
-                       repo,
-                       branch = 'main',
-                       path,
-                       content,
-                       message,
-                     }: {
+    repo,
+    branch = 'main',
+    path,
+    content,
+    message,
+  }: {
     repo: string;
     branch?: string;
     path: string;
@@ -148,11 +148,11 @@ export class GitHubService {
   }
 
   async mergeBranch({
-                      repo,
-                      base,
-                      head,
-                      commitMessage,
-                    }: {
+    repo,
+    base,
+    head,
+    commitMessage,
+  }: {
     repo: string;
     base: string;
     head: string;
@@ -172,7 +172,9 @@ export class GitHubService {
   async listCommits(projectId: bigint, branchId: bigint) {
     const repo = `project-${projectId}`;
     // Lấy tên branch thực tế từ DB
-    const branchEntity = await this.branchRepository.findOne({ where: { id: branchId } });
+    const branchEntity = await this.branchRepository.findOne({
+      where: { id: branchId },
+    });
     if (!branchEntity) throw new Error('Branch not found');
     const branchName = branchEntity.name;
 
@@ -185,11 +187,11 @@ export class GitHubService {
     return data;
   }
 
-  async fetchAllBranch(projectId: bigint){
+  async fetchAllBranch(projectId: bigint) {
     const branch = await this.branchRepository.find({
-      where: {project : {id: projectId}},
+      where: { project: { id: projectId } },
     });
-    if (!branch){
+    if (!branch) {
       console.log('no branch found');
     }
     return branch;

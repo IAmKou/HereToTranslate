@@ -8,8 +8,8 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
-  UserEntity, UserTypeEntity, WalletEntity,TranslationApprovalEntity,
-  BranchEntity,CommitEntity,FileEntity
+  UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
+  BranchEntity, CommitEntity, FileEntity, TaskEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -45,7 +45,9 @@ import { FileController } from './controller/file.controller';
 import { PermissionsController } from './controller/project-role.controller';
 import { TranslationController } from './controller/translation.controller';
 import { AdminTransactionController } from './controller/admin-transaction.controller';
-import { ChatController } from '../chat/chat.controller'; // hoặc đúng path của bạn
+import { ChatController } from '../chat/chat.controller';
+import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
+import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway'; 
 
 
 @Global()
@@ -72,6 +74,7 @@ import { ChatController } from '../chat/chat.controller'; // hoặc đúng path 
       BranchEntity,
       CommitEntity,
       FileEntity,
+      TaskEntity,
     ])
   ],
   providers: [
@@ -90,6 +93,8 @@ import { ChatController } from '../chat/chat.controller'; // hoặc đúng path 
     GitHubService,
     FileService,
     TranslationService,
+    TaskManagerService,
+    TaskGateway,
   ],
   exports: [
     CategoryManagerService,
@@ -107,6 +112,7 @@ import { ChatController } from '../chat/chat.controller'; // hoặc đúng path 
     GitHubService,
     FileService,
     TranslationService,
+    TaskManagerService,
   ],
   controllers: [
     CategoryController,
@@ -121,7 +127,7 @@ import { ChatController } from '../chat/chat.controller'; // hoặc đúng path 
     PaymentController,
     FileController,
     PermissionsController,
-    TranslationController, // Đăng ký controller translation
+    TranslationController,
     AdminTransactionController,
     ChatController
   ]

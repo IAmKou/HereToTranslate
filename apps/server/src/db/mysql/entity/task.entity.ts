@@ -22,11 +22,23 @@ export class TaskEntity {
   @Column({ type: 'enum', enum: TaskStatus, default: TaskStatus.Pending })
   status: TaskStatus;
 
+  @Column({ type: 'varchar', nullable: true })
+  projectId?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  branchId?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  fileId?: string;
+
+  @Column({ type: 'int', nullable: true })
+  filePart?: number;
+
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
-  assignedTo: UserEntity;
+  assignedTo?: UserEntity;
 
   @ManyToOne(() => ProjectGroupEntity, { nullable: true, onDelete: 'SET NULL' })
-  group: ProjectGroupEntity;
+  group?: ProjectGroupEntity;
 
   @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
   createdBy: UserEntity;
@@ -37,3 +49,4 @@ export class TaskEntity {
   @CreateDateColumn()
   createdAt: Date;
 }
+

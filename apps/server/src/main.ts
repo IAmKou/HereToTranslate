@@ -24,14 +24,14 @@ async function bootstrap() {
   ));
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
   app.enableCors({
-    origin: 'http://localhost:4200', // Vue dev server
+    origin: ['http://localhost:4200','http://26.19.116.244:4200'], // Vue dev server
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTION'],
     credentials: true,
   });
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  await app.listen(3000, '0.0.0.0');
   Logger.log(
     `🚀 Application is running on: http://localhost:${port}`
   );

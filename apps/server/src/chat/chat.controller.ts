@@ -5,7 +5,7 @@ import {
   Get,
   NotFoundException,
   Param, Patch,
-  Post,
+  Post, Query,
   Req,
   UseGuards
 } from '@nestjs/common';
@@ -26,7 +26,8 @@ import { Types } from 'mongoose';
     const rooms = await this.chatService.getChatRoomsForUser(userId);
     return rooms.map((room) => ({
       ...room,
-      _id: room._id.toString(), // ✅ Force ObjectId to string
+      _id: room._id.toString(),
+      createdBy: room.createdBy
     }));
   }
 
@@ -88,6 +89,24 @@ import { Types } from 'mongoose';
   async deleteMessage(@Param('id') id: string) {
     return this.chatService.deleteMessage(id);
   }
+  @Get('search')
+  async searchUser(@Query('q') q: string) {
+    if (!q) {
+      throw new BadRequestException('Missing search query');
+    }
+    const user = await this.userService.searchByEmailOrUsername(q.trim());
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+    };
+  }
   @Patch('rooms/:id/add-member')
   async addMember(
     @Param('id') roomId: string,
@@ -98,6 +117,15 @@ import { Types } from 'mongoose';
   @Get('rooms/:roomId/participants')
   async getRoomParticipants(@Param('roomId') roomId: string) {
     return this.chatService.getParticipants(roomId);
+  }
+
+  @Patch('rooms/:id/remove-member')
+  async removeMember(
+    @Param('id') roomId: string,
+    @Body('creatorId') creatorId: number,
+    @Body('userId') userId: number,
+  ) {
+    return this.chatService.removeMemberFromRoom(roomId, creatorId, userId);
   }
 }
 

@@ -25,8 +25,8 @@
 
     <!-- ✅ Main chat body -->
     <div class="chat-body">
+      <!-- Messages panel -->
       <div class="messages" ref="messageContainer" :class="{ 'info-open': showInfo }">
-        <!-- messages loop -->
         <div
           v-for="(message, index) in messages"
           :key="message._id"
@@ -43,14 +43,14 @@
               {{ message.senderId === currentUserId ? 'You' : message.senderUsername || 'Unknown' }}
             </div>
 
-            <!-- edit mode -->
+            <!-- Edit mode -->
             <div v-if="editingMessageId === message._id" class="edit-container">
               <input v-model="editingText" @keyup.enter="confirmEdit(message)" class="edit-input" />
               <button class="save-btn" @click="confirmEdit(message)">💾</button>
               <button class="cancel-btn" @click="cancelEdit">✖️</button>
             </div>
 
-            <!-- normal mode -->
+            <!-- Normal mode -->
             <div v-else class="message-content">
               <div v-if="message.replyTo" class="reply-ref">
                 ↪ {{ message.replyTo.senderId === currentUserId ? 'You' : message.replyTo.senderUsername || 'Unknown' }}:
@@ -66,7 +66,7 @@
             </div>
           </div>
 
-          <!-- toolbar -->
+          <!-- Toolbar -->
           <div v-if="hoveredMessageId === message._id" class="toolbar">
             <button class="toolbar-btn" @click="handleReply(message)">💬</button>
             <button v-if="message.senderId === currentUserId" class="toolbar-btn" @click="startEdit(message)">✏️</button>
@@ -75,26 +75,40 @@
         </div>
       </div>
 
-      <!-- ✅ Participants panel -->
+      <!-- Participants info panel -->
       <div v-if="showInfo" class="chat-info-panel">
         <h3>Participants</h3>
+
+        <!-- Admin Info -->
+        <div class="admin-info">
+          <p><strong>Admin:</strong> {{ adminUser?.username || 'Unknown' }}</p>
+        </div>
+
         <ul class="participants-list">
           <li v-for="user in participants" :key="user.id" class="participant-item">
             <div class="participant-header" @click="toggleUserDetail(user)">
-              👤 {{ user.username }}
+              👤 {{ user.username || 'Unknown' }}
             </div>
             <div v-if="selectedUser && selectedUser.id === user.id" class="user-detail">
               <p><strong>Name:</strong> {{ selectedUser.username }}</p>
               <p><strong>Email:</strong> {{ selectedUser.email }}</p>
               <p><strong>Phone:</strong> {{ selectedUser.phone }}</p>
               <button @click="selectedUser = null">Close</button>
+              <button
+                v-if="props.currentUserId === props.createdById && user.id !== props.createdById"
+                @click="kickMember(user.id)"
+              >Kick</button>
+              <button
+                v-if="props.currentUserId === user.id && user.id !== props.createdById"
+                @click="kickMember(user.id)"
+              >Leave Chat</button>
             </div>
           </li>
         </ul>
       </div>
-    </div> <!-- ✅ CLOSE chat-body -->
+    </div> <!-- ✅ END chat-body -->
 
-    <!-- ✅ Reply preview below chat body but above input -->
+    <!-- ✅ Reply preview below chat body -->
     <div v-if="replyingTo" class="reply-preview">
       Replying to: {{ replyingTo.senderUsername || 'Unknown' }} - "{{ replyingTo.message }}"
       <button @click="replyingTo = null">Cancel</button>
@@ -126,6 +140,7 @@ const props = defineProps<{
   currentUserId: number;
   currentUsername: string;
   roomName: string;
+  createdById: number;
 }>();
 
 interface ChatMessage {
@@ -159,6 +174,7 @@ const selectedUser = ref<{ id:number; username:string; email:string; phone:strin
 const newMemberUsernameOrEmail = ref('');
 const addMemberError = ref('');
 const showAddMemberInput = ref(false);
+const adminUser = ref<{ id:number; username:string } | null>(null);
 
 const toggleUserDetail = (user: { id:number; username:string; email:string; phone:string }) => {
   // if the same user is clicked again, close it
@@ -173,23 +189,34 @@ const handleReply = (message: ChatMessage) => {
   replyingTo.value = message;
 };
 
-const toggleInfoPanel = async () => {
-  showInfo.value = !showInfo.value
-  if (showInfo.value) {
-    const res = await axios.get(`/api/chat/rooms/${props.roomId}/participants`)
-    participants.value = res.data
-  }
-}
+const toggleInfoPanel = () => {
+  showInfo.value = !showInfo.value;
+};
 
 const loadParticipants = async () => {
   try {
     const res = await axios.get(`/api/chat/rooms/${props.roomId}/participants`);
-    participants.value = res.data;
+    console.log('Participants API response:', res.data);
+    const data = Array.isArray(res.data)
+      ? res.data
+      : Array.isArray(res.data.participants)
+        ? res.data.participants
+        : [];
+
+    participants.value = data;
+    if (props.createdById) {
+      const admin = participants.value.find(
+        u => String(u.id) === String(props.createdById)
+      );
+      adminUser.value = admin || null;
+    } else {
+      adminUser.value = null;
+    }
   } catch (err) {
     console.error('❌ Failed to load participants:', err);
+    participants.value = []; // reset on error
   }
 };
-
 // Call when mounted or roomId changes:
 watch(
   () => props.roomId,
@@ -206,14 +233,13 @@ const addMember = async () => {
   const target = newMemberUsernameOrEmail.value.trim();
   if (!target) return;
 
-  // Prevent adding yourself
   if (target === props.currentUsername) {
     addMemberError.value = "❌ You can't add yourself.";
     return;
   }
 
   try {
-    const res = await axios.get('/api/users/search', {
+    const res = await axios.get('/api/chat/search', {
       params: { q: target },
       headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
     });
@@ -244,6 +270,26 @@ const addMember = async () => {
     }
   }
 };
+const kickMember = async (userId: number) => {
+  if (!confirm(userId === props.currentUserId ? 'Leave this room?' : 'Kick this member?')) return;
+  try {
+    await axios.patch(`/api/chat/rooms/${props.roomId}/remove-member`, {
+      creatorId: props.currentUserId,
+      userId: userId,
+    }, { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } });
+
+    if (userId === props.currentUserId) {
+      alert('✅ You left the chat room.');
+      location.reload();
+    } else {
+      await loadParticipants();
+      alert('✅ Member removed.');
+    }
+  } catch (err: any) {
+    alert(err.response?.data?.message || '❌ Failed to remove member.');
+  }
+};
+
 
 
 // ✅ Start editing
@@ -333,7 +379,7 @@ const loadMessages = async () => {
 // ✅ Socket connect
 const connectSocket = () => {
   if (socket.value && socket.value.connected) return
-  socket.value = io('http://26.19.116.244:3000/chat', {
+  socket.value = io('http://localhost:3000/chat', {
     withCredentials: true,
     path: '/api/chat/socket.io',
     transports: ['websocket']
@@ -373,12 +419,18 @@ watch(
   () => props.roomId,
   async (newRoomId) => {
     if (newRoomId && newRoomId.length === 24) {
-      await loadMessages()
-      socket.value?.connected ? socket.value.emit('join_room', newRoomId) : connectSocket()
+      await loadParticipants();
+      await loadMessages();
+
+      if (socket.value?.connected) {
+        socket.value.emit('join_room', newRoomId);
+      } else {
+        connectSocket();
+      }
     }
   },
   { immediate: true }
-)
+);
 
 onMounted(connectSocket)
 onUnmounted(() => {
@@ -738,5 +790,27 @@ onUnmounted(() => {
   font-size: 13px;
   margin: 6px 0 0 0;
 }
+.admin-info {
+  background: #eef3ff;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  border-left: 3px solid #007bff;
+  font-size: 14px;
+}
+
+.user-detail button {
+  margin-top: 6px;
+  margin-right: 6px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.user-detail button:nth-child(4) {
+  background-color: #ff4d4f;
+  color: white;
+}
+
 </style>
 

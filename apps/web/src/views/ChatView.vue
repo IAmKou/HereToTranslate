@@ -1,51 +1,49 @@
 <template>
-  <div id="chat-app">
-    <div class="chat-container">
-      <!-- Sidebar -->
-      <div class="chat-sidebar">
-        <h2 class="welcome">Welcome, {{ currentUser.username }}</h2>
+  <div class="chat-layout">
+    <!-- Sidebar -->
+    <div class="chat-sidebar">
+      <h2 class="welcome">Welcome, {{ currentUser.username }}</h2>
 
-        <!-- 🔍 Start Chat -->
-        <div class="search-user">
-          <input v-model="searchQuery" placeholder="Enter username or email" />
-          <button @click="searchAndStartChat">Start Chat</button>
-        </div>
-        <p v-if="searchError" class="error">{{ searchError }}</p>
-
-        <!-- 🧾 Chat Rooms -->
-        <div class="room-list">
-          <h3>Your Chat Rooms</h3>
-          <ul>
-            <li
-              v-for="room in chatRooms"
-              :key="getRoomId(room)"
-              :class="{ active: selectedRoom && getRoomId(selectedRoom) === getRoomId(room) }"
-            >
-              <div class="room-item" @click="openRoom(room)">
-                <span class="room-name">{{ room.name }}</span>
-                <span class="room-type">{{ room.isGroupChat ? 'Group' : 'DM' }}</span>
-              </div>
-              <div class="room-actions">
-                <button @click.stop="renameRoom(room)">✏️</button>
-                <button @click.stop="deleteRoom(room)">🗑️</button>
-              </div>
-            </li>
-          </ul>
-        </div>
+      <div class="search-user">
+        <input v-model="searchQuery" placeholder="Enter username or email" />
+        <button @click="searchAndStartChat">Start Chat</button>
       </div>
+      <p v-if="searchError" class="error">{{ searchError }}</p>
 
-      <!-- Chat Room -->
-      <div class="chat-main">
-        <ChatRoom
-          v-if="selectedRoom && selectedRoom._id"
-          :roomId="getRoomId(selectedRoom)"
-          :currentUserId="currentUser.id"
-          :currentUsername="currentUser.username"
-          :roomName="selectedRoom.name"
-        />
-        <div v-else class="chat-placeholder">
-          Select a chat room to start messaging.
-        </div>
+      <div class="room-list">
+        <h3>Your Chat Rooms</h3>
+        <ul>
+          <li
+            v-for="room in chatRooms"
+            :key="getRoomId(room)"
+            :class="{ active: selectedRoom && getRoomId(selectedRoom) === getRoomId(room) }"
+            @click="openRoom(room)"
+          >
+            <div class="room-item">
+              <span class="room-name">{{ room.name }}</span>
+              <span class="room-type">{{ room.isGroupChat ? 'Group' : 'DM' }}</span>
+            </div>
+            <div class="room-actions">
+              <button @click.stop="renameRoom(room)">✏️</button>
+              <button @click.stop="deleteRoom(room)">🗑️</button>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Main chat area -->
+    <div class="chat-main">
+      <ChatRoom
+        v-if="selectedRoom && selectedRoom._id"
+        :roomId="getRoomId(selectedRoom)"
+        :currentUserId="currentUser.id"
+        :currentUsername="currentUser.username"
+        :roomName="selectedRoom.name"
+        :createdById="selectedRoom.createdBy"
+      />
+      <div v-else class="chat-placeholder">
+        Select a chat room to start messaging.
       </div>
     </div>
   </div>
@@ -61,12 +59,9 @@ interface ChatRoomInfo {
   name: string;
   isGroupChat: boolean;
   members: any[];
-  oppositeUser?: {
-    id: number;
-    username: string;
-  };
+  createdBy: number;
+  oppositeUser?: { id: number; username: string };
 }
-
 
 interface UserInfo {
   id: number;
@@ -75,7 +70,6 @@ interface UserInfo {
 }
 
 const accessToken = localStorage.getItem('accessToken');
-
 const currentUser = ref<UserInfo>({ id: 0, username: '', email: '' });
 const chatRooms = ref<ChatRoomInfo[]>([]);
 const selectedRoom = ref<(ChatRoomInfo & { _id: string }) | null>(null);
@@ -89,8 +83,7 @@ function getRoomId(room: any): string {
 }
 
 function normalizeRoomId(room: any): ChatRoomInfo {
-  const rawId = getRoomId(room);
-  return { ...room, _id: rawId };
+  return { ...room, _id: getRoomId(room) };
 }
 
 const fetchCurrentUser = async () => {
@@ -117,7 +110,8 @@ const openRoom = (room: ChatRoomInfo) => {
     selectedRoom.value = {
       ...room,
       _id: room._id,
-      oppositeUser: room.oppositeUser // ✅ make sure this is stored
+      createdBy: room.createdBy ?? 0,
+      oppositeUser: room.oppositeUser,
     };
   }
 };
@@ -126,7 +120,6 @@ const searchAndStartChat = async () => {
   searchError.value = '';
   const target = searchQuery.value.trim();
   if (!target) return;
-
   if (target === currentUser.value.username || target === currentUser.value.email) {
     searchError.value = "You can't chat with yourself.";
     return;
@@ -138,7 +131,6 @@ const searchAndStartChat = async () => {
       { targetIdentifier: target },
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
-
     const room = res.data as ChatRoomInfo;
     if (room && String(room._id).length === 24) {
       const normalized = { ...normalizeRoomId(room), oppositeUser: room.oppositeUser };
@@ -155,11 +147,9 @@ const searchAndStartChat = async () => {
   }
 };
 
-/* ✏️ Rename chat room */
 const renameRoom = async (room: ChatRoomInfo) => {
   const newName = prompt('Enter new name for this room:', room.name);
   if (!newName || newName.trim() === '' || newName === room.name) return;
-
   try {
     await axios.patch(
       `/api/chat/rooms/${getRoomId(room)}`,
@@ -169,11 +159,9 @@ const renameRoom = async (room: ChatRoomInfo) => {
     room.name = newName.trim();
   } catch (err) {
     alert('Failed to rename room');
-    console.error(err);
   }
 };
 
-/* 🗑️ Delete chat room */
 const deleteRoom = async (room: ChatRoomInfo) => {
   if (!confirm(`Are you sure you want to delete "${room.name}"?`)) return;
   try {
@@ -186,7 +174,6 @@ const deleteRoom = async (room: ChatRoomInfo) => {
     }
   } catch (err) {
     alert('Failed to delete room');
-    console.error(err);
   }
 };
 
@@ -197,35 +184,27 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-#chat-app {
+.chat-layout {
+  display: flex;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: #fff;
-}
-
-.chat-container {
-  flex: 1;
-  display: flex;
-  height: 100%;
-  border-top: 1px solid #ddd;
+  background: #fff;
   overflow: hidden;
 }
 
 /* Sidebar */
 .chat-sidebar {
+  width: 260px;
   background: #f8f8f8;
   border-right: 1px solid #ddd;
   padding: 12px;
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
 
 .welcome {
   font-size: 16px;
-  margin-bottom: 12px;
   font-weight: 600;
+  margin-bottom: 12px;
 }
 
 .search-user {
@@ -243,16 +222,15 @@ onMounted(async () => {
 
 .search-user button {
   padding: 6px 10px;
-  background-color: #007bff;
-  color: white;
+  background: #007bff;
+  color: #fff;
   border: none;
-  cursor: pointer;
   border-radius: 4px;
-  font-size: 13px;
+  cursor: pointer;
 }
 
 .search-user button:hover {
-  background-color: #0056b3;
+  background: #0056b3;
 }
 
 .room-list {
@@ -261,8 +239,8 @@ onMounted(async () => {
 }
 
 .room-list h3 {
-  margin-bottom: 8px;
   font-size: 14px;
+  margin-bottom: 8px;
 }
 
 .room-list ul {
@@ -274,15 +252,22 @@ onMounted(async () => {
 .room-list li {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   padding: 6px;
   border-bottom: 1px solid #ddd;
   cursor: pointer;
   font-size: 14px;
 }
 
+.room-list li.active {
+  background: #e6f0ff;
+  font-weight: bold;
+}
+
+.room-list li:hover {
+  background: #f0f0f0;
+}
+
 .room-item {
-  flex: 1;
   display: flex;
   flex-direction: column;
 }
@@ -303,15 +288,6 @@ onMounted(async () => {
   color: #007bff;
 }
 
-.room-list li.active {
-  background-color: #e6f0ff;
-  font-weight: bold;
-}
-
-.room-list li:hover {
-  background-color: #f0f0f0;
-}
-
 .room-name {
   font-weight: 500;
 }
@@ -321,14 +297,12 @@ onMounted(async () => {
   color: #777;
 }
 
+/* Main chat area */
 .chat-main {
   flex: 1;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-left: 1px solid #eee;
-  border-right: 1px solid #eee;
+  background: #fff;
 }
 
 .chat-placeholder {

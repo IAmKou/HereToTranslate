@@ -122,12 +122,16 @@
                 <div class="lts-row lts-desc">
                   <span class="lts-desc-icon">
                     <template v-if="wallet.latestTransaction.type === 'Deposit'">💰</template>
+                    <template v-else-if="wallet.latestTransaction.type === 'Payment'">💳</template>
                     <template v-else-if="wallet.latestTransaction.type === 'Withdrawal'">💸</template>
                     <template v-else>🔄</template>
                   </span>
                   <span class="lts-desc-text">
                     <template v-if="wallet.latestTransaction.type === 'Deposit'">
                       You deposited {{ formatCurrency(wallet.latestTransaction.amount) }} via PayPal.
+                    </template>
+                    <template v-else-if="wallet.latestTransaction.type === 'Payment'">
+                      You received {{ formatCurrency(wallet.latestTransaction.amount) }} for translation work.
                     </template>
                     <template v-else-if="wallet.latestTransaction.type === 'Withdrawal'">
                       You withdrew {{ formatCurrency(Math.abs(wallet.latestTransaction.amount)) }} to PayPal.

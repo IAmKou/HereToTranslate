@@ -99,16 +99,25 @@ export class WalletManagerService implements OnModuleInit {
         status: In([TransactionStatus.Completed, TransactionStatus.Approved]),
       },
       order: { createdAt: 'DESC' },
-      relations: ['user'],
+      relations: ['user', 'request'],
     });
     const txn = txns.find(t => Number(t.amount) !== 0);
     if (!txn) return null;
+
+    // Xác định type dựa trên logic mới
+    let type = 'Deposit';
+    if (txn.amount < 0) {
+      type = 'Withdraw';
+    } else if (txn.amount > 0 && txn.request) {
+      type = 'Payment';
+    }
+
     return {
       id: txn.id,
       amount: txn.amount,
       status: txn.status,
       createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
-      type: txn.amount > 0 ? 'Deposit' : 'Withdraw',
+      type: type,
     };
   }
 
@@ -144,22 +153,71 @@ export class WalletManagerService implements OnModuleInit {
     return { success: true };
   }
 
-  // Lấy lịch sử giao dịch của user
+  // Lấy lịch sử giao dịch của user bằng queryBuilder để lấy requesterId raw
   async getUserTransactions(userId: bigint) {
-    const txns = await this.transactionRepository.find({
-      where: { user: { id: userId } },
-      relations: ['user'],
-      order: { createdAt: 'DESC' },
+    console.log('getUserTransactions userId:', userId, typeof userId);
+    const qb = this.transactionRepository.createQueryBuilder('t')
+      .leftJoinAndSelect('t.user', 'user')
+      .leftJoinAndSelect('t.request', 'request')
+      .leftJoinAndSelect('request.assignee', 'assignee')
+      .leftJoinAndSelect('request.project', 'project')
+      .leftJoinAndSelect('project.createdBy', 'projectCreator')
+      .addSelect('request.requesterId', 'request_requesterId')
+      .where('user.id = :userId', { userId: Number(userId) })
+      .orderBy('t.createdAt', 'DESC');
+    const txnsRaw = await qb.getRawAndEntities();
+    const mappedTxns = txnsRaw.entities.map((txn, idx) => {
+      const requesterId = String(txnsRaw.raw[idx]['request_requesterId']);
+      const userId = String(txn.user?.id);
+      const result = userId === requesterId;
+      // Populate project info if available
+      let project = undefined;
+      if (txn.request && txn.request.project) {
+        project = {
+          id: txn.request.project.id?.toString() || null,
+          name: txn.request.project.name || null,
+          status: txn.request.project.status || null,
+          assignee: txn.request.project.assignee ? {
+            id: txn.request.project.assignee.id?.toString() || null,
+            fullName: txn.request.project.assignee.fullName || null,
+            email: txn.request.project.assignee.email || null,
+            phone: txn.request.project.assignee.phone || null
+          } : null
+        };
+      }
+      return {
+        ...txn,
+        createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
+        paypalEmail: txn.paypalEmail || txn.user?.paypalEmail || null,
+        status: (txn.amount > 0 && txn.status !== TransactionStatus.Approved && txn.status !== TransactionStatus.Completed) ? TransactionStatus.On_Hold : txn.status,
+        requestId: txn.request?.id?.toString() || null,
+        isRequester: result,
+        request: txn.request ? {
+          ...txn.request,
+          project
+        } : undefined,
+        debug: {
+          hasRequest: !!txn.request,
+          hasAssignee: !!txn.request?.assignee,
+          assigneeId: txn.request?.assignee?.id,
+          userId: txn.user?.id,
+          isAssignee: txn.request?.assignee?.id === txn.user?.id
+        }
+      };
     });
-    // Get user's wallet to check for wallet-level PayPal email
-    const wallet = await this.walletRepository.findOne({ where: { user: { id: userId } } });
-    return txns.map((txn: any) => ({
-      ...txn,
-      createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
-      paypalEmail: txn.paypalEmail || txn.user?.paypalEmail || wallet?.paypalEmail || null,
-      // If deposit and not APPROVED, force status to ON_HOLD for display
-      status: txn.amount > 0 && txn.status !== TransactionStatus.Approved ? TransactionStatus.On_Hold : txn.status,
-    }));
+
+    console.log('✅ getUserTransactions for userId:', userId, 'Found transactions:', mappedTxns.map(t => ({
+      id: t.id,
+      amount: t.amount,
+      status: t.status,
+      requestId: t.requestId,
+      isRequester: t.isRequester,
+      userEmail: t.user?.email,
+      type: t.amount > 0 ? (t.requestId ? (t.isRequester ? 'Deposit' : 'Payment') : 'Deposit') : 'Withdrawal',
+      debug: t.debug
+    })));
+
+    return mappedTxns;
   }
 
   // Lấy tất cả giao dịch (cho admin)

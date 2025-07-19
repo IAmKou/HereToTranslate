@@ -77,7 +77,6 @@ export class ChatService {
 
     const results = await Promise.all(
       rooms.map(async (room) => {
-        // find the other participant for DM
         let oppositeUser = null;
         if (!room.isGroupChat) {
           const otherId = room.participants.find((id: number) => id !== userId);
@@ -85,14 +84,17 @@ export class ChatService {
             oppositeUser = await this.userService.findUserById(otherId);
           }
         }
+
         return {
-          ...room,
           _id: room._id.toString(),
+          name: room.name,
+          isGroupChat: room.isGroupChat,
+          participants: room.participants,
+          createdBy: room.createdBy,
           oppositeUser,
         };
       }),
     );
-
     return results;
   }
 
@@ -185,17 +187,38 @@ export class ChatService {
     return room.toObject();
   }
 
+  async removeMemberFromRoom(roomId: string, creatorId: number, userId: number) {
+    const room = await this.chatRoomModel.findById(roomId);
+    if (!room) throw new NotFoundException('Room not found');
+
+    if (room.createdBy !== creatorId) {
+      throw new BadRequestException('Only the room creator can remove members.');
+    }
+
+    if (userId === creatorId) {
+      throw new BadRequestException('Creator cannot be removed.');
+    }
+
+    room.participants = room.participants.filter((id: number) => id !== userId);
+    await room.save();
+    return { success: true, removedUserId: userId };
+  }
+
+
   async getParticipants(roomId: string) {
     const room = await this.chatRoomModel.findById(roomId).lean();
     if (!room) throw new NotFoundException('Room not found');
 
-    const participants = room.participants || [];
-    const users = await this.userService.findUsersByIds(participants);
-    return users.map(u => ({
-      id: u.id,
-      username: u.username,
-      email: u.email,
-      phone: u.phone,
-    }));
+    const users = await this.userService.findUsersByIds(room.participants);
+
+    return {
+      createdBy: room.createdBy,
+      participants: users.map(u => ({
+        id: Number(u.id),
+        username: u.username,
+        email: u.email,
+        phone: u.phone,
+      })),
+    };
   }
 }

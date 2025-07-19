@@ -6,7 +6,8 @@ import {
   CreateDateColumn,
   ManyToMany,
   JoinTable,
-  OneToMany
+  OneToMany,
+  JoinColumn
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
@@ -28,6 +29,7 @@ export class RequestEntity {
   id: bigint;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'requesterId' })
   requester: UserEntity;
 
   @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'SET NULL' })

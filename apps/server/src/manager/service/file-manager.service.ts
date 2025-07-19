@@ -68,7 +68,7 @@ export class FileService {
     try {
       await this.githubService.pushInitialFile({
         repo: repoName,
-        path: `uploads/${timestamped}`,
+        path: timestamped,
         content: fileContent,
         message: `Uploaded ${fileName}`,
       });
@@ -77,7 +77,7 @@ export class FileService {
     }
 
     // this.logger.log(`Saved FileEntity: ${JSON.stringify(savedFile)}`); // XÓA hoặc comment dòng này để tránh lỗi BigInt
-    this.logger.log(`Pushed file to repo: ${repoName}, path: uploads/${timestamped}`);
+    this.logger.log(`Pushed file to repo: ${repoName}, path: ${timestamped}`);
 
     return {
       fileId: savedFile.id.toString(),

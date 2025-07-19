@@ -12,8 +12,8 @@ export class WalletManagerService implements OnModuleInit {
     private readonly walletRepository: Repository<WalletEntity>,
     @InjectRepository(TransactionEntity)
     private readonly transactionRepository: Repository<TransactionEntity>,
-    @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
+    // @InjectRepository(UserEntity)
+    // private readonly userRepository: Repository<UserEntity>,
   ) {}
 
   async onModuleInit() {
@@ -121,11 +121,11 @@ export class WalletManagerService implements OnModuleInit {
       .getMany();
   }
 
-  async linkPaypal(userId: bigint, paypalEmail: string) {
-    const user = await this.userRepository.findOneOrFail({ where: { id: userId } });
-    user.paypalEmail = paypalEmail;
-    await this.userRepository.save(user);
-  }
+  // async linkPaypal(userId: bigint, paypalEmail: string) {
+  //   const user = await this.userRepository.findOneOrFail({ where: { id: userId } });
+  //   user.paypalEmail = paypalEmail;
+  //   await this.userRepository.save(user);
+  // }
 
   // Đồng bộ balance cho tất cả ví dựa trên transaction deposit đã hoàn thành
   async syncAllWalletBalances() {
@@ -228,7 +228,6 @@ export class WalletManagerService implements OnModuleInit {
       createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
       requestId: txn.request?.id?.toString() || null,
       projectId: txn.request?.project?.id?.toString() || null,
-      description: txn.request?.description || txn.description || null,
     }));
   }
 }

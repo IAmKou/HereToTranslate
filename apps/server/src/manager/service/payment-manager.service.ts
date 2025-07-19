@@ -94,6 +94,12 @@ export class PaypalService {
     const accessToken = await this.getAccessToken();
 
     try {
+      // Chuyển location sang tiếng Anh nếu là Hà Nội hoặc TP.HCM
+      let locationEn = 'N/A';
+      if (user.location) {
+        if (user.location.toLowerCase().includes('hà nội')) locationEn = 'Hanoi';
+        else if (user.location.toLowerCase().includes('hcm') || user.location.toLowerCase().includes('hồ chí minh')) locationEn = 'Ho Chi Minh City';
+      }
       const { data } = await axios.post(
         `${this.api}/v2/checkout/orders`,
         {
@@ -105,11 +111,27 @@ export class PaypalService {
                 value: depositAmount.toFixed(2),
               },
               description: `50% Deposit (5% fee included) for request ID ${request.id}`,
+              shipping: {
+                name: {
+                  full_name: user.fullName || user.username || user.email, // Giữ nguyên tên
+                },
+                address: {
+                  address_line_1: user.email, // Email luôn là tiếng Anh
+                  admin_area_2: locationEn, // Thành phố tiếng Anh
+                  admin_area_1: '',
+                  postal_code: '000000',
+                  country_code: 'VN',
+                },
+                phone: user.phone || '',
+              },
             },
           ],
           application_context: {
             return_url: `http://localhost:4200/paypal-success`,
             cancel_url: `http://localhost:4200/paypal/cancel`,
+            shipping_preference: 'SET_PROVIDED_ADDRESS',
+            brand_name: 'HereToTranslate',
+            user_action: 'PAY_NOW',
           },
         },
         {
@@ -483,10 +505,6 @@ export class PaypalService {
     const adminWallet = await this.walletManagerService.getOrCreateWallet(
       this.ADMIN_USER_ID
     );
-    if (Number(adminWallet.balance) < amount) {
-      throw new BadRequestException('Admin wallet has insufficient funds');
-    }
-
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
       request = await this.requestRepository.findOneOrFail({

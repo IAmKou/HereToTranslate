@@ -791,7 +791,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     if (approve) {
       const githubRepo = `project-${commit.project.id}`;
-      const githubBranch = `branch-${commit.branch.id}`;
+      // Lấy tên branch thực tế từ DB
+      const branchEntity = await this.branchRepository.findOne({ where: { id: commit.branch.id } });
+      if (!branchEntity) throw new Error('Branch not found');
+      const githubBranch = branchEntity.name;
 
       this.logger.log(`[GITHUB] Start pushing commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`);
       try {

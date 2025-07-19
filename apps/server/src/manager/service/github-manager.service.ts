@@ -48,12 +48,12 @@ export class GitHubService {
   }
 
   async pushInitialFile({
-    repo,
-    path,
-    content,
-    message,
-    branch = 'main',
-  }: {
+                          repo,
+                          path,
+                          content,
+                          message,
+                          branch = 'main',
+                        }: {
     repo: string;
     path: string;
     content: string | Buffer;
@@ -91,12 +91,12 @@ export class GitHubService {
   }
 
   async commitChange({
-    repo,
-    branch = 'main',
-    path,
-    content,
-    message,
-  }: {
+                       repo,
+                       branch = 'main',
+                       path,
+                       content,
+                       message,
+                     }: {
     repo: string;
     branch?: string;
     path: string;
@@ -148,11 +148,11 @@ export class GitHubService {
   }
 
   async mergeBranch({
-    repo,
-    base,
-    head,
-    commitMessage,
-  }: {
+                      repo,
+                      base,
+                      head,
+                      commitMessage,
+                    }: {
     repo: string;
     base: string;
     head: string;
@@ -171,7 +171,10 @@ export class GitHubService {
 
   async listCommits(projectId: bigint, branchId: bigint) {
     const repo = `project-${projectId}`;
-    const branchName = `branch-${branchId}`;
+    // Lấy tên branch thực tế từ DB
+    const branchEntity = await this.branchRepository.findOne({ where: { id: branchId } });
+    if (!branchEntity) throw new Error('Branch not found');
+    const branchName = branchEntity.name;
 
     const { data } = await this.octokit.rest.repos.listCommits({
       owner: this.username,

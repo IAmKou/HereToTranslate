@@ -29,8 +29,8 @@
                     Title
                   </span>
                   <span class="overview-value">{{
-                    request?.title || 'N/A'
-                  }}</span>
+                      request?.title || 'N/A'
+                    }}</span>
                 </div>
                 <div class="overview-row">
                   <span class="overview-label">
@@ -148,8 +148,8 @@
                     Requester
                   </span>
                   <span class="overview-value">{{
-                    request?.requester?.username || 'N/A'
-                  }}</span>
+                      request?.requester?.username || 'N/A'
+                    }}</span>
                 </div>
                 <div class="overview-row">
                   <span class="overview-label">
@@ -158,8 +158,8 @@
                   </span>
                   <span class="overview-value">
                     <span class="category-badge">{{
-                      request?.category?.name || 'N/A'
-                    }}</span>
+                        request?.category?.name || 'N/A'
+                      }}</span>
                   </span>
                 </div>
                 <div class="overview-row">
@@ -173,7 +173,7 @@
                         v-for="tag in request.tags"
                         :key="tag.id"
                         class="tag-badge"
-                        >{{ tag.name }}</span
+                      >{{ tag.name }}</span
                       >
                     </template>
                     <template v-else>
@@ -193,8 +193,8 @@
                     Created At
                   </span>
                   <span class="overview-value">{{
-                    formatDate(request?.createdAt)
-                  }}</span>
+                      formatDate(request?.createdAt)
+                    }}</span>
                 </div>
               </div>
             </div>
@@ -234,8 +234,8 @@
                     <div class="file-details">
                       <span class="file-name">{{ file.fileName }}</span>
                       <span class="file-size">{{
-                        formatFileSize(file.fileSize)
-                      }}</span>
+                          formatFileSize(file.fileSize)
+                        }}</span>
                     </div>
                   </div>
                   <Button
@@ -269,8 +269,8 @@
                   <div class="history-content">
                     <div class="history-status">
                       <span class="status-text">{{
-                        formatStatus(history.status)
-                      }}</span>
+                          formatStatus(history.status)
+                        }}</span>
                       <span
                         :class="statusClass(history.status)"
                         class="status-badge-small"
@@ -280,11 +280,11 @@
                     </div>
                     <div class="history-details">
                       <span v-if="history.actor" class="actor">{{
-                        history.actor
-                      }}</span>
+                          history.actor
+                        }}</span>
                       <span class="timestamp">{{
-                        formatDateTime(history.timestamp)
-                      }}</span>
+                          formatDateTime(history.timestamp)
+                        }}</span>
                     </div>
                     <div v-if="history.comment" class="history-comment">
                       {{ history.comment }}
@@ -332,10 +332,10 @@
                       </i>
                     </div>
                     <span class="rating-score">{{
-                      request.requester.rating.toFixed(1)
-                    }}</span>
+                        request.requester.rating.toFixed(1)
+                      }}</span>
                     <span class="rating-count"
-                      >({{ request.requester.reviewCount || 0 }} reviews)</span
+                    >({{ request.requester.reviewCount || 0 }} reviews)</span
                     >
                   </div>
                 </div>
@@ -368,10 +368,10 @@
                       </i>
                     </div>
                     <span class="rating-score">{{
-                      request.assignee.rating.toFixed(1)
-                    }}</span>
+                        request.assignee.rating.toFixed(1)
+                      }}</span>
                     <span class="rating-count"
-                      >({{ request.assignee.reviewCount || 0 }} reviews)</span
+                    >({{ request.assignee.reviewCount || 0 }} reviews)</span
                     >
                   </div>
                 </div>
@@ -465,7 +465,7 @@
                       v-if="request?.requester?.email"
                       :href="`mailto:${request.requester.email}`"
                       class="email-link"
-                      >{{ request.requester.email }}</a
+                    >{{ request.requester.email }}</a
                     >
                     <span v-else>N/A</span>
                   </span>
@@ -475,7 +475,7 @@
                       v-if="request?.requester?.phone"
                       :href="`tel:${request.requester.phone}`"
                       class="phone-link"
-                      >{{ request.requester.phone }}</a
+                    >{{ request.requester.phone }}</a
                     >
                     <span v-else>N/A</span>
                   </span>
@@ -519,7 +519,7 @@
                       v-if="request.assignee?.email"
                       :href="`mailto:${request.assignee.email}`"
                       class="email-link"
-                      >{{ request.assignee.email }}</a
+                    >{{ request.assignee.email }}</a
                     >
                     <span v-else>N/A</span>
                   </span>
@@ -529,7 +529,7 @@
                       v-if="request.assignee?.phone"
                       :href="`tel:${request.assignee.phone}`"
                       class="phone-link"
-                      >{{ request.assignee.phone }}</a
+                    >{{ request.assignee.phone }}</a
                     >
                     <span v-else>N/A</span>
                   </span>
@@ -642,13 +642,7 @@
                   <span v-if="request?.isRegistered">Registered</span>
                   <span v-else>Register for this request</span>
                 </button>
-                <button
-                  v-if="request?.files && request.files.length > 0"
-                  class="action-btn secondary"
-                  @click="viewFiles"
-                >
-                  <i class="pi pi-folder-open"></i> View Files
-                </button>
+
               </div>
             </div>
           </div>
@@ -906,10 +900,11 @@ function statusClass(status: string) {
 function getInitial(name: string | undefined) {
   return name ? name.charAt(0).toUpperCase() : '?';
 }
-function downloadFile(file: AttachmentInfo) {
-  // Logic tải file
-  if (!file?.url) return;
-  window.open(file.url, '_blank');
+function downloadFile(file: FileInfo) {
+  // Ưu tiên dùng file.url, nếu không có thì tạo url từ id
+  const url = file.url || `/api/files/${file.id}/download`;
+  if (!url) return;
+  window.open(url, '_blank');
 }
 function contactRequester() {
   if (request.value?.requester?.email) {

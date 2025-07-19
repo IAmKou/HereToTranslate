@@ -116,18 +116,6 @@
                   <div class="mini-stat-label">Pending Withdrawals</div>
                   <div class="mini-stat-value" :class="currencyClass(wallet.pendingWithdrawals)">{{ formatCurrency(wallet.pendingWithdrawals) }}</div>
                 </div>
-                <div class="mini-stat-card hold" @click="filterTransactions('hold')" tabindex="0" title="Show only hold amount">
-                  <div class="mini-stat-icon">
-                    <!-- SVG icon for hold -->
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="14" cy="14" r="14" fill="#E0E7FF"/>
-                      <rect x="9" y="12" width="10" height="6" rx="2" stroke="#2563EB" stroke-width="2"/>
-                      <rect x="12" y="9" width="4" height="4" rx="2" stroke="#2563EB" stroke-width="2"/>
-                    </svg>
-                  </div>
-                  <div class="mini-stat-label">Hold Amount</div>
-                  <div class="mini-stat-value" :class="currencyClass(wallet.holdAmount)">{{ formatCurrency(Math.abs(wallet.holdAmount)) }}</div>
-                </div>
               </div>
               <div v-if="wallet.latestTransaction" class="latest-transaction-summary">
                 <div class="lts-title">Latest Transaction</div>
@@ -330,6 +318,7 @@ function formatDateTime(date: any): string {
   if (!date) return '';
   try {
     const d = typeof date === 'string' ? new Date(date) : date;
+    d.setHours(d.getHours() + 7); // Cộng thêm 7 tiếng để khớp múi giờ Việt Nam
     return d.toLocaleString('en-US', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: true

@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ChatMessageSchema } from './schema/chat-message.schema';
 import { ChatRoomSchema } from './schema/chat-room.schema';
 import { TranslationStringSchema } from './schema/translation.schema';
+import { Notification, NotificationSchema } from './schema/notification.schema';
 
 
 @Module({
@@ -11,6 +12,7 @@ import { TranslationStringSchema } from './schema/translation.schema';
       { name: 'ChatMessage', schema: ChatMessageSchema },
       { name: 'ChatRoom', schema: ChatRoomSchema },
       { name: 'TranslationString', schema: TranslationStringSchema },
+
     ])
   ],
   exports: [MongooseModule]

@@ -174,7 +174,9 @@
                       </span>
                   </td>
                   <td>
-                      <span :class="['status-badge', `status-${transaction.status.toLowerCase()}`]" :title="getStatusTooltip(transaction.status)">
+                      <span :class="['status-badge', `status-${transaction.status.toLowerCase()}`,
+                        (transaction.status && transaction.status.replace(/[-_ ]/g, '').toUpperCase() === 'ONHOLD') ? 'badge-on-hold' : '']"
+                            :title="getStatusTooltip(transaction.status)">
                         {{ formatStatus(transaction.status) }}
                       </span>
                   </td>
@@ -190,7 +192,7 @@
                       <span v-if="transaction.paypalEmail && transaction.paypalEmail !== '-'" class="paypal-email">
                         {{ transaction.paypalEmail }}
                       </span>
-                    <span v-else class="paypal-email-empty">-</span>
+                    <span v-else class="paypal-email-system">System</span>
                   </td>
                 </tr>
                 </tbody>
@@ -299,37 +301,37 @@ const filteredTransactions = computed(() => {
   // Filter by type
   if (filterDraft.value.type) {
     if (filterDraft.value.type === 'deposit') {
-      filtered = filtered.filter(t => t.amount > 0);
+      filtered = filtered.filter((t: any) => t.amount > 0);
     } else if (filterDraft.value.type === 'withdraw') {
-      filtered = filtered.filter(t => t.amount < 0);
+      filtered = filtered.filter((t: any) => t.amount < 0);
     }
   }
 
   // Filter by status
   if (filterDraft.value.status) {
-    filtered = filtered.filter(t => t.status && t.status.toLowerCase() === filterDraft.value.status.toLowerCase());
+    filtered = filtered.filter((t: any) => t.status && t.status.toLowerCase() === filterDraft.value.status.toLowerCase());
   }
 
   // Filter by min amount
   if (filterDraft.value.minAmount !== '' && !isNaN(Number(filterDraft.value.minAmount))) {
-    filtered = filtered.filter(t => Math.abs(Number(t.amount)) >= Number(filterDraft.value.minAmount));
+    filtered = filtered.filter((t: any) => Math.abs(Number(t.amount)) >= Number(filterDraft.value.minAmount));
   }
   // Filter by max amount
   if (filterDraft.value.maxAmount !== '' && !isNaN(Number(filterDraft.value.maxAmount))) {
-    filtered = filtered.filter(t => Math.abs(Number(t.amount)) <= Number(filterDraft.value.maxAmount));
+    filtered = filtered.filter((t: any) => Math.abs(Number(t.amount)) <= Number(filterDraft.value.maxAmount));
   }
 
   // Filter by date range
   if (filterDraft.value.startDate) {
     const start = new Date(filterDraft.value.startDate);
-    filtered = filtered.filter(t => new Date(t.createdAt) >= start);
+    filtered = filtered.filter((t: any) => new Date(t.createdAt) >= start);
   }
   if (filterDraft.value.endDate) {
     const end = new Date(filterDraft.value.endDate);
-    filtered = filtered.filter(t => new Date(t.createdAt) <= end);
+    filtered = filtered.filter((t: any) => new Date(t.createdAt) <= end);
   }
 
-  return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return filtered.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 });
 
 const totalPages = computed(() => Math.ceil(filteredTransactions.value.length / itemsPerPage.value));
@@ -353,9 +355,9 @@ function getSortIcon(key) {
 const sortedTransactions = computed(() => {
   let arr = [...filteredTransactions.value];
   if (sortKey.value === 'amount') {
-    arr.sort((a, b) => (Math.abs(a.amount) - Math.abs(b.amount)) * sortOrder.value);
+    arr.sort((a: any, b: any) => (Math.abs(a.amount) - Math.abs(b.amount)) * sortOrder.value);
   } else if (sortKey.value === 'date') {
-    arr.sort((a, b) => (new Date(a.createdAt) - new Date(b.createdAt)) * sortOrder.value);
+    arr.sort((a: any, b: any) => (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * sortOrder.value);
   }
   return arr;
 });
@@ -384,14 +386,17 @@ const visiblePages = computed(() => {
 
 const totalDeposits = computed(() => {
   return filteredTransactions.value
-    .filter(t => t.amount > 0)
-    .reduce((sum, t) => sum + t.amount, 0);
+    .filter((t: any) => Number(t.amount) > 0)
+    .reduce((sum: number, t: any) => {
+      const amt = Number(t.amount);
+      return sum + (isNaN(amt) ? 0 : amt);
+    }, 0);
 });
 
 const totalWithdrawals = computed(() => {
   return filteredTransactions.value
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    .filter((t: any) => t.amount < 0)
+    .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
 });
 
 const wallet = ref(null);
@@ -469,6 +474,9 @@ function getTransactionCardClass(transaction: Transaction): string {
 }
 
 function formatStatus(status: string): string {
+  if (!status) return '';
+  const s = status.replace(/[-_ ]/g, '').toUpperCase();
+  if (s === 'ONHOLD') return 'On Hold';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
@@ -481,13 +489,22 @@ function formatCurrency(amount: number): string {
 
 function formatDate(dateString: string): string {
   if (!dateString) return '';
-  const date = dayjs(dateString);
-  return `${date.format('MMM DD, YYYY · hh:mm A')}`;
+  const date = new Date(dateString);
+  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để fix lệch múi giờ
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 function formatDateRelative(dateString: string): string {
   if (!dateString) return '';
-  return dayjs(dateString).fromNow();
+  const date = new Date(dateString);
+  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để khớp với giờ hiển thị
+  return dayjs(date).fromNow();
 }
 
 function prevPage() {
@@ -1351,5 +1368,22 @@ onMounted(() => {
 .custom-status-select {
   min-width: 170px;
   width: 180px;
+}
+.badge-on-hold {
+  background: #fef3c7 !important;
+  color: #d97706 !important;
+  font-weight: 600;
+  border-radius: 12px !important;
+  padding: 4px 16px !important;
+  font-size: 0.98em;
+  display: inline-block;
+  text-align: center;
+}
+.paypal-email-system {
+  color: #2563eb;
+  font-weight: 600;
+  font-style: normal;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
 }
 </style>

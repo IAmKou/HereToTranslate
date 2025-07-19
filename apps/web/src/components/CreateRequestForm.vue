@@ -142,10 +142,10 @@
                 <span
                   v-if="assigneeTouched && assigneeError"
                   class="error-message"
-                  >{{ assigneeError }}</span
+                >{{ assigneeError }}</span
                 >
                 <span v-else class="help-text"
-                  >Enter the email of the translator you want to assign</span
+                >Enter the email of the translator you want to assign</span
                 >
               </div>
             </div>
@@ -204,11 +204,11 @@
                 <span
                   :class="{ warning: title.length > 200 }"
                   class="char-count"
-                  >{{ title.length }}/255</span
+                >{{ title.length }}/255</span
                 >
                 <span v-if="titleTouched && titleError" class="error-message">{{
-                  titleError
-                }}</span>
+                    titleError
+                  }}</span>
               </div>
             </div>
 
@@ -276,12 +276,12 @@
                 <span
                   :class="{ warning: description.length > 800 }"
                   class="char-count"
-                  >{{ description.length }}/1000</span
+                >{{ description.length }}/1000</span
                 >
                 <span
                   v-if="descTouched && descriptionError"
                   class="error-message"
-                  >{{ descriptionError }}</span
+                >{{ descriptionError }}</span
                 >
               </div>
             </div>
@@ -334,10 +334,10 @@
                 <span
                   v-if="amountTouched && dealAmountError"
                   class="error-message"
-                  >{{ dealAmountError }}</span
+                >{{ dealAmountError }}</span
                 >
                 <span v-else class="help-text"
-                  >Set the budget for this translation request</span
+                >Set the budget for this translation request</span
                 >
               </div>
             </div>
@@ -381,10 +381,10 @@
                 <span
                   v-if="deadlineTouched && deadlineError"
                   class="error-message"
-                  >{{ deadlineError }}</span
+                >{{ deadlineError }}</span
                 >
                 <span v-else class="help-text"
-                  >Deadline must be at least 7 days from now</span
+                >Deadline must be at least 7 days from now</span
                 >
               </div>
             </div>
@@ -418,10 +418,10 @@
                 <span
                   v-if="categoryTouched && categoryError"
                   class="error-message"
-                  >{{ categoryError }}</span
+                >{{ categoryError }}</span
                 >
                 <span v-else class="help-text"
-                  >Select the most appropriate category for your request</span
+                >Select the most appropriate category for your request</span
                 >
               </div>
             </div>
@@ -445,10 +445,10 @@
               />
               <div class="input-info">
                 <span v-if="tagError" class="error-message">{{
-                  tagError
-                }}</span>
+                    tagError
+                  }}</span>
                 <span v-else class="help-text"
-                  >Select one or many tags to help others find your
+                >Select one or many tags to help others find your
                   request</span
                 >
               </div>
@@ -456,7 +456,7 @@
 
             <!-- File Upload -->
             <div class="form-group full-width">
-              <label for="files" class="form-label">Files (Optional)</label>
+              <label for="files" class="form-label">Files <span class="required-mark">*</span></label>
               <div class="file-upload-container">
                 <div
                   :class="{
@@ -556,8 +556,8 @@
                       <div class="file-details">
                         <span class="file-name">{{ file.name }}</span>
                         <span class="file-size">{{
-                          formatFileSize(file.size)
-                        }}</span>
+                            formatFileSize(file.size)
+                          }}</span>
                       </div>
                     </div>
                     <button
@@ -594,12 +594,11 @@
               </div>
               <div class="input-info">
                 <span v-if="fileError" class="error-message">{{
-                  fileError
-                }}</span>
-                <span v-else class="help-text"
-                  >Upload files related to your translation request (optional).
-                  Files will be uploaded with the request.</span
-                >
+                    fileError
+                  }}</span>
+                <span v-else class="help-text">
+                  Upload <b>at least one file</b> related to your translation request. Files will be uploaded with the request.
+                </span>
               </div>
             </div>
           </div>
@@ -789,7 +788,8 @@ const isFormValid = computed(() => {
       !dealAmountError.value &&
       !deadlineError.value &&
       !categoryError.value &&
-      !assigneeError.value
+      !assigneeError.value &&
+      uploadedFiles.value.length > 0 // Bắt buộc phải có file
     );
   } else {
     return (
@@ -797,7 +797,8 @@ const isFormValid = computed(() => {
       !descriptionError.value &&
       !dealAmountError.value &&
       !deadlineError.value &&
-      !categoryError.value
+      !categoryError.value &&
+      uploadedFiles.value.length > 0 // Bắt buộc phải có file
     );
   }
 });
@@ -844,6 +845,17 @@ async function handleSubmit() {
   deadlineTouched.value = true;
   assigneeTouched.value = true;
   categoryTouched.value = true;
+
+  if (uploadedFiles.value.length === 0) {
+    fileError.value = 'Please upload at least one file.';
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Please upload at least one file.',
+      life: 3000,
+    });
+    return;
+  }
 
   if (!isFormValid.value) {
     toast.add({

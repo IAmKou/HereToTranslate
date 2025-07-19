@@ -123,7 +123,7 @@
                 :loading="loading"
                 filterDisplay="menu"
                 :globalFilterFields="['username', 'fullName', 'email', 'phone']"
-                responsiveLayout="scroll"
+
                 class="p-datatable-lg enhanced-table"
                 v-model:filters="filters"
                 dataKey="id"
@@ -723,6 +723,28 @@ onMounted(loadUsers);
 </script>
 
 <style lang="scss" scoped>
+.table-section {
+  overflow-x: hidden !important; /* tắt scroll ngang */
+  max-width: 100% !important;   /* giới hạn chiều rộng */
+}
+
+.enhanced-table {
+  :deep(.p-datatable-wrapper) {
+    overflow-x: hidden !important;
+    width: 100% !important;
+  }
+
+  :deep(table) {
+    table-layout: auto !important; /* cho phép co giãn cột */
+    width: 100% !important;
+  }
+
+  :deep(th), :deep(td) {
+    white-space: normal !important; /* cho phép xuống dòng thay vì scroll ngang */
+    word-break: break-word !important;
+  }
+}
+
 .layout-wrapper .main-content {
   transition: margin-left 0.2s;
   margin-left: 9rem;
@@ -1811,5 +1833,32 @@ body, .admin-user-management {
   }
 
 }
+.enhanced-table {
+  :deep(.p-datatable-thead > tr > th) {
+    white-space: nowrap !important;  /* không cho xuống dòng */
+    text-align: center !important;   /* căn giữa nội dung tiêu đề */
+    vertical-align: middle !important;
+  }
+}
+.enhanced-table {
+  /* Áp dụng cho cột Role và Status (th cột 5 và 6) */
+  :deep(.p-datatable-tbody > tr > td:nth-child(5)),
+  :deep(.p-datatable-tbody > tr > td:nth-child(6)) {
+    white-space: nowrap !important;   /* Không xuống dòng */
+    max-width: 160px;                 /* tùy chỉnh giới hạn rộng nếu cần */
+    overflow: hidden;                 /* ẩn phần tràn */
+    text-overflow: ellipsis;          /* nếu dài quá thì hiện ... */
+  }
+
+  /* Nếu muốn áp dụng trực tiếp cho Tag bên trong */
+  :deep(.p-datatable-tbody > tr > td:nth-child(5) .role-tag),
+  :deep(.p-datatable-tbody > tr > td:nth-child(6) .status-tag) {
+    white-space: nowrap !important;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 
 </style>

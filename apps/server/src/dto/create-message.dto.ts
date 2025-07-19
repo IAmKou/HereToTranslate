@@ -9,4 +9,5 @@ export class CreateMessageDto {
   @IsString()
   @IsNotEmpty()
   message: string;
+  replyToId?: string;
 }

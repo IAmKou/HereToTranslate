@@ -9,6 +9,13 @@ const groupToEdit = ref({ id: null, name: '' });
 const props = defineProps({
   project: Object,
 });
+import { onActivated } from 'vue';
+
+onActivated(() => {
+  if (props.project?.id) {
+    loadGroups();
+  }
+});
 
 const groups = ref([]);
 const groupsLoading = ref(false);
@@ -31,9 +38,15 @@ const loadGroups = async () => {
   }
 };
 
-watch(() => props.project, (newProject) => {
-  if (newProject) loadGroups();
+const fetched = ref(false);
+
+watch(() => props.project?.id, async (projectId) => {
+  if (projectId) {
+    await loadGroups();
+  }
 }, { immediate: true });
+
+
 
 const createGroup = async () => {
   if (!props.project) return;

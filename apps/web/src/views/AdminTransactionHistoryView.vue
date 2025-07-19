@@ -182,7 +182,13 @@
                       </span>
                   </td>
                   <td class="status-cell">
-                      <span :class="['status-badge', `status-${transaction.status.toLowerCase()}`]">
+                      <span
+                        :class="[
+                          'status-badge',
+                          `status-${transaction.status.toLowerCase()}`,
+                          transaction.status === 'ON_HOLD' ? 'badge-on-hold' : ''
+                        ]"
+                      >
                         {{ formatStatus(transaction.status) }}
                       </span>
                   </td>
@@ -231,46 +237,68 @@
                 </h3>
                 <button @click="closeDetailModal" class="close-btn">×</button>
               </div>
-              <div class="detail-content" v-if="detailTarget">
-                <div class="detail-section">
-                  <h4 class="section-title-with-icon"><span>💰</span> Amount</h4>
-                  <div class="detail-value amount-value">{{ formatCurrency(Math.abs(detailTarget.amount)) }}</div>
-                </div>
-                <div class="detail-section">
-                  <h4 class="section-title-with-icon"><span>👤</span> User Information</h4>
-                  <div class="detail-grid">
-                    <div class="detail-item"><span class="detail-label">Name:</span><span class="detail-value">{{ detailTarget.user?.fullName || 'N/A' }}</span></div>
-                    <div class="detail-item"><span class="detail-label">Username:</span><span class="detail-value">{{ detailTarget.user?.username || 'N/A' }}</span></div>
-                    <div class="detail-item"><span class="detail-label">Email:</span><span class="detail-value">{{ detailTarget.user?.email || 'N/A' }}</span></div>
-                    <div class="detail-item"><span class="detail-label">User ID:</span><span class="detail-value">{{ detailTarget.user?.id || 'N/A' }}</span></div>
+              <div class="modal-detail-grid" v-if="detailTarget">
+                <div class="modal-detail-col">
+                  <div class="detail-section">
+                    <h4 class="section-title-with-icon"><span>💰</span> Amount</h4>
+                    <div class="detail-value amount-value">{{ formatCurrency(Math.abs(detailTarget.amount)) }}</div>
                   </div>
-                </div>
-                <div class="detail-section">
-                  <h4 class="section-title-with-icon"><span>💳</span> PayPal Information</h4>
-                  <div class="detail-grid">
-                    <div class="detail-item">
-                      <span class="detail-label">PayPal Email:</span>
-                      <span class="detail-value">{{ detailTarget.paypalEmail || 'Not provided' }}</span>
+                  <div class="detail-section">
+                    <h4 class="section-title-with-icon"><span>👤</span> User Information</h4>
+                    <div class="section-grid">
+                      <div><span class="detail-label">Name:</span> <span class="detail-value">{{ detailTarget.user?.fullName || 'N/A' }}</span></div>
+                      <div><span class="detail-label">Username:</span> <span class="detail-value">{{ detailTarget.user?.username || 'N/A' }}</span></div>
+                      <div><span class="detail-label">Email:</span> <span class="detail-value">{{ detailTarget.user?.email || 'N/A' }}</span></div>
+                      <div><span class="detail-label">User ID:</span> <span class="detail-value">{{ detailTarget.user?.id || 'N/A' }}</span></div>
+                    </div>
+                  </div>
+                  <div class="detail-section">
+                    <h4 class="section-title-with-icon"><span>💳</span> PayPal Information</h4>
+                    <div class="section-grid">
+                      <div>
+                        <span class="detail-label">PayPal Email:</span>
+                        <span class="detail-value paypal-email-system">{{ detailTarget.paypalEmail || 'System' }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div class="detail-section">
-                  <h4 class="section-title-with-icon"><span>📊</span> Transaction Info</h4>
-                  <div class="detail-grid">
-                    <div class="detail-item"><span class="detail-label">Type:</span><span class="detail-value">{{ getTransactionType(detailTarget) }}</span></div>
-                    <div class="detail-item"><span class="detail-label">Status:</span>
-                      <span :class="['detail-value', 'status-badge', badgeClass(detailTarget.status)]">
-                        <span v-if="detailTarget.status === 'COMPLETED'" class="status-icon">✅</span>
-                        <span v-else-if="detailTarget.status === 'APPROVED'" class="status-icon">✅</span>
-                        <span v-else-if="detailTarget.status === 'REJECTED'" class="status-icon">❌</span>
-                        <span v-else-if="detailTarget.status === 'FAILED'" class="status-icon">⚠️</span>
-                        <span v-else class="status-icon">🔄</span>
-                        <span class="status-text">{{ formatStatus(detailTarget.status) }}</span>
-                      </span>
+                <div class="modal-detail-col">
+                  <div class="detail-section">
+                    <h4 class="section-title-with-icon"><span>📊</span> Transaction Info</h4>
+                    <div class="section-grid">
+                      <div><span class="detail-label">Type:</span> <span class="detail-value">{{ getTransactionType(detailTarget) }}</span></div>
+                      <div><span class="detail-label">Status:</span>
+                        <span :class="['detail-value', 'status-badge', badgeClass(detailTarget.status)]">
+                          <span v-if="detailTarget.status === 'COMPLETED'" class="status-icon">✅</span>
+                          <span v-else-if="detailTarget.status === 'APPROVED'" class="status-icon">✅</span>
+                          <span v-else-if="detailTarget.status === 'REJECTED'" class="status-icon">❌</span>
+                          <span v-else-if="detailTarget.status === 'FAILED'" class="status-icon">⚠️</span>
+                          <span v-else-if="detailTarget.status === 'ON_HOLD'" class="status-icon">⏸</span>
+                          <span v-else class="status-icon">🔄</span>
+                          <span class="status-text">{{ formatStatus(detailTarget.status) }}</span>
+                        </span>
+                      </div>
+                      <div><span class="detail-label">Created:</span> <span class="detail-value"><span style="font-size:1.1em;">📅</span> {{ formatDate(detailTarget.createdAt) }}</span></div>
                     </div>
-                    <div class="detail-item"><span class="detail-label">Created:</span><span class="detail-value"><span style="font-size:1.1em;">📅</span> {{ formatDate(detailTarget.createdAt) }}</span></div>
-                    <div class="detail-item"><span class="detail-label">Updated:</span><span class="detail-value">{{ formatDate(detailTarget.updatedAt) }}</span></div>
-                    <div class="detail-item" v-if="detailTarget.description"><span class="detail-label">Description:</span><span class="detail-value">{{ detailTarget.description }}</span></div>
+                  </div>
+                  <div class="detail-section" v-if="detailTarget.amount > 0 && (detailTarget.requestId || detailTarget.request)">
+                    <h4 class="section-title-with-icon"><span>📄</span> Request Info</h4>
+                    <div class="section-grid">
+                      <div v-if="detailTarget.requestId"><span class="detail-label">Request ID:</span> <span class="detail-value"><router-link v-if="$router && detailTarget.requestId" :to="`/requests/${detailTarget.requestId}`" style="color:#2563eb;text-decoration:underline;">#{{ detailTarget.requestId }}</router-link><span v-else>#{{ detailTarget.requestId }}</span></span></div>
+                      <div v-if="detailTarget.request?.title"><span class="detail-label">Title:</span> <span class="detail-value">{{ detailTarget.request.title }}</span></div>
+                      <div v-if="detailTarget.request?.requester"><span class="detail-label">Requester:</span> <span class="detail-value">{{ detailTarget.request.requester.fullName || detailTarget.request.requester.username || detailTarget.request.requester.email }}</span></div>
+                      <div v-if="detailTarget.request?.dealAmount"><span class="detail-label">Deal Amount:</span> <span class="detail-value">${{ detailTarget.request.dealAmount }}</span></div>
+                      <div v-if="detailTarget.request?.deadline"><span class="detail-label">Deadline:</span> <span class="detail-value">{{ detailTarget.request.deadline }}</span></div>
+                    </div>
+                  </div>
+                  <div class="detail-section" v-if="detailTarget.amount > 0 && (detailTarget.projectId || detailTarget.request?.project)">
+                    <h4 class="section-title-with-icon"><span>📁</span> Project Info</h4>
+                    <div class="section-grid">
+                      <div v-if="detailTarget.projectId"><span class="detail-label">Project ID:</span> <span class="detail-value"><router-link v-if="$router && detailTarget.projectId" :to="`/projects/${detailTarget.projectId}`" style="color:#2563eb;text-decoration:underline;">#{{ detailTarget.projectId }}</router-link><span v-else>#{{ detailTarget.projectId }}</span></span></div>
+                      <div v-if="detailTarget.request?.project?.name"><span class="detail-label">Name:</span> <span class="detail-value">{{ detailTarget.request.project.name }}</span></div>
+                      <div v-if="detailTarget.request?.project?.status"><span class="detail-label">Status:</span> <span class="detail-value">{{ detailTarget.request.project.status }}</span></div>
+                      <div v-if="detailTarget.request?.project?.assignee"><span class="detail-label">Assignee:</span> <span class="detail-value">{{ detailTarget.request.project.assignee?.fullName || detailTarget.request.project.assignee?.username || detailTarget.request.project.assignee?.email }}</span></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -311,6 +339,8 @@ interface Transaction {
   updatedAt: string;
   user: User;
   paypalEmail?: string; // Added for PayPal information
+  requestId?: string; // Added for requestId
+  projectId?: string; // Added for projectId
 }
 
 interface Filters {
@@ -507,7 +537,10 @@ async function loadTransactions() {
       axios.get('/api/admin/transactions/users')
     ]);
 
-    transactions.value = transactionsRes.data || [];
+    transactions.value = (transactionsRes.data || []).map((txn: any) => ({
+      ...txn,
+      status: typeof txn.status === 'string' ? txn.status.toUpperCase() : txn.status,
+    }));
     users.value = usersRes.data || [];
   } catch (err: any) {
     error.value = err?.response?.data?.message || 'Failed to load transactions.';
@@ -550,11 +583,14 @@ function getTransactionType(transaction: Transaction): string {
 
 function formatStatus(status: string): string {
   if (!status) return '';
+  if (status.toUpperCase() === 'ON_HOLD') return 'On Hold';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
 function formatDate(dateString: string): string {
+  if (!dateString) return '';
   const date = new Date(dateString);
+  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để khớp múi giờ Việt Nam
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -627,6 +663,7 @@ function badgeClass(status: string) {
     case 'REJECTED': return 'badge bg-red-100 text-red-700';
     case 'FAILED': return 'badge bg-gray-100 text-gray-700';
     case 'COMPLETED': return 'badge bg-green-100 text-green-700';
+    case 'ON_HOLD': return 'badge bg-orange-100 text-orange-700 badge-on-hold'; // Badge vàng cam nổi bật cho On Hold
     default: return 'badge';
   }
 }
@@ -1187,19 +1224,27 @@ onMounted(loadTransactions);
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 12px 48px 0 rgba(37,99,235,0.18), 0 2px 8px rgba(0,0,0,0.08);
-  padding: 12px 16px 8px 16px;
-  min-width: 320px;
-  max-width: 420px;
-  width: 420px;
+  padding: 32px 40px;
+  min-width: 420px;
+  max-width: 98vw;
+  width: 950px;
+  max-height: 90vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   align-items: stretch;
   margin: 0;
   box-sizing: border-box;
   z-index: 3100;
   animation: modal-pop-detail 0.22s cubic-bezier(.4,1.4,.6,1) 1;
   border: 2px solid #3b82f6;
+}
+.section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 32px;
+  margin-bottom: 12px;
 }
 @keyframes modal-pop-detail {
   0% { transform: scale(0.88) translateY(40px); opacity: 0; }
@@ -1374,5 +1419,13 @@ onMounted(loadTransactions);
   font-weight: 600;
   color: #374151;
   margin-bottom: 4px;
+}
+</style>
+<style scoped>
+.badge-on-hold {
+  background: #fef3c7 !important;
+  color: #d97706 !important;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 </style>

@@ -46,10 +46,12 @@
                   <select v-model="filterDraft.type" class="filter-select custom-type-select" @change="applyFilters">
                     <option value="">All Types</option>
                     <option value="deposit">💳 Deposit</option>
+                    <option value="payment">💸 Payment</option>
                     <option value="withdraw">💸 Withdraw</option>
                   </select>
                   <span v-if="filterDraft.type" class="type-icon-preview">
                     <span v-if="filterDraft.type === 'deposit'">💳</span>
+                    <span v-else-if="filterDraft.type === 'payment'">💸</span>
                     <span v-else-if="filterDraft.type === 'withdraw'">💸</span>
                     <span v-else>🔄</span>
                   </span>
@@ -156,12 +158,14 @@
                 </tr>
                 </thead>
                 <tbody>
-                <tr v-for="(transaction, idx) in paginatedTransactions" :key="transaction.id">
+                <tr v-for="(transaction, idx) in paginatedTransactions" :key="transaction.id" @click="openDetailModal(transaction)" style="cursor:pointer;">
                   <td>{{ (currentPage - 1) * itemsPerPage + idx + 1 }}</td>
                   <td class="type-cell">
                       <span :class="['type-icon', getTransactionTypeClass(transaction)]">
-                        <span v-if="transaction.amount > 0">💳</span>
-                        <span v-else-if="transaction.amount < 0">💸</span>
+                        <span v-if="getTransactionTitle(transaction) === 'Deposit'">💳</span>
+                        <span v-else-if="getTransactionTitle(transaction) === 'Payment'">💸</span>
+                        <span v-else-if="getTransactionTitle(transaction) === 'Withdrawal'">💸</span>
+                        <span v-else-if="getTransactionTitle(transaction) === 'Refund'">🔄</span>
                         <span v-else>🔄</span>
                       </span>
                     <span :class="['type-label', getTransactionTypeClass(transaction)]">
@@ -234,6 +238,125 @@
     </div>
     <AppFooter />
   </div>
+
+  <!-- Modal chi tiết transaction -->
+  <template v-if="showDetailModal && detailTarget">
+    <div class="modal-backdrop" @click.self="closeDetailModal">
+      <div class="modal-content modal-detail modal-detail-boxed">
+        <div class="modal-header">
+          <h3 class="modal-title-with-icon">
+            <span class="modal-title-icon">💸</span> Transaction Details
+          </h3>
+          <button @click="closeDetailModal" class="close-btn">×</button>
+        </div>
+        <div class="modal-box-table">
+          <!-- Amount & PayPal -->
+          <div class="box-row">
+            <div class="box-title"><span>💰</span> <b>Amount:</b></div>
+            <div class="box-value amount-value">{{ formatCurrency(Math.abs(detailTarget.amount)) }}</div>
+          </div>
+          <div class="box-row">
+            <div class="box-title"><span>📧</span> <b>PayPal:</b></div>
+            <div class="box-value">
+              <template v-if="getTransactionTitle(detailTarget) === 'Deposit' || getTransactionTitle(detailTarget) === 'Payment'">
+                System
+              </template>
+              <template v-else>
+                {{ detailTarget.paypalEmail ? detailTarget.paypalEmail : 'Chưa cung cấp' }}
+              </template>
+            </div>
+          </div>
+          <!-- Transaction Info -->
+          <div class="box-row box-section-title"><span>📝</span> <b>Transaction Info</b></div>
+          <div class="box-row">
+            <div class="box-title">Type:</div>
+            <div class="box-value type-label"
+                 :class="{
+                deposit: getTransactionTitle(detailTarget) === 'Deposit',
+                withdraw: getTransactionTitle(detailTarget) === 'Withdrawal',
+                refund: getTransactionTitle(detailTarget) === 'Refund',
+                payment: getTransactionTitle(detailTarget) === 'Payment'
+              }"
+                 style="display: flex; align-items: center; gap: 6px; font-size: 1.05em;"
+            >
+              <span v-if="getTransactionTitle(detailTarget) === 'Deposit'">💳</span>
+              <span v-else-if="getTransactionTitle(detailTarget) === 'Payment'">💸</span>
+              <span v-else-if="getTransactionTitle(detailTarget) === 'Withdrawal'">💸</span>
+              <span v-else-if="getTransactionTitle(detailTarget) === 'Refund'">🔄</span>
+              {{ getTransactionTitle(detailTarget) }}
+            </div>
+          </div>
+          <div class="box-row">
+            <div class="box-title">Status:</div>
+            <div class="box-value">
+              <span :class="['status-badge',
+                detailTarget.status.toLowerCase() === 'completed' ? 'status-completed' :
+                detailTarget.status.toLowerCase() === 'pending' ? 'status-pending' :
+                detailTarget.status.toLowerCase() === 'failed' ? 'status-failed' : '']">
+                <span v-if="detailTarget.status.toLowerCase() === 'completed'">✅</span>
+                <span v-else-if="detailTarget.status.toLowerCase() === 'pending'">⏳</span>
+                <span v-else-if="detailTarget.status.toLowerCase() === 'failed'">❌</span>
+                {{ formatStatus(detailTarget.status) }}
+              </span>
+            </div>
+          </div>
+          <div class="box-row">
+            <div class="box-title">Created:</div>
+            <div class="box-value">{{ formatDate(detailTarget.createdAt) }}</div>
+          </div>
+          <!-- Request Info -->
+          <div class="box-row box-section-title"><span>📋</span> <b>Request Info</b></div>
+          <div class="box-row">
+            <div class="box-title">Request:</div>
+            <div class="box-value">
+              <template v-if="detailTarget.request && detailTarget.request.title && detailTarget.request.id">
+                <template v-if="detailTarget.isRequester === true">
+                  <router-link :to="`/requests/${detailTarget.request.id}`" class="link">{{ detailTarget.request.title }} <span style='font-size:1em;'>🔗</span></router-link>
+                </template>
+                <template v-else>
+                  {{ detailTarget.request.title }}
+                </template>
+              </template>
+              <template v-else>-</template>
+            </div>
+          </div>
+          <div class="box-row">
+            <div class="box-title">Project:</div>
+            <div class="box-value">
+              <template v-if="detailTarget.request && detailTarget.request.project && detailTarget.request.project.name && detailTarget.request.project.id">
+                <template v-if="detailTarget.isRequester === false">
+                  <router-link :to="`/projects/${detailTarget.request.project.id}`" class="link">{{ detailTarget.request.project.name }} <span style='font-size:1em;'>🔗</span></router-link>
+                </template>
+                <template v-else>
+                  {{ detailTarget.request.project.name }}
+                </template>
+              </template>
+              <template v-else>-</template>
+            </div>
+          </div>
+          <!-- Translator -->
+          <div v-if="detailTarget.request && detailTarget.request.assignee">
+            <div class="box-row box-section-title"><span>👤</span> <b>Translator</b></div>
+            <div class="box-row">
+              <div class="box-title">{{ detailTarget.request.assignee.fullName || detailTarget.request.assignee.username || detailTarget.request.assignee.email || '-' }}</div>
+              <div class="box-value"></div>
+            </div>
+            <div class="box-row">
+              <div class="box-title"><span>📧</span> Email:</div>
+              <div class="box-value">{{ detailTarget.request.assignee.email || '-' }}</div>
+            </div>
+            <div class="box-row">
+              <div class="box-title"><span>📞</span> Phone:</div>
+              <div class="box-value">{{ detailTarget.request.assignee.phone || '-' }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="closeDetailModal">Close</button>
+        </div>
+      </div>
+    </div>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -256,6 +379,13 @@ interface Transaction {
   createdAt: string;
   updatedAt: string;
   paypalEmail?: string; // Added paypalEmail
+  requestId?: string; // Added requestId
+  isRequester?: boolean; // Added isRequester flag
+  request?: {
+    assignee?: {
+      id: number;
+    };
+  }; // Added request object
 }
 
 interface Filters {
@@ -301,7 +431,9 @@ const filteredTransactions = computed(() => {
   // Filter by type
   if (filterDraft.value.type) {
     if (filterDraft.value.type === 'deposit') {
-      filtered = filtered.filter((t: any) => t.amount > 0);
+      filtered = filtered.filter((t: any) => t.amount > 0 && getTransactionTitle(t) === 'Deposit');
+    } else if (filterDraft.value.type === 'payment') {
+      filtered = filtered.filter((t: any) => getTransactionTitle(t) === 'Payment');
     } else if (filterDraft.value.type === 'withdraw') {
       filtered = filtered.filter((t: any) => t.amount < 0);
     }
@@ -454,7 +586,11 @@ function getTransactionIcon(transaction: Transaction): string {
 }
 
 function getTransactionTitle(transaction: Transaction): string {
-  if (transaction.amount > 0) return 'Deposit';
+  console.log('Transaction object:', transaction);
+  if (transaction.amount > 0 && transaction.requestId) {
+    if (transaction.isRequester === true || transaction.isRequester === 'true') return 'Deposit';
+    return 'Payment';
+  }
   if (transaction.amount < 0) return 'Withdrawal';
   return 'Transfer';
 }
@@ -531,7 +667,18 @@ function goToCreateRequest() {
 }
 
 function getTransactionTypeClass(transaction: Transaction) {
-  if (transaction.amount > 0) return 'deposit';
+  if (transaction.amount > 0) {
+    // Kiểm tra xem có phải là giao dịch payment cho translator không
+    if (transaction.requestId) {
+      // Sử dụng isRequester để phân biệt
+      if (transaction.isRequester) {
+        return 'deposit';
+      } else {
+        return 'payment';
+      }
+    }
+    return 'deposit';
+  }
   if (transaction.amount < 0) return 'withdraw';
   return 'transfer';
 }
@@ -568,6 +715,17 @@ watch(
 //   filters.value.status = filterDraft.value.status;
 //   currentPage.value = 1;
 // });
+
+const showDetailModal = ref(false);
+const detailTarget = ref<Transaction | null>(null);
+function openDetailModal(transaction: Transaction) {
+  detailTarget.value = transaction;
+  showDetailModal.value = true;
+}
+function closeDetailModal() {
+  showDetailModal.value = false;
+  detailTarget.value = null;
+}
 
 onMounted(() => {
   loadTransactions();
@@ -1161,7 +1319,11 @@ onMounted(() => {
   justify-content: center;
 }
 .type-label.deposit {
-  color: #10b981;
+  color: #22c55e;
+  font-weight: 600;
+}
+.type-label.payment {
+  color: #2563eb;
   font-weight: 600;
 }
 .type-label.withdraw {
@@ -1174,6 +1336,9 @@ onMounted(() => {
 }
 .type-icon.deposit {
   color: #10b981;
+}
+.type-icon.payment {
+  color: #2563eb;
 }
 .type-icon.withdraw {
   color: #ef4444;
@@ -1385,5 +1550,350 @@ onMounted(() => {
   font-style: normal;
   font-size: 0.95rem;
   letter-spacing: 0.5px;
+}
+/* Modal style copy từ admin */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(30, 41, 59, 0.48);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.25s;
+  backdrop-filter: blur(4px);
+  animation: overlay-fade-in 0.22s cubic-bezier(.4,1.4,.6,1) 1;
+}
+@keyframes overlay-fade-in {
+  0% { background: rgba(30,41,59,0.01); opacity: 0; }
+  100% { background: rgba(30,41,59,0.48); opacity: 1; }
+}
+.modal-content.modal-detail {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 6px 24px 0 rgba(37,99,235,0.12), 0 1px 4px rgba(0,0,0,0.06);
+  padding: 32px 28px;
+  min-width: 420px;
+  max-width: 98vw;
+  width: 650px;
+  max-height: none;
+  overflow-y: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
+  margin: 0;
+  box-sizing: border-box;
+  z-index: 3100;
+  animation: modal-pop-detail 0.22s cubic-bezier(.4,1.4,.6,1) 1;
+  border: 2px solid #3b82f6;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.modal-header h3 {
+  margin: 0;
+  color: #2563eb;
+  font-size: 1.25rem;
+}
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+.close-btn:hover {
+  color: #374151;
+}
+/* Thay đổi .modal-detail-grid thành 1 cột cho toàn bộ phần info bên phải */
+.modal-detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.modal-detail-col {
+  width: 100%;
+  padding: 0;
+}
+.detail-section {
+  margin-bottom: 12px;
+}
+.detail-section .section-title-with-icon {
+  margin-bottom: 8px;
+}
+.detail-section .detail-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.detail-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 0.96rem;
+}
+.detail-value {
+  color: #1f2937;
+  font-size: 1.01rem;
+  font-weight: 500;
+  word-break: break-word;
+}
+.link {
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+}
+.amount-value {
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 12px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.status-icon {
+  font-size: 0.9em;
+}
+.status-text {
+  font-weight: 600;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.btn {
+  padding: 8px 22px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, opacity 0.18s, border 0.18s;
+  margin-right: 8px;
+  outline: none;
+}
+.btn-secondary {
+  background: #fff;
+  color: #2563eb;
+  border: 2px solid #2563eb;
+  border-radius: 10px;
+}
+.btn-secondary:disabled {
+  background: #e5e7eb;
+  color: #a5b4fc;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #1d4ed8;
+  border-color: #1d4ed8;
+}
+.detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.detail-grid-vertical .detail-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.detail-label {
+  min-width: 90px;
+  font-weight: 600;
+  color: #374151;
+}
+.detail-value {
+  flex: 1;
+  color: #374151;
+  word-break: break-word;
+}
+.link {
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.detail-section,
+.detail-row,
+.detail-label,
+.detail-value,
+.link {
+  font-size: 0.97rem;
+}
+/* Card section cho từng nhóm thông tin trong modal */
+.modal-section-card {
+  background: #f7fafc;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px 0 rgba(60,60,60,0.06);
+  padding: 18px 20px 14px 20px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.modal-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.modal-section-title.amount {
+  color: #22c55e;
+}
+.modal-section-title.paypal {
+  color: #2563eb;
+}
+.modal-section-title.transinfo {
+  color: #a21caf;
+}
+.modal-section-title.reqinfo {
+  color: #eab308;
+}
+/* Badge trạng thái */
+.status-badge.status-completed {
+  background: #d1fae5;
+  color: #059669;
+  font-weight: 700;
+  font-size: 1.01rem;
+  padding: 7px 16px;
+  border-radius: 16px;
+  gap: 8px;
+}
+.status-badge.status-completed .status-icon {
+  font-size: 1.2em;
+  margin-right: 4px;
+}
+/* Type badge màu riêng */
+.type-label.deposit, .type-icon.deposit {
+  color: #22c55e;
+}
+.type-label.withdraw, .type-icon.withdraw {
+  color: #ef4444;
+}
+.type-label.refund, .type-icon.refund {
+  color: #eab308;
+}
+.type-label.payment, .type-icon.payment {
+  color: #2563eb;
+}
+/* Font đậm cho label, thường cho value */
+.detail-label {
+  font-weight: 700;
+  color: #374151;
+}
+.detail-value {
+  font-weight: 400;
+  color: #1f2937;
+}
+.modal-detail-boxed .modal-box-table {
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2937;
+  font-family: inherit;
+  padding: 18px 18px 8px 18px;
+  margin-bottom: 0;
+  margin-top: 0;
+  font-size: 1.01rem;
+  box-shadow: none;
+}
+.modal-detail-boxed .box-row {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px dashed #e5e7eb;
+  padding: 2px 0 2px 0;
+}
+.modal-detail-boxed .box-row:last-child {
+  border-bottom: none;
+}
+.modal-detail-boxed .box-title {
+  min-width: 120px;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.modal-detail-boxed .box-value {
+  flex: 1;
+  color: #1f2937;
+  font-weight: 400;
+  word-break: break-word;
+}
+.modal-detail-boxed .amount-value {
+  color: #2563eb;
+  font-weight: 700;
+}
+.modal-detail-boxed .box-section-title {
+  border-bottom: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #2563eb;
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin-top: 8px;
+  margin-bottom: 2px;
+  padding: 4px 0 2px 0;
+}
+.modal-detail-boxed .status-badge.status-completed {
+  background: #d1fae5;
+  color: #059669;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-size: 1em;
+  margin-right: 4px;
+}
+.modal-detail-boxed .status-badge.status-pending {
+  background: #fde68a;
+  color: #eab308;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-size: 1em;
+  margin-right: 4px;
+}
+.modal-detail-boxed .status-badge.status-failed {
+  background: #fee2e2;
+  color: #ef4444;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-size: 1em;
+  margin-right: 4px;
+}
+.modal-detail-boxed .link {
+  color: #2563eb;
+  text-decoration: underline;
+  font-weight: 600;
+  cursor: pointer;
 }
 </style>

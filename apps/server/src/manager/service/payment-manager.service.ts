@@ -152,12 +152,54 @@ export class PaypalService {
         );
       }
 
-      await this.transactionRepo.save({
-        user,
-        request,
+      logger.log('🔄 Creating requester transaction in createDeposit:', {
+        userId: user.id,
+        userEmail: user.email,
+        requestId: request.id,
+        requestDescription: request.description,
+        amount: depositAmount,
+        paypalOrderId: data.id
+      });
+
+      console.log('🔄 About to save requester transaction to database:', {
+        userId: user.id,
+        userEmail: user.email,
+        requestId: request.id,
         amount: depositAmount,
         status: TransactionStatus.Pending,
+        paypalOrderId: data.id
+      });
+
+      const requesterTransaction = await this.transactionRepo.save({
+        user,
+        request,
+        amount: depositAmount, // ✅ SỬA LẠI: Requester deposit nên amount > 0
+        status: TransactionStatus.Pending,
         paypalOrderId: data.id,
+      });
+
+      console.log('✅ Successfully saved requester transaction to database:', {
+        id: requesterTransaction.id,
+        userId: requesterTransaction.user?.id,
+        requestId: requesterTransaction.request?.id,
+        amount: requesterTransaction.amount,
+        status: requesterTransaction.status,
+        paypalOrderId: requesterTransaction.paypalOrderId,
+        userEmail: requesterTransaction.user?.email,
+        requestDescription: requesterTransaction.request?.description,
+        createdAt: requesterTransaction.createdAt
+      });
+
+      logger.log('✅ Created requester transaction in createDeposit:', {
+        id: requesterTransaction.id,
+        userId: requesterTransaction.user?.id,
+        requestId: requesterTransaction.request?.id,
+        amount: requesterTransaction.amount,
+        status: requesterTransaction.status,
+        paypalOrderId: requesterTransaction.paypalOrderId,
+        userEmail: requesterTransaction.user?.email,
+        requestDescription: requesterTransaction.request?.description,
+        type: 'Deposit' // Thêm type để debug
       });
 
       return approvalUrl;
@@ -229,12 +271,33 @@ export class PaypalService {
         );
       }
 
-      await this.transactionRepo.save({
-        user,
-        request,
+      console.log('🔄 About to save requester transaction in createPrivateDeposit:', {
+        userId: user.id,
+        userEmail: user.email,
+        requestId: request.id,
         amount: depositAmount,
         status: TransactionStatus.Pending,
+        paypalOrderId: data.id
+      });
+
+      const requesterTransaction = await this.transactionRepo.save({
+        user,
+        request,
+        amount: depositAmount, // ✅ SỬA LẠI: Requester deposit nên amount > 0
+        status: TransactionStatus.Pending,
         paypalOrderId: data.id,
+      });
+
+      console.log('✅ Successfully saved requester transaction in createPrivateDeposit:', {
+        id: requesterTransaction.id,
+        userId: requesterTransaction.user?.id,
+        requestId: requesterTransaction.request?.id,
+        amount: requesterTransaction.amount,
+        status: requesterTransaction.status,
+        paypalOrderId: requesterTransaction.paypalOrderId,
+        userEmail: requesterTransaction.user?.email,
+        requestDescription: requesterTransaction.request?.description,
+        createdAt: requesterTransaction.createdAt
       });
 
       return approvalUrl;
@@ -254,6 +317,7 @@ export class PaypalService {
   }
 
   async capturePaymentAndCreateProject(orderId: string) {
+    console.log('[DEBUG] ===> ĐÃ VÀO capturePaymentAndCreateProject', { orderId, time: new Date().toISOString() });
     const accessToken = await this.getAccessToken();
 
     try {
@@ -274,6 +338,8 @@ export class PaypalService {
         );
       }
 
+      console.log('🔄 Finding transaction for orderId:', orderId);
+
       const transaction = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
         relations: [
@@ -284,11 +350,43 @@ export class PaypalService {
         ],
       });
 
-      const { user: selectedUser, request } = transaction;
+      console.log('✅ Found original transaction:', {
+        id: transaction.id,
+        userId: transaction.user?.id,
+        userEmail: transaction.user?.email,
+        requestId: transaction.request?.id,
+        amount: transaction.amount,
+        status: transaction.status,
+        registrantsCount: transaction.request?.registrants?.length || 0
+      });
+
+      const { user: payerUser, request } = transaction;
+
+      console.log('🔄 Finding translator from registrants:', {
+        registrants: request.registrants?.map(r => ({ id: r.id, email: r.email })),
+        payerUserId: payerUser.id,
+        payerUserEmail: payerUser.email
+      });
+
+      // ✅ SỬA: Tìm translator từ registrants để gán làm assignee
+      // PayerUser là người thanh toán (requester), không phải translator
+      const translator = request.registrants.find(registrant =>
+        registrant.id !== payerUser.id
+      );
+
+      if (!translator) {
+        console.error('❌ No translator found in registrants');
+        throw new Error('No translator found in registrants');
+      }
+
+      console.log('✅ Found translator:', {
+        id: translator.id,
+        email: translator.email
+      });
 
       const otherUserIds = request.registrants
         .map((user) => Number(user.id))
-        .filter((uid) => uid !== Number(selectedUser.id));
+        .filter((uid) => uid !== Number(translator.id));
 
       const queryRunner = this.projectService['dataSource'].createQueryRunner();
       await queryRunner.connect();
@@ -297,22 +395,108 @@ export class PaypalService {
       try {
         const createResult = await this.projectService.createProjectFromRequest(
           request,
-          selectedUser.id
+          translator.id // ✅ SỬA: Sử dụng translator.id thay vì selectedUser.id
         );
 
         const newProject = await this.projectRepository.findOneOrFail({
           where: { id: createResult.projectId },
         });
 
-        request.assignee = selectedUser;
+        request.assignee = translator; // ✅ SỬA: Gán translator làm assignee
         request.registrants = [];
         request.project = newProject;
         request.status = RequestStatus.Approved;
         transaction.status = TransactionStatus.On_Hold;
 
+        console.log('🔄 Creating translator transaction:', {
+          userId: translator.id,
+          userEmail: translator.email,
+          amount: Math.abs(transaction.amount),
+          requestId: request.id
+        });
+
+        // ✅ THÊM: Tạo transaction cho translator (payment)
+        const translatorTransaction = this.transactionRepo.create({
+          user: translator,
+          request: request,
+          amount: Math.abs(transaction.amount), // Số tiền translator nhận được (dương)
+          status: TransactionStatus.On_Hold,
+          paypalEmail: translator.paypalEmail || null,
+        });
+
+        console.log('🔄 Creating requester transaction:', {
+          userId: payerUser.id,
+          userEmail: payerUser.email,
+          amount: Math.abs(transaction.amount),
+          requestId: request.id
+        });
+
+        // ✅ Tạo transaction cho requester - copy hệt translator nhưng thay user
+        const requesterTransaction = this.transactionRepo.create({
+          user: payerUser, // Thay translator thành requester
+          request: request,
+          amount: Math.abs(transaction.amount),
+          status: TransactionStatus.On_Hold,
+          paypalEmail: payerUser.paypalEmail || null,
+        });
+
+        console.log('✅ Created requester transaction:', {
+          id: requesterTransaction.id,
+          userId: requesterTransaction.user?.id,
+          userEmail: requesterTransaction.user?.email,
+          requestId: requesterTransaction.request?.id,
+          amount: requesterTransaction.amount,
+          status: requesterTransaction.status,
+          type: 'Deposit' // Thêm type để debug
+        });
+
+        // Log transaction của translator
+        console.log('[DEBUG] TRANSLATOR TRANSACTION:', {
+          userId: translatorTransaction.user?.id,
+          userEmail: translatorTransaction.user?.email,
+          requestId: translatorTransaction.request?.id,
+          amount: translatorTransaction.amount,
+          status: translatorTransaction.status,
+        });
+
+        // Log transaction của requester
+        console.log('[DEBUG] REQUESTER TRANSACTION:', {
+          userId: requesterTransaction.user?.id,
+          userEmail: requesterTransaction.user?.email,
+          requestId: requesterTransaction.request?.id,
+          amount: requesterTransaction.amount,
+          status: requesterTransaction.status,
+        });
+
         await this.translationService.extractStringsForRequestFiles(request.id);
 
-        await queryRunner.manager.save([request, transaction]);
+        console.log('🔄 Saving all transactions to database...');
+        await queryRunner.manager.save([request, transaction, translatorTransaction, requesterTransaction]);
+        console.log('✅ Successfully saved all transactions to database');
+
+        console.log('✅ Created transactions in capturePaymentAndCreateProject:', {
+          originalTransaction: {
+            id: transaction.id,
+            userId: transaction.user?.id,
+            userEmail: transaction.user?.email,
+            amount: transaction.amount,
+            status: transaction.status
+          },
+          translatorTransaction: {
+            id: translatorTransaction.id,
+            userId: translatorTransaction.user?.id,
+            userEmail: translatorTransaction.user?.email,
+            amount: translatorTransaction.amount,
+            status: translatorTransaction.status
+          },
+          requesterTransaction: {
+            id: requesterTransaction.id,
+            userId: requesterTransaction.user?.id,
+            userEmail: requesterTransaction.user?.email,
+            amount: requesterTransaction.amount,
+            status: requesterTransaction.status
+          }
+        });
 
         if (otherUserIds.length > 0) {
           await this.mailService.notifyAllOthersRequestTaken(
@@ -383,7 +567,13 @@ export class PaypalService {
 
       const transaction = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
-        relations: ['user', 'request'],
+        relations: [
+          'user',
+          'request',
+          'request.requester', // Đúng trường requester
+          'request.registrants',
+          'request.category',
+        ],
       });
       const user = transaction.user;
       let request = transaction.request;
@@ -401,7 +591,42 @@ export class PaypalService {
 
       // Mark transaction and request status
       transaction.status = TransactionStatus.On_Hold;
+
+      // ✅ THÊM: Tạo transaction cho translator (payment) nếu có assignee
+      let translatorTransaction = null;
+      if (request.assignee && request.assignee.id !== user.id) {
+        translatorTransaction = this.transactionRepo.create({
+          user: request.assignee,
+          request: request,
+          amount: transaction.amount, // Số tiền translator nhận được
+          status: TransactionStatus.On_Hold,
+          paypalEmail: request.assignee.paypalEmail || null,
+        });
+      }
+
       await this.transactionRepo.save(transaction);
+      if (translatorTransaction) {
+        await this.transactionRepo.save(translatorTransaction);
+      }
+
+      // ✅ THÊM: Tạo transaction cho requester (deposit)
+      const requesterTransaction = this.transactionRepo.create({
+        user: request.requester, // Đúng là requester
+        request: request,
+        amount: Math.abs(transaction.amount), // dương
+        status: TransactionStatus.Completed,
+        paypalEmail: request.requester?.paypalEmail || null,
+      });
+      await this.transactionRepo.save(requesterTransaction);
+      // Log để debug
+      console.log('[DEBUG] REQUESTER TRANSACTION (capturePayment):', {
+        id: requesterTransaction.id,
+        userId: requesterTransaction.user?.id,
+        userEmail: requesterTransaction.user?.email,
+        requestId: requesterTransaction.request?.id,
+        amount: requesterTransaction.amount,
+        status: requesterTransaction.status,
+      });
 
       let projectId = null;
       let receiver = null;

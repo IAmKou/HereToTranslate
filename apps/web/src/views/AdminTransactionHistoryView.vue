@@ -340,7 +340,13 @@ interface Transaction {
   user: User;
   paypalEmail?: string; // Added for PayPal information
   requestId?: string; // Added for requestId
+  isRequester?: boolean; // Added isRequester flag
   projectId?: string; // Added for projectId
+  request?: {
+    assignee?: {
+      id: number;
+    };
+  }; // Added request object
 }
 
 interface Filters {
@@ -576,7 +582,20 @@ function getSortIcon(key: string): string {
 }
 
 function getTransactionType(transaction: Transaction): string {
-  if (transaction.amount > 0) return 'Deposit';
+  if (transaction.amount > 0) {
+    // Kiểm tra xem có phải là giao dịch payment cho translator không
+    // Nếu có requestId và user là assignee, thì đây là Payment
+    // Nếu có requestId và user là requester, thì đây là Deposit
+    if (transaction.requestId) {
+      // Sử dụng isRequester để phân biệt
+      if (transaction.isRequester) {
+        return 'Deposit';
+      } else {
+        return 'Payment';
+      }
+    }
+    return 'Deposit';
+  }
   if (transaction.amount < 0) return 'Withdraw';
   return 'Transfer';
 }
@@ -1039,6 +1058,11 @@ onMounted(loadTransactions);
 .type-deposit {
   background: #d1fae5;
   color: #065f46;
+}
+
+.type-payment {
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 .type-withdraw {

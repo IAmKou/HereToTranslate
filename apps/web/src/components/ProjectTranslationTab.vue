@@ -318,10 +318,6 @@ async function saveTranslation(str: any) {
                 <input type="checkbox" v-model="highlightUntranslated" />
                 Highlight untranslated
               </label>
-              <label class="focus-toggle">
-                <input type="checkbox" v-model="focusUntranslated" />
-                Focus on untranslated
-              </label>
             </div>
             <div class="translation-scroll-area">
               <div v-if="getStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>

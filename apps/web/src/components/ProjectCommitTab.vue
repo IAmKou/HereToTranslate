@@ -466,7 +466,6 @@ async function autoFillTranslationContent() {
     const byFile: Record<string, Record<string, string>> = {};
     (res.data || []).forEach((str: any) => {
       if (str.translatedText && str.translatedText.trim()) {
-        // Ưu tiên gom theo filePath, nếu không có thì thử fileName, cuối cùng fallback 'translations.json'
         const file = str.filePath || str.fileName || 'translations.json';
         if (!byFile[file]) byFile[file] = {};
         byFile[file][str.originalText] = str.translatedText;
@@ -475,26 +474,39 @@ async function autoFillTranslationContent() {
     autoFillTranslations.value = byFile;
     autoFillFiles.value = Object.keys(byFile);
     if (autoFillFiles.value.length === 1) {
-      // Nếu chỉ có 1 file, auto-fill luôn
       autoFillSelectedFile.value = autoFillFiles.value[0];
+      // So sánh với commit gần nhất cùng filePath
+      const latestSameFileCommit = commits.value.find((c: any) => c.filePath === autoFillSelectedFile.value);
+      const newContent = JSON.stringify(byFile[autoFillSelectedFile.value], null, 2);
+      let isSame = false;
+      if (latestSameFileCommit) {
+        try {
+          const latestObj = JSON.parse(latestSameFileCommit.contentSnapshot || '{}');
+          const newObj = JSON.parse(newContent || '{}');
+          isSame = JSON.stringify(latestObj) === JSON.stringify(newObj);
+        } catch (e) {}
+      }
+      if (isSame) {
+        toast.add({
+          severity: 'warn',
+          summary: 'Nothing changes',
+          detail: 'No new translations to auto-fill!',
+          life: 3000,
+        });
+        showAutoFillFileSelect.value = false;
+        return;
+      }
       submitForm.value.filePath = autoFillSelectedFile.value;
-      submitForm.value.content = JSON.stringify(byFile[autoFillSelectedFile.value], null, 2);
+      submitForm.value.content = newContent;
       if (!submitForm.value.message) {
         submitForm.value.message = 'Update translations';
       }
       showAutoFillFileSelect.value = false;
     } else if (autoFillFiles.value.length > 1) {
-      // Nếu có nhiều file, hiện dropdown chọn file
       showAutoFillFileSelect.value = true;
       autoFillSelectedFile.value = autoFillFiles.value[0];
-      // Auto-fill file đầu tiên luôn, user có thể đổi file
-      submitForm.value.filePath = autoFillSelectedFile.value;
-      submitForm.value.content = JSON.stringify(byFile[autoFillSelectedFile.value], null, 2);
-      if (!submitForm.value.message) {
-        submitForm.value.message = 'Update translations';
-      }
+      // Không auto-fill luôn, chỉ khi user chọn file thì watcher phía trên sẽ kiểm tra và update form nếu có thay đổi
     } else {
-      // Không có bản dịch nào
       toast.add({
         severity: 'warn',
         summary: 'Warning',
@@ -621,8 +633,28 @@ function handleCopyContent() {
 // Watcher: Khi user chọn file khác trong dropdown, auto-fill lại content và filePath
 watch(autoFillSelectedFile, (file: string) => {
   if (file && autoFillTranslations.value[file]) {
+    // So sánh với commit gần nhất cùng filePath
+    const latestSameFileCommit = commits.value.find((c: any) => c.filePath === file);
+    const newContent = JSON.stringify(autoFillTranslations.value[file], null, 2);
+    let isSame = false;
+    if (latestSameFileCommit) {
+      try {
+        const latestObj = JSON.parse(latestSameFileCommit.contentSnapshot || '{}');
+        const newObj = JSON.parse(newContent || '{}');
+        isSame = JSON.stringify(latestObj) === JSON.stringify(newObj);
+      } catch (e) {}
+    }
+    if (isSame) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Nothing changes',
+        detail: 'No new translations to auto-fill!',
+        life: 3000,
+      });
+      return;
+    }
     submitForm.value.filePath = file;
-    submitForm.value.content = JSON.stringify(autoFillTranslations.value[file], null, 2);
+    submitForm.value.content = newContent;
     if (!submitForm.value.message) {
       submitForm.value.message = 'Update translations';
     }
@@ -639,6 +671,26 @@ const shortContentPreview = computed(() => {
 const isContentLong = computed(() => {
   if (!submitForm.value.content) return false;
   return submitForm.value.content.split('\n').length > 6;
+});
+
+// Thêm state cho nút xem full content trong modal commit content
+const showFullCommitContent = ref(false);
+const fullCommitContent = ref('');
+
+function openFullCommitContent(content: string) {
+  fullCommitContent.value = content;
+  showFullCommitContent.value = true;
+}
+
+const shortCommitContentPreview = computed(() => {
+  if (!selectedContent.value?.contentSnapshot) return '';
+  const lines = selectedContent.value.contentSnapshot.split('\n');
+  if (lines.length <= 12) return selectedContent.value.contentSnapshot;
+  return lines.slice(0, 12).join('\n') + '\n...';
+});
+const isCommitContentLong = computed(() => {
+  if (!selectedContent.value?.contentSnapshot) return false;
+  return selectedContent.value.contentSnapshot.split('\n').length > 12;
 });
 </script>
 
@@ -1006,37 +1058,42 @@ const isContentLong = computed(() => {
     <Dialog
       v-model:visible="showContentDialog"
       header="Commit Content"
-      :style="{ width: '800px' }"
+      :style="{ width: '700px', maxWidth: '98vw', borderRadius: '18px', boxShadow: '0 8px 32px rgba(30,41,59,0.16)' }"
       :modal="true"
+      class="commit-content-dialog-upgrade"
     >
-      <div v-if="selectedContent" class="content-view">
-        <div class="content-info">
-          <div class="info-item">
-            <strong>Message:</strong> {{ selectedContent.message }}
-          </div>
-          <div class="info-item">
-            <strong>File:</strong> {{ selectedContent.filePath }}
-          </div>
-          <div class="info-item">
-            <strong>Author:</strong> {{ selectedContent.author.fullName || selectedContent.author.username }}
-          </div>
-          <div class="info-item">
-            <strong>Date:</strong> {{ formatDate(selectedContent.createdAt) }}
-          </div>
+      <div v-if="selectedContent" class="commit-content-modal-body">
+        <div class="commit-content-info-grid">
+          <div class="info-row"><span class="info-icon">📝</span><span class="info-label">Message:</span><span class="info-value">{{ selectedContent.message }}</span></div>
+          <div class="info-row"><span class="info-icon">📄</span><span class="info-label">File:</span><span class="info-value">{{ selectedContent.filePath }}</span></div>
+          <div class="info-row"><span class="info-icon">👤</span><span class="info-label">Author:</span><span class="info-value">{{ selectedContent.author.fullName || selectedContent.author.username }}</span></div>
+          <div class="info-row"><span class="info-icon">📅</span><span class="info-label">Date:</span><span class="info-value">{{ formatDate(selectedContent.createdAt) }}</span></div>
         </div>
-
-        <div class="content-preview">
-          <h4>File Content</h4>
-          <pre class="content-code">{{ selectedContent.contentSnapshot }}</pre>
+        <div class="commit-content-file-title">File Content</div>
+        <div class="commit-content-file-area">
+          <pre class="commit-content-file-code">{{ shortCommitContentPreview }}</pre>
+          <div v-if="isCommitContentLong" class="view-full-content-btn-row">
+            <Button label="View Full Content" icon="pi pi-external-link" class="view-full-content-btn" @click="openFullCommitContent(selectedContent.contentSnapshot)" />
+          </div>
         </div>
       </div>
-
       <template #footer>
         <Button
           label="Close"
           icon="pi pi-times"
+          class="close-btn"
           @click="showContentDialog = false"
         />
+      </template>
+    </Dialog>
+    <Dialog v-model:visible="showFullCommitContent" :modal="true" :style="{ width: '98vw', maxWidth: '1100px', minHeight: '80vh' }">
+      <div class="fullscreen-title"><span class="icon">📝</span> View Full File Content</div>
+      <div style="margin-bottom:1em; position:relative;">
+        <Button icon="pi pi-copy" class="copy-btn" style="position:absolute;top:0;right:0.5em;z-index:2;" @click="() => { navigator.clipboard.writeText(fullCommitContent) }" v-tooltip="'Copy All Content'" />
+      </div>
+      <pre class="fullscreen-textarea content-scrollable">{{ fullCommitContent }}</pre>
+      <template #footer>
+        <Button label="Close" icon="pi pi-times" class="close-btn" @click="showFullCommitContent = false" />
       </template>
     </Dialog>
   </div>
@@ -1971,10 +2028,13 @@ const isContentLong = computed(() => {
 }
 .commit-dialog-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 1em;
   margin-top: 0.5em;
+  background: none;
+  border: none;
+  padding: 0 1.5em 1em 1.5em;
 }
 .commit-dialog-footer .gray-btn {
   order: 1;
@@ -2229,10 +2289,12 @@ const isContentLong = computed(() => {
 }
 
 .commit-dialog-upgrade .p-dialog-title {
-  padding-top: 1.2em !important;
-  padding-bottom: 0.7em !important;
+  width: 100%;
+  text-align: center !important;
   padding-left: 1.5em !important;
   padding-right: 1.5em !important;
+  margin: 0 auto;
+  display: block;
 }
 
 /* Nổi bật dòng thông báo content dài */
@@ -2241,5 +2303,163 @@ const isContentLong = computed(() => {
   font-weight: 600;
   font-size: 0.97em;
   margin-top: 0.2em;
+}
+
+.commit-form-upgrade .content-area-group {
+  padding-left: 1em;
+  padding-right: 1em;
+}
+
+.content-area-group .content-textarea {
+  padding-left: 1.2em !important;
+  padding-right: 1.2em !important;
+}
+
+pre.content-textarea {
+  padding-left: 1.2em !important;
+  padding-right: 1.2em !important;
+  box-sizing: border-box !important;
+}
+
+.commit-dialog-upgrade .p-dialog-header {
+  justify-content: center !important;
+  text-align: center !important;
+  padding-left: 1.5em !important;
+  padding-right: 1.5em !important;
+}
+
+.commit-content-dialog-upgrade .p-dialog-header {
+  justify-content: center !important;
+  text-align: center !important;
+  padding-left: 1.5em !important;
+  padding-right: 1.5em !important;
+}
+.commit-content-modal-body {
+  padding: 1.5em 1.5em 0.5em 1.5em;
+  background: #f8fafc;
+  border-radius: 16px;
+}
+.commit-content-info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5em;
+  margin-bottom: 1.2em;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px #e0e7ff33;
+  padding: 1em 1.2em 0.5em 1.2em;
+}
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.4em 0;
+  font-size: 1.01em;
+}
+.info-row:last-child {
+  border-bottom: none;
+}
+.info-icon {
+  font-size: 1.1em;
+  color: #6366f1;
+}
+.info-label {
+  font-weight: 700;
+  color: #374151;
+  min-width: 80px;
+}
+.info-value {
+  color: #1e293b;
+  font-weight: 400;
+  flex: 1;
+  word-break: break-word;
+}
+.commit-content-file-title {
+  font-size: 1.08em;
+  font-weight: 700;
+  color: #2563eb;
+  margin: 1.2em 0 0.5em 0;
+  letter-spacing: 0.01em;
+}
+.commit-content-file-area {
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 1.2em 1.2em 1em 1.2em;
+  margin-bottom: 0.5em;
+  max-height: 340px;
+  overflow: auto;
+  box-shadow: 0 1px 4px #e0e7ff33;
+}
+.commit-content-file-code {
+  font-family: 'Fira Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.98em;
+  color: #334155;
+  background: none;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.commit-content-dialog-upgrade .close-btn {
+  background: #f3f4f6 !important;
+  color: #ef4444 !important;
+  border-radius: 8px;
+  font-weight: 600;
+  float: right;
+  margin-top: 0.5em;
+  min-width: 110px;
+}
+@media (max-width: 700px) {
+  .commit-content-modal-body { padding: 0.5em; }
+  .commit-content-info-grid { padding: 0.5em; }
+  .commit-content-file-area { padding: 0.5em; }
+}
+
+.view-full-content-btn-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5em;
+}
+.view-full-content-btn {
+  background: #6366f1 !important;
+  color: #fff !important;
+  border-radius: 8px;
+  font-weight: 600;
+  min-width: 160px;
+}
+.fullscreen-title {
+  font-size: 1.3em;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 0.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+}
+.fullscreen-title .icon {
+  font-size: 1.2em;
+}
+.fullscreen-textarea {
+  width: 100%;
+  border-radius: 14px;
+  background: #f9f9f9;
+  padding: 1em;
+  font-size: 0.95em;
+  border: 1.5px solid #e5e7eb;
+  margin-bottom: 1em;
+  resize: both;
+  min-height: 400px;
+  min-width: 300px;
+  box-sizing: border-box;
+  font-family: 'Fira Mono', 'Menlo', 'Consolas', monospace;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+@media (max-width: 700px) {
+  .fullscreen-title { font-size: 1.1em; }
+  .fullscreen-textarea { min-width: 0; }
 }
 </style>

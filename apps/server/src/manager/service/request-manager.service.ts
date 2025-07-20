@@ -249,8 +249,8 @@ export class RequestManagerService {
       ...r,
       isRegistered: r.registrants
         ? r.registrants.some(
-            (u: UserEntity) => u.id.toString() === userId.toString()
-          )
+          (u: UserEntity) => u.id.toString() === userId.toString()
+        )
         : false,
     }));
   }
@@ -655,23 +655,9 @@ export class RequestManagerService {
     await queryRunner.startTransaction();
 
     try {
-      const createProjectDto: any = {
-        name: request.title,
-        description: request.description,
-        isPrivate: true,
-        tags: [],
-      };
-
-      if (request.category?.id) {
-        createProjectDto.categoryId = request.category.id.toString();
-      }
-
-      const files = request.files || [];
-
-      const { projectId } = await this.projectService.createProject(
-        assigneeId,
-        createProjectDto,
-        files
+      const { projectId } = await this.projectService.createProjectFromRequest(
+        request,
+        assigneeId
       );
 
       const newProject = await this.projectRepository.findOneOrFail({

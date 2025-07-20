@@ -18,6 +18,9 @@ const userSearch = ref({
   addingId: null, // id of user being added
 });
 
+// Add collapsible state for add user section
+const showAddUserSection = ref(false);
+
 // Fetch members
 const loadMembers = async () => {
   if (!props.project) return;
@@ -162,8 +165,16 @@ function getAvatarText(user) {
         <span class="title-icon">➕</span>
         Add User to Project
       </h2>
+      <button
+        class="btn btn-outline btn-sm toggle-btn"
+        @click="showAddUserSection = !showAddUserSection"
+        :title="showAddUserSection ? 'Hide add user section' : 'Show add user section'"
+      >
+        <span class="icon">{{ showAddUserSection ? '−' : '+' }}</span>
+        {{ showAddUserSection ? 'Hide' : 'Add User' }}
+      </button>
     </div>
-    <div class="section-content">
+    <div v-if="showAddUserSection" class="section-content">
       <form autocomplete="off" class="add-user-form" @submit.prevent="searchUser">
         <div class="form-row">
           <div class="form-group" style="flex: 1; margin-bottom: 0; position: relative;">
@@ -328,7 +339,7 @@ function getAvatarText(user) {
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 1.2rem;
   margin-bottom: 1.2rem;
 }
@@ -352,6 +363,17 @@ function getAvatarText(user) {
   justify-content: center;
   color: white;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+.toggle-btn {
+  margin-left: auto;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+.toggle-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 .section-content {
   background: #f8fafc;

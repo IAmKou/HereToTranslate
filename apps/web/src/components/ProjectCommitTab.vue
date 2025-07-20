@@ -1230,7 +1230,7 @@ watch(showSubmitDialog, (val: boolean) => {
 
 <style scoped>
 .commits-tab-wrapper {
-  padding: 2rem 0;
+  padding: 0;
 }
 
 .commits-header {

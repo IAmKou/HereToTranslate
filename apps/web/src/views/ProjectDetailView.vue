@@ -1380,7 +1380,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2rem;
+  padding: 1.5rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
@@ -1392,18 +1392,18 @@ onMounted(() => {
 .page-title {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin: 0 0 0.5rem 0;
-  font-size: 2rem;
+  gap: 0.75rem;
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
   font-weight: 700;
   color: white;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .page-icon {
-  font-size: 2.5rem;
-  width: 4rem;
-  height: 4rem;
+  font-size: 2rem;
+  width: 3rem;
+  height: 3rem;
   background: rgba(255, 255, 255, 0.2);
   border-radius: 50%;
   display: flex;
@@ -1416,7 +1416,7 @@ onMounted(() => {
 
 .page-subtitle {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: rgba(255, 255, 255, 0.9);
   font-weight: 400;
 }
@@ -1635,10 +1635,10 @@ onMounted(() => {
   position: relative;
   background: linear-gradient(135deg, #4f2c8c 0%, #764ba2 100%);
   color: white;
-  padding: 2.5rem 2rem 2rem 2rem;
+  padding: 1.5rem 2rem 1.5rem 2rem;
   display: flex;
   align-items: flex-start;
-  gap: 2.5rem;
+  gap: 2rem;
   border-radius: 0 0 32px 32px;
   box-shadow: 0 10px 40px rgba(76, 34, 128, 0.18);
   overflow: visible;
@@ -1669,15 +1669,15 @@ onMounted(() => {
 }
 
 .creator-avatar {
-  width: 70px;
-  height: 70px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
-  font-size: 2.2rem;
+  font-size: 1.8rem;
   font-weight: 700;
   color: #fff;
   border: 3px solid rgba(255, 255, 255, 0.5);
@@ -1713,7 +1713,7 @@ onMounted(() => {
 .project-title {
   margin: 0;
   color: white;
-  font-size: 2.2rem;
+  font-size: 1.8rem;
   font-weight: 800;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -2020,18 +2020,18 @@ onMounted(() => {
 /* Enhanced Project Statistics */
 .project-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  padding: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
 .stat-card {
   background: white;
-  padding: 1rem;
-  border-radius: 2rem;
+  padding: 0.75rem;
+  border-radius: 1rem;
   text-align: center;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
   border: 1px solid #e2e8f0;
   transition: all 0.3s cubic-bezier(0.4, 1, 0.7, 1.2);
   position: relative;
@@ -2048,37 +2048,37 @@ onMounted(() => {
   z-index: 2;
 }
 .stat-icon {
-  font-size: 2.2rem;
-  margin-bottom: 1rem;
+  font-size: 1.8rem;
+  margin-bottom: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .stat-icon-circle {
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 50%;
   background: linear-gradient(135deg, #f3f6fa 0%, #e6f0fa 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 1rem auto;
+  margin: 0 auto 0.75rem auto;
   box-shadow: 0 2px 8px #3182ce11;
 }
 
 .stat-number {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #4299e1;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
   text-shadow: 0 2px 4px rgba(66, 153, 225, 0.2);
 }
 
 .stat-label {
   color: #718096;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.05em;
   font-weight: 600;
 }
 

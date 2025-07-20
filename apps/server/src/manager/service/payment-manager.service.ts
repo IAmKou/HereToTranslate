@@ -347,6 +347,7 @@ export class PaypalService {
           'request',
           'request.registrants',
           'request.category',
+          'request.files',
         ],
       });
 
@@ -573,6 +574,7 @@ export class PaypalService {
           'request.requester', // Đúng trường requester
           'request.registrants',
           'request.category',
+          'request.files',
         ],
       });
       const user = transaction.user;

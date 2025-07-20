@@ -223,9 +223,28 @@ const sortedFilteredCommits = computed(() => {
   arr = sortCommits(arr, sortBy.value);
   return arr;
 });
+
+// Computed cho commit history - chỉ hiển thị approved và rejected
+const commitHistoryCommits = computed(() => {
+  return filteredCommits.value.filter((commit: Commit) =>
+    commit.status === 'approved' || commit.status === 'rejected'
+  );
+});
+
+const sortedCommitHistoryCommits = computed(() => {
+  let arr = commitHistoryCommits.value;
+  arr = sortCommits(arr, sortBy.value);
+  return arr;
+});
+
 const pagedCommits = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
   return sortedFilteredCommits.value.slice(start, start + pageSize.value);
+});
+
+const pagedCommitHistoryCommits = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return sortedCommitHistoryCommits.value.slice(start, start + pageSize.value);
 });
 
 // Sắp xếp và lọc github commits
@@ -281,7 +300,7 @@ const branches = ref<Branch[]>([]);
 const branchLoading = ref(false);
 const emit = defineEmits(['update:branchId']);
 
-const activeTab = ref<'local' | 'github'>('local');
+const activeTab = ref<'local' | 'history'>('local');
 
 // Methods
 async function loadCommits() {
@@ -388,8 +407,11 @@ function openReviewDialog(commit: Commit) {
 }
 
 function openContentDialog(commit: Commit) {
+  console.log('openContentDialog called with:', commit);
   selectedContent.value = commit;
   showContentDialog.value = true;
+  console.log('selectedContent set to:', selectedContent.value);
+  console.log('showContentDialog set to:', showContentDialog.value);
 }
 
 async function reviewCommit() {
@@ -454,7 +476,10 @@ function formatDate(dateString: string) {
 
 // Thêm hàm autoFillTranslationContent vào phần <script setup>
 async function autoFillTranslationContent() {
-  if (!props.projectId || !props.branchId) return;
+  if (!props.projectId || !props.branchId || !selectedFileForAutoFill.value) return;
+
+  console.log('Auto-fill for file:', selectedFileForAutoFill.value);
+
   try {
     const res = await axiosInstance.get('/translation/strings', {
       params: {
@@ -462,67 +487,135 @@ async function autoFillTranslationContent() {
         branchId: props.branchId,
       },
     });
-    // Gom các string theo filePath
-    const byFile: Record<string, Record<string, string>> = {};
-    (res.data || []).forEach((str: any) => {
+
+    console.log('API response for auto-fill:', res.data);
+    console.log('Total strings received:', res.data?.length || 0);
+
+    // Lọc chỉ lấy translations cho file đã chọn
+    const fileTranslations: Record<string, string> = {};
+    let matchedStrings = 0;
+
+    (res.data || []).forEach((str: any, index: number) => {
+      console.log(`String ${index}:`, {
+        filePath: str.filePath,
+        fileName: str.fileName,
+        originalText: str.originalText,
+        translatedText: str.translatedText,
+        hasTranslation: !!(str.translatedText && str.translatedText.trim())
+      });
+
       if (str.translatedText && str.translatedText.trim()) {
-        const file = str.filePath || str.fileName || 'translations.json';
-        if (!byFile[file]) byFile[file] = {};
-        byFile[file][str.originalText] = str.translatedText;
+        const currentFilePath = str.filePath || str.fileName || 'translations.json';
+        console.log('Checking file match:', currentFilePath, 'vs', selectedFileForAutoFill.value);
+
+        if (currentFilePath === selectedFileForAutoFill.value) {
+          fileTranslations[str.originalText] = str.translatedText;
+          matchedStrings++;
+          console.log('✓ Matched string added:', str.originalText, '->', str.translatedText);
+        }
       }
     });
-    autoFillTranslations.value = byFile;
-    autoFillFiles.value = Object.keys(byFile);
-    if (autoFillFiles.value.length === 1) {
-      autoFillSelectedFile.value = autoFillFiles.value[0];
-      // So sánh với commit gần nhất cùng filePath
-      const latestSameFileCommit = commits.value.find((c: any) => c.filePath === autoFillSelectedFile.value);
-      const newContent = JSON.stringify(byFile[autoFillSelectedFile.value], null, 2);
-      let isSame = false;
-      if (latestSameFileCommit) {
-        try {
-          const latestObj = JSON.parse(latestSameFileCommit.contentSnapshot || '{}');
-          const newObj = JSON.parse(newContent || '{}');
-          isSame = JSON.stringify(latestObj) === JSON.stringify(newObj);
-        } catch (e) {}
-      }
-      if (isSame) {
-        toast.add({
-          severity: 'warn',
-          summary: 'Nothing changes',
-          detail: 'No new translations to auto-fill!',
-          life: 3000,
-        });
-        showAutoFillFileSelect.value = false;
-        return;
-      }
-      submitForm.value.filePath = autoFillSelectedFile.value;
-      submitForm.value.content = newContent;
-      if (!submitForm.value.message) {
-        submitForm.value.message = 'Update translations';
-      }
-      showAutoFillFileSelect.value = false;
-    } else if (autoFillFiles.value.length > 1) {
-      showAutoFillFileSelect.value = true;
-      autoFillSelectedFile.value = autoFillFiles.value[0];
-      // Không auto-fill luôn, chỉ khi user chọn file thì watcher phía trên sẽ kiểm tra và update form nếu có thay đổi
-    } else {
+
+    console.log('Matched strings count:', matchedStrings);
+    console.log('Final translations object:', fileTranslations);
+
+    if (Object.keys(fileTranslations).length === 0) {
       toast.add({
         severity: 'warn',
         summary: 'Warning',
-        detail: 'No translations available to auto-fill!',
+        detail: 'No translations available for the selected file!',
         life: 3000,
       });
-      showAutoFillFileSelect.value = false;
+      return;
     }
+
+    // So sánh với commit gần nhất cùng filePath
+    const latestSameFileCommit = commits.value.find((c: any) => c.filePath === selectedFileForAutoFill.value);
+    const newContent = JSON.stringify(fileTranslations, null, 2);
+    let isSame = false;
+    if (latestSameFileCommit) {
+      try {
+        const latestObj = JSON.parse(latestSameFileCommit.contentSnapshot || '{}');
+        const newObj = JSON.parse(newContent || '{}');
+        isSame = JSON.stringify(latestObj) === JSON.stringify(newObj);
+        console.log('Comparing with latest commit:', {
+          latest: latestObj,
+          new: newObj,
+          isSame: isSame
+        });
+      } catch (e) {
+        console.error('Error comparing content:', e);
+      }
+    }
+
+    if (isSame) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Nothing changes',
+        detail: 'No new translations to auto-fill for the selected file!',
+        life: 3000,
+      });
+      return;
+    }
+
+    submitForm.value.filePath = selectedFileForAutoFill.value;
+    submitForm.value.content = newContent;
+    if (!submitForm.value.message) {
+      submitForm.value.message = 'Update translations';
+    }
+
+    console.log('Auto-fill completed. Form updated:', {
+      filePath: submitForm.value.filePath,
+      contentLength: submitForm.value.content.length,
+      message: submitForm.value.message
+    });
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Auto-fill completed for selected file',
+      life: 3000,
+    });
   } catch (e) {
+    console.error('Auto-fill error:', e);
     toast.add({
       severity: 'error',
       summary: 'Error',
       detail: 'Failed to auto-fill translations',
       life: 3000,
     });
-    showAutoFillFileSelect.value = false;
+  }
+}
+
+// Sửa hàm loadAvailableFiles để có debug log
+async function loadAvailableFiles() {
+  if (!props.projectId || !props.branchId) return;
+
+  try {
+    console.log('Loading available files for project:', props.projectId, 'branch:', props.branchId);
+    const res = await axiosInstance.get('/translation/strings', {
+      params: {
+        projectId: props.projectId,
+        branchId: props.branchId,
+      },
+    });
+
+    console.log('API response:', res.data);
+
+    // Gom các file có translations
+    const files = new Set<string>();
+    (res.data || []).forEach((str: any) => {
+      if (str.translatedText && str.translatedText.trim()) {
+        const filePath = str.filePath || str.fileName || 'translations.json';
+        files.add(filePath);
+        console.log('Added file:', filePath);
+      }
+    });
+
+    autoFillFiles.value = Array.from(files);
+    console.log('Available files:', autoFillFiles.value);
+  } catch (e) {
+    console.error('Failed to load available files:', e);
   }
 }
 
@@ -585,10 +678,12 @@ const contentHistory = ref<string[]>([]);
 const redoStack = ref<string[]>([]);
 
 // Watcher: Khi mở fullscreen, reset history
-watch(showFullscreenContent, (val) => {
+watch(showFullscreenContent, (val: boolean) => {
+  console.log('showFullscreenContent changed to:', val);
   if (val) {
     contentHistory.value = [];
     redoStack.value = [];
+    console.log('History reset');
   }
 });
 
@@ -596,7 +691,7 @@ watch(showFullscreenContent, (val) => {
 let lastContent = '';
 watch(
   () => showFullscreenContent.value ? submitForm.value.content : null,
-  (newVal, oldVal) => {
+  (newVal: string | null, oldVal: string | null) => {
     if (showFullscreenContent.value && oldVal !== null && newVal !== oldVal) {
       contentHistory.value.push(oldVal);
       redoStack.value = [];
@@ -678,8 +773,11 @@ const showFullCommitContent = ref(false);
 const fullCommitContent = ref('');
 
 function openFullCommitContent(content: string) {
-  fullCommitContent.value = content;
-  showFullCommitContent.value = true;
+  console.log('openFullCommitContent called with content length:', content.length);
+  console.log('Content preview:', content.substring(0, 100) + '...');
+  submitForm.value.content = content;
+  showFullscreenContent.value = true;
+  console.log('showFullscreenContent set to:', showFullscreenContent.value);
 }
 
 const shortCommitContentPreview = computed(() => {
@@ -690,7 +788,47 @@ const shortCommitContentPreview = computed(() => {
 });
 const isCommitContentLong = computed(() => {
   if (!selectedContent.value?.contentSnapshot) return false;
-  return selectedContent.value.contentSnapshot.split('\n').length > 12;
+  const lines = selectedContent.value.contentSnapshot.split('\n');
+  const isLong = lines.length > 12;
+  console.log('isCommitContentLong check:', {
+    hasContent: !!selectedContent.value?.contentSnapshot,
+    linesCount: lines.length,
+    isLong: isLong
+  });
+  return isLong;
+});
+
+// Thêm computed kiểm tra có phải commit mới nhất đã approve không
+const isLatestForFile = computed(() => {
+  if (!selectedCommit.value) return true;
+  // Tìm commit approved mới nhất cùng filePath
+  const latest = commits.value
+    .filter((c: Commit) => c.filePath === selectedCommit.value.filePath && c.status === 'approved')
+    .sort((a: Commit, b: Commit) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  // Nếu chưa có commit approved nào thì cho phép
+  if (!latest) return true;
+  // Nếu nội dung giống nhau thì KHÔNG cho approve (cảnh báo)
+  try {
+    const latestObj = JSON.parse(latest.contentSnapshot || '{}');
+    const currentObj = JSON.parse(selectedCommit.value.contentSnapshot || '{}');
+    if (JSON.stringify(latestObj) === JSON.stringify(currentObj)) return false;
+  } catch (e) {}
+  // Nếu khác nội dung thì cho approve
+  return true;
+});
+
+// Thêm state cho file được chọn
+const selectedFileForAutoFill = ref('');
+
+// Watcher: Khi mở modal, reset form và load files
+watch(showSubmitDialog, (val: boolean) => {
+  if (val) {
+    // Reset form
+    submitForm.value = { filePath: '', content: '', message: '' };
+    selectedFileForAutoFill.value = '';
+    // Load available files
+    loadAvailableFiles();
+  }
 });
 </script>
 
@@ -699,13 +837,13 @@ const isCommitContentLong = computed(() => {
     <!-- Advanced filter bar -->
     <div style="display:flex;align-items:center;gap:2em;margin-bottom:1em;">
     </div>
-    <!-- Tabs for Local/GitHub Commits -->
+    <!-- Tabs for Local/Commit History -->
     <div class="commit-tabs" style="display:flex;gap:1em;margin-bottom:1.5em;">
-      <button :class="['tab-btn', {active: activeTab==='local'}]" @click="activeTab='local'" :disabled="showOnlyGithub" style="display:flex;align-items:center;gap:0.5em;">
-        <span style="font-size:1.2em;">📄</span> Local Commits
+      <button :class="['tab-btn', {active: activeTab==='local'}]" @click="activeTab='local'" style="display:flex;align-items:center;gap:0.5em;">
+        <span style="font-size:1.2em;">📄</span> Awaiting Commits
       </button>
-      <button :class="['tab-btn', {active: activeTab==='github'}]" @click="activeTab='github'" style="display:flex;align-items:center;gap:0.5em;">
-        <span style="font-size:1.2em;">🌐</span> GitHub Commits
+      <button :class="['tab-btn', {active: activeTab==='history'}]" @click="activeTab='history'" style="display:flex;align-items:center;gap:0.5em;">
+        <span style="font-size:1.2em;">🕓</span> Commit History
       </button>
     </div>
     <!-- Branch select giữ nguyên -->
@@ -726,26 +864,30 @@ const isCommitContentLong = computed(() => {
     <!-- Header with stats giữ nguyên -->
     <div class="commits-header">
       <div class="commits-title">
-        <h2>Project Commits</h2>
-        <p>Manage and review commits for this project</p>
+        <h2>{{ activeTab === 'local' ? 'Awaiting Commits' : 'Commit History' }}</h2>
+        <p>{{ activeTab === 'local' ? 'Review and approve pending commits' : 'View approved and rejected commits' }}</p>
       </div>
       <div class="commits-stats">
-        <div class="stat-item">
-          <div class="stat-number">{{ pendingCommits.length }}</div>
-          <div class="stat-label">Pending</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number">{{ approvedCommits.length }}</div>
-          <div class="stat-label">Approved</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number">{{ rejectedCommits.length }}</div>
-          <div class="stat-label">Rejected</div>
-        </div>
+        <template v-if="activeTab==='local'">
+          <div class="stat-item">
+            <div class="stat-number">{{ pendingCommits.length }}</div>
+            <div class="stat-label">Pending</div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="stat-item">
+            <div class="stat-number">{{ commitHistoryCommits.filter(c => c.status === 'approved').length }}</div>
+            <div class="stat-label">Approved</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">{{ commitHistoryCommits.filter(c => c.status === 'rejected').length }}</div>
+            <div class="stat-label">Rejected</div>
+          </div>
+        </template>
       </div>
     </div>
     <!-- Actions & Filters -->
-    <div v-if="activeTab==='local'">
+    <div v-if="activeTab==='local' || activeTab==='history'">
       <div class="commits-actions">
         <div class="filter-group">
           <div class="search-container">
@@ -756,9 +898,8 @@ const isCommitContentLong = computed(() => {
               class="search-input"
             />
           </div>
-          <select v-model="statusFilter" class="status-filter">
+          <select v-model="statusFilter" class="status-filter" v-if="activeTab==='history'">
             <option value="all">All Status</option>
-            <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
@@ -791,10 +932,11 @@ const isCommitContentLong = computed(() => {
           </select>
         </div>
         <Button
+          v-if="activeTab==='local'"
           label="Submit Commit"
           icon="pi pi-plus"
           class="submit-btn"
-          @click="showSubmitDialog = true"
+          @click="() => { console.log('Clicked Submit Commit'); showSubmitDialog = true; console.log('showSubmitDialog:', showSubmitDialog); }"
         />
       </div>
       <!-- Loading/Error/Commits list giữ nguyên, chỉ thay pagedCommits thành sortedFilteredCommits -->
@@ -809,10 +951,10 @@ const isCommitContentLong = computed(() => {
       </div>
       <div v-else class="commits-content">
         <div v-if="pagedCommits.length > 0" class="commits-section">
-          <h3>Local Commits</h3>
+          <h3>{{ activeTab==='local' ? 'Awaiting Commits' : 'Commit History' }}</h3>
           <div class="commits-list">
             <div
-              v-for="commit in pagedCommits"
+              v-for="commit in (activeTab==='local' ? pendingCommits.slice((currentPage-1)*pageSize, currentPage*pageSize) : pagedCommitHistoryCommits)"
               :key="commit.id"
               :class="['commit-card-upgrade', getStatusClass(commit.status)]"
             >
@@ -833,7 +975,7 @@ const isCommitContentLong = computed(() => {
                   </span>
                   <div class="commit-actions-upgrade">
                     <button class="action-btn view" @click="openContentDialog(commit)">View</button>
-                    <button v-if="commit.status === 'pending'" class="action-btn review" @click="openReviewDialog(commit)">Review</button>
+                    <button v-if="commit.status === 'pending' && activeTab==='local'" class="action-btn review" @click="openReviewDialog(commit)">Review</button>
                   </div>
                 </div>
               </div>
@@ -845,83 +987,13 @@ const isCommitContentLong = computed(() => {
           <!-- Pagination controls giữ nguyên -->
           <div class="pagination-controls" style="display:flex;gap:0.5em;align-items:center;justify-content:center;margin-top:1.5em;">
             <button :disabled="currentPage === 1" @click="currentPage--">« Prev</button>
-            <span>Page {{ currentPage }} / {{ Math.max(1, Math.ceil(totalCommits / pageSize)) }}</span>
-            <button :disabled="currentPage >= Math.ceil(totalCommits / pageSize)" @click="currentPage++">Next »</button>
+            <span>Page {{ currentPage }} / {{ Math.max(1, Math.ceil((activeTab==='local' ? pendingCommits.length : commitHistoryCommits.length) / pageSize)) }}</span>
+            <button :disabled="currentPage >= Math.ceil((activeTab==='local' ? pendingCommits.length : commitHistoryCommits.length) / pageSize)" @click="currentPage++">Next »</button>
           </div>
         </div>
       </div>
     </div>
-    <div v-else>
-      <div class="commits-section">
-        <h3>GitHub Commits</h3>
-        <div style="display:flex;align-items:center;gap:1em;margin-bottom:1em;">
-          <label for="github-page-size-select" style="font-weight:600;">Commits/page:</label>
-          <select id="github-page-size-select" v-model.number="githubPageSize" style="padding:0.3em 1em;border-radius:8px;">
-            <option v-for="opt in githubPageSizeOptions" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-          <select v-model="githubUserFilter" class="status-filter">
-            <option value="all">All users</option>
-            <option v-for="u in githubUsers" :key="u" :value="u">{{ u }}</option>
-          </select>
-          <div class="custom-date-range">
-            <button
-              class="date-range-btn"
-              :class="{ active: githubDateRange && githubDateRange[0] && githubDateRange[1] }"
-              @click="showGithubDatePopover = !showGithubDatePopover"
-              @blur="() => setTimeout(() => showGithubDatePopover = false, 200)"
-              type="button"
-            >
-              <i class="pi pi-calendar mr-1"></i>
-              <span>{{ formatRangeLabel(githubDateRange) }}</span>
-              <i v-if="githubDateRange && githubDateRange[0] && githubDateRange[1]" class="pi pi-times ml-2 clear-btn" @click.stop="clearGithubDateRange"></i>
-            </button>
-            <div v-if="showGithubDatePopover" class="date-range-popover">
-              <Calendar v-model="githubDateRange" selectionMode="range" inline :showIcon="false" dateFormat="M dd, yy" />
-              <button class="clear-date-btn" @click="clearGithubDateRange" type="button">Clear</button>
-            </div>
-          </div>
-          <select v-model="githubSortBy" class="status-filter">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="user">User</option>
-            <option value="file">File</option>
-          </select>
-        </div>
-        <div class="commits-list">
-          <div
-            v-for="commit in pagedGithubCommits"
-            :key="commit.sha"
-            class="commit-card-upgrade github-commit"
-          >
-            <div class="commit-card-main">
-              <div class="commit-card-left">
-                <div class="commit-message">{{ commit.commit.message }}</div>
-                <div class="commit-meta">
-                  <span><i class="pi pi-user mr-1"></i> {{ commit.author?.login || commit.commit.author.name }}</span>
-                  <span><i class="pi pi-calendar mr-1"></i> {{ formatDate(commit.commit.author.date) }}</span>
-                  <span><i class="pi pi-code mr-1"></i> {{ commit.sha.substring(0, 8) }}</span>
-                </div>
-              </div>
-              <div class="commit-card-right">
-                <span class="status-badge-upgrade status-synced">
-                  <i class="pi pi-check-circle mr-1"></i> SYNCED
-                </span>
-                <div class="commit-actions-upgrade">
-                  <button class="action-btn view">View</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Pagination controls for GitHub Commits giữ nguyên -->
-        <div class="pagination-controls" style="display:flex;gap:0.5em;align-items:center;justify-content:center;margin-top:1.5em;">
-          <button :disabled="githubCurrentPage === 1" @click="githubCurrentPage--">« Prev</button>
-          <span>Page {{ githubCurrentPage }} / {{ Math.max(1, Math.ceil(githubTotalCommits / githubPageSize)) }}</span>
-          <button :disabled="githubCurrentPage >= Math.ceil(githubTotalCommits / githubPageSize)" @click="githubCurrentPage++">Next »</button>
-        </div>
-      </div>
-    </div>
-
+    <!-- ... các dialog giữ nguyên ... -->
     <!-- Submit Commit Dialog -->
     <Dialog
       v-model:visible="showSubmitDialog"
@@ -933,14 +1005,13 @@ const isCommitContentLong = computed(() => {
       <div class="submit-form commit-form-upgrade">
         <div class="form-group file-path-group">
           <label class="input-label"><span class="icon">📂</span> File Path</label>
-          <template v-if="showAutoFillFileSelect && autoFillFiles.length > 1">
-            <select v-model="autoFillSelectedFile" class="file-select-dropdown">
-              <option v-for="f in autoFillFiles" :key="f" :value="f">{{ f }}</option>
-            </select>
-          </template>
-          <template v-else>
-            <InputText v-model="submitForm.filePath" readonly />
-          </template>
+          <select v-model="submitForm.filePath" class="file-select-dropdown" @change="selectedFileForAutoFill = submitForm.filePath">
+            <option value="">-- Select a file --</option>
+            <option v-for="f in autoFillFiles" :key="f" :value="f">{{ f }}</option>
+          </select>
+          <div v-if="autoFillFiles.length === 0" style="color: #ef4444; font-size: 0.9em; margin-top: 0.5em;">
+            No files available for auto-fill. Please check if translations exist.
+          </div>
         </div>
         <div class="form-group">
           <label class="input-label"><span class="icon">📝</span> Commit Message</label>
@@ -950,14 +1021,12 @@ const isCommitContentLong = computed(() => {
           <label class="input-label"><span class="icon">📄</span> Content</label>
           <div class="textarea-actions">
             <Button :icon="copySuccess ? 'pi pi-check' : 'pi pi-copy'" class="copy-btn" :class="{ 'copied': copySuccess }" @click="handleCopyContent" v-tooltip="copySuccess ? 'Copied!' : 'Copy All Content'" />
-            <Button icon="pi pi-external-link" class="fullscreen-btn" @click="showFullscreenContent = true" v-tooltip="'Edit Fullscreen'" />
+            <Button icon="pi pi-external-link" class="fullscreen-btn" @click="() => { console.log('Fullscreen button clicked'); showFullscreenContent = true; console.log('showFullscreenContent set to:', showFullscreenContent.value); }" v-tooltip="'View Fullscreen'" />
           </div>
           <pre class="content-textarea" style="min-height:120px;max-height:220px;overflow:auto;resize:vertical;white-space:pre-wrap;">{{ shortContentPreview }}</pre>
           <div v-if="isContentLong" class="content-long-hint">(If content is long, click <b>Fullscreen</b> to view all content)</div>
         </div>
-        <!-- Xoá nút Auto-fill Translations ở phần trên form -->
       </div>
-
       <template #footer>
         <div class="commit-dialog-footer">
           <Button
@@ -971,6 +1040,8 @@ const isCommitContentLong = computed(() => {
             icon="pi pi-download"
             class="auto-translation-btn secondary-btn"
             @click="autoFillTranslationContent"
+            :disabled="!submitForm.filePath"
+            v-tooltip="!submitForm.filePath ? 'Please select a file first' : ''"
           />
           <Button
             label="Submit"
@@ -982,42 +1053,30 @@ const isCommitContentLong = computed(() => {
         </div>
       </template>
     </Dialog>
-
-    <!-- Fullscreen Content Dialog -->
-    <Dialog v-model:visible="showFullscreenContent" :modal="true" :style="{ width: '98vw', maxWidth: '1100px', minHeight: '80vh' }">
-      <div class="fullscreen-title"><span class="icon">📝</span> View Content</div>
-      <div style="margin-bottom:1em; position:relative;">
-        <Button icon="pi pi-copy" class="copy-btn" style="position:absolute;top:0;right:0.5em;z-index:2;" @click="handleCopyContent" v-tooltip="'Copy All Content'" />
-      </div>
-      <pre class="fullscreen-textarea content-scrollable">{{ submitForm.content }}</pre>
-    </Dialog>
-
     <!-- Review Commit Dialog -->
     <Dialog
       v-model:visible="showReviewDialog"
       header="Review Commit"
-      :style="{ width: '600px' }"
+      :style="{ width: '600px', maxWidth: '98vw', borderRadius: '16px', padding: '0 0 1.5em 0' }"
       :modal="true"
+      class="review-commit-dialog-upgrade"
     >
-      <div v-if="selectedCommit" class="review-form">
-        <div class="commit-preview">
-          <h4>Commit Details</h4>
-          <div class="preview-item">
-            <strong>Message:</strong> {{ selectedCommit.message }}
-          </div>
-          <div class="preview-item">
-            <strong>File:</strong> {{ selectedCommit.filePath }}
-          </div>
-          <div class="preview-item">
-            <strong>Author:</strong> {{ selectedCommit.author.fullName || selectedCommit.author.username }}
-          </div>
+      <div v-if="selectedCommit" class="review-form" style="padding: 1.2em 0.5em 0.5em 0.5em;">
+        <div class="commit-preview" style="margin-bottom:1.2em;">
+          <h4 style="margin-bottom:0.7em;">Commit Details</h4>
+          <div class="preview-item"><strong>Message:</strong> {{ selectedCommit.message }}</div>
+          <div class="preview-item"><strong>File:</strong> {{ selectedCommit.filePath }}</div>
+          <div class="preview-item"><strong>Author:</strong> {{ selectedCommit.author.fullName || selectedCommit.author.username }}</div>
         </div>
-
-        <div class="form-group">
+        <div v-if="!isLatestForFile" class="review-warning-box">
+          <i class="pi pi-exclamation-triangle warning-icon"></i>
+          <span class="warning-text">A newer commit for this file has already been approved.<br>Approving this commit is not allowed to prevent rollback.</span>
+        </div>
+        <div class="form-group" style="margin-top:1.2em;">
           <label>Review Decision</label>
           <div class="radio-group">
             <label>
-              <input type="radio" v-model="reviewForm.approve" :value="true" />
+              <input type="radio" v-model="reviewForm.approve" :value="true" :disabled="!isLatestForFile" />
               Approve
             </label>
             <label>
@@ -1026,7 +1085,6 @@ const isCommitContentLong = computed(() => {
             </label>
           </div>
         </div>
-
         <div class="form-group">
           <label>Review Message (Optional)</label>
           <Textarea
@@ -1037,7 +1095,6 @@ const isCommitContentLong = computed(() => {
           />
         </div>
       </div>
-
       <template #footer>
         <Button
           label="Cancel"
@@ -1046,14 +1103,16 @@ const isCommitContentLong = computed(() => {
           @click="showReviewDialog = false"
         />
         <Button
-          :label="reviewForm.approve ? 'Approve' : 'Reject'"
-          :icon="reviewForm.approve ? 'pi pi-check' : 'pi pi-times'"
+          label="Confirm"
+          icon="pi pi-check"
           :loading="reviewing"
           @click="reviewCommit"
+          :disabled="reviewForm.approve && !isLatestForFile"
+          v-tooltip="reviewForm.approve && !isLatestForFile ? 'Cannot approve because a newer commit has already been approved.' : ''"
+          class="primary-btn"
         />
       </template>
     </Dialog>
-
     <!-- View Content Dialog -->
     <Dialog
       v-model:visible="showContentDialog"
@@ -1069,32 +1128,102 @@ const isCommitContentLong = computed(() => {
           <div class="info-row"><span class="info-icon">👤</span><span class="info-label">Author:</span><span class="info-value">{{ selectedContent.author.fullName || selectedContent.author.username }}</span></div>
           <div class="info-row"><span class="info-icon">📅</span><span class="info-label">Date:</span><span class="info-value">{{ formatDate(selectedContent.createdAt) }}</span></div>
         </div>
-        <div class="commit-content-file-title">File Content</div>
+        <div class="commit-content-file-header">
+          <div class="commit-content-file-title">File Content</div>
+          <button
+            type="button"
+            class="view-full-content-btn"
+            @click="() => {
+              console.log('HTML Button clicked!');
+              console.log('selectedContent:', selectedContent.value);
+              console.log('contentSnapshot:', selectedContent.value?.contentSnapshot);
+              openFullCommitContent(selectedContent.value?.contentSnapshot || '');
+            }"
+            style="background: #6366f1; color: #fff; border: none; border-radius: 8px; padding: 0.5em 1em; font-weight: 600; cursor: pointer;"
+          >
+            📄 View Full Content
+          </button>
+        </div>
         <div class="commit-content-file-area">
           <pre class="commit-content-file-code">{{ shortCommitContentPreview }}</pre>
-          <div v-if="isCommitContentLong" class="view-full-content-btn-row">
-            <Button label="View Full Content" icon="pi pi-external-link" class="view-full-content-btn" @click="openFullCommitContent(selectedContent.contentSnapshot)" />
-          </div>
         </div>
+      </div>
+
+    </Dialog>
+
+    <!-- Full Commit Content Dialog -->
+    <Dialog
+      v-model:visible="showFullCommitContent"
+      header="Full Commit Content"
+      :style="{ width: '900px', maxWidth: '98vw', borderRadius: '18px', boxShadow: '0 8px 32px rgba(30,41,59,0.16)' }"
+      :modal="true"
+      class="full-commit-content-dialog"
+      @show="() => console.log('Full commit content dialog shown')"
+      @hide="() => console.log('Full commit content dialog hidden')"
+    >
+      <div class="full-content-modal-body">
+        <pre class="full-content-code">{{ fullCommitContent }}</pre>
       </div>
       <template #footer>
         <Button
           label="Close"
           icon="pi pi-times"
           class="close-btn"
-          @click="showContentDialog = false"
+          @click="showFullCommitContent = false"
         />
       </template>
     </Dialog>
-    <Dialog v-model:visible="showFullCommitContent" :modal="true" :style="{ width: '98vw', maxWidth: '1100px', minHeight: '80vh' }">
-      <div class="fullscreen-title"><span class="icon">📝</span> View Full File Content</div>
-      <div style="margin-bottom:1em; position:relative;">
-        <Button icon="pi pi-copy" class="copy-btn" style="position:absolute;top:0;right:0.5em;z-index:2;" @click="() => { navigator.clipboard.writeText(fullCommitContent) }" v-tooltip="'Copy All Content'" />
-      </div>
-      <pre class="fullscreen-textarea content-scrollable">{{ fullCommitContent }}</pre>
-      <template #footer>
-        <Button label="Close" icon="pi pi-times" class="close-btn" @click="showFullCommitContent = false" />
+
+    <!-- Fullscreen Content Editor Dialog -->
+    <Dialog
+      v-model:visible="showFullscreenContent"
+      :style="{ width: '95vw', height: '90vh', maxWidth: 'none', borderRadius: '18px', boxShadow: '0 8px 32px rgba(30,41,59,0.16)' }"
+      :modal="true"
+      :draggable="false"
+      :resizable="false"
+      class="fullscreen-content-dialog"
+      @header="() => console.log('Fullscreen header')"
+    >
+      <template #header>
+        <div class="fullscreen-header">
+          <div class="header-left">
+            <span class="header-icon">📄</span>
+            <h3 class="header-title">View Content</h3>
+          </div>
+        </div>
       </template>
+
+      <div class="fullscreen-content-body">
+        <div class="content-info-bar">
+          <div class="info-column">
+            <div class="info-item">
+              <span class="info-label">📁 File:</span>
+              <span class="info-value">{{ selectedContent?.filePath || submitForm.filePath || 'No file selected' }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">📝 Message:</span>
+              <span class="info-value">{{ selectedContent?.message || submitForm.message || 'No message' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-viewer">
+          <div class="viewer-header">
+            <span class="viewer-title">📄 Content Preview</span>
+            <div class="viewer-actions">
+              <Button
+                :icon="copySuccess ? 'pi pi-check' : 'pi pi-copy'"
+                :class="['copy-btn', { 'copied': copySuccess }]"
+                @click="handleCopyContent"
+                v-tooltip="copySuccess ? 'Copied!' : 'Copy Content'"
+              />
+            </div>
+          </div>
+          <div class="content-container">
+            <pre class="fullscreen-content-view">{{ selectedContent?.contentSnapshot || submitForm.content || 'No content available' }}</pre>
+          </div>
+        </div>
+      </div>
     </Dialog>
   </div>
 </template>
@@ -2082,10 +2211,23 @@ const isCommitContentLong = computed(() => {
   font-size: 0.95em;
   border: 1.5px solid #e5e7eb;
   margin-bottom: 1em;
-  resize: both;
-  min-height: 400px;
-  min-width: 300px;
-  box-sizing: border-box;
+}
+
+.fullscreen-content-view {
+  width: 100%;
+  height: calc(90vh - 120px);
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 1.5em;
+  font-size: 0.95em;
+  border: 1.5px solid #e5e7eb;
+  margin-bottom: 1em;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Fira Mono', 'Menlo', 'Consolas', monospace;
+  color: #334155;
+  line-height: 1.5;
 }
 .close-btn {
   background: #f3f4f6 !important;
@@ -2375,12 +2517,19 @@ pre.content-textarea {
   flex: 1;
   word-break: break-word;
 }
+.commit-content-file-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 1.2em 0 0.5em 0;
+}
+
 .commit-content-file-title {
   font-size: 1.08em;
   font-weight: 700;
   color: #2563eb;
-  margin: 1.2em 0 0.5em 0;
   letter-spacing: 0.01em;
+  margin: 0;
 }
 .commit-content-file-area {
   background: #f3f4f6;
@@ -2461,5 +2610,277 @@ pre.content-textarea {
 @media (max-width: 700px) {
   .fullscreen-title { font-size: 1.1em; }
   .fullscreen-textarea { min-width: 0; }
+}
+
+.review-commit-dialog-upgrade .review-warning-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1.5px solid #fde68a;
+  border-radius: 10px;
+  padding: 1em 1.2em;
+  margin-bottom: 1em;
+  font-weight: 600;
+  font-size: 1.05em;
+  text-align: center;
+  gap: 0.7em;
+}
+.review-commit-dialog-upgrade .warning-icon {
+  font-size: 1.7em;
+  color: #f59e0b;
+}
+.review-commit-dialog-upgrade .warning-text {
+  flex: 1;
+  color: #b45309;
+  font-size: 1.05em;
+  line-height: 1.5;
+}
+
+.full-commit-content-dialog .p-dialog-header {
+  justify-content: center !important;
+  text-align: center !important;
+  padding-left: 1.5em !important;
+  padding-right: 1.5em !important;
+}
+
+.full-content-modal-body {
+  padding: 1.5em 1.5em 0.5em 1.5em;
+  background: #f8fafc;
+  border-radius: 16px;
+}
+
+.full-content-code {
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 1em;
+  font-size: 0.95em;
+  border: 1.5px solid #e5e7eb;
+  margin-bottom: 1em;
+  resize: both;
+  min-height: 400px;
+  min-width: 300px;
+  box-sizing: border-box;
+  font-family: 'Fira Mono', 'Menlo', 'Consolas', monospace;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.fullscreen-content-dialog .p-dialog-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
+  border-bottom: 1px solid #e0e7ff;
+  padding: 1.5rem 2rem;
+  border-radius: 18px 18px 0 0;
+}
+
+.fullscreen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-icon {
+  font-size: 1.5rem;
+  color: #6366f1;
+}
+
+.header-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.header-copy-btn {
+  background: #6366f1 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 0.5rem !important;
+  transition: all 0.2s !important;
+}
+
+.header-copy-btn:hover {
+  background: #4f46e5 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+}
+
+.header-close-btn {
+  background: #ef4444 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 0.5rem !important;
+  transition: all 0.2s !important;
+}
+
+.header-close-btn:hover {
+  background: #dc2626 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+}
+
+.fullscreen-content-body {
+  padding: 0;
+  height: calc(90vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+
+.content-info-bar {
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.info-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.info-label {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.info-value {
+  color: #1e293b;
+  font-weight: 500;
+  font-size: 0.9rem;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.content-viewer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 2rem;
+}
+
+.viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.viewer-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.viewer-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.content-container {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.fullscreen-content-view {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 1.5rem;
+  font-size: 0.95rem;
+  border: none;
+  background: #fff;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Fira Code', 'Fira Mono', 'Menlo', 'Consolas', monospace;
+  color: #334155;
+  line-height: 1.6;
+  border-radius: 12px;
+}
+
+.fullscreen-content-view::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fullscreen-content-view::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.fullscreen-content-view::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.fullscreen-content-view::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .fullscreen-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    align-self: flex-end;
+  }
+
+  .content-info-bar {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .info-column {
+    width: 100%;
+  }
+
+  .info-item {
+    width: 100%;
+  }
+
+  .viewer-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
 }
 </style>

@@ -229,7 +229,7 @@ export class ProjectController {
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @Param('branchId', BigIntTransformPipe) branchId: bigint
   ) {
-    return this.gitHubService.listCommits(projectId, branchId);
+    return this.projects.listCommits(projectId, branchId);
   }
 
   @Get(':projectId/:branchId/local-commits')

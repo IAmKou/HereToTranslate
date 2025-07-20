@@ -1,42 +1,52 @@
 <template>
-  <div class="project-edit-view">
-    <div v-if="loading" class="loading">
-      <div class="loading-spinner"></div>
-      <p>Loading project...</p>
-    </div>
+  <div class="project-edit-page">
+    <!-- Navbar -->
+    <Navbar />
 
-    <div v-else-if="error" class="error">
-      <p>{{ error }}</p>
-      <button @click="loadProject" class="btn btn-secondary">Try Again</button>
-    </div>
+    <div class="main-content">
+      <!-- Sidebar -->
+      <Sidebar />
 
-    <div v-else-if="project" class="edit-content">
-      <div class="edit-header">
-        <div class="edit-header-icon">
-          <!-- Pencil/Edit SVG Icon -->
-          <svg
-            fill="none"
-            height="36"
-            viewBox="0 0 24 24"
-            width="36"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect fill="#4299e1" height="24" rx="12" width="24" />
-            <path
-              d="M7 17.25V19H8.75L15.81 11.94L14.06 10.19L7 17.25ZM17.71 9.04C18.1 8.65 18.1 8.02 17.71 7.63L16.37 6.29C15.98 5.9 15.35 5.9 14.96 6.29L13.13 8.12L15.88 10.87L17.71 9.04Z"
-              fill="white"
-            />
-          </svg>
-        </div>
-        <div>
-          <h1>Edit Project</h1>
-          <p class="subtitle">Update project information and settings</p>
-        </div>
-      </div>
+      <!-- Main content area -->
+      <div class="content-wrapper">
+        <div class="project-edit-view">
+          <div v-if="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Loading project...</p>
+          </div>
 
-      <form @submit.prevent="handleSubmit" class="edit-form">
-        <section class="form-section">
-          <h2 class="section-title">
+          <div v-else-if="error" class="error">
+            <p>{{ error }}</p>
+            <button @click="loadProject" class="btn btn-secondary">Try Again</button>
+          </div>
+
+          <div v-else-if="project" class="edit-content">
+            <div class="edit-header">
+              <div class="edit-header-icon">
+                <!-- Pencil/Edit SVG Icon -->
+                <svg
+                  fill="none"
+                  height="36"
+                  viewBox="0 0 24 24"
+                  width="36"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect fill="#4299e1" height="24" rx="12" width="24" />
+                  <path
+                    d="M7 17.25V19H8.75L15.81 11.94L14.06 10.19L7 17.25ZM17.71 9.04C18.1 8.65 18.1 8.02 17.71 7.63L16.37 6.29C15.98 5.9 15.35 5.9 14.96 6.29L13.13 8.12L15.88 10.87L17.71 9.04Z"
+                    fill="white"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h1>Edit Project</h1>
+                <p class="subtitle">Update project information and settings</p>
+              </div>
+            </div>
+
+            <form @submit.prevent="handleSubmit" class="edit-form">
+              <section class="form-section">
+                <h2 class="section-title">
             <span class="section-icon">
               <!-- Info SVG Icon -->
               <svg
@@ -51,46 +61,46 @@
                 <rect fill="white" height="2" rx="1" width="2" x="9" y="5" />
               </svg>
             </span>
-            Basic Information
-          </h2>
-          <div class="form-group">
-            <label for="name">
-              Project Name
-              <span class="required-mark">*</span>
-            </label>
-            <input
-              id="name"
-              v-model="form.name"
-              type="text"
-              required
-              class="form-control"
-              placeholder="Enter project name"
-              maxlength="100"
-              @blur="nameTouched = true"
-            />
-            <span v-if="nameErrorMessage" class="error-text">
+                  Basic Information
+                </h2>
+                <div class="form-group">
+                  <label for="name">
+                    Project Name
+                    <span class="required-mark">*</span>
+                  </label>
+                  <input
+                    id="name"
+                    v-model="form.name"
+                    type="text"
+                    required
+                    class="form-control"
+                    placeholder="Enter project name"
+                    maxlength="100"
+                    @blur="nameTouched = true"
+                  />
+                  <span v-if="nameErrorMessage" class="error-text">
               {{ nameErrorMessage }}
             </span>
-          </div>
+                </div>
 
-          <div class="form-group">
-            <label for="description">Description</label>
-            <textarea
-              id="description"
-              v-model="form.description"
-              class="form-control"
-              rows="4"
-              placeholder="Provide details about your project"
-              maxlength="500"
-            ></textarea>
-            <span class="char-count"
-              >{{ form.description?.length || 0 }}/500</span
-            >
-          </div>
-        </section>
+                <div class="form-group">
+                  <label for="description">Description</label>
+                  <textarea
+                    id="description"
+                    v-model="form.description"
+                    class="form-control"
+                    rows="4"
+                    placeholder="Provide details about your project"
+                    maxlength="500"
+                  ></textarea>
+                  <span class="char-count"
+                  >{{ form.description?.length || 0 }}/500</span
+                  >
+                </div>
+              </section>
 
-        <section class="form-section">
-          <h2 class="section-title">
+              <section class="form-section">
+                <h2 class="section-title">
             <span class="section-icon">
               <!-- Category SVG Icon -->
               <svg
@@ -111,59 +121,59 @@
                 <rect fill="white" height="4" rx="1" width="8" x="6" y="8" />
               </svg>
             </span>
-            Category & Tags
-          </h2>
-          <div class="form-group mt-4">
-            <label for="category"
-              >Category
-              <span class="help-text"
-                >Choose the appropriate project category.</span
-              >
-            </label>
-            <select
-              id="category"
-              v-model="form.categoryId"
-              class="form-control"
-              @blur="categoryTouched = true"
-            >
-              <option value="">Select a category</option>
-              <option
-                v-for="category in categories"
-                :key="category.id"
-                :value="category.id"
-              >
-                {{ category.name }}
-              </option>
-            </select>
-            <span v-if="categoryError" class="error-text">
+                  Category & Tags
+                </h2>
+                <div class="form-group mt-4">
+                  <label for="category"
+                  >Category
+                    <span class="help-text"
+                    >Choose the appropriate project category.</span
+                    >
+                  </label>
+                  <select
+                    id="category"
+                    v-model="form.categoryId"
+                    class="form-control"
+                    @blur="categoryTouched = true"
+                  >
+                    <option value="">Select a category</option>
+                    <option
+                      v-for="category in categories"
+                      :key="category.id"
+                      :value="category.id"
+                    >
+                      {{ category.name }}
+                    </option>
+                  </select>
+                  <span v-if="categoryError" class="error-text">
               Category is required.
             </span>
-          </div>
+                </div>
 
-          <div class="form-group mt-4">
-            <label for="tags"
-              >Tags
-              <span class="help-text"
-                >Tags help categorize and search your project.</span
-              ></label
-            >
-            <Multiselect
-              v-model="form.tags"
-              :options="allTags"
-              :multiple="true"
-              :close-on-select="false"
-              :clear-on-select="false"
-              :preserve-search="true"
-              placeholder="Select tag..."
-              :taggable="false"
-              class="multiselect-custom"
-            />
-            <span class="help-text">Select one or many tags.</span>
-          </div>
-        </section>
+                <div class="form-group mt-4">
+                  <label for="tags"
+                  >Tags
+                    <span class="help-text"
+                    >Tags help categorize and search your project.</span
+                    ></label
+                  >
+                  <Multiselect
+                    v-model="form.tags"
+                    :options="allTags"
+                    :multiple="true"
+                    :close-on-select="false"
+                    :clear-on-select="false"
+                    :preserve-search="true"
+                    placeholder="Select tag..."
+                    :taggable="false"
+                    class="multiselect-custom"
+                  />
+                  <span class="help-text">Select one or many tags.</span>
+                </div>
+              </section>
 
-        <section class="form-section">
-          <h2 class="section-title">
+              <section class="form-section">
+                <h2 class="section-title">
             <span class="section-icon">
               <!-- Visibility SVG Icon -->
               <svg
@@ -177,46 +187,52 @@
                 <circle cx="10" cy="10" fill="white" r="2.5" />
               </svg>
             </span>
-            Visibility
-          </h2>
-          <div class="form-group">
-            <label class="switch-label">
-              <input
-                v-model="form.isPrivate"
-                type="checkbox"
-                class="switch-input"
-                @change="() => {}"
-              />
-              <span class="switch-slider"></span>
-              <span class="switch-text">
+                  Visibility
+                </h2>
+                <div class="form-group">
+                  <label class="switch-label">
+                    <input
+                      v-model="form.isPrivate"
+                      type="checkbox"
+                      class="switch-input"
+                      @change="() => {}"
+                    />
+                    <span class="switch-slider"></span>
+                    <span class="switch-text">
                 {{ form.isPrivate ? 'Private' : 'Public' }}
               </span>
-            </label>
-            <span class="help-text">
+                  </label>
+                  <span class="help-text">
               {{
-                form.isPrivate
-                  ? 'Only you and collaborators can see this project.'
-                  : 'Public projects are visible to all users.'
-              }}
+                      form.isPrivate
+                        ? 'Only you and collaborators can see this project.'
+                        : 'Public projects are visible to all users.'
+                    }}
             </span>
-          </div>
-        </section>
+                </div>
+              </section>
 
-        <div class="form-actions">
-          <button type="button" @click="cancelEdit" class="btn btn-secondary">
-            Cancel
-          </button>
-          <button
-            :disabled="isSubmitting"
-            class="btn btn-primary"
-            type="submit"
-          >
-            <span v-if="isSubmitting" class="loading-spinner small"></span>
-            {{ isSubmitting ? 'Updating...' : 'Update Project' }}
-          </button>
+              <div class="form-actions">
+                <button type="button" @click="cancelEdit" class="btn btn-secondary">
+                  Cancel
+                </button>
+                <button
+                  :disabled="isSubmitting"
+                  class="btn btn-primary"
+                  type="submit"
+                >
+                  <span v-if="isSubmitting" class="loading-spinner small"></span>
+                  {{ isSubmitting ? 'Updating...' : 'Update Project' }}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
+
+    <!-- Footer -->
+    <AppFooter />
   </div>
 </template>
 
@@ -225,6 +241,9 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axiosInstance from '../api';
 import Multiselect from 'vue-multiselect';
+import Navbar from '../components/Navbar.vue';
+import Sidebar from '../components/Sidebar.vue';
+import AppFooter from '../components/AppFooter.vue';
 
 // Toast notification
 const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -386,12 +405,28 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.project-edit-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+}
+
+.content-wrapper {
+  flex: 1;
+  padding: 2rem;
+  background: #f7fafc;
+  overflow-y: auto;
+}
+
 .project-edit-view {
-  padding: 2.5rem 2rem;
   max-width: 700px;
   margin: 0 auto;
   background: #f7fafc;
-  min-height: 100vh;
 }
 
 .multiselect-custom .multiselect__tags {
@@ -694,9 +729,11 @@ textarea.form-control {
 }
 
 @media (max-width: 900px) {
+  .content-wrapper {
+    padding: 1rem;
+  }
   .project-edit-view {
-    padding: 1.2rem 0.5rem;
-    max-width: 100vw;
+    max-width: 100%;
   }
   .edit-form {
     padding: 1.2rem 0.5rem 1.2rem 0.5rem;

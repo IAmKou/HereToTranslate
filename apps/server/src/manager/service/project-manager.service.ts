@@ -16,7 +16,7 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
-  RequestEntity, CommitStatus, FileEntity
+  RequestEntity, CommitStatus
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -27,7 +27,6 @@ import {
 import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
-import { FileService } from '#LocalProject/Managers/service/file-manager.service';
 
 @Injectable()
 export class ProjectManagerService extends CommonHttpServiceImpl {
@@ -47,8 +46,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
     private readonly dataSource: DataSource,
-    private readonly githubService: GitHubService,
-    private readonly fileService: FileService
+    private readonly githubService: GitHubService
   ) {
     super();
   }
@@ -251,32 +249,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       createProjectDto.categoryId = request.category.id.toString();
     }
 
-    // Tạo project trước
-    const projectResult = await this.createProject(uid, createProjectDto);
-
-    // Copy files từ request sang project
-    if (request.files && request.files.length > 0) {
-      const projectId = projectResult.projectId;
-
-      // Copy từng file từ request sang project
-      for (const requestFile of request.files) {
-        try {
-          // Tạo file mới trong project với nội dung từ request file
-          await this.fileService.saveFile({
-            uid,
-            fileName: requestFile.fileName,
-            fileType: requestFile.fileType,
-            fileContent: requestFile.fileContent,
-            projectId: BigInt(projectId),
-            branchId: projectResult.branchId ? BigInt(projectResult.branchId) : undefined,
-          });
-        } catch (error) {
-          this.logger.error(`Failed to copy file ${requestFile.fileName} from request to project:`, error);
-        }
-      }
-    }
-
-    return projectResult;
+    return this.createProject(uid, createProjectDto);
   }
 
   async fetchAllUserProjects(userId: bigint): Promise<ProjectEntity[]> {
@@ -848,6 +821,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       relations: ['author'],
       order: { createdAt: 'DESC' }
     });
+  }
+
+  async listCommits(projectId: bigint, branchId: bigint) {
+    return this.githubService.listCommits(projectId, branchId);
   }
 
 }

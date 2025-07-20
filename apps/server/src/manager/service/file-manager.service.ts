@@ -68,7 +68,7 @@ export class FileService {
     try {
       await this.githubService.pushInitialFile({
         repo: repoName,
-        path: safeFileName,
+        path: timestamped,
         content: fileContent,
         message: `Uploaded ${fileName}`,
       });

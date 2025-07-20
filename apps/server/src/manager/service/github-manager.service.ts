@@ -101,12 +101,10 @@ export class GitHubService {
     repo: string;
     branch?: string;
     path: string;
-    content: string | Buffer;
+    content: string;
     message: string;
   }) {
-    const encodedContent = Buffer.isBuffer(content)
-      ? content.toString('base64')
-      : Buffer.from(content, 'utf8').toString('base64');
+    const encodedContent = Buffer.from(content).toString('base64');
 
     let sha: string | undefined;
     try {
@@ -131,7 +129,7 @@ export class GitHubService {
       message,
       content: encodedContent,
       branch,
-      sha,
+      sha, // needed for updating
     });
   }
 

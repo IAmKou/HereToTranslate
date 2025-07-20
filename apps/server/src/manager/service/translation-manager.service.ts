@@ -162,12 +162,12 @@ export class TranslationService {
       .lean();
 
     // Lấy danh sách fileId duy nhất
-    const fileIds = Array.from(new Set(strings.map((str) => str.fileId)));
+    const fileIds = Array.from(new Set(strings.map(str => str.fileId)));
     // Lấy tên file từ MySQL
     const fileNamesMap: Record<string, string> = {};
     if (fileIds.length > 0) {
       const files = await this.fileRepository.findByIds(fileIds);
-      files.forEach((f) => {
+      files.forEach(f => {
         fileNamesMap[String(f.id)] = f.fileName;
       });
     }
@@ -200,13 +200,6 @@ export class TranslationService {
     repo: string,
     githubBranch: string
   ) {
-    const fileEntity = await this.fileRepository.findOneOrFail({
-      where: {
-        project: { id: BigInt(projectId) },
-        branch: { id: BigInt(branchId) },
-      },
-    });
-
     const strings = await this.translationModel
       .find({
         projectId,
@@ -215,51 +208,19 @@ export class TranslationService {
       })
       .lean();
 
-    const translations: string[] = strings.map((s) => s.translatedText!);
+    const translations: Record<string, string> = {};
+    strings.forEach((s) => {
+      translations[s.originalText] = s.translatedText!;
+    });
 
-    let newBuffer: Buffer;
+    const fileContent = JSON.stringify(translations, null, 2);
+    const filePath = `translations/${branchId}.json`;
 
-    switch (fileEntity.fileType) {
-      case 'text/plain':
-        newBuffer = Buffer.from(translations.join('\n'), 'utf8');
-        break;
-
-      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-        const { Document, Packer, Paragraph } = require('docx');
-        const doc = new Document({
-          sections: [{ children: translations.map((t) => new Paragraph(t)) }],
-        });
-        newBuffer = await Packer.toBuffer(doc);
-        break;
-      }
-
-      case 'application/pdf': {
-        const PDFDocument = require('pdfkit');
-        const doc = new PDFDocument();
-        const chunks: any[] = [];
-        doc.on('data', (chunk: any) => chunks.push(chunk));
-        doc.on('end', () => {
-          console.log('PDF generation finished.');
-        });
-        translations.forEach((t) => doc.text(t));
-        doc.end();
-        newBuffer = Buffer.concat(chunks);
-        break;
-      }
-
-      default:
-        throw new Error(
-          `Unsupported file type for export: ${fileEntity.fileType}`
-        );
-    }
-
-    // Commit the rebuilt file
-    const safeOriginalPath = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
     await this.githubService.commitChange({
       repo,
-      path: safeOriginalPath,
-      content: newBuffer,
-      message: `Export translated ${fileEntity.fileName}`,
+      path: filePath,
+      content: fileContent,
+      message: `Export translated strings for branch ${branchId}`,
       branch: githubBranch,
     });
   }
@@ -286,6 +247,7 @@ export class TranslationService {
       }
     }
   }
+
 }
 
 function extractJsonStrings(obj: any, result: string[], path = '') {

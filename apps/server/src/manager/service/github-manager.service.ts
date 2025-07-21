@@ -7,7 +7,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { BranchEntity } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import * as console from 'node:console';
-import { In } from 'typeorm';
 
 @Injectable()
 export class GitHubService {
@@ -49,12 +48,12 @@ export class GitHubService {
   }
 
   async pushInitialFile({
-                          repo,
-                          path,
-                          content,
-                          message,
-                          branch = 'main',
-                        }: {
+    repo,
+    path,
+    content,
+    message,
+    branch = 'main',
+  }: {
     repo: string;
     path: string;
     content: string | Buffer;
@@ -92,19 +91,23 @@ export class GitHubService {
   }
 
   async commitChange({
-                       repo,
-                       branch = 'main',
-                       path,
-                       content,
-                       message,
-                     }: {
+    repo,
+    branch = 'main',
+    path,
+    content,
+    message,
+    isBase64 = false,
+  }: {
     repo: string;
     branch?: string;
     path: string;
     content: string;
     message: string;
+    isBase64?: boolean;
   }) {
-    const encodedContent = Buffer.from(content).toString('base64');
+    const encodedContent = isBase64
+      ? content
+      : Buffer.from(content).toString('base64');
 
     let sha: string | undefined;
     try {
@@ -149,11 +152,11 @@ export class GitHubService {
   }
 
   async mergeBranch({
-                      repo,
-                      base,
-                      head,
-                      commitMessage,
-                    }: {
+    repo,
+    base,
+    head,
+    commitMessage,
+  }: {
     repo: string;
     base: string;
     head: string;
@@ -172,11 +175,13 @@ export class GitHubService {
 
   async listCommits(projectId: bigint, branchId: bigint) {
     // Lấy tất cả local commits (không filter status)
-    const localCommits = await (this as any).commitRepository?.find ? await (this as any).commitRepository.find({
-      where: { project: { id: projectId }, branch: { id: branchId } },
-      relations: ['author'],
-      order: { createdAt: 'DESC' }
-    }) : [];
+    const localCommits = (await (this as any).commitRepository?.find)
+      ? await (this as any).commitRepository.find({
+          where: { project: { id: projectId }, branch: { id: branchId } },
+          relations: ['author'],
+          order: { createdAt: 'DESC' },
+        })
+      : [];
     // Định dạng lại cho giống FE mong muốn
     return localCommits.map((c: any) => ({
       id: c.id,
@@ -186,11 +191,11 @@ export class GitHubService {
       author: {
         id: c.author?.id,
         username: c.author?.username,
-        fullName: c.author?.fullName
+        fullName: c.author?.fullName,
       },
       createdAt: c.createdAt,
       reviewMessage: c.reviewMessage,
-      contentSnapshot: c.contentSnapshot
+      contentSnapshot: c.contentSnapshot,
     }));
   }
 

@@ -6,16 +6,23 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
 import  { Express } from 'express';
 import  { Multer } from 'multer';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
+import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class FileService {
   constructor(
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
+    @InjectModel(TranslationString.name)
+    private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
     private readonly githubService: GitHubService,
     private readonly translationService : TranslationService,
+    private readonly manifestService : ManifestService,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
@@ -68,7 +75,7 @@ export class FileService {
     try {
       await this.githubService.pushInitialFile({
         repo: repoName,
-        path: timestamped,
+        path: safeFileName,
         content: fileContent,
         message: `Uploaded ${fileName}`,
       });
@@ -100,6 +107,7 @@ export class FileService {
     requestId?: bigint,
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
+
     const saved = await this.saveFile({
       uid,
       fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
@@ -115,18 +123,29 @@ export class FileService {
       relations: ['project', 'branch'],
       select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
     });
+
     if (fileEntity) {
-      await this.translationService.extractStrings(fileEntity);
-    } else {
-      this.logger.error('Cannot find fileEntity after save for extractStrings');
+      await this.manifestService.generateManifest(fileEntity);
+
+      const manifestEntries = await this.translationModel.find({ fileId: fileEntity.id.toString() }).lean();
+      const manifestJson = JSON.stringify(manifestEntries, null, 2);
+
+      try {
+        await this.githubService.pushInitialFile({
+          repo: `project-${fileEntity.project.id}`,
+          path: `${fileEntity.id.toString()}_manifest.json`,
+          content: manifestJson,
+          message: `Add manifest for ${fileEntity.fileName}`,
+          branch: 'main',
+        });
+        this.logger.log(`Manifest pushed to repo for fileId: ${fileEntity.id}`);
+      } catch (err) {
+        this.logger.error('Error pushing manifest to GitHub', err);
+      }
     }
-    this.logger.log(`handleUpload called with file: ${file.originalname}, mimetype: ${file.mimetype}, size: ${file.size}`);
-    this.logger.log(`File uploaded and processed, fileId: ${saved.fileId}`);
-    return {
-      message: 'File uploaded and processed',
-      fileId: saved.fileId,
-    };
+
   }
+
 
   async saveTempFile(file: Express.Multer.File, uid: bigint) {
     const fileEntity = this.fileRepository.create({
@@ -245,7 +264,7 @@ export class FileService {
       };
     } catch (error) {
       this.logger.error(`Error extracting strings from file ${file.fileName}:`, error);
-      throw new Error(`Failed to extract strings: ${error.message}`);
+      throw new Error(`Failed to extract strings: `);
     }
   }
 

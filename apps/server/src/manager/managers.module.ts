@@ -47,7 +47,8 @@ import { TranslationController } from './controller/translation.controller';
 import { AdminTransactionController } from './controller/admin-transaction.controller';
 import { ChatController } from '../chat/chat.controller';
 import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
-import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway'; 
+import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
+import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 
 
 @Global()
@@ -95,6 +96,7 @@ import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
     TranslationService,
     TaskManagerService,
     TaskGateway,
+    ManifestService,
   ],
   exports: [
     CategoryManagerService,
@@ -113,6 +115,7 @@ import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
     FileService,
     TranslationService,
     TaskManagerService,
+    ManifestService,
   ],
   controllers: [
     CategoryController,

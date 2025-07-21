@@ -162,12 +162,12 @@ export class TranslationService {
       .lean();
 
     // Lấy danh sách fileId duy nhất
-    const fileIds = Array.from(new Set(strings.map(str => str.fileId)));
+    const fileIds = Array.from(new Set(strings.map((str) => str.fileId)));
     // Lấy tên file từ MySQL
     const fileNamesMap: Record<string, string> = {};
     if (fileIds.length > 0) {
       const files = await this.fileRepository.findByIds(fileIds);
-      files.forEach(f => {
+      files.forEach((f) => {
         fileNamesMap[String(f.id)] = f.fileName;
       });
     }
@@ -248,6 +248,84 @@ export class TranslationService {
     }
   }
 
+  async addTranslation(manifestEntryId: string, translatedText: string) {
+    const entry = await this.translationModel.findOne({ manifestEntryId });
+    if (!entry) throw new Error('Manifest entry not found');
+
+    entry.translatedText = translatedText;
+    await entry.save();
+
+    const fileId = entry.fileId;
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['project'],
+    });
+    if (!fileEntity || !fileEntity.project) {
+      throw new Error('File or project not found');
+    }
+
+    const updatedBuffer = await this.applyTranslation(fileId);
+
+
+    const repoName = `project-${fileEntity.project.id}`;
+    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
+    const path = safeFileName;
+
+    try {
+      await this.githubService.commitChange({
+        repo: repoName,
+        branch: 'main',
+        path,
+        content: updatedBuffer.toString('utf8'),
+        message: `Update translations for ${fileEntity.fileName}`,
+      });
+      logger.log(`✅ Translation committed to GitHub: ${repoName}/${path}`);
+    } catch (err) {
+      logger.error(`❌ Error committing translation to GitHub: ${err}`);
+    }
+
+    return entry;
+  }
+
+
+  async applyTranslation(fileId: string): Promise<Buffer> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+    });
+    if (!fileEntity) throw new Error('File not found');
+
+    const entriesRaw = await this.translationModel.find({ fileId }).lean();
+    const entries = entriesRaw.map((e) => ({
+      text:
+        e.translatedText && e.translatedText.trim().length > 0
+          ? e.translatedText
+          : e.originalText,
+      style: e.style,
+      font: e.font,
+    }));
+
+    return rebuildFileWithManifest(fileEntity.fileType, entries);
+  }
+
+  async revertTranslation(fileId: string): Promise<Buffer> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+    });
+    if (!fileEntity) throw new Error('File not found');
+
+    const entries = await this.translationModel.find({ fileId }).lean();
+    const map = new Map<string, { text: string; style: any; font: string }>();
+    for (const e of entries) {
+      map.set(e.manifestEntryId, {
+        text: e.originalText,
+        style: e.style || {},
+        font: e.font || 'default',
+      });
+    }
+
+    const entriesArray = Array.from(map.values());
+    return rebuildFileWithManifest(fileEntity.fileType, entriesArray);
+  }
 }
 
 function extractJsonStrings(obj: any, result: string[], path = '') {
@@ -258,6 +336,66 @@ function extractJsonStrings(obj: any, result: string[], path = '') {
   } else if (typeof obj === 'object' && obj !== null) {
     for (const key of Object.keys(obj)) {
       extractJsonStrings(obj[key], result, path + '.' + key);
+    }
+  }
+}
+async function rebuildFileWithManifest(
+  fileType: string,
+  entries: { text: string; style?: any; font?: string }[]
+): Promise<Buffer> {
+  switch (fileType) {
+    case 'text/plain': {
+      const combined = entries.map((e) => e.text).join('\n');
+      return Buffer.from(combined, 'utf8');
+    }
+
+    case 'application/json': {
+      const jsonArray = entries.map((e) => e.text);
+      return Buffer.from(JSON.stringify(jsonArray, null, 2), 'utf8');
+    }
+
+    case 'application/pdf': {
+      const { PDFDocument, StandardFonts } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage();
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      let y = page.getHeight() - 24;
+      for (const e of entries) {
+        page.drawText(e.text, { x: 50, y, font, size: 12 });
+        y -= 16;
+        if (y < 40) {
+          const newPage = pdfDoc.addPage();
+          y = newPage.getHeight() - 24;
+        }
+      }
+      const pdfBytes = await pdfDoc.save();
+      return Buffer.from(pdfBytes);
+    }
+
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+      const { Document, Packer, Paragraph, TextRun } = await import('docx');
+      const paragraphs = entries.map((e) => {
+        return new Paragraph({
+          children: [
+            new TextRun({
+              text: e.text,
+              bold: e.style?.bold || false,
+              italics: e.style?.italic || false,
+              color: e.style?.color,
+              size: e.style?.fontSize ? e.style.fontSize * 2 : undefined,
+              font: e.font !== 'default' ? e.font : undefined,
+            }),
+          ],
+        });
+      });
+      const doc = new Document({ sections: [{ children: paragraphs }] });
+      const buffer = await Packer.toBuffer(doc);
+      return buffer;
+    }
+
+    default: {
+      const defaultCombined = entries.map((e) => e.text).join('\n');
+      return Buffer.from(defaultCombined, 'utf8');
     }
   }
 }

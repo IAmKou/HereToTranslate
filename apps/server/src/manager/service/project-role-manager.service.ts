@@ -67,14 +67,15 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     projectId: bigint,
     roleData: CreateProjectRoleDto
   ) {
-    this.logger.debug(
-      `Adding role to project [${projectId}] for user [${uid}]`,
-      roleData
-    );
+
     const permissionMask = await this.projectManager.testPermissions(
       projectId,
       uid,
       PermissionFlags.ManageMembers
+    );
+    this.logger.debug(
+      `Adding role to project [${projectId}] for user [${uid}]`,
+      roleData
     );
     const newRole = this.projectRoleRepository.create({
       project: { id: BigInt(projectId) },

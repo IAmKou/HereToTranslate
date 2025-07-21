@@ -182,49 +182,6 @@ export class TranslationService {
     }));
   }
 
-  async addTranslatedString(id: string, translatedText: string) {
-    const stringDoc = await this.translationModel.findById(id);
-    if (!stringDoc) {
-      throw new Error('Translation string not found');
-    }
-
-    stringDoc.translatedText = translatedText;
-    await stringDoc.save();
-
-    return stringDoc;
-  }
-
-  async commitTranslatedFileToGitHub(
-    projectId: string,
-    branchId: string,
-    repo: string,
-    githubBranch: string
-  ) {
-    const strings = await this.translationModel
-      .find({
-        projectId,
-        branchId,
-        translatedText: { $exists: true, $ne: '' },
-      })
-      .lean();
-
-    const translations: Record<string, string> = {};
-    strings.forEach((s) => {
-      translations[s.originalText] = s.translatedText!;
-    });
-
-    const fileContent = JSON.stringify(translations, null, 2);
-    const filePath = `translations/${branchId}.json`;
-
-    await this.githubService.commitChange({
-      repo,
-      path: filePath,
-      content: fileContent,
-      message: `Export translated strings for branch ${branchId}`,
-      branch: githubBranch,
-    });
-  }
-
   async extractStringsForRequestFiles(requestId: bigint) {
     const files = await this.fileRepository.find({
       where: { request: { id: requestId } },
@@ -248,8 +205,8 @@ export class TranslationService {
     }
   }
 
-  async addTranslation(manifestEntryId: string, translatedText: string) {
-    const entry = await this.translationModel.findOne({ manifestEntryId });
+  async addTranslation(id: string, translatedText: string) {
+    const entry = await this.translationModel.findById(id);
     if (!entry) throw new Error('Manifest entry not found');
 
     entry.translatedText = translatedText;

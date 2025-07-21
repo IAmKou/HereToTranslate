@@ -218,9 +218,28 @@ export class FileService {
     const fullFile = await this.fileRepository.findOneOrFail({
       where: { id: BigInt(saved.fileId) },
       relations: ['project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
     });
 
-    await this.translationService.extractStrings(fullFile);
+    await this.manifestService.generateManifest(fullFile);
+
+    // Push manifest to GitHub if project/branch info is present
+    if (fullFile.project && fullFile.branch) {
+      const manifestEntries = await this.translationModel.find({ fileId: fullFile.id.toString() }).lean();
+      const manifestJson = JSON.stringify(manifestEntries, null, 2);
+      try {
+        await this.githubService.pushInitialFile({
+          repo: `project-${fullFile.project.id}`,
+          path: `${fullFile.id.toString()}_manifest.json`,
+          content: manifestJson,
+          message: `Add manifest for ${fullFile.fileName}`,
+          branch: 'main',
+        });
+        this.logger.log(`Manifest pushed to repo for fileId: ${fullFile.id}`);
+      } catch (err) {
+        this.logger.error('Error pushing manifest to GitHub', err);
+      }
+    }
 
     return {
       message: 'File uploaded and linked to request',
@@ -254,17 +273,34 @@ export class FileService {
     }
 
     try {
-      await this.translationService.extractStrings(file);
-      this.logger.log(`Successfully extracted strings from file: ${file.fileName}`);
+      await this.manifestService.generateManifest(file);
+      // Optionally push manifest to GitHub if project/branch info is present
+      if (file.project && file.branch) {
+        const manifestEntries = await this.translationModel.find({ fileId: file.id.toString() }).lean();
+        const manifestJson = JSON.stringify(manifestEntries, null, 2);
+        try {
+          await this.githubService.pushInitialFile({
+            repo: `project-${file.project.id}`,
+            path: `${file.id.toString()}_manifest.json`,
+            content: manifestJson,
+            message: `Add manifest for ${file.fileName}`,
+            branch: 'main',
+          });
+          this.logger.log(`Manifest pushed to repo for fileId: ${file.id}`);
+        } catch (err) {
+          this.logger.error('Error pushing manifest to GitHub', err);
+        }
+      }
+      this.logger.log(`Successfully generated manifest for file: ${file.fileName}`);
       return {
         success: true,
-        message: 'Strings extracted successfully',
+        message: 'Manifest generated successfully',
         fileId: file.id.toString(),
         fileName: file.fileName
       };
     } catch (error) {
-      this.logger.error(`Error extracting strings from file ${file.fileName}:`, error);
-      throw new Error(`Failed to extract strings: `);
+      this.logger.error(`Error generating manifest for file ${file.fileName}:`, error);
+      throw new Error(`Failed to generate manifest: `);
     }
   }
 
@@ -321,6 +357,34 @@ export class FileService {
       branchId,
       requestId,
     });
+
+    // Find the full file entity with project/branch for manifest
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(saved.fileId) },
+      relations: ['project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
+    });
+
+    if (fileEntity) {
+      await this.manifestService.generateManifest(fileEntity);
+      // Optionally push manifest to GitHub if project/branch info is present
+      if (fileEntity.project && fileEntity.branch) {
+        const manifestEntries = await this.translationModel.find({ fileId: fileEntity.id.toString() }).lean();
+        const manifestJson = JSON.stringify(manifestEntries, null, 2);
+        try {
+          await this.githubService.pushInitialFile({
+            repo: `project-${fileEntity.project.id}`,
+            path: `${fileEntity.id.toString()}_manifest.json`,
+            content: manifestJson,
+            message: `Add manifest for ${fileEntity.fileName}`,
+            branch: 'main',
+          });
+          this.logger.log(`Manifest pushed to repo for fileId: ${fileEntity.id}`);
+        } catch (err) {
+          this.logger.error('Error pushing manifest to GitHub', err);
+        }
+      }
+    }
 
     this.logger.log(`File uploaded and saved. fileId: ${saved.fileId}`);
     return {

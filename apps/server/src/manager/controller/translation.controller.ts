@@ -21,16 +21,9 @@ export class TranslationController {
     @Param('id') id: string,
     @Body('translatedText') translatedText: string
   ) {
-    return this.translationService.addTranslatedString(id, translatedText);
+    return this.translationService.addTranslation(id, translatedText);
   }
 
-  @Post('commit-translations')
-  async commitAllToGitHub(
-    @Query('projectId') projectId: string,
-    @Query('branchId') branchId: string,
-    @Query('repo') repo: string
-  ) {
-    return this.translationService.commitTranslatedFileToGitHub(projectId, branchId, repo);
-  }
+
 
 }

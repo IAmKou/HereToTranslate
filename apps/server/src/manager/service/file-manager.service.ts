@@ -5,7 +5,6 @@ import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import  { Express } from 'express';
 import  { Multer } from 'multer';
-import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
@@ -21,7 +20,6 @@ export class FileService {
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
     private readonly githubService: GitHubService,
-    private readonly translationService : TranslationService,
     private readonly manifestService : ManifestService,
   ) {
     this.logger = new Logger(FileService.name);

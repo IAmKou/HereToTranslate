@@ -367,7 +367,8 @@ import { useAuthStore } from '../store/auth'
 import DeleteDiscussionDialog from './DeleteDiscussionDialog.vue'
 import EditDiscussionDialog from './EditDiscussionDialog.vue'
 import axiosInstance from '../api'
-import { useProjectPermission } from '../composables/useProjectPermission'
+import { useProjectMemberPermissions } from '../composables/useProjectMemberPermissions'
+import { parsePermissionFlags } from '../utils/permissions'
 
 interface Discussion {
   id: number
@@ -662,61 +663,6 @@ onMounted(() => {
 })
 
 // Permission logic
-// Trước khi truyền members vào useProjectPermission, parse lại permissions cho từng role:
-const availablePermissions = [
-  { value: 'ProjectAdmin', label: 'Project Admin' },
-  { value: 'ManageRoles', label: 'Manage Roles' },
-  { value: 'ManageMembers', label: 'Manage Members' },
-  { value: 'ManageBranches', label: 'Manage Branches' },
-  { value: 'ManageGroups', label: 'Manage Groups' },
-  { value: 'ManageProjectMetadata', label: 'Manage Project Metadata' },
-  { value: 'ManageWorkspaces', label: 'Manage Workspaces' },
-  { value: 'ManageDiscussions', label: 'Manage Discussions' },
-  { value: 'ViewAudit', label: 'View Audit' },
-  { value: 'ReviewCommit', label: 'Review Commit' },
-  { value: 'PushCommit', label: 'Push Commit' },
-  { value: 'ReviewRequests', label: 'Review Requests' },
-  { value: 'ViewRequest', label: 'View Request' },
-  { value: 'ManageWorkspaceMetadata', label: 'Manage Workspace Metadata' },
-  { value: 'ViewWorkspace', label: 'View Workspace' },
-  { value: 'ViewProject', label: 'View Project' },
-  { value: 'ManageComments', label: 'Manage Comments' },
-  { value: 'PostComment', label: 'Post Comment' },
-  { value: 'Vote', label: 'Vote' },
-  { value: 'AttachFiles', label: 'Attach Files' },
-  { value: 'ViewThread', label: 'View Thread' },
-];
-function parsePermissionFlags(bitmask) {
-  if (bitmask === undefined || bitmask === null) return [];
-  let actualBitmask = bitmask;
-  if (typeof bitmask === 'object' && bitmask !== null) {
-    actualBitmask = bitmask.value || bitmask.permissionFlags || bitmask.flags || bitmask;
-    if (typeof actualBitmask === 'object' && actualBitmask !== null) {
-      actualBitmask = actualBitmask.value || actualBitmask._value || actualBitmask.toString();
-    }
-  }
-  let flags;
-  try {
-    if (typeof actualBitmask === 'bigint') {
-      flags = actualBitmask;
-    } else if (typeof actualBitmask === 'string') {
-      flags = BigInt(actualBitmask);
-    } else if (typeof actualBitmask === 'number') {
-      flags = BigInt(actualBitmask);
-    } else {
-      return [];
-    }
-    return availablePermissions
-      .filter((_, index) => {
-        const mask = BigInt(1) << BigInt(index);
-        return (flags & mask) !== BigInt(0);
-      })
-      .map(p => p.value);
-  } catch (e) {
-    return [];
-  }
-}
-
 const normalizedMembers = computed(() => {
   if (!props.members) return [];
   return props.members.map(m => ({
@@ -733,7 +679,7 @@ const normalizedMembers = computed(() => {
   }));
 });
 
-const { hasPermission } = useProjectPermission(
+const { hasPermission } = useProjectMemberPermissions(
   computed(() => props.project || {}),
   normalizedMembers,
   computed(() => props.currentUser || null)

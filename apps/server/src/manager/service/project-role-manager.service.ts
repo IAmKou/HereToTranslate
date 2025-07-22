@@ -324,4 +324,29 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
       );
     }
   }
+
+  async fixEveryoneRolePermissions(projectId: bigint) {
+    this.logger.debug(`Fixing Everyone role permissions for project [${projectId}]`);
+
+    const everyoneRole = await this.projectRoleRepository.findOne({
+      where: { project: { id: projectId }, name: 'Everyone' },
+    });
+
+    if (!everyoneRole) {
+      this.logger.debug(`Everyone role not found for project [${projectId}]`);
+      return;
+    }
+
+    // Fix permissions to only include ViewProject
+    everyoneRole.permissionFlags = new Permission(
+      BigInt(PermissionFlags.ViewProject)
+    );
+
+    try {
+      await this.projectRoleRepository.save(everyoneRole);
+      this.logger.debug(`Everyone role permissions fixed for project [${projectId}]`);
+    } catch (error) {
+      this.unknownErrorHanlder(error, 'Failed to fix Everyone role permissions');
+    }
+  }
 }

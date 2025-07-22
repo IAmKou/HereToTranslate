@@ -34,12 +34,17 @@ export const PermissionFlags = Object.freeze({
   /** Permission to view the audit log. */
   ViewAudit: 1n << 55n,
 
-  // Workspace permissions
+  /** Permission to manage project files (upload, rename, delete). */
+  ManageFiles: 1n << 54n,
+
+  /** Permission to view and download project files. */
+  ViewFiles: 1n << 53n,
+
   /** Permission to review commits in a workspace. */
-  ReviewCommit: 1n << 53n,
+  ReviewCommit: 1n << 52n,
 
   /** Permission to push commits to a workspace. */
-  PushCommit: 1n << 52n,
+  PushCommit: 1n << 51n,
 
   /** Permission to review requests in a workspace. */
   ReviewRequests: 1n << 40n,
@@ -141,10 +146,10 @@ export class Permission implements IntoBigInt {
   }
 
   /**
-  * Creates a new `Permission` instance from the specified permissions.
-  * @param permissions - Permissions to include, can be strings, numbers, or bigint.
-  * @return A new `Permission` instance with the specified permissions added.
-  */
+   * Creates a new `Permission` instance from the specified permissions.
+   * @param permissions - Permissions to include, can be strings, numbers, or bigint.
+   * @return A new `Permission` instance with the specified permissions added.
+   */
   static from(...permissions: Array<IntoPermission>): Permission {
     const perms = new Permission(PermissionFlags.None);
     for (const perm of permissions) {
@@ -182,9 +187,18 @@ export class Permission implements IntoBigInt {
    * @returns `true` if all permissions are present, otherwise `false`.
    */
   has(...permissions: Array<IntoPermission>): boolean {
+    // Convert current value to binary string
+    const binaryStr = this._value.toString(2).padStart(64, '0');
+
     for (const perm of permissions) {
       const resolvedPerm = this.resolvePermission(perm);
-      if ((this._value & resolvedPerm) !== resolvedPerm) {
+      if (resolvedPerm === PermissionFlags.None) continue;
+
+      // Get the bit position from the permission value
+      const bitPos = resolvedPerm === 1n ? 0 : resolvedPerm.toString(2).length - 1;
+
+      // Check if that specific bit is set
+      if (binaryStr[63 - bitPos] !== '1') {
         return false;
       }
     }
@@ -197,9 +211,18 @@ export class Permission implements IntoBigInt {
    * @returns `true` if any permission is present, otherwise `false`.
    */
   hasAny(...permissions: Array<IntoPermission>): boolean {
+    // Convert current value to binary string
+    const binaryStr = this._value.toString(2).padStart(64, '0');
+
     for (const perm of permissions) {
       const resolvedPerm = this.resolvePermission(perm);
-      if ((this._value & resolvedPerm) === resolvedPerm) {
+      if (resolvedPerm === PermissionFlags.None) continue;
+
+      // Get the bit position from the permission value
+      const bitPos = resolvedPerm === 1n ? 0 : resolvedPerm.toString(2).length - 1;
+
+      // Check if that specific bit is set
+      if (binaryStr[63 - bitPos] === '1') {
         return true;
       }
     }

@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository, Not } from 'typeorm';
 import {
   BranchEntity,
   CategoryEntity,
@@ -188,16 +188,22 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       const everyoneRole = queryRunner.manager.create(ProjectRoleEntity, {
         project: savedProject,
         permissionFlags: new Permission(
-          PermissionFlags.ViewProject | PermissionFlags.ManageDiscussions
+          // Everyone role should only have ViewProject permission
+          BigInt(PermissionFlags.ViewProject)
         ),
         name: 'Everyone',
       });
 
       const savedOwnerRole = await queryRunner.manager.save(ownerRole);
-      await queryRunner.manager.save(everyoneRole);
+      const savedEveryoneRole = await queryRunner.manager.save(everyoneRole);
 
+      // Add owner to owner role
       savedOwnerRole.users = [<UserEntity>{ id: uid }];
       await queryRunner.manager.save(savedOwnerRole);
+
+      // Add owner to Everyone role
+      savedEveryoneRole.users = [<UserEntity>{ id: uid }];
+      await queryRunner.manager.save(savedEveryoneRole);
 
       const githubRepoName = `project-${savedProject.id}`;
 
@@ -552,28 +558,54 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       throw new BadRequestException('User not found');
     }
 
-    project.members.push(user);
-    const updatedProject = await this.projectRepository.save(project);
+    // Start transaction
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const memberRole = await this.projectRoleRepository.findOne({
-      where: {
-        project: { id: projectId },
-        name: 'Everyone',
-      },
-      relations: ['users'],
-    });
+    try {
+      // Add user to project members
+      project.members.push(user);
+      await queryRunner.manager.save(project);
 
-    if (memberRole) {
-      const existingUserIds = new Set(memberRole.users.map((u) => u.id.toString()));
-      if (!existingUserIds.has(user.id.toString())) {
-        memberRole.users.push(user);
-        await this.projectRoleRepository.save(memberRole);
+      // Add user to Everyone role
+      const everyoneRole = await queryRunner.manager.findOne(ProjectRoleEntity, {
+        where: {
+          project: { id: projectId },
+          name: 'Everyone',
+        },
+        relations: ['users'],
+      });
+
+      if (!everyoneRole) {
+        // If Everyone role doesn't exist, create it
+        const newEveryoneRole = queryRunner.manager.create(ProjectRoleEntity, {
+          project: { id: projectId },
+          permissionFlags: new Permission(
+            // Everyone role should only have ViewProject permission
+            BigInt(PermissionFlags.ViewProject)
+          ),
+          name: 'Everyone',
+          users: [user],
+        });
+        await queryRunner.manager.save(newEveryoneRole);
+      } else {
+        // Add user to existing Everyone role
+        const existingUserIds = new Set(everyoneRole.users.map((u) => u.id.toString()));
+        if (!existingUserIds.has(user.id.toString())) {
+          everyoneRole.users.push(user);
+          await queryRunner.manager.save(everyoneRole);
+        }
       }
-    } else {
-      this.logger.warn(`'Everyone' role not found for project ${projectId}`);
-    }
 
-    return updatedProject;
+      await queryRunner.commitTransaction();
+      return project;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async removeUserFromProject(projectId: bigint, userId: bigint) {
@@ -647,15 +679,54 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }[];
     projectRoles: { id: string; name: string; permissionFlags: string | number | bigint }[];
   }> {
+    // Get project with members first
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: ['members'],
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Get all roles except Everyone role first
     const roles = await this.projectRoleRepository.find({
-      where: { project: { id: projectId } },
+      where: {
+        project: { id: projectId },
+        name: Not('Everyone')
+      },
       relations: ['users'],
     });
 
-    // Tạo roleMap để tra cứu permissionFlags
-    const roleMap: Record<string, any> = {};
-    for (const role of roles) {
-      roleMap[role.id.toString()] = role;
+    // Get Everyone role separately
+    const everyoneRole = await this.projectRoleRepository.findOne({
+      where: {
+        project: { id: projectId },
+        name: 'Everyone'
+      },
+      relations: ['users'],
+    });
+
+    // If Everyone role doesn't exist or has wrong permissions, fix it
+    if (!everyoneRole) {
+      this.logger.warn(`Everyone role not found for project ${projectId}, creating it`);
+      const newEveryoneRole = this.projectRoleRepository.create({
+        project: { id: projectId },
+        permissionFlags: new Permission(BigInt(PermissionFlags.ViewProject)),
+        name: 'Everyone',
+        users: project.members, // Add all project members to Everyone role
+      });
+      await this.projectRoleRepository.save(newEveryoneRole);
+    } else if (everyoneRole.permissionFlags.value !== BigInt(PermissionFlags.ViewProject)) {
+      this.logger.warn(`Fixing Everyone role permissions for project ${projectId}`);
+      everyoneRole.permissionFlags = new Permission(BigInt(PermissionFlags.ViewProject));
+      // Add any missing members to Everyone role
+      const everyoneUserIds = new Set(everyoneRole.users.map(u => u.id.toString()));
+      const missingUsers = project.members.filter(m => !everyoneUserIds.has(m.id.toString()));
+      if (missingUsers.length > 0) {
+        everyoneRole.users = [...everyoneRole.users, ...missingUsers];
+      }
+      await this.projectRoleRepository.save(everyoneRole);
     }
 
     const memberMap: Record<
@@ -669,10 +740,23 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       }
     > = {};
 
+    // First add all project members
+    for (const member of project.members) {
+      memberMap[member.id.toString()] = {
+        id: member.id.toString(),
+        username: member.username,
+        fullName: member.fullName,
+        email: member.email,
+        roles: [],
+      };
+    }
+
+    // Then add roles to members
     for (const role of roles) {
       for (const user of role.users) {
         const key = user.id.toString();
         if (!memberMap[key]) {
+          // If user is in a role but not in project members, add them
           memberMap[key] = {
             id: key,
             username: user.username,
@@ -681,7 +765,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
             roles: [],
           };
         }
-        // Luôn gán permissionFlags cho role trong member
         memberMap[key].roles.push({
           id: role.id.toString(),
           name: role.name,
@@ -689,12 +772,42 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         });
       }
     }
-    const projectRoles = roles.map((role) => ({
-      id: role.id.toString(),
-      name: role.name,
-      permissionFlags: role.permissionFlags,
-    }));
-    return { members: Object.values(memberMap), projectRoles };
+
+    // Add Everyone role to all members
+    if (everyoneRole) {
+      const projectRoles = roles.map((role) => ({
+        id: role.id.toString(),
+        name: role.name,
+        permissionFlags: role.permissionFlags,
+      }));
+
+      // Add Everyone role to roles list
+      projectRoles.push({
+        id: everyoneRole.id.toString(),
+        name: everyoneRole.name,
+        permissionFlags: everyoneRole.permissionFlags,
+      });
+
+      // Add Everyone role to all members
+      Object.values(memberMap).forEach((member) => {
+        member.roles.push({
+          id: everyoneRole.id.toString(),
+          name: everyoneRole.name,
+          permissionFlags: everyoneRole.permissionFlags,
+        });
+      });
+
+      return { members: Object.values(memberMap), projectRoles };
+    }
+
+    return {
+      members: Object.values(memberMap),
+      projectRoles: roles.map(role => ({
+        id: role.id.toString(),
+        name: role.name,
+        permissionFlags: role.permissionFlags,
+      }))
+    };
   }
 
   async createBranch(

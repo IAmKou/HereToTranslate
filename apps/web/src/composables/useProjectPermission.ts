@@ -1,5 +1,6 @@
 import { computed, isRef } from 'vue';
 import { useAuthStore } from '../store/auth';
+import { PermissionFlags } from '../utils/permissions';
 
 /**
  * Helper composable để kiểm tra quyền của user hiện tại trong 1 project.
@@ -8,7 +9,7 @@ import { useAuthStore } from '../store/auth';
  */
 export function useProjectPermission(
   project: any,
-  members: { value: Array<{ id: string | number; roles?: Array<{ permissions?: string[] }> }> },
+  members: { value: Array<{ id: string | number; roles?: Array<{ permissions?: string[]; permissionFlags?: any }> }> },
   currentUser?: { value: any }
 ) {
   const authStore = useAuthStore();
@@ -25,53 +26,59 @@ export function useProjectPermission(
     members.value.find((m: { id: string | number }) => String(m.id) === String(currentUserId.value))
   );
 
-  // Helper để chuẩn hóa tên permission (bỏ dấu cách, về chữ thường)
-  function normalizePermission(p: string) {
-    return p.replace(/\s+/g, '').toLowerCase();
-  }
-
   // Lấy tất cả quyền của user hiện tại (dạng Set)
   const allPerms = computed(() => {
     const set = new Set<string>();
-    (currentMember.value?.roles || []).forEach((r: { permissions?: string[], name?: string }) => {
-      if (r.name === 'Project Owner') {
-        (r.permissions || []).forEach((p: string) => set.add(p));
-      } else {
-        (r.permissions || []).forEach((p: string) => {
-          if (p !== 'ProjectAdmin') set.add(p);
-        });
-      }
+    (currentMember.value?.roles || []).forEach((r: { permissions?: string[] }) => {
+      (r.permissions || []).forEach((p: string) => set.add(p));
     });
     return set;
+  });
+
+  // Lấy tất cả permission flags của user hiện tại
+  const allPermissionFlags = computed(() => {
+    let flags = BigInt(0);
+    (currentMember.value?.roles || []).forEach((r: { permissionFlags?: any }) => {
+      if (r.permissionFlags) {
+        // Handle Permission object from backend
+        let value = r.permissionFlags;
+        if (value && typeof value === 'object') {
+          if ('value' in value) {
+            value = value.value;
+          } else if ('permissionFlags' in value) {
+            value = value.permissionFlags;
+          }
+        }
+        flags = flags | BigInt(value);
+      }
+    });
+    return flags;
   });
 
   // Check có quyền cụ thể không
   function hasPermission(permission: string) {
     // Debug log chi tiết
-    const normPerm = normalizePermission(permission);
     const allPermsArr = Array.from(allPerms.value);
-    const normalizedAllPerms = allPermsArr.map(p => typeof p === 'string' ? normalizePermission(p) : p);
     console.log('[useProjectPermission] hasPermission check:', {
       permission,
-      normPerm,
       allPerms: allPermsArr,
-      normalizedAllPerms,
-      match: normalizedAllPerms.includes(normPerm),
+      match: allPermsArr.includes(permission),
       authUser: authStore.user,
       currentUserId: currentUserId.value,
       projectOwnerId: getProject.value?.createdBy?.id,
       isProjectOwner: isProjectOwner.value,
       currentMember: currentMember.value,
       members: members.value,
-      project: getProject.value
+      project: getProject.value,
+      allPermissionFlags: allPermissionFlags.value.toString()
     });
     // Project Owner luôn có mọi quyền (trừ xóa project, remove owner)
     if (isProjectOwner.value) return true;
     // Project Admin có mọi quyền trừ xóa project, remove owner
     if (isProjectAdmin.value)
-      return normPerm !== 'deleteproject' && normPerm !== 'removeowner';
-    // So sánh permission đã normalize
-    return normalizedAllPerms.includes(normPerm);
+      return permission !== 'DeleteProject' && permission !== 'RemoveOwner';
+    // So sánh permission trực tiếp
+    return allPermsArr.includes(permission);
   }
 
   // Có phải Project Owner không
@@ -82,12 +89,11 @@ export function useProjectPermission(
     );
   });
 
-  // Có phải Project Admin không
-  const isProjectAdmin = computed(() =>
-    Array.from(allPerms.value).some(
-      p => typeof p === 'string' && normalizePermission(p) === 'projectadmin'
-    )
-  );
+  // Có phải Project Admin không - check bằng bit mask
+  const isProjectAdmin = computed(() => {
+    const flags = allPermissionFlags.value;
+    return (flags & PermissionFlags.ProjectAdmin) === PermissionFlags.ProjectAdmin;
+  });
 
   return {
     hasPermission,

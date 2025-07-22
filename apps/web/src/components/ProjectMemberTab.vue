@@ -101,27 +101,27 @@ const selectedMemberForRoles = ref<Member | null>(null);
 const selectedRoleIds = ref<string[]>([]);
 
 const availablePermissions = [
-  { value: 'ProjectAdmin', label: 'Project Admin' },
-  { value: 'ManageRoles', label: 'Manage Roles' },
-  { value: 'ManageMembers', label: 'Manage Members' },
-  { value: 'ManageBranches', label: 'Manage Branches' },
-  { value: 'ManageGroups', label: 'Manage Groups' },
-  { value: 'ManageProjectMetadata', label: 'Manage Project Metadata' },
-  { value: 'ManageWorkspaces', label: 'Manage Workspaces' },
-  { value: 'ManageDiscussions', label: 'Manage Discussions' },
-  { value: 'ViewAudit', label: 'View Audit' },
-  { value: 'ReviewCommit', label: 'Review Commit' },
-  { value: 'PushCommit', label: 'Push Commit' },
-  { value: 'ReviewRequests', label: 'Review Requests' },
-  { value: 'ViewRequest', label: 'View Request' },
-  { value: 'ManageWorkspaceMetadata', label: 'Manage Workspace Metadata' },
-  { value: 'ViewWorkspace', label: 'View Workspace' },
-  { value: 'ViewProject', label: 'View Project' },
-  { value: 'ManageComments', label: 'Manage Comments' },
-  { value: 'PostComment', label: 'Post Comment' },
-  { value: 'Vote', label: 'Vote' },
-  { value: 'AttachFiles', label: 'Attach Files' },
-  { value: 'ViewThread', label: 'View Thread' },
+  { value: 'ProjectAdmin', label: 'Project Admin', bit: 63n },
+  { value: 'ManageRoles', label: 'Manage Roles', bit: 60n },
+  { value: 'ManageMembers', label: 'Manage Members', bit: 62n },
+  { value: 'ManageBranches', label: 'Manage Branches', bit: 61n },
+  { value: 'ManageGroups', label: 'Manage Groups', bit: 58n },
+  { value: 'ManageProjectMetadata', label: 'Manage Project Metadata', bit: 57n },
+  { value: 'ManageWorkspaces', label: 'Manage Workspaces', bit: 59n },
+  { value: 'ManageDiscussions', label: 'Manage Discussions', bit: 56n },
+  { value: 'ViewAudit', label: 'View Audit', bit: 55n },
+  { value: 'ReviewCommit', label: 'Review Commit', bit: 53n },
+  { value: 'PushCommit', label: 'Push Commit', bit: 52n },
+  { value: 'ReviewRequests', label: 'Review Requests', bit: 40n },
+  { value: 'ViewRequest', label: 'View Request', bit: 39n },
+  { value: 'ManageWorkspaceMetadata', label: 'Manage Workspace Metadata', bit: 27n },
+  { value: 'ViewWorkspace', label: 'View Workspace', bit: 26n },
+  { value: 'ViewProject', label: 'View Project', bit: 25n },
+  { value: 'ManageComments', label: 'Manage Comments', bit: 15n },
+  { value: 'PostComment', label: 'Post Comment', bit: 14n },
+  { value: 'Vote', label: 'Vote', bit: 10n },
+  { value: 'AttachFiles', label: 'Attach Files', bit: 9n },
+  { value: 'ViewThread', label: 'View Thread', bit: 8n },
 ];
 
 function parsePermissionFlags(bitmask: string | number | bigint | undefined | any): string[] {
@@ -163,11 +163,11 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
     console.log('parsed flags:', flags.toString());
 
     const permissions = availablePermissions
-      .filter((_, index) => {
-        const mask = BigInt(1) << BigInt(index);
+      .filter(perm => {
+        const mask = BigInt(1) << perm.bit;
         return (flags & mask) !== BigInt(0);
       })
-      .map(p => p.label);
+      .map(p => p.value);
 
     console.log('parsed permissions:', permissions);
     return permissions;

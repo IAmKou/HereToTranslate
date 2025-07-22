@@ -112,6 +112,63 @@ export class ManifestService {
         break;
       }
 
+      case 'text/plain': {
+        // Treat as plain text, one line per entry
+        const lines = file.fileContent
+          .toString()
+          .split('\n')
+          .filter((l) => l.trim());
+        for (const line of lines) {
+          manifestEntries.push({
+            projectId: String(file.project.id),
+            branchId: String(file.branch.id),
+            fileId: String(file.id),
+            manifestEntryId: uuidv4(),
+            originalText: line,
+            font: 'default',
+            style: {},
+            position: { x: 0, y: 0 },
+          });
+        }
+        break;
+      }
+
+      case 'application/json': {
+        // Parse JSON and extract all string values (recursively)
+        function extractStrings(obj: any, out: string[] = []): string[] {
+          if (typeof obj === 'string') {
+            out.push(obj);
+          } else if (Array.isArray(obj)) {
+            for (const item of obj) extractStrings(item, out);
+          } else if (typeof obj === 'object' && obj !== null) {
+            for (const key in obj) extractStrings(obj[key], out);
+          }
+          return out;
+        }
+        let jsonContent: any;
+        try {
+          jsonContent = JSON.parse(file.fileContent.toString());
+        } catch (e) {
+          break; 
+        }
+        const strings = extractStrings(jsonContent);
+        for (const str of strings) {
+          if (str && str.trim()) {
+            manifestEntries.push({
+              projectId: String(file.project.id),
+              branchId: String(file.branch.id),
+              fileId: String(file.id),
+              manifestEntryId: uuidv4(),
+              originalText: str,
+              font: 'default',
+              style: {},
+              position: { x: 0, y: 0 },
+            });
+          }
+        }
+        break;
+      }
+
       default: {
         // fallback plain text
         const lines = file.fileContent

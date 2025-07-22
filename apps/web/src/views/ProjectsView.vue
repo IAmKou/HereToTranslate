@@ -140,7 +140,7 @@
                 class="project-card project-card-highlight"
                 :class="{ 'card-animated': true }"
                 :style="{ animationDelay: `${index * 0.1}s` }"
-                @click="viewProject((project as Project).id)"
+                @click="handleSingleClick((project as Project).id)"
               >
                 <div class="project-header">
                   <h3
@@ -196,14 +196,14 @@
                   <div class="meta-item" v-if="project.createdBy">
                     <i class="pi pi-user-edit meta-icon"></i>
                     <span class="meta-value">{{
-                      project.createdBy.username
-                    }}</span>
+                        project.createdBy.username
+                      }}</span>
                   </div>
                   <div class="meta-item">
                     <i class="pi pi-calendar-plus meta-icon"></i>
                     <span class="meta-value">{{
-                      formatDate(project.createdAt)
-                    }}</span>
+                        formatDate(project.createdAt)
+                      }}</span>
                   </div>
                   <div class="meta-item" v-if="project.category">
                     <i class="pi pi-tag meta-icon"></i>
@@ -212,7 +212,7 @@
                   <div class="meta-item" v-if="project.updatedAt">
                     <i class="pi pi-refresh meta-icon"></i>
                     <span class="meta-value"
-                      >Updated: {{ formatDate(project.updatedAt) }}</span
+                    >Updated: {{ formatDate(project.updatedAt) }}</span
                     >
                   </div>
                 </div>
@@ -309,6 +309,14 @@ export default defineComponent({
     const isGridVisible = ref(false);
     const pageSize = 9;
     const currentPage = ref(0);
+
+    let lastClick = 0;
+    const handleSingleClick = (projectId: string) => {
+      const now = Date.now();
+      if (now - lastClick < 700) return; // Chặn double click trong 700ms
+      lastClick = now;
+      viewProject(projectId);
+    };
 
     // Animation triggers
     onMounted(() => {
@@ -438,6 +446,7 @@ export default defineComponent({
       paginatedProjects,
       onPageChange,
       Paginator,
+      handleSingleClick,
     };
   },
 });
@@ -1132,7 +1141,7 @@ export default defineComponent({
 .project-card.project-card-highlight {
   border: 2px solid #764ba2;
   box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25),
-    0 2px 8px rgba(118, 75, 162, 0.15);
+  0 2px 8px rgba(118, 75, 162, 0.15);
   background: #f8f6ff;
 }
 

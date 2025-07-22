@@ -1,11 +1,58 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, defineProps, computed } from 'vue';
+import { ref, onMounted, watch, defineProps, defineEmits, computed } from 'vue';
 import axiosInstance from '../api';
+import { useToast } from "primevue/usetoast";
+import Toast from 'primevue/toast';
+import { useProjectPermission } from '../composables/useProjectPermission';
 
-const props = defineProps<{ project: any }>();
+const emit = defineEmits<{
+  (e: 'update-role-count', count: number): void
+}>();
 
-// Role management state
-const roles = ref<any[]>([]);
+const toast = useToast();
+const modalToast = useToast();
+
+interface Role {
+  id: string;
+  name: string;
+  permissionFlags?: string | number;
+  permissions?: string[];
+  isProjectRole?: boolean;
+  users?: User[];
+}
+
+interface User {
+  id: string;
+  email?: string;
+  phone?: string;
+  fullName?: string;
+  username?: string;
+  roles?: Role[];
+  selectedRole?: string;
+}
+
+interface Member extends User {
+  roles: Role[];
+  selectedRole: string;
+}
+
+interface Project {
+  id: string;
+  createdBy?: {
+    id: string;
+  };
+}
+
+interface MemberMap {
+  [key: string]: Member;
+}
+
+const props = defineProps<{
+  project: Project;
+}>();
+
+// State với type annotations
+const roles = ref<Role[]>([]);
 const loading = ref(false);
 const error = ref('');
 const showCreateRole = ref(false);
@@ -16,27 +63,30 @@ const deletingRoleId = ref<string | null>(null);
 const roleNameError = ref('');
 const permissionsError = ref('');
 const showAllPermissionsModal = ref(false);
-const selectedRoleForPermissions = ref<any>(null);
+const selectedRoleForPermissions = ref<Role | null>(null);
 
 // Member management state
-const members = ref([]);
+const members = ref<Member[]>([]);
 const membersLoading = ref(false);
 const membersError = ref('');
-const userSearch = ref({
-  identifier: '',
-  loading: false,
-  error: '',
-  results: [], // now an array
-  addingId: null, // id of user being added
-});
-const showAddUserSection = ref(false);
 const showFullRoles = ref<string | null>(null);
 
 // State cho modal assign role
 const showAssignRoleModal = ref(false);
-const userToAssignRole = ref(null);
+const userToAssignRole = ref<User | null>(null);
 const selectedRoleId = ref('');
 const assigningRole = ref(false);
+const hasAttemptedSubmit = ref(false);
+
+// State cho remove role
+const removingRoleId = ref<string | null>(null);
+
+// Thêm state cho modal hiển thị tất cả roles
+const showAllRolesModal = ref(false);
+const selectedMemberForRoles = ref<Member | null>(null);
+
+// Thêm state cho multiple selection
+const selectedRoleIds = ref<string[]>([]);
 
 const availablePermissions = [
   { value: 'ProjectAdmin', label: 'Project Admin' },
@@ -105,7 +155,7 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
         const mask = BigInt(1) << BigInt(index);
         return (flags & mask) !== BigInt(0);
       })
-      .map(p => p.label);
+      .map(p => p.value);
 
     console.log('parsed permissions:', permissions);
     return permissions;
@@ -115,17 +165,43 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
   }
 }
 
-// Fetch roles
+// Sửa lại các hàm với type annotations
 const fetchRoles = async () => {
   if (!props.project?.id) return;
   loading.value = true;
   error.value = '';
   try {
-    const { data } = await axiosInstance.get(
+    const { data } = await axiosInstance.get<Role[]>(
       `/projects/${props.project.id}/roles`
     );
     console.log('Fetched roles data:', data);
-    roles.value = data;
+
+    // Chỉ lấy các role gốc của project, không lấy role được tạo ra từ việc assign
+    const projectRoles = Array.isArray(data) ? data.filter(role => {
+      // Chỉ lấy role có isProjectRole = true hoặc role gốc có permissions
+      // Và loại bỏ role Everyone
+      return role.name !== 'Everyone' && (
+        role.isProjectRole === true ||
+        (role.permissionFlags && role.permissionFlags !== '0') ||
+        (role.permissions && role.permissions.length > 0)
+      );
+    }) : [];
+
+    // Filter out duplicate roles based on role ID and name
+    const uniqueRoles: Role[] = [];
+    const seenRoleIds = new Set<string>();
+    const seenRoleNames = new Set<string>();
+
+    projectRoles.forEach(role => {
+      const roleKey = `${role.id}-${role.name}`;
+      if (!seenRoleIds.has(role.id) && !seenRoleNames.has(role.name.toLowerCase())) {
+        seenRoleIds.add(role.id);
+        seenRoleNames.add(role.name.toLowerCase());
+        uniqueRoles.push(role);
+      }
+    });
+
+    roles.value = uniqueRoles;
   } catch (err: any) {
     error.value = err.message || 'Failed to load roles.';
   } finally {
@@ -133,21 +209,38 @@ const fetchRoles = async () => {
   }
 };
 
-// Fetch members
 const loadMembers = async () => {
   if (!props.project) return;
   membersLoading.value = true;
   membersError.value = '';
   try {
     const { data } = await axiosInstance.get(`/projects/${props.project.id}/members`);
-    // Map lại member.roles đúng chuẩn
-    const memberMap = {};
+    const memberMap: MemberMap = {};
+
     if (data.members) {
       for (const m of data.members) {
-        let roles = Array.isArray(m.roles) ? m.roles.filter((r) => r && r.id && r.name) : [];
-        memberMap[m.id] = { ...m, roles, selectedRole: '' };
+        let memberRoles: Role[] = [];
+        if (Array.isArray(m.roles)) {
+          const uniqueRoles = new Set<string>();
+          m.roles.forEach((role: Role) => {
+            if (role && role.id && role.name) {
+              const roleKey = `${role.id}-${role.name}`;
+              if (!uniqueRoles.has(roleKey)) {
+                uniqueRoles.add(roleKey);
+                // Parse permissionFlags nếu chưa có permissions
+                let permissions = role.permissions;
+                if ((!permissions || permissions.length === 0) && role.permissionFlags) {
+                  permissions = parsePermissionFlags(role.permissionFlags);
+                }
+                memberRoles.push({ ...role, permissions });
+              }
+            }
+          });
+        }
+        memberMap[m.id] = { ...m, roles: memberRoles, selectedRole: '' };
       }
     }
+
     if (data.projectRoles) {
       for (const role of data.projectRoles) {
         if (role.users) {
@@ -155,8 +248,14 @@ const loadMembers = async () => {
             if (!memberMap[user.id]) {
               memberMap[user.id] = { ...user, roles: [], selectedRole: '' };
             }
-            if (!memberMap[user.id].roles.some((r) => r.id === role.id)) {
-              memberMap[user.id].roles.push({ id: role.id, name: role.name });
+            const hasRole = memberMap[user.id].roles.some(r => r.id === role.id);
+            if (!hasRole) {
+              // Parse permissionFlags nếu chưa có permissions
+              let permissions = role.permissions;
+              if ((!permissions || permissions.length === 0) && role.permissionFlags) {
+                permissions = parsePermissionFlags(role.permissionFlags);
+              }
+              memberMap[user.id].roles.push({ id: role.id, name: role.name, permissions });
             }
           }
         }
@@ -165,15 +264,16 @@ const loadMembers = async () => {
 
     // Add Project Owner role with all permissions for project owner
     if (props.project?.createdBy?.id) {
-      const ownerId = props.project.createdBy.id;
+      const ownerId = String(props.project.createdBy.id);
       if (memberMap[ownerId]) {
-        // Check if Project Owner role already exists
         const hasProjectOwnerRole = memberMap[ownerId].roles.some(r => r.name === 'Project Owner');
-        if (!hasProjectOwnerRole) {
+        if (!hasProjectOwnerRole && String(memberMap[ownerId].id) === ownerId) {
+          console.log('[DEBUG] Gán role Project Owner cho user:', memberMap[ownerId]);
           memberMap[ownerId].roles.push({
             id: 'project-owner',
             name: 'Project Owner',
-            permissions: availablePermissions.map(p => p.value) // All permissions
+            isProjectRole: true,
+            permissions: availablePermissions.map(p => p.value)
           });
         }
       }
@@ -189,11 +289,11 @@ const loadMembers = async () => {
       if (aIsOwner && !bIsOwner) return -1;
       if (!aIsOwner && bIsOwner) return 1;
 
-      // If both are owners or both are not owners, sort by name
-      return (a.fullName || a.username).localeCompare(b.fullName || b.username);
+      return (a.fullName || a.username || '').localeCompare(b.fullName || b.username || '');
     });
   } catch (err) {
-    membersError.value = err.message || 'Failed to load members.';
+    const error = err as Error;
+    membersError.value = error.message || 'Failed to load members.';
   } finally {
     membersLoading.value = false;
   }
@@ -255,7 +355,7 @@ const searchUser = async () => {
   }
 };
 
-const addUserToProject = async (user) => {
+const addUserToProject = async (user: User) => {
   if (!props.project || !user) return;
   userSearch.value.addingId = user.id;
   try {
@@ -265,50 +365,42 @@ const addUserToProject = async (user) => {
       user: user
     });
 
-    // Try different payload formats that backend might expect
-    const payload = {
-      identifier: user.id,
-      userId: user.id,
-      email: user.email,
-      userEmail: user.email, // Alternative field name
-      userName: user.fullName || user.username,
-      // Add more fields that backend might need
-      projectId: props.project.id,
-    };
+    // First, add user to project using the add-user endpoint
+    await axiosInstance.post(`/projects/${props.project.id}/add-user`, {
+      userId: user.id.toString()
+    });
 
-    console.log('Sending payload:', payload);
-
-    const response = await axiosInstance.post(`/projects/${props.project.id}/add-user`, payload);
-
-    console.log('Add user response:', response.data);
-
-    // BỎ QUA gọi update-roles
+    // Refresh member list
     await loadMembers();
     userSearch.value.results = userSearch.value.results.filter(u => u.id !== user.id);
     userSearch.value.identifier = '';
-  } catch (err) {
-    console.error('Add user error:', err);
-    console.error('Error status:', err.response?.status);
-    console.error('Error data:', err.response?.data);
-    console.error('Error message:', err.message);
 
-    // Try to show more specific error message
+    // Show success message
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'User added successfully',
+      life: 3000
+    });
+  } catch (err: any) {
+    console.error('Add user error:', err);
     let errorMsg = 'Failed to add user';
     if (err.response?.data?.message) {
-      errorMsg += ': ' + err.response.data.message;
-    } else if (err.response?.data?.error) {
-      errorMsg += ': ' + err.response.data.error;
-    } else if (err.message) {
-      errorMsg += ': ' + err.message;
+      errorMsg = err.response.data.message;
     }
 
-    alert(errorMsg);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: errorMsg,
+      life: 5000
+    });
   } finally {
     userSearch.value.addingId = null;
   }
 };
 
-function displayRoles(member, project) {
+function displayRoles(member: Member, project: Project): Role[] {
   if (!member.roles) return [];
   return member.roles.filter(
     (role) =>
@@ -317,7 +409,7 @@ function displayRoles(member, project) {
       role.name !== 'Everyone' // Only hide "Everyone" role
   );
 }
-function getRoleBadgeClass(roleName) {
+function getRoleBadgeClass(roleName: string) {
   if (!roleName) return 'role-badge-default';
   const name = roleName.toLowerCase();
   if (name.includes('owner')) return 'role-badge-owner';
@@ -326,10 +418,10 @@ function getRoleBadgeClass(roleName) {
   if (name.includes('everyone')) return 'role-badge-everyone';
   return 'role-badge-default';
 }
-function getRoleCount(roles) {
+function getRoleCount(roles: Role[] | undefined) {
   return roles ? roles.length : 0;
 }
-function sortBy(key) {
+function sortBy(key: 'name' | 'roles') {
   if (!members.value.length) return;
   members.value.sort((a, b) => {
     // Project owner should always be first
@@ -341,7 +433,7 @@ function sortBy(key) {
 
     // If both are owners or both are not owners, apply normal sorting
     if (key === 'name') {
-      return (a.fullName || a.username).localeCompare(b.fullName || b.username);
+      return (a.fullName || a.username || '').localeCompare(b.fullName || b.username || '');
     }
     if (key === 'roles') {
       return getRoleCount(b.roles) - getRoleCount(a.roles);
@@ -351,7 +443,7 @@ function sortBy(key) {
 }
 
 // Helper to get avatar text safely
-function getAvatarText(user) {
+function getAvatarText(user: User) {
   const name = user?.fullName || user?.username || user?.email || user?.phone || '';
   return name ? name.charAt(0).toUpperCase() : '?';
 }
@@ -368,17 +460,36 @@ function calculatePermissionFlags(permissions: string[]): string {
     .toString();
 }
 
+// Thêm hàm kiểm tra trùng tên
+const isRoleNameExists = (name: string) => {
+  return roles.value.some(role => role.name.toLowerCase() === name.toLowerCase());
+};
+
+// Cập nhật hàm createRole
 const createRole = async () => {
   // Clear previous errors
   roleNameError.value = '';
   permissionsError.value = '';
 
-  if (
-    !props.project?.id ||
-    !newRoleName.value ||
-    newRolePermissions.value.length === 0
-  )
+  // Validate role name
+  if (!newRoleName.value.trim()) {
+    roleNameError.value = 'Role name is required';
     return;
+  }
+
+  // Kiểm tra trùng tên
+  if (isRoleNameExists(newRoleName.value.trim())) {
+    roleNameError.value = 'Role name already exists';
+    return;
+  }
+
+  if (!props.project?.id || !newRoleName.value || newRolePermissions.value.length === 0) {
+    if (newRolePermissions.value.length === 0) {
+      permissionsError.value = 'Please select at least one permission';
+    }
+    return;
+  }
+
   creating.value = true;
   try {
     const permissionFlags = calculatePermissionFlags(newRolePermissions.value);
@@ -391,9 +502,8 @@ const createRole = async () => {
     });
 
     const response = await axiosInstance.post(`/projects/${props.project.id}/roles/create`, {
-      name: newRoleName.value,
+      name: newRoleName.value.trim(),
       permissionFlags: permissionFlags,
-      // Try alternative field names
       permissions: newRolePermissions.value,
       permissionFlagsString: permissionFlags.toString()
     });
@@ -404,38 +514,22 @@ const createRole = async () => {
     newRoleName.value = '';
     newRolePermissions.value = [];
     fetchRoles();
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Role created successfully',
+      life: 3000
+    });
   } catch (err: any) {
-    console.error('Create role error:', err);
-    console.error('Error response:', err.response?.data);
-
-    // Display errors inline
-    if (err.response?.data?.message) {
-      let errorMsg = err.response.data.message;
-
-      // Handle if message is an array
-      if (Array.isArray(errorMsg)) {
-        errorMsg = errorMsg[0] || errorMsg.join(', ');
-      }
-
-      // Format error messages to be more user-friendly
-      if (errorMsg.includes('name')) {
-        roleNameError.value = errorMsg.replace('name', 'Role name');
-      } else if (errorMsg.includes('permission')) {
-        permissionsError.value = errorMsg.replace('permission', 'Permission');
-      } else {
-        roleNameError.value = errorMsg;
-      }
-    } else if (err.response?.data?.error) {
-      let errorMsg = err.response.data.error;
-      if (Array.isArray(errorMsg)) {
-        errorMsg = errorMsg[0] || errorMsg.join(', ');
-      }
-      roleNameError.value = errorMsg.replace('name', 'Role name');
-    } else if (err.message) {
-      roleNameError.value = err.message;
-    } else {
-      roleNameError.value = 'Failed to create role';
-    }
+    // Sửa lại: lấy đúng message từ backend nếu có
+    let errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to create role';
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: errorMsg,
+      life: 5000
+    });
   } finally {
     creating.value = false;
   }
@@ -443,26 +537,56 @@ const createRole = async () => {
 
 // State cho modal confirm delete
 const showDeleteConfirmModal = ref(false);
-const roleToDelete = ref(null);
+const roleToDelete = ref<Role | null>(null);
 
 // Function để xóa role
-const deleteRole = async (role) => {
+const deleteRole = async (role: Role) => {
+  // Kiểm tra xem role có đang được sử dụng không
+  if (isRoleInUse(role)) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Cannot delete role that is assigned to members',
+      life: 3000
+    });
+    return;
+  }
+
   roleToDelete.value = role;
   showDeleteConfirmModal.value = true;
 };
 
+// Thêm state cho loading
+const isDeleting = ref(false);
+
 // Function để confirm delete
 const confirmDeleteRole = async () => {
   if (!roleToDelete.value) return;
+  isDeleting.value = true;
 
   try {
     await axiosInstance.delete(`/projects/${props.project.id}/roles/${roleToDelete.value.id}`);
     await fetchRoles();
     showDeleteConfirmModal.value = false;
     roleToDelete.value = null;
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Role deleted successfully',
+      life: 3000
+    });
   } catch (err) {
     console.error('Failed to delete role:', err);
-    alert('Failed to delete role: ' + err.message);
+
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to delete role: ' + (err.response?.data?.message || err.message),
+      life: 5000
+    });
+  } finally {
+    isDeleting.value = false;
   }
 };
 
@@ -472,34 +596,94 @@ const cancelDeleteRole = () => {
   roleToDelete.value = null;
 };
 
-const showAllPermissions = (role) => {
+const showAllPermissions = (role: Role) => {
   selectedRoleForPermissions.value = role;
   showAllPermissionsModal.value = true;
 };
 
 // Function để mở modal assign role
-const openAssignRoleModal = (user) => {
+const openAssignRoleModal = (user: User) => {
   userToAssignRole.value = user;
   selectedRoleId.value = '';
+  hasAttemptedSubmit.value = false; // Reset submission attempt when opening modal
   showAssignRoleModal.value = true;
 };
 
 // Function để assign role
 const assignRoleToUser = async () => {
-  if (!selectedRoleId.value || !userToAssignRole.value) return;
+  hasAttemptedSubmit.value = true;
+
+  if (!props.project?.id) {
+    console.error('Missing project ID');
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Cannot assign role: Project ID is missing',
+      life: 3000
+    });
+    return;
+  }
+
+  if (!selectedRoleIds.value.length || !userToAssignRole.value) {
+    console.log('Missing required values:', {
+      selectedRoleIds: selectedRoleIds.value,
+      userToAssignRole: userToAssignRole.value
+    });
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Please select at least one role to assign',
+      life: 3000
+    });
+    return;
+  }
 
   assigningRole.value = true;
   try {
-    await axiosInstance.post(`/projects/${props.project.id}/roles/${selectedRoleId.value}/users/add`, {
-      userIds: [userToAssignRole.value.id]
-    });
-    await loadMembers();
+    // First verify user is a member
+    const memberResponse = await axiosInstance.get(`/projects/${props.project.id}/members`);
+    const isMember = memberResponse.data.members?.some(m => m.id === userToAssignRole.value.id);
+
+    if (!isMember) {
+      await axiosInstance.post(`/projects/${props.project.id}/members`, {
+        userId: userToAssignRole.value.id,
+        email: userToAssignRole.value.email,
+        userName: userToAssignRole.value.fullName || userToAssignRole.value.username
+      });
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Assign all selected roles
+    await Promise.all(
+      selectedRoleIds.value.map(roleId =>
+        axiosInstance.post(
+          `/projects/${props.project.id}/roles/${roleId}/users/add`,
+          { userIds: [userToAssignRole.value.id] }
+        )
+      )
+    );
+
+    await Promise.all([loadMembers(), fetchRoles()]);
+
     showAssignRoleModal.value = false;
     userToAssignRole.value = null;
-    selectedRoleId.value = '';
+    selectedRoleIds.value = [];
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Roles assigned successfully',
+      life: 3000
+    });
   } catch (err) {
-    console.error('Failed to assign role:', err);
-    alert('Failed to assign role: ' + err.message);
+    console.error('Failed to assign roles:', err);
+    const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to assign roles';
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: errorMsg,
+      life: 5000
+    });
   } finally {
     assigningRole.value = false;
   }
@@ -510,6 +694,7 @@ const closeAssignRoleModal = () => {
   showAssignRoleModal.value = false;
   userToAssignRole.value = null;
   selectedRoleId.value = '';
+  hasAttemptedSubmit.value = false; // Reset submission attempt when closing modal
 };
 
 onMounted(() => {
@@ -520,84 +705,251 @@ watch(() => props.project?.id, () => {
   fetchRoles();
   loadMembers();
 });
+
+// Thêm computed property để lọc các roles có thể assign
+const assignableRoles = computed(() => {
+  if (!userToAssignRole.value) return [];
+
+  // Tìm member hiện tại
+  const currentMember = members.value.find(m => m.id === userToAssignRole.value.id);
+  if (!currentMember) return roles.value;
+
+  // Lấy danh sách role names mà user đã có (dùng name thay vì id để chắc chắn)
+  const userRoleNames = new Set(currentMember.roles.map(r => r.name));
+
+  console.log('Current member roles:', currentMember.roles);
+  console.log('User role names:', Array.from(userRoleNames));
+  console.log('Available roles:', roles.value);
+
+  // Lọc ra các roles:
+  // 1. Không phải Everyone và Project Owner
+  // 2. User chưa có role này (so sánh bằng name)
+  return roles.value.filter(role => {
+    const shouldInclude =
+      role.name !== 'Everyone' &&
+      role.name !== 'Project Owner' &&
+      !userRoleNames.has(role.name);
+
+    console.log(`Role ${role.name}: should include = ${shouldInclude}`);
+    return shouldInclude;
+  });
+});
+
+// Thêm computed property để lấy thông tin member hiện tại
+const currentMemberRoles = computed(() => {
+  if (!userToAssignRole.value) return [];
+  const member = members.value.find(m => m.id === userToAssignRole.value.id);
+  // Filter out Everyone role
+  return (member?.roles || []).filter(role => role.name !== 'Everyone');
+});
+
+// Thêm function để remove role
+const removeRoleFromUser = async (roleId: string | number | bigint) => {
+  if (!props.project?.id || !userToAssignRole.value?.id) return;
+
+  const roleIdStr = String(roleId);
+  removingRoleId.value = roleIdStr;
+  try {
+    console.log('Removing role:', {
+      projectId: props.project.id,
+      roleId: roleIdStr,
+      userId: userToAssignRole.value.id,
+    });
+
+    // Optional: find role locally for logging (not mandatory)
+    const role = roles.value.find((r) => String(r.id) === roleIdStr);
+
+    // Remove the user from the role using POST method
+    await axiosInstance.post(
+      `/projects/${props.project.id}/roles/${roleIdStr}/users/remove`,
+      {
+        userIds: [String(userToAssignRole.value.id)],
+      }
+    );
+
+    // Refresh member list
+    await loadMembers();
+
+    // Update the current member roles directly
+    if (userToAssignRole.value) {
+      const updatedMember = members.value.find(
+        (m) => m.id === userToAssignRole.value.id
+      );
+      if (updatedMember) {
+        userToAssignRole.value = { ...updatedMember };
+      } else {
+        const currentRoles = userToAssignRole.value.roles || [];
+        userToAssignRole.value = {
+          ...userToAssignRole.value,
+          roles: currentRoles.filter((r) => String(r.id) !== roleIdStr),
+        };
+      }
+    }
+
+    // Update roles list (in case role becomes unused)
+    await fetchRoles();
+
+    showCustomToast('Role removed successfully');
+  } catch (err: any) {
+    const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to remove role';
+    showCustomToast(errorMsg, 'error', 5000);
+  } finally {
+    removingRoleId.value = null;
+  }
+};
+
+// Sửa lại hàm isRoleInUse để kiểm tra chính xác hơn
+const isRoleInUse = (role: Role) => {
+  // Project Owner role không thể xóa
+  if (role.name === 'Project Owner') return true;
+
+  return members.value.some(member =>
+    member.roles.some(memberRole =>
+      // So sánh cả id và name để đảm bảo chính xác
+      (memberRole.id === role.id || memberRole.name.toLowerCase() === role.name.toLowerCase())
+    )
+  );
+};
+
+// Thêm hàm để xác định class cho từng loại permission
+const getPermissionClass = (permission: string) => {
+  if (permission.toLowerCase().includes('admin')) return 'project-admin';
+  if (permission.toLowerCase().includes('manage')) return 'manage';
+  if (permission.toLowerCase().includes('view')) return 'view';
+  return '';
+};
+
+// Thêm hàm để mở modal roles
+const showAllMemberRoles = (member: Member) => {
+  selectedMemberForRoles.value = member;
+  showAllRolesModal.value = true;
+};
+
+// Thêm state cho custom toast
+const customToast = ref({
+  show: false,
+  message: '',
+  type: 'success',
+  duration: 3000
+});
+
+// Thêm function hiển thị toast
+const showCustomToast = (message: string, type: 'success' | 'error' = 'success', duration: number = 3000) => {
+  customToast.value = {
+    show: true,
+    message,
+    type,
+    duration
+  };
+
+  setTimeout(() => {
+    customToast.value.show = false;
+  }, duration);
+};
+
+// Add new data for role search
+const roleSearchQuery = ref('');
+
+// Add computed property for filtered roles
+const filteredAssignableRoles = computed(() => {
+  if (!roleSearchQuery.value) return assignableRoles.value;
+  const query = roleSearchQuery.value.toLowerCase();
+  return assignableRoles.value.filter(role =>
+    role.name.toLowerCase().includes(query) ||
+    parsePermissionFlags(role.permissionFlags).some(perm =>
+      perm.toLowerCase().includes(query)
+    )
+  );
+});
+
+// Add function to get role icon
+function getRoleIcon(roleName) {
+  const name = roleName.toLowerCase();
+  if (name.includes('owner')) return '👑';
+  if (name.includes('admin')) return '⚡';
+  if (name.includes('manager')) return '🔧';
+  if (name.includes('moderator')) return '🛡️';
+  if (name.includes('editor')) return '✏️';
+  if (name.includes('viewer')) return '👁️';
+  return '🔹';
+}
+
+// Add computed property for role count
+const roleCount = computed(() => {
+  // Only count actual project roles, excluding system roles like 'Everyone'
+  return roles.value.filter(role =>
+    role.name !== 'Everyone' &&
+    // Include roles that either:
+    // 1. Have permissions
+    (role.permissionFlags && role.permissionFlags !== '0') ||
+    (role.permissions && role.permissions.length > 0) ||
+    // 2. Are explicitly marked as project roles
+    role.isProjectRole === true
+  ).length;
+});
+
+// Add computed property for total roles count
+const totalRoleCount = computed(() => {
+  // Count all roles in the table (excluding Everyone)
+  return roles.value.filter(role => role.name !== 'Everyone').length;
+});
+
+// Add watcher for roles
+watch(
+  () => roles.value,
+  (newRoles) => {
+    // Count actual roles (excluding Everyone)
+    const actualCount = newRoles.filter(role => {
+      // Only count custom roles (not system roles)
+      return role.name !== 'Everyone';
+    }).length;
+    console.log('Roles:', newRoles);
+    console.log('Filtered roles:', newRoles.filter(role => role.name !== 'Everyone'));
+    console.log('Emitting role count:', actualCount);
+    // Emit the count to parent
+    emit('update-role-count', actualCount);
+  },
+  { immediate: true }
+);
+
+const { hasPermission, isProjectOwner, isProjectAdmin, currentMember, currentUserId } = useProjectPermission(props.project, members);
+
+// Thêm hàm chuẩn hóa permission
+function normalizePermission(p: string) {
+  return typeof p === 'string' ? p.replace(/\s+/g, '').toLowerCase() : '';
+}
+
+// Thêm biến kiểm tra quyền quản lý roles
+const canManageRoles = computed(() => {
+  if (isProjectOwner.value || isProjectAdmin.value) return true;
+  // Lấy tất cả quyền của user hiện tại
+  const perms = new Set<string>();
+  if (currentMember.value && Array.isArray(currentMember.value.roles)) {
+    currentMember.value.roles.forEach(r => {
+      (r.permissions || []).forEach(p => perms.add(p));
+    });
+  }
+  // So sánh không phân biệt dấu cách/chữ hoa-thường
+  const hasPerm = (perm: string) =>
+    Array.from(perms).some(
+      p => normalizePermission(p) === normalizePermission(perm)
+    );
+  return hasPerm('ManageRoles') || hasPerm('ProjectAdmin');
+});
+
+// Debug: log dữ liệu khi currentMember hoặc currentUserId thay đổi
+watch([currentMember, currentUserId, canManageRoles], () => {
+  console.log('==DEBUG ProjectRoleTab==');
+  console.log('currentMember:', currentMember.value);
+  console.log('currentUserId:', currentUserId.value);
+  console.log('all roles:', currentMember.value?.roles);
+  console.log('all permissions:', currentMember.value?.roles?.flatMap(r => r.permissions));
+  console.log('canManageRoles:', canManageRoles.value);
+});
 </script>
 
 <template>
   <div class="project-role-tab">
-    <!-- Add User Section -->
-    <div class="management-section user-section">
-      <div class="section-header">
-        <h2 class="section-title">
-          <span class="title-icon">➕</span>
-          Add User to Project
-        </h2>
-        <button
-          class="btn btn-outline btn-sm toggle-btn"
-          @click="showAddUserSection = !showAddUserSection"
-          :title="showAddUserSection ? 'Hide add user section' : 'Show add user section'"
-        >
-          <span class="icon">{{ showAddUserSection ? '−' : '+' }}</span>
-          {{ showAddUserSection ? 'Hide' : 'Add User' }}
-        </button>
-      </div>
-      <div v-if="showAddUserSection" class="section-content">
-        <form autocomplete="off" class="add-user-form" @submit.prevent="searchUser">
-          <div class="form-row">
-            <div class="form-group" style="flex: 1; margin-bottom: 0; position: relative;">
-              <label for="userIdentifier" class="form-label">
-                <span class="label-icon">🔍</span>
-                Search by Email or Name
-              </label>
-              <input
-                id="userIdentifier"
-                v-model="userSearch.identifier"
-                type="text"
-                required
-                class="form-control"
-                placeholder="Enter email or full name"
-                autocomplete="off"
-              />
-            </div>
-            <div class="form-actions" style="margin-bottom: 0; align-self: flex-end">
-              <button
-                type="submit"
-                class="btn btn-primary"
-                :disabled="!userSearch.identifier || userSearch.loading"
-                :title="!userSearch.identifier ? 'Please enter a name or email to search' : ''"
-              >
-                <span v-if="userSearch.loading" class="loading-spinner-small"></span>
-                <span v-else class="icon">🔍</span>
-                {{ userSearch.loading ? 'Searching...' : 'Search User' }}
-              </button>
-            </div>
-          </div>
-        </form>
-        <div v-if="userSearch.error" class="error-message">
-          <span class="error-icon">❌</span>
-          <p>{{ userSearch.error }}</p>
-        </div>
-        <div v-if="userSearch.results && userSearch.results.length > 0" class="found-user" style="flex-direction: column; align-items: stretch;">
-          <div v-for="user in userSearch.results" :key="user.id" class="user-info user-card">
-            <div class="user-card-left">
-              <div class="user-avatar big-avatar">
-                <span class="avatar-text">{{ getAvatarText(user) }}</span>
-              </div>
-              <div class="user-details">
-                <h4 class="user-name">{{ user.fullName || user.username || user.email || user.phone || 'Unknown' }}</h4>
-                <p v-if="user.email" class="user-meta">Email: {{ user.email }}</p>
-                <p v-if="user.phone" class="user-meta">Phone: {{ user.phone }}</p>
-              </div>
-            </div>
-            <button class="btn btn-primary btn-sm user-add-btn" @click="addUserToProject(user)" :disabled="userSearch.addingId === user.id">
-              <span v-if="userSearch.addingId === user.id" class="loading-spinner-small"></span>
-              <span v-else class="icon">➕</span>
-              {{ userSearch.addingId === user.id ? 'Adding...' : 'Add to Project' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Members Section -->
     <div class="management-section members-section">
       <div class="section-header">
@@ -639,37 +991,28 @@ watch(() => props.project?.id, () => {
                 </div>
               </td>
               <td>
+                <div class="roles-display-container">
                   <span
-                    class="role-badges-group discord-badge-group"
-                    @mouseenter="showFullRoles = member.id"
-                    @mouseleave="showFullRoles = null"
-                    @click="showFullRoles = showFullRoles === member.id ? null : member.id"
+                    class="role-badges-group"
+                    @click="showAllMemberRoles(member)"
                     style="cursor:pointer;"
                   >
                     <span
                       v-for="(role, idx) in displayRoles(member, props.project).slice(0, 3)"
                       :key="role.id"
-                      :class="['role-badge discord-role-badge', getRoleBadgeClass(role.name)]"
+                      :class="['role-badge', getRoleBadgeClass(role.name)]"
                     >{{ role.name }}</span>
-                    <span v-if="getRoleCount(displayRoles(member, props.project)) > 3" class="discord-more-badge">
+                    <span
+                      v-if="getRoleCount(displayRoles(member, props.project)) > 3"
+                      class="more-badge"
+                    >
                       +{{ getRoleCount(displayRoles(member, props.project)) - 3 }} more
                     </span>
                   </span>
-                <div
-                  v-if="showFullRoles === member.id && getRoleCount(displayRoles(member, props.project)) > 3"
-                  class="discord-role-tooltip"
-                  style="display:flex; flex-wrap:wrap; gap:0.4em; padding:0.7em 1.2em;"
-                >
-                    <span
-                      v-for="role in displayRoles(member, props.project)"
-                      :key="role.id"
-                      :class="['role-badge discord-role-badge', getRoleBadgeClass(role.name)]"
-                      style="margin-bottom:0.2em;"
-                    >{{ role.name }}</span>
                 </div>
               </td>
               <td>
-                <button class="btn btn-outline btn-sm" @click="openAssignRoleModal(member)" :disabled="assigningRole">
+                <button v-if="canManageRoles && !displayRoles(member, props.project).some(r => r.name === 'Project Owner')" class="btn btn-outline btn-sm" @click="openAssignRoleModal(member)" :disabled="assigningRole" :title="!canManageRoles ? 'You do not have permission to assign roles' : ''">
                   <span v-if="assigningRole" class="loading-spinner-small"></span>
                   <span v-else class="icon">🔗</span>
                   Assign Role
@@ -694,7 +1037,7 @@ watch(() => props.project?.id, () => {
           <span class="title-icon">🛡️</span>
           Project Roles
         </h2>
-        <button class="btn btn-primary" @click="showCreateRole = true">
+        <button class="btn btn-primary" @click="showCreateRole = true" :disabled="!canManageRoles" :title="!canManageRoles ? 'You do not have permission to create a role' : ''">
           <span class="icon">➕</span> Create Role
         </button>
       </div>
@@ -722,7 +1065,7 @@ watch(() => props.project?.id, () => {
             <span
               v-for="(perm, idx) in parsePermissionFlags(role.permissionFlags).slice(0, 3)"
               :key="perm"
-              class="permission-badge"
+              :class="['permission-badge', getPermissionClass(perm)]"
             >
               {{ perm }}
             </span>
@@ -738,10 +1081,13 @@ watch(() => props.project?.id, () => {
             </div>
           </td>
           <td>
+            <span v-if="isRoleInUse(role)" class="role-in-use-text">In use</span>
             <button
+              v-else
               class="btn btn-danger"
               @click="deleteRole(role)"
-              :disabled="deletingRoleId === role.id"
+              :disabled="!canManageRoles || deletingRoleId === role.id"
+              :title="!canManageRoles ? 'You do not have permission to delete roles' : ''"
             >
               <span v-if="deletingRoleId === role.id">Deleting...</span>
               <span v-else>Delete</span>
@@ -759,9 +1105,12 @@ watch(() => props.project?.id, () => {
         class="new-modal-overlay"
         @click.self="showCreateRole = false"
       >
-        <div class="new-modal-content">
+        <div class="new-modal-content create-role-modal">
           <div class="new-modal-header">
-            <h3>Create New Role</h3>
+            <h3>
+              <span class="header-icon">🏷️</span>
+              Create New Role
+            </h3>
             <button class="new-modal-close" @click="showCreateRole = false">×</button>
           </div>
 
@@ -811,7 +1160,7 @@ watch(() => props.project?.id, () => {
           </div>
 
           <div class="new-modal-footer">
-            <button class="btn btn-secondary" @click="showCreateRole = false">
+            <button class="btn btn-text" @click="showCreateRole = false">
               Cancel
             </button>
             <button
@@ -875,6 +1224,8 @@ watch(() => props.project?.id, () => {
       >
         <div class="modal-overlay" @click="cancelDeleteRole"></div>
         <div class="modal-content">
+          <!-- Add Toast inside modal -->
+          <Toast position="top-right" group="modal-messages" />
           <div class="modal-header">
             <h3>Delete Role</h3>
             <button class="close-btn" @click="cancelDeleteRole">
@@ -893,14 +1244,16 @@ watch(() => props.project?.id, () => {
           </div>
 
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="cancelDeleteRole">
+            <button class="btn btn-secondary" @click="cancelDeleteRole" :disabled="isDeleting">
               Keep Role
             </button>
             <button
               class="btn btn-danger"
               @click="confirmDeleteRole"
+              :disabled="isDeleting"
             >
-              Delete Role
+              <span v-if="isDeleting" class="loading-spinner-small"></span>
+              {{ isDeleting ? 'Deleting...' : 'Delete Role' }}
             </button>
           </div>
         </div>
@@ -914,50 +1267,159 @@ watch(() => props.project?.id, () => {
         class="new-modal-overlay"
         @click.self="closeAssignRoleModal"
       >
-        <div class="new-modal-content">
-          <div class="new-modal-header">
-            <h3>Assign Role to {{ userToAssignRole?.fullName || userToAssignRole?.username || userToAssignRole?.email || userToAssignRole?.phone || 'User' }}</h3>
-            <button class="new-modal-close" @click="closeAssignRoleModal">×</button>
-          </div>
-          <div class="new-modal-body">
-            <div class="form-group">
-              <label for="assignRole" class="form-label">
-                <span class="label-icon">🛡️</span>
-                Select Role
-              </label>
-              <select
-                id="assignRole"
-                v-model="selectedRoleId"
-                class="form-control"
-                :disabled="assigningRole"
-              >
-                <option value="">Select a role to assign</option>
-                <option v-for="role in roles.filter(r => r.name !== 'Everyone')" :key="role.id" :value="role.id">
-                  {{ role.name }}
-                </option>
-              </select>
-              <div v-if="!selectedRoleId" class="error-message" style="margin-top: 0.5rem;">
-                <span class="error-icon">❌</span>
-                <p>Please select a role to assign.</p>
-              </div>
+        <div class="modal-content">
+          <!-- Current Roles Section -->
+          <div class="header-row">
+            <div class="header-left">
+              <span class="header-icon">👤</span>
+              <span class="header-title">Current Roles</span>
             </div>
           </div>
-          <div class="new-modal-footer">
-            <button class="btn btn-secondary" @click="closeAssignRoleModal">
+
+          <div class="current-roles-container">
+            <div class="role-badge" v-for="role in currentMemberRoles" :key="role.id">
+              <span class="role-dot">⬤</span>
+              {{ role.name }}
+              <button
+                class="remove-role"
+                @click="removeRoleFromUser(role.id)"
+                :disabled="!canManageRoles || removingRoleId === role.id"
+                :title="!canManageRoles ? 'You do not have permission to remove roles' : ''"
+              >×</button>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Assign New Roles Section -->
+          <div class="header-row">
+            <div class="header-left">
+              <span class="header-icon">🔵</span>
+              <span class="header-title">Assign New Roles</span>
+            </div>
+          </div>
+
+          <div class="search-container">
+            <div class="search-box">
+              <span class="search-icon">🔍</span>
+              <input
+                type="text"
+                v-model="roleSearchQuery"
+                placeholder="Search roles..."
+                class="search-input"
+              />
+            </div>
+          </div>
+
+          <div class="roles-list">
+            <label v-for="role in filteredAssignableRoles"
+                   :key="role.id"
+                   class="role-item">
+              <div class="role-checkbox">
+                <input type="checkbox"
+                       :value="role.id"
+                       v-model="selectedRoleIds"
+                       :disabled="!canManageRoles || assigningRole">
+              </div>
+              <div class="role-info">
+                <div class="role-name">{{ role.name }}</div>
+                <div class="role-permissions">
+                  {{ parsePermissionFlags(role.permissionFlags).join(', ') }}
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="modal-actions">
+            <button class="cancel-btn" @click="closeAssignRoleModal">
               Cancel
             </button>
             <button
-              class="btn btn-primary"
+              class="assign-btn"
               @click="assignRoleToUser"
-              :disabled="!selectedRoleId || assigningRole"
+              :disabled="!canManageRoles || assigningRole || !selectedRoleIds.length"
+              :title="!canManageRoles ? 'You do not have permission to assign roles' : ''"
             >
-              <span v-if="assigningRole" class="loading-spinner-small"></span>
-              <span v-else class="icon">🔗</span>
-              {{ assigningRole ? 'Assigning...' : 'Assign Role' }}
+              <span v-if="assigningRole" class="loading-spinner"></span>
+              <span v-else>➕</span>
+              Assign Role
             </button>
           </div>
         </div>
       </div>
+    </Teleport>
+
+    <!-- Thêm modal hiển thị tất cả roles -->
+    <Teleport to="body">
+      <div
+        v-if="showAllRolesModal"
+        class="new-modal-overlay"
+        @click.self="showAllRolesModal = false"
+      >
+        <div class="new-modal-content">
+          <div class="new-modal-header">
+            <h3>
+              <span class="header-icon">👤</span>
+              {{ selectedMemberForRoles?.fullName || selectedMemberForRoles?.username || 'User' }}'s Roles
+            </h3>
+            <button class="new-modal-close" @click="showAllRolesModal = false">×</button>
+          </div>
+          <div class="new-modal-body">
+            <div class="role-section">
+              <label class="form-label">
+                <span class="label-icon">🛡️</span>
+                All Roles ({{ displayRoles(selectedMemberForRoles, props.project).length }} total)
+              </label>
+              <div class="roles-grid">
+                <div
+                  v-for="role in displayRoles(selectedMemberForRoles, props.project)"
+                  :key="role.id"
+                  :class="['role-badge', getRoleBadgeClass(role.name)]"
+                >
+                  {{ role.name }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="new-modal-footer">
+            <button class="btn btn-secondary" @click="showAllRolesModal = false">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Cập nhật template cho toast -->
+    <Teleport to="body">
+      <Transition name="toast">
+        <div v-if="customToast.show"
+             :class="['custom-toast', `custom-toast-${customToast.type}`]">
+          <div class="custom-toast-content">
+            <span class="toast-icon" v-if="customToast.type === 'success'">
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z"/>
+              </svg>
+            </span>
+            <span class="toast-icon" v-else>
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <path fill="currentColor" d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+              </svg>
+            </span>
+            <div class="toast-text">
+              <div class="toast-summary">{{ customToast.type === 'success' ? 'Success' : 'Error' }}</div>
+              <div class="toast-detail">{{ customToast.message }}</div>
+            </div>
+            <button class="toast-close" @click="customToast.show = false">
+              <svg viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -1377,27 +1839,30 @@ watch(() => props.project?.id, () => {
 
 /* Role Badge Styles */
 .role-badge {
-  display: inline-block;
-  background: #ede9fe;
-  color: #7c3aed;
+  display: inline-flex;
+  align-items: center;
+  background: #e2e8f0;
+  color: #475569;
   border-radius: 999px;
-  padding: 0.2rem 0.7rem;
-  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
   font-weight: 500;
   margin-right: 0.2rem;
   margin-bottom: 0.1rem;
   cursor: pointer;
-  transition: background 0.18s;
+  transition: all 0.2s;
 }
 
 .role-badge:hover {
-  background: #c7d2fe;
+  background: #cbd5e1;
 }
 
 .role-badges-group {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.2rem;
+  cursor: pointer;
 }
 
 .discord-badge-group {
@@ -1470,20 +1935,25 @@ watch(() => props.project?.id, () => {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  z-index: 2147483647 !important;
+  z-index: 9000 !important; /* Giảm z-index của modal */
   backdrop-filter: blur(4px) !important;
 }
 
+/* Đảm bảo toast luôn hiển thị trên cùng */
+:global(.p-toast) {
+  z-index: 9999 !important; /* Tăng z-index của toast */
+}
+
 .new-modal-content {
+  position: relative;
+  z-index: 10000; /* Đảm bảo content cũng có z-index cao */
   background: #fff;
-  border-radius: 20px;
+  border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  min-width: 500px;
+  width: 360px;
   max-width: 90vw;
-  height: 600px;
+  max-height: 400px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   animation: modalSlideIn 0.3s ease-out;
 }
 
@@ -1499,19 +1969,11 @@ watch(() => props.project?.id, () => {
 }
 
 .new-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem 2rem 1rem 2rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  padding: 0.8rem 1rem; /* Giảm padding */
 }
 
 .new-modal-header h3 {
-  margin: 0;
-  color: #2d3748;
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 1rem; /* Giảm font size */
 }
 
 .new-modal-close {
@@ -1536,21 +1998,16 @@ watch(() => props.project?.id, () => {
 }
 
 .new-modal-body {
-  padding: 1.5rem 2rem;
-  overflow: hidden;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  padding: 0.8rem 1rem; /* Giảm padding */
 }
 
 .new-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
-  padding: 1rem 2rem 1.5rem 2rem;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  padding: 0.8rem 1rem; /* Giảm padding */
+}
+
+.new-modal-footer .btn {
+  padding: 0.4rem 0.8rem; /* Giảm padding của button */
+  font-size: 0.85rem; /* Giảm font size của button */
 }
 
 .form-group {
@@ -1657,39 +2114,66 @@ watch(() => props.project?.id, () => {
 .btn-primary {
   background: linear-gradient(135deg, #38b2ac 0%, #4299e1 100%) !important;
   color: #fff !important;
-  box-shadow: 0 4px 16px #4299e133 !important;
-  border: 2px solid #4299e1 !important;
+  box-shadow: 0 1px 4px #4299e133 !important;
+  border: 1px solid #4299e1 !important;
 }
 
-.btn-primary:hover:not(:disabled) {
+.btn-primary:hover {
   background: linear-gradient(135deg, #4299e1 0%, #38b2ac 100%) !important;
   color: #fff !important;
   border-color: #3182ce !important;
-  box-shadow: 0 8px 32px #4299e133 !important;
-  transform: translateY(-2px) scale(1.04) !important;
-  filter: brightness(1.08) !important;
+  box-shadow: 0 2px 8px #4299e133 !important;
+  transform: translateY(-1px) !important;
+  filter: brightness(1.02) !important;
 }
 
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
+.btn-outline {
+  background: #fff !important;
+  color: #2563eb !important;
+  border: 1px solid #2563eb !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px #2563eb22 !important;
+  transition: all 0.18s !important;
+}
+
+.btn-outline:hover {
+  background: #2563eb !important;
+  color: #fff !important;
+  border-color: #1e40af !important;
+  box-shadow: 0 2px 6px #2563eb33 !important;
+}
+
+.btn-sm {
+  font-size: 0.7rem !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 3px !important;
+}
+
+.btn-danger {
+  background: #e53e3e !important;
+  color: #fff !important;
+  border: 1px solid #e53e3e !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px #e53e3e22 !important;
+}
+
+.btn-danger:hover {
+  background: #c53030 !important;
+  color: #fff !important;
+  border-color: #a02323 !important;
+  box-shadow: 0 2px 6px #e53e3e33 !important;
+  transform: translateY(-1px) !important;
 }
 
 .btn-secondary {
-  background: #fff;
-  color: #4a5568;
-  border: 2px solid #e2e8f0;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  transition: all 0.18s;
+  background: #718096;
+  color: #fff;
+  border: 2px solid #718096;
 }
 
 .btn-secondary:hover {
-  background: #f7fafc;
-  border-color: #cbd5e0;
-  color: #2d3748;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  background: #4a5568;
+  border-color: #4a5568;
 }
 
 .loading-spinner-small {
@@ -1714,14 +2198,20 @@ watch(() => props.project?.id, () => {
 }
 
 .permission-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   background: #e2e8f0;
-  color: #4a5568;
+  color: #475569;
   border-radius: 999px;
-  padding: 0.15rem 0.5rem;
+  padding: 0.2rem 0.5rem;
   font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
+  margin-right: 0.2rem;
+}
+
+.permission-badge:hover {
+  background: #cbd5e1;
 }
 
 .more-permissions {
@@ -1731,13 +2221,30 @@ watch(() => props.project?.id, () => {
   cursor: pointer;
   padding: 0.15rem 0.3rem;
   border-radius: 4px;
-  background: #ebf8ff;
-  border: 1px solid #bee3f8;
+  background: #60a5fa;
+  color: white;
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
 }
 
 .more-permissions:hover {
-  background: #bee3f8;
-  color: #2b6cb0;
+  background: #3b82f6;
+}
+
+/* Thêm style cho các loại permission khác nhau */
+.permission-badge.project-admin {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.permission-badge.manage {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.permission-badge.view {
+  background: #f3e8ff;
+  color: #6b21a8;
 }
 
 .no-permissions {
@@ -1825,7 +2332,7 @@ watch(() => props.project?.id, () => {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1838,6 +2345,7 @@ watch(() => props.project?.id, () => {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
 }
 
 .modal-content {
@@ -1845,10 +2353,24 @@ watch(() => props.project?.id, () => {
   border-radius: 12px;
   width: 90%;
   max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Đảm bảo toast luôn hiển thị trên cùng */
+:global(.p-toast) {
+  z-index: 9999 !important;
+}
+
+:global(.p-toast-message) {
+  background: white !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  margin: 0 1rem 1rem !important;
+}
+
+:global(.p-toast-top-right) {
+  top: 1.5rem !important;
+  right: 1.5rem !important;
 }
 
 .modal-header {
@@ -1941,6 +2463,16 @@ watch(() => props.project?.id, () => {
   border: none !important;
   font-weight: 500 !important;
   box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  min-width: 90px !important;
+  justify-content: center !important;
+}
+
+.btn-danger:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .btn-danger:hover {
@@ -2006,7 +2538,12 @@ watch(() => props.project?.id, () => {
 }
 
 .new-modal-body {
-  padding: 1.5rem;
+  padding: 1.2rem 1.5rem;
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
 
 .new-modal-footer {
@@ -2041,5 +2578,1773 @@ select.form-control:disabled {
   background: #f7fafc;
   color: #a0aec0;
   cursor: not-allowed;
+}
+
+.form-control.error {
+  border-color: #e53e3e;
+  box-shadow: 0 0 0 1px #e53e3e;
+}
+
+.form-control.error:focus {
+  border-color: #e53e3e;
+  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.1);
+}
+
+.current-roles-section {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+
+.assign-role-section {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  background: #f0f9ff;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #2d3748;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.current-roles-list {
+  background: white;
+  border-radius: 6px;
+  padding: 0.6rem;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.no-roles {
+  color: #64748b;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.role-section {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 0.8rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.role-badge-container {
+  display: inline-flex;
+  align-items: center;
+  background: white;
+  border-radius: 20px;
+  padding: 2px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+}
+
+.role-badge-container:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.role-badge {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 16px;
+  color: #4a5568;
+  background: #edf2f7;
+  margin: 0;
+}
+
+.role-badge-container .role-badge {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.remove-role-btn {
+  background: none;
+  border: none;
+  color: #718096;
+  font-size: 1.2rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  border-radius: 0 16px 16px 0;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+}
+
+.remove-role-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.remove-role-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.no-roles {
+  color: #718096;
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 0.8rem 0;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.9rem 1.2rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: white;
+  color: #2d3748;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 4px rgba(66,153,225,0.10);
+}
+
+.btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+  padding: 0.8rem 1.5rem !important;
+  font-size: 1rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #4299e1 0%, #667eea 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 6px rgba(66, 153, 225, 0.2) !important;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 8px rgba(66, 153, 225, 0.3) !important;
+  filter: brightness(1.1) !important;
+}
+
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-text {
+  background: none !important;
+  border: none !important;
+  color: #718096 !important;
+  padding: 0.8rem !important;
+}
+
+.btn-text:hover {
+  color: #4a5568 !important;
+  background: #f7fafc !important;
+}
+
+.new-modal-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  color: #2d3748;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.header-icon {
+  font-size: 1.3rem;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #2d3748;
+  font-weight: 600;
+  margin-bottom: 0.8rem;
+  font-size: 0.95rem;
+}
+
+.label-icon {
+  font-size: 1.1rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.role-badge {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 16px;
+  color: #4a5568;
+  background: #edf2f7;
+  margin: 0;
+}
+
+.remove-role-btn {
+  background: none;
+  border: none;
+  color: #718096;
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  border-radius: 0 16px 16px 0;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+}
+
+.btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  padding: 0.6rem 1.2rem !important;
+  font-size: 0.9rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+}
+
+.btn .icon {
+  font-size: 0.9rem;
+}
+
+.loading-spinner-small {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 50%;
+  border-top-color: #4299e1;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+.role-section {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.2rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.current-roles-list {
+  background: white;
+  border-radius: 8px;
+  padding: 0.8rem;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+}
+
+.no-roles {
+  color: #718096;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.btn[title] {
+  position: relative;
+}
+
+.btn[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem;
+  background: #1f2937;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 10;
+  margin-bottom: 0.5rem;
+}
+
+.btn[title]:disabled:hover::after {
+  background: #4b5563;
+}
+
+.btn-danger:disabled {
+  background: #ef4444 !important;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.role-in-use-text {
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.more-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #60a5fa;
+  color: white;
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.more-badge:hover {
+  background: #3b82f6;
+}
+
+.roles-display-container {
+  position: relative;
+  display: inline-block;
+}
+
+.role-badges-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+  cursor: pointer;
+}
+
+.roles-tooltip {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 0.75rem;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.roles-tooltip-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.roles-tooltip .role-badge {
+  margin: 0;
+  white-space: nowrap;
+  background: #e2e8f0;
+  color: #475569;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Thêm mũi tên cho tooltip */
+.roles-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 10px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-left: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0;
+  transform: rotate(45deg);
+}
+
+/* Animation cho tooltip */
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.roles-tooltip {
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+/* Cập nhật style cho role badges */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #e2e8f0;
+  color: #475569;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.role-badge:hover {
+  background: #cbd5e1;
+}
+
+.more-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #60a5fa;
+  color: white;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.more-badge:hover {
+  background: #3b82f6;
+}
+
+/* Thêm styles cho roles grid */
+.roles-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+  min-height: 100px;
+}
+
+.roles-grid .role-badge {
+  margin: 0;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  background: #e2e8f0;
+  color: #475569;
+  border-radius: 999px;
+  transition: all 0.2s;
+}
+
+.roles-grid .role-badge:hover {
+  background: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+/* Thêm styles */
+.create-role-modal {
+  width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.create-role-modal .new-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.2rem;
+}
+
+.create-role-modal .new-modal-footer {
+  padding: 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8rem;
+}
+
+.create-role-modal .btn {
+  min-width: 100px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  padding: 0 1rem;
+}
+
+.create-role-modal .btn-text {
+  color: #64748b;
+  background: none;
+  border: none;
+}
+
+.create-role-modal .btn-text:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.create-role-modal .btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  font-weight: 500;
+}
+
+.create-role-modal .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-1px);
+}
+
+.create-role-modal .btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+  padding: 0.8rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.permission-item:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.new-modal-content .p-toast,
+.modal-content .p-toast {
+  position: absolute !important;
+  top: 1rem !important;
+  right: 1rem !important;
+  z-index: 9999 !important;
+}
+
+.new-modal-content .p-toast-message,
+.modal-content .p-toast-message {
+  margin: 0 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Custom Toast Styles - PrimeVue like */
+.custom-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 999999;
+  min-width: 350px;
+  max-width: 450px;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+  padding: 0;
+  margin: 0 0 1rem 0;
+  border-width: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.custom-toast-content {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem 1.5rem;
+  gap: 0.75rem;
+}
+
+.toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.custom-toast-success {
+  border-left: 6px solid #4CAF50;
+}
+
+.custom-toast-success .toast-icon {
+  color: #4CAF50;
+}
+
+.custom-toast-error {
+  border-left: 6px solid #F44336;
+}
+
+.custom-toast-error .toast-icon {
+  color: #F44336;
+}
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-summary {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+  line-height: 1.2;
+}
+
+.toast-detail {
+  color: #4c566a;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.toast-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.25rem;
+  border: none;
+  background: none;
+  color: #99A4AE;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-close:hover {
+  opacity: 1;
+}
+
+/* Toast Animation */
+.toast-enter-active {
+  transition: all 0.15s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.toast-leave-active {
+  transition: all 0.15s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+/* Hover effect */
+.custom-toast:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+/* Thêm style cho role checkboxes */
+.roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.role-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-checkbox-item:hover {
+  background: #f0f9ff;
+  border-color: #3b82f6;
+}
+
+.role-checkbox-item input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 4px;
+  border: 2px solid #cbd5e1;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.role-name {
+  font-weight: 500;
+  color: #1f2937;
+  flex: 1;
+}
+
+.role-permissions {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.role-checkbox-item:has(input:checked) {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.role-checkbox-item:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.assign-role-modal {
+  width: 700px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-divider {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+  gap: 1rem;
+}
+
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.divider-text {
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.search-box {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: white;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.role-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.role-card:hover {
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.role-card.selected {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.role-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.role-icon {
+  font-size: 1.2rem;
+}
+
+.role-name {
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+}
+
+.role-permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-left: 2.5rem;
+}
+
+.permission-tag {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background: #f1f5f9;
+  color: #475569;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.more-permissions-tag {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background: #dbeafe;
+  color: #2563eb;
+  border-radius: 12px;
+  cursor: help;
+}
+
+.role-checkbox-wrapper {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.custom-checkbox {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 20px;
+  width: 20px;
+  background: white;
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.role-card:hover .custom-checkbox {
+  border-color: #3b82f6;
+}
+
+input[type="checkbox"]:checked ~ .custom-checkbox {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.checkmark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
+  opacity: 1;
+}
+
+/* Current roles section improvements */
+.current-roles-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.2rem;
+}
+
+.role-badge-container {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 2px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.role-badge-container:hover {
+  border-color: #ef4444;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1);
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 16px;
+}
+
+.remove-role-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  border-radius: 0 16px 16px 0;
+  transition: all 0.2s;
+}
+
+.remove-role-btn:hover:not(:disabled) {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+.remove-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* Role badge variations */
+.role-badge-owner {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.role-badge-admin {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.role-badge-mod {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.role-badge-default {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Button improvements */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.btn-text {
+  color: #64748b;
+  background: none;
+}
+
+.btn-text:hover {
+  background: #f1f5f9;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.assign-role-modal {
+  width: 500px;
+  max-width: 95vw;
+  max-height: 90vh;
+  background: white;
+  border-radius: 8px;
+  color: #333;
+}
+
+.modal-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.section-header h4 {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
+}
+
+.section-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 1rem 0;
+}
+
+.search-box {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 2rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #333;
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.role-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.role-item:hover {
+  background: #f3f4f6;
+}
+
+.role-item.selected {
+  background: #e5e7eb;
+}
+
+.role-content {
+  flex: 1;
+}
+
+.role-name {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.role-description {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: #6b7280;
+}
+
+.btn-text:hover {
+  background: #f3f4f6;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Role badge styles */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  background: #f3f4f6;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+}
+
+.role-badge .role-icon {
+  font-size: 0.75rem;
+  color: #3b82f6;
+}
+
+.remove-role-btn {
+  border: none;
+  background: none;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 0 9999px 9999px 0;
+}
+
+.remove-role-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.role-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.role-checkbox-wrapper input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 3px;
+  border: 2px solid #d1d5db;
+  cursor: pointer;
+}
+
+.role-checkbox-wrapper input[type="checkbox"]:checked {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.modal-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.section-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.section-header h4 {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
+}
+
+.role-section {
+  background: #fff;
+  border-radius: 4px;
+}
+
+.current-roles-section {
+  padding: 0.5rem;
+}
+
+.assign-role-section {
+  padding: 0.5rem;
+}
+
+.section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.section-title span:last-child {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.role-section {
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.current-roles-section {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.assign-role-section {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.btn-cancel {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.875rem;
+  border-radius: 4px;
+}
+
+.btn-cancel:hover {
+  background: #f3f4f6;
+}
+
+.btn-assign {
+  padding: 0.5rem 1rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-assign:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-assign:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 95vw;
+  padding: 1.5rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.header-icon {
+  font-size: 1.2rem;
+}
+
+.section-header h3 {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0;
+  color: #333;
+}
+
+.current-roles-container {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.75rem;
+  min-height: 40px;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  padding: 0.25rem 0.5rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  gap: 0.25rem;
+}
+
+.role-dot {
+  color: #3b82f6;
+  font-size: 0.75rem;
+}
+
+.remove-role {
+  border: none;
+  background: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.remove-role:hover {
+  color: #ef4444;
+}
+
+.divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 1.5rem 0;
+}
+
+.search-container {
+  margin-bottom: 1rem;
+}
+
+.search-box {
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #f9fafb;
+}
+
+.roles-list {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.role-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.75rem;
+  gap: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.role-item:last-child {
+  border-bottom: none;
+}
+
+.role-checkbox {
+  padding-top: 0.25rem;
+}
+
+.role-info {
+  flex: 1;
+}
+
+.role-name {
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.role-permissions {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.cancel-btn {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+.assign-btn {
+  padding: 0.5rem 1rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.assign-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.assign-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-icon {
+  font-size: 1.2rem;
+}
+
+.header-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+}
+
+/* Stats Card Styles */
+.stats-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.stat-number {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.stats-group {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.stats-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.stats-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
+}
+
+.stats-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stats-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.stats-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+
+</style>
+
+<!-- Thêm style global -->
+<style>
+.p-toast {
+  z-index: 1100 !important;
+}
+
+.p-toast-message {
+  margin: 0 1rem !important;
+}
+
+.p-toast-message-content {
+  border-radius: 8px !important;
+  padding: 1rem 1.5rem !important;
+}
+
+.p-toast-message-text {
+  margin: 0 0 0 1rem !important;
+}
+
+.p-toast-message-icon {
+  font-size: 1.5rem !important;
+}
+
+.p-toast-top-right {
+  top: 20px !important;
+  right: 20px !important;
+}
+</style>
+
+<!-- Thêm style global cho toast và modal -->
+<style>
+/* Đảm bảo toast luôn hiển thị trên cùng */
+:global(.p-toast) {
+  position: fixed !important;
+  z-index: 2147483647 !important; /* Max z-index to be above any overlay */
+}
+
+:global(.p-toast-message) {
+  background: white !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  margin: 0 1rem 1rem !important;
+  pointer-events: auto !important;
+}
+
+:global(.p-toast-top-right) {
+  top: 1.5rem !important;
+  right: 1.5rem !important;
+  pointer-events: none !important; /* Cho phép click xuyên qua vùng trống */
+}
+
+/* Style cho modal */
+.delete-dialog-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Style cho các modal khác */
+.new-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9000 !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.new-modal-content {
+  position: relative !important;
+  z-index: 9001 !important;
+  background: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
 }
 </style>

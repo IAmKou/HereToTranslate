@@ -206,7 +206,7 @@ async function handleSubmit() {
 
     // Show error message to user
     const errorMessage = error.response?.data?.message || 'Failed to update request'
-    alert(errorMessage) // Temporary alert, should use toast
+    toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 5000 })
   } finally {
     loading.value = false
   }

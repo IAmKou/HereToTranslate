@@ -9,6 +9,7 @@ import Button from 'primevue/button';
 import { FilterMatchMode } from 'primevue/api';
 import Menu from 'primevue/menu';
 import axiosInstance from '../api';
+import { useProjectPermission } from '../composables/useProjectPermission';
 
 interface ProjectFile {
   id: string | number;
@@ -29,6 +30,9 @@ const props = defineProps<{
   downloadFile: (file: ProjectFile) => void;
   isImage?: (fileName: string) => boolean;
   isPDF?: (fileName: string) => boolean;
+  project?: any;
+  members?: any[];
+  currentUser?: any;
 }>();
 
 const toast = useToast();
@@ -357,6 +361,17 @@ defineExpose({
   confirmDelete,
   deletingFile
 });
+
+const { hasPermission, isProjectOwner } = useProjectPermission(
+  computed(() => props.project || {}),
+  computed(() => props.members || []),
+  computed(() => props.currentUser || null)
+);
+const canAttachFiles = computed(() => hasPermission('AttachFiles'));
+
+watch([canAttachFiles, isProjectOwner], () => {
+  console.log('canAttachFiles:', canAttachFiles.value, 'isProjectOwner:', isProjectOwner.value, 'members:', props.members, 'project:', props.project);
+});
 </script>
 <template>
   <div class="project-section files-section">
@@ -368,7 +383,11 @@ defineExpose({
         <InputText v-model="searchValue" placeholder="Search files by name..." class="search-input custom-search-input" />
       </div>
       <div class="toolbar-right">
-        <Button label="Add File" icon="pi pi-upload" class="p-button-success p-button-lg add-file-btn" @click="triggerUpload" :disabled="uploading || !props.branchId" />
+        <Button label="Add File" icon="pi pi-upload" class="p-button-success p-button-lg add-file-btn"
+                @click="canAttachFiles && triggerUpload()"
+                :disabled="uploading || !props.branchId || !canAttachFiles"
+                :title="!canAttachFiles ? 'You do not have permission to add files (requires AttachFiles permission)' : ''"
+        />
         <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" />
       </div>
     </div>
@@ -392,18 +411,30 @@ defineExpose({
           <Button icon="pi pi-ellipsis-v" class="p-button-rounded p-button-text p-button-sm" @click="toggleDropdown(file.id || file.fileId)" :ref="setEllipsisBtnRef(file.id || file.fileId)" />
           <transition name="fade">
             <div v-if="dropdownOpenId === (file.id || file.fileId)" class="custom-dropdown-menu" :ref="setDropdownMenuRef(file.id || file.fileId)">
-              <div class="dropdown-item" @click="handleAction('download', file.id || file.fileId)" title="Download file">
+              <button class="dropdown-item"
+                      @click="canAttachFiles && handleAction('download', file.id || file.fileId)"
+                      :disabled="!canAttachFiles"
+                      :title="!canAttachFiles ? 'You do not have permission to download files (requires AttachFiles permission)' : ''"
+              >
                 <i class="pi pi-download"></i>
                 <span>Download</span>
-              </div>
-              <div class="dropdown-item" @click="handleAction('rename', file.id || file.fileId)" title="Rename file">
+              </button>
+              <button class="dropdown-item"
+                      @click="canAttachFiles && handleAction('rename', file.id || file.fileId)"
+                      :disabled="!canAttachFiles"
+                      :title="!canAttachFiles ? 'You do not have permission to rename files (requires AttachFiles permission)' : ''"
+              >
                 <i class="pi pi-pencil"></i>
                 <span>Rename</span>
-              </div>
-              <div class="dropdown-item delete" @click="handleAction('delete', file.id || file.fileId)" title="Delete file">
+              </button>
+              <button class="dropdown-item delete"
+                      @click="canAttachFiles && handleAction('delete', file.id || file.fileId)"
+                      :disabled="!canAttachFiles"
+                      :title="!canAttachFiles ? 'You do not have permission to delete files (requires AttachFiles permission)' : ''"
+              >
                 <i class="pi pi-trash"></i>
                 <span>Delete</span>
-              </div>
+              </button>
             </div>
           </transition>
         </td>
@@ -836,6 +867,13 @@ defineExpose({
 }
 .dropdown-item.delete span {
   color: #ef4444;
+}
+.dropdown-item[disabled], .dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  background: #f3f4f6 !important;
+  color: #a0aec0 !important;
 }
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.18s, transform 0.18s;

@@ -674,7 +674,7 @@ async function handleCreateRole() {
     showToast('Role created successfully!');
     setTimeout(() => emitClose(), 1200);
   } catch (err: any) {
-    alert('Failed to create role: ' + err.message);
+    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message || err.message, life: 5000 });
   } finally {
     creatingOrUpdatingRole.value = false;
   }

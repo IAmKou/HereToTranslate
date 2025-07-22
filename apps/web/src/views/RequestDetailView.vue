@@ -1,1527 +1,2550 @@
-/* eslint-disable */
 <template>
-  <div class="request-detail-wrapper">
-    <Toast position="top-right" />
+  <div class="project-detail-page">
+    <!-- Navbar -->
     <Navbar />
-    <div class="main-content">
+
+    <div class="main-container">
+      <!-- Sidebar -->
       <Sidebar />
-      <div class="content">
+
+      <!-- Main Content -->
+      <div class="content-wrapper" @click="closeDropdowns">
         <!-- Page Header -->
         <div class="page-header">
-          <div class="page-title">
-            <h1>Request Details Information</h1>
+          <div class="page-header-content">
+            <div class="page-title-section">
+              <h1 class="page-title">
+                <span class="page-icon">📋</span>
+                Project Details
+              </h1>
+              <p class="page-subtitle">
+                View and manage project information, members, and settings
+              </p>
+            </div>
+            <div class="page-actions">
+              <router-link to="/projects" class="btn btn-outline btn-back">
+                <span class="icon">←</span>
+                Back to Projects
+              </router-link>
+            </div>
           </div>
         </div>
 
-        <div class="request-detail-grid">
-          <!-- LEFT COLUMN -->
-          <div class="left-column">
-            <!-- Request Overview Card -->
-            <div class="info-card info-card-hover">
-              <div class="info-card-title">
-                <i class="pi pi-info-circle"></i>
-                Request Overview
-              </div>
-              <div class="overview-grid">
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-tag"></i>
-                    Title
-                  </span>
-                  <span class="overview-value">{{
-                      request?.title || 'N/A'
-                    }}</span>
+        <div class="project-detail-view">
+          <!-- Loading State -->
+          <div v-if="loading" class="loading-container">
+            <div class="loading-content">
+              <div class="loading-spinner"></div>
+              <h3>Loading Project</h3>
+              <p>Please wait while we fetch the project details...</p>
+            </div>
+          </div>
+
+          <!-- Error State -->
+          <div v-else-if="error" class="error-container">
+            <div class="error-content">
+              <div class="error-icon">⚠️</div>
+              <h3>Oops! Something went wrong</h3>
+              <p>{{ error }}</p>
+              <button @click="loadProject" class="btn btn-primary btn-retry">
+                <span class="icon">🔄</span>
+                Try Again
+              </button>
+            </div>
+          </div>
+
+          <!-- Project Content -->
+          <div v-else-if="project" class="project-content">
+            <!-- Enhanced Project Header -->
+            <div class="project-header glassy-header">
+              <div class="project-header-left">
+                <div class="creator-avatar">
+                  <template v-if="project.createdBy.avatarUrl">
+                    <img
+                      :src="project.createdBy.avatarUrl"
+                      alt="Avatar"
+                      class="avatar-img"
+                    />
+                  </template>
+                  <template v-else>
+                    <svg
+                      class="avatar-placeholder"
+                      fill="none"
+                      height="48"
+                      viewBox="0 0 48 48"
+                      width="48"
+                    >
+                      <circle
+                        cx="24"
+                        cy="24"
+                        fill="url(#avatarGradient)"
+                        r="24"
+                      />
+                      <path
+                        d="M24 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm0 3c-4.418 0-13 2.238-13 6.667V39h26v-4.333C37 30.238 28.418 28 24 28z"
+                        fill="#fff"
+                        fill-opacity=".7"
+                      />
+                    </svg>
+                    <svg width="0" height="0">
+                      <defs>
+                        <linearGradient
+                          id="avatarGradient"
+                          x1="0"
+                          x2="1"
+                          y1="0"
+                          y2="1"
+                        >
+                          <stop offset="0%" stop-color="#7f53ac" />
+                          <stop offset="100%" stop-color="#4299e1" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </template>
                 </div>
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-dollar" style="font-size: 16px">💰</i>
-                    Amount
-                  </span>
-                  <span
-                    :title="'Total amount for this request'"
-                    class="overview-value amount"
+                <div class="creator-info-block">
+                  <div class="project-title-row">
+                    <h1 class="project-title">
+                      {{ project.name }}
+                      <span
+                        v-if="project.isPrivate"
+                        class="badge badge-private-new"
+                        title="Private"
+                      >
+                        <span class="badge-icon"
+                        ><svg
+                          fill="none"
+                          height="16"
+                          viewBox="0 0 20 20"
+                          width="16"
+                        >
+                            <path
+                              d="M6 9V7a4 4 0 118 0v2"
+                              stroke="#b7791f"
+                              stroke-width="1.5"
+                            />
+                            <rect
+                              fill="#fefcbf"
+                              height="7"
+                              rx="2"
+                              stroke="#b7791f"
+                              stroke-width="1.5"
+                              width="12"
+                              x="4"
+                              y="9"
+                            />
+                            <circle
+                              cx="10"
+                              cy="13"
+                              fill="#b7791f"
+                              r="1.5"
+                            /></svg
+                        ></span>
+                        <span class="badge-text">Private</span>
+                      </span>
+                      <span
+                        v-else
+                        class="badge badge-public-new"
+                        title="Public"
+                      >
+                        <span class="badge-icon">🌍</span>
+                        <span class="badge-text">Public</span>
+                      </span>
+                    </h1>
+                  </div>
+                  <div class="project-meta-row">
+                    <div class="meta-item">
+                      <span class="meta-icon">👤</span>
+                      <span class="meta-text">
+                        {{
+                          project.createdBy.fullName ||
+                          project.createdBy.username
+                        }}
+                      </span>
+                    </div>
+                    <div class="meta-item">
+                      <span class="meta-icon">📅</span>
+                      <span class="meta-text">{{
+                          formatDate(project.createdAt)
+                        }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="project-actions actions-dropdown-wrapper">
+                <div class="actions-dropdown" v-if="!showActionsMenu">
+                  <button
+                    class="btn btn-outline icon-btn"
+                    @click="showActionsMenu = true"
                   >
-                    {{ formatAmount(request?.dealAmount) }}
-                    <span class="currency">USD</span>
-                  </span>
+                    <span class="icon">⋮</span>
+                  </button>
                 </div>
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-clock"></i>
-                    Deadline
-                  </span>
-                  <span class="overview-value deadline">
-                    <div
-                      :title="`${timeRemaining} days left (out of ${totalDays})`"
-                      class="deadline-info"
-                    >
-                      <i class="pi pi-clock"></i>
-                      {{ formatDate(request?.deadline) }}
-                      <span
-                        v-if="timeRemaining >= 0"
-                        :class="[
-                          'time-remaining',
-                          timeRemaining < 4
-                            ? 'urgent'
-                            : timeRemaining < 8
-                            ? 'warning'
-                            : 'safe',
-                        ]"
+                <div class="actions-dropdown-menu" v-if="showActionsMenu">
+                  <button class="dropdown-action" @click="goToManage">
+                    <span class="icon">⚙️</span> Manage Project
+                  </button>
+                  <button class="dropdown-action" @click="editProject">
+                    <span class="icon">✏️</span> Edit Project
+                  </button>
+                  <button
+                    class="dropdown-action danger"
+                    @click="openDeleteModal"
+                  >
+                    <span class="icon">🗑️</span> Delete Project
+                  </button>
+                  <button
+                    class="dropdown-action close"
+                    @click="showActionsMenu = false"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div class="actions-desktop" v-if="!isMobile">
+                  <router-link
+                    :to="`/projects/${project.id}/manage`"
+                    class="btn btn-primary btn-manage"
+                  >
+                    <span class="icon">⚙️</span> Manage Project
+                  </router-link>
+                  <button @click="editProject" class="btn btn-outline">
+                    <span class="icon">✏️</span> Edit Project
+                  </button>
+                  <button @click="openDeleteModal" class="btn btn-danger">
+                    <span class="icon">🗑️</span> Delete Project
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stat Cards ngay sau Header -->
+            <div class="project-stats">
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Roles & Members"
+                @click="activeTab = 'members'"
+              >
+                <div class="stat-icon stat-icon-circle">👥</div>
+                <div class="stat-number">
+                  {{ actualRoleCount }}
+                </div>
+                <div class="stat-label">Roles</div>
+              </div>
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Groups"
+                @click="activeTab = 'groups'"
+              >
+                <div class="stat-icon stat-icon-circle">👨‍👩‍👧‍👦</div>
+                <div class="stat-number">{{ project.groups?.length || 0 }}</div>
+                <div class="stat-label">Groups</div>
+              </div>
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Files"
+                @click="scrollToFiles"
+              >
+                <div class="stat-icon stat-icon-circle">📁</div>
+                <div class="stat-number">{{ projectFiles.length }}</div>
+                <div class="stat-label">Files</div>
+              </div>
+              <div
+                class="stat-card stat-card-clickable"
+                title="Branches"
+                @click="window.alert('Branch detail coming soon!')"
+              >
+                <div class="stat-icon stat-icon-circle">🌿</div>
+                <div class="stat-number">{{ branches.length }}</div>
+                <div class="stat-label">Branches</div>
+              </div>
+            </div>
+
+            <!-- Project Members + Add User lên ngay sau Stat Cards -->
+            <div class="management-sections">
+              <!-- Tabs Navigation giữ nguyên -->
+              <div class="tabs">
+                <button
+                  :class="['tab', { active: activeTab === 'description' }]"
+                  @click="activeTab = 'description'"
+                >
+                  Description
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'members' }]"
+                  @click="activeTab = 'members'"
+                >
+                  Members
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'roles' }]"
+                  @click="activeTab = 'roles'"
+                >
+                  Roles
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'groups' }]"
+                  @click="activeTab = 'groups'"
+                >
+                  Groups
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'discussions' }]"
+                  @click="activeTab = 'discussions'"
+                >
+                  Discussions
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'files' }]"
+                  @click="activeTab = 'files'"
+                >
+                  Files
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'translation' }]"
+                  @click="activeTab = 'translation'"
+                >
+                  Translations
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'commits' }]"
+                  @click="activeTab = 'commits'"
+                >
+                  Commits
+                </button>
+                <button
+                  :class="['tab', { active: activeTab === 'task' }]"
+                  @click="activeTab = 'task'"
+                >
+                  Tasks
+                </button>
+              </div>
+              <transition name="fade-tab" mode="out-in">
+
+                <ProjectMemberTab
+                  v-if="activeTab === 'members'"
+                  :project="project"
+                />
+                <ProjectRoleTab
+                  v-else-if="activeTab === 'roles'"
+                  :project="project"
+                  @update-role-count="handleRoleCountUpdate"
+                />
+                <ProjectGroupTab
+                  v-else-if="activeTab === 'groups'"
+                  :project="project"
+                />
+                <ProjectDisscusionTab
+                  v-else-if="activeTab === 'discussions'"
+                  :project-id="Number(project.id)"
+                  :project="project"
+                  :members="members"
+                  :can-create-discussion="canCreateDiscussion"
+                  :can-manage-discussions="canManageDiscussions"
+                />
+                <ProjectFileTab
+                  v-else-if="activeTab === 'files'"
+                  :project-id="project.id"
+                  :branch-id="selectedBranchId"
+                  :project-files="projectFiles"
+                  :files-loading="filesLoading"
+                  :files-error="filesError || ''"
+                  :is-image="isImage"
+                  :is-p-d-f="isPDF"
+                  :download-file="downloadFile"
+                  :load-files="loadFiles"
+                  key="files"
+                />
+                <ProjectTranslationTab
+                  v-else-if="activeTab === 'translation'"
+                  :project-id="project.id"
+                  :branch-id="selectedBranchId"
+                  key="translation"
+                />
+                <ProjectCommitTab
+                  v-else-if="activeTab === 'commits'"
+                  :project-id="project.id"
+                  :branch-id="selectedBranchId"
+                  key="commits"
+                />
+                <ProjectTaskTab
+                  v-else-if="activeTab === 'task'"
+                  :tasks="tasks"
+                  :loading="tasksLoading"
+                  :error="tasksError"
+                  :on-reload="loadTasks"
+                  custom-title="Tasks"
+                />
+
+                <!-- Tab Description giữ nguyên như cũ -->
+                <div v-else-if="activeTab === 'description'" key="description">
+                  <!-- Project Description Section -->
+                  <div class="project-section description-section">
+                    <div class="section-header">
+                      <h2 class="section-title">
+                        <span class="title-icon">📝</span>
+                        Description
+                      </h2>
+                      <button
+                        v-if="canEditDescription && !editingDescription"
+                        class="edit-desc-btn"
+                        @click="startEditDescription"
                       >
-                        ({{ timeRemaining }} days left)
-                      </span>
+                        <span class="icon">✏️</span>
+                      </button>
                     </div>
-                    <div v-if="timeRemaining >= 0" class="deadline-progress">
-                      <div class="progress-bar">
+                    <div class="description-content improved-desc-box">
+                      <template v-if="editingDescription">
+                        <textarea
+                          v-model="editedDescription"
+                          :maxlength="maxDescriptionLength"
+                          class="desc-textarea"
+                          rows="3"
+                          @input="updateCharCount"
+                        />
                         <div
-                          :style="{
-                            width: deadlineProgressPercent + '%',
-                            background: deadlineProgressColor,
-                          }"
-                          class="progress-fill"
-                        ></div>
-                      </div>
+                          :class="{ 'over-limit': descriptionOverLimit }"
+                          class="desc-char-count"
+                        >
+                          {{ descriptionCharCount }}/{{ maxDescriptionLength }}
+                          characters
+                        </div>
+                        <div class="desc-edit-actions">
+                          <button
+                            :disabled="descriptionOverLimit"
+                            class="btn btn-primary btn-sm"
+                            @click="saveDescription"
+                          >
+                            Save
+                          </button>
+                          <button
+                            class="btn btn-secondary btn-sm"
+                            @click="cancelEditDescription"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div
+                          v-if="project.description"
+                          class="description desc-plain"
+                        >
+                          <span v-html="project.description"></span>
+                          <button
+                            v-if="canEditDescription"
+                            class="edit-desc-btn"
+                            title="Edit description"
+                            @click="startEditDescription"
+                          >
+                            <span class="icon">✏️</span>
+                          </button>
+                        </div>
+                        <div v-else class="no-description">
+                          <span class="no-content-icon">📄</span>
+                          <p>No description provided for this project.</p>
+                          <button
+                            v-if="canEditDescription"
+                            class="edit-desc-btn"
+                            title="Edit description"
+                            @click="startEditDescription"
+                          >
+                            <span class="icon">✏️</span>
+                          </button>
+                        </div>
+                      </template>
                     </div>
-                  </span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-check-circle"></i>
-                    Status
-                  </span>
-                  <span class="overview-value">
-                    <span
-                      :class="statusClass(request?.status)"
-                      class="status-badge"
-                    >
-                      <i :class="getStatusIcon(request?.status)" class="pi"></i>
-                      {{ formatStatus(request?.status) }}
-                    </span>
-                  </span>
-                </div>
-                <div class="overview-row" v-if="request?.status === 'PENDING'">
-                  <span class="overview-label">
-                    <i
-                      v-tooltip.top="
-                        request?.isPublic
-                          ? 'This request is visible to everyone'
-                          : 'This request is private'
-                      "
-                      class="pi pi-eye"
-                    ></i>
-                    Visibility
-                  </span>
-                  <span class="overview-value">
-                    <span
-                      :class="request?.isPublic ? 'public' : 'private'"
-                      class="visibility-badge"
-                    >
-                      <i
-                        :class="request?.isPublic ? 'pi-globe' : 'pi-lock'"
-                        class="pi"
-                      ></i>
-                      {{ request?.isPublic ? 'Public' : 'Private' }}
-                    </span>
-                  </span>
-                </div>
-                <div class="overview-row" v-else>
-                  <span class="overview-label">
-                    <i class="pi pi-eye"></i>
-                    Visibility
-                  </span>
-                  <span class="overview-value">
-                    <span
-                      :class="request?.isPublic ? 'public' : 'private'"
-                      class="visibility-badge"
-                    >
-                      <i
-                        :class="request?.isPublic ? 'pi-globe' : 'pi-lock'"
-                        class="pi"
-                      ></i>
-                      {{ request?.isPublic ? 'Public' : 'Private' }}
-                    </span>
-                  </span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-user"></i>
-                    Requester
-                  </span>
-                  <span class="overview-value">{{
-                      request?.requester?.username || 'N/A'
-                    }}</span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-folder"></i>
-                    Category
-                  </span>
-                  <span class="overview-value">
-                    <span class="category-badge">{{
-                        request?.category?.name || 'N/A'
-                      }}</span>
-                  </span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-tags"></i>
-                    Tags
-                  </span>
-                  <span class="overview-value">
-                    <template v-if="request?.tags && request.tags.length">
-                      <span
-                        v-for="tag in request.tags"
-                        :key="tag.id"
-                        class="tag-badge"
-                      >{{ tag.name }}</span
-                      >
-                    </template>
-                    <template v-else>
-                      <span class="no-tags">
-                        <i
-                          class="pi pi-tag"
-                          style="margin-right: 4px; color: #999"
-                        ></i>
-                        No tags
-                      </span>
-                    </template>
-                  </span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">
-                    <i class="pi pi-calendar"></i>
-                    Created At
-                  </span>
-                  <span class="overview-value">{{
-                      formatDate(request?.createdAt)
-                    }}</span>
-                </div>
-              </div>
-            </div>
-            <!-- Description Card -->
-            <div class="info-card info-card-hover">
-              <div class="info-card-title">
-                <i class="pi pi-file-edit"></i>
-                Request Description
-              </div>
-              <div v-if="request?.description" class="instructions-note">
-                <div class="note-content">{{ request.description }}</div>
-              </div>
-              <div v-else class="no-description">
-                <i class="pi pi-info-circle"></i>
-                No description provided
-              </div>
-            </div>
-            <!-- Attached Files Card -->
-            <div
-              v-if="request?.files && request.files.length > 0"
-              class="info-card info-card-hover"
-            >
-              <div class="info-card-title">
-                <i class="pi pi-paperclip"></i>
-                Attached Files ({{ request.files.length }})
-              </div>
-              <div class="files-list">
-                <div
-                  v-for="file in request.files"
-                  :key="file.id"
-                  class="file-item file-item-hover"
-                >
-                  <div class="file-info">
-                    <div class="file-icon">
-                      <i class="pi pi-file"></i>
-                    </div>
-                    <div class="file-details">
-                      <span class="file-name">{{ file.fileName }}</span>
-                      <span class="file-size">{{
-                          formatFileSize(file.fileSize)
-                        }}</span>
-                    </div>
-                  </div>
-                  <Button
-                    icon="pi pi-download"
-                    label="Download"
-                    @click="downloadFile(file)"
-                    class="p-button-text download-btn"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Status History Card -->
-            <div
-              v-if="request?.statusHistory && request.statusHistory.length > 0"
-              class="info-card info-card-hover"
-            >
-              <div class="info-card-title">
-                <i class="pi pi-history"></i>
-                Status History
-              </div>
-              <div class="status-history-list">
-                <div
-                  v-for="(history, index) in request.statusHistory"
-                  :key="index"
-                  class="status-history-item"
-                >
-                  <div class="history-icon">
-                    <i class="pi" :class="getStatusIcon(history.status)"></i>
-                  </div>
-                  <div class="history-content">
-                    <div class="history-status">
-                      <span class="status-text">{{
-                          formatStatus(history.status)
-                        }}</span>
-                      <span
-                        :class="statusClass(history.status)"
-                        class="status-badge-small"
-                      >
-                        {{ formatStatus(history.status) }}
-                      </span>
-                    </div>
-                    <div class="history-details">
-                      <span v-if="history.actor" class="actor">{{
-                          history.actor
-                        }}</span>
-                      <span class="timestamp">{{
-                          formatDateTime(history.timestamp)
-                        }}</span>
-                    </div>
-                    <div v-if="history.comment" class="history-comment">
-                      {{ history.comment }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Reliability Ratings Card -->
-            <div
-              v-if="request?.requester?.rating || request?.assignee?.rating"
-              class="info-card info-card-hover"
-            >
-              <div class="info-card-title">
-                <i class="pi pi-star"></i>
-                Reliability Ratings
-              </div>
-              <div class="ratings-container">
-                <div v-if="request?.requester?.rating" class="rating-item">
-                  <div class="rating-header">
-                    <i class="pi pi-user"></i>
-                    <span class="rating-label">Requester Rating</span>
-                  </div>
-                  <div class="rating-display">
-                    <div class="stars">
-                      <i
-                        v-for="i in 5"
-                        :key="i"
-                        :class="
-                          i <= Math.floor(request.requester.rating)
-                            ? 'pi-star-fill'
-                            : i <= request.requester.rating
-                            ? 'pi-star-half'
-                            : 'pi-star'
-                        "
-                        :style="{
-                          color:
-                            i <= request.requester.rating
-                              ? '#fbbf24'
-                              : '#d1d5db',
-                        }"
-                        class="pi"
-                      >
-                      </i>
-                    </div>
-                    <span class="rating-score">{{
-                        request.requester.rating.toFixed(1)
-                      }}</span>
-                    <span class="rating-count"
-                    >({{ request.requester.reviewCount || 0 }} reviews)</span
-                    >
                   </div>
                 </div>
 
-                <div v-if="request?.assignee?.rating" class="rating-item">
-                  <div class="rating-header">
-                    <i class="pi pi-user-plus"></i>
-                    <span class="rating-label">Translator Rating</span>
-                  </div>
-                  <div class="rating-display">
-                    <div class="stars">
-                      <i
-                        v-for="i in 5"
-                        :key="i"
-                        :class="
-                          i <= Math.floor(request.assignee.rating)
-                            ? 'pi-star-fill'
-                            : i <= request.assignee.rating
-                            ? 'pi-star-half'
-                            : 'pi-star'
-                        "
-                        :style="{
-                          color:
-                            i <= request.assignee.rating
-                              ? '#fbbf24'
-                              : '#d1d5db',
-                        }"
-                        class="pi"
-                      >
-                      </i>
-                    </div>
-                    <span class="rating-score">{{
-                        request.assignee.rating.toFixed(1)
-                      }}</span>
-                    <span class="rating-count"
-                    >({{ request.assignee.reviewCount || 0 }} reviews)</span
-                    >
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Activity Timeline Card -->
-            <div class="info-card info-card-hover">
-              <div class="info-card-title">
-                <i class="pi pi-calendar"></i>
-                Activity Timeline
-              </div>
-              <div class="activity-timeline">
-                <div class="timeline-step">
-                  <div class="timeline-icon created">
-                    <i class="pi pi-plus-circle"></i>
-                  </div>
-                  <div class="timeline-content">
-                    <div class="timeline-title">Created</div>
-                    <div class="timeline-date">
-                      {{ formatDateTime(request?.createdAt) }}
-                    </div>
-                  </div>
-                </div>
-                <div v-if="isApprovedOrAssigned" class="timeline-step">
-                  <div class="timeline-icon approved">
-                    <i class="pi pi-check-circle"></i>
-                  </div>
-                  <div class="timeline-content">
-                    <div class="timeline-title">Approved</div>
-                    <div class="timeline-date">
-                      {{
-                        request?.approvedAt
-                          ? formatDateTime(request.approvedAt)
-                          : '-'
-                      }}
-                    </div>
-                    <div v-if="request?.assignee" class="timeline-user">
-                      To:
-                      {{
-                        request.assignee.fullName || request.assignee.username
-                      }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- RIGHT COLUMN -->
-          <div class="right-column">
-            <!-- Requester Information Card -->
-            <div class="info-card info-card-hover">
-              <div class="info-card-title">
-                <i class="pi pi-user"></i>
-                Requester Information
-              </div>
-              <div class="requester-block">
-                <div
-                  class="avatar-container"
-                  title="View Profile"
-                  @click="viewProfile(request?.requester?.id)"
-                >
-                  <Avatar
-                    :image="request?.requester?.avatar"
-                    :label="
-                      getInitial(
-                        request?.requester?.fullName ||
-                          request?.requester?.username
-                      )
-                    "
-                    shape="circle"
-                    size="large"
-                    class="avatar-bordered"
-                  />
-                  <div class="avatar-overlay">
-                    <i class="pi pi-external-link"></i>
-                  </div>
-                </div>
-                <div class="requester-details">
-                  <span class="username">
-                    <i class="pi pi-user"></i>
-                    {{
-                      request?.requester?.fullName ||
-                      request?.requester?.username ||
-                      'N/A'
-                    }}
-                  </span>
-                  <span class="user-email">
-                    <i class="pi pi-envelope"></i>
-                    <a
-                      v-if="request?.requester?.email"
-                      :href="`mailto:${request.requester.email}`"
-                      class="email-link"
-                    >{{ request.requester.email }}</a
-                    >
-                    <span v-else>N/A</span>
-                  </span>
-                  <span class="user-phone">
-                    <i class="pi pi-phone"></i>
-                    <a
-                      v-if="request?.requester?.phone"
-                      :href="`tel:${request.requester.phone}`"
-                      class="phone-link"
-                    >{{ request.requester.phone }}</a
-                    >
-                    <span v-else>N/A</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <!-- Assigned Translator Card (only if exists) -->
-            <div
-              v-if="request && request.assignee"
-              class="info-card info-card-hover"
-            >
-              <div class="info-card-title">
-                <i class="pi pi-user-plus"></i>
-                Assigned Translator
-              </div>
-              <div class="requester-block">
-                <div
-                  class="avatar-container"
-                  title="View Profile"
-                  @click="viewProfile(request?.assignee?.id)"
-                >
-                  <Avatar
-                    :image="request.assignee?.avatar"
-                    :label="getInitial(request.assignee?.username)"
-                    shape="circle"
-                    size="large"
-                    class="avatar-bordered translator-avatar"
-                  />
-                  <div class="avatar-overlay">
-                    <i class="pi pi-external-link"></i>
-                  </div>
-                </div>
-                <div class="requester-details">
-                  <span class="username">
-                    <i class="pi pi-user-plus"></i>
-                    {{ request.assignee?.fullName || 'N/A' }}
-                  </span>
-                  <span class="user-email">
-                    <i class="pi pi-envelope"></i>
-                    <a
-                      v-if="request.assignee?.email"
-                      :href="`mailto:${request.assignee.email}`"
-                      class="email-link"
-                    >{{ request.assignee.email }}</a
-                    >
-                    <span v-else>N/A</span>
-                  </span>
-                  <span class="user-phone">
-                    <i class="pi pi-phone"></i>
-                    <a
-                      v-if="request.assignee?.phone"
-                      :href="`tel:${request.assignee.phone}`"
-                      class="phone-link"
-                    >{{ request.assignee.phone }}</a
-                    >
-                    <span v-else>N/A</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <!-- Actions Card -->
-            <div class="info-card info-card-hover">
-              <div class="info-card-title">
-                <i class="pi pi-cog"></i>
-                Actions
-              </div>
-              <div class="actions">
-                <button
-                  v-if="
-                    request &&
-                    request.assignee &&
-                    request.requester &&
-                    userId !== null &&
-                    request.requester.id === userId
-                  "
-                  class="action-btn primary"
-                  @click="contactTranslator"
-                >
-                  <i class="pi pi-comments"></i> Contact Translator
-                </button>
-                <button
-                  v-if="
-                    request &&
-                    request.requester &&
-                    userId !== null &&
-                    request.requester.id !== userId
-                  "
-                  class="action-btn info"
-                  @click="contactRequester"
-                >
-                  <i class="pi pi-envelope"></i> Contact Requester
-                </button>
-                <button
-                  v-if="
-                    request &&
-                    request.requester &&
-                    userId !== null &&
-                    request.requester.id === userId &&
-                    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(
-                      request.status
-                    )
-                  "
-                  class="action-btn edit"
-                  @click="showEdit = true"
-                >
-                  <i class="pi pi-pencil"></i> Edit Request
-                </button>
-                <button
-                  v-if="
-                    request &&
-                    request.requester &&
-                    userId !== null &&
-                    request.requester.id === userId &&
-                    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(
-                      request.status
-                    )
-                  "
-                  class="action-btn danger"
-                  @click="confirmCancelVisible = true"
-                >
-                  <i class="pi pi-times"></i> Cancel Request
-                </button>
-                <button
-                  v-if="
-                    request &&
-                    request.isPublic === false &&
-                    request.requester &&
-                    userId !== null &&
-                    request.requester.id !== userId
-                  "
-                  class="action-btn approve"
-                  @click="approveRequest"
-                >
-                  <i class="pi pi-check"></i> Approve
-                </button>
-                <button
-                  v-if="
-                    request &&
-                    request.isPublic === false &&
-                    request.requester &&
-                    userId !== null &&
-                    request.requester.id !== userId
-                  "
-                  class="action-btn reject"
-                  @click="rejectRequest"
-                >
-                  <i class="pi pi-times"></i> Reject
-                </button>
-                <button
-                  v-if="
-                    request &&
-                    request.isPublic &&
-                    !request.assignee &&
-                    userId !== null &&
-                    request.requester &&
-                    request.requester.id !== userId &&
-                    request.status === 'PENDING'
-                  "
-                  class="action-btn primary"
-                  @click="registerForRequest"
-                  :disabled="request?.isRegistered"
-                >
-                  <i class="pi pi-user-plus"></i>
-                  <span v-if="request?.isRegistered">Registered</span>
-                  <span v-else>Register for this request</span>
-                </button>
-
-              </div>
+              </transition>
             </div>
           </div>
         </div>
+        <!-- Footer -->
+        <AppFooter />
+
+        <!-- Enhanced Create Group Modal -->
+        <div
+          v-if="showCreateGroupModal"
+          class="modal-overlay"
+          @click.self="showCreateGroupModal = false"
+        >
+          <div class="modal-content group-modal">
+            <div class="modal-header">
+              <div class="modal-title">
+                <div class="title-icon">👨‍👩‍👧‍👦</div>
+                <h3>Create New Group</h3>
+              </div>
+              <button
+                class="close-button"
+                @click="showCreateGroupModal = false"
+              >
+                &times;
+              </button>
+            </div>
+            <div class="modal-body">
+              <form @submit.prevent="createGroup" class="group-form">
+                <div class="form-group">
+                  <label for="groupName" class="form-label">
+                    <span class="label-text">Group Name</span>
+                    <span class="required">*</span>
+                  </label>
+                  <input
+                    id="groupName"
+                    v-model="newGroup.name"
+                    type="text"
+                    required
+                    class="form-control"
+                    placeholder="Enter group name"
+                  />
+                  <div class="form-hint">
+                    Choose a descriptive name for this group
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                @click="showCreateGroupModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                @click="createGroup"
+                :disabled="isCreatingGroup"
+              >
+                <span
+                  v-if="isCreatingGroup"
+                  class="loading-spinner-small"
+                ></span>
+                {{ isCreatingGroup ? 'Creating...' : 'Create Group' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delete Project Modal -->
+        <div
+          v-if="showDeleteModal"
+          class="modal-overlay"
+          @click.self="showDeleteModal = false"
+        >
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Delete Project</h3>
+            </div>
+            <div class="modal-body">
+              <p>
+                Are you sure you want to delete this project? This action cannot
+                be undone.
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button
+                class="btn btn-secondary"
+                @click="showDeleteModal = false"
+              >
+                Cancel
+              </button>
+              <button class="btn btn-danger" @click="confirmDeleteProject">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div v-if="showSuccessModal" class="modal-overlay">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Project Deleted</h3>
+            </div>
+            <div class="modal-body">
+              <p>Project deleted successfully!</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-primary" @click="handleSuccessModalOk">
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add User Success Modal -->
+        <div v-if="showAddUserSuccessModal" class="modal-overlay">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>User Added</h3>
+            </div>
+            <div class="modal-body">
+              <p>User added to project!</p>
+            </div>
+            <div class="modal-footer">
+              <button
+                class="btn btn-primary"
+                @click="showAddUserSuccessModal = false"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toast Success -->
+        <div v-if="showSavedSnackbar" class="toast-success">
+          <span class="toast-icon">✅</span>
+          <span>Saved successfully!</span>
+        </div>
+
+        <ProjectRoleManagementView
+          v-if="showRoleModal"
+          :project-id="project?.id"
+          @close="showRoleModal = false"
+          @roles-updated="handleRolesUpdated"
+        />
+
+        <div v-if="showEditUserRoleModal" class="modal-overlay" @click.self="showEditUserRoleModal = false">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Edit Roles for {{ memberToEdit?.fullName || memberToEdit?.username }}</h3>
+            </div>
+            <div class="modal-body">
+              <div v-if="project && project.projectRoles">
+                <input v-model="roleSearch" placeholder="Search roles..." class="role-search-box" />
+                <div class="role-grid">
+                  <label v-for="role in filteredRoles" :key="role.id" class="role-card" :class="{ selected: selectedRoles.includes(role.id) }">
+                    <input type="checkbox" :value="role.id" v-model="selectedRoles" />
+                    <span class="role-name">{{ role.name }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="showEditUserRoleModal = false">Cancel</button>
+              <button class="btn btn-primary" @click="saveUserRoles" :disabled="!memberToEdit">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <ProjectRoleManagementView
+          v-if="showAddRoleModal"
+          :project-id="project?.id"
+          :show-create-role-modal="true"
+          @close="showAddRoleModal = false"
+          @roles-updated="handleRolesUpdated"
+        />
       </div>
     </div>
-    <Footer />
-    <Dialog
-      v-model:visible="confirmCancelVisible"
-      :closable="true"
-      :style="{ width: '700px', maxWidth: '100vw' }"
-      class="custom-confirm-dialog"
-      header="⚠️ Confirm Cancellation"
-      modal
-    >
-      <div class="confirm-content">
-        <p class="confirm-message">
-          Are you sure you want to cancel this request?<br />
-          <strong>This action cannot be undone.</strong>
-        </p>
-      </div>
-
-      <template #footer>
-        <Button
-          class="p-button-outlined p-button-secondary cancel-btn"
-          icon="pi pi-times"
-          label="No"
-          @click="confirmCancelVisible = false"
-        />
-        <Button
-          class="p-button-danger confirm-btn"
-          icon="pi pi-check"
-          label="Yes, Cancel"
-          @click="handleConfirmedCancel"
-        />
-      </template>
-    </Dialog>
-    <!-- Edit Request Modal -->
-    <RequestEditView
-      v-if="showEdit"
-      :request="request"
-      @close="showEdit = false"
-      @updated="onRequestUpdated"
-    />
   </div>
 </template>
 
-<script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+<script lang="ts" setup>
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import axiosInstance from '../api';
+import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
-import Footer from '../components/AppFooter.vue';
-import Button from 'primevue/button';
-import Avatar from 'primevue/avatar';
-import 'primeicons/primeicons.css';
-import axiosInstance from '../api';
-import { authService } from '../services/auth.service';
-import RequestEditView from './RequestEditView.vue';
-import Toast from 'primevue/toast';
-import { useToast } from 'primevue/usetoast';
-import Dialog from 'primevue/dialog';
-
-// import { useUserStore } from '../store/user'; // Nếu có store user
-
-interface UserInfo {
-  id: number;
-  username: string;
-  fullName?: string;
-  email: string;
-  phone?: string;
-  avatar?: string;
-  createdAt?: string;
-  role?: string;
-  company?: string;
-}
-interface CategoryInfo {
-  id: number;
-  name: string;
-}
-interface AttachmentInfo {
-  name: string;
-  url: string;
-}
-
-interface FileInfo {
-  id: number;
-  fileName: string;
-  fileSize: number;
-  fileType: string;
-  url?: string;
-}
-interface StatusHistory {
-  status: string;
-  timestamp: string;
-  actor?: string;
-  comment?: string;
-}
-
-interface UserInfo {
-  id: number;
-  username: string;
-  fullName?: string;
-  email: string;
-  phone?: string;
-  avatar?: string;
-  createdAt?: string;
-  role?: string;
-  company?: string;
-  rating?: number;
-  reviewCount?: number;
-}
-
-interface RequestDetail {
-  id: number;
-  title: string;
-  description: string;
-  dealAmount: number;
-  deadline: string;
-  createdAt: string;
-  status: string;
-  isPublic: boolean;
-  requester?: UserInfo;
-  assignee?: UserInfo;
-  category?: CategoryInfo;
-  previewText?: string;
-  attachment?: AttachmentInfo;
-  files?: FileInfo[];
-  project?: any;
-  statusHistory?: StatusHistory[];
-  approvedAt?: string;
-}
+import AppFooter from '../components/AppFooter.vue';
+import ProjectDisscusionTab from '../components/ProjectDisscusionTab.vue';
+import ProjectRoleManagementView from './ProjectRoleManagementView.vue';
+import ProjectMemberTab from '../components/ProjectMemberTab.vue';
+import ProjectGroupTab from '../components/ProjectGroupTab.vue';
+import ProjectTranslationTab from '../components/ProjectTranslationTab.vue';
+import ProjectCommitTab from '../components/ProjectCommitTab.vue';
+import ProjectTaskTab from '../components/ProjectTaskTab.vue';
+import ProjectFileTab from '../components/ProjectFileTab.vue';
+import ProjectRoleTab from '../components/ProjectRoleTab.vue';
+import type { Ref } from 'vue';
 
 const route = useRoute();
 const router = useRouter();
-const request = ref<RequestDetail | null>(null);
-const loading = ref<boolean>(true);
-const userId = ref<number | null>(null);
-const showEdit = ref(false);
-const toast = useToast();
-const confirmCancelVisible = ref(false);
-const handleConfirmedCancel = async () => {
-  confirmCancelVisible.value = false;
-  await cancelRequest(); // existing function
+
+
+// Interfaces
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  isPrivate: boolean;
+  createdAt: string;
+  createdBy: {
+    id: string;
+    username: string;
+    fullName?: string;
+    avatarUrl?: string;
+  };
+  tags?: Array<{ id: string; name: string }>;
+  projectRoles?: ProjectRole[];
+  groups?: ProjectGroup[];
+}
+
+interface ProjectRole {
+  id: string;
+  name: string;
+  permissionFlags: string;
+}
+
+interface ProjectGroup {
+  id: string;
+  name: string;
+  permissionFlags: string;
+  members?: Array<{ id: string; username: string; fullName?: string }>;
+}
+
+interface ProjectFile {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: string;
+  uploader: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+}
+
+interface CreateGroupData {
+  name: string;
+}
+
+const project = ref<Project | null>(null);
+const loading = ref(true);
+const error = ref<string | null>(null);
+const selectedPermissions = ref<PermissionStrings[]>([]);
+const availablePermissions = Object.keys(PermissionFlags).filter(
+  (key) =>
+    typeof PermissionFlags[key as PermissionStrings] === 'bigint' &&
+    key !== 'None'
+) as PermissionStrings[];
+
+// Modal states
+const showCreateGroupModal = ref(false);
+const isCreatingGroup = ref(false);
+const showDeleteModal = ref(false);
+const showSuccessModal = ref(false);
+const showAddUserSuccessModal = ref(false);
+const showRoleModal = ref(false);
+const showEditUserRoleModal = ref(false);
+const memberToEdit = ref<any>(null);
+const selectedRoles = ref<string[]>([]);
+const showAddRoleModal = ref(false);
+
+// Form data
+const newGroup = ref<CreateGroupData>({
+  name: '',
+});
+
+// User search/add state
+const userSearch = ref({
+  identifier: '',
+  loading: false,
+  error: '',
+  result: null as null | {
+    id: string;
+    username: string;
+    fullName?: string;
+    email: string;
+  },
+  adding: false,
+});
+
+// Members tab state
+const members = ref<
+  Array<{
+    id: string;
+    username: string;
+    fullName?: string;
+    email: string;
+    roles: Array<{ id: string; name: string }>;
+    selectedRole: string;
+  }>
+>([]);
+const membersLoading = ref(false);
+const membersError = ref('');
+
+type TabType = 'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'commits' | 'task' | 'roles';
+const activeTab = ref<TabType>('description');
+
+const isAllSelected = ref(false);
+
+// File-related variables
+const projectFiles = ref<ProjectFile[]>([]);
+const filesLoading = ref(false);
+const filesError = ref<string | null>(null);
+
+// Dropdown states
+const activeRoleDropdown = ref<string | null>(null);
+const activeGroupDropdown = ref<string | null>(null);
+
+// Watch for changes in selected permissions to update select all state
+watch(
+  selectedPermissions,
+  (newSelection: PermissionStrings[]) => {
+    isAllSelected.value = newSelection.length === availablePermissions.length;
+  },
+  { deep: true }
+);
+
+watch(
+  () => activeTab.value,
+  (newTab) => {
+    if (newTab === 'groups') {
+      loadGroups();
+    }
+  },
+  { immediate: true }
+);
+
+// Watch for changes in available permissions to update select all state
+watch(availablePermissions, () => {
+  isAllSelected.value =
+    selectedPermissions.value.length === availablePermissions.length;
+});
+
+// Watch project, tự động gọi loadFiles khi project có dữ liệu
+watch(project, (newProject) => {
+  if (newProject && newProject.id) {
+    console.log('project.value changed, calling loadFiles & loadBranches');
+    loadFiles();
+    loadBranches();
+  }
+});
+
+const loadProject = async () => {
+  try {
+    loading.value = true;
+    error.value = null;
+    const projectId = route.params.projectId as string;
+    const { data } = await axiosInstance.get(`/projects/${projectId}`);
+    project.value = data;
+  } catch (err: any) {
+    error.value = err.message || 'Failed to load project';
+    console.error('Error loading project:', err);
+  } finally {
+    loading.value = false;
+  }
 };
 
-const timeRemaining = computed(() => {
-  if (!request.value?.deadline) return null;
-  const now = new Date();
-  const deadline = new Date(request.value.deadline);
-  const diff = Math.ceil(
-    (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  return diff;
-});
-
-const deadlineProgressPercent = computed(() => {
-  if (!request.value?.deadline || !request.value?.createdAt) return 0;
-  const now = new Date();
-  const created = new Date(request.value.createdAt);
-  const deadline = new Date(request.value.deadline);
-  const total = deadline.getTime() - created.getTime();
-  const elapsed = now.getTime() - created.getTime();
-  const percent = Math.min(Math.max((elapsed / total) * 100, 0), 100);
-  return Math.round(percent);
-});
-
-const totalDays = computed(() => {
-  if (!request.value?.deadline || !request.value?.createdAt) return 0;
-  const created = new Date(request.value.createdAt);
-  const deadline = new Date(request.value.deadline);
-  return Math.ceil(
-    (deadline.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
-  );
-});
-
-const deadlineProgressColor = computed(() => {
-  if (timeRemaining.value == null) return '#3b82f6';
-  if (timeRemaining.value > 7)
-    return 'linear-gradient(90deg, #22d3ee 0%, #3b82f6 100%)'; // xanh
-  if (timeRemaining.value > 3)
-    return 'linear-gradient(90deg, #fde68a 0%, #f59e42 100%)'; // vàng
-  return 'linear-gradient(90deg, #fecaca 0%, #ef4444 100%)'; // đỏ
-});
-
-function formatDate(date: string | Date) {
-  if (!date) return '-';
+const formatDate = (date: string) => {
   return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
+};
+
+const formatPermissions = (permissions: string) => {
+  // This is a simplified version - you might want to decode the permission flags
+  return permissions;
+};
+
+const editProject = () => {
+  router.push(`/projects/${project.value?.id}/edit`);
+};
+
+const openDeleteModal = () => {
+  showDeleteModal.value = true;
+};
+
+const confirmDeleteProject = async () => {
+  if (!project.value) return;
+  try {
+    await axiosInstance.delete(`/projects/${project.value.id}`);
+    showDeleteModal.value = false;
+    showSuccessModal.value = true;
+  } catch (err: any) {
+    alert('Failed to delete project: ' + err.message);
+    showDeleteModal.value = false;
+  }
+};
+
+const handleSuccessModalOk = () => {
+  showSuccessModal.value = false;
+  router.push('/projects');
+};
+const groups = ref<ProjectGroup[]>([]);
+const groupsLoading = ref(false);
+const groupsError = ref<string | null>(null);
+const createGroup = async () => {
+  if (!project.value) return;
+
+  isCreatingGroup.value = true;
+  try {
+    await axiosInstance.post(`/projects/${project.value.id}/groups/create`, newGroup.value);
+    await loadProject(); // Reload project to get updated groups
+    showCreateGroupModal.value = false;
+    newGroup.value = { name: '' };
+  } catch (err: any) {
+    alert('Failed to create group: ' + err.message);
+  } finally {
+    isCreatingGroup.value = false;
+  }
+};
+
+const loadGroups = async () => {
+  groupsLoading.value = true;
+  groupsError.value = null;
+  try {
+    const res = await axios.get(`/api/projects/${projectId}/groups`);
+    groups.value = res.data;
+  } catch (error: any) {
+    groupsError.value = error?.response?.data?.message || 'Failed to load groups.';
+  } finally {
+    groupsLoading.value = false;
+  }
+};
+
+const editGroup = (group: any) => {
+  // Navigate to group edit page or open edit modal
+  console.log('Edit group:', group);
+};
+
+const deleteGroup = async (groupId: string) => {
+  if (
+    !project.value ||
+    !confirm('Are you sure you want to delete this group?')
+  ) {
+    return;
+  }
+
+  try {
+    await axiosInstance.delete(
+      `/projects/${project.value.id}/groups/${groupId}`
+    );
+    await loadProject(); // Reload project to get updated groups
+  } catch (err: any) {
+    alert('Failed to delete group: ' + err.message);
+  }
+};
+
+const searchUser = async () => {
+  if (!project.value) return;
+  userSearch.value.loading = true;
+  userSearch.value.error = '';
+  userSearch.value.result = null;
+  try {
+    const { data } = await axiosInstance.post(
+      `/projects/${project.value.id}/search-user`,
+      { identifier: userSearch.value.identifier }
+    );
+    if (data.user) {
+      userSearch.value.result = data.user;
+    } else {
+      userSearch.value.error = 'No user found.';
+    }
+  } catch (err: any) {
+    userSearch.value.error = err.message || 'Failed to search user.';
+  } finally {
+    userSearch.value.loading = false;
+  }
+};
+const addUserToProject = async () => {
+  if (!project.value || !userSearch.value.result) return;
+  userSearch.value.adding = true;
+  try {
+    await axiosInstance.post(`/projects/${project.value.id}/add-user`, {
+      identifier: userSearch.value.result.email,
+    });
+    // Sau khi thêm user, gán role Everyone nếu có
+    const everyoneRole = project.value.projectRoles?.find((r: any) => r.name === 'Everyone');
+    if (everyoneRole) {
+      // Gọi API gán role cho user mới
+      await axiosInstance.post(`/projects/${project.value.id}/members/${userSearch.value.result.id}/update-roles`, {
+        roleIds: [everyoneRole.id]
+      });
+    }
+    await loadProject();
+    showAddUserSuccessModal.value = true;
+    userSearch.value.result = null;
+    userSearch.value.identifier = '';
+  } catch (err: any) {
+    alert('Failed to add user: ' + err.message);
+  } finally {
+    userSearch.value.adding = false;
+  }
+};
+
+const toggleGroupDropdown = (groupId: string) => {
+  if (activeGroupDropdown.value === groupId) {
+    activeGroupDropdown.value = null;
+  } else {
+    activeGroupDropdown.value = groupId;
+    activeRoleDropdown.value = null; // Close other dropdowns
+  }
+};
+
+function closeDropdowns() {
+  activeRoleDropdown.value = null;
+  activeGroupDropdown.value = null;
 }
 
-function formatDateTime(date: string | Date) {
-  if (!date) return '-';
-  return new Date(date).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
+const loadMembers = async () => {
+  if (!project.value) return;
+  membersLoading.value = true;
+  membersError.value = '';
+  try {
+    const projectId = route.params.projectId as string;
+    const { data } = await axiosInstance.get(`/projects/${projectId}/members`);
+    // Map lại member.roles đúng chuẩn
+    const memberMap: Record<string, any> = {};
+    if (data.members) {
+      for (const m of data.members) {
+        // Nếu API trả về roles lồng trong user
+        let roles = Array.isArray(m.roles) ? m.roles.filter((r: any) => r && r.id && r.name) : [];
+        memberMap[m.id] = { ...m, roles, selectedRole: '' };
+      }
+    }
+    // Nếu API trả về projectRoles có users, map lại roles cho từng user
+    if (data.projectRoles) {
+      for (const role of data.projectRoles) {
+        if (role.users) {
+          for (const user of role.users) {
+            if (!memberMap[user.id]) {
+              memberMap[user.id] = { ...user, roles: [], selectedRole: '' };
+            }
+            // Tránh trùng role
+            if (!memberMap[user.id].roles.some((r: any) => r.id === role.id)) {
+              memberMap[user.id].roles.push({ id: role.id, name: role.name });
+            }
+          }
+        }
+      }
+    }
+    // Log để debug nếu roles bị rỗng
+    Object.values(memberMap).forEach((m: any) => {
+      if (!m.roles || m.roles.length === 0) {
+        console.warn('User has no roles:', m);
+      }
+    });
+    members.value = Object.values(memberMap);
+  } catch (err: any) {
+    membersError.value = err.message || 'Failed to load members.';
+  } finally {
+    membersLoading.value = false;
+  }
+};
 
-function getStatusIcon(status: string) {
-  const iconMap: Record<string, string> = {
-    PENDING: 'pi-clock',
-    APPROVED: 'pi-check-circle',
-    REJECTED: 'pi-times-circle',
-    COMPLETED: 'pi-check-square',
-    CANCELLED: 'pi-ban',
-    IN_PROGRESS: 'pi-play-circle'
-  };
-  return iconMap[status] || 'pi-info-circle';
-}
-function formatAmount(amount: number) {
-  if (amount == null) return '-';
-  return Number(amount).toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  });
-}
+watch(activeTab, (tab) => {
+  if (tab === 'members') {
+    loadMembers();
+  }
+});
 
-function formatFileSize(bytes: number) {
+onMounted(() => {
+  loadProject();
+  loadBranches();
+});
+
+defineExpose({ closeDropdowns });
+loadProject();
+
+// File handling functions
+const loadFiles = async () => {
+  if (!project.value) {
+    console.warn('loadFiles: project.value is null, cannot load files');
+    return;
+  }
+  try {
+    filesLoading.value = true;
+    filesError.value = null;
+    console.log('Call API: /files/project/' + project.value.id);
+    // Thêm query string random để tránh cache
+    const { data } = await axiosInstance.get(
+      `/files/project/${project.value.id}?t=${Date.now()}`
+    );
+    console.log('API /files/project response:', data);
+    // Luôn gán lại mảng mới để Vue nhận ra thay đổi
+    projectFiles.value = Array.isArray(data) ? [...data] : [];
+    console.log(
+      'Files loaded for project',
+      project.value.id,
+      ':',
+      projectFiles.value
+    );
+  } catch (err: any) {
+    filesError.value = err.message || 'Failed to load files';
+    console.error('Error loading files:', err);
+  } finally {
+    filesLoading.value = false;
+  }
+};
+
+const refreshFiles = () => {
+  console.log('Refresh button clicked, calling loadFiles');
+  loadFiles();
+};
+
+const downloadFile = (file) => {
+  const id = file.fileId || file.id;
+  window.open(`/api/files/${id}/download`, '_blank');
+};
+
+const formatFileSize = (bytes: number) => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-function formatStatus(status: string) {
-  const statusMap: Record<string, string> = {
-    PENDING: 'Pending',
-    APPROVED: 'Approved',
-    REJECTED: 'Rejected',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-    IN_PROGRESS: 'In Progress'
-  };
-  return statusMap[status] || status;
-}
-function statusClass(status: string) {
-  return (
-    {
-      PENDING: 'pending',
-      APPROVED: 'approved',
-      REJECTED: 'rejected',
-      COMPLETED: 'completed',
-      CANCELLED: 'cancelled',
-      IN_PROGRESS: 'inprogress'
-    }[status] || 'pending'
-  );
-}
-function getInitial(name: string | undefined) {
-  return name ? name.charAt(0).toUpperCase() : '?';
-}
-function downloadFile(file: FileInfo) {
-  // Ưu tiên dùng file.url, nếu không có thì tạo url từ id
-  const url = file.url || `/api/files/${file.id}/download`;
-  if (!url) return;
-  window.open(url, '_blank');
-}
-function contactRequester() {
-  if (request.value?.requester?.email) {
-    window.open(`mailto:${request.value.requester.email}`);
-  } else {
-    toast.add({
-      severity: 'warn',
-      summary: 'Warning',
-      detail: 'Requester email not available',
-      life: 3000
-    });
-  }
-}
-function contactTranslator() {
-  if (request.value?.assignee?.email) {
-    window.open(`mailto:${request.value.assignee.email}`);
-  } else {
-    toast.add({
-      severity: 'warn',
-      summary: 'Warning',
-      detail: 'Translator email not available',
-      life: 3000
-    });
-  }
-}
-function viewProfile(userId: number | undefined) {
-  if (userId) {
-    // Navigate to user profile page
-    router.push({
-      name: 'user-profile',
-      params: { userId: userId.toString() }
-    });
-  }
-}
-function viewFiles() {
-  // Scroll to files section or show files modal
-  const filesSection = document.querySelector('.files-list');
-  if (filesSection) {
-    filesSection.scrollIntoView({ behavior: 'smooth' });
-  }
-}
-// const userStore = useUserStore();
-const canEdit = computed(() => {
-  // Chỉ cho phép sửa nếu là requester và trạng thái KHÔNG phải là APPROVED, CANCELLED, COMPLETED
-  return (
-    request.value &&
-    request.value.requester &&
-    userId.value !== null &&
-    request.value.requester.id === userId.value &&
-    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.value.status)
-  );
+};
+
+// Computed properties for discussion permissions
+const canCreateDiscussion = computed(() => {
+  // TODO: Implement proper permission checking based on user roles
+  return true; // For now, allow all authenticated users
 });
-const canContact = computed(
-  () =>
-    !!request.value?.assignee && request.value?.requester?.id !== userId.value
+
+const canManageDiscussions = computed(() => {
+  // TODO: Implement proper permission checking based on user roles
+  return true; // For now, allow all authenticated users
+});
+
+const editingDescription = ref(false);
+const editedDescription = ref('');
+const maxDescriptionLength = 500;
+const descriptionCharCount = computed(() => editedDescription.value.length);
+const descriptionOverLimit = computed(
+  () => descriptionCharCount.value > maxDescriptionLength
 );
+// For demo, allow editing always. Replace with real permission check.
+const canEditDescription = computed(() => true);
 
-function onRequestUpdated() {
-  // Refetch request details after update
-  fetchRequestDetail();
+function startEditDescription() {
+  editedDescription.value = project.value?.description || '';
+  editingDescription.value = true;
 }
-
-async function fetchRequestDetail() {
-  loading.value = true;
-  try {
-    const requestId = route.params.requestId;
-    const res = await axiosInstance.get(`/requests/${requestId}/detail`);
-    request.value = res.data;
-  } catch (e) {
-    request.value = null;
-  } finally {
-    loading.value = false;
+function cancelEditDescription() {
+  editingDescription.value = false;
+}
+function updateCharCount() {
+  if (editedDescription.value.length > maxDescriptionLength) {
+    editedDescription.value = editedDescription.value.slice(
+      0,
+      maxDescriptionLength
+    );
   }
 }
-
-async function cancelRequest() {
-  if (!request.value?.id) return;
+async function saveDescription() {
+  if (!project.value) return;
   try {
-    await axiosInstance.post(`/requests/${request.value.id}/cancel`);
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Request cancelled successfully!',
-      life: 3000
+    await axiosInstance.patch(`/projects/${project.value.id}`, {
+      description: editedDescription.value,
     });
-    await nextTick();
+    project.value.description = editedDescription.value;
+    editingDescription.value = false;
+    showSavedSnackbar.value = true;
     setTimeout(() => {
-      router.push({ name: 'my-requests' });
-    }, 1500);
-  } catch (e) {
-    toast.add({
-      severity: 'error',
-      summary: 'Failed',
-      detail: 'Failed to cancel request.',
-      life: 3000
-    });
+      showSavedSnackbar.value = false;
+    }, 2500);
+  } catch (err: any) {
+    alert('Failed to update description: ' + err.message);
   }
 }
 
-function approveRequest() {
-  alert('Approve request!');
+const fileMenuOpen = ref<string | null>(null);
+function toggleFileMenu(fileId: string) {
+  fileMenuOpen.value = fileMenuOpen.value === fileId ? null : fileId;
 }
-function rejectRequest() {
-  alert('Reject request!');
+function closeFileMenus() {
+  fileMenuOpen.value = null;
+}
+function isImage(file: ProjectFile) {
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(file.fileName);
+}
+function isPDF(file: ProjectFile) {
+  return /\.pdf$/i.test(file.fileName);
+}
+function previewFile(file: ProjectFile) {
+  // Mở xem trước ảnh hoặc PDF
+  window.open(`/api/files/${file.id}/preview`, '_blank');
 }
 
-async function registerForRequest() {
-  if (!request.value?.id) return;
+const showActionsMenu = ref(false);
+const isMobile = computed(() => window.innerWidth < 768);
+function goToManage() {
+  router.push(`/projects/${project.value?.id}/manage`);
+  showActionsMenu.value = false;
+}
+
+const showSavedSnackbar = ref(false);
+
+const inputFocused = ref(false);
+
+function getRoleDescription(roleName: string) {
+  if (roleName === 'Admin')
+    return 'Full permissions: manage project, members, settings.';
+  if (roleName === 'Editor') return 'Can edit content, but not manage members.';
+  if (roleName === 'Viewer') return 'Read-only access.';
+  return 'Project role';
+}
+function editRoles(member: any) {
+  memberToEdit.value = member;
+  selectedRoles.value = (member.roles || []).filter((r: any) => r && r.id && r.name).map((r: any) => r.id);
+  showEditUserRoleModal.value = true;
+}
+function sortBy(field: string) {
+  // TODO: Implement sorting logic
+}
+
+function scrollToFiles() {
+  const el = document.querySelector('.files-section');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+const userSuggestList = ref<any[]>([]);
+const userSuggestActiveIdx = ref(-1);
+
+async function handleUserSuggest() {
+  userSuggestActiveIdx.value = -1;
+  userSuggestList.value = [];
+  if (!userSearch.value.identifier || userSearch.value.identifier.length < 2)
+    return;
   try {
-    await axiosInstance.post(`/requests/${request.value.id}/register`);
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail:
-        'Successfully registered for this request! Please check your chat or email.',
-      life: 3000
+    const { data } = await axiosInstance.post(`/users/suggest`, {
+      q: userSearch.value.identifier,
     });
-    await fetchRequestDetail();
-  } catch (e: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Failed',
-      detail: e?.response?.data?.message || 'Registration failed.',
-      life: 3000
-    });
+    userSuggestList.value = data.users || [];
+  } catch (e) {
+    userSuggestList.value = [];
+  }
+}
+function moveSuggest(dir: number) {
+  if (!userSuggestList.value.length) return;
+  let idx = userSuggestActiveIdx.value + dir;
+  if (idx < 0) idx = userSuggestList.value.length - 1;
+  if (idx >= userSuggestList.value.length) idx = 0;
+  userSuggestActiveIdx.value = idx;
+}
+function selectUserSuggest(idx?: number) {
+  if (typeof idx !== 'number') idx = userSuggestActiveIdx.value;
+  if (idx < 0 || idx >= userSuggestList.value.length) return;
+  const user = userSuggestList.value[idx];
+  userSearch.value.identifier = user.email;
+  userSuggestList.value = [];
+  userSuggestActiveIdx.value = -1;
+  nextTick(() => {
+    // Tự động submit form khi chọn suggest
+    searchUser();
+  });
+}
+
+function handleRolesUpdated() {
+  loadProject(); // Cập nhật lại project để số role mới được cập nhật lên card
+  loadMembers();
+}
+
+async function saveUserRoles() {
+  if (!project.value || !memberToEdit.value) return;
+  // Lấy danh sách role hiện tại của user từ backend (chắc chắn)
+  const oldRoleIds: string[] = (memberToEdit.value.roles || []).filter((r: any) => r && r.id).map((r: any) => r.id);
+  const newRoleIds: string[] = selectedRoles.value;
+  // Chỉ add nếu user chưa có role đó
+  const rolesToAdd = newRoleIds.filter((id) => !oldRoleIds.includes(id));
+  // Chỉ remove nếu user thực sự có role đó
+  const rolesToRemove = oldRoleIds.filter((id) => !newRoleIds.includes(id));
+  console.log('oldRoleIds:', oldRoleIds);
+  console.log('newRoleIds:', newRoleIds);
+  console.log('rolesToAdd:', rolesToAdd);
+  console.log('rolesToRemove:', rolesToRemove);
+  try {
+    for (const roleId of rolesToAdd) {
+      await axiosInstance.post(`/projects/${project.value.id}/roles/${roleId}/users/add`, {
+        userIds: [memberToEdit.value.id],
+      });
+    }
+    for (const roleId of rolesToRemove) {
+      await axiosInstance.post(`/projects/${project.value.id}/roles/${roleId}/users/remove`, {
+        userIds: [memberToEdit.value.id],
+      });
+    }
+    showEditUserRoleModal.value = false;
+    await loadMembers();
+    showSavedSnackbar.value = true;
+    setTimeout(() => (showSavedSnackbar.value = false), 2000);
+  } catch (err: any) {
+    alert('Failed to update roles: ' + (err?.message || err));
   }
 }
 
-const isApprovedOrAssigned = computed(() => {
-  return (
-    request.value?.status === 'APPROVED' ||
-    request.value?.status === 'COMPLETED' ||
-    request.value?.status === 'IN_PROGRESS' ||
-    request.value?.status === 'CANCELLED' ||
-    !!request.value?.assignee
-  );
+const roleSearch = ref('');
+const filteredRoles = computed(() => {
+  if (!project.value?.projectRoles) return [];
+  // Log để debug dữ liệu roles
+  console.log('projectRoles:', project.value.projectRoles);
+  // Lọc role hợp lệ (có id và name)
+  const validRoles = project.value.projectRoles.filter((r: any) => r && r.id && r.name);
+  if (!roleSearch.value) return validRoles;
+  return validRoles.filter((r: any) => r.name.toLowerCase().includes(roleSearch.value.toLowerCase()));
 });
 
-onMounted(async () => {
-  const user = await authService.getCurrentUser();
-  userId.value = user?.id ?? null;
-  await fetchRequestDetail();
+// Thêm log để debug filteredRoles và selectedRoles khi mở modal edit roles
+watch(filteredRoles, (val: any[]) => {
+  console.log('filteredRoles:', val);
 });
+watch(selectedRoles, (val: string[]) => {
+  console.log('selectedRoles:', val);
+});
+
+function displayRoles(member: any, project: Project) {
+  if (!member.roles) return [];
+  return member.roles.filter(
+    (role: any) =>
+      role &&
+      role.name &&
+      !(member.id === project.createdBy.id && role.name === 'Project Owner')
+  );
+}
+
+function getRoleBadgeClass(roleName: string) {
+  if (!roleName) return 'role-badge-default';
+  const name = roleName.toLowerCase();
+  if (name.includes('owner')) return 'role-badge-owner';
+  if (name.includes('admin')) return 'role-badge-admin';
+  if (name.includes('mod')) return 'role-badge-mod';
+  if (name.includes('everyone')) return 'role-badge-everyone';
+  return 'role-badge-default';
+}
+const showFullRoles = ref<string | null>(null);
+function getRoleCount(roles: any[]): number {
+  return roles ? roles.length : 0;
+}
+
+const branches = ref<any[]>([]);
+const selectedBranchId = ref<string | number | null>(null);
+
+async function loadBranches() {
+  if (!project.value?.id) return;
+  try {
+    // Gọi đúng API backend lấy branch cho project
+    const res = await axiosInstance.get(`/projects/${project.value.id}/branches`);
+    console.log('API /branches response:', res.data);
+    branches.value = Array.isArray(res.data) ? res.data : (res.data.branches || []);
+    selectedBranchId.value = branches.value.length > 0 ? String(branches.value[0].id) : null;
+    console.log('Branches:', branches.value, 'Selected:', selectedBranchId.value, typeof selectedBranchId.value, 'Count:', branches.value.length);
+    if (branches.value.length === 0) {
+      // Hiển thị log chi tiết nếu không có branch
+      window.alert('Branches array is empty! Response: ' + JSON.stringify(res.data));
+    }
+  } catch (e) {
+    branches.value = [];
+    selectedBranchId.value = null;
+    console.error('Error loading branches:', e);
+  }
+}
+
+onMounted(() => {
+  loadProject();
+  loadBranches();
+});
+
+// Add computed property for actual role count
+// Role count from ProjectRoleTab
+const actualRoleCount = ref(0);
+
+// Handler for role count update
+const handleRoleCountUpdate = (count: number) => {
+  console.log('Received role count from ProjectRoleTab:', count);
+  actualRoleCount.value = count;
+};
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 :root {
-  --main-radius: 18px;
-  --main-shadow: 0 4px 24px rgba(59, 130, 246, 0.08);
-  --main-font: 'Inter', 'Roboto', Arial, sans-serif;
+  --color-secondary: #38b2ac;
 }
-
-body,
-.request-detail-wrapper {
-  font-family: var(--main-font);
-}
-.request-detail-wrapper {
+/* Page Layout */
+.project-detail-page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #f9f9fb 60%, #e0e7ff 100%);
-}
-.main-content {
-  flex: 1;
-  display: flex;
-  margin-left: 220px;
-}
-.content {
-  flex: 1;
-  padding: 32px 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  font-size: 15px;
 }
 
-/* Page Header Styles */
+.main-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.content-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem 2rem 2rem 17rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  margin-right: 0;
+}
+
+/* Page Header */
 .page-header {
-  width: 100%;
-  max-width: 1200px;
-  margin-bottom: 32px;
-  padding: 0 32px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.page-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.page-title-section {
+  flex: 1;
 }
 
 .page-title {
-  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.page-title h1 {
-  font-size: 32px;
-  font-weight: 800;
-  color: #111827;
-  margin: 0 0 8px 0;
-  letter-spacing: -0.025em;
+.page-icon {
+  font-size: 2rem;
+  width: 3rem;
+  height: 3rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.request-title {
-  font-size: 18px;
-  color: #6b7280;
+.page-subtitle {
   margin: 0;
-  font-weight: 500;
-  line-height: 1.4;
-}
-.request-detail-grid {
-  display: flex;
-  flex-direction: row;
-  gap: 32px;
-  max-width: 1200px;
-  width: 100%;
-}
-.left-column {
-  flex: 7;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.right-column {
-  flex: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.info-card {
-  background: #fff;
-  border-radius: var(--main-radius);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 32px 32px 32px 32px;
-  margin-bottom: 0;
-  transition: box-shadow 0.2s, transform 0.2s;
-  border: 1px solid #f1f5f9;
-}
-.info-card-hover:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
-  transform: translateY(-2px) scale(1.01);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.info-card-hover:hover + .info-card {
-  margin-top: 16px;
-  border-top: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-.info-card-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 24px;
-  letter-spacing: -0.025em;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  line-height: 1.4;
-}
-.info-card-title i {
-  color: #3b82f6;
-  font-size: 20px;
-}
-.overview-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px 32px;
-}
-.overview-row {
-  display: flex;
-  flex-direction: column;
-  font-size: 16px;
-  line-height: 1.5;
-}
-.overview-label {
-  color: #6b7280;
-  font-weight: 500;
-  font-size: 12.5px;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  line-height: 1.5;
-}
-.overview-label i {
-  color: #3b82f6;
-  font-size: 14px;
-}
-.overview-value {
-  color: #111827;
-  font-weight: 800;
-  font-size: 16px;
-  line-height: 1.5;
-}
-.amount {
-  color: #1e40af;
-  font-weight: 800;
-  font-size: 18px;
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-}
-.amount .currency {
-  font-size: 13px;
-  color: #64748b;
-  margin-left: 2px;
-  font-weight: 500;
-}
-.deadline {
-  color: #1e293b;
-  font-size: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.deadline-info {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: nowrap;
-}
-
-.time-remaining.safe {
-  color: #10b981; /* green */
-}
-
-.time-remaining.warning {
-  color: #f59e0b; /* yellow */
-}
-
-.time-remaining.urgent {
-  color: #ef4444; /* red */
-}
-.deadline-progress {
-  width: 100%;
-  margin-top: 4px;
-}
-.progress-bar {
-  width: 100%;
-  height: 6px;
-  background: #e2e8f0;
-  border-radius: 3px;
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease, background 0.3s;
-}
-.status-badge {
-  background: linear-gradient(90deg, #fef3c7 60%, #fde68a 100%);
-  color: #b45309;
-  border-radius: 9999px;
-  padding: 6px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.08);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.status-badge.approved {
-  background: linear-gradient(90deg, #d1fae5 60%, #6ee7b7 100%);
-  color: #047857;
-}
-.status-badge.pending {
-  background: linear-gradient(90deg, #fef3c7 60%, #fde68a 100%);
-  color: #b45309;
-}
-.status-badge.rejected {
-  background: linear-gradient(90deg, #fee2e2 60%, #fecaca 100%);
-  color: #991b1b;
-}
-.status-badge.completed {
-  background: linear-gradient(90deg, #e0e7ff 60%, #a5b4fc 100%);
-  color: #3730a3;
-}
-.status-badge.cancelled {
-  background: linear-gradient(90deg, #f3f4f6 60%, #e5e7eb 100%);
-  color: #6b7280;
-}
-.status-badge.inprogress {
-  background: linear-gradient(90deg, #bae6fd 60%, #7dd3fc 100%);
-  color: #0369a1;
-}
-.visibility-badge.private {
-  background: #fdeaea;
-  color: #d93025;
-  border-radius: 999px;
-  padding: 5px 18px;
-  font-size: 15px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  word-wrap: break-word;
-}
-.visibility-badge.public {
-  background: linear-gradient(90deg, #dbeafe 60%, #a5b4fc 100%);
-  color: #1e40af;
-  border-radius: 9999px;
-  padding: 5px 18px;
-  font-size: 15px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.category-badge {
-  background: linear-gradient(90deg, #f3f6fd 60%, #e8effc 100%);
-  color: #3b5998;
-  border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 13px;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 400;
-  display: inline-block;
-  border: none;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.instructions-note {
-  margin-bottom: 10px;
+
+.page-actions {
+  display: flex;
+  gap: 1rem;
 }
-.note-content {
+
+.btn-back {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.btn-back:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.project-detail-view {
+  max-width: 1700px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(76, 34, 128, 0.18),
+  0 2px 8px rgba(49, 130, 206, 0.1);
+  overflow: hidden;
+  margin-bottom: 2rem;
+  position: relative;
+}
+.project-detail-view::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(120deg, #f3f0ff 0%, #e6f0fa 100%);
+  opacity: 0.7;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 20px;
+}
+.project-detail-view > * {
+  position: relative;
+  z-index: 1;
+}
+.project-content {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(49, 130, 206, 0.13),
+  0 2px 8px rgba(76, 34, 128, 0.1);
+  overflow: hidden;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+/* Nút chính */
+.btn-manage {
+  background: linear-gradient(135deg, #7f53ac 0%, var(--color-secondary) 100%);
+  border: 2.5px solid #7f53ac;
+  color: white;
+  box-shadow: 0 4px 16px #7f53ac33;
+  font-weight: 700;
+  transition: all 0.22s cubic-bezier(0.4, 1, 0.7, 1.2);
+}
+.btn-manage:hover {
+  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
+  border-color: #4299e1;
+  color: #fff;
+  box-shadow: 0 8px 32px #4299e133;
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.08);
+}
+.btn-outline {
+  background: #fff;
+  color: #2563eb;
+  border: 2.5px solid #2563eb;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #2563eb22;
+  transition: all 0.18s;
+}
+.btn-outline:hover {
+  background: #2563eb;
+  color: #fff;
+  border-color: #1e40af;
+  box-shadow: 0 6px 24px #2563eb33;
+}
+.btn-danger {
+  background: linear-gradient(135deg, #e53e3e 0%, #b91c1c 100%);
+  color: #fff;
+  border: 2.5px solid #b91c1c;
+  font-weight: 700;
+  box-shadow: 0 4px 16px #e53e3e33;
+  transition: all 0.18s;
+}
+.btn-danger:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+  color: #fff;
+  border-color: #7f1d1d;
+  box-shadow: 0 8px 32px #e53e3e44;
+  transform: scale(1.04);
+}
+
+/* Badge Public/Private */
+.badge-public {
+  background: linear-gradient(135deg, #38a169 0%, #22543d 100%);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #38a16933;
+  border: 1.5px solid #22543d;
+}
+.badge-private {
+  background: linear-gradient(135deg, #e53e3e 0%, #7f1d1d 100%);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #e53e3e33;
+  border: 1.5px solid #7f1d1d;
+}
+.badge-icon {
+  filter: drop-shadow(0 2px 4px #0002);
+}
+
+/* Header icon contrast */
+.page-icon,
+.title-icon,
+.meta-icon,
+.icon {
+  color: #4f2c8c !important;
+  filter: drop-shadow(0 2px 4px #7f53ac22);
+}
+
+/* Loading and Error States */
+.loading-container,
+.error-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.loading-content,
+.error-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  background: white;
+  padding: 3rem;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+}
+
+.loading-spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 4px solid #e2e8f0;
+  border-radius: 50%;
+  border-top-color: #4299e1;
+  animation: spin 1s linear infinite;
+}
+
+.loading-content h3 {
+  color: #2d3748;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.loading-content p {
+  color: #718096;
+  margin: 0;
+}
+
+.error-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.error-content h3 {
+  color: #e53e3e;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.error-content p {
+  color: #718096;
+  margin: 0;
+}
+
+.btn-retry {
+  margin-top: 1rem;
+}
+
+/* Project Content */
+.project-content {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(49, 130, 206, 0.13),
+  0 2px 8px rgba(76, 34, 128, 0.1);
+  overflow: hidden;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+/* Enhanced Project Header */
+.project-header {
+  position: relative;
+  background: linear-gradient(135deg, #4f2c8c 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem 2rem 1.5rem 2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+  border-radius: 0 0 32px 32px;
+  box-shadow: 0 10px 40px rgba(76, 34, 128, 0.18);
+  overflow: visible;
+}
+
+.glassy-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  border-radius: 0 0 32px 32px;
+  z-index: 0;
+}
+
+.project-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.project-header-left {
+  display: flex;
+  align-items: center;
+  margin-right: 1.5rem;
+}
+
+.creator-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #fff;
+  border: 3px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-placeholder {
+  width: 48px;
+  height: 48px;
+  display: block;
+}
+
+.creator-info-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-left: 1.2rem;
+}
+
+.project-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.project-title {
+  margin: 0;
+  color: white;
+  font-size: 1.8rem;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.project-badges {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.project-meta-row {
+  display: flex;
+  gap: 2.5rem;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  opacity: 0.85;
+}
+
+.meta-icon {
+  font-size: 1.2rem;
+  opacity: 0.8;
+}
+
+.meta-text {
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.meta-text strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .project-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 2rem 1rem 1.5rem 1rem;
+    gap: 1.5rem;
+  }
+  .project-header-left {
+    justify-content: center;
+    margin-right: 0;
+    margin-bottom: 1rem;
+  }
+  .project-header-main {
+    align-items: center;
+    text-align: center;
+  }
+  .project-title-section {
+    align-items: center;
+  }
+  .project-meta-row {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+  }
+}
+
+.project-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 200px;
+}
+
+.btn-manage {
+  background: linear-gradient(135deg, #7f53ac 0%, var(--color-secondary) 100%);
+  border: 2.5px solid #7f53ac;
+  color: white;
+  box-shadow: 0 4px 16px #7f53ac33;
+  font-weight: 700;
+  transition: all 0.22s cubic-bezier(0.4, 1, 0.7, 1.2);
+}
+
+.btn-manage:hover {
+  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
+  border-color: #4299e1;
+  color: #fff;
+  box-shadow: 0 8px 32px #4299e133;
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.08);
+}
+
+/* Project Sections */
+.project-section {
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.project-section:last-child {
+  border-bottom: none;
+}
+
+.description-section {
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
-  font-size: 16px;
-  color: #1e293b;
-  line-height: 1.6;
-  font-weight: 500;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
 }
+
+.tags-section {
+  background: white;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  color: #2d3748;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.title-icon {
+  font-size: 1.5rem;
+  width: 3rem;
+  height: 3rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.description-content {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.description {
+  color: #4a5568;
+  line-height: 1.7;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
 .no-description {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #64748b;
+  gap: 1rem;
+  color: #a0aec0;
   font-style: italic;
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px dashed #cbd5e1;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  white-space: pre-wrap;
 }
-.no-tags {
-  color: #999;
-  font-style: italic;
-  font-size: 14px;
+
+.no-content-icon {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.tag {
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
+  color: white;
+  border-radius: 25px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+}
+
+.tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Project Files */
+.files-section {
+  background: #f8fafc;
+}
+
+.files-content {
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.files-loading {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: white;
 }
+
+.files-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: white;
+}
+
 .files-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 1rem;
 }
+
 .file-item {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 14px;
-  background: #f8fafc;
-  border: 1.5px solid #e2e8f0;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
   border-radius: 12px;
+  border: 1px solid #e2e8f0;
   transition: all 0.3s ease;
 }
-.file-item-hover:hover {
-  background: #e0e7ff;
-  border-color: #a5b4fc;
-  transform: scale(1.01);
+
+.file-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
+
 .file-info {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 1rem;
   flex: 1;
 }
+
 .file-icon {
-  color: #64748b;
-  font-size: 1.3rem;
-  transition: color 0.2s;
-}
-.file-item-hover:hover .file-icon {
-  color: #2563eb;
-}
-.file-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.file-name {
-  color: #1e293b;
-  font-size: 15px;
-  font-weight: 700;
-  word-break: break-word;
-  white-space: normal;
-}
-.file-size {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 500;
-}
-.download-btn {
-  padding: 7px 14px !important;
-  font-size: 13px !important;
-  min-width: auto !important;
-  border-radius: 8px !important;
-  font-weight: 700 !important;
-}
-.requester-block {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 10px;
-}
-.avatar-container {
-  position: relative;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-.avatar-container:hover {
-  transform: scale(1.05);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.avatar-bordered {
-  border: 3px solid #e0e7ff;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
-}
-.translator-avatar {
-  border-color: #d1fae5;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
-}
-.avatar-overlay {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  background: #3b82f6;
-  color: white;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 50%;
-  width: 20px;
-  height: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.avatar-container:hover .avatar-overlay {
-  opacity: 1;
-}
-.requester-details {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.username {
-  font-weight: 800;
-  font-size: 18px;
-  line-height: 1.2;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.user-email,
-.user-phone {
-  color: #64748b;
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  line-height: 1.2;
+.file-details {
+  flex: 1;
 }
 
-.email-link,
-.phone-link {
-  color: #2563eb;
-  text-decoration: none;
-  transition: color 0.2s, text-decoration 0.2s;
+.file-name {
+  margin: 0 0 0.25rem 0;
+  color: #2d3748;
+  font-size: 1rem;
   font-weight: 600;
 }
 
-.email-link:hover,
-.phone-link:hover {
-  color: #1d4ed8;
-  text-decoration: underline;
+.file-meta {
+  margin: 0;
+  color: #718096;
+  font-size: 0.9rem;
 }
-.actions {
+
+.file-actions {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 8px;
+  justify-content: flex-end;
+  gap: 0.75rem;
 }
-.action-btn {
-  width: 100%;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 700;
-  padding: 12px 0;
+
+.btn-outline {
+  background: transparent;
+  color: #4299e1;
+  border: 2px solid #4299e1;
+}
+
+.btn-outline:hover {
+  background: #4299e1;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.no-files {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
+}
+
+/* Enhanced Project Statistics */
+.project-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.stat-card {
+  background: white;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s cubic-bezier(0.4, 1, 0.7, 1.2);
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+}
+.stat-card-clickable {
+  cursor: pointer;
+}
+.stat-card-clickable:hover {
+  transform: scale(1.045) translateY(-6px);
+  box-shadow: 0 18px 40px rgba(49, 130, 206, 0.18),
+  0 2px 8px rgba(76, 34, 128, 0.1);
+  z-index: 2;
+}
+.stat-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.75rem;
   display: flex;
   align-items: center;
-  gap: 10px;
   justify-content: center;
+}
+.stat-icon-circle {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f3f6fa 0%, #e6f0fa 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.75rem auto;
+  box-shadow: 0 2px 8px #3182ce11;
+}
+
+.stat-number {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #4299e1;
+  margin-bottom: 0.25rem;
+  text-shadow: 0 2px 4px rgba(66, 153, 225, 0.2);
+}
+
+.stat-label {
+  color: #718096;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+/* Management Sections */
+.management-sections {
+  display: grid;
+  gap: 2rem;
+  padding: 2rem;
+  background: #f8fafc;
+}
+
+.management-section {
+  background: white;
+  padding: 1rem;
+  border-radius: 16px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.management-section:hover {
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+}
+
+.user-section {
+  border-left: 4px solid #4299e1;
+}
+
+.roles-section {
+  border-left: 4px solid #48bb78;
+}
+
+.groups-section {
+  border-left: 4px solid #ed8936;
+}
+
+.section-content {
+  width: 100%;
+}
+
+/* Enhanced Forms */
+.add-user-form {
+  background: #f8fafc;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+}
+
+.form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #2d3748;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+
+.label-icon {
+  font-size: 1.25rem;
+}
+
+.form-control {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  background-color: white;
+  color: #2d3748;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 4px rgba(66, 153, 225, 0.1);
+  transform: translateY(-1px);
+}
+
+.form-control:disabled {
+  background-color: #f7fafc;
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.form-hint {
+  color: #718096;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.form-actions {
+  margin-top: 0;
+}
+
+/* Error Messages */
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #fed7d7;
+  color: #c53030;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #feb2b2;
+  margin-top: 1rem;
+}
+
+.error-icon {
+  font-size: 1.25rem;
+}
+
+/* Found User */
+.found-user {
+  background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+  border: 2px solid #9ae6b4;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.user-avatar {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.avatar-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+}
+
+.user-details {
+  flex: 1;
+}
+
+.user-details h4 {
+  margin: 0 0 0.25rem 0;
+  color: #2d3748;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.user-details p {
+  margin: 0;
+  color: #718096;
+  font-size: 0.9rem;
+}
+
+/* Enhanced Lists */
+.roles-list,
+.groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.role-item,
+.group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+  margin-bottom: 2rem;
+  overflow: visible;
+}
+
+.role-item:hover,
+.group-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.role-info,
+.group-info {
+  flex: 1;
+}
+
+.role-header,
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.role-name,
+.group-name {
+  margin: 0;
+  color: #2d3748;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.role-badge,
+.group-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.role-badge {
+  background: #bee3f8;
+  color: #2b6cb0;
+}
+
+.group-badge {
+  background: #fef5e7;
+  color: #c05621;
+}
+
+.permissions {
+  color: #718096;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.members-info {
+  margin-top: 0.5rem;
+}
+
+.members-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4299e1;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.count-icon {
+  font-size: 1rem;
+}
+
+.role-actions,
+.group-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.role-actions .dropdown,
+.group-actions .dropdown {
+  margin-left: auto;
+}
+
+/* Dropdown Styles */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  color: #4a5568;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 100px;
+  justify-content: center;
+}
+
+.dropdown-toggle:hover {
+  border-color: #4299e1;
+  background: #f7fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(66, 153, 225, 0.15);
+}
+
+.dropdown-arrow {
+  font-size: 0.75rem;
+  transition: transform 0.3s ease;
+}
+
+.dropdown-toggle:hover .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: auto;
+  left: 0;
+  min-width: 140px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  z-index: 2000;
+  margin-top: 0.5rem;
+  overflow: visible;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: auto;
+  left: 20px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
+  border-right: none;
+  transform: rotate(45deg);
+  z-index: -1;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
   border: none;
+  color: #4a5568;
+  font-size: 0.95rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: #f7fafc;
+  color: #2d3748;
+}
+
+.dropdown-item:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.dropdown-item:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.dropdown-item-danger {
+  color: #e53e3e;
+}
+
+.dropdown-item-danger:hover {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+.dropdown-item .icon {
+  font-size: 1rem;
+  width: 16px;
+  text-align: center;
+}
+
+/* Empty States */
+.empty-section {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-section h3 {
+  color: #2d3748;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-section p {
+  margin: 0 0 1.5rem 0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* Enhanced Buttons */
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   position: relative;
   overflow: hidden;
 }
-.action-btn::before {
+
+.btn::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1536,443 +2559,1710 @@ body,
   );
   transition: left 0.5s;
 }
-.action-btn:hover::before {
+
+.btn:hover::before {
   left: 100%;
-  transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.action-btn.primary {
-  background: linear-gradient(90deg, #2563eb 60%, #60a5fa 100%);
-  color: #fff;
-}
-.action-btn.primary:hover:enabled {
-  background: linear-gradient(90deg, #1d4ed8 60%, #3b82f6 100%);
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.16);
-  transform: translateY(-1px);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.action-btn.edit {
-  background: #e0e7ff;
-  color: #2563eb;
-  border: 1.5px solid #2563eb;
-}
-.action-btn.edit:hover:enabled {
-  background: #2563eb;
-  color: #fff;
-  border-color: #1d4ed8;
-}
-.action-btn.danger {
-  background: #fee2e2;
-  color: #ef4444;
-  border: 1.5px solid #ef4444;
-}
-.action-btn.danger:hover:enabled {
-  background: #ef4444;
-  color: #fff;
-  border-color: #b91c1c;
-}
-.action-btn.info {
-  background: #e0f2fe;
-  color: #0369a1;
-  border: 1.5px solid #0369a1;
-}
-.action-btn.info:hover:enabled {
-  background: #0369a1;
-  color: #fff;
-  border-color: #0c4a6e;
-}
-.action-btn.approve {
-  background: #d1fae5;
-  color: #059669;
-  border: 1.5px solid #059669;
-  margin-bottom: 4px;
-}
-.action-btn.approve:hover:enabled {
-  background: #059669;
-  color: #fff;
-  border-color: #047857;
-}
-.action-btn.reject {
-  background: #fee2e2;
-  color: #ef4444;
-  border: 1.5px solid #ef4444;
-  margin-bottom: 4px;
-}
-.action-btn.reject:hover:enabled {
-  background: #ef4444;
-  color: #fff;
-  border-color: #b91c1c;
-}
-.action-btn.secondary {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1.5px solid #cbd5e1;
-}
-.action-btn.secondary:hover:enabled {
-  background: #475569;
-  color: #fff;
-  border-color: #64748b;
-}
-.action-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.tag-badge {
-  display: inline-block;
-  background: linear-gradient(90deg, #f3f6fd 60%, #e8effc 100%);
-  color: #3b5998;
-  border-radius: 10px;
-  padding: 3px 12px;
-  margin-right: 6px;
-  font-size: 13px;
-  font-weight: 400;
-  border: 1px solid #e0e7ef;
 }
 
-/* Status History Styles */
-.status-history-list {
+.btn-primary,
+.btn-primary:active,
+.btn-primary:focus {
+  background: linear-gradient(135deg, #38a169 0%, #48bb78 100%) !important;
+  color: #fff !important;
+  border: none;
+  box-shadow: 0 4px 16px #38a16933;
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
+  color: #fff !important;
+  filter: brightness(1.08);
+  box-shadow: 0 8px 20px #38a16944;
+}
+.btn-primary:disabled,
+.btn[disabled].btn-primary {
+  background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%) !important;
+  color: #a0aec0 !important;
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+  color: #4a5568;
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #cbd5e0 0%, #a0aec0 100%);
+  transform: translateY(-2px);
+}
+
+.btn-outline {
+  background: transparent;
+  color: #4299e1;
+  border: 2px solid #4299e1;
+}
+
+.btn-outline:hover {
+  background: #4299e1;
+  color: #fff;
+  border-color: #1e40af;
+  box-shadow: 0 6px 24px #2563eb33;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(229, 62, 62, 0.3);
+}
+
+.btn-sm {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.95rem;
+}
+
+.btn-add {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  color: white;
+}
+
+.btn-add:hover {
+  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(72, 187, 120, 0.3);
+}
+
+.icon {
+  font-size: 1.1rem;
+}
+
+/* Enhanced Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease;
+  padding: 1rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  animation: slideUp 0.3s ease;
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  max-height: 90vh;
 }
 
-.status-history-item {
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.group-modal {
+  max-width: 700px;
+  max-height: 90vh;
+}
+
+.modal-header {
   display: flex;
-  gap: 12px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border-left: 3px solid #3b82f6;
-  transition: all 0.2s ease;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
-.status-history-item:hover {
-  background: #f1f5f9;
-  transform: translateX(2px);
-}
-
-.history-icon {
-  color: #3b82f6;
-  font-size: 16px;
-  margin-top: 2px;
-}
-
-.history-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.history-status {
+.modal-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
+  gap: 1rem;
 }
 
-.status-text {
-  font-weight: 600;
-  color: #111827;
-  font-size: 14px;
-}
-
-.status-badge-small {
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.status-badge-small.pending {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.status-badge-small.approved {
-  background: #d1fae5;
-  color: #047857;
-}
-
-.status-badge-small.rejected {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.status-badge-small.completed {
-  background: #e0e7ff;
-  color: #3730a3;
-}
-
-.status-badge-small.cancelled {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.status-badge-small.inprogress {
-  background: #bae6fd;
-  color: #0369a1;
-}
-
-.history-details {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.actor {
-  font-weight: 500;
-  color: #374151;
-}
-
-.timestamp {
-  color: #9ca3af;
-}
-
-.history-comment {
-  font-size: 13px;
-  color: #4b5563;
-  font-style: italic;
-  margin-top: 4px;
-  padding: 8px;
-  background: #f9fafb;
-  border-radius: 4px;
-  border-left: 2px solid #d1d5db;
-}
-
-/* Ratings Styles */
-.ratings-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.rating-item {
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
-}
-
-.rating-item:hover {
-  background: #f1f5f9;
-  border-color: #d1d5db;
-}
-
-.rating-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.rating-header i {
-  color: #3b82f6;
-  font-size: 14px;
-}
-
-.rating-label {
-  font-weight: 600;
-  color: #374151;
-  font-size: 14px;
-}
-
-.rating-display {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.stars {
-  display: flex;
-  gap: 2px;
-}
-
-.stars i {
-  font-size: 16px;
-  transition: color 0.2s ease;
-}
-
-.rating-score {
-  font-weight: 700;
-  color: #111827;
-  font-size: 16px;
-}
-
-.rating-count {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.activity-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin-top: 8px;
-}
-.timeline-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-.timeline-icon {
-  width: 32px;
-  height: 32px;
+.modal-title .title-icon {
+  font-size: 1.5rem;
+  width: 3rem;
+  height: 3rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  background: #f3f4f6;
-  color: #64748b;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
-.timeline-icon.created {
-  background: #dbeafe;
-  color: #2563eb;
+
+.modal-header h3 {
+  margin: 0;
+  color: #1a202c;
+  font-size: 1.2rem;
+  font-weight: 700;
 }
-.timeline-icon.approved {
-  background: #d1fae5;
-  color: #059669;
-}
-.timeline-icon.assigned {
-  background: #fef3c7;
-  color: #b45309;
-}
-.timeline-content {
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #718096;
+  cursor: pointer;
+  padding: 0.5rem;
+  line-height: 1;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  width: 3rem;
+  height: 3rem;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.timeline-title {
-  font-weight: 700;
-  color: #1e293b;
-  font-size: 15px;
-}
-.timeline-date {
-  color: #64748b;
-  font-size: 13px;
-}
-.timeline-user {
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 600;
-}
-@media (max-width: 1100px) {
-  .request-detail-grid {
-    flex-direction: column;
-    gap: 24px;
-    max-width: 100%;
-  }
-
-  .left-column,
-  .right-column {
-    max-width: 100%;
-    min-width: 0;
-  }
-
-  .visibility-badge {
-    font-size: 13px;
-    padding: 4px 12px;
-    line-height: 1.2;
-  }
-}
-@media (max-width: 900px) {
-  .main-content {
-    margin-left: 0;
-  }
-}
-@media (max-width: 600px) {
-  .page-header {
-    padding: 0 16px;
-    margin-bottom: 24px;
-  }
-
-  .page-title h1 {
-    font-size: 24px;
-  }
-
-  .request-title {
-    font-size: 16px;
-  }
-
-  .info-card {
-    padding: 18px 8px 14px 8px;
-  }
-  .info-card-title {
-    font-size: 18px;
-  }
-
-  .overview-label,
-  .overview-value {
-    font-size: 14px;
-  }
-  .action-btn {
-    font-size: 14px;
-    padding: 8px 0;
-  }
-  .overview-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+  align-items: center;
+  justify-content: center;
 }
 
-.custom-confirm-dialog .p-dialog-content {
-  padding: 1.5rem;
-  background-color: #f9fafb;
-  font-family: 'Inter', sans-serif;
-  border-radius: 12px;
+.close-button:hover {
+  background: #f7fafc;
+  color: #2d3748;
+  transform: rotate(90deg);
 }
 
-.custom-confirm-dialog .p-dialog-header {
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: #1f2937;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 1rem 1.5rem 0.5rem;
+.modal-body {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
-.confirm-message {
-  max-width: 100%;
-  font-size: 1rem;
-  padding: 0.2rem 0;
-  color: #374151;
-}
-
-.confirm-btn:hover {
-  background-color: #dc2626 !important;
-}
-
-.custom-confirm-dialog .p-dialog-footer {
+.modal-footer {
   display: flex;
   justify-content: flex-end;
-  padding: 1rem 1.5rem 1.5rem;
   gap: 1rem;
-  border-top: 1px solid #e5e7eb;
+  padding: 1rem;
+  border-top: 2px solid #e2e8f0;
+  background: #f8fafc;
+  flex-shrink: 0;
 }
 
-.p-dialog-footer .p-button .pi {
-  margin-right: 0.4rem;
+/* Enhanced Form Styles */
+.group-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
 
-.cancel-btn {
-  padding: 0.5rem 1.2rem !important;
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #2d3748;
   font-weight: 600;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.label-text {
+  color: #2d3748;
+}
+
+.required {
+  color: #e53e3e;
+  font-weight: 700;
+}
+
+.form-control {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: white;
+  color: #2d3748;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 4px rgba(66, 153, 225, 0.1);
+  transform: translateY(-1px);
+}
+
+.form-control:disabled {
+  background-color: #f7fafc;
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.form-hint {
+  color: #718096;
+  font-size: 0.9rem;
+  margin-top: 0.75rem;
+  line-height: 1.5;
+}
+
+/* Enhanced Permissions Container */
+.permissions-container {
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.permissions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border-bottom: 1px solid #e2e8f0;
+  gap: 1rem;
+}
+
+.select-all-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.select-all-btn:hover {
+  background: linear-gradient(135deg, #3182ce 0%, #2c5aa0 100%);
+  transform: translateY(-1px);
+}
+
+.permissions-search {
+  flex: 1;
+  max-width: 250px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.permissions-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.permission-item {
+  margin-bottom: 0.75rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.permission-item:hover {
+  background: #f7fafc;
+}
+
+.permission-item.selected {
+  background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+  border: 1px solid #90cdf4;
+}
+
+.permission-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  cursor: pointer;
+  position: relative;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.permission-checkbox:hover {
+  background: rgba(66, 153, 225, 0.05);
+}
+
+.permission-checkbox input[type='checkbox'] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  height: 20px;
+  width: 20px;
+  background: white;
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all 0.3s ease;
+}
+
+.permission-checkbox:hover .checkmark {
+  border-color: #4299e1;
+  box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.1);
+}
+
+.permission-checkbox input:checked ~ .checkmark {
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+  border-color: #4299e1;
+  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
+}
+
+.checkmark:after {
+  content: '';
+  position: absolute;
+  display: none;
+  left: 6px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.permission-checkbox input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.permission-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.permission-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 1rem;
+}
+
+.permission-description {
+  color: #718096;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.no-permissions {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
+}
+
+.no-permissions-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-permissions p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.loading-spinner-small {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .content-wrapper {
+    padding: 1rem;
+  }
+
+  .page-header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+    justify-content: center;
+  }
+
+  .page-icon {
+    font-size: 2rem;
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .page-subtitle {
+    text-align: center;
+    font-size: 1rem;
+  }
+
+  .page-actions {
+    justify-content: center;
+  }
+
+  .project-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 2rem 1.5rem;
+  }
+
+  .project-title-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .project-title {
+    font-size: 2rem;
+  }
+
+  .project-actions {
+    flex-direction: column;
+    min-width: auto;
+  }
+
+  .project-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .stat-card {
+    padding: 1.5rem;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .role-item,
+  .group-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .role-actions,
+  .group-actions {
+    justify-content: center;
+  }
+
+  /* Modal responsive styles */
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .modal-content {
+    width: 95%;
+    max-height: 95vh;
+    margin: 0;
+  }
+
+  .group-modal {
+    width: 95%;
+    max-width: none;
+    max-height: 95vh;
+  }
+
+  .modal-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .modal-title {
+    justify-content: center;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-footer {
+    padding: 1.5rem;
+  }
+
+  .permissions-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .permissions-search {
+    max-width: none;
+  }
+
+  .permissions-list {
+    max-height: 250px;
+  }
+
+  .permission-checkbox {
+    padding: 0.75rem;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: 1rem;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .found-user {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .user-info {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .project-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-card {
+    padding: 1.25rem;
+  }
+
+  .stat-number {
+    font-size: 2rem;
+  }
+
+  .stat-icon {
+    font-size: 2rem;
+  }
+
+  .modal-header {
+    padding: 1rem;
+  }
+
+  .modal-body {
+    padding: 1rem;
+  }
+
+  .modal-footer {
+    padding: 1rem;
+  }
+
+  .permissions-list {
+    max-height: 200px;
+  }
+}
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  position: relative;
+  background: #f8fafc;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 2px 8px #3182ce11;
+  padding: 0.5rem 1rem 0 1rem;
+}
+.tab {
+  position: relative;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 12px 12px 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  background: #e2e8f0;
+  color: #4a5568;
+  cursor: pointer;
+  transition: background 0.22s, color 0.22s, box-shadow 0.22s;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  overflow: visible;
+  z-index: 1;
+}
+.tab.active {
+  background: #fff;
+  color: #3182ce;
+  font-weight: 700;
+  z-index: 2;
+}
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4299e1 0%, #7f53ac 100%);
+  box-shadow: 0 2px 8px #3182ce33;
+  transition: all 0.3s;
+  animation: tabUnderlineIn 0.3s;
+}
+@keyframes tabUnderlineIn {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 64%;
+    opacity: 1;
+  }
+}
+.tab:hover:not(.active) {
+  background: #dbeafe;
+  color: #2563eb;
+  box-shadow: 0 4px 16px #3182ce22;
+  z-index: 2;
+}
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+.members-table th,
+.members-table td {
+  border: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+.role-badge {
+  display: inline-block;
+  background: #edf2f7;
+  color: #4299e1;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  margin-right: 0.25rem;
+  font-size: 0.9em;
+}
+
+/* Members Section Styles */
+.members-section {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.members-content {
+  margin-top: 1.5rem;
+}
+
+.members-loading,
+.members-error {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+  color: #718096;
+}
+
+.members-list {
+  background: #f7fafc;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.members-table th {
+  background: #edf2f7;
+  color: #2d3748;
+  font-weight: 600;
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.members-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+}
+
+.members-table tr:hover td {
+  background: #f7fafc;
+}
+
+.member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.member-name {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.member-email {
+  font-size: 0.875rem;
+  color: #718096;
+}
+
+.member-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.member-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.empty-members {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
+}
+
+.empty-members .empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-members h3 {
+  color: #2d3748;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-members p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.improved-desc-box {
+  background: #f9fafb;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem 1.5rem 1.5rem;
+  position: relative;
+  min-height: 80px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.edit-desc-btn {
+  background: none;
+  border: none;
+  color: #3182ce;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.edit-desc-btn:hover {
+  background: #edf2f7;
+  color: #2b6cb0;
+  opacity: 1;
+}
+.description-content.improved-desc-box .edit-desc-btn {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.2rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.description-content.improved-desc-box:hover .edit-desc-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+.desc-textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 300px;
+  border: 1.5px solid #cbd5e0;
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fff;
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+  resize: vertical;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: border 0.18s;
+}
+.desc-textarea:focus {
+  border-color: #3182ce;
+}
+.desc-char-count {
+  font-size: 0.95rem;
+  color: #718096;
+  margin-top: 0.2rem;
+  text-align: right;
+}
+.desc-char-count.over-limit {
+  color: #e53e3e;
+  font-weight: 600;
+}
+.desc-edit-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.file-hoverable {
+  transition: box-shadow 0.22s, border 0.22s, background 0.22s;
+  cursor: pointer;
+  position: relative;
+  background: #f8fafc;
+}
+.file-hoverable:hover {
+  box-shadow: 0 8px 32px rgba(49, 130, 206, 0.18);
+  border: 2.5px solid #3182ce;
+  background: #e6f0fa;
+  z-index: 2;
+}
+.file-hoverable:active {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+.file-download-icon {
+  position: absolute;
+  right: 1.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.85;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.file-hoverable:hover .file-download-icon {
+  opacity: 1;
+  filter: drop-shadow(0 2px 6px #3182ce33);
+}
+.file-thumb {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f3f6fa;
+}
+.file-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.pdf-icon {
+  font-weight: bold;
+  color: #e53e3e;
+  background: #fff5f5;
+  border: 1.5px solid #e53e3e;
+  border-radius: 6px;
+  padding: 0.25rem 0.7rem;
+  font-size: 1rem;
+  letter-spacing: 1px;
+}
+.file-name {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  vertical-align: middle;
+}
+.file-menu-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.file-menu-btn {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  color: #718096;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+.file-menu-btn:hover {
+  background: #edf2f7;
+  color: #2b6cb0;
+}
+.file-menu {
+  position: absolute;
+  top: 2.2rem;
+  right: 0;
+  min-width: 130px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
+  z-index: 10;
+  padding: 0.5rem 0;
+}
+.file-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.file-menu li {
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  color: #2d3748;
+  transition: background 0.18s, color 0.18s;
+}
+.file-menu li:hover {
+  background: #f3f6fa;
+  color: #3182ce;
+}
+.file-menu li.danger {
+  color: #e53e3e;
+}
+.file-menu li.danger:hover {
+  background: #fff5f5;
+  color: #c53030;
+}
+
+.badge-private-new {
+  background: #fefcbf;
+  color: #b7791f;
+  border: 1.5px solid #b7791f;
+  font-weight: 700;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  padding: 0.18rem 0.7rem 0.18rem 0.5rem;
+  margin-left: 0.7rem;
+  box-shadow: 0 2px 8px #f6e05e33;
 }
 
-.cancel-btn:hover {
-  background-color: #f3f4f6 !important;
-  border-color: #cbd5e1 !important;
-}
-
-.confirm-btn {
-  padding: 0.6rem 1.4rem;
+.badge-public-new {
+  background: linear-gradient(135deg, #38a169 0%, #22543d 100%);
+  color: #fff;
   font-weight: 700;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  padding: 0.18rem 0.7rem 0.18rem 0.5rem;
+  margin-left: 0.7rem;
+  box-shadow: 0 2px 8px #38a16933;
+}
+
+.badge-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.1em;
+  margin-right: 0.2em;
+}
+
+.badge-text {
+  font-size: 0.98em;
+}
+
+.actions-dropdown-wrapper {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+}
+
+.actions-dropdown {
+  display: none;
+}
+
+.actions-dropdown-menu {
+  position: absolute;
+  top: 2.5rem;
+  right: 0;
+  background: white;
+  border: 1.5px solid #e2e8f0;
   border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
+  z-index: 10;
+  min-width: 180px;
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.dropdown-action {
+  background: none;
+  border: none;
+  color: #2d3748;
+  font-size: 1rem;
+  text-align: left;
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  border-radius: 6px;
+}
+
+.dropdown-action:hover {
+  background: #f3f6fa;
+  color: #3182ce;
+}
+
+.dropdown-action.danger {
+  color: #e53e3e;
+}
+
+.dropdown-action.danger:hover {
+  background: #fff5f5;
+  color: #c53030;
+}
+
+.dropdown-action.close {
+  color: #718096;
+  font-size: 0.95em;
+}
+
+.actions-desktop {
+  display: flex;
+  gap: 1rem;
+}
+
+.icon-btn {
+  padding: 0.5rem 0.7rem;
+  font-size: 1.3rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  color: #4a5568;
+  box-shadow: 0 2px 8px #2563eb22;
+  transition: all 0.18s;
+}
+
+.icon-btn:hover {
+  background: #f7fafc;
+  color: #3182ce;
+  border-color: #3182ce;
+}
+
+@media (max-width: 900px) {
+  .actions-desktop {
+    display: none;
+  }
+  .actions-dropdown {
+    display: block;
+  }
+}
+
+@media (min-width: 901px) {
+  .actions-dropdown {
+    display: none;
+  }
+  .actions-desktop {
+    display: flex;
+  }
+}
+
+/* Snackbar/Toast */
+.saved-snackbar {
+  position: fixed;
+  left: 50%;
+  bottom: 2.5rem;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, #38b2ac 0%, #7f53ac 100%);
+  color: #fff;
+  padding: 0.9rem 2.2rem;
+  border-radius: 2rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(56, 178, 172, 0.18);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  animation: fadeInUp 0.3s;
+}
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.tabs-enhanced {
+  position: relative;
+  background: #f8fafc;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 2px 8px #3182ce11;
+  padding: 0.5rem 1rem 0 1rem;
+  margin-bottom: 2rem;
+}
+.tab {
+  position: relative;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 12px 12px 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  background: #e2e8f0;
+  color: #4a5568;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  overflow: visible;
+}
+.tab.active {
+  background: #fff;
+  color: #3182ce;
+  font-weight: 700;
+  z-index: 2;
+}
+.tab-icon {
+  font-size: 1.2em;
+}
+.tab-underline {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4299e1 0%, #7f53ac 100%);
+  border-radius: 2px;
+  transition: all 0.3s;
+  animation: tabUnderlineIn 0.3s;
+}
+@keyframes tabUnderlineIn {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 60%;
+    opacity: 1;
+  }
+}
+.add-user-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px #3182ce11;
+  padding: 2rem 1.5rem;
+  max-width: 480px;
+  margin: 0 auto 2rem auto;
+  border: 1.5px solid #e2e8f0;
+}
+.add-user-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1.5rem;
+}
+.add-user-icon {
+  font-size: 2.2rem;
+}
+.add-user-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+.add-user-form-enhanced {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+}
+.add-user-input-group {
+  display: flex;
+  align-items: center;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  padding: 0.5rem 1rem;
+  transition: border 0.2s, box-shadow 0.2s;
+  position: relative;
+  flex: 1;
+}
+.add-user-input-group.focused {
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px #4299e122;
+}
+.input-icon {
+  font-size: 1.2rem;
+  color: #a0aec0;
+  margin-right: 0.7rem;
+}
+.add-user-input-group input {
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-size: 1rem;
+  color: #2d3748;
+  padding: 0.5rem 0;
+}
+.btn[disabled] {
+  background: #e2e8f0 !important;
+  color: #a0aec0 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+}
+@media (max-width: 600px) {
+  .add-user-card {
+    padding: 1rem 0.5rem;
+    max-width: 100%;
+  }
+  .add-user-form-enhanced {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .add-user-input-group {
+    width: 100%;
+  }
+  .btn {
+    width: 100%;
+    margin-top: 0.7rem;
+  }
+}
+
+.members-table-responsive {
+  overflow-x: auto;
+  display: block;
+}
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+.members-table tr:nth-child(even) td {
+  background: #f8fafc;
+}
+.members-table tr:hover td {
+  background: #e0e7ef;
+}
+.members-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #2d3748;
+  padding: 1rem;
+  text-align: left;
+  position: relative;
+  cursor: pointer;
+}
+.members-table td {
+  padding: 1rem;
+  vertical-align: middle;
+}
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.user-avatar {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7f53ac 0%, #4299e1 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px #3182ce22;
+}
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+.user-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 1rem;
+}
+.user-email {
+  color: #a0aec0;
+  font-size: 0.92rem;
+  margin-top: 0.1rem;
+}
+.role-badge {
+  display: inline-block;
+  background: #ede9fe;
+  color: #7c3aed;
+  border-radius: 999px;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  margin-right: 0.3rem;
+  margin-bottom: 0.1rem;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.role-badge:hover {
+  background: #c7d2fe;
+}
+.edit-role-btn {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 50%;
+  color: #3182ce;
+  cursor: pointer;
+  transition: background 0.18s;
+  font-size: 1.1rem;
+}
+.edit-role-btn:hover {
+  background: #e0e7ef;
+}
+@media (max-width: 700px) {
+  .members-table {
+    min-width: 500px;
+  }
+}
+
+.btn-primary:disabled,
+.btn[disabled].btn-primary {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%) !important;
+  color: #a0aec0 !important;
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Toast Success */
+.toast-success {
+  position: fixed;
+  top: 2.5rem;
+  right: 2.5rem;
+  background: linear-gradient(90deg, #38a169 0%, #48bb78 100%);
+  color: #fff;
+  padding: 1rem 2.2rem;
+  border-radius: 2rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(56, 178, 172, 0.18);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  animation: fadeInUp 0.3s;
+}
+.toast-icon {
+  font-size: 1.5em;
+}
+@media (max-width: 600px) {
+  .toast-success {
+    right: 0.7rem;
+    left: 0.7rem;
+    top: 1.2rem;
+    padding: 0.8rem 1.2rem;
+    font-size: 1rem;
+  }
+}
+
+.user-suggest-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 8px 24px #3182ce22;
+  z-index: 20;
+  margin: 0;
+  padding: 0.2rem 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.user-suggest-dropdown li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #2d3748;
+  transition: background 0.18s, color 0.18s;
+}
+.user-suggest-dropdown li.active,
+.user-suggest-dropdown li:hover {
+  background: #f0f6ff;
+  color: #3182ce;
+}
+.suggest-name {
+  font-weight: 600;
+}
+.suggest-email {
+  color: #a0aec0;
+  font-size: 0.95em;
+  margin-left: 0.5rem;
+}
+
+/* Thêm hiệu ứng transition cho tab và list */
+.fade-tab-enter-active,
+.fade-tab-leave-active {
+  transition: opacity 0.28s cubic-bezier(0.4, 1, 0.7, 1.2);
+}
+.fade-tab-enter-from,
+.fade-tab-leave-to {
+  opacity: 0;
+}
+.fade-list-enter-active,
+.fade-list-leave-active {
+  transition: all 0.25s cubic-bezier(0.4, 1, 0.7, 1.2);
+}
+.fade-list-enter-from,
+.fade-list-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.description,
+.desc-plain {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.role-search-box {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.role-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  background: #f7fafc;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+  padding: 1rem 1rem 1rem 0.8rem;
+  cursor: pointer;
+  transition: box-shadow 0.18s, border 0.18s, background 0.18s;
+  position: relative;
+}
+.role-card.selected {
+  border-color: #4299e1;
+  background: #ebf8ff;
+  box-shadow: 0 2px 8px #3182ce22;
+}
+.role-card:hover {
+  border-color: #4299e1;
+  background: #e6f0fa;
+}
+.role-card input[type='checkbox'] {
+  margin-top: 3px;
+}
+.role-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.role-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 1rem;
+}
+.role-desc {
+  color: #718096;
+  font-size: 0.92rem;
+}
+@media (max-width: 600px) {
+  .role-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.owner-badge {
+  background: #fefcbf;
+  color: #b7791f;
+  border: 1.5px solid #b7791f;
+  margin-right: 0.3rem;
+}
+
+.role-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.18em 0.9em;
+  font-size: 0.95em;
+  font-weight: 700;
+  margin-right: 0.3em;
+  margin-bottom: 0.1em;
+  background: #f3f3f3;
+  color: #333;
+  border: 1.5px solid #e2e8f0;
+  letter-spacing: 0.04em;
+}
+.role-badge-owner { background: #fefcbf; color: #b7791f; border-color: #b7791f; }
+.role-badge-admin { background: #bee3f8; color: #2b6cb0; border-color: #2b6cb0; }
+.role-badge-mod { background: #c6f6d5; color: #276749; border-color: #276749; }
+.role-badge-everyone { background: #ede9fe; color: #7c3aed; border-color: #7c3aed; }
+.role-badge-default { background: #f3f3f3; color: #333; border-color: #e2e8f0; }
+.role-badges-group { display: inline-block; }
+.discord-role-tooltip {
+  position: absolute;
+  background: #23272a;
+  color: #fff;
+  padding: 0.7em 1.2em;
+  border-radius: 8px;
+  font-size: 0.98em;
+  z-index: 100;
+  box-shadow: 0 4px 16px #0005;
+  white-space: pre-line;
+  max-width: 320px;
+  left: 0;
+  top: 2.2em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+.discord-badge-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18em;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.discord-role-badge {
+  border-radius: 999px;
+  padding: 0.18em 0.85em;
+  font-size: 0.97em;
+  font-weight: 700;
+  margin-right: 0.13em;
+  margin-bottom: 0.08em;
+  background: #23272a;
+  color: #fff;
+  border: none;
+  box-shadow: 0 1px 4px #0002;
+  letter-spacing: 0.04em;
+  transition: background 0.18s, color 0.18s;
+  cursor: pointer;
+}
+.discord-role-badge:hover {
+  background: #5865f2;
+  color: #fff;
+}
+.role-badge-owner { background: #f9e076 !important; color: #b7791f !important; }
+.role-badge-admin { background: #6ba4f8 !important; color: #2b6cb0 !important; }
+.role-badge-mod { background: #6ee7b7 !important; color: #276749 !important; }
+.role-badge-everyone { background: #bdb5f7 !important; color: #7c3aed !important; }
+.role-badge-default { background: #4f545c !important; color: #fff !important; }
+.discord-more-badge {
+  color: #7289da;
+  font-weight: 700;
+  margin-left: 0.2em;
+  font-size: 0.97em;
+  cursor: pointer;
+}
+.discord-role-tooltip {
+  position: absolute;
+  background: #23272a;
+  color: #fff;
+  padding: 0.7em 1.2em;
+  border-radius: 8px;
+  font-size: 0.98em;
+  z-index: 100;
+  box-shadow: 0 4px 16px #0005;
+  white-space: pre-line;
+  max-width: 320px;
+  left: 0;
+  top: 2.2em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  min-width: 180px;
 }
 </style>

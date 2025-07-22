@@ -20,13 +20,17 @@ import {
   UserIdsArray,
 } from '#LocalProject/Dtos';
 import { ProjectRoleManagerService } from '#LocalProject/Managers/service/project-role-manager.service';
+import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { PermissionFlags } from '@here-to-translate/common';
 
 @Controller('projects/:projectId/roles')
 @UseInterceptors(JsonSerializerInterceptor)
 export class ProjectRoleController {
-  constructor(private readonly roles: ProjectRoleManagerService) {}
+  constructor(
+    private readonly roles: ProjectRoleManagerService,
+    private readonly projectManager: ProjectManagerService
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -123,6 +127,22 @@ export class ProjectRoleController {
       roleId,
       userIds.userIds
     );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('/fix-everyone-role')
+  async fixEveryoneRole(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    // Only project owner or admin can fix roles
+    await this.projectManager.testPermissions(
+      projectId,
+      req.user.id,
+      PermissionFlags.ProjectAdmin
+    );
+    await this.roles.fixEveryoneRolePermissions(projectId);
+    return { message: 'Everyone role permissions fixed successfully' };
   }
 }
 

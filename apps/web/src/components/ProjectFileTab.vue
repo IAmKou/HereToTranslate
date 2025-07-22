@@ -9,7 +9,8 @@ import Button from 'primevue/button';
 import { FilterMatchMode } from 'primevue/api';
 import Menu from 'primevue/menu';
 import axiosInstance from '../api';
-import { useProjectPermission } from '../composables/useProjectPermission';
+import { useProjectMemberPermissions } from '../composables/useProjectMemberPermissions';
+import { parsePermissionFlags } from '../utils/permissions';
 
 interface ProjectFile {
   id: string | number;
@@ -362,15 +363,44 @@ defineExpose({
   deletingFile
 });
 
-const { hasPermission, isProjectOwner } = useProjectPermission(
+// Permission logic
+const normalizedMembers = computed(() => {
+  if (!props.members) return [];
+  return props.members.map(m => ({
+    ...m,
+    roles: Array.isArray(m.roles)
+      ? m.roles.map(r => {
+        let permissions = r.permissions;
+        if ((!permissions || permissions.length === 0) && r.permissionFlags) {
+          permissions = parsePermissionFlags(r.permissionFlags);
+        }
+        return { ...r, permissions };
+      })
+      : []
+  }));
+});
+
+const { hasPermission, isProjectOwner, isProjectAdmin } = useProjectMemberPermissions(
   computed(() => props.project || {}),
-  computed(() => props.members || []),
+  normalizedMembers,
   computed(() => props.currentUser || null)
 );
-const canAttachFiles = computed(() => hasPermission('AttachFiles'));
 
-watch([canAttachFiles, isProjectOwner], () => {
-  console.log('canAttachFiles:', canAttachFiles.value, 'isProjectOwner:', isProjectOwner.value, 'members:', props.members, 'project:', props.project);
+// Separate permission checks for each operation
+const canAttachFiles = computed(() => hasPermission('AttachFiles') || isProjectAdmin.value || isProjectOwner.value);
+const canManageFiles = computed(() => hasPermission('ManageFiles') || isProjectAdmin.value || isProjectOwner.value);
+const canViewFiles = computed(() => hasPermission('ViewFiles') || hasPermission('AttachFiles') || isProjectAdmin.value || isProjectOwner.value);
+
+watch([canAttachFiles, canManageFiles, canViewFiles], () => {
+  console.log('File permissions:', {
+    canAttachFiles: canAttachFiles.value,
+    canManageFiles: canManageFiles.value,
+    canViewFiles: canViewFiles.value,
+    isProjectOwner: isProjectOwner.value,
+    isProjectAdmin: isProjectAdmin.value,
+    members: props.members,
+    project: props.project
+  });
 });
 </script>
 <template>
@@ -412,25 +442,25 @@ watch([canAttachFiles, isProjectOwner], () => {
           <transition name="fade">
             <div v-if="dropdownOpenId === (file.id || file.fileId)" class="custom-dropdown-menu" :ref="setDropdownMenuRef(file.id || file.fileId)">
               <button class="dropdown-item"
-                      @click="canAttachFiles && handleAction('download', file.id || file.fileId)"
-                      :disabled="!canAttachFiles"
-                      :title="!canAttachFiles ? 'You do not have permission to download files (requires AttachFiles permission)' : ''"
+                      @click="canViewFiles && handleAction('download', file.id || file.fileId)"
+                      :disabled="!canViewFiles"
+                      :title="!canViewFiles ? 'You do not have permission to download files (requires ViewFiles permission)' : ''"
               >
                 <i class="pi pi-download"></i>
                 <span>Download</span>
               </button>
               <button class="dropdown-item"
-                      @click="canAttachFiles && handleAction('rename', file.id || file.fileId)"
-                      :disabled="!canAttachFiles"
-                      :title="!canAttachFiles ? 'You do not have permission to rename files (requires AttachFiles permission)' : ''"
+                      @click="canManageFiles && handleAction('rename', file.id || file.fileId)"
+                      :disabled="!canManageFiles"
+                      :title="!canManageFiles ? 'You do not have permission to rename files (requires ManageFiles permission)' : ''"
               >
                 <i class="pi pi-pencil"></i>
                 <span>Rename</span>
               </button>
               <button class="dropdown-item delete"
-                      @click="canAttachFiles && handleAction('delete', file.id || file.fileId)"
-                      :disabled="!canAttachFiles"
-                      :title="!canAttachFiles ? 'You do not have permission to delete files (requires AttachFiles permission)' : ''"
+                      @click="canManageFiles && handleAction('delete', file.id || file.fileId)"
+                      :disabled="!canManageFiles"
+                      :title="!canManageFiles ? 'You do not have permission to delete files (requires ManageFiles permission)' : ''"
               >
                 <i class="pi pi-trash"></i>
                 <span>Delete</span>

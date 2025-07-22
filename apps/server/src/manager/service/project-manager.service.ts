@@ -64,9 +64,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     uid: bigint,
     against: IntoPermission
   ): Promise<Permission> {
-    const permissionAgainst = new Permission(against);
+    // against có thể là bigint hoặc string, luôn convert về bigint
+    const permissionValue = BigInt(against);
     this.logger.debug(
-      `Checking if user [${uid}] has ${permissionAgainst} for project [${projectId}]`
+      `Checking if user [${uid}] has permission [${permissionValue}] for project [${projectId}]`
     );
 
     const projectExists = await this.projectRepository.exists({
@@ -96,16 +97,12 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
           new Permission(result?.userPermissionFlags ?? PermissionFlags.None)
       );
 
-    if (
-      permissionAgainst.applyMask(userPermissionFlags).value !==
-      permissionAgainst.value
-    ) {
+    // So sánh bitmask trực tiếp
+    if ((userPermissionFlags.value & permissionValue) !== permissionValue) {
       this.logger.debug(
-        `User [${uid}] does not have permission [${permissionAgainst}] for project [${projectId}]`
+        `User [${uid}] does NOT have permission [${permissionValue}] for project [${projectId}]`
       );
-      throw new ForbiddenException(
-        `You do not have permission to perform this action`
-      );
+      throw new ForbiddenException('You do not have permission to perform this action');
     }
 
     return new Permission(userPermissionFlags);
@@ -343,6 +340,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     try {
       return await projectMetadataQuery
         .leftJoinAndSelect('project.projectRoles', 'projectRoles')
+        .andWhere('projectRoles.name != :systemRole', { systemRole: 'Everyone' })
         .getOne();
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to fetch project metadata');
@@ -450,17 +448,23 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
   }
 
-  async deleteProject(projectId: bigint) {
+  async deleteProject(projectId: bigint, userId: bigint) {
     this.logger.debug(`Deleting project with ID: ${projectId}`);
 
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
-      relations: ['defaultBranch'],
+      relations: ['defaultBranch', 'createdBy'],
     });
 
     if (!project) {
       this.logger.debug(`Project [${projectId}] does not exist`);
       throw new NotFoundException(`Unknown project`);
+    }
+
+    // Chỉ cho phép owner xóa project
+    if (!project.createdBy || String(project.createdBy.id) !== String(userId)) {
+      this.logger.debug(`User [${userId}] không phải owner, không được xóa project [${projectId}]`);
+      throw new ForbiddenException('Only project owner can delete the project');
     }
 
     const repoName = `project-${projectId}`;
@@ -572,6 +576,24 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     return updatedProject;
   }
 
+  async removeUserFromProject(projectId: bigint, userId: bigint) {
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: ['members', 'createdBy'],
+    });
+    if (!project) throw new NotFoundException('Project not found');
+    // Không cho phép remove owner
+    if (project.createdBy && String(project.createdBy.id) === String(userId)) {
+      throw new ForbiddenException('Cannot remove project owner');
+    }
+    // Xóa trực tiếp bằng raw SQL
+    await this.dataSource.query(
+      'DELETE FROM project_members_user WHERE projectId = ? AND userId = ?',
+      [projectId, userId]
+    );
+    return { message: 'User removed from project members' };
+  }
+
   async getProjectMembers(projectId: bigint): Promise<
     {
       id: string;
@@ -613,6 +635,66 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       }
     }
     return Object.values(memberMap);
+  }
+
+  async getProjectMembersWithRoles(projectId: bigint): Promise<{
+    members: {
+      id: string;
+      username: string;
+      fullName: string;
+      email: string;
+      roles: { id: string; name: string; permissionFlags?: string | number | bigint }[];
+    }[];
+    projectRoles: { id: string; name: string; permissionFlags: string | number | bigint }[];
+  }> {
+    const roles = await this.projectRoleRepository.find({
+      where: { project: { id: projectId } },
+      relations: ['users'],
+    });
+
+    // Tạo roleMap để tra cứu permissionFlags
+    const roleMap: Record<string, any> = {};
+    for (const role of roles) {
+      roleMap[role.id.toString()] = role;
+    }
+
+    const memberMap: Record<
+      string,
+      {
+        id: string;
+        username: string;
+        fullName: string;
+        email: string;
+        roles: { id: string; name: string; permissionFlags?: string | number | bigint }[];
+      }
+    > = {};
+
+    for (const role of roles) {
+      for (const user of role.users) {
+        const key = user.id.toString();
+        if (!memberMap[key]) {
+          memberMap[key] = {
+            id: key,
+            username: user.username,
+            fullName: user.fullName,
+            email: user.email,
+            roles: [],
+          };
+        }
+        // Luôn gán permissionFlags cho role trong member
+        memberMap[key].roles.push({
+          id: role.id.toString(),
+          name: role.name,
+          permissionFlags: role.permissionFlags
+        });
+      }
+    }
+    const projectRoles = roles.map((role) => ({
+      id: role.id.toString(),
+      name: role.name,
+      permissionFlags: role.permissionFlags,
+    }));
+    return { members: Object.values(memberMap), projectRoles };
   }
 
   async createBranch(

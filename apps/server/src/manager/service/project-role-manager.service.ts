@@ -68,7 +68,9 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     roleData: CreateProjectRoleDto
   ) {
 
-    const permissionMask = await this.projectManager.testPermissions(
+    this.logger.debug('Check PermissionFlags.ManageRoles:', PermissionFlags.ManageRoles);
+    this.logger.debug('All PermissionFlags:', PermissionFlags);
+    await this.projectManager.testPermissions(
       projectId,
       uid,
       PermissionFlags.ManageMembers
@@ -77,14 +79,26 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
       `Adding role to project [${projectId}] for user [${uid}]`,
       roleData
     );
+    let permissionFlags = roleData.permissionFlags ?? PermissionFlags.None;
+    // Nếu có ProjectAdmin thì gán tất cả quyền (trừ DeleteProject và RemoveOwner)
+    const hasProjectAdmin = (BigInt(permissionFlags) & PermissionFlags.ProjectAdmin) === PermissionFlags.ProjectAdmin;
+    if (hasProjectAdmin) {
+      const ALL_FLAGS = Object.entries(PermissionFlags)
+        .filter(([key, value]) =>
+          typeof value === 'bigint' &&
+          key !== 'None' &&
+          key !== 'Owner' &&
+          key !== 'DeleteProject' &&
+          key !== 'RemoveOwner'
+        )
+        .reduce((acc, [_, value]) => acc | BigInt(value), BigInt(0));
+      permissionFlags = ALL_FLAGS;
+    }
     const newRole = this.projectRoleRepository.create({
       project: { id: BigInt(projectId) },
       name: roleData.name,
-      permissionFlags: new Permission(
-        roleData.permissionFlags ?? PermissionFlags.None
-      ).applyMask(permissionMask),
+      permissionFlags: new Permission(permissionFlags),
     });
-
     try {
       const savedRole = await this.projectRoleRepository.save(newRole);
       this.logger.debug(`Role created successfully with ID: ${savedRole.id}`);
@@ -102,6 +116,7 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     this.logger.debug(
       `Fetching roles [${roleId ?? 'All'}] for project [${projectId}]`
     );
+    // Phải có quyền ViewProject để xem roles
     await this.projectManager.testPermissions(
       projectId,
       uid,
@@ -132,13 +147,12 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
       `Updating role [${roleId}] for project [${projectId}]`,
       updateData
     );
-
-    const userPermissionFlags = await this.projectManager.testPermissions(
+    // Phải có quyền ManageRoles để sửa role
+    await this.projectManager.testPermissions(
       projectId,
       uid,
       PermissionFlags.ManageRoles
     );
-
     const role = await this.projectRoleRepository.findOne({
       where: { id: BigInt(roleId), project: { id: BigInt(projectId) } },
     });
@@ -152,9 +166,21 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
       role.name = updateData.name;
     }
     if (updateData.permissionFlags) {
-      role.permissionFlags = new Permission(
-        updateData.permissionFlags
-      ).applyMask(userPermissionFlags);
+      let permissionFlags = updateData.permissionFlags;
+      const hasProjectAdmin = (BigInt(permissionFlags) & PermissionFlags.ProjectAdmin) === PermissionFlags.ProjectAdmin;
+      if (hasProjectAdmin) {
+        const ALL_FLAGS = Object.entries(PermissionFlags)
+          .filter(([key, value]) =>
+            typeof value === 'bigint' &&
+            key !== 'None' &&
+            key !== 'Owner' &&
+            key !== 'DeleteProject' &&
+            key !== 'RemoveOwner'
+          )
+          .reduce((acc, [_, value]) => acc | BigInt(value), BigInt(0));
+        permissionFlags = ALL_FLAGS;
+      }
+      role.permissionFlags = new Permission(permissionFlags);
     }
     try {
       const updatedRole = await this.projectRoleRepository.save(role);
@@ -166,14 +192,13 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
   }
 
   async deleteProjectRole(uid: bigint, projectId: bigint, roleId: bigint) {
+    // Phải có quyền ManageRoles để xóa role
     await this.projectManager.testPermissions(
       projectId,
       uid,
       PermissionFlags.ManageRoles
     );
-
     this.logger.debug(`Deleting role [${roleId}] for project [${projectId}]`);
-
     const role = await this.projectRoleRepository.findOne({
       where: { id: BigInt(roleId), project: { id: BigInt(projectId) } },
     });
@@ -194,12 +219,12 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     roleId: bigint,
     userIds: bigint[]
   ) {
-    const userPermissionFlags = await this.projectManager.testPermissions(
+    // Phải có quyền ManageMembers để xóa user khỏi role
+    await this.projectManager.testPermissions(
       projectId,
       uid,
-      PermissionFlags.ManageMembers
+      PermissionFlags.ManageRoles
     );
-
     this.logger.debug(
       `Adding users to role [${roleId}] in project [${projectId}]`,
       { userIds }
@@ -207,26 +232,13 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
 
     const role = await this.projectRoleRepository.findOne({
       where: { id: BigInt(roleId), project: { id: BigInt(projectId) } },
+      relations: ['users'],
     });
     if (!role) {
       this.logger.debug(
         `Role [${roleId}] does not exist in project [${projectId}]`
       );
       throw new NotFoundException(`Unknown role`);
-    }
-
-    const rolePermissionDoesOverlap =
-      role.permissionFlags.value & userPermissionFlags.value;
-
-    if (rolePermissionDoesOverlap !== role.permissionFlags.value) {
-      const missingPermissionNames = role.permissionFlags
-        .remove(userPermissionFlags)
-        .resolveNames();
-      this.logger.debug(
-        `User [${uid}] does not have some permissions in role [${roleId}]: \n${missingPermissionNames.join(
-          ', '
-        )}`
-      );
     }
 
     const toAddSet = new Set(userIds.map((id) => BigInt(id)));
@@ -237,24 +249,25 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
       projects: { id: BigInt(projectId) },
     });
     if (usersToAdd.length !== toAddSet.size) {
-      const missingIds = searchIds.filter((id) => !toAddSet.has(id));
+      const missingIds = searchIds.filter((id) => !usersToAdd.some(u => u.id === id));
       throw new BadRequestException({
         message: `Some users do not exist in the project`,
         data: missingIds,
       });
     }
 
-    const updatedRole = this.projectRoleRepository.create({
-      project: { id: BigInt(projectId) },
-      users: usersToAdd,
-      name: role.name,
-      permissionFlags: role.permissionFlags,
-    });
+    // Chỉ thêm user vào mảng users của role, không tạo mới role!
+    const existingUserIds = new Set(role.users.map((u) => u.id.toString()));
+    for (const user of usersToAdd) {
+      if (!existingUserIds.has(user.id.toString())) {
+        role.users.push(user);
+      }
+    }
 
     try {
-      const savedRoles = await this.projectRoleRepository.save(updatedRole);
-      this.logger.debug(`Users added to role successfully`, { savedRoles });
-      return savedRoles;
+      const savedRole = await this.projectRoleRepository.save(role);
+      this.logger.debug(`Users added to role successfully`, { savedRole });
+      return savedRole;
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to add users to project role');
     }
@@ -266,7 +279,8 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     roleId: bigint,
     userIds: bigint[]
   ) {
-    const userPermissionFlags = await this.projectManager.testPermissions(
+    // Phải có quyền ManageMembers để thêm user vào role
+    await this.projectManager.testPermissions(
       projectId,
       uid,
       PermissionFlags.ManageMembers
@@ -276,53 +290,32 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
       { userIds }
     );
 
+    // Find the role with users relation
     const role = await this.projectRoleRepository.findOne({
       where: { id: BigInt(roleId), project: { id: BigInt(projectId) } },
-      select: ['permissionFlags'],
+      relations: ['users', 'project'],
     });
+
     if (!role) {
       this.logger.debug(
         `Role [${roleId}] does not exist in project [${projectId}]`
       );
       throw new NotFoundException(`Unknown role`);
     }
-    const rolePermissionDoesOverlap =
-      role.permissionFlags.value & userPermissionFlags.value;
-
-    if (rolePermissionDoesOverlap !== role.permissionFlags.value) {
-      const missingPermissionNames = role.permissionFlags
-        .remove(userPermissionFlags)
-        .resolveNames();
-      this.logger.debug(
-        `User [${uid}] does not have some permissions in role [${roleId}]: \n${missingPermissionNames.join(
-          ', '
-        )}`
-      );
-    }
 
     const toRemoveSet = new Set(userIds.map((id) => BigInt(id)));
-    const searchIds = Array.from(toRemoveSet);
-
-    const usersToRemove = await this.projectRoleRepository.find({
-      where: {
-        id: roleId,
-        project: { id: BigInt(projectId) },
-        users: { id: In(searchIds) },
-      },
-    });
-    if (usersToRemove.length !== toRemoveSet.size) {
-      const missingIds = searchIds.filter((id) => !toRemoveSet.has(id));
-      throw new BadRequestException({
-        message: `Some users do not exist in the project role`,
-        data: missingIds,
-      });
-    }
 
     try {
-      await this.projectRoleRepository.remove(usersToRemove);
-      this.logger.debug(`Users removed from role successfully`, {
-        rolesToRemove: usersToRemove,
-      });
+      // Delete the relationships directly from the join table
+      await this.projectRoleRepository
+        .createQueryBuilder()
+        .delete()
+        .from('user_project_roles')
+        .where('roleId = :roleId', { roleId: role.id })
+        .andWhere('userId IN (:...userIds)', { userIds: Array.from(toRemoveSet) })
+        .execute();
+
+      this.logger.debug(`Users removed from role successfully`);
       return { message: `Users removed from role successfully` };
     } catch (error) {
       this.unknownErrorHanlder(

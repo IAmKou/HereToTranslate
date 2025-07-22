@@ -4,6 +4,7 @@ import { useToast } from 'primevue/usetoast';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import axiosInstance from '../api';
+import { useProjectPermission } from '../composables/useProjectPermission';
 
 interface TranslationString {
   id: string;
@@ -12,7 +13,13 @@ interface TranslationString {
   fileId: string;
 }
 
-const props = defineProps<{ projectId: string | number; branchId: string | number | null }>();
+const props = defineProps<{
+  projectId: string | number;
+  branchId: string | number | null;
+  project?: any;
+  members?: any[];
+  currentUser?: any;
+}>();
 
 const files = ref<any[]>([]);
 const translationStrings = ref<any[]>([]);
@@ -191,6 +198,12 @@ const filterOptions = [
   { value: 'translated', label: 'Translated', icon: 'pi pi-check', tooltip: 'Show only translated' },
   { value: 'untranslated', label: 'Untranslated', icon: 'pi pi-times', tooltip: 'Show only untranslated' },
 ];
+
+const { hasPermission } = useProjectPermission(
+  computed(() => props.project || {}),
+  computed(() => props.members || []),
+  computed(() => props.currentUser || null)
+);
 
 watch(() => [props.projectId, props.branchId], () => {
   loadFiles();

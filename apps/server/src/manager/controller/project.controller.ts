@@ -132,12 +132,21 @@ export class ProjectController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post(':projectId/remove-user')
+  async removeUserFromProject(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Body('userId', BigIntTransformPipe) userId: bigint
+  ) {
+    return this.projects.removeUserFromProject(projectId, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':projectId/members')
   async getAllMembers(
     @Param('projectId', BigIntTransformPipe) projectId: bigint
   ) {
-    const members = await this.projects.getProjectMembers(projectId);
-    return { members };
+    const { members, projectRoles } = await this.projects.getProjectMembersWithRoles(projectId);
+    return { members, projectRoles };
   }
 
   @UseGuards(JwtAuthGuard)

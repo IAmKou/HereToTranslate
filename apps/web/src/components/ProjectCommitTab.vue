@@ -7,6 +7,7 @@ import Textarea from 'primevue/textarea';
 import Dialog from 'primevue/dialog';
 import axiosInstance from '../api';
 import Calendar from 'primevue/calendar';
+import { useProjectPermission } from '../composables/useProjectPermission';
 
 interface Commit {
   id: string;
@@ -46,7 +47,10 @@ interface Branch {
 
 const props = defineProps<{
   projectId: string | number;
-  branchId: string | number | null
+  branchId: string | number | null;
+  project?: any;
+  members?: any[];
+  currentUser?: any;
 }>();
 
 const toast = useToast();
@@ -301,6 +305,14 @@ const branchLoading = ref(false);
 const emit = defineEmits(['update:branchId']);
 
 const activeTab = ref<'local' | 'history'>('local');
+
+const { hasPermission } = useProjectPermission(
+  computed(() => props.project || {}),
+  computed(() => props.members || []),
+  computed(() => props.currentUser || null)
+);
+const canPushCommit = computed(() => hasPermission('PushCommit'));
+const canReviewCommit = computed(() => hasPermission('ReviewCommit'));
 
 // Methods
 async function loadCommits() {
@@ -936,7 +948,9 @@ watch(showSubmitDialog, (val: boolean) => {
           label="Submit Commit"
           icon="pi pi-plus"
           class="submit-btn"
-          @click="() => { console.log('Clicked Submit Commit'); showSubmitDialog = true; console.log('showSubmitDialog:', showSubmitDialog); }"
+          @click="canPushCommit && (() => { showSubmitDialog = true })"
+          :disabled="!canPushCommit"
+          :title="!canPushCommit ? 'You do not have permission to submit commits' : ''"
         />
       </div>
       <!-- Loading/Error/Commits list giữ nguyên, chỉ thay pagedCommits thành sortedFilteredCommits -->
@@ -975,7 +989,7 @@ watch(showSubmitDialog, (val: boolean) => {
                   </span>
                   <div class="commit-actions-upgrade">
                     <button class="action-btn view" @click="openContentDialog(commit)">View</button>
-                    <button v-if="commit.status === 'pending' && activeTab==='local'" class="action-btn review" @click="openReviewDialog(commit)">Review</button>
+                    <button v-if="commit.status === 'pending' && activeTab==='local'" class="action-btn review" @click="canReviewCommit && openReviewDialog(commit)" :disabled="!canReviewCommit" :title="!canReviewCommit ? 'You do not have permission to review commits' : ''">Review</button>
                   </div>
                 </div>
               </div>

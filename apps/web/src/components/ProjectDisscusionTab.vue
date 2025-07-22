@@ -5,10 +5,12 @@
         <span class="title-icon">💬</span>
         Discussions
       </h2>
+      <!-- Section Header: New Discussion Button -->
       <button
-        v-if="canCreateDiscussion"
-        @click="showCreateModal = true"
         class="btn btn-primary btn-add"
+        @click="canManageDiscussions && (showCreateModal = true)"
+        :disabled="!canManageDiscussions"
+        :title="!canManageDiscussions ? 'You do not have permission to create discussions (requires ManageDiscussions permission)' : ''"
       >
         <span class="icon">➕</span>
         New Discussion
@@ -66,15 +68,23 @@
 
           </div>
           <div class="discussion-actions">
+            <!-- Discussion Actions: View, Actions -->
             <button
-              @click="viewDiscussion(discussion)"
+              @click="canViewThread && viewDiscussion(discussion)"
               class="btn btn-outline btn-sm"
+              :disabled="!canViewThread"
+              :title="!canViewThread ? 'You do not have permission to view discussions (requires ViewThread permission)' : ''"
             >
               <span class="icon">👁️</span>
               View
             </button>
             <div v-if="canManageDiscussions" class="dropdown">
-              <button class="dropdown-toggle" @click="toggleDropdown(discussion.id)">
+              <button
+                class="dropdown-toggle"
+                @click="canManageDiscussions && toggleDropdown(discussion.id)"
+                :disabled="!canManageDiscussions"
+                :title="!canManageDiscussions ? 'You do not have permission to manage discussions (requires ManageDiscussions permission)' : ''"
+              >
                 <span class="icon">⚙️</span>
                 Actions
                 <span class="dropdown-arrow">▼</span>
@@ -114,6 +124,13 @@
                 </button>
               </div>
             </div>
+            <div v-else class="dropdown">
+              <button class="dropdown-toggle" disabled :title="'You do not have permission to manage discussions (requires ManageDiscussions permission)'">
+                <span class="icon">⚙️</span>
+                Actions
+                <span class="dropdown-arrow">▼</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -135,10 +152,12 @@
       </div>
       <h3>No discussions yet</h3>
       <p>Start a discussion to collaborate with your team members.</p>
+      <!-- Empty State: Create First Discussion Button -->
       <button
-        v-if="canCreateDiscussion"
-        @click="showCreateModal = true"
         class="btn btn-primary btn-big-cta"
+        @click="canManageDiscussions && (showCreateModal = true)"
+        :disabled="!canManageDiscussions"
+        :title="!canManageDiscussions ? 'You do not have permission to create discussions (requires ManageDiscussions permission)' : ''"
       >
         <span class="icon">➕</span>
         Create First Discussion
@@ -235,12 +254,14 @@
                   class="form-control"
                   placeholder="Write a comment..."
                   rows="3"
-                  :disabled="selectedDiscussion?.isArchived"
+                  :disabled="selectedDiscussion?.isArchived || !canPostComment"
+                  :title="!canPostComment ? 'You do not have permission to post comments (requires PostComment permission)' : ''"
                 ></textarea>
                 <button
-                  @click="postComment"
+                  @click="canPostComment && postComment()"
                   class="btn btn-primary btn-sm"
-                  :disabled="!newComment.trim() || posting || selectedDiscussion?.isArchived"
+                  :disabled="!newComment.trim() || posting || selectedDiscussion?.isArchived || !canPostComment"
+                  :title="!canPostComment ? 'You do not have permission to post comments (requires PostComment permission)' : ''"
                 >
                   <span v-if="posting" class="loading-spinner-small"></span>
                   <span v-else class="icon">💬</span>
@@ -271,38 +292,42 @@
                     {{ comment.content }}
                   </div>
                   <div class="comment-actions">
+                    <!-- Upvote/Downvote -->
                     <button
-                      @click="upvoteComment(comment.id)"
+                      @click="canVote && upvoteComment(comment.id)"
                       class="btn btn-sm btn-outline"
-                      :class="{ 'voted': comment.upvotes?.some(u => u.id === currentUser?.id) }"
-                      :disabled="selectedDiscussion?.isArchived"
+                      :class="{ 'voted': comment.upvotes?.some((u: { id: number }) => u.id === currentUser?.id) }"
+                      :disabled="selectedDiscussion?.isArchived || !canVote"
+                      :title="!canVote ? 'You do not have permission to vote (requires Vote permission)' : ''"
                     >
                       <span class="icon">👍</span>
                       {{ comment.upvotes?.length || 0 }}
                     </button>
                     <button
-                      @click="downvoteComment(comment.id)"
+                      @click="canVote && downvoteComment(comment.id)"
                       class="btn btn-sm btn-outline"
-                      :class="{ 'voted': comment.downvotes?.some(d => d.id === currentUser?.id) }"
-                      :disabled="selectedDiscussion?.isArchived"
+                      :class="{ 'voted': comment.downvotes?.some((d: { id: number }) => d.id === currentUser?.id) }"
+                      :disabled="selectedDiscussion?.isArchived || !canVote"
+                      :title="!canVote ? 'You do not have permission to vote (requires Vote permission)' : ''"
                     >
                       <span class="icon">👎</span>
                       {{ comment.downvotes?.length || 0 }}
                     </button>
+                    <!-- Edit/Delete comment -->
                     <button
-                      v-if="canEditComment(comment)"
-                      @click="editComment(comment)"
+                      @click="(canEditComment(comment) || canManageComments) && editComment(comment)"
                       class="btn btn-sm btn-outline"
-                      :disabled="selectedDiscussion?.isArchived"
+                      :disabled="selectedDiscussion?.isArchived || !(canEditComment(comment) || canManageComments)"
+                      :title="!(canEditComment(comment) || canManageComments) ? 'You do not have permission to edit comments (requires ManageComments or be the comment owner)' : ''"
                     >
                       <span class="icon">✏️</span>
                       Edit
                     </button>
                     <button
-                      v-if="canDeleteComment(comment)"
-                      @click="deleteComment(comment.id)"
+                      @click="(canDeleteComment(comment) || canManageComments) && deleteComment(comment.id)"
                       class="btn btn-sm btn-outline btn-danger"
-                      :disabled="selectedDiscussion?.isArchived"
+                      :disabled="selectedDiscussion?.isArchived || !(canDeleteComment(comment) || canManageComments)"
+                      :title="!(canDeleteComment(comment) || canManageComments) ? 'You do not have permission to delete comments (requires ManageComments or be the comment owner)' : ''"
                     >
                       <span class="icon">🗑️</span>
                       Delete
@@ -337,11 +362,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, type ComputedRef, watch, watchEffect } from 'vue'
 import { useAuthStore } from '../store/auth'
 import DeleteDiscussionDialog from './DeleteDiscussionDialog.vue'
 import EditDiscussionDialog from './EditDiscussionDialog.vue'
 import axiosInstance from '../api'
+import { useProjectPermission } from '../composables/useProjectPermission'
 
 interface Discussion {
   id: number
@@ -371,13 +397,19 @@ interface Comment {
 
 interface Props {
   projectId: number
+  project?: any
+  members?: any[]
   canCreateDiscussion?: boolean
   canManageDiscussions?: boolean
+  currentUser?: any
 }
 
 const props = withDefaults(defineProps<Props>(), {
   canCreateDiscussion: false,
-  canManageDiscussions: false
+  canManageDiscussions: false,
+  project: undefined,
+  members: undefined,
+  currentUser: undefined
 })
 
 const authStore = useAuthStore()
@@ -441,11 +473,11 @@ const sortBy = ref<'createdAt' | 'commentsCount' | 'isPinned'>('createdAt')
 
 const sortDiscussions = () => {
   if (sortBy.value === 'createdAt') {
-    discussions.value.sort((a, b) => b.id - a.id)
+    discussions.value.sort((a: Discussion, b: Discussion) => b.id - a.id)
   } else if (sortBy.value === 'commentsCount') {
-    discussions.value.sort((a, b) => (b.commentsCount || 0) - (a.commentsCount || 0))
+    discussions.value.sort((a: Discussion, b: Discussion) => (b.commentsCount || 0) - (a.commentsCount || 0))
   } else if (sortBy.value === 'isPinned') {
-    discussions.value.sort((a, b) => Number(b.isPinned) - Number(a.isPinned))
+    discussions.value.sort((a: Discussion, b: Discussion) => Number(b.isPinned) - Number(a.isPinned))
   }
 }
 
@@ -628,6 +660,100 @@ const closeEditDialog = () => {
 onMounted(() => {
   loadDiscussions()
 })
+
+// Permission logic
+// Trước khi truyền members vào useProjectPermission, parse lại permissions cho từng role:
+const availablePermissions = [
+  { value: 'ProjectAdmin', label: 'Project Admin' },
+  { value: 'ManageRoles', label: 'Manage Roles' },
+  { value: 'ManageMembers', label: 'Manage Members' },
+  { value: 'ManageBranches', label: 'Manage Branches' },
+  { value: 'ManageGroups', label: 'Manage Groups' },
+  { value: 'ManageProjectMetadata', label: 'Manage Project Metadata' },
+  { value: 'ManageWorkspaces', label: 'Manage Workspaces' },
+  { value: 'ManageDiscussions', label: 'Manage Discussions' },
+  { value: 'ViewAudit', label: 'View Audit' },
+  { value: 'ReviewCommit', label: 'Review Commit' },
+  { value: 'PushCommit', label: 'Push Commit' },
+  { value: 'ReviewRequests', label: 'Review Requests' },
+  { value: 'ViewRequest', label: 'View Request' },
+  { value: 'ManageWorkspaceMetadata', label: 'Manage Workspace Metadata' },
+  { value: 'ViewWorkspace', label: 'View Workspace' },
+  { value: 'ViewProject', label: 'View Project' },
+  { value: 'ManageComments', label: 'Manage Comments' },
+  { value: 'PostComment', label: 'Post Comment' },
+  { value: 'Vote', label: 'Vote' },
+  { value: 'AttachFiles', label: 'Attach Files' },
+  { value: 'ViewThread', label: 'View Thread' },
+];
+function parsePermissionFlags(bitmask) {
+  if (bitmask === undefined || bitmask === null) return [];
+  let actualBitmask = bitmask;
+  if (typeof bitmask === 'object' && bitmask !== null) {
+    actualBitmask = bitmask.value || bitmask.permissionFlags || bitmask.flags || bitmask;
+    if (typeof actualBitmask === 'object' && actualBitmask !== null) {
+      actualBitmask = actualBitmask.value || actualBitmask._value || actualBitmask.toString();
+    }
+  }
+  let flags;
+  try {
+    if (typeof actualBitmask === 'bigint') {
+      flags = actualBitmask;
+    } else if (typeof actualBitmask === 'string') {
+      flags = BigInt(actualBitmask);
+    } else if (typeof actualBitmask === 'number') {
+      flags = BigInt(actualBitmask);
+    } else {
+      return [];
+    }
+    return availablePermissions
+      .filter((_, index) => {
+        const mask = BigInt(1) << BigInt(index);
+        return (flags & mask) !== BigInt(0);
+      })
+      .map(p => p.value);
+  } catch (e) {
+    return [];
+  }
+}
+
+const normalizedMembers = computed(() => {
+  if (!props.members) return [];
+  return props.members.map(m => ({
+    ...m,
+    roles: Array.isArray(m.roles)
+      ? m.roles.map(r => {
+        let permissions = r.permissions;
+        if ((!permissions || permissions.length === 0) && r.permissionFlags) {
+          permissions = parsePermissionFlags(r.permissionFlags);
+        }
+        return { ...r, permissions };
+      })
+      : []
+  }));
+});
+
+const { hasPermission } = useProjectPermission(
+  computed(() => props.project || {}),
+  normalizedMembers,
+  computed(() => props.currentUser || null)
+)
+const canViewThread = computed(() => hasPermission('ViewThread'))
+const canManageDiscussions = computed(() => hasPermission('ManageDiscussions'))
+const canManageComments = computed(() => hasPermission('ManageComments'))
+const canPostComment = computed(() => hasPermission('PostComment'))
+const canVote = computed(() => hasPermission('Vote'))
+
+// Debug: log dữ liệu khi normalizedMembers hoặc quyền thay đổi
+watch([normalizedMembers], () => {
+  console.log('==DEBUG DiscussionTab==');
+  console.log('normalizedMembers:', normalizedMembers.value);
+});
+watchEffect(() => {
+  console.log('canManageDiscussions:', canManageDiscussions.value);
+  console.log('canPostComment:', canPostComment.value);
+  console.log('currentUser:', currentUser.value);
+});
 </script>
 
 <style scoped>
@@ -1274,5 +1400,10 @@ onMounted(() => {
 .btn-create .icon {
   font-size: 1.1em;
   margin-right: 0.2em;
+}
+.btn[disabled], .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
 }
 </style>

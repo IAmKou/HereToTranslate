@@ -1,27 +1,47 @@
 <template>
   <div class="chat-window">
+    <!-- ✅ Notification -->
+    <Transition name="fade">
+      <div
+        v-if="showNotification && notification"
+        class="notification"
+        :class="notification.type"
+      >
+        {{ notification.message }}
+      </div>
+    </Transition>
+
     <!-- ✅ Header -->
-    <div class="chat-header">
+    <header class="chat-header">
       <div class="room-info">
         <div class="avatar">
           {{ roomName[0]?.toUpperCase() || '💬' }}
         </div>
         <div class="room-details">
           <h2 class="room-name">{{ roomName }}</h2>
-          <span class="online-status" v-if="participants.length">
+          <span class="online-status">
             {{ participants.length }} member{{ participants.length !== 1 ? 's' : '' }}
           </span>
         </div>
       </div>
       <div class="header-actions">
-        <button class="icon-button" @click="toggleInfoPanel" :class="{ active: showInfo }">
-          <span class="icon">ℹ️</span>
+        <button
+          class="icon-button"
+          @click="toggleInfoPanel"
+          :class="{ active: showInfo }"
+          title="Room info"
+        >
+          ℹ️
         </button>
-        <button class="icon-button" @click="showAddMemberInput = !showAddMemberInput">
-          <span class="icon">👥</span>
+        <button
+          class="icon-button"
+          @click="showAddMemberInput = !showAddMemberInput"
+          title="Add member"
+        >
+          👥
         </button>
       </div>
-    </div>
+    </header>
 
     <!-- ✅ Add Member Panel -->
     <div v-if="showAddMemberInput" class="add-member-panel">
@@ -40,57 +60,44 @@
     </div>
 
     <!-- ✅ Main chat body -->
-    <div class="chat-body" :class="{ 'with-info': showInfo }">
-      <!-- Messages panel -->
+    <main class="chat-body" :class="{ 'with-info': showInfo }">
+      <!-- Messages -->
       <div class="messages" ref="messageContainer">
+        <!-- Loading & error states -->
         <div v-if="isLoading" class="loading-overlay">
           <div class="loading-spinner"></div>
           <span>Loading messages...</span>
         </div>
-
         <div v-if="error" class="error-message">
           {{ error }}
           <button @click="loadMessages">Retry</button>
         </div>
-
         <div v-if="isConnecting" class="connecting-message">
           <div class="loading-spinner"></div>
           <span>Connecting to chat server...</span>
         </div>
 
         <!-- Message groups -->
-        <template v-for="(group, index) in messageGroups" :key="index">
-          <!-- Date separator -->
-          <div v-if="group.showDate" class="date-separator">
-            {{ formatDate(group.messages[0].createdAt) }}
-          </div>
-
-          <!-- Messages in group -->
+        <template v-for="(group, gIndex) in messageGroups" :key="gIndex">
+          <div v-if="group.showDate" class="date-separator">{{ group.date }}</div>
           <div
             v-for="message in group.messages"
             :key="message._id"
             class="message-wrapper"
-            :class="{
-              'mine': message.senderId === currentUserId,
-              'theirs': message.senderId !== currentUserId,
-              'first-in-group': message === group.messages[0],
-              'last-in-group': message === group.messages[group.messages.length - 1]
-            }"
+            :class="{ mine: message.senderId === currentUserId }"
           >
-            <!-- Reply preview if message is a reply -->
+            <!-- Reply reference -->
             <div v-if="message.replyTo" class="reply-preview-bubble">
-              <span class="reply-sender">{{ message.replyTo.senderUsername }}</span>
-              <p class="reply-content">{{ message.replyTo.message }}</p>
+              ↪ {{ message.replyTo.senderUsername }}: "{{ message.replyTo.message }}"
             </div>
 
-            <!-- Main message bubble -->
+            <!-- Message bubble -->
             <div
               class="message-bubble"
               @mouseenter="hoveredMessageId = message._id"
               @mouseleave="hoveredMessageId = null"
             >
-              <!-- Message header -->
-              <div class="message-header" v-if="message === group.messages[0]">
+              <div class="message-header">
                 <span class="sender-name">
                   {{ message.senderId === currentUserId ? 'You' : message.senderUsername }}
                 </span>
@@ -99,73 +106,73 @@
                 </span>
               </div>
 
-              <!-- Message content -->
-              <div class="message-content">
-                {{ message.message }}
-                <span v-if="message.isEdited" class="edited-indicator">(edited)</span>
+              <!-- Edit mode -->
+              <div v-if="editingMessageId === message._id" class="edit-container">
+                <textarea
+                  v-model="editingText"
+                  @keydown.enter.prevent="confirmEdit(message)"
+                  class="edit-input"
+                ></textarea>
+                <div class="edit-actions">
+                  <button @click="confirmEdit(message)">💾 Save</button>
+                  <button @click="cancelEdit">✖️ Cancel</button>
+                </div>
               </div>
 
-              <!-- Message actions -->
+              <!-- Normal message -->
+              <div v-else class="message-content">
+                <img
+                  v-if="message.fileUrl"
+                  :src="message.fileUrl"
+                  :alt="message.fileName || 'Image'"
+                  class="message-image"
+                />
+                <span v-else>
+                  {{ message.message }}
+                  <span v-if="message.isEdited" class="edited-indicator">(edited)</span>
+                </span>
+              </div>
+
+              <!-- Actions -->
               <div
                 class="message-actions"
-                v-if="hoveredMessageId === message._id"
+                v-if="hoveredMessageId === message._id && editingMessageId !== message._id"
               >
-                <button class="action-button" @click="() => handleReply(message)">
-                  ↩️ Reply
-                </button>
+                <button @click="handleReply(message)" title="Reply">↩️</button>
                 <button
                   v-if="message.senderId === currentUserId"
-                  class="action-button"
-                  @click="() => startEdit(message)"
-                >
-                  ✏️ Edit
-                </button>
+                  @click="startEdit(message)"
+                  title="Edit"
+                >✏️</button>
                 <button
                   v-if="message.senderId === currentUserId"
-                  class="action-button delete"
-                  @click="() => handleDelete(message)"
-                >
-                  🗑️ Delete
-                </button>
+                  @click="handleDelete(message)"
+                  title="Delete"
+                >🗑️</button>
               </div>
             </div>
           </div>
         </template>
       </div>
 
-      <!-- Info panel -->
-      <div v-if="showInfo" class="info-panel">
-        <div class="info-header">
-          <h3>Chat Members</h3>
-          <button class="close-button" @click="showInfo = false">×</button>
-        </div>
-        <div class="participants-list">
-          <div
+      <!-- Participants panel -->
+      <aside v-if="showInfo" class="info-panel">
+        <h3>Participants</h3>
+        <ul>
+          <li
             v-for="user in participants"
             :key="user.id"
-            class="participant-item"
-            @click="toggleUserDetail(user)"
+            :class="{ admin: user.id === props.createdById }"
           >
-            <div class="participant-avatar">
-              {{ user.username[0]?.toUpperCase() || '?' }}
-            </div>
-            <div class="participant-info">
-              <span class="participant-name">{{ user.username }}</span>
-              <span class="participant-role" v-if="user.id === props.createdById">Admin</span>
-            </div>
-            <button
-              v-if="canManageUser(user)"
-              class="kick-button"
-              @click.stop="kickMember(user.id)"
-            >
-              Remove
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+            <span class="participant-name">{{ user.username }}</span>
+            <span v-if="user.id === props.createdById" class="admin-badge">Admin</span>
+            <button v-if="canManageUser(user)" @click="kickMember(user.id)">Remove</button>
+          </li>
+        </ul>
+      </aside>
+    </main>
 
-    <!-- ✅ Reply preview -->
+    <!-- ✅ Reply bar -->
     <div v-if="replyingTo" class="reply-bar">
       <div class="reply-info">
         <span class="reply-label">Replying to</span>
@@ -175,149 +182,372 @@
       <button class="cancel-reply" @click="replyingTo = null">×</button>
     </div>
 
-    <!-- ✅ Message input -->
-    <form class="message-input" @submit.prevent="sendMessage">
-      <div class="input-container">
+    <!-- ✅ Input -->
+    <footer class="input-footer">
+      <div class="input-wrapper">
         <textarea
           v-model="msg"
           placeholder="Type a message..."
           @keydown.enter.exact.prevent="sendMessage"
           @keydown.enter.shift.exact="msg += '\n'"
-          :rows="Math.min(5, (msg.match(/\n/g) || []).length + 1)"
+          class="message-textarea"
         ></textarea>
         <div class="input-actions">
-          <button
-            type="submit"
-            class="send-button"
-            :disabled="!msg.trim() || isConnecting"
-          >
+          <div class="emoji-wrapper">
+            <button
+              type="button"
+              class="icon-button large"
+              @click.stop="showEmojiPicker = !showEmojiPicker"
+              title="Insert emoji"
+            >😊</button>
+            <div v-if="showEmojiPicker" class="emoji-picker" @click.stop>
+              <div class="emoji-categories-nav">
+                <button
+                  v-for="category in (Object.keys(emojiCategories) as EmojiCategory[])"
+                  :key="category"
+                  :class="{ active: selectedEmojiCategory === category }"
+                  @click="selectedEmojiCategory = category"
+                >
+                  {{ emojiCategories[category][0] }}
+                </button>
+              </div>
+              <div class="emoji-grid">
+                <button
+                  v-for="emoji in emojiCategories[selectedEmojiCategory]"
+                  :key="emoji"
+                  class="emoji-button"
+                  @click="() => { msg += emoji; showEmojiPicker = false; }"
+                >
+                  {{ emoji }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <input
+            type="file"
+            ref="fileInput"
+            accept="image/*"
+            style="display: none"
+            @change="handleFileUpload"
+          />
+          <button type="button" class="icon-button large" @click="fileInput?.click()" title="Attach file">
+            📎
+          </button>
+          <button type="submit" class="send-button" :disabled="!msg.trim() || isConnecting">
             Send
           </button>
         </div>
       </div>
-    </form>
+    </footer>
   </div>
 </template>
 
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted, onMounted, nextTick, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, type Socket } from 'socket.io-client'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import localizedFormat from 'dayjs/plugin/localizedFormat'
 import utc from 'dayjs/plugin/utc'
+
 dayjs.extend(utc)
 dayjs.extend(relativeTime)
 dayjs.extend(localizedFormat)
 
+// ======================== Props & Emits ========================
 const props = defineProps<{
-  roomId: string;
-  currentUserId: number;
-  currentUsername: string;
-  roomName: string;
-  createdById: number;
-}>();
+  roomId: string
+  currentUserId: number
+  currentUsername: string
+  roomName: string
+  createdById: number
+}>()
 
+const emit = defineEmits<{
+  (e: 'message-received', message: ChatMessage): void
+  (e: 'message-updated', message: ChatMessage): void
+  (e: 'message-deleted', messageId: string): void
+}>()
+
+// ======================== Interfaces ===========================
 interface ChatMessage {
-  _id: string;
-  roomId: string;
-  senderId: number;
-  senderUsername?: string;
-  message: string;
-  createdAt: string;
-  isEdited?: boolean;
-  updatedAt?: string;
+  _id: string
+  roomId: string
+  senderId: number
+  senderUsername?: string
+  message: string
+  createdAt: string
+  updatedAt?: string
+  isEdited?: boolean
+  fileUrl?: string
+  fileName?: string
   replyTo?: {
-    _id: string;
-    senderId: number;
-    senderUsername?: string;
-    message: string;
-  };
+    _id: string
+    senderId: number
+    senderUsername?: string
+    message: string
+  }
 }
 
-// Add this type for messageGroups
 interface MessageGroup {
-  showDate: boolean;
-  messages: ChatMessage[];
+  senderId: number
+  senderUsername: string
+  messages: ChatMessage[]
+  showDate: boolean
+  date: string
 }
 
+interface Participant {
+  id: number
+  username: string
+  email: string
+  phone: string
+}
+
+// ======================== State ================================
 const messages = ref<ChatMessage[]>([])
+const participants = ref<Participant[]>([])
+const adminUser = ref<Participant | null>(null)
+
 const msg = ref('')
-const socket = ref<Socket | null>(null)
-const messageContainer = ref<HTMLElement | null>(null)
-const isConnecting = ref(true);
-const isLoading = ref(true);
-const error = ref<string | null>(null);
+const replyingTo = ref<ChatMessage | null>(null)
 
 const hoveredMessageId = ref<string | null>(null)
 const editingMessageId = ref<string | null>(null)
 const editingText = ref('')
-const replyingTo = ref<ChatMessage | null>(null);
-const participants = ref<{ id:number; username:string; email:string; phone:string }[]>([]);
-const selectedUser = ref<{ id:number; username:string; email:string; phone:string } | null>(null);
-const newMemberUsernameOrEmail = ref('');
-const addMemberError = ref('');
-const showAddMemberInput = ref(false);
-const adminUser = ref<{ id:number; username:string } | null>(null);
 
-const toggleUserDetail = (user: { id:number; username:string; email:string; phone:string }) => {
-  // if the same user is clicked again, close it
-  if (selectedUser.value && selectedUser.value.id === user.id) {
-    selectedUser.value = null;
-  } else {
-    selectedUser.value = user;
+const showInfo = ref(false)
+const showAddMemberInput = ref(false)
+const newMemberUsernameOrEmail = ref('')
+const addMemberError = ref('')
+
+// Socket and status
+const socket = ref<Socket | null>(null)
+const isConnecting = ref(true)
+const isLoading = ref(true)
+const error = ref<string | null>(null)
+
+// File upload
+const fileInput = ref<HTMLInputElement | null>(null)
+const isUploading = ref(false)
+const uploadProgress = ref(0)
+
+// Notification
+const notification = ref<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
+const showNotification = ref(false)
+
+// Emoji
+type EmojiCategory = 'smileys' | 'gestures' | 'hearts' | 'activities'
+const emojiCategories = {
+  smileys: ['😀', '😃', '😄', '😁', '😂', '🤣', '😊', '😇', '😉', '😍', '🥰', '😘'],
+  gestures: ['👍', '👎', '👌', '✌️', '🤞', '🤝', '👊', '✊', '🙌', '👋'],
+  hearts: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💖', '💗'],
+  activities: ['🎮', '🎲', '🎨', '🎤', '🎧', '🎸', '⚽', '🏀', '🏈', '⚾']
+} as const
+const selectedEmojiCategory = ref<EmojiCategory>('smileys')
+const showEmojiPicker = ref(false)
+
+// ======================== Helpers ==============================
+const displayNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  notification.value = { message, type }
+  showNotification.value = true
+  setTimeout(() => (showNotification.value = false), 3000)
+}
+
+// Group messages by sender & date
+const messageGroups = computed<MessageGroup[]>(() => {
+  const groups: MessageGroup[] = []
+  let currentGroup: MessageGroup | null = null
+
+  messages.value.forEach((m, i) => {
+    const prev = messages.value[i - 1]
+    const showDate =
+      !prev || !dayjs(m.createdAt).isSame(dayjs(prev.createdAt), 'day')
+
+    if (
+      !prev ||
+      prev.senderId !== m.senderId ||
+      dayjs(m.createdAt).diff(dayjs(prev.createdAt), 'minute') > 5 ||
+      showDate
+    ) {
+      currentGroup = {
+        senderId: m.senderId,
+        senderUsername: m.senderUsername || 'Unknown',
+        messages: [m],
+        showDate,
+        date: dayjs(m.createdAt).format('MMMM D, YYYY')
+      }
+      groups.push(currentGroup)
+    } else {
+      currentGroup?.messages.push(m)
+    }
+  })
+
+  return groups
+})
+
+// ======================== Socket Handling ======================
+const connectSocket = () => {
+  if (socket.value?.connected) return
+  isConnecting.value = true
+  error.value = null
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = location.hostname
+  const port = import.meta.env.PROD ? location.port : '3000'
+  const wsUrl = `${protocol}//${host}${port ? `:${port}` : ''}`
+
+  socket.value = io(wsUrl + '/chat', {
+    withCredentials: true,
+    path: '/api/chat/socket.io',
+    transports: ['websocket']
+  })
+
+  socket.value.on('connect', () => {
+    isConnecting.value = false
+    socket.value?.emit('join_room', props.roomId)
+  })
+
+  socket.value.on('new_message', (message: ChatMessage) => {
+    messages.value.push(message)
+    scrollToBottom()
+    emit('message-received', message)
+  })
+
+  socket.value.on('message_edited', (updated: ChatMessage) => {
+    const idx = messages.value.findIndex(m => m._id === updated._id)
+    if (idx !== -1) {
+      messages.value[idx] = { ...messages.value[idx], ...updated, isEdited: true }
+      emit('message-updated', updated)
+    }
+  })
+
+  socket.value.on('message_deleted', (deletedId: string) => {
+    messages.value = messages.value.filter(m => m._id !== deletedId)
+    emit('message-deleted', deletedId)
+  })
+
+  socket.value.on('disconnect', () => {
+    isConnecting.value = true
+  })
+
+  socket.value.on('connect_error', () => {
+    error.value = 'Connection error'
+  })
+}
+
+// ======================== Message Actions ======================
+const sendMessage = () => {
+  if (!msg.value.trim() || !socket.value?.connected) return
+  socket.value.emit('send_message', {
+    roomId: props.roomId,
+    senderId: props.currentUserId,
+    senderUsername: props.currentUsername,
+    message: msg.value.trim(),
+    replyToId: replyingTo.value?._id
+  })
+  msg.value = ''
+  replyingTo.value = null
+}
+
+const startEdit = (m: ChatMessage) => {
+  editingMessageId.value = m._id
+  editingText.value = m.message
+}
+
+const cancelEdit = () => {
+  editingMessageId.value = null
+  editingText.value = ''
+}
+
+const confirmEdit = async (m: ChatMessage) => {
+  if (!editingText.value.trim()) return cancelEdit()
+  try {
+    await axios.patch(`/api/chat/messages/${m._id}`, { message: editingText.value.trim() })
+    const idx = messages.value.findIndex(x => x._id === m._id)
+    if (idx !== -1) messages.value[idx].message = editingText.value.trim()
+    messages.value[idx].isEdited = true
+    displayNotification('Message edited', 'success')
+  } catch {
+    displayNotification('Edit failed', 'error')
   }
-};
+  cancelEdit()
+}
 
-const handleReply = (message: ChatMessage) => {
-  replyingTo.value = message;
-};
+const handleDelete = async (m: ChatMessage) => {
+  if (!confirm('Delete this message?')) return
+  try {
+    await axios.delete(`/api/chat/messages/${m._id}`)
+    messages.value = messages.value.filter(x => x._id !== m._id)
+    displayNotification('Message deleted', 'success')
+  } catch {
+    displayNotification('Delete failed', 'error')
+  }
+}
 
-const toggleInfoPanel = () => {
-  showInfo.value = !showInfo.value;
-};
+const handleReply = (m: ChatMessage) => {
+  replyingTo.value = m
+}
 
+// ======================== File Upload ==========================
+const handleFileUpload = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+
+  if (!file.type.startsWith('image/')) return displayNotification('Only images allowed', 'error')
+  if (file.size > 5 * 1024 * 1024) return displayNotification('Max file size 5MB', 'error')
+
+  isUploading.value = true
+  const form = new FormData()
+  form.append('file', file)
+
+  try {
+    const res = await axios.post('/api/chat/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: e => {
+        if (e.total) uploadProgress.value = Math.round((e.loaded * 100) / e.total)
+      }
+    })
+    socket.value?.emit('send_message', {
+      roomId: props.roomId,
+      senderId: props.currentUserId,
+      senderUsername: props.currentUsername,
+      message: '📎',
+      fileUrl: res.data.url,
+      fileName: file.name
+    })
+    displayNotification('File uploaded', 'success')
+  } catch {
+    displayNotification('Upload failed', 'error')
+  } finally {
+    isUploading.value = false
+    uploadProgress.value = 0
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
+
+// ======================== Participants =========================
 const loadParticipants = async () => {
   try {
-    const res = await axios.get(`/api/chat/rooms/${props.roomId}/participants`);
-    console.log('Participants API response:', res.data);
-    const data = Array.isArray(res.data)
-      ? res.data
-      : Array.isArray(res.data.participants)
-        ? res.data.participants
-        : [];
-
-    participants.value = data;
-    if (props.createdById) {
-      const admin = participants.value.find(
-        u => String(u.id) === String(props.createdById)
-      );
-      adminUser.value = admin || null;
-    } else {
-      adminUser.value = null;
-    }
-  } catch (err) {
-    console.error('❌ Failed to load participants:', err);
-    participants.value = []; // reset on error
+    const res = await axios.get(`/api/chat/rooms/${props.roomId}/participants`)
+    participants.value = Array.isArray(res.data) ? res.data : []
+    adminUser.value = participants.value.find(u => u.id === props.createdById) || null
+  } catch {
+    participants.value = []
   }
-};
-// Call when mounted or roomId changes:
-watch(
-  () => props.roomId,
-  async newRoomId => {
-    if (newRoomId) {
-      await loadParticipants();
-    }
-  },
-  { immediate: true }
-);
+}
 
-const addMember = async () => {
+const addMember = async (): Promise<void> => {
   addMemberError.value = '';
+
   const target = newMemberUsernameOrEmail.value.trim();
-  if (!target) return;
+  if (!target) {
+    // no-op, just exit
+    return;
+  }
 
   if (target === props.currentUsername) {
     addMemberError.value = "❌ You can't add yourself.";
@@ -327,7 +557,6 @@ const addMember = async () => {
   try {
     const res = await axios.get('/api/chat/search', {
       params: { q: target },
-      headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
     });
 
     const targetUser = res.data;
@@ -336,16 +565,15 @@ const addMember = async () => {
       return;
     }
 
-    await axios.patch(
-      `/api/chat/rooms/${props.roomId}/add-member`,
-      { userId: targetUser.id },
-      { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } }
-    );
+    await axios.patch(`/api/chat/rooms/${props.roomId}/add-member`, {
+      userId: targetUser.id,
+    });
+
     newMemberUsernameOrEmail.value = '';
     showAddMemberInput.value = false;
     await loadParticipants();
 
-    alert(`✅ Added ${targetUser.username} to this room!`);
+    displayNotification(`✅ Added ${targetUser.username} to this room!`, 'success');
   } catch (err: any) {
     console.error(err);
     const message = err.response?.data?.message;
@@ -354,95 +582,28 @@ const addMember = async () => {
     } else {
       addMemberError.value = message || '❌ Failed to add member.';
     }
-  }
-};
-const kickMember = async (userId: number) => {
-  if (!confirm(userId === props.currentUserId ? 'Leave this room?' : 'Kick this member?')) return;
-  try {
-    await axios.patch(`/api/chat/rooms/${props.roomId}/remove-member`, {
-      creatorId: props.currentUserId,
-      userId: userId,
-    }, { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } });
-
-    if (userId === props.currentUserId) {
-      alert('✅ You left the chat room.');
-      location.reload();
-    } else {
-      await loadParticipants();
-      alert('✅ Member removed.');
-    }
-  } catch (err: any) {
-    alert(err.response?.data?.message || '❌ Failed to remove member.');
+    return;
   }
 };
 
-
-
-// ✅ Start editing
-const startEdit = (message: ChatMessage) => {
-  editingMessageId.value = message._id
-  editingText.value = message.message
-}
-
-// ✅ Cancel editing
-const cancelEdit = () => {
-  editingMessageId.value = null
-  editingText.value = ''
-}
-
-const showInfo = ref(false)
-
-const confirmEdit = async (message: ChatMessage) => {
+const kickMember = async (id: number) => {
+  if (!confirm(id === props.currentUserId ? 'Leave this room?' : 'Remove member?')) return
   try {
-    const id = String(message._id)
-    const { data } = await axios.patch(`/api/chat/messages/${id}`, {
-      message: editingText.value
-    })
-    const idx = messages.value.findIndex(m => String(m._id) === id)
-    if (idx !== -1) {
-      messages.value[idx].message = data.message
-      messages.value[idx].isEdited = true
-    }
-    cancelEdit()
-  } catch (err) {
-    console.error('❌ Edit failed:', err)
+    await axios.patch(`/api/chat/rooms/${props.roomId}/remove-member`, { userId: id })
+    if (id === props.currentUserId) location.reload()
+    else await loadParticipants()
+    displayNotification('Member updated', 'success')
+  } catch {
+    displayNotification('Failed to remove member', 'error')
   }
 }
 
-// ✅ Delete message
-const handleDelete = async (message: ChatMessage) => {
-  if (!confirm('Delete this message?')) return
-  try {
-    await axios.delete(`/api/chat/messages/${message._id}`)
-    messages.value = messages.value.filter(m => m._id !== message._id)
-  } catch (err) {
-    console.error('❌ Delete failed:', err)
-  }
-}
+const canManageUser = (user: Participant) =>
+  props.currentUserId === props.createdById || user.id === props.currentUserId
 
-// ✅ Format times
-const formatFullTime = (timestamp: string): string => {
-  const parsed = dayjs(timestamp)
-  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : 'Invalid Date'
-}
+const toggleInfoPanel = () => (showInfo.value = !showInfo.value)
 
-const expandedMessages = ref<Set<string>>(new Set())
-const toggleTimestamp = (id: string) => {
-  expandedMessages.value.has(id)
-    ? expandedMessages.value.delete(id)
-    : expandedMessages.value.add(id)
-}
-const isExpanded = (id: string) => expandedMessages.value.has(id)
-const formatTime = (timestamp: string, id: string): string => {
-  const parsed = dayjs(timestamp)
-  return !parsed.isValid()
-    ? 'Invalid Date'
-    : isExpanded(id)
-      ? parsed.format('YYYY-MM-DD HH:mm:ss')
-      : parsed.fromNow()
-}
-
-// ✅ Scroll helper
+// ======================== Utility ==============================
 const scrollToBottom = () => {
   nextTick(() => {
     if (messageContainer.value) {
@@ -451,697 +612,512 @@ const scrollToBottom = () => {
   })
 }
 
-// ✅ Socket connect with dynamic host
-const connectSocket = () => {
-  if (socket.value && socket.value.connected) return;
+const formatMessageTime = (t: string) =>
+  dayjs(t).isValid() ? dayjs(t).fromNow() : 'Invalid'
+const formatFullTime = (t: string) =>
+  dayjs(t).isValid() ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : 'Invalid'
 
-  isConnecting.value = true;
-  error.value = null;
+// ======================== Lifecycle ============================
+const messageContainer = ref<HTMLElement | null>(null)
 
-  // Get the base URL from the current window location
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = window.location.hostname;
-  const port = import.meta.env.PROD ? window.location.port : '3000';
-  const wsUrl = `${protocol}//${host}${port ? `:${port}` : ''}`;
-
-  console.log('Connecting to WebSocket at:', wsUrl + '/chat');
-
-  socket.value = io(wsUrl + '/chat', {
-    withCredentials: true,
-    path: '/api/chat/socket.io',
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    timeout: 10000
-  });
-
-  // Connection event handlers
-  socket.value.on('connect', () => {
-    console.log('✅ Connected to socket');
-    isConnecting.value = false;
-    error.value = null;
-    socket.value?.emit('join_room', props.roomId);
-  });
-
-  socket.value.on('connect_error', (err) => {
-    console.error('❌ Socket connection error:', err);
-    error.value = 'Failed to connect to chat server. Retrying...';
-  });
-
-  socket.value.on('disconnect', (reason) => {
-    console.log('❌ Socket disconnected:', reason);
-    isConnecting.value = true;
-    error.value = 'Disconnected from chat server. Reconnecting...';
-  });
-
-  socket.value.on('reconnect', (attemptNumber) => {
-    console.log('✅ Socket reconnected after', attemptNumber, 'attempts');
-    isConnecting.value = false;
-    error.value = null;
-    socket.value?.emit('join_room', props.roomId);
-  });
-
-  // Message event handlers
-  socket.value.on('new_message', (message: ChatMessage) => {
-    console.log('📥 new_message received', message);
-    messages.value.push(message);
-    scrollToBottom();
-  });
-
-  socket.value.on('message_edited', (updatedMessage: ChatMessage) => {
-    const idx = messages.value.findIndex(m => m._id === updatedMessage._id);
-    if (idx !== -1) {
-      messages.value[idx] = {
-        ...messages.value[idx],
-        ...updatedMessage,
-        isEdited: true
-      };
-    }
-  });
-
-  socket.value.on('message_deleted', (deletedMessageId: string) => {
-    messages.value = messages.value.filter(m => m._id !== deletedMessageId);
-  });
-};
-
-// ✅ Load messages with error handling
 const loadMessages = async () => {
-  error.value = null;
-  isLoading.value = true;
+  isLoading.value = true
   try {
-    const res = await axios.get(`/api/chat/messages/${props.roomId}`);
-    messages.value = res.data;
-    scrollToBottom();
-  } catch (err: any) {
-    console.error('Load failed:', err.message);
-    error.value = 'Failed to load messages. Please try again.';
+    const res = await axios.get(`/api/chat/messages/${props.roomId}`)
+    messages.value = res.data
+    scrollToBottom()
+  } catch {
+    error.value = 'Failed to load messages'
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
-};
+}
 
-// ✅ Send message with error handling
-const sendMessage = () => {
-  const text = msg.value.trim();
-  if (!text) return;
-
-  if (!socket.value?.connected) {
-    error.value = 'Not connected to chat server. Please wait or refresh the page.';
-    return;
-  }
-
-  const payload: any = {
-    roomId: props.roomId,
-    senderId: props.currentUserId,
-    senderUsername: props.currentUsername,
-    message: text,
-  };
-
-  if (replyingTo.value) {
-    payload.replyToId = replyingTo.value._id;
-  }
-
-  try {
-    socket.value.emit('send_message', payload);
-    msg.value = '';
-    replyingTo.value = null;
-    error.value = null;
-  } catch (err) {
-    console.error('Failed to send message:', err);
-    error.value = 'Failed to send message. Please try again.';
-  }
-};
-
-// Watch for room changes and reconnect
 watch(
   () => props.roomId,
-  async (newRoomId) => {
-    if (newRoomId && newRoomId.length === 24) {
-      await loadParticipants();
-      await loadMessages();
-
-      if (socket.value?.connected) {
-        socket.value.emit('join_room', newRoomId);
-      } else {
-        connectSocket();
-      }
+  async newId => {
+    if (newId) {
+      await loadParticipants()
+      await loadMessages()
+      socket.value?.emit('join_room', newId)
     }
   },
   { immediate: true }
-);
+)
 
-// Auto-reconnect on mount
 onMounted(() => {
-  connectSocket();
-});
+  connectSocket()
+  loadParticipants()
+  loadMessages()
+  document.addEventListener('click', () => (showEmojiPicker.value = false))
+})
 
-// Clean up on unmount
 onUnmounted(() => {
-  if (socket.value) {
-    socket.value.disconnect();
-    socket.value = null;
-  }
-});
-
-// Add computed property for message grouping
-const messageGroups = computed(() => {
-  const groups: MessageGroup[] = [];
-  let currentGroup: ChatMessage[] = [];
-  let lastDate = '';
-  let lastSender: number | null = null;
-  let lastTimestamp = 0;
-
-  messages.value.forEach((message, index) => {
-    const messageDate = new Date(message.createdAt).toLocaleDateString();
-    const messageTimestamp = new Date(message.createdAt).getTime();
-    const timeDiff = messageTimestamp - lastTimestamp;
-
-    // Start a new group if:
-    // 1. Different date
-    // 2. Different sender
-    // 3. More than 5 minutes between messages
-    if (
-      messageDate !== lastDate ||
-      message.senderId !== lastSender ||
-      timeDiff > 5 * 60 * 1000
-    ) {
-      if (currentGroup.length > 0) {
-        groups.push({
-          showDate: messageDate !== lastDate,
-          messages: [...currentGroup]
-        });
-      }
-      currentGroup = [message];
-    } else {
-      currentGroup.push(message);
-    }
-
-    // Push the last group
-    if (index === messages.value.length - 1) {
-      groups.push({
-        showDate: messageDate !== lastDate,
-        messages: [...currentGroup]
-      });
-    }
-
-    lastDate = messageDate;
-    lastSender = message.senderId;
-    lastTimestamp = messageTimestamp;
-  });
-
-  return groups;
-});
-
-// Add helper functions for date formatting
-const formatDate = (timestamp: string): string => {
-  const date = new Date(timestamp);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  if (date.toDateString() === today.toDateString()) {
-    return 'Today';
-  } else if (date.toDateString() === yesterday.toDateString()) {
-    return 'Yesterday';
-  } else {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  }
-};
-
-const formatMessageTime = (timestamp: string): string => {
-  return new Date(timestamp).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
-};
-
-// Add function to check if user can be managed
-const canManageUser = (user: { id: number }) => {
-  return (
-    props.currentUserId === props.createdById && // Current user is admin
-    user.id !== props.createdById && // Target is not admin
-    user.id !== props.currentUserId // Not trying to manage self
-  );
-};
+  socket.value?.disconnect()
+  if (socket.value) socket.value = null
+})
 </script>
+
 
 <style lang="scss" scoped>
 .chat-window {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f8f9fa;
+  background: #f9fafb;
+  font-family: system-ui, sans-serif;
 }
 
-/* Header styles */
+/* HEADER */
 .chat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: white;
-  border-bottom: 1px solid #e9ecef;
-  height: 64px;
-}
+  background: #ffffff;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
 
-.room-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+  .room-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 
-.avatar {
-  width: 40px;
-  height: 40px;
-  background: #4263eb;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 1.2rem;
-}
+    .avatar {
+      width: 40px;
+      height: 40px;
+      background: #4f46e5;
+      color: #fff;
+      border-radius: 50%;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
 
-.room-details {
-  display: flex;
-  flex-direction: column;
-}
+    .room-details {
+      display: flex;
+      flex-direction: column;
 
-.room-name {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0;
-}
+      .room-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin: 0;
+      }
 
-.online-status {
-  font-size: 0.85rem;
-  color: #868e96;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.icon-button {
-  background: none;
-  border: none;
-  padding: 8px;
-  cursor: pointer;
-  border-radius: 50%;
-  transition: background-color 0.2s;
-
-  &:hover {
-    background: #f1f3f5;
+      .online-status {
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+    }
   }
 
-  &.active {
-    background: #e7f5ff;
-    color: #339af0;
-  }
-}
+  .header-actions {
+    display: flex;
+    gap: 8px;
 
-/* Add member panel */
-.add-member-panel {
-  background: white;
-  padding: 1rem;
-  border-bottom: 1px solid #e9ecef;
-}
+    .icon-button {
+      border: none;
+      background: #f3f4f6;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
 
-.input-group {
-  display: flex;
-  gap: 8px;
+      &:hover {
+        background: #e5e7eb;
+      }
 
-  input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    font-size: 0.95rem;
-
-    &:focus {
-      outline: none;
-      border-color: #339af0;
-      box-shadow: 0 0 0 3px rgba(51, 154, 240, 0.1);
+      &.active {
+        background: #e0e7ff;
+        color: #4338ca;
+      }
     }
   }
 }
 
-.button-group {
-  display: flex;
-  gap: 8px;
+/* ADD MEMBER PANEL */
+.add-member-panel {
+  background: #ffffff;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e5e7eb;
+
+  .input-group {
+    display: flex;
+    gap: 8px;
+
+    input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.95rem;
+
+      &:focus {
+        border-color: #6366f1;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+      }
+    }
+
+    .button-group {
+      display: flex;
+      gap: 6px;
+
+      .primary {
+        background: #4f46e5;
+        color: #fff;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: background 0.2s;
+        &:hover {
+          background: #4338ca;
+        }
+      }
+
+      .secondary {
+        background: #e5e7eb;
+        color: #374151;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        &:hover {
+          background: #d1d5db;
+        }
+      }
+    }
+  }
+
+  .error-text {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: #dc2626;
+  }
 }
 
-/* Message container */
+/* CHAT BODY */
 .chat-body {
   flex: 1;
   display: flex;
   overflow: hidden;
   position: relative;
+
+  &.with-info .messages {
+    width: 70%;
+  }
 }
 
 .messages {
   flex: 1;
+  padding: 12px;
   overflow-y: auto;
-  padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  /* Custom scrollbar */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 4px;
+  }
 }
 
-/* Date separator */
+/* DATE SEPARATOR */
 .date-separator {
   text-align: center;
-  margin: 1rem 0;
+  color: #6b7280;
+  font-size: 0.8rem;
+  margin: 12px 0;
   position: relative;
-  color: #868e96;
-  font-size: 0.85rem;
 
   &::before,
   &::after {
     content: '';
     position: absolute;
     top: 50%;
-    width: 100px;
+    width: 40%;
     height: 1px;
-    background: #dee2e6;
+    background: #e5e7eb;
   }
 
   &::before {
-    right: calc(50% + 1rem);
+    left: 0;
   }
 
   &::after {
-    left: calc(50% + 1rem);
+    right: 0;
   }
 }
 
-/* Message styles */
+/* MESSAGE */
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 70%;
-  gap: 4px;
-  margin: 2px 0;
+  max-width: 75%;
 
   &.mine {
     align-self: flex-end;
-
     .message-bubble {
-      background: #4263eb;
-      color: white;
-      border-radius: 16px 16px 4px 16px;
+      background: #4f46e5;
+      color: #fff;
+      border-radius: 16px 16px 0 16px;
+      align-self: flex-end;
+    }
+  }
 
-      .message-time {
-        color: rgba(255, 255, 255, 0.7);
+  .message-bubble {
+    background: #ffffff;
+    border-radius: 16px 16px 16px 0;
+    padding: 8px 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+
+    .message-header {
+      font-size: 0.75rem;
+      margin-bottom: 4px;
+      color: #6b7280;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .message-content {
+      font-size: 0.95rem;
+      line-height: 1.4;
+      word-wrap: break-word;
+
+      .edited-indicator {
+        font-size: 0.75rem;
+        margin-left: 4px;
+        opacity: 0.7;
+      }
+    }
+
+    .message-actions {
+      display: flex;
+      gap: 4px;
+      position: absolute;
+      top: -28px;
+      right: 0;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 2px 4px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      button {
+        border: none;
+        background: none;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        &:hover {
+          background: #f3f4f6;
+        }
+      }
+    }
+
+    &:hover .message-actions {
+      opacity: 1;
+      pointer-events: all;
+    }
+  }
+
+  .reply-preview-bubble {
+    font-size: 0.8rem;
+    background: #f3f4f6;
+    border-left: 3px solid #4f46e5;
+    padding: 4px 6px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    color: #374151;
+  }
+}
+
+/* INFO PANEL */
+.info-panel {
+  width: 30%;
+  border-left: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 12px;
+  overflow-y: auto;
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+
+    li {
+      padding: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-radius: 6px;
+      &:hover {
+        background: #f3f4f6;
+      }
+
+      .admin-badge {
+        background: #4f46e5;
+        color: #fff;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin-left: 8px;
+      }
+
+      button {
+        background: #fee2e2;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        &:hover {
+          background: #fecaca;
+        }
       }
     }
   }
+}
 
-  &.theirs {
-    align-self: flex-start;
+/* INPUT FOOTER */
+.input-footer {
+  padding: 12px;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
 
-    .message-bubble {
-      background: white;
-      border-radius: 16px 16px 16px 4px;
+  .input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    background: #f3f4f6;
+    border-radius: 12px;
+    padding: 6px 8px;
+    gap: 8px;
+
+    textarea {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 0.95rem;
+      resize: none;
+      line-height: 1.4;
+      padding: 8px;
+      &:focus {
+        outline: none;
+      }
+    }
+
+    .input-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .icon-button {
+      background: #e5e7eb;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      transition: background 0.2s;
+
+      &:hover {
+        background: #d1d5db;
+      }
+    }
+
+    .send-button {
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      &:hover {
+        background: #4338ca;
+      }
+      &:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
     }
   }
 }
 
-.message-bubble {
-  padding: 8px 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  position: relative;
-}
-
-.message-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.sender-name {
-  font-weight: 500;
-  font-size: 0.9rem;
-}
-
-.message-time {
-  font-size: 0.75rem;
-  color: #868e96;
-}
-
-.message-content {
-  font-size: 0.95rem;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
-.edited-indicator {
-  font-size: 0.75rem;
-  opacity: 0.7;
-  margin-left: 4px;
-}
-
-/* Message actions */
-.message-actions {
+/* NOTIFICATION */
+.notification {
   position: absolute;
-  top: -30px;
-  right: 0;
-  display: flex;
-  gap: 4px;
-  background: white;
-  padding: 4px;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 1;
-}
-
-.action-button {
-  background: none;
-  border: none;
-  padding: 4px 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  color: #495057;
-  border-radius: 4px;
-
-  &:hover {
-    background: #f1f3f5;
-  }
-
-  &.delete:hover {
-    background: #ffe3e3;
-    color: #e03131;
-  }
-}
-
-/* Reply styles */
-.reply-bar {
-  background: white;
-  padding: 8px 12px;
-  border-top: 1px solid #e9ecef;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.reply-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-}
-
-.reply-label {
-  color: #868e96;
-}
-
-.reply-name {
-  font-weight: 500;
-}
-
-.reply-text {
-  color: #495057;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 300px;
-}
-
-.cancel-reply {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  padding: 4px;
-  color: #868e96;
-
-  &:hover {
-    color: #495057;
-  }
-}
-
-/* Input area */
-.message-input {
-  background: white;
-  padding: 1rem;
-  border-top: 1px solid #e9ecef;
-}
-
-.input-container {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-textarea {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  resize: none;
-  font-family: inherit;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  max-height: 150px;
-
-  &:focus {
-    outline: none;
-    border-color: #339af0;
-    box-shadow: 0 0 0 3px rgba(51, 154, 240, 0.1);
-  }
-}
-
-.send-button {
-  background: #4263eb;
-  color: white;
-  border: none;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   padding: 8px 16px;
   border-radius: 8px;
+  color: #fff;
   font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  z-index: 1000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 
-  &:hover:not(:disabled) {
-    background: #364fc7;
+  &.success {
+    background: #22c55e;
   }
 
-  &:disabled {
-    background: #adb5bd;
-    cursor: not-allowed;
+  &.error {
+    background: #ef4444;
   }
-}
 
-/* Info panel */
-.info-panel {
-  width: 280px;
-  background: white;
-  border-left: 1px solid #e9ecef;
-  display: flex;
-  flex-direction: column;
-}
-
-.info-header {
-  padding: 1rem;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-
-  h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 600;
+  &.info {
+    background: #3b82f6;
   }
 }
 
-.participants-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1rem;
-}
-
-.participant-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-
-  &:hover {
-    background: #f8f9fa;
-  }
-}
-
-.participant-avatar {
-  width: 32px;
-  height: 32px;
-  background: #4263eb;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-}
-
-.participant-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.participant-name {
-  font-weight: 500;
-}
-
-.participant-role {
-  font-size: 0.8rem;
-  color: #868e96;
-}
-
-.kick-button {
-  background: none;
-  border: none;
-  padding: 4px 8px;
-  font-size: 0.85rem;
-  color: #e03131;
-  cursor: pointer;
-  border-radius: 4px;
-
-  &:hover {
-    background: #ffe3e3;
-  }
-}
-
-/* Loading and error states */
+/* LOADING SPINNER */
 .loading-overlay,
 .connecting-message {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 1rem;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 8px 12px;
+  font-size: 0.9rem;
 }
 
 .loading-spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid #e9ecef;
-  border-top-color: #4263eb;
+  border: 3px solid #e5e7eb;
+  border-top-color: #4f46e5;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1152,68 +1128,17 @@ textarea {
   }
 }
 
-.error-message {
-  background: #fff5f5;
-  color: #e03131;
-  padding: 1rem;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 0.5rem;
-
-  button {
-    background: #e03131;
-    color: white;
-    border: none;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-
-    &:hover {
-      background: #c92a2a;
-    }
-  }
-}
-
-/* Responsive adjustments */
+/* RESPONSIVE */
 @media (max-width: 768px) {
-  .message-wrapper {
-    max-width: 85%;
-  }
-
   .info-panel {
     position: absolute;
-    right: 0;
     top: 0;
-    bottom: 0;
-    z-index: 10;
+    right: 0;
+    height: 100%;
+    z-index: 20;
   }
-
-  .date-separator {
-    &::before,
-    &::after {
-      width: 50px;
-    }
-  }
-}
-
-@media (max-width: 480px) {
-  .message-wrapper {
-    max-width: 95%;
-  }
-
-  .room-name {
-    font-size: 1rem;
-  }
-
-  .input-container {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .send-button {
-    height: 40px;
+  .messages {
+    width: 100% !important;
   }
 }
 </style>

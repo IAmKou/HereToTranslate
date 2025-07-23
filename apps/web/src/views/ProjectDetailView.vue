@@ -202,15 +202,23 @@
                 </div>
                 <div class="actions-desktop" v-if="!isMobile">
                   <router-link
+                    v-if="isProjectOwner || isProjectAdmin"
                     :to="`/projects/${project.id}/manage`"
                     class="btn btn-primary btn-manage"
                   >
                     <span class="icon">⚙️</span> Manage Project
                   </router-link>
-                  <button @click="editProject" class="btn btn-outline">
+                  <span
+                    v-else
+                    class="btn btn-primary btn-manage"
+                    style="opacity:0.5; cursor:not-allowed; pointer-events: none;"
+                  >
+                    <span class="icon">⚙️</span> Manage Project
+                  </span>
+                  <button @click="editProject" class="btn btn-outline" :disabled="!(isProjectOwner || isProjectAdmin)">
                     <span class="icon">✏️</span> Edit Project
                   </button>
-                  <button @click="openDeleteModal" class="btn btn-danger">
+                  <button @click="openDeleteModal" class="btn btn-danger" :disabled="!isProjectOwner">
                     <span class="icon">🗑️</span> Delete Project
                   </button>
                 </div>
@@ -333,6 +341,13 @@
                 <ProjectGroupTab
                   v-else-if="activeTab === 'groups'"
                   :project="project"
+                  :groups="groups"
+                  :groups-loading="groupsLoading"
+                  :groups-error="groupsError"
+                  :members="members"
+                  @create-group="handleCreateGroup"
+                  @edit-group="handleEditGroup"
+                  @delete-group="handleDeleteGroup"
                 />
                 <ProjectDisscusionTab
                   v-else-if="activeTab === 'discussions'"
@@ -648,6 +663,18 @@
           @close="showAddRoleModal = false"
           @roles-updated="handleRolesUpdated"
         />
+
+        <!-- Thêm modal xác nhận xóa group vào template (nếu chưa có) -->
+        <div v-if="showDeleteConfirmModal" class="modal-overlay" @click.self="showDeleteConfirmModal = false">
+          <div class="modal-content">
+            <h2>Confirm Delete</h2>
+            <p>Are you sure you want to delete the group "<strong>{{ groupToDelete?.name }}</strong>"?</p>
+            <div class="form-actions">
+              <button class="btn btn-confirm" @click="confirmDeleteGroup">Confirm</button>
+              <button class="btn btn-outline" @click="showDeleteConfirmModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -903,10 +930,11 @@ const createGroup = async () => {
 };
 
 const loadGroups = async () => {
+  if (!project.value) return;
   groupsLoading.value = true;
   groupsError.value = null;
   try {
-    const res = await axios.get(`/api/projects/${projectId}/groups`);
+    const res = await axiosInstance.get(`/projects/${project.value.id}/groups`);
     groups.value = res.data;
   } catch (error: any) {
     groupsError.value = error?.response?.data?.message || 'Failed to load groups.';
@@ -1080,10 +1108,16 @@ const loadMembers = async () => {
   }
 };
 
-watch(activeTab, (tab) => {
-  if (tab === 'members') {
-    loadMembers();
+watch(activeTab, (tab: string) => {
+  if (tab === 'members') loadMembers();
+  else if (tab === 'files') loadFiles();
+  else if (tab === 'groups') {
+    console.log('[DEBUG] groups:', groups.value);
+    console.log('[DEBUG] groupsLoading:', groupsLoading.value);
+    console.log('[DEBUG] groupsError:', groupsError.value);
+    loadGroups();
   }
+  // Có thể thêm các tab khác nếu cần
 });
 
 const currentUser = ref<any>(null);
@@ -1411,7 +1445,7 @@ const actualRoleCount = computed(() => {
 
   // Count only actual roles (excluding system roles like Everyone)
   // But include Project Owner role since it's shown in the table
-  const visibleRoles = roles.filter(role => {
+  const visibleRoles = roles.filter((role: any) => {
     // Filter out system roles except Project Owner
     return role.name !== 'Everyone';
   });
@@ -1445,6 +1479,59 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
   // Trả về đúng key (không phải label, không có dấu cách)
   return availablePermissions.filter((_, idx) => ((flags >> BigInt(idx)) & BigInt(1)) !== BigInt(0));
 }
+
+// Thêm computed kiểm tra Project Owner
+const isProjectOwner = computed(() => {
+  return project.value && currentUser.value && String(project.value.createdBy.id) === String(currentUser.value.id);
+});
+
+// Thêm computed kiểm tra Project Admin
+const isProjectAdmin = computed(() => {
+  if (!project.value || !currentUser.value) return false;
+  // Kiểm tra roles của currentUser trong project
+  const member = members.value.find((m: any) => String(m.id) === String(currentUser.value.id));
+  if (!member || !member.roles) return false;
+  return member.roles.some((r: any) => r.name && r.name.toLowerCase().includes('admin'));
+});
+
+// Thêm các handler ở script:
+const handleCreateGroup = async (group) => {
+  if (!project.value) return;
+  await axiosInstance.post(`/projects/${project.value.id}/groups/create`, group);
+  await loadGroups();
+};
+const handleEditGroup = async (group) => {
+  if (!project.value || !group.id) return;
+  await axiosInstance.patch(`/projects/${project.value.id}/groups/${group.id}`, { name: group.name });
+  await loadGroups();
+};
+const handleDeleteGroup = async (group) => {
+  if (!project.value || !group.id) return;
+  await axiosInstance.delete(`/projects/${project.value.id}/groups/${group.id}`);
+  await loadGroups();
+};
+
+// Thêm hàm confirmDeleteGroup vào script
+const confirmDeleteGroup = async () => {
+  if (!project.value || !groupToDelete.value?.id) return;
+  try {
+    await axiosInstance.delete(`/projects/${project.value.id}/groups/${groupToDelete.value.id}`);
+    showDeleteConfirmModal.value = false;
+    await loadGroups();
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Group deleted successfully!', life: 2000 });
+  } catch (err) {
+    alert('Failed to delete group: ' + err.message);
+  }
+};
+
+
+
+
+
+const groupToDelete = ref<ProjectGroup | null>(null);
+const showDeleteConfirmModal = ref(false);
+
+const toast = ref(null);
 </script>
 
 <style scoped>
@@ -1588,18 +1675,18 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
 
 /* Nút chính */
 .btn-manage {
-  background: linear-gradient(135deg, #7f53ac 0%, var(--color-secondary) 100%);
-  border: 2.5px solid #7f53ac;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); /* Xanh lá nổi bật hơn */
+  border: 2.5px solid #22c55e;
   color: white;
-  box-shadow: 0 4px 16px #7f53ac33;
+  box-shadow: 0 4px 16px #22c55e33;
   font-weight: 700;
   transition: all 0.22s cubic-bezier(0.4, 1, 0.7, 1.2);
 }
 .btn-manage:hover {
-  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
-  border-color: #4299e1;
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  border-color: #16a34a;
   color: #fff;
-  box-shadow: 0 8px 32px #4299e133;
+  box-shadow: 0 8px 32px #22c55e33;
   transform: translateY(-2px) scale(1.04);
   filter: brightness(1.08);
 }
@@ -1896,19 +1983,19 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
 }
 
 .btn-manage {
-  background: linear-gradient(135deg, #7f53ac 0%, var(--color-secondary) 100%);
-  border: 2.5px solid #7f53ac;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); /* Xanh lá nổi bật hơn */
+  border: 2.5px solid #22c55e;
   color: white;
-  box-shadow: 0 4px 16px #7f53ac33;
+  box-shadow: 0 4px 16px #22c55e33;
   font-weight: 700;
   transition: all 0.22s cubic-bezier(0.4, 1, 0.7, 1.2);
 }
 
 .btn-manage:hover {
-  background: linear-gradient(135deg, var(--color-secondary) 0%, #7f53ac 100%);
-  border-color: #4299e1;
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  border-color: #16a34a;
   color: #fff;
-  box-shadow: 0 8px 32px #4299e133;
+  box-shadow: 0 8px 32px #22c55e33;
   transform: translateY(-2px) scale(1.04);
   filter: brightness(1.08);
 }
@@ -2266,644 +2353,6 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
   border-radius: 12px;
   font-size: 1rem;
   background-color: white;
-  color: #2d3748;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: #4299e1;
-  box-shadow: 0 0 0 4px rgba(66, 153, 225, 0.1);
-  transform: translateY(-1px);
-}
-
-.form-control:disabled {
-  background-color: #f7fafc;
-  color: #a0aec0;
-  cursor: not-allowed;
-}
-
-.form-hint {
-  color: #718096;
-  font-size: 0.875rem;
-  margin-top: 0.5rem;
-}
-
-.form-actions {
-  margin-top: 0;
-}
-
-/* Error Messages */
-.error-message {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: #fed7d7;
-  color: #c53030;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #feb2b2;
-  margin-top: 1rem;
-}
-
-.error-icon {
-  font-size: 1.25rem;
-}
-
-/* Found User */
-.found-user {
-  background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
-  border: 2px solid #9ae6b4;
-  border-radius: 12px;
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 1rem;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex: 1;
-}
-
-.user-avatar {
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.avatar-text {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: white;
-}
-
-.user-details {
-  flex: 1;
-}
-
-.user-details h4 {
-  margin: 0 0 0.25rem 0;
-  color: #2d3748;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.user-details p {
-  margin: 0;
-  color: #718096;
-  font-size: 0.9rem;
-}
-
-/* Enhanced Lists */
-.roles-list,
-.groups-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.role-item,
-.group-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.3s ease;
-  margin-bottom: 2rem;
-  overflow: visible;
-}
-
-.role-item:hover,
-.group-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.role-info,
-.group-info {
-  flex: 1;
-}
-
-.role-header,
-.group-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.role-name,
-.group-name {
-  margin: 0;
-  color: #2d3748;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.role-badge,
-.group-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.role-badge {
-  background: #bee3f8;
-  color: #2b6cb0;
-}
-
-.group-badge {
-  background: #fef5e7;
-  color: #c05621;
-}
-
-.permissions {
-  color: #718096;
-  font-size: 0.9rem;
-  margin: 0;
-}
-
-.members-info {
-  margin-top: 0.5rem;
-}
-
-.members-count {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #4299e1;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.count-icon {
-  font-size: 1rem;
-}
-
-.role-actions,
-.group-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.role-actions .dropdown,
-.group-actions .dropdown {
-  margin-left: auto;
-}
-
-/* Dropdown Styles */
-.dropdown {
-  position: relative;
-  display: inline-block;
-}
-
-.dropdown-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1rem;
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  color: #4a5568;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  min-width: 100px;
-  justify-content: center;
-}
-
-.dropdown-toggle:hover {
-  border-color: #4299e1;
-  background: #f7fafc;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(66, 153, 225, 0.15);
-}
-
-.dropdown-arrow {
-  font-size: 0.75rem;
-  transition: transform 0.3s ease;
-}
-
-.dropdown-toggle:hover .dropdown-arrow {
-  transform: rotate(180deg);
-}
-
-.dropdown-menu {
-  position: absolute;
-  top: 100%;
-  right: auto;
-  left: 0;
-  min-width: 140px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  z-index: 2000;
-  margin-top: 0.5rem;
-  overflow: visible;
-  animation: slideDown 0.2s ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.dropdown-menu::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  right: auto;
-  left: 20px;
-  width: 12px;
-  height: 12px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-bottom: none;
-  border-right: none;
-  transform: rotate(45deg);
-  z-index: -1;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: none;
-  border: none;
-  color: #4a5568;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.dropdown-item:hover {
-  background: #f7fafc;
-  color: #2d3748;
-}
-
-.dropdown-item:first-child {
-  border-radius: 8px 8px 0 0;
-}
-
-.dropdown-item:last-child {
-  border-radius: 0 0 8px 8px;
-}
-
-.dropdown-item-danger {
-  color: #e53e3e;
-}
-
-.dropdown-item-danger:hover {
-  background: #fed7d7;
-  color: #c53030;
-}
-
-.dropdown-item .icon {
-  font-size: 1rem;
-  width: 16px;
-  text-align: center;
-}
-
-/* Empty States */
-.empty-section {
-  text-align: center;
-  padding: 3rem 2rem;
-  color: #718096;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-.empty-section h3 {
-  color: #2d3748;
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem 0;
-}
-
-.empty-section p {
-  margin: 0 0 1.5rem 0;
-  font-size: 1rem;
-  line-height: 1.6;
-}
-
-/* Enhanced Buttons */
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  text-decoration: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  position: relative;
-  overflow: hidden;
-}
-
-.btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transition: left 0.5s;
-}
-
-.btn:hover::before {
-  left: 100%;
-}
-
-.btn-primary,
-.btn-primary:active,
-.btn-primary:focus {
-  background: linear-gradient(135deg, #38a169 0%, #48bb78 100%) !important;
-  color: #fff !important;
-  border: none;
-  box-shadow: 0 4px 16px #38a16933;
-}
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
-  color: #fff !important;
-  filter: brightness(1.08);
-  box-shadow: 0 8px 20px #38a16944;
-}
-.btn-primary:disabled,
-.btn[disabled].btn-primary {
-  background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%) !important;
-  color: #a0aec0 !important;
-  opacity: 1 !important;
-  cursor: not-allowed !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.btn-secondary {
-  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
-  color: #4a5568;
-}
-
-.btn-secondary:hover {
-  background: linear-gradient(135deg, #cbd5e0 0%, #a0aec0 100%);
-  transform: translateY(-2px);
-}
-
-.btn-outline {
-  background: transparent;
-  color: #4299e1;
-  border: 2px solid #4299e1;
-}
-
-.btn-outline:hover {
-  background: #4299e1;
-  color: #fff;
-  border-color: #1e40af;
-  box-shadow: 0 6px 24px #2563eb33;
-}
-
-.btn-danger {
-  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-  color: white;
-}
-
-.btn-danger:hover {
-  background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(229, 62, 62, 0.3);
-}
-
-.btn-sm {
-  padding: 0.625rem 1.25rem;
-  font-size: 0.95rem;
-}
-
-.btn-add {
-  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-  color: white;
-}
-
-.btn-add:hover {
-  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(72, 187, 120, 0.3);
-}
-
-.icon {
-  font-size: 1.1rem;
-}
-
-/* Enhanced Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(8px);
-  animation: fadeIn 0.3s ease;
-  padding: 1rem;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.modal-content {
-  background: white;
-  border-radius: 20px;
-  width: 90%;
-  max-width: 400px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
-  animation: slideUp 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: 90vh;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.group-modal {
-  max-width: 700px;
-  max-height: 90vh;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  border-bottom: 2px solid #e2e8f0;
-  flex-shrink: 0;
-}
-
-.modal-title {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.modal-title .title-icon {
-  font-size: 1.5rem;
-  width: 3rem;
-  height: 3rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #1a202c;
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 2rem;
-  color: #718096;
-  cursor: pointer;
-  padding: 0.5rem;
-  line-height: 1;
-  border-radius: 50%;
-  transition: all 0.3s ease;
-  width: 3rem;
-  height: 3rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-button:hover {
-  background: #f7fafc;
-  color: #2d3748;
-  transform: rotate(90deg);
-}
-
-.modal-body {
-  padding: 1rem;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  padding: 1rem;
-  border-top: 2px solid #e2e8f0;
-  background: #f8fafc;
-  flex-shrink: 0;
-}
-
-/* Enhanced Form Styles */
-.group-form {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.form-group {
-  margin-bottom: 0;
-}
-
-.form-label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #2d3748;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  font-size: 1rem;
-}
-
-.label-text {
-  color: #2d3748;
-}
-
-.required {
-  color: #e53e3e;
-  font-weight: 700;
-}
-
-.form-control {
-  width: 100%;
-  padding: 1rem 1.25rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 1rem;
-  background: white;
   color: #2d3748;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);

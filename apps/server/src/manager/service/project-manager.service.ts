@@ -589,6 +589,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
           users: [user],
         });
         await queryRunner.manager.save(newEveryoneRole);
+        // LOG: Tạo role Everyone mới
+        console.log(`[addUserToProject] Created new role 'Everyone' for project ${projectId} with permissionFlags:`, newEveryoneRole.permissionFlags.value.toString(), newEveryoneRole.permissionFlags.resolveNames());
       } else {
         // Add user to existing Everyone role
         const existingUserIds = new Set(everyoneRole.users.map((u) => u.id.toString()));
@@ -596,6 +598,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
           everyoneRole.users.push(user);
           await queryRunner.manager.save(everyoneRole);
         }
+        // LOG: Đã thêm user vào role Everyone
+        console.log(`[addUserToProject] Added user ${userId} to existing role 'Everyone' for project ${projectId} with permissionFlags:`, everyoneRole.permissionFlags.value.toString(), everyoneRole.permissionFlags.resolveNames());
       }
 
       await queryRunner.commitTransaction();
@@ -647,7 +651,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         username: string;
         fullName: string;
         email: string;
-        roles: { id: string; name: string }[];
+        roles: { id: string; name: string; permissionFlags?: string | number | bigint }[];
       }
     > = {};
 
@@ -663,7 +667,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
             roles: [],
           };
         }
-        memberMap[key].roles.push({ id: role.id.toString(), name: role.name });
+        memberMap[key].roles.push({
+          id: role.id.toString(),
+          name: role.name,
+          permissionFlags: role.permissionFlags.value.toString(), // Ensure proper serialization
+        });
       }
     }
     return Object.values(memberMap);
@@ -768,7 +776,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         memberMap[key].roles.push({
           id: role.id.toString(),
           name: role.name,
-          permissionFlags: role.permissionFlags
+          permissionFlags: role.permissionFlags.value.toString(), // Ensure proper serialization
         });
       }
     }
@@ -778,14 +786,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       const projectRoles = roles.map((role) => ({
         id: role.id.toString(),
         name: role.name,
-        permissionFlags: role.permissionFlags,
+        permissionFlags: role.permissionFlags.value.toString(), // Ensure proper serialization
       }));
 
       // Add Everyone role to roles list
       projectRoles.push({
         id: everyoneRole.id.toString(),
         name: everyoneRole.name,
-        permissionFlags: everyoneRole.permissionFlags,
+        permissionFlags: everyoneRole.permissionFlags.value.toString(), // Ensure proper serialization
       });
 
       // Add Everyone role to all members
@@ -793,7 +801,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         member.roles.push({
           id: everyoneRole.id.toString(),
           name: everyoneRole.name,
-          permissionFlags: everyoneRole.permissionFlags,
+          permissionFlags: everyoneRole.permissionFlags.value.toString(), // Ensure proper serialization
         });
       });
 
@@ -805,7 +813,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       projectRoles: roles.map(role => ({
         id: role.id.toString(),
         name: role.name,
-        permissionFlags: role.permissionFlags,
+        permissionFlags: role.permissionFlags.value.toString(), // Ensure proper serialization
       }))
     };
   }

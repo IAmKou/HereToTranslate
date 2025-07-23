@@ -109,4 +109,20 @@ export class GroupController {
       userIds.userIds
     );
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':groupId/users/set')
+  async setUsersForGroup(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Param('groupId', BigIntTransformPipe) groupId: bigint,
+    @Body(ValidationPipe) userIds: UserIdsArray,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.groups.setUsersForGroup(
+      req.user.id,
+      projectId,
+      groupId,
+      userIds.userIds
+    );
+  }
 }

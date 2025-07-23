@@ -948,7 +948,7 @@ watch(showSubmitDialog, (val: boolean) => {
           label="Submit Commit"
           icon="pi pi-plus"
           class="submit-btn"
-          @click="canPushCommit && (() => { showSubmitDialog = true })"
+          @click="showSubmitDialog = true"
           :disabled="!canPushCommit"
           :title="!canPushCommit ? 'You do not have permission to submit commits' : ''"
         />

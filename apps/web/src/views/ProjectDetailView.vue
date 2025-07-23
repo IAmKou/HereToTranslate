@@ -348,6 +348,7 @@
                   @create-group="handleCreateGroup"
                   @edit-group="handleEditGroup"
                   @delete-group="handleDeleteGroup"
+                  @refresh-groups="loadGroups"
                 />
                 <ProjectDisscusionTab
                   v-else-if="activeTab === 'discussions'"
@@ -937,7 +938,14 @@ const loadGroups = async () => {
     const res = await axiosInstance.get(`/projects/${project.value.id}/groups`);
     groups.value = res.data;
   } catch (error: any) {
-    groupsError.value = error?.response?.data?.message || 'Failed to load groups.';
+    // Nếu lỗi 403 hoặc 401 thì chỉ set groupsError, không set groups = []
+    if (error?.response?.status === 403 || error?.response?.status === 401) {
+      groupsError.value = 'Bạn không có quyền xem danh sách nhóm.';
+      // Không set groups = [] để giữ nguyên dữ liệu cũ nếu có
+    } else {
+      groupsError.value = error?.response?.data?.message || 'Failed to load groups.';
+      groups.value = [];
+    }
   } finally {
     groupsLoading.value = false;
   }

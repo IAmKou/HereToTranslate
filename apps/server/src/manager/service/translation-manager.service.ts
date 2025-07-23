@@ -210,6 +210,43 @@ export class TranslationService {
     const githubUrl = `https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/${repoName}/main/${encodeURIComponent(safeFileName)}`;
     return { githubUrl };
   }
+
+  async getAllString(
+    projectId: string,
+    branchId: string,
+    fileId?: string,
+    filePart?: number
+  ) {
+    const query: any = { projectId, branchId };
+    if (fileId) query.fileId = fileId;
+    if (filePart !== undefined) query.filePart = filePart;
+
+    const strings = await this.translationModel
+      .find(query)
+      .sort({ filePart: 1, _id: 1 })
+      .lean();
+
+    // Lấy danh sách fileId duy nhất
+    const fileIds = Array.from(new Set(strings.map((str) => str.fileId)));
+    // Lấy tên file từ MySQL
+    const fileNamesMap: Record<string, string> = {};
+    if (fileIds.length > 0) {
+      const files = await this.fileRepository.findByIds(fileIds);
+      files.forEach((f) => {
+        fileNamesMap[String(f.id)] = f.fileName;
+      });
+    }
+
+    return strings.map((str) => ({
+      id: str._id.toString(),
+      originalText: str.originalText,
+      translatedText: str.translatedText || '',
+      fileId: str.fileId,
+      filePart: str.filePart ?? 0,
+      fileName: fileNamesMap[str.fileId] || '',
+    }));
+  }
+
 }
 
 async function rebuildFileWithManifest(

@@ -1236,7 +1236,6 @@ watch([currentMember, currentUserId, canManageRoles], () => {
               <i class="pi pi-times"></i>
             </button>
           </div>
-
           <div class="modal-body">
             <div class="warning-message">
               <div class="warning-icon">
@@ -1246,7 +1245,6 @@ watch([currentMember, currentUserId, canManageRoles], () => {
               <p>This action cannot be undone.</p>
             </div>
           </div>
-
           <div class="modal-footer">
             <button class="btn btn-secondary" @click="cancelDeleteRole" :disabled="isDeleting">
               Keep Role
@@ -2350,6 +2348,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
+  z-index: 0;
 }
 
 .modal-content {
@@ -2358,6 +2357,9 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   width: 90%;
   max-width: 500px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1;
+  padding: 0;
 }
 
 /* Đảm bảo toast luôn hiển thị trên cùng */

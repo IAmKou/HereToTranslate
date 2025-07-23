@@ -370,10 +370,8 @@ const normalizedMembers = computed(() => {
     ...m,
     roles: Array.isArray(m.roles)
       ? m.roles.map(r => {
-        let permissions = r.permissions;
-        if ((!permissions || permissions.length === 0) && r.permissionFlags) {
-          permissions = parsePermissionFlags(r.permissionFlags);
-        }
+        // Luôn parse lại từ permissionFlags, không dùng r.permissions từ backend
+        const permissions = r.permissionFlags ? parsePermissionFlags(r.permissionFlags) : [];
         return { ...r, permissions };
       })
       : []
@@ -388,7 +386,12 @@ const { hasPermission, isProjectOwner, isProjectAdmin } = useProjectMemberPermis
 
 // Separate permission checks for each operation
 const canAttachFiles = computed(() => hasPermission('AttachFiles') || isProjectAdmin.value || isProjectOwner.value);
-const canManageFiles = computed(() => hasPermission('ManageFiles') || isProjectAdmin.value || isProjectOwner.value);
+const canManageFiles = computed(() =>
+  hasPermission('ManageFiles') ||
+  hasPermission('AttachFiles') || // Cho phép AttachFiles được rename, delete
+  isProjectAdmin.value ||
+  isProjectOwner.value
+);
 const canViewFiles = computed(() => hasPermission('ViewFiles') || hasPermission('AttachFiles') || isProjectAdmin.value || isProjectOwner.value);
 
 watch([canAttachFiles, canManageFiles, canViewFiles], () => {

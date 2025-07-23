@@ -63,20 +63,12 @@ export function parsePermissionFlags(bitmask: string | number | bigint | undefin
 
     console.log('parsed flags:', flags.toString());
 
-    // Convert flags to binary string to check exact bits
-    const binaryStr = flags.toString(2).padStart(64, '0');
-    console.log('binary flags:', binaryStr);
-
+    // Sửa: Dùng phép toán bit để xác định quyền
     const permissions = Object.entries(PermissionFlags)
       .filter(([key, value]) => {
         if (key === 'None') return false;
         if (typeof value !== 'bigint') return false;
-
-        // Get the bit position from the value
-        const bitPos = value === 1n ? 0 : value.toString(2).length - 1;
-
-        // Check if that specific bit is set in our flags
-        return binaryStr[63 - bitPos] === '1';
+        return (flags & value) === value && value !== 0n;
       })
       .map(([key]) => key);
 

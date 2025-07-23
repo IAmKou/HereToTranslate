@@ -59,6 +59,13 @@ export function useProjectPermission(
   function hasPermission(permission: string) {
     // Debug log chi tiết
     const allPermsArr = Array.from(allPerms.value);
+    // Thêm log toàn bộ roles và permissionFlags của currentMember
+    console.log('[useProjectPermission] DEBUG currentMember:', {
+      currentMember: currentMember.value,
+      roles: currentMember.value?.roles,
+      permissionFlags: (currentMember.value?.roles || []).map(r => r.permissionFlags),
+      parsedPermissions: (currentMember.value?.roles || []).map(r => r.permissions),
+    });
     console.log('[useProjectPermission] hasPermission check:', {
       permission,
       allPerms: allPermsArr,
@@ -77,6 +84,17 @@ export function useProjectPermission(
     // Project Admin có mọi quyền trừ xóa project, remove owner
     if (isProjectAdmin.value)
       return permission !== 'DeleteProject' && permission !== 'RemoveOwner';
+    // Nếu user có AttachFiles, coi như có mọi quyền trên tab Files
+    const fileRelatedPermissions = [
+      'ManageFiles', 'ViewFiles', 'AttachFiles', // thêm các quyền khác nếu có
+    ];
+    if (
+      permission &&
+      fileRelatedPermissions.includes(permission) &&
+      allPermsArr.includes('AttachFiles')
+    ) {
+      return true;
+    }
     // So sánh permission trực tiếp
     return allPermsArr.includes(permission);
   }

@@ -39,8 +39,32 @@ export class TranslationService {
       throw new Error('File or project not found');
     }
 
-    const updatedBuffer = await this.applyTranslation(fileId);
+    let updatedBuffer: Buffer;
+    if (
+      fileEntity.fileType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      const entries = await this.translationModel.find({ fileId }).lean();
+      const translations = new Map<string, string>();
+      for (const e of entries) {
+        if (e.translatedText && e.translatedText.trim().length > 0) {
+          translations.set(e.originalText, e.translatedText);
+        }
+      }
+      const originalBuffer = fileEntity.fileContent as Buffer;
+      updatedBuffer = await replaceDocxText(originalBuffer, translations);
+    } else if (fileEntity.fileType === 'application/pdf') {
+      const entries = await this.translationModel.find({ fileId }).lean();
+      const translatedEntries = entries.map((e) => ({
+        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
+      }));
+      const originalBuffer = fileEntity.fileContent as Buffer;
+      updatedBuffer = await buildTranslatedPdf(originalBuffer, translatedEntries);
+    } else {
+      updatedBuffer = await this.applyTranslation(fileId);
+    }
 
+    // --- Commit to GitHub ---
     const repoName = `project-${fileEntity.project.id}`;
     const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
     const path = safeFileName;
@@ -50,7 +74,7 @@ export class TranslationService {
         repo: repoName,
         branch: 'main',
         path,
-        content: updatedBuffer.toString('utf8'),
+        content: updatedBuffer,
         message: `Update translations for ${fileEntity.fileName}`,
       });
       logger.log(`✅ Translation committed to GitHub: ${repoName}/${path}`);
@@ -61,7 +85,8 @@ export class TranslationService {
     return entry;
   }
 
-  async applyTranslation(fileId: string): Promise<Buffer> {
+
+    async applyTranslation(fileId: string): Promise<Buffer> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
     });
@@ -139,31 +164,16 @@ export class TranslationService {
     }
   }
 
-  async exportTranslation(
-    fileId: string
-  ): Promise<{ buffer: Buffer; fileName: string; fileType: string }> {
+  async exportTranslation(fileId: string): Promise<{ githubUrl: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
+      relations: ['project'],
     });
-    if (!fileEntity) throw new Error('File not found');
-    if (fileEntity.fileType === 'application/pdf') {
-      const entries = await this.translationModel.find({ fileId }).lean();
-      const translatedEntries = entries.map((e) => ({
-        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
-      }));
-
-      const originalBuffer = fileEntity.fileContent as Buffer;
-      const newBuffer = await buildTranslatedPdf(
-        originalBuffer,
-        translatedEntries
-      );
-
-      return {
-        buffer: newBuffer,
-        fileName: fileEntity.fileName,
-        fileType: fileEntity.fileType,
-      };
+    if (!fileEntity || !fileEntity.project) {
+      throw new Error('File not found');
     }
+
+    let buffer: Buffer;
     if (
       fileEntity.fileType ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -175,23 +185,30 @@ export class TranslationService {
           translations.set(e.originalText, e.translatedText);
         }
       }
-
-      const originalBuffer = fileEntity.fileContent as Buffer;
-      const newBuffer = await replaceDocxText(originalBuffer, translations);
-
-      return {
-        buffer: newBuffer,
-        fileName: fileEntity.fileName,
-        fileType: fileEntity.fileType,
-      };
+      buffer = await replaceDocxText(fileEntity.fileContent as Buffer, translations);
+    } else if (fileEntity.fileType === 'application/pdf') {
+      const entries = await this.translationModel.find({ fileId }).lean();
+      const translatedEntries = entries.map((e) => ({
+        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
+      }));
+      buffer = await buildTranslatedPdf(fileEntity.fileContent as Buffer, translatedEntries);
     } else {
-      const buffer = await this.applyTranslation(fileId);
-      return {
-        buffer,
-        fileName: fileEntity.fileName,
-        fileType: fileEntity.fileType,
-      };
+      buffer = await this.applyTranslation(fileId);
     }
+
+    const repoName = `project-${fileEntity.project.id}`;
+    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
+
+    await this.githubService.commitChange({
+      repo: repoName,
+      branch: 'main',
+      path: safeFileName,
+      content: buffer,
+      message: `Exported translation for ${fileEntity.fileName}`,
+    });
+
+    const githubUrl = `https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/${repoName}/main/${encodeURIComponent(safeFileName)}`;
+    return { githubUrl };
   }
 }
 

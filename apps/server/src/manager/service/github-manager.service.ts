@@ -8,6 +8,15 @@ import { BranchEntity } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import * as console from 'node:console';
 
+interface CommitChangeOptions {
+  repo: string;
+  branch?: string;
+  path: string;
+  content: string | Buffer;
+  message: string;
+  isBase64?: boolean; // true if content is already base64 encoded
+}
+
 @Injectable()
 export class GitHubService {
   @InjectRepository(BranchEntity)
@@ -90,26 +99,25 @@ export class GitHubService {
     }
   }
 
-  async commitChange({
-    repo,
-    branch = 'main',
-    path,
-    content,
-    message,
-    isBase64 = false,
-  }: {
-    repo: string;
-    branch?: string;
-    path: string;
-    content: string;
-    message: string;
-    isBase64?: boolean;
-  }) {
-    const encodedContent = isBase64
-      ? content
-      : Buffer.from(content).toString('base64');
+  async commitChange(options: CommitChangeOptions): Promise<void> {
+    const {
+      repo,
+      branch = 'main',
+      path,
+      content,
+      message,
+      isBase64 = false,
+    } = options;
+
+    const encodedContent =
+      isBase64
+        ? (typeof content === 'string' ? content : content.toString())
+        : Buffer.isBuffer(content)
+          ? content.toString('base64')
+          : Buffer.from(content).toString('base64');
 
     let sha: string | undefined;
+
     try {
       const { data } = await this.octokit.repos.getContent({
         owner: this.username,
@@ -122,7 +130,9 @@ export class GitHubService {
         sha = data.sha;
       }
     } catch (err: any) {
-      if (err.status !== 404) throw err;
+      if (err.status !== 404) {
+        throw err;
+      }
     }
 
     await this.octokit.repos.createOrUpdateFileContents({
@@ -132,7 +142,7 @@ export class GitHubService {
       message,
       content: encodedContent,
       branch,
-      sha, // needed for updating
+      sha,
     });
   }
 

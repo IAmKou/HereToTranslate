@@ -20,6 +20,8 @@ export class SeederService implements OnApplicationBootstrap {
 
   private async seedRoles() {
     const roles = ['SUPER_ADMIN', 'ADMIN', 'MEMBER'];
+    const troles = await this.roleRepo.find();
+    console.log(troles);
     for (const roleName of roles) {
       const exists = await this.roleRepo.findOne({ where: { name: roleName } });
       if (!exists) {
@@ -54,4 +56,5 @@ export class SeederService implements OnApplicationBootstrap {
         console.log(`✅ Admin account created: admin / admin123`);
       }
     }
+
 }

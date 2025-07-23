@@ -24,8 +24,11 @@ async function bootstrap() {
   ));
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
   app.enableCors({
-    origin: ['http://localhost:4200','http://26.19.116.244:4200'], // Vue dev server
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTION'],
+    origin: [
+      'http://localhost:4200',
+      'http://26.19.116.244:4200', // 👈 add your RadVPN IP
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
   const globalPrefix = 'api';

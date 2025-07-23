@@ -17,7 +17,9 @@ import { ChatMessageDocument } from '../db/mongo/schema/chat-message.schema';
   namespace: '/chat',
   path: '/api/chat/socket.io',
   cors: {
-    origin: ['http://localhost:4200','http://26.19.116.244:4200'],
+    origin: process.env.NODE_ENV === 'production'
+      ? ['http://localhost:4200']
+      : true, // Allow all origins in development
     credentials: true,
   },
 })
@@ -103,7 +105,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     console.log('[GATEWAY] ✏️ Edit request:', data);
     const updated = await this.chatService.editMessage(data.messageId, data.newContent);
-    this.server.to(updated.roomId.toString()).emit('message_edited', updated);
+    // Broadcast the edited message to all clients in the room
+    this.server.to(updated.roomId.toString()).emit('message_edited', {
+      _id: updated._id.toString(),
+      roomId: updated.roomId.toString(),
+      message: updated.message,
+      isEdited: true,
+      senderId: updated.senderId,
+      createdAt: updated.createdAt
+    });
     return updated;
   }
 

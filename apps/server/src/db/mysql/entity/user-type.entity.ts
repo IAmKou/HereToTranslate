@@ -5,7 +5,7 @@ import { UserEntity } from './user.entity';
 export class UserTypeEntity {
 
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
-  id: bigint;
+  id: string;
 
   @Column()
   name: string;

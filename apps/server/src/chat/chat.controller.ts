@@ -16,7 +16,7 @@ import { UserManagerService } from '#LocalProject/Managers/service/user-manager.
 import { Types } from 'mongoose';
 
 @Controller('chat')
-  export class ChatController {
+export class ChatController {
   constructor(private readonly chatService: ChatService,
               private readonly userService: UserManagerService) {
   }
@@ -57,7 +57,7 @@ import { Types } from 'mongoose';
 
     return {
       ...room,
-      _id: room._id!.toString(),
+      _id: room._id?.toString(),
     };
   }
   @Get('messages/:roomId')

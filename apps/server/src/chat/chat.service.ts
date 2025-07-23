@@ -1,9 +1,16 @@
-import { ChatMessage, ChatMessageDocument } from '../db/mongo/schema/chat-message.schema';
+import {
+  ChatMessage,
+  ChatMessageDocument,
+} from '../db/mongo/schema/chat-message.schema';
 import { Model, Types } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { CreateMessageDto } from '#LocalProject/Dtos';
 import { ChatRoom } from '../db/mongo/schema/chat-room.schema';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { UserManagerService } from '#LocalProject/Managers/service/user-manager.service';
 
 @Injectable()
@@ -75,7 +82,7 @@ export class ChatService {
       .lean()
       .exec();
 
-    const results = await Promise.all(
+    return await Promise.all(
       rooms.map(async (room) => {
         let oppositeUser = null;
         if (!room.isGroupChat) {
@@ -95,7 +102,6 @@ export class ChatService {
         };
       }),
     );
-    return results;
   }
 
   async openChatBetween(

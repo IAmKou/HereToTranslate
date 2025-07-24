@@ -18,7 +18,9 @@
           {{ roomName[0]?.toUpperCase() || '💬' }}
         </div>
         <div class="room-details">
-          <h2 class="room-name">{{ roomName }}</h2>
+          <h2 class="room-name">
+            {{ roomName }}
+          </h2>
           <span class="online-status">
             {{ participants.length }} member{{ participants.length !== 1 ? 's' : '' }}
           </span>
@@ -27,16 +29,16 @@
       <div class="header-actions">
         <button
           class="icon-button"
-          @click="toggleInfoPanel"
           :class="{ active: showInfo }"
           title="Room info"
+          @click="toggleInfoPanel"
         >
           ℹ️
         </button>
         <button
           class="icon-button"
-          @click="showAddMemberInput = !showAddMemberInput"
           title="Add member"
+          @click="showAddMemberInput = !showAddMemberInput"
         >
           👥
         </button>
@@ -44,42 +46,85 @@
     </header>
 
     <!-- ✅ Add Member Panel -->
-    <div v-if="showAddMemberInput" class="add-member-panel">
+    <div
+      v-if="showAddMemberInput"
+      class="add-member-panel"
+    >
       <div class="input-group">
         <input
           v-model="newMemberUsernameOrEmail"
           placeholder="Enter username or email"
           @keyup.enter="addMember"
-        />
+        >
         <div class="button-group">
-          <button class="primary" @click="addMember">Add</button>
-          <button class="secondary" @click="showAddMemberInput = false">Cancel</button>
+          <button
+            class="primary"
+            @click="addMember"
+          >
+            Add
+          </button>
+          <button
+            class="secondary"
+            @click="showAddMemberInput = false"
+          >
+            Cancel
+          </button>
         </div>
       </div>
-      <p v-if="addMemberError" class="error-text">{{ addMemberError }}</p>
+      <p
+        v-if="addMemberError"
+        class="error-text"
+      >
+        {{ addMemberError }}
+      </p>
     </div>
 
     <!-- ✅ Main chat body -->
-    <main class="chat-body" :class="{ 'with-info': showInfo }">
+    <main
+      class="chat-body"
+      :class="{ 'with-info': showInfo }"
+    >
       <!-- Messages -->
-      <div class="messages" ref="messageContainer">
+      <div
+        ref="messageContainer"
+        class="messages"
+      >
         <!-- Loading & error states -->
-        <div v-if="isLoading" class="loading-overlay">
-          <div class="loading-spinner"></div>
+        <div
+          v-if="isLoading"
+          class="loading-overlay"
+        >
+          <div class="loading-spinner" />
           <span>Loading messages...</span>
         </div>
-        <div v-if="error" class="error-message">
+        <div
+          v-if="error"
+          class="error-message"
+        >
           {{ error }}
-          <button @click="loadMessages">Retry</button>
+          <button @click="loadMessages">
+            Retry
+          </button>
         </div>
-        <div v-if="isConnecting" class="connecting-message">
-          <div class="loading-spinner"></div>
+        <div
+          v-if="isConnecting"
+          class="connecting-message"
+        >
+          <div class="loading-spinner" />
           <span>Connecting to chat server...</span>
         </div>
 
         <!-- Message groups -->
-        <template v-for="(group, gIndex) in messageGroups" :key="gIndex">
-          <div v-if="group.showDate" class="date-separator">{{ group.date }}</div>
+        <template
+          v-for="(group, gIndex) in messageGroups"
+          :key="gIndex"
+        >
+          <div
+            v-if="group.showDate"
+            class="date-separator"
+          >
+            {{ group.date }}
+          </div>
           <div
             v-for="message in group.messages"
             :key="message._id"
@@ -98,57 +143,79 @@
               @mouseleave="hoveredMessageId = null"
             >
               <div class="message-header">
-                <span class="sender-name">
+                <span
+                  class="sender-name"
+                  :class="{ mine: message.senderId === currentUserId }"
+                >
                   {{ message.senderId === currentUserId ? 'You' : message.senderUsername }}
                 </span>
-                <span class="message-time" :title="formatFullTime(message.createdAt)">
+                <span
+                  class="message-time"
+                  :class="{ mine: message.senderId === currentUserId }"
+                  :title="formatFullTime(message.createdAt)"
+                >
                   {{ formatMessageTime(message.createdAt) }}
                 </span>
               </div>
 
+
+
+
               <!-- Edit mode -->
-              <div v-if="editingMessageId === message._id" class="edit-container">
+              <div
+                v-if="editingMessageId === message._id"
+                class="edit-container"
+              >
                 <textarea
                   v-model="editingText"
-                  @keydown.enter.prevent="confirmEdit(message)"
                   class="edit-input"
-                ></textarea>
+                  @keydown.enter.prevent="confirmEdit(message)"
+                />
                 <div class="edit-actions">
-                  <button @click="confirmEdit(message)">💾 Save</button>
-                  <button @click="cancelEdit">✖️ Cancel</button>
+                  <button @click="confirmEdit(message)">
+                    💾 Save
+                  </button>
+                  <button @click="cancelEdit">
+                    ✖️ Cancel
+                  </button>
                 </div>
               </div>
 
               <!-- Normal message -->
-              <div v-else class="message-content">
+              <div
+                v-else
+                class="message-content"
+              >
                 <img
                   v-if="message.fileUrl"
                   :src="message.fileUrl"
                   :alt="message.fileName || 'Image'"
                   class="message-image"
-                />
+                >
                 <span v-else>
                   {{ message.message }}
-                  <span v-if="message.isEdited" class="edited-indicator">(edited)</span>
+                  <span
+                    v-if="message.isEdited"
+                    class="edited-indicator"
+                  >(edited)</span>
                 </span>
               </div>
 
               <!-- Actions -->
               <div
-                class="message-actions"
-                v-if="hoveredMessageId === message._id && editingMessageId !== message._id"
+                class="message-bubble"
+                @mouseenter="hoveredMessageId = message._id"
+                @mouseleave="hoveredMessageId = null"
               >
-                <button @click="handleReply(message)" title="Reply">↩️</button>
-                <button
-                  v-if="message.senderId === currentUserId"
-                  @click="startEdit(message)"
-                  title="Edit"
-                >✏️</button>
-                <button
-                  v-if="message.senderId === currentUserId"
-                  @click="handleDelete(message)"
-                  title="Delete"
-                >🗑️</button>
+                <!-- header, content… -->
+                <div
+                  v-if="hoveredMessageId === message._id && editingMessageId !== message._id"
+                  class="message-actions"
+                >
+                  <button title="Reply" @click="handleReply(message)">↩️</button>
+                  <button v-if="message.senderId === currentUserId" title="Edit" @click="startEdit(message)">✏️</button>
+                  <button v-if="message.senderId === currentUserId" title="Delete" @click="handleDelete(message)">🗑️</button>
+                </div>
               </div>
             </div>
           </div>
@@ -156,7 +223,10 @@
       </div>
 
       <!-- Participants panel -->
-      <aside v-if="showInfo" class="info-panel">
+      <aside
+        v-if="showInfo"
+        class="info-panel"
+      >
         <h3>Participants</h3>
         <ul>
           <li
@@ -165,21 +235,37 @@
             :class="{ admin: user.id === props.createdById }"
           >
             <span class="participant-name">{{ user.username }}</span>
-            <span v-if="user.id === props.createdById" class="admin-badge">Admin</span>
-            <button v-if="canManageUser(user)" @click="kickMember(user.id)">Remove</button>
+            <span
+              v-if="user.id === props.createdById"
+              class="admin-badge"
+            >Admin</span>
+            <button
+              v-if="canManageUser(user)"
+              @click="kickMember(user.id)"
+            >
+              Remove
+            </button>
           </li>
         </ul>
       </aside>
     </main>
 
     <!-- ✅ Reply bar -->
-    <div v-if="replyingTo" class="reply-bar">
+    <div
+      v-if="replyingTo"
+      class="reply-bar"
+    >
       <div class="reply-info">
         <span class="reply-label">Replying to</span>
         <span class="reply-name">{{ replyingTo.senderUsername }}</span>
         <span class="reply-text">{{ replyingTo.message }}</span>
       </div>
-      <button class="cancel-reply" @click="replyingTo = null">×</button>
+      <button
+        class="cancel-reply"
+        @click="replyingTo = null"
+      >
+        ×
+      </button>
     </div>
 
     <!-- ✅ Input -->
@@ -188,35 +274,52 @@
         <textarea
           v-model="msg"
           placeholder="Type a message..."
+          class="message-textarea"
           @keydown.enter.exact.prevent="sendMessage"
           @keydown.enter.shift.exact="msg += '\n'"
-          class="message-textarea"
-        ></textarea>
+        />
         <div class="input-actions">
           <div class="emoji-wrapper">
             <button
               type="button"
               class="icon-button large"
-              @click.stop="showEmojiPicker = !showEmojiPicker"
               title="Insert emoji"
-            >😊</button>
-            <div v-if="showEmojiPicker" class="emoji-picker" @click.stop>
-              <div class="emoji-categories-nav">
-                <button
-                  v-for="category in (Object.keys(emojiCategories) as EmojiCategory[])"
-                  :key="category"
-                  :class="{ active: selectedEmojiCategory === category }"
-                  @click="selectedEmojiCategory = category"
+              @click.stop="showEmojiPicker = !showEmojiPicker"
+            >
+              😊
+            </button>
+            <!-- Emoji Picker -->
+            <div
+              v-if="showEmojiPicker"
+              class="emoji-board"
+              @click.stop
+            >
+              <!-- Search bar -->
+              <div class="emoji-search">
+                <input
+                  v-model="emojiSearch"
+                  type="text"
+                  placeholder="Tìm kiếm biểu tượng cảm xúc"
                 >
-                  {{ emojiCategories[category][0] }}
+              </div>
+              <!-- Tabs -->
+              <div class="emoji-tabs">
+                <button
+                  v-for="tab in emojiTabs"
+                  :key="tab.key"
+                  :class="{ active: activeTab === tab.key }"
+                  @click="activeTab = tab.key"
+                >
+                  {{ tab.icon }}
                 </button>
               </div>
+              <!-- Emoji Grid -->
               <div class="emoji-grid">
                 <button
-                  v-for="emoji in emojiCategories[selectedEmojiCategory]"
+                  v-for="emoji in filteredEmojis"
                   :key="emoji"
-                  class="emoji-button"
-                  @click="() => { msg += emoji; showEmojiPicker = false; }"
+                  class="emoji-btn"
+                  @click="addEmoji(emoji)"
                 >
                   {{ emoji }}
                 </button>
@@ -224,16 +327,26 @@
             </div>
           </div>
           <input
-            type="file"
             ref="fileInput"
+            type="file"
             accept="image/*"
             style="display: none"
             @change="handleFileUpload"
-          />
-          <button type="button" class="icon-button large" @click="fileInput?.click()" title="Attach file">
+          >
+          <button
+            type="button"
+            class="icon-button large"
+            title="Attach file"
+            @click="fileInput?.click()"
+          >
             📎
           </button>
-          <button type="submit" class="send-button" :disabled="!msg.trim() || isConnecting">
+          <button
+            type="button"
+            class="send-button"
+            :disabled="!msg || !msg.replace(/\s/g, '') || isConnecting"
+            @click="sendMessage"
+          >
             Send
           </button>
         </div>
@@ -338,16 +451,30 @@ const uploadProgress = ref(0)
 const notification = ref<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
 const showNotification = ref(false)
 
-// Emoji
-type EmojiCategory = 'smileys' | 'gestures' | 'hearts' | 'activities'
-const emojiCategories = {
-  smileys: ['😀', '😃', '😄', '😁', '😂', '🤣', '😊', '😇', '😉', '😍', '🥰', '😘'],
-  gestures: ['👍', '👎', '👌', '✌️', '🤞', '🤝', '👊', '✊', '🙌', '👋'],
-  hearts: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💖', '💗'],
-  activities: ['🎮', '🎲', '🎨', '🎤', '🎧', '🎸', '⚽', '🏀', '🏈', '⚾']
-} as const
-const selectedEmojiCategory = ref<EmojiCategory>('smileys')
+// ================== EMOJI BOARD ==================
 const showEmojiPicker = ref(false)
+const emojiSearch = ref('')
+
+// Tabs and emojis
+const emojiTabs = [
+  { key: 'smileys', icon: '😊', emojis: ['😀','😃','😄','😁','😆','😅','😂','🤣','🥲','☺️','😊','😇','🙂','🙃','😉','😌','😍','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎'] },
+  { key: 'gestures', icon: '👍', emojis: ['👍','👎','👌','✌️','🤞','🤟','🤘','🤙','🖖','👋','👏','🙌','👐','🤲','🙏','✍️','💪','🦾'] },
+  { key: 'hearts', icon: '❤️', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟'] },
+  { key: 'objects', icon: '🎁', emojis: ['🎁','🎈','🎉','🎊','🎃','🎄','🎆','🎇','✨','🎩','🧢','👑','💍','🎤','🎧','🎸','🎹','🎺','🥁','⚽','🏀','🏈','⚾','🎾','🏐'] },
+]
+
+const activeTab = ref('smileys')
+
+const filteredEmojis = computed(() => {
+  const tab = emojiTabs.find(t => t.key === activeTab.value)
+  if (!tab) return []
+  if (!emojiSearch.value.trim()) return tab.emojis
+  return tab.emojis.filter(e => e.includes(emojiSearch.value.trim()))
+})
+
+const addEmoji = (emoji: string) => {
+  msg.value += emoji
+}
 
 // ======================== Helpers ==============================
 const displayNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -440,6 +567,10 @@ const connectSocket = () => {
 
 // ======================== Message Actions ======================
 const sendMessage = () => {
+  const text = msg.value
+  if ((!text || text.replace(/\s/g, '') === '') && !replyingTo.value) {
+    return // nothing to send
+  }
   if (!msg.value.trim() || !socket.value?.connected) return
   socket.value.emit('send_message', {
     roomId: props.roomId,
@@ -533,7 +664,7 @@ const handleFileUpload = async (e: Event) => {
 const loadParticipants = async () => {
   try {
     const res = await axios.get(`/api/chat/rooms/${props.roomId}/participants`)
-    participants.value = Array.isArray(res.data) ? res.data : []
+    participants.value = res.data.participants
     adminUser.value = participants.value.find(u => u.id === props.createdById) || null
   } catch {
     participants.value = []
@@ -614,9 +745,10 @@ const scrollToBottom = () => {
 
 const formatMessageTime = (t: string) =>
   dayjs(t).isValid() ? dayjs(t).fromNow() : 'Invalid'
-const formatFullTime = (t: string) =>
-  dayjs(t).isValid() ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : 'Invalid'
-
+const formatFullTime = (timestamp: string): string => {
+  const parsed = dayjs(timestamp)
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : 'Invalid Date'
+}
 // ======================== Lifecycle ============================
 const messageContainer = ref<HTMLElement | null>(null)
 
@@ -635,11 +767,11 @@ const loadMessages = async () => {
 
 watch(
   () => props.roomId,
-  async newId => {
-    if (newId) {
-      await loadParticipants()
+  async (newRoomId) => {
+    if (newRoomId) {
+      await loadParticipants() // ✅ load participants whenever room changes
       await loadMessages()
-      socket.value?.emit('join_room', newId)
+      socket.value?.emit('join_room', newRoomId)
     }
   },
   { immediate: true }
@@ -865,34 +997,69 @@ onUnmounted(() => {
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 75%;
+  max-width: 70%;
+  margin-bottom: 6px;
 
+  &:not(.mine) {
+    align-self: flex-start;
+    .message-bubble {
+      background: #f3f4f6; /* light gray */
+      color: #111827;
+      border-radius: 16px 16px 16px 0;
+    }
+  }
+
+  /* Outgoing message */
   &.mine {
     align-self: flex-end;
     .message-bubble {
-      background: #4f46e5;
+      background: #4f46e5; /* soft indigo */
       color: #fff;
       border-radius: 16px 16px 0 16px;
-      align-self: flex-end;
     }
   }
 
   .message-bubble {
-    background: #ffffff;
-    border-radius: 16px 16px 16px 0;
-    padding: 8px 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     position: relative;
-    display: inline-block;
-    max-width: 100%;
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+
 
     .message-header {
-      font-size: 0.75rem;
-      margin-bottom: 4px;
-      color: #6b7280;
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-bottom: 4px;
     }
+
+    .sender-name {
+      font-weight: 500;
+      color: #000000;
+      align-items: flex-start;
+
+      &.mine {
+        color: #ffffff;
+        align-items: flex-end;
+      }
+    }
+
+    .message-time {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      color: #000000;
+      align-items: flex-start;
+
+      &.mine {
+        color: #ffffff;
+        align-items: flex-end;
+      }
+    }
+
+
 
     .message-content {
       font-size: 0.95rem;
@@ -919,6 +1086,7 @@ onUnmounted(() => {
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s;
+
       button {
         border: none;
         background: none;
@@ -926,6 +1094,7 @@ onUnmounted(() => {
         padding: 2px 6px;
         border-radius: 4px;
         font-size: 0.85rem;
+
         &:hover {
           background: #f3f4f6;
         }
@@ -1120,6 +1289,90 @@ onUnmounted(() => {
   border-top-color: #4f46e5;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+.emoji-board {
+  position: absolute;
+  bottom: 60px;
+  right: 60px;
+  width: 320px;
+  background: #242526;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  z-index: 999;
+}
+
+.emoji-search {
+  margin-bottom: 6px;
+  input {
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 6px;
+    background: #3a3b3c;
+    color: #fff;
+    font-size: 0.9rem;
+    &::placeholder {
+      color: #aaa;
+    }
+    &:focus {
+      outline: none;
+      background: #4a4b4d;
+    }
+  }
+}
+
+.emoji-tabs {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 6px;
+  button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s;
+    &:hover {
+      background: #3a3b3c;
+    }
+    &.active {
+      background: #4f46e5;
+    }
+  }
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+  }
+}
+
+.emoji-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.4rem;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+  &:hover {
+    background: #3a3b3c;
+  }
 }
 
 @keyframes spin {

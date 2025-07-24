@@ -65,6 +65,7 @@ export class ChatService {
         _id: msg.replyTo._id.toString(),
         message: msg.replyTo.message,
         senderId: msg.replyTo.senderId,
+        senderUsername: userMap.get(msg.replyTo.senderId) || 'Unknown',
       } : null,
     }));
   }

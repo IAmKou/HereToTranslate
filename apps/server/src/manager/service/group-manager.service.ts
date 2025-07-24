@@ -65,7 +65,12 @@ export class GroupManagerService extends CommonHttpServiceImpl {
 
     const groups = await this.projectGroupRepository.find({
       where: { project: { id: BigInt(projectId) } },
-      select: ['id', 'name'],
+      relations: ['members'],
+    });
+
+    this.logger.debug(`[DEBUG] fetchAllProjectGroups: Số group: ${groups.length}`);
+    groups.forEach((g) => {
+      this.logger.debug(`[DEBUG] Group ${g.id} - ${g.name}: members = [${(g.members || []).map(m => m.id).join(', ')}]`);
     });
 
     if (!groups.length) {
@@ -264,6 +269,49 @@ export class GroupManagerService extends CommonHttpServiceImpl {
       return updatedGroup;
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to remove users from group');
+    }
+  }
+
+  async setUsersForGroup(
+    uid: bigint,
+    projectId: bigint,
+    groupId: bigint,
+    userIds: bigint[]
+  ) {
+    await this.projectManager.testPermissions(
+      projectId,
+      uid,
+      PermissionFlags.ManageMembers
+    );
+    this.logger.debug(
+      `[DEBUG] setUsersForGroup: Đặt lại toàn bộ thành viên cho group [${groupId}] trong project [${projectId}]`,
+      { userIds }
+    );
+    const group = await this.projectGroupRepository.findOne({
+      where: { id: BigInt(groupId), project: { id: BigInt(projectId) } },
+      relations: ['members'],
+    });
+    if (!group) {
+      this.logger.debug(
+        `Group [${groupId}] does not exist in project [${projectId}]`
+      );
+      throw new NotFoundException(`Unknown group`);
+    }
+    // Lấy danh sách user hợp lệ
+    const users = await this.userRepository.findBy({
+      id: In(userIds),
+      projects: { id: BigInt(projectId) },
+    });
+    if (users.length !== userIds.length) {
+      throw new BadRequestException('Some users do not exist in the project');
+    }
+    group.members = users;
+    try {
+      const updatedGroup = await this.projectGroupRepository.save(group);
+      this.logger.debug(`[DEBUG] setUsersForGroup: Đã cập nhật group.members = [${users.map(u => u.id).join(', ')}]`);
+      return updatedGroup;
+    } catch (error) {
+      this.unknownErrorHanlder(error, 'Failed to set users for group');
     }
   }
 }

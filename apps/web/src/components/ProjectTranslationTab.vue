@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, defineProps, watch, onMounted, computed, nextTick } from 'vue';
+import { ref, defineProps, watch, onMounted, computed, nextTick, onBeforeUnmount } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
@@ -42,6 +42,15 @@ const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
 function isFileProcessing(file: any): boolean {
   return file.status === 'processing';
 }
+
+// Expose method để component cha có thể gọi reload files
+function reloadFiles() {
+  loadFiles();
+}
+
+defineExpose({
+  reloadFiles
+});
 
 function getTotalParts(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
@@ -210,14 +219,20 @@ const { hasPermission } = useProjectPermission(
   computed(() => props.currentUser || null)
 );
 
-watch(() => [props.projectId, props.branchId], () => {
+// Watch cho projectId và branchId thay đổi
+watch([() => props.projectId, () => props.branchId], () => {
   loadFiles();
   loadTranslationStrings();
-}, { immediate: true });
+});
 
 onMounted(() => {
   loadFiles();
   loadTranslationStrings();
+  window.addEventListener('file-ready-for-translation', reloadFiles);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('file-ready-for-translation', reloadFiles);
 });
 
 // Autosize textarea

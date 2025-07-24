@@ -373,10 +373,12 @@
                   :project="project"
                   :members="members"
                   :current-user="currentUser"
+                  @fileReady="handleFileReady"
                   key="files"
                 />
                 <ProjectTranslationTab
                   v-else-if="activeTab === 'translation'"
+                  ref="translationTabRef"
                   :project-id="project.id"
                   :branch-id="selectedBranchId"
                   :project="project"
@@ -1540,6 +1542,16 @@ const groupToDelete = ref<ProjectGroup | null>(null);
 const showDeleteConfirmModal = ref(false);
 
 const toast = ref(null);
+
+const translationTabRef = ref(null);
+
+const handleFileReady = (fileId: string | number) => {
+  console.log('File ready:', fileId);
+  // Reload files trong ProjectTranslationTab ngay khi file ready
+  if (translationTabRef.value && translationTabRef.value.reloadFiles) {
+    translationTabRef.value.reloadFiles();
+  }
+};
 </script>
 
 <style scoped>

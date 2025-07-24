@@ -38,6 +38,10 @@ const props = defineProps<{
   currentUser?: any;
 }>();
 
+const emit = defineEmits<{
+  fileReady: [fileId: string | number];
+}>();
+
 const toast = useToast();
 const uploading = ref(false);
 const uploadError = ref('');
@@ -102,6 +106,7 @@ function startPollingFileStatus(fileId: string | number) {
         props.loadFiles();
         if (file.status === 'ready') {
           toast.add({ severity: 'success', summary: 'Success', detail: 'File is ready for translation!', life: 3000 });
+          window.dispatchEvent(new Event('file-ready-for-translation'));
         } else {
           toast.add({ severity: 'warn', summary: 'Warning', detail: 'File processing failed. Please try again.', life: 3000 });
         }
@@ -475,9 +480,9 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       <i class="pi pi-exclamation-triangle" style="color:#faad14;font-size:1.3em;"></i>
       <span>
         <b>Note:</b><br>
-        - For <b>DOCX</b> files: The exported translation will retain about <b>80–90%</b> of the original formatting and layout (similar to Crowdin). Some complex layouts or advanced styles may not be fully preserved.<br>
+        - For <b>DOCX</b> files: The exported translation will retain about <b>80–90%</b> of the original formatting and layout . Some complex layouts or advanced styles may not be fully preserved.<br>
         - For <b>PDF</b> files:<br>
-        &nbsp;&nbsp;• If the PDF contains selectable text, about <b>70–85%</b> of the original formatting may be preserved.<br>
+        &nbsp;&nbsp;• If the PDF contains selectable text, about <b>60-75%</b> of the original formatting may be preserved.<br>
         &nbsp;&nbsp;• If the PDF is a scanned image (OCR), only the text content will be extracted; formatting and layout will <b>not</b> be preserved.
       </span>
     </div>

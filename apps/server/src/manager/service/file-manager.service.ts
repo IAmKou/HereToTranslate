@@ -1,5 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
@@ -9,6 +9,7 @@ import { ManifestService } from '#LocalProject/Managers/service/manifest.service
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
+import { CommitEntity } from '../../db/mysql/entity/commit.entity';
 
 @Injectable()
 export class FileService {
@@ -21,6 +22,8 @@ export class FileService {
     private readonly requestRepository: Repository<RequestEntity>,
     private readonly githubService: GitHubService,
     private readonly manifestService : ManifestService,
+    @InjectRepository(CommitEntity)
+    private readonly commitRepository: Repository<CommitEntity>,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
@@ -106,42 +109,90 @@ export class FileService {
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
 
-    const saved = await this.saveFile({
-      uid,
-      fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
-      fileType: file.mimetype,
-      fileContent: file.buffer,
-      projectId,
-      branchId,
-      requestId,
-    });
-
-    const fileEntity = await this.fileRepository.findOne({
-      where: { id: BigInt(saved.fileId) },
+    // Tìm file trùng tên trong cùng project + branch
+    const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    let existingFile = await this.fileRepository.findOne({
+      where: {
+        fileName,
+        project: projectId ? { id: projectId } : undefined,
+        branch: branchId ? { id: branchId } : undefined,
+      },
       relations: ['project', 'branch'],
-      select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
     });
 
-    if (fileEntity) {
-      await this.manifestService.generateManifest(fileEntity);
-
-      const manifestEntries = await this.translationModel.find({ fileId: fileEntity.id.toString() }).lean();
-      const manifestJson = JSON.stringify(manifestEntries, null, 2);
-
-      try {
-        await this.githubService.pushInitialFile({
-          repo: `project-${fileEntity.project.id}`,
-          path: `${fileEntity.id.toString()}_manifest.json`,
-          content: manifestJson,
-          message: `Add manifest for ${fileEntity.fileName}`,
-          branch: 'main',
-        });
-        this.logger.log(`Manifest pushed to repo for fileId: ${fileEntity.id}`);
-      } catch (err) {
-        this.logger.error('Error pushing manifest to GitHub', err);
-      }
+    let saved;
+    let isUpdate = false;
+    if (existingFile) {
+      // Update nội dung file cũ
+      existingFile.fileContent = file.buffer;
+      existingFile.fileType = file.mimetype;
+      existingFile.uploader = { id: uid } as any;
+      existingFile.updatedAt = new Date();
+      existingFile.status = 'processing';
+      await this.fileRepository.save(existingFile);
+      saved = {
+        fileId: existingFile.id.toString(),
+        fileName: existingFile.fileName,
+        fileType: existingFile.fileType,
+        createdAt: existingFile.createdAt,
+        updatedAt: existingFile.updatedAt,
+        uploaderId: existingFile.uploader?.id?.toString(),
+        projectId: existingFile.project?.id?.toString(),
+        branchId: existingFile.branch?.id?.toString(),
+        requestId: existingFile.request?.id?.toString(),
+      };
+      isUpdate = true;
+    } else {
+      // Tạo file mới như cũ
+      const fileEntity = this.fileRepository.create({
+        fileName,
+        fileType: file.mimetype,
+        fileContent: file.buffer,
+        uploader: { id: uid },
+        project: projectId ? { id: projectId } : undefined,
+        branch: branchId ? { id: branchId } : undefined,
+        request: requestId ? { id: requestId } : undefined,
+        status: 'processing',
+      });
+      const savedFile = await this.fileRepository.save(fileEntity);
+      saved = {
+        fileId: savedFile.id.toString(),
+        fileName: savedFile.fileName,
+        createdAt: savedFile.createdAt,
+        updatedAt: savedFile.updatedAt,
+        uploaderId: savedFile.uploader?.id?.toString(),
+        projectId: savedFile.project?.id?.toString(),
+        branchId: savedFile.branch?.id?.toString(),
+        requestId: savedFile.request?.id?.toString(),
+      };
     }
 
+    // Chạy extract string ở background, trả về ngay cho client
+    setTimeout(async () => {
+      try {
+        await this.extractStringsFromFile(saved.fileId, uid);
+        // Cập nhật status file thành 'ready'
+        const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
+        if (fileEntity) {
+          fileEntity.status = 'ready';
+          await this.fileRepository.save(fileEntity);
+        }
+      } catch (err) {
+        // Nếu lỗi, cập nhật status file thành 'error'
+        const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
+        if (fileEntity) {
+          fileEntity.status = 'error';
+          await this.fileRepository.save(fileEntity);
+        }
+      }
+    }, 100);
+
+    // Trả về ngay, không chờ extract xong
+    return {
+      ...saved,
+      updated: isUpdate,
+      status: 'processing',
+    };
   }
 
 
@@ -165,7 +216,7 @@ export class FileService {
     const files = await this.fileRepository.find({
       where: { project: { id: projectId } },
       relations: ['uploader'],
-      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader'],
+      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader', 'status'],
       order: { createdAt: 'DESC' }
     });
 
@@ -173,8 +224,8 @@ export class FileService {
       fileId: file.id.toString(),
       fileName: file.fileName,
       fileType: file.fileType,
-      fileSize: file.fileContent ? file.fileContent.length : 0,
       createdAt: file.createdAt,
+      status: file.status || 'ready',
       uploader: {
         uploaderId: file.uploader.id.toString(),
         username: file.uploader.username,
@@ -186,14 +237,16 @@ export class FileService {
   async getFileById(fileId: string) {
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      select: ['id', 'fileName', 'fileType', 'fileContent'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'status', 'extractLog'],
     });
-    if (!file) throw new Error('File not found');
+    if (!file) return null;
     return {
       fileId: file.id.toString(),
       fileName: file.fileName,
       fileType: file.fileType,
       fileContent: file.fileContent,
+      status: file.status || 'ready',
+      extractLog: file.extractLog || '',
     };
   }
 
@@ -247,14 +300,31 @@ export class FileService {
 
 
   async deleteFile(fileId: bigint, userId: string | bigint) {
-    const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader'] });
+    const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader', 'project'] });
     if (!file) throw new NotFoundException('File not found');
-    // Chỉ cho phép uploader hoặc admin xóa (ở đây chỉ check uploader)
-    if (file.uploader.id.toString() !== userId.toString()) {
-      throw new Error('You do not have permission to delete this file');
+
+    // Kiểm tra quyền AttachFiles trên project
+    const hasAttachFiles = await this.checkUserAttachFilesPermission(userId, file.project?.id);
+    if (!hasAttachFiles) {
+      throw new ForbiddenException('You do not have permission (AttachFiles) to delete this file');
     }
+
+    // Kiểm tra commit liên quan đến file (filePath trùng tên file)
+    const hasCommit = await this.commitRepository.count({ where: { filePath: file.fileName } });
+    if (hasCommit > 0) {
+      throw new BadRequestException('Cannot delete file: There are commits related to this file.');
+    }
+
     await this.fileRepository.delete(String(file.id));
     return { success: true, message: 'File deleted' };
+  }
+
+  // Hàm kiểm tra quyền AttachFiles (giả định, bạn cần implement đúng logic thực tế)
+  async checkUserAttachFilesPermission(userId: string | bigint, projectId: string | bigint): Promise<boolean> {
+    // TODO: Thay bằng logic thực tế kiểm tra quyền AttachFiles của user trên project
+    // Ví dụ: kiểm tra bảng project_member, roles, permissionFlags, ...
+    // Trả về true nếu có quyền, false nếu không
+    return true; // Tạm thời cho phép tất cả, bạn cần thay thế bằng logic thực tế
   }
 
   async extractStringsFromFile(fileId: string, userId: string | bigint) {
@@ -270,10 +340,25 @@ export class FileService {
       throw new Error('You do not have permission to extract strings from this file');
     }
 
+    let log = '';
+    function appendLog(msg: string) {
+      log += `[${new Date().toISOString()}] ${msg}\n`;
+      file.extractLog = log;
+    }
     try {
-      await this.manifestService.generateManifest(file);
+      appendLog('Start extracting strings...');
+      // ĐÁNH DẤU OBSOLETE CHO STRING CŨ THAY VÌ XÓA CỨNG
+      appendLog('Marking old strings as obsolete...');
+      await this.translationModel.updateMany(
+        { fileId: file.id.toString(), obsolete: { $ne: true } },
+        { $set: { obsolete: true } }
+      );
+      appendLog('Generating manifest...');
+      await this.manifestService.generateManifest(file); // Đảm bảo hàm này set obsolete: false cho string mới
+      appendLog('Manifest generated.');
       // Optionally push manifest to GitHub if project/branch info is present
       if (file.project && file.branch) {
+        appendLog('Pushing manifest to GitHub...');
         const manifestEntries = await this.translationModel.find({ fileId: file.id.toString() }).lean();
         const manifestJson = JSON.stringify(manifestEntries, null, 2);
         try {
@@ -284,12 +369,13 @@ export class FileService {
             message: `Add manifest for ${file.fileName}`,
             branch: 'main',
           });
-          this.logger.log(`Manifest pushed to repo for fileId: ${file.id}`);
+          appendLog('Manifest pushed to GitHub.');
         } catch (err) {
-          this.logger.error('Error pushing manifest to GitHub', err);
+          appendLog('Error pushing manifest to GitHub: ' + (err?.message || err));
         }
       }
-      this.logger.log(`Successfully generated manifest for file: ${file.fileName}`);
+      appendLog('Successfully generated manifest for file.');
+      await this.fileRepository.save(file);
       return {
         success: true,
         message: 'Manifest generated successfully',
@@ -297,6 +383,8 @@ export class FileService {
         fileName: file.fileName
       };
     } catch (error) {
+      appendLog('Error generating manifest: ' + (error?.message || error));
+      await this.fileRepository.save(file);
       this.logger.error(`Error generating manifest for file ${file.fileName}:`, error);
       throw new Error(`Failed to generate manifest: `);
     }

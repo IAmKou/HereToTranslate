@@ -30,6 +30,12 @@ export class FileEntity {
   @Column({ type: 'longblob', nullable: true })
   compiledContent: Buffer;
 
+  @Column({ type: 'text', nullable: true })
+  extractLog?: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ready', nullable: true })
+  status?: 'processing' | 'ready' | 'error';
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -38,6 +38,11 @@ const focusUntranslated = ref(false);
 const PART_SIZE = 250;
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
 
+// Hàm kiểm tra file đang processing
+function isFileProcessing(file: any): boolean {
+  return file.status === 'processing';
+}
+
 function getTotalParts(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
   return Math.ceil(arr.length / PART_SIZE);
@@ -254,6 +259,10 @@ async function saveTranslation(str: any) {
     <div v-else-if="error" style="color:red">{{ error }}</div>
     <div v-else>
       <div v-if="files.length === 0">No files found for this branch.</div>
+      <div v-if="files.some(f => f.fileName && f.fileName.toLowerCase().endsWith('.docx'))" class="docx-toc-hint" style="background:#e0e7ff;padding:12px 18px;border-radius:10px;margin-bottom:18px;color:#374151;font-size:1.08em;display:flex;align-items:center;gap:0.7em;">
+        <i class="pi pi-info-circle" style="color:#6366f1;font-size:1.3em;"></i>
+        <span><b>Note:</b> After translating, open the DOCX file and right-click on the Table of Contents → select <b>"Update Field"</b> → <b>"Update entire table"</b> to automatically refresh the table of contents formatting.</span>
+      </div>
       <div v-for="file in files" :key="file.fileId || file.id" class="file-accordion">
         <div class="file-header" @click="toggleFileAccordion(file.fileId || file.id)">
           <span class="file-name">
@@ -262,29 +271,25 @@ async function saveTranslation(str: any) {
           </span>
           <div class="progress-bar-wrapper"
                :title="`${fileProgress[file.fileId || file.id]?.translated || 0} / ${fileProgress[file.fileId || file.id]?.total || 0} translated segments` +
-              ` (${((fileProgress[file.fileId || file.id]?.total || 0) === 0 ? 0 : Math.round((fileProgress[file.fileId || file.id]?.translated || 0) / (fileProgress[file.fileId || file.id]?.total || 1) * 100))}% translated)`">
-            <div
-              class="progress-bar"
-              :data-empty="(fileProgress[file.fileId || file.id]?.translated || 0) === 0"
-            >
-              <div
-                class="progress"
-                :style="{width: ((fileProgress[file.fileId || file.id]?.translated || 0) / (fileProgress[file.fileId || file.id]?.total || 1) * 100) + '%'}"
-              ></div>
-            </div>
-            <span class="progress-label"
-                  :title="`${fileProgress[file.fileId || file.id]?.translated || 0} / ${fileProgress[file.fileId || file.id]?.total || 0} translated segments` +
-                ` (${((fileProgress[file.fileId || file.id]?.total || 0) === 0 ? 0 : Math.round((fileProgress[file.fileId || file.id]?.translated || 0) / (fileProgress[file.fileId || file.id]?.total || 1) * 100))}% translated)`">
-              <i v-if="getStatusIcon(fileProgress[file.fileId || file.id])" :class="getStatusIcon(fileProgress[file.fileId || file.id])" class="status-icon"></i>
-              {{ fileProgress[file.fileId || file.id]?.translated || 0 }}/{{ fileProgress[file.fileId || file.id]?.total || 0 }}
+                (isFileProcessing(file) ? ' (Extracting...)' : '')">
+            <span v-if="isFileProcessing(file)" class="processing-badge" style="color:#6366f1;font-weight:600;margin-left:8px;">
+              <i class="pi pi-spin pi-spinner"></i> Extracting...
             </span>
+            <span v-else>{{ fileProgress[file.fileId || file.id]?.translated || 0 }} / {{ fileProgress[file.fileId || file.id]?.total || 0 }}</span>
           </div>
           <span class="accordion-arrow" :class="{ open: expandedFileIds.includes(file.fileId || file.id) }">
             <i class="pi" :class="expandedFileIds.includes(file.fileId || file.id) ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
           </span>
         </div>
         <transition name="fade">
-          <div v-if="expandedFileIds.includes(file.fileId || file.id)" class="file-strings-list">
+          <div v-if="expandedFileIds.includes(file.fileId || file.id)" class="file-strings-list" :class="{ 'disabled-processing': isFileProcessing(file) }">
+            <div v-if="isFileProcessing(file)" class="processing-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.85);z-index:10;display:flex;align-items:center;justify-content:center;border-radius:12px;">
+              <div style="text-align:center;">
+                <i class="pi pi-spin pi-spinner" style="font-size:2.5rem;color:#6366f1;"></i>
+                <div style="color:#6366f1;font-size:1.2em;font-weight:600;margin-top:12px;">File is extracting...</div>
+                <div style="color:#6b7280;font-size:0.95em;margin-top:6px;">Please wait for the extraction to complete</div>
+              </div>
+            </div>
             <!-- Part selector -->
             <div v-if="getTotalParts(file.fileId || file.id) > 1" class="part-selector" style="margin-bottom: 1em; display: flex; gap: 0.5em; align-items: center;">
               <span style="font-weight:600; color:#6366f1;">Part:</span>
@@ -294,6 +299,7 @@ async function saveTranslation(str: any) {
                 :class="['part-btn', { active: (selectedPartMap[file.fileId || file.id] ?? 0) === (part-1) }]"
                 @click="selectedPartMap[file.fileId || file.id] = part-1"
                 style="padding: 0.3em 1em; border-radius: 8px; border: none; background: #e0e7ff; color: #374151; font-weight:600; cursor:pointer;"
+                :disabled="isFileProcessing(file)"
               >
                 {{ part }} ({{ getStringsCountOfPart(file.fileId || file.id, part-1) }})
               </button>
@@ -301,7 +307,7 @@ async function saveTranslation(str: any) {
             <!-- Improved search & filter bar -->
             <div class="search-filter-bar">
               <span class="search-icon"><i class="pi pi-search"></i></span>
-              <InputText v-model="searchQueryMap[file.fileId || file.id]" placeholder="Search strings..." class="search-input" />
+              <InputText v-model="searchQueryMap[file.fileId || file.id]" placeholder="Search strings..." class="search-input" :disabled="isFileProcessing(file)" />
               <div class="filter-group-btn">
                 <button
                   v-for="opt in filterOptions"
@@ -310,6 +316,7 @@ async function saveTranslation(str: any) {
                   @click="filterStatusMap[file.fileId || file.id] = opt.value"
                   :title="opt.tooltip"
                   type="button"
+                  :disabled="isFileProcessing(file)"
                 >
                   <i v-if="opt.icon" :class="opt.icon" style="margin-right:0.4em;"></i>{{ opt.label }}
                 </button>
@@ -321,14 +328,14 @@ async function saveTranslation(str: any) {
             <div class="advanced-options">
               <div class="view-mode-toggle">
                 <label>
-                  <input type="radio" value="single" v-model="viewMode" /> Single Column
+                  <input type="radio" value="single" v-model="viewMode" :disabled="isFileProcessing(file)" /> Single Column
                 </label>
                 <label>
-                  <input type="radio" value="side" v-model="viewMode" /> Side by Side
+                  <input type="radio" value="side" v-model="viewMode" :disabled="isFileProcessing(file)" /> Side by Side
                 </label>
               </div>
               <label class="highlight-toggle">
-                <input type="checkbox" v-model="highlightUntranslated" />
+                <input type="checkbox" v-model="highlightUntranslated" :disabled="isFileProcessing(file)" />
                 Highlight untranslated
               </label>
             </div>
@@ -341,13 +348,16 @@ async function saveTranslation(str: any) {
                 :class="{
                   untranslated: highlightUntranslated && (!str.translatedText || !str.translatedText.trim()),
                   translated: str.translatedText && str.translatedText.trim(),
-                  'side-by-side': viewMode === 'side'
+                  'side-by-side': viewMode === 'side',
+                  'disabled-processing': isFileProcessing(file)
                 }"
+                :style="isFileProcessing(file) ? 'pointer-events:none;opacity:0.5;' : ''"
+                :title="isFileProcessing(file) ? 'Extracting, please wait...' : ''"
               >
                 <div v-if="viewMode === 'side'" class="side-by-side-row">
                   <div class="side-original">
                     <div class="original-label">Original Text:</div>
-                    <div class="original-text">{{ str.originalText }}</div>
+                    <div class="original-text" v-html="str.originalText"></div>
                   </div>
                   <div class="side-translation">
                     <div class="translation-label">Translation:</div>
@@ -358,13 +368,14 @@ async function saveTranslation(str: any) {
                       @input="e => { autoResize(e); onInput(str); }"
                       rows="1"
                       :ref="el => setTextareaRef(str.id, el)"
+                      :disabled="isFileProcessing(file)"
                     ></textarea>
                     <div class="card-actions">
                       <button
                         v-if="str.translatedText && str.translatedText.trim()"
                         class="save-btn"
                         @click="saveTranslation(str)"
-                        :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim()"
+                        :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file)"
                         title="Save"
                         type="button"
                       >💾 Save</button>
@@ -373,7 +384,7 @@ async function saveTranslation(str: any) {
                 </div>
                 <template v-else>
                   <div class="original-label">Original Text:</div>
-                  <div class="original-text">{{ str.originalText }}</div>
+                  <div class="original-text" v-html="str.originalText"></div>
                   <div class="translation-label">Translation:</div>
                   <textarea
                     class="translation-input"
@@ -382,13 +393,14 @@ async function saveTranslation(str: any) {
                     @input="e => { autoResize(e); onInput(str); }"
                     rows="1"
                     :ref="el => setTextareaRef(str.id, el)"
+                    :disabled="isFileProcessing(file)"
                   ></textarea>
                   <div class="card-actions">
                     <button
                       v-if="str.translatedText && str.translatedText.trim()"
                       class="save-btn"
                       @click="saveTranslation(str)"
-                      :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim()"
+                      :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file)"
                       title="Save"
                       type="button"
                     >💾 Save</button>
@@ -873,5 +885,26 @@ async function saveTranslation(str: any) {
 .part-btn.active {
   background: linear-gradient(90deg, #6366f1 0%, #7c3aed 100%) !important;
   color: #fff !important;
+}
+.disabled-processing {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.processing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.processing-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255,255,255,0.7);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

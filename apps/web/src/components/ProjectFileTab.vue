@@ -11,6 +11,7 @@ import Menu from 'primevue/menu';
 import axiosInstance from '../api';
 import { useProjectMemberPermissions } from '../composables/useProjectMemberPermissions';
 import { parsePermissionFlags } from '../utils/permissions';
+import { isSidebarCollapsed } from '../store/sidebar';
 
 interface ProjectFile {
   id: string | number;
@@ -19,6 +20,7 @@ interface ProjectFile {
   children?: ProjectFile[];
   strings?: number;
   revision?: string;
+  status?: 'processing' | 'ready' | 'error';
 }
 
 const props = defineProps<{
@@ -81,10 +83,34 @@ onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside);
   window.addEventListener('scroll', () => { dropdownOpenId.value = null; }, true);
 });
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleClickOutside);
-  window.removeEventListener('scroll', () => { dropdownOpenId.value = null; }, true);
-});
+const lastUploadedFileId = ref<string | number | null>(null);
+let pollingTimer: any = null;
+
+function startPollingFileStatus(fileId: string | number) {
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollingTimer = setInterval(async () => {
+    try {
+      const res = await axiosInstance.get(`/files/${fileId}`);
+      const file = res.data;
+      if (!file) {
+        // File chưa có trong DB, tiếp tục polling
+        return;
+      }
+      if (file.status === 'ready' || file.status === 'error') {
+        clearInterval(pollingTimer);
+        pollingTimer = null;
+        props.loadFiles();
+        if (file.status === 'ready') {
+          toast.add({ severity: 'success', summary: 'Success', detail: 'File is ready for translation!', life: 3000 });
+        } else {
+          toast.add({ severity: 'warn', summary: 'Warning', detail: 'File processing failed. Please try again.', life: 3000 });
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, 5000);
+}
 const renamingFile = ref<any>(null);
 const renameInput = ref('');
 const showRenameDialog = ref(false);
@@ -93,6 +119,8 @@ const fileToDelete = ref<any>(null);
 const showRevisionDialog = ref(false);
 const revisionFile = ref<any>(null);
 const deletingFile = ref(false);
+const uploadProgress = ref(0);
+const uploadPhase = ref<'uploading' | 'processing' | null>(null);
 
 function triggerUpload() {
   uploadError.value = '';
@@ -108,6 +136,8 @@ async function handleFileChange(event: Event) {
   const file = input.files[0];
   uploading.value = true;
   uploadError.value = '';
+  uploadProgress.value = 0;
+  uploadPhase.value = 'uploading';
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -118,62 +148,43 @@ async function handleFileChange(event: Event) {
     formData.append('projectId', projectId.toString());
     formData.append('branchId', branchId.toString());
     console.log('Uploading file:', file.name, 'to project:', projectId, 'branch:', branchId);
-    const response = await fetch('/api/files/upload', {
-      method: 'POST',
-      body: formData,
-    });
-    const respText = await response.text();
-    console.log('Upload response status:', response.status, 'body:', respText);
-    if (!response.ok) {
-      throw new Error('File upload failed: ' + respText);
-    }
-
-    // Parse response to get fileId
-    let fileId;
-    try {
-      const respData = JSON.parse(respText);
-      fileId = respData.fileId;
-    } catch (e) {
-      console.warn('Could not parse upload response:', e);
-    }
-
-    // Tăng delay lên 2500ms để backend ghi file xong
-    await new Promise(r => setTimeout(r, 2500));
-
-    // Trigger extract strings if we have fileId
-    if (fileId) {
-      try {
-        console.log('Triggering extract strings for file:', fileId);
-        const extractResponse = await axiosInstance.post(`/files/${fileId}/extract-strings`);
-        console.log('Extract strings response:', extractResponse.data);
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'File uploaded and strings extracted successfully!',
-          life: 3000
-        });
-      } catch (extractError) {
-        console.error('Extract strings error:', extractError);
-        toast.add({
-          severity: 'warn',
-          summary: 'Warning',
-          detail: 'File uploaded but string extraction failed. You can retry later.',
-          life: 3000
-        });
+    // Sử dụng axios để lấy onUploadProgress
+    const response = await axiosInstance.post('/files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent: ProgressEvent) => {
+        if (progressEvent.lengthComputable) {
+          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        }
       }
-    }
+    });
 
-    // Reload file list
-    const result = props.loadFiles();
-    if (result instanceof Promise) {
-      await result;
+    // Upload xong, tắt overlay ngay lập tức
+    uploading.value = false;
+    uploadProgress.value = 0;
+    uploadPhase.value = null;
+
+    const respData = response.data;
+    const isUpdate = respData?.updated;
+    const message = isUpdate
+      ? `File "${file.name}" updated successfully!`
+      : `File "${file.name}" uploaded successfully!`;
+    toast.add({ severity: 'success', summary: 'Success', detail: message, life: 3000 });
+
+    // Reload files ngay để hiển thị file với status processing
+    props.loadFiles();
+
+    lastUploadedFileId.value = respData && respData.fileId ? respData.fileId : null;
+    // Polling trạng thái file nếu status là processing
+    if (lastUploadedFileId.value) {
+      startPollingFileStatus(lastUploadedFileId.value);
     }
   } catch (e: any) {
     uploadError.value = e.message || 'Upload failed';
     toast.add({ severity: 'error', summary: 'Error', detail: uploadError.value, life: 3000 });
     console.error('File upload error:', e);
-  } finally {
     uploading.value = false;
+    uploadProgress.value = 0;
+    uploadPhase.value = null;
   }
 }
 
@@ -308,6 +319,7 @@ function handleAction(action: string, fileId: string | number) {
   } else if (action === 'delete') {
     fileToDelete.value = { ...file };
     showDeleteDialog.value = true;
+    isSidebarCollapsed.value = true;
     console.log('Open delete modal for file:', fileToDelete.value);
   } else if (action === 'revisions') {
     revisionFile.value = file;
@@ -331,13 +343,34 @@ async function confirmDelete() {
   try {
     await axiosInstance.delete(`/files/${fileId}`);
     showDeleteDialog.value = false;
+    isSidebarCollapsed.value = false;
     props.loadFiles();
-    toast.add({ severity: 'success', summary: 'Deleted', detail: 'File deleted successfully!', life: 3000 });
-  } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Delete failed', life: 3000 });
+    // Chỉ hiện toast sau khi modal đã đóng
+    setTimeout(() => {
+      toast.add({ severity: 'success', summary: 'Deleted', detail: 'File deleted successfully!', life: 3000 });
+    }, 200);
+  } catch (e: any) {
+    showDeleteDialog.value = false;
+    isSidebarCollapsed.value = false;
+    let msg = 'Delete failed';
+    if (e?.response?.data?.message) {
+      msg = e.response.data.message;
+    } else if (e?.response?.data?.error) {
+      msg = e.response.data.error;
+    } else if (e?.message) {
+      msg = e.message;
+    }
+    // Chỉ hiện toast sau khi modal đã đóng
+    setTimeout(() => {
+      toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 3000 });
+    }, 200);
   } finally {
     deletingFile.value = false;
   }
+}
+function closeDeleteDialog() {
+  showDeleteDialog.value = false;
+  isSidebarCollapsed.value = false;
 }
 defineExpose({
   searchValue,
@@ -408,6 +441,20 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 </script>
 <template>
   <div class="project-section files-section">
+    <!-- Overlay loading khi uploading -->
+    <transition name="fade">
+      <div v-if="uploading && uploadPhase === 'uploading'" class="upload-loading-overlay">
+        <div class="spinner-container">
+          <i class="pi pi-spin pi-spinner" style="font-size:2.5rem;color:#6366f1;"></i>
+          <div style="margin-top:12px;color:#6366f1;font-weight:500;">
+            Uploading... <span v-if="uploadProgress > 0">{{ uploadProgress }}%</span>
+          </div>
+          <div v-if="uploadProgress > 0" class="upload-progress-bar" style="width: 100%; background: #e0e7ff; border-radius: 8px; height: 12px; margin-top: 18px;">
+            <div :style="{ width: uploadProgress + '%', background: '#6366f1', height: '100%', borderRadius: '8px', transition: 'width 0.3s' }"></div>
+          </div>
+        </div>
+      </div>
+    </transition>
     <div v-if="!props.branchId" class="warning-message" style="color:#e53e3e; margin-bottom: 1em; font-weight:600;">
       This project has no branch. Please create a branch before uploading files.
     </div>
@@ -424,6 +471,16 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
         <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" />
       </div>
     </div>
+    <div class="file-format-note" style="background:#fffbe6;border:1.5px solid #ffe58f;color:#ad8b00;padding:12px 18px;border-radius:10px;margin:14px 0 18px 0;font-size:1.08em;display:flex;align-items:center;gap:0.7em;">
+      <i class="pi pi-exclamation-triangle" style="color:#faad14;font-size:1.3em;"></i>
+      <span>
+        <b>Note:</b><br>
+        - For <b>DOCX</b> files: The exported translation will retain about <b>80–90%</b> of the original formatting and layout (similar to Crowdin). Some complex layouts or advanced styles may not be fully preserved.<br>
+        - For <b>PDF</b> files:<br>
+        &nbsp;&nbsp;• If the PDF contains selectable text, about <b>70–85%</b> of the original formatting may be preserved.<br>
+        &nbsp;&nbsp;• If the PDF is a scanned image (OCR), only the text content will be extracted; formatting and layout will <b>not</b> be preserved.
+      </span>
+    </div>
     <div v-if="uploadError" style="color:#e53e3e; margin-bottom: 0.5em">{{ uploadError }}</div>
     <div v-if="searchLoading" class="search-loading">Searching...</div>
     <div v-else-if="filteredFiles.length === 0 && searchQuery" class="no-files-found">No files found for: "{{ searchQuery }}"</div>
@@ -439,6 +496,10 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
         <td class="file-name-cell">
           <i :class="getFileIcon(file.fileName)" style="color:#6366f1" />
           <span class="file-base-name">{{ file.fileName }}</span>
+          <span v-if="file.status === 'processing'" class="file-status processing">
+            <i class="pi pi-spin pi-spinner" style="font-size:1em;margin-left:8px;"></i> Processing...
+          </span>
+          <span v-else-if="file.status === 'error'" class="file-status error" style="color:#e53e3e;margin-left:8px;">Error extracting strings</span>
         </td>
         <td class="file-actions-cell" style="position:relative;">
           <Button icon="pi pi-ellipsis-v" class="p-button-rounded p-button-text p-button-sm" @click="toggleDropdown(file.id || file.fileId)" :ref="setEllipsisBtnRef(file.id || file.fileId)" />
@@ -485,34 +546,36 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       </template>
     </Dialog>
     <!-- Modal xác nhận xóa file đẹp -->
-    <div v-if="showDeleteDialog" class="delete-dialog-modal">
-      <div class="modal-overlay" @click="showDeleteDialog = false"></div>
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Delete File</h3>
-          <button class="close-btn" @click="showDeleteDialog = false">
-            <i class="pi pi-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="warning-message">
-            <div class="warning-icon">
-              <i class="pi pi-exclamation-triangle"></i>
+    <teleport to="body">
+      <div v-if="showDeleteDialog" class="delete-dialog-modal">
+        <div class="modal-overlay" @click="closeDeleteDialog"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Delete File</h3>
+            <button class="close-btn" @click="closeDeleteDialog">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="warning-message">
+              <div class="warning-icon">
+                <i class="pi pi-exclamation-triangle"></i>
+              </div>
+              <h4>Are you sure you want to delete this file?</h4>
+              <p><b>{{ fileToDelete.value?.fileName }}</b></p>
+              <p>This action cannot be undone.</p>
             </div>
-            <h4>Are you sure you want to delete this file?</h4>
-            <p><b>{{ fileToDelete.value?.fileName }}</b></p>
-            <p>This action cannot be undone.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="closeDeleteDialog">Keep File</button>
+            <button class="btn btn-danger" @click="confirmDelete" :disabled="deletingFile">
+              <span v-if="deletingFile" class="loading-spinner"></span>
+              {{ deletingFile ? 'Deleting...' : 'Delete File' }}
+            </button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showDeleteDialog = false">Keep File</button>
-          <button class="btn btn-danger" @click="confirmDelete" :disabled="deletingFile">
-            <span v-if="deletingFile" class="loading-spinner"></span>
-            {{ deletingFile ? 'Deleting...' : 'Delete File' }}
-          </button>
-        </div>
       </div>
-    </div>
+    </teleport>
     <!-- End modal đẹp -->
   </div>
 </template>
@@ -730,7 +793,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: 9999; /* Đảm bảo cao hơn mọi thành phần khác */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -741,7 +804,8 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45); /* Overlay mờ toàn trang */
+  z-index: 10000;
 }
 .modal-content {
   background: white;
@@ -752,6 +816,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   overflow-y: auto;
   position: relative;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  z-index: 10001;
 }
 .modal-header {
   display: flex;
@@ -860,24 +925,45 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   min-width: 170px;
   background: rgba(255,255,255,0.98);
   box-shadow: 0 12px 32px 0 rgba(49,130,206,0.16), 0 2px 8px rgba(76,34,128,0.10);
-  border-radius: 18px;
-  padding: 0.6rem 0;
+  border-radius: 12px;
+  padding: 0;
   z-index: 10;
   animation: fadeScaleIn 0.18s;
   border: 1.5px solid #f1f5f9;
+  overflow: hidden; /* Đảm bảo các item không bị tràn ra ngoài */
+  display: flex;
+  flex-direction: column;
 }
 .dropdown-item {
   display: flex;
   align-items: center;
   gap: 0.85rem;
   padding: 0.85rem 1.3rem;
-  border-radius: 14px;
+  border: none !important;      /* Xóa border mặc định */
+  border-radius: 0 !important;  /* Không bo góc từng item */
+  background: transparent !important; /* Không background riêng */
   font-size: 1.09em;
   font-weight: 500;
   color: #374151;
   cursor: pointer;
   transition: background 0.16s, color 0.16s;
   user-select: none;
+  margin: 0 !important;         /* Không margin giữa các item */
+  box-shadow: none !important;  /* Xóa box-shadow mặc định */
+  width: 100%;
+  text-align: left;
+}
+.dropdown-item:first-child {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+.dropdown-item:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+.dropdown-item:focus {
+  outline: none;
+  background: #f1f5f9;
 }
 .dropdown-item:hover {
   background: #f1f5f9;
@@ -918,5 +1004,57 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 @keyframes fadeScaleIn {
   from { opacity: 0; transform: scale(0.98) translateY(-8px);}
   to { opacity: 1; transform: scale(1) translateY(0);}
+}
+.upload-loading-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.75);
+  z-index: 10010;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+.spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+</style>
+
+<style>
+/* Overlay modal che toàn bộ trang, kể cả sidebar/navbar */
+.delete-dialog-modal {
+  position: fixed !important;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 99999 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+.delete-dialog-modal .modal-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 100000 !important;
+}
+.delete-dialog-modal .modal-content {
+  position: relative;
+  z-index: 100001 !important;
+}
+.p-toast {
+  z-index: 200000 !important;
+}
+.file-status.processing {
+  color: #6366f1;
+  font-weight: 500;
+  margin-left: 8px;
+}
+.file-status.error {
+  color: #e53e3e;
+  font-weight: 500;
+  margin-left: 8px;
 }
 </style>

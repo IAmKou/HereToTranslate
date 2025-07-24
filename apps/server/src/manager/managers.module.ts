@@ -49,6 +49,7 @@ import { ChatController } from '../chat/chat.controller';
 import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
+import { BullModule } from '@nestjs/bull';
 
 
 @Global()
@@ -76,7 +77,8 @@ import { ManifestService } from '#LocalProject/Managers/service/manifest.service
       CommitEntity,
       FileEntity,
       TaskEntity,
-    ])
+    ]),
+    BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
   ],
   providers: [
     CategoryManagerService,

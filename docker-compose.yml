@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mysql:
     image: mysql:8
@@ -28,6 +26,23 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    networks:
+      - mynetwork
+
+  server:
+    build:
+      context: .
+      dockerfile: ./apps/server/Dockerfile
+    container_name: htt-server
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - mysql
+      - mongo
     networks:
       - mynetwork
 

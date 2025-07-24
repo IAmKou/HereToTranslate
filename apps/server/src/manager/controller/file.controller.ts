@@ -83,4 +83,17 @@ export class FileController {
     return this.fileService.extractStringsFromFile(fileId, req.user.id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get(':fileId/log')
+  async getFileExtractLog(@Param('fileId') fileId: string) {
+    const file = await this.fileService.getFileById(fileId);
+    return { extractLog: file?.extractLog || '' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':fileId')
+  async getFileById(@Param('fileId') fileId: string) {
+    return this.fileService.getFileById(fileId);
+  }
+
 }

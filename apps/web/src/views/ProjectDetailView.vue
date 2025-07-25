@@ -348,6 +348,7 @@
                   @create-group="handleCreateGroup"
                   @edit-group="handleEditGroup"
                   @delete-group="handleDeleteGroup"
+                  @refresh-groups="loadGroups"
                 />
                 <ProjectDisscusionTab
                   v-else-if="activeTab === 'discussions'"
@@ -372,10 +373,12 @@
                   :project="project"
                   :members="members"
                   :current-user="currentUser"
+                  @fileReady="handleFileReady"
                   key="files"
                 />
                 <ProjectTranslationTab
                   v-else-if="activeTab === 'translation'"
+                  ref="translationTabRef"
                   :project-id="project.id"
                   :branch-id="selectedBranchId"
                   :project="project"
@@ -937,7 +940,14 @@ const loadGroups = async () => {
     const res = await axiosInstance.get(`/projects/${project.value.id}/groups`);
     groups.value = res.data;
   } catch (error: any) {
-    groupsError.value = error?.response?.data?.message || 'Failed to load groups.';
+    // Nếu lỗi 403 hoặc 401 thì chỉ set groupsError, không set groups = []
+    if (error?.response?.status === 403 || error?.response?.status === 401) {
+      groupsError.value = 'Bạn không có quyền xem danh sách nhóm.';
+      // Không set groups = [] để giữ nguyên dữ liệu cũ nếu có
+    } else {
+      groupsError.value = error?.response?.data?.message || 'Failed to load groups.';
+      groups.value = [];
+    }
   } finally {
     groupsLoading.value = false;
   }
@@ -1532,6 +1542,16 @@ const groupToDelete = ref<ProjectGroup | null>(null);
 const showDeleteConfirmModal = ref(false);
 
 const toast = ref(null);
+
+const translationTabRef = ref(null);
+
+const handleFileReady = (fileId: string | number) => {
+  console.log('File ready:', fileId);
+  // Reload files trong ProjectTranslationTab ngay khi file ready
+  if (translationTabRef.value && translationTabRef.value.reloadFiles) {
+    translationTabRef.value.reloadFiles();
+  }
+};
 </script>
 
 <style scoped>

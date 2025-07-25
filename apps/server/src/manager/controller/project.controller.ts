@@ -251,7 +251,7 @@ export class ProjectController {
 
   @UseGuards(JwtAuthGuard)
   @Post(':projectId/files')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadProjectFile(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
     @UploadedFile() file: Express.Multer.File,

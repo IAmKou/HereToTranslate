@@ -9,17 +9,18 @@ import { MainModule } from './main.module';
 import { shared } from '@here-to-translate/common';
 import { BigIntSerializerInterceptor } from './util/bigint-serializer.interceptor';
 import cookieParser from 'cookie-parser';
+import { join } from 'path';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 
 async function bootstrap() {
   shared();
-  const app = await NestFactory.create(MainModule);
+  const app = await NestFactory.create<NestExpressApplication>(MainModule);
     app.use(cookieParser());
 
   app.useGlobalPipes(new ValidationPipe(
     {
       enableDebugMessages: true,
-
     }
   ));
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
@@ -34,6 +35,9 @@ async function bootstrap() {
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT ?? 3000;
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
   await app.listen(3000, '0.0.0.0');
   Logger.log(
     `🚀 Application is running on: http://localhost:${port}`

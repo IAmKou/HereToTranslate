@@ -110,6 +110,7 @@ const availablePermissions = [
   { value: 'Vote', label: 'Vote', bit: 10n },
   { value: 'AttachFiles', label: 'Attach Files', bit: 9n },
   { value: 'ViewThread', label: 'View Thread', bit: 8n },
+  { value: 'ManageTranslation', label: 'ManageTranslation', bit: 23n },
 ];
 
 function parsePermissionFlags(bitmask: string | number | bigint | undefined | any): string[] {

@@ -5,6 +5,8 @@ import axiosInstance from '../api';
 import Multiselect from 'vue-multiselect';
 import 'vue-multiselect/dist/vue-multiselect.min.css';
 import 'primeicons/primeicons.css';
+import { useProjectMemberPermissions } from '../composables/useProjectMemberPermissions';
+import { parsePermissionFlags } from '../utils/permissions';
 const toast = useToast();
 // Không fetch API ở đây nữa, chỉ nhận props
 const showDeleteConfirmModal = ref(false);
@@ -34,12 +36,43 @@ const isDeleting = ref(false);
 // Thay selectedUserIds bằng selectedMembers (array object)
 const selectedMembers = ref([]);
 
-const memberOptions = computed(() =>
-  (props.members ?? props.project?.members ?? []).map((m: any) => ({
+const memberOptions = computed(() => {
+  // Khi edit group, loại bỏ các member đã được chọn khỏi danh sách options
+  if (showEditGroupModal.value) {
+    const selectedIds = new Set(editSelectedMembers.value.map((m: any) => m.id));
+    return (props.members ?? props.project?.members ?? []).filter((m: any) => !selectedIds.has(m.id)).map((m: any) => ({
+      ...m,
+      label: `${m.fullName || m.username} (${m.email})`,
+      value: m.id,
+    }));
+  }
+  // Khi tạo group, hiển thị tất cả
+  return (props.members ?? props.project?.members ?? []).map((m: any) => ({
     ...m,
     label: `${m.fullName || m.username} (${m.email})`,
     value: m.id,
-  }))
+  }));
+});
+
+const normalizedMembers = computed(() => {
+  if (!props.members) return [];
+  return props.members.map(m => ({
+    ...m,
+    roles: Array.isArray(m.roles)
+      ? m.roles.map(r => {
+        const permissions = r.permissionFlags ? parsePermissionFlags(r.permissionFlags) : [];
+        return { ...r, permissions };
+      })
+      : []
+  }));
+});
+const { hasPermission, isProjectOwner, isProjectAdmin } = useProjectMemberPermissions(
+  computed(() => props.project || {}),
+  normalizedMembers,
+  computed(() => props.project?.currentUser || null)
+);
+const canManageGroups = computed(() =>
+  isProjectOwner.value || isProjectAdmin.value || hasPermission('ManageGroups')
 );
 
 function openCreateGroupModal() {
@@ -88,10 +121,14 @@ const createGroup = async () => {
     // 2. Nếu có chọn thành viên, gọi API assign
     const userIds = selectedMembers.value.map((m: any) => m.id);
     if (props.project && groupId && userIds.length > 0) {
-      await axiosInstance.post(`/projects/${props.project.id}/groups/${groupId}/users/add`, {
+      const assignRes = await axiosInstance.post(`/projects/${props.project.id}/groups/${groupId}/users/add`, {
         userIds
       });
+      console.log('[DEBUG] Assign members to group:', { groupId, userIds, assignRes: assignRes.data });
     }
+    // Sau khi tạo group và assign member, reload lại danh sách group
+    const refreshRes = await emit('refresh-groups');
+    console.log('[DEBUG] After refresh-groups, current groups:', props.groups);
     showCreateGroupModal.value = false;
     newGroup.value = { name: '' };
     selectedMembers.value = [];
@@ -113,10 +150,18 @@ const editGroup = (group: any) => {
   emit('edit-group', group);
 };
 
+const editSelectedMembers = ref([]);
+
 const openEditGroupModal = (group: any) => {
   editingGroup.value = group;
   editGroupName.value = group.name;
   editGroupNameError.value = '';
+  // Pre-select current members
+  editSelectedMembers.value = (group.members || []).map((m: any) => ({
+    ...m,
+    label: `${m.fullName || m.username} (${m.email})`,
+    value: m.id,
+  }));
   showEditGroupModal.value = true;
   setTimeout(() => {
     const input = document.getElementById('editGroupName');
@@ -146,11 +191,18 @@ const performEditGroup = async () => {
   }
   isEditingGroup.value = true;
   try {
+    // 1. Cập nhật tên group
     await emit('edit-group', { id: editingGroup.value.id, name: editGroupName.value });
+    // 2. Đồng bộ lại toàn bộ thành viên group
+    const userIds = editSelectedMembers.value.map((m: any) => m.id);
+    if (props.project && editingGroup.value.id) {
+      await axiosInstance.post(`/projects/${props.project.id}/groups/${editingGroup.value.id}/users/set`, { userIds });
+    }
     showEditGroupModal.value = false;
     editingGroup.value = null;
     editGroupName.value = '';
     toast.add({ severity: 'success', summary: 'Success', detail: 'Group updated successfully!', life: 2000 });
+    await emit('refresh-groups');
   } catch (err: any) {
     alert('Failed to update group: ' + err.message);
   } finally {
@@ -192,6 +244,18 @@ const performDeleteGroup = async () => {
     alert('Failed to delete group: ' + err.message);
   }
 };
+
+const showGroupDetailModal = ref(false);
+const selectedGroup = ref(null);
+
+function viewGroupDetail(group) {
+  selectedGroup.value = group;
+  showGroupDetailModal.value = true;
+}
+function closeGroupDetailModal() {
+  showGroupDetailModal.value = false;
+  selectedGroup.value = null;
+}
 </script>
 
 <template>
@@ -209,7 +273,7 @@ const performDeleteGroup = async () => {
           </span>
           Project Groups
         </h2>
-        <button class="btn btn-primary btn-sm" @click="openCreateGroupModal">
+        <button class="btn btn-primary btn-sm" @click="openCreateGroupModal" :disabled="!canManageGroups" :title="!canManageGroups ? 'You do not have permission to create groups (requires ManageGroups or ProjectAdmin)' : ''">
           <span class="icon">➕</span> Create Group
         </button>
       </div>
@@ -221,8 +285,10 @@ const performDeleteGroup = async () => {
         </div>
         <div v-else-if="props.groupsError" class="empty-section">
           <div class="empty-icon">❌</div>
-          <h3>Error: {{ props.groupsError }}</h3>
-          <p>Failed to load project groups. Please try again later.</p>
+          <h3 v-if="props.groupsError.includes('quyền')">{{ props.groupsError }}</h3>
+          <h3 v-else>Error: {{ props.groupsError }}</h3>
+          <p v-if="props.groupsError.includes('quyền')">Bạn không có quyền xem danh sách nhóm của dự án này.</p>
+          <p v-else>Failed to load project groups. Please try again later.</p>
         </div>
         <div v-else-if="props.groups.length === 0" class="empty-section">
           <div class="empty-icon">
@@ -236,7 +302,7 @@ const performDeleteGroup = async () => {
           <p>No groups have been created for this project yet.</p>
         </div>
         <div v-else class="groups-list">
-          <div v-for="group in props.groups" :key="group.id" class="group-item">
+          <div v-for="group in props.groups" :key="group.id" class="group-item" @click="viewGroupDetail(group)" style="cursor: pointer;">
             <div class="group-info">
               <div class="group-header">
                 <span class="group-name">{{ group.name }}</span>
@@ -249,11 +315,11 @@ const performDeleteGroup = async () => {
                 </span>
               </div>
             </div>
-            <div class="group-actions">
-              <button class="btn btn-outline btn-sm" @click="openEditGroupModal(group)">
+            <div class="group-actions" @click.stop>
+              <button class="btn btn-outline btn-sm" @click="openEditGroupModal(group)" :disabled="!canManageGroups" :title="!canManageGroups ? 'You do not have permission to edit groups (requires ManageGroups or ProjectAdmin)' : ''">
                 <span class="icon">✏️</span> Edit
               </button>
-              <button class="btn btn-danger btn-sm" @click="confirmDeleteGroup(group)">
+              <button class="btn btn-danger btn-sm" @click="confirmDeleteGroup(group)" :disabled="!canManageGroups" :title="!canManageGroups ? 'You do not have permission to delete groups (requires ManageGroups or ProjectAdmin)' : ''">
                 <span class="icon">🗑️</span> Delete
               </button>
             </div>
@@ -369,6 +435,27 @@ const performDeleteGroup = async () => {
               />
               <div v-if="editGroupNameError" class="input-error">{{ editGroupNameError }}</div>
             </div>
+            <!-- Multiselect chọn thành viên khi edit group -->
+            <div class="form-group input-icon-group-harmonize" style="position: relative; margin-bottom: 22px;">
+              <label for="editGroupMembers" style="margin-bottom: 8px;">Group Members:</label>
+              <Multiselect
+                id="editGroupMembers"
+                v-model="editSelectedMembers"
+                :options="memberOptions"
+                :multiple="true"
+                :close-on-select="false"
+                :clear-on-select="false"
+                :preserve-search="true"
+                placeholder="Select members..."
+                label="label"
+                track-by="id"
+                class="multiselect-custom"
+                :show-labels="false"
+              />
+              <div class="form-hint" style="font-size: 12px; color: #999; margin-top: 8px;">
+                You can select multiple members for this group
+              </div>
+            </div>
             <div class="form-actions form-actions-harmonize">
               <button type="submit" class="btn btn-primary btn-action-harmonize" :disabled="isEditingGroup">
                 <span class="btn-action-icon-harmonize">✏️</span>
@@ -378,6 +465,49 @@ const performDeleteGroup = async () => {
               <button type="button" class="btn btn-outline btn-cancel-harmonize" @click="closeEditGroupModal">Cancel</button>
             </div>
           </form>
+        </div>
+      </div>
+    </Teleport>
+    <!-- Modal chi tiết group -->
+    <Teleport to="body">
+      <div v-if="showGroupDetailModal" class="modal-overlay" @click.self="closeGroupDetailModal">
+        <div class="modal-content group-modal-detail">
+          <div class="modal-title-detail">
+            <span class="modal-title-icon-detail">👥</span>
+            <h2 class="modal-title-text-detail">Group Detail</h2>
+          </div>
+          <div class="modal-title-desc-detail"></div>
+          <div v-if="selectedGroup">
+            <div class="group-section-detail">
+              <div class="group-label-detail">Name:</div>
+              <div class="group-value-detail">{{ selectedGroup.name }}</div>
+            </div>
+            <div class="group-section-detail">
+              <div class="group-label-detail">Members:</div>
+              <div class="group-members-list-detail">
+                <div v-if="!selectedGroup.members || selectedGroup.members.length === 0" class="no-members-detail">No members yet. Add some!</div>
+                <div v-else class="members-scroll-detail">
+                  <div v-for="m in selectedGroup.members" :key="m.id" class="group-member-item-detail">
+                    <span class="member-avatar-detail">
+                      <template v-if="m.avatarUrl">
+                        <img :src="m.avatarUrl" alt="avatar" />
+                      </template>
+                      <template v-else>
+                        {{ (m.fullName || m.username || '?').charAt(0).toUpperCase() }}
+                      </template>
+                    </span>
+                    <span class="member-info-detail">
+                      <span class="member-name-detail">{{ m.fullName || m.username }}</span>
+                      <span class="member-email-detail">{{ m.email }}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions form-actions-harmonize">
+            <button type="button" class="btn btn-outline btn-cancel-detail" @click="closeGroupDetailModal">Close</button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -1067,43 +1197,25 @@ const performDeleteGroup = async () => {
   opacity: 1;
 }
 .btn.btn-primary.btn-action-harmonize {
-  font-size: 0.95rem; /* 13.5px */
-  padding: 8px 16px;
-  border-radius: 8px;
-  background: linear-gradient(90deg, #38b2ac 0%, #4299e1 100%) !important;
-  color: #fff !important;
-  font-weight: 700;
-  box-shadow: 0 1.5px 6px #4299e122;
-  transition: filter 0.18s, box-shadow 0.18s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  min-width: 130px;
-  white-space: nowrap;
-}
-.btn.btn-primary.btn-action-harmonize:hover:not(:disabled) {
-  filter: brightness(1.07);
-  box-shadow: 0 4px 12px #4299e133;
+  font-size: 0.97rem;
+  padding: 7px 18px;
+  border-radius: 7px;
+  min-width: 110px;
 }
 .btn-action-icon-harmonize {
-  font-size: 1rem;
-  margin-right: 0.08rem;
+  font-size: 1.05rem;
+  margin-right: 0.12rem;
 }
 .btn-cancel-harmonize {
-  font-size: 0.95rem; /* 13.5px */
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1.2px solid #e2e8f0 !important;
-  color: #555 !important;
-  background: #fff !important;
-  font-weight: 600;
-  transition: background 0.18s, color 0.18s, border 0.18s;
+  font-size: 0.97rem;
+  padding: 7px 18px;
+  border-radius: 7px;
 }
 .btn-cancel-harmonize:hover {
   background: #f8fafc !important;
   color: #222 !important;
   border-color: #cbd5e0 !important;
+  box-shadow: 0 4px 16px #e2e8f044;
 }
 .form-group {
   margin-bottom: 0.7rem;
@@ -1336,26 +1448,155 @@ const performDeleteGroup = async () => {
 .modal-content.group-modal-harmonize {
   z-index: 2100;
 }
-</style>
-
-<style>
-.global-modal-overlay-fixed {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(30, 41, 59, 0.32);
-  z-index: 9999;
-  backdrop-filter: blur(2px);
-  pointer-events: auto;
+.group-modal-detail {
+  min-width: 340px;
+  max-width: 420px;
+  padding: 32px 28px 28px 28px !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+  background: #fff;
+  text-align: center;
 }
-.modal-portal {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 10000;
+.modal-title-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.modal-title-icon-detail {
+  font-size: 1.6rem;
+  color: #764ba2;
+  margin-bottom: 0.1rem;
+}
+.modal-title-text-detail {
+  font-size: 20px;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+.modal-title-desc-detail {
+  font-size: 1rem;
+  color: #666;
+  margin-bottom: 18px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: center;
+}
+.group-section-detail {
+  margin-bottom: 22px;
+  text-align: left;
+}
+.group-label-detail {
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 6px;
+  font-size: 1.05rem;
+}
+.group-value-detail {
+  font-size: 1.08rem;
+  color: #222;
+  padding-left: 2px;
+  line-height: 1.6;
+}
+.group-members-list-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin-top: 2px;
+}
+.members-scroll-detail {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.no-members-detail {
+  color: #aaa;
+  font-size: 1.04rem;
+  padding: 12px 0 8px 0;
+  text-align: center;
+}
+.group-member-item-detail {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0 6px 0;
+}
+.member-avatar-detail {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f3f3f3;
+  color: #764ba2;
+  font-weight: 700;
+  font-size: 1.15rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  border: 1.5px solid #e0e0e0;
 }
-.modal-content.group-modal-harmonize {
-  z-index: 10001;
+.member-avatar-detail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.member-info-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.member-name-detail {
+  font-weight: 600;
+  color: #222;
+  font-size: 1.05rem;
+}
+.member-email-detail {
+  color: #888;
+  font-size: 0.98rem;
+}
+.btn-cancel-detail {
+  border-radius: 8px !important;
+  border: 1.5px solid #e0e0e0 !important;
+  color: #555 !important;
+  background: #fff !important;
+  font-weight: 600;
+  font-size: 1.05rem;
+  padding: 10px 28px;
+  transition: background 0.18s, color 0.18s, border 0.18s;
+  box-shadow: none;
+}
+.btn-cancel-detail:hover {
+  background: #f5f5f5 !important;
+  color: #222 !important;
+  border-color: #cbd5e0 !important;
+}
+@media (max-width: 700px) {
+  .group-modal-detail {
+    padding: 1.2rem 0.7rem 1rem 0.7rem !important;
+    min-width: 90vw;
+    max-width: 98vw;
+  }
+  .modal-title-text-detail {
+    font-size: 1.1rem;
+  }
+  .modal-title-icon-detail {
+    font-size: 1.1rem;
+  }
+}
+</style>
+
+<style>
+button:disabled,
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.3);
+  pointer-events: none;
 }
 </style>

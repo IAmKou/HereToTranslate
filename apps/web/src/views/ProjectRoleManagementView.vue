@@ -423,6 +423,7 @@ const permissionDescriptionMap: Record<string, string> = {
   AttachFiles: 'Attach files in discussions',
   ViewThread: 'View discussions',
   ViewProject: 'View project metadata',
+  ManageTranslation: 'Edit and save translations – cho phép sửa và lưu bản dịch',
 };
 
 const mappedAvailablePermissions = computed(() =>

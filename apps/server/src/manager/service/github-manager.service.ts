@@ -57,12 +57,12 @@ export class GitHubService {
   }
 
   async pushInitialFile({
-    repo,
-    path,
-    content,
-    message,
-    branch = 'main',
-  }: {
+                          repo,
+                          path,
+                          content,
+                          message,
+                          branch = 'main',
+                        }: {
     repo: string;
     path: string;
     content: string | Buffer;
@@ -73,6 +73,26 @@ export class GitHubService {
       ? content.toString('base64')
       : Buffer.from(content, 'utf8').toString('base64');
 
+    let sha: string | undefined;
+    try {
+      const { data } = await this.octokit.repos.getContent({
+        owner: this.username,
+        repo,
+        path,
+        ref: branch,
+      });
+
+      if (!Array.isArray(data) && 'sha' in data) {
+        sha = data.sha;
+      }
+    } catch (error: any) {
+      if (error.status !== 404) {
+        // Nếu lỗi không phải là 404 (not found), thì throw lỗi
+        throw error;
+      }
+      // Nếu lỗi là 404, file chưa tồn tại, không cần làm gì, sha sẽ là undefined
+    }
+
     await this.octokit.rest.repos.createOrUpdateFileContents({
       owner: this.username,
       repo,
@@ -80,6 +100,7 @@ export class GitHubService {
       message,
       content: base64Content,
       branch,
+      sha, // sha sẽ là undefined nếu file chưa tồn tại (tạo mới), hoặc là sha của file cũ (cập nhật)
     });
   }
 
@@ -162,11 +183,11 @@ export class GitHubService {
   }
 
   async mergeBranch({
-    repo,
-    base,
-    head,
-    commitMessage,
-  }: {
+                      repo,
+                      base,
+                      head,
+                      commitMessage,
+                    }: {
     repo: string;
     base: string;
     head: string;
@@ -187,10 +208,10 @@ export class GitHubService {
     // Lấy tất cả local commits (không filter status)
     const localCommits = (await (this as any).commitRepository?.find)
       ? await (this as any).commitRepository.find({
-          where: { project: { id: projectId }, branch: { id: branchId } },
-          relations: ['author'],
-          order: { createdAt: 'DESC' },
-        })
+        where: { project: { id: projectId }, branch: { id: branchId } },
+        relations: ['author'],
+        order: { createdAt: 'DESC' },
+      })
       : [];
     // Định dạng lại cho giống FE mong muốn
     return localCommits.map((c: any) => ({

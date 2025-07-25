@@ -506,7 +506,7 @@
                         Drop files here or click to browse
                       </p>
                       <p class="upload-subtitle">
-                        Support: PDF, DOC, DOCX, TXT, RTF (Max 10MB each) -
+                        Support: PDF, DOCX, TXT, JSON (Max 10MB each) -
                         Files will be uploaded with request
                       </p>
                     </div>
@@ -515,7 +515,7 @@
                     ref="fileInput"
                     type="file"
                     multiple
-                    accept=".pdf,.doc,.docx,.txt,.rtf"
+                    accept=".pdf,.docx,.txt,.json"
                     @change="handleFileSelect"
                     class="file-input-hidden"
                   />
@@ -596,9 +596,7 @@
                 <span v-if="fileError" class="error-message">{{
                     fileError
                   }}</span>
-                <span v-else class="help-text">
-                  Upload <b>at least one file</b> related to your translation request. Files will be uploaded with the request.
-                </span>
+                <span v-else class="help-text">Upload <b>at least one file</b> related to your translation request. Files will be uploaded with the request.<br/>Supported formats: PDF, DOCX, TXT, JSON. Max 10MB/file. Max 5 files.</span>
               </div>
             </div>
           </div>
@@ -1049,21 +1047,17 @@ function handleFileDrop(event) {
 
 function addFiles(files) {
   fileError.value = '';
-
+  const allowedTypes = ['.pdf', '.docx', '.txt', '.json'];
   for (const file of files) {
-    // Validate file type
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.rtf'];
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-
     if (!allowedTypes.includes(fileExtension)) {
-      fileError.value = `File type ${fileExtension} is not supported. Please upload PDF, DOC, DOCX, TXT, or RTF files.`;
-      continue;
-    }
-
-    // Validate file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
-    if (file.size > maxSize) {
-      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`;
+      fileError.value = `File type ${fileExtension} is not supported. Please upload only PDF, DOCX, TXT, or JSON files.`;
+      toast.add({
+        severity: 'error',
+        summary: 'File type not supported',
+        detail: fileError.value,
+        life: 4000,
+      });
       continue;
     }
 
@@ -1077,6 +1071,18 @@ function addFiles(files) {
     // Check total number of files (max 5 files)
     if (uploadedFiles.value.length >= 5) {
       fileError.value = 'Maximum 5 files allowed.';
+      continue;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > maxSize) {
+      fileError.value = `File ${file.name} is too large. Maximum size is 10MB.`;
+      toast.add({
+        severity: 'error',
+        summary: 'File too large',
+        detail: fileError.value,
+        life: 4000,
+      });
       continue;
     }
 

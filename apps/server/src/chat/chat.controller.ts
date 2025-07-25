@@ -1,34 +1,49 @@
 import {
   BadRequestException,
   Body,
-  Controller, Delete,
+  Controller,
+  Delete,
   Get,
   NotFoundException,
-  Param, Patch,
-  Post, Query,
+  Param,
+  Patch,
+  Post,
+  Query,
   Req,
-  UseGuards
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { UserManagerService } from '#LocalProject/Managers/service/user-manager.service';
 import { Types } from 'mongoose';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService,
-              private readonly userService: UserManagerService) {
-  }
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly userService: UserManagerService,
+  ) {}
 
   @Get('rooms/:userId')
+  @UseGuards(JwtAuthGuard)
   async getRoomsForUser(@Param('userId') userId: number) {
-    const rooms = await this.chatService.getChatRoomsForUser(userId);
-    return rooms.map((room) => ({
-      ...room,
-      _id: room._id.toString(),
-      createdBy: room.createdBy
-    }));
+    try {
+      const rooms = await this.chatService.getChatRoomsForUser(userId);
+      return rooms.map(room => ({
+        ...room,
+        _id: room._id.toString(),
+        createdBy: room.createdBy
+      }));
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch chat rooms');
+    }
   }
 
   @Post('open-dm')
@@ -37,95 +52,250 @@ export class ChatController {
     @Req() req: AuthenticatedRequest,
     @Body('targetIdentifier') targetIdentifier: string,
   ) {
-    const sender = req.user;
-    const target = await this.userService.searchByEmailOrUsername(targetIdentifier);
-    if (!target) throw new NotFoundException('Target user not found');
-
-    const room = await this.chatService.openChatBetween(
-      {
-        id: Number(sender.id),
-        username: sender.username,
-      },
-      {
-        id: Number(target.id),
-        username: target.username,
-      }
-    );
-    if (!room) {
-      throw new NotFoundException('Chat room could not be created');
+    if (!targetIdentifier) {
+      throw new BadRequestException('Target identifier is required');
     }
 
-    return {
-      ...room,
-      _id: room._id?.toString(),
-    };
+    const sender = req.user;
+    const target = await this.userService.searchByEmailOrUsername(targetIdentifier);
+
+    if (!target) {
+      throw new NotFoundException('Target user not found');
+    }
+
+    if (target.id === sender.id) {
+      throw new BadRequestException('Cannot open chat with yourself');
+    }
+
+    try {
+      const room = await this.chatService.openChatBetween(
+        {
+          id: Number(sender.id),
+          username: sender.username,
+        },
+        {
+          id: Number(target.id),
+          username: target.username,
+        }
+      );
+
+      if (!room) {
+        throw new NotFoundException('Chat room could not be created');
+      }
+
+      return {
+        ...room,
+        _id: room._id!.toString(),
+      };
+    } catch (error) {
+      throw new BadRequestException('Failed to create chat room');
+    }
   }
+
   @Get('messages/:roomId')
+  @UseGuards(JwtAuthGuard)
   async getMessages(@Param('roomId') roomId: string) {
     if (!Types.ObjectId.isValid(roomId)) {
       throw new BadRequestException('Invalid room ID');
     }
 
-    const objectId = new Types.ObjectId(roomId);
-    return this.chatService.getMessages(objectId);
+    try {
+      const messages = await this.chatService.getMessages(new Types.ObjectId(roomId));
+      return messages;
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch messages');
+    }
   }
+
+  @Post('upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/chat',
+        filename: (req, file, cb) => {
+          const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
+          cb(null, uniqueName);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/^image\/(jpg|jpeg|png|gif)$/)) {
+          cb(new BadRequestException('Only image files are allowed'), false);
+          return;
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Return the file URL that can be accessed through your static file server
+    return {
+      url: `/uploads/chat/${file.filename}`,
+      fileName: file.originalname,
+    };
+  }
+
   @Patch('rooms/:id')
-  async renameRoom(@Param('id') id: string, @Body() body: { name: string }) {
-    return this.chatService.renameRoom(id, body.name);
+  @UseGuards(JwtAuthGuard)
+  async renameRoom(
+    @Param('id') id: string,
+    @Body('name') name: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!name) {
+      throw new BadRequestException('Room name is required');
+    }
+
+    try {
+      const room = await this.chatService.renameRoom(id, name);
+      if (!room) {
+        throw new NotFoundException('Room not found');
+      }
+      return room;
+    } catch (error) {
+      throw new BadRequestException('Failed to rename room');
+    }
   }
 
   @Delete('rooms/:id')
-  async deleteRoom(@Param('id') id: string) {
-    return this.chatService.deleteRoom(id);
+  @UseGuards(JwtAuthGuard)
+  async deleteRoom(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    try {
+      const room = await this.chatService.deleteRoom(id);
+      if (!room) {
+        throw new NotFoundException('Room not found');
+      }
+      return { message: 'Room deleted successfully' };
+    } catch (error) {
+      throw new BadRequestException('Failed to delete room');
+    }
   }
 
   @Patch('messages/:id')
-  async updateMessage(@Param('id') id: string, @Body() body: { message: string }) {
-    return this.chatService.editMessage(id, body.message);
+  @UseGuards(JwtAuthGuard)
+  async updateMessage(
+    @Param('id') id: string,
+    @Body('message') message: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!message) {
+      throw new BadRequestException('Message content is required');
+    }
+
+    try {
+      const updatedMessage = await this.chatService.editMessage(id, message);
+      if (!updatedMessage) {
+        throw new NotFoundException('Message not found');
+      }
+      return updatedMessage;
+    } catch (error) {
+      throw new BadRequestException('Failed to update message');
+    }
   }
 
-// DELETE /api/chat/messages/:id
   @Delete('messages/:id')
-  async deleteMessage(@Param('id') id: string) {
-    return this.chatService.deleteMessage(id);
+  @UseGuards(JwtAuthGuard)
+  async deleteMessage(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    try {
+      const result = await this.chatService.deleteMessage(id);
+      if (!result) {
+        throw new NotFoundException('Message not found');
+      }
+      return { message: 'Message deleted successfully' };
+    } catch (error) {
+      throw new BadRequestException('Failed to delete message');
+    }
   }
+
   @Get('search')
+  @UseGuards(JwtAuthGuard)
   async searchUser(@Query('q') q: string) {
     if (!q) {
-      throw new BadRequestException('Missing search query');
-    }
-    const user = await this.userService.searchByEmailOrUsername(q.trim());
-
-    if (!user) {
-      throw new NotFoundException('User not found');
+      throw new BadRequestException('Search query is required');
     }
 
-    return {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      phone: user.phone,
-    };
+    try {
+      const user = await this.userService.searchByEmailOrUsername(q.trim());
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+      };
+    } catch (error) {
+      throw new BadRequestException('Failed to search user');
+    }
   }
+
   @Patch('rooms/:id/add-member')
+  @UseGuards(JwtAuthGuard)
   async addMember(
     @Param('id') roomId: string,
     @Body('userId') userId: number,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.chatService.addMemberToRoom(roomId, userId);
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+
+    try {
+      const result = await this.chatService.addMemberToRoom(roomId, userId);
+      if (!result) {
+        throw new NotFoundException('Room not found or user already in room');
+      }
+      return { message: 'Member added successfully' };
+    } catch (error) {
+      throw new BadRequestException('Failed to add member to room');
+    }
   }
+
   @Get('rooms/:roomId/participants')
+  @UseGuards(JwtAuthGuard)
   async getRoomParticipants(@Param('roomId') roomId: string) {
-    return this.chatService.getParticipants(roomId);
+    if (!Types.ObjectId.isValid(roomId)) {
+      throw new BadRequestException('Invalid room ID');
+    }
+
+    try {
+      const participants = await this.chatService.getParticipants(roomId);
+      return participants;
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch participants');
+    }
   }
 
   @Patch('rooms/:id/remove-member')
+  @UseGuards(JwtAuthGuard)
   async removeMember(
     @Param('id') roomId: string,
-    @Body('creatorId') creatorId: number,
     @Body('userId') userId: number,
+    @Body('creatorId') creatorId: number,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.chatService.removeMemberFromRoom(roomId, creatorId, userId);
+    if (!userId || !creatorId) {
+      throw new BadRequestException('User ID and creator ID are required');
+    }
+
+    try {
+      const result = await this.chatService.removeMemberFromRoom(roomId, userId, creatorId);
+      if (!result) {
+        throw new NotFoundException('Room not found or user not in room');
+      }
+      return { message: 'Member removed successfully' };
+    } catch (error) {
+      throw new BadRequestException('Failed to remove member from room');
+    }
   }
 }
 

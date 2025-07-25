@@ -109,7 +109,7 @@ export class AuthService {
     return this.generateTokenPair(user);
   }
 
-  async validateToken(token: string | null): Promise<IUserAuthMeta> {
+  async validateToken(token: string | null): Promise<IUserAuthMeta & { avatarUrl?: string; fullName?: string; email?: string }> {
     if (!token) {
       throw new UnauthorizedException('Token is missing');
     }
@@ -140,7 +140,14 @@ export class AuthService {
       await this.authRepository.delete({ accessToken: token });
       throw new UnauthorizedException('User not found');
     }
-    return { id: user.id, username: user.username, role: Number(user.role.id) };
+    return {
+      id: user.id,
+      username: user.username,
+      role: Number(user.role.id),
+      avatarUrl: user.avatarUrl,
+      fullName: user.fullName,
+      email: user.email,
+    };
   }
 
   async login(username: string, password: string) {
@@ -330,6 +337,9 @@ export class AuthService {
           id: Number(user.role.id),
           name: user.role.name,
         },
+        avatarUrl: user.avatarUrl,
+        fullName: user.fullName,
+        email: user.email,
       },
     };
   }

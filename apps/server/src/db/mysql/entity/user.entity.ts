@@ -44,6 +44,9 @@ export class UserEntity {
   @Column({ length: 100 })
   fullName: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  avatarUrl?: string;
+
   @ManyToOne(() => UserTypeEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: UserTypeEntity;

@@ -21,9 +21,19 @@ export class TranslationController {
     @Param('id') id: string,
     @Body('translatedText') translatedText: string
   ) {
-    return this.translationService.addTranslation(id, translatedText);
+    try {
+      return await this.translationService.addTranslation(id, translatedText);
+    } catch (err: any) {
+      if (err?.message && err.message.includes('DOCX body not found')) {
+        // Trả về lỗi 400 với message rõ ràng cho FE
+        return {
+          statusCode: 400,
+          message: 'DOCX file does not contain editable text. Please check your file content.'
+        };
+      }
+      throw err;
+    }
   }
-
 
 
 }

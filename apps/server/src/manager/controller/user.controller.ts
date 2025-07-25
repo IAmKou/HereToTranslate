@@ -11,7 +11,8 @@ import {
   UseInterceptors,
   ValidationPipe,
   Query,
-  NotFoundException
+  NotFoundException,
+  UploadedFile
 } from '@nestjs/common';
 import {
   RegisterDto,
@@ -25,6 +26,10 @@ import { UserManagerService } from '../service/user-manager.service';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { join } from 'path';
 
 @Controller('users')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -39,7 +44,9 @@ export class UserController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   getProfile(@Req() request: AuthenticatedRequest) {
-    return this.users.getUserProfile(request.user.id);
+    const result = this.users.getUserProfile(request.user.id);
+    console.log('[GET PROFILE]', { userId: request.user.id, result });
+    return result;
   }
 
   @Put('update')
@@ -58,6 +65,32 @@ export class UserController {
     @Body() dto: UpdateUserPasswordDto
   ) {
     await this.users.changePassword(request.user.id, dto);
+  }
+
+  @Post('avatar')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('avatar', {
+    storage: diskStorage({
+      destination: join(process.cwd(), 'apps/server/uploads/avatars'),
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + extname(file.originalname));
+      }
+    }),
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+        cb(new Error('Only image files are allowed!'), false);
+      } else {
+        cb(null, true);
+      }
+    },
+    limits: { fileSize: 2 * 1024 * 1024 },
+  }))
+  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req) {
+    const avatarUrl = `/uploads/avatars/${file.filename}`;
+    console.log('[UPLOAD AVATAR]', { userId: req.user.id, avatarUrl, file });
+    await this.users.updateAvatar(req.user.id, avatarUrl);
+    return { avatarUrl };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

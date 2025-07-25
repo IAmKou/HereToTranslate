@@ -51,12 +51,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-
-const isCollapsed = ref(false);
-
+import { ref, watch, defineProps, defineEmits } from 'vue';
+const props = defineProps({ collapsed: Boolean });
+const emit = defineEmits(['update:collapsed']);
+const isCollapsed = ref(props.collapsed);
+watch(() => props.collapsed, (val) => { isCollapsed.value = val; });
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value;
+  emit('update:collapsed', isCollapsed.value);
 };
 </script>
 
@@ -71,12 +73,15 @@ const toggleSidebar = () => {
   position: fixed;
   left: 0;
   top: 0;
-  transition: width 0.2s cubic-bezier(.4,0,.2,1);
+  transition: width 0.2s cubic-bezier(.4,0,.2,1), background 0.2s;
   z-index: 1100;
   box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 }
-.sidebar-collapsed {
+.sidebar.sidebar-collapsed {
   width: 72px;
+  background: #fff;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+  border-right: 1px solid #eee;
 }
 .sidebar-header {
   padding: 1.25rem 1rem 1rem 1rem;

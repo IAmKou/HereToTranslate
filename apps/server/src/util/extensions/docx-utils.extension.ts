@@ -1,4 +1,4 @@
-import * as Docx4js from 'docx4js';
+import Docx4js from 'docx4js';
 
 /**
  * Replace text in a DOCX file while preserving layout, styles, tables, images, etc.
@@ -12,7 +12,10 @@ export async function replaceDocxText(
 ): Promise<Buffer> {
   const docx: any = await Docx4js.load(originalBuffer);
 
-  const body = docx.document.body;
+  const body = docx.mainDocumentPart?.document?.body;
+  if (!body) {
+    throw new Error('DOCX body not found. The file may be corrupted or not a valid DOCX.');
+  }
   body.descendants().forEach((node: any) => {
     if (node.type === 'w:t') {
       const oldText: string = node.text();

@@ -68,7 +68,7 @@ export class UserService {
 
   async getUserProfile(): Promise<UserProfile> {
     const response = await this.api.get<UserProfile>('/users/profile');
-
+    console.log('[FE] getUserProfile response', response.data);
     return {
       ...response.data,
       id: BigInt(response.data.id),
@@ -120,3 +120,13 @@ export class UserService {
 }
 
 export const userService = new UserService();
+
+export async function uploadAvatar(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('avatar', file);
+  const res = await userService.api.post('/users/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  console.log('[FE] uploadAvatar response', res.data);
+  return res.data.avatarUrl;
+}

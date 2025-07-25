@@ -100,6 +100,7 @@ export class UserManagerService {
         'fullName',
         'role',
         'createdProjects',
+        'avatarUrl',
       ],
     });
 
@@ -284,5 +285,9 @@ export class UserManagerService {
       ])
       .orderBy('user.fullName', 'ASC')
       .getMany();
+  }
+
+  async updateAvatar(userId: number, avatarUrl: string) {
+    await this.userRepository.update(userId, { avatarUrl });
   }
 }

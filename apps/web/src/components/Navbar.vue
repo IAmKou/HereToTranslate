@@ -39,12 +39,17 @@
                 class="avatar-button"
                 aria-label="Open user menu"
               >
-                <Avatar
-                  :label="getInitials(currentUser.fullName)"
-                  size="large"
-                  shape="circle"
-                  :style="{ backgroundColor: getRandomColor(currentUser.username), boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '2px solid #e0e7ef' }"
-                />
+                <template v-if="currentUser.avatarUrl">
+                  <img :src="getFullAvatarUrl(currentUser.avatarUrl)" alt="Avatar" class="navbar-avatar-img" />
+                </template>
+                <template v-else>
+                  <Avatar
+                    :label="getInitials(currentUser.fullName)"
+                    size="large"
+                    shape="circle"
+                    :style="{ backgroundColor: getRandomColor(currentUser.username), boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '2px solid #e0e7ef' }"
+                  />
+                </template>
               </Button>
             </div>
             <transition name="fade-scale">
@@ -118,6 +123,7 @@ interface User {
   isActive: boolean;
   phone?: string;
   createdAt: string;
+  avatarUrl?: string;
 }
 
 const router = useRouter();
@@ -151,6 +157,13 @@ const getRandomColor = (seed: string): string => {
   ];
   const index = seed.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
   return colors[index % colors.length];
+};
+
+const getFullAvatarUrl = (avatarUrl: string) => {
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  const base = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3000';
+  return base + avatarUrl;
 };
 
 const loadUserInfo = async (): Promise<void> => {
@@ -319,6 +332,15 @@ onMounted(() => {
   width: 36px;
   height: 36px;
   border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.navbar-avatar-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e7ef;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 

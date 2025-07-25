@@ -187,6 +187,12 @@ function getFilteredStrings(fileId: string | number) {
   });
 }
 
+function getFilteredStringsOfPart(fileId: string | number, part: number) {
+  const filtered = getFilteredStrings(fileId);
+  const start = part * PART_SIZE;
+  return filtered.slice(start, start + PART_SIZE);
+}
+
 // Thêm hàm chọn icon theo loại file
 function getFileIconClass(fileName: string) {
   if (!fileName) return 'pi pi-file';
@@ -357,9 +363,9 @@ async function saveTranslation(str: any) {
               </label>
             </div>
             <div class="translation-scroll-area">
-              <div v-if="getStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>
+              <div v-if="getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>
               <div
-                v-for="str in getStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0)"
+                v-for="str in getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0)"
                 :key="str.id"
                 class="string-card"
                 :class="{

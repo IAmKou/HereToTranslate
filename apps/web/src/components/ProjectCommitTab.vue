@@ -783,13 +783,14 @@ const isContentLong = computed(() => {
 // Thêm state cho nút xem full content trong modal commit content
 const showFullCommitContent = ref(false);
 const fullCommitContent = ref('');
+const fullscreenFilePath = ref('');
+const fullscreenMessage = ref('');
 
-function openFullCommitContent(content: string) {
-  console.log('openFullCommitContent called with content length:', content.length);
-  console.log('Content preview:', content.substring(0, 100) + '...');
-  submitForm.value.content = content;
+function openFullCommitContent(content: string, filePath?: string, message?: string) {
+  fullCommitContent.value = content;
+  fullscreenFilePath.value = filePath || '';
+  fullscreenMessage.value = message || '';
   showFullscreenContent.value = true;
-  console.log('showFullscreenContent set to:', showFullscreenContent.value);
 }
 
 const shortCommitContentPreview = computed(() => {
@@ -1071,60 +1072,107 @@ watch(showSubmitDialog, (val: boolean) => {
     <Dialog
       v-model:visible="showReviewDialog"
       header="Review Commit"
-      :style="{ width: '600px', maxWidth: '98vw', borderRadius: '16px', padding: '0 0 1.5em 0' }"
+      :style="{ width: '600px', borderRadius: '16px', padding: '0 0 1.5em 0' }"
       :modal="true"
       class="review-commit-dialog-upgrade"
     >
+      <template #header>
+        <div class="review-dialog-header">
+          <span>Review Commit</span>
+        </div>
+      </template>
       <div v-if="selectedCommit" class="review-form" style="padding: 1.2em 0.5em 0.5em 0.5em;">
-        <div class="commit-preview" style="margin-bottom:1.2em;">
-          <h4 style="margin-bottom:0.7em;">Commit Details</h4>
-          <div class="preview-item"><strong>Message:</strong> {{ selectedCommit.message }}</div>
-          <div class="preview-item"><strong>File:</strong> {{ selectedCommit.filePath }}</div>
-          <div class="preview-item"><strong>Author:</strong> {{ selectedCommit.author.fullName || selectedCommit.author.username }}</div>
+        <div class="commit-details-card" style="background: #f1f5f9; border-radius: 14px; padding: 1.2em 1.5em 1.2em 1.5em; margin-bottom:1.2em; box-shadow: 0 2px 8px #e0e7ff33; display: flex; flex-direction: column; gap: 0.7em;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.7em;">
+            <h4 style="color: #6366f1; font-weight: 700; font-size: 1.08em; letter-spacing: 0.01em; margin: 0;">Commit Details</h4>
+            <Button
+              label="View Full Content"
+              icon="pi pi-file"
+              class="view-full-content-btn"
+              style="background: #7c3aed; color: #fff; border: none; border-radius: 8px; padding: 0.5em 1.2em; font-weight: 600; font-size: 1em; box-shadow: 0 2px 8px #a78bfa33; letter-spacing: 0.01em;"
+              @click="openFullCommitContent(selectedCommit.contentSnapshot, selectedCommit.filePath, selectedCommit.message)"
+            />
+          </div>
+          <div class="preview-item" style="display: flex; align-items: center; gap: 0.6em; font-size: 1.01em;">
+            <span style="font-size:1.2em;">✏️</span>
+            <strong style="color:#374151; min-width: 80px;">Message:</strong>
+            <span style="color:#1e293b; font-weight: 400; flex: 1; word-break: break-word;">{{ selectedCommit.message }}</span>
+          </div>
+          <div class="preview-item" style="display: flex; align-items: center; gap: 0.6em; font-size: 1.01em;">
+            <span style="font-size:1.2em;">📄</span>
+            <strong style="color:#374151; min-width: 80px;">File:</strong>
+            <span
+              class="file-path-ellipsis"
+              :title="selectedCommit.filePath"
+              @click="alert(selectedCommit.filePath)"
+              style="color:#1e293b; font-weight: 400; flex: 1; word-break: break-all; cursor: pointer; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;"
+            >
+              {{ selectedCommit.filePath }}
+            </span>
+          </div>
+          <div class="preview-item" style="display: flex; align-items: center; gap: 0.6em; font-size: 1.01em;">
+            <span style="font-size:1.2em;">👤</span>
+            <strong style="color:#374151; min-width: 80px;">Author:</strong>
+            <span style="color:#1e293b; font-weight: 400; flex: 1; word-break: break-word;">{{ selectedCommit.author.fullName || selectedCommit.author.username }}</span>
+          </div>
         </div>
         <div v-if="!isLatestForFile" class="review-warning-box">
           <i class="pi pi-exclamation-triangle warning-icon"></i>
           <span class="warning-text">A newer commit for this file has already been approved.<br>Approving this commit is not allowed to prevent rollback.</span>
         </div>
-        <div class="form-group" style="margin-top:1.2em;">
-          <label>Review Decision</label>
-          <div class="radio-group">
-            <label>
-              <input type="radio" v-model="reviewForm.approve" :value="true" :disabled="!isLatestForFile" />
-              Approve
-            </label>
-            <label>
-              <input type="radio" v-model="reviewForm.approve" :value="false" />
-              Reject
-            </label>
+        <div class="review-group-card" style="background: #f8fafc; border-radius: 14px; padding: 1.2em 1.5em 1.2em 1.5em; margin-bottom:1.2em; box-shadow: 0 1px 4px #e0e7ff22; display: flex; flex-direction: column; gap: 1.2em;">
+          <div class="form-group" style="margin-top:0;">
+            <label style="font-weight:600; color:#374151; margin-bottom:0.5em;">Review Decision</label>
+            <div class="decision-btn-group">
+              <button
+                type="button"
+                :class="['decision-btn', 'approve', reviewForm.approve ? 'selected' : '']"
+                @click="reviewForm.approve = true"
+              >
+                <i class="pi pi-check" style="margin-right:0.5em;"></i> Approve
+              </button>
+              <button
+                type="button"
+                :class="['decision-btn', 'reject', !reviewForm.approve ? 'selected' : '']"
+                @click="reviewForm.approve = false"
+              >
+                <i class="pi pi-times" style="margin-right:0.5em;"></i> Reject
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="form-group">
-          <label>Review Message (Optional)</label>
-          <Textarea
-            v-model="reviewForm.reviewMessage"
-            placeholder="Add a review comment..."
-            rows="4"
-            autoResize
-          />
+          <div class="form-group">
+            <label style="font-weight:600; color:#374151; margin-bottom:0.5em;">Review Message <span style='color:#a1a1aa;'>(optional)</span></label>
+            <Textarea
+              v-model="reviewForm.reviewMessage"
+              placeholder="Add a short review comment..."
+              rows="4"
+              autoResize
+              class="review-textarea"
+              style="border-radius: 14px; border: 2px solid #e0e7ff; font-size:1em; transition: border 0.15s; min-height: 80px;"
+              @focus="(e:any) => e.target.style.border='2px solid #6366f1'"
+              @blur="(e:any) => e.target.style.border='2px solid #e0e7ff'"
+            />
+          </div>
         </div>
       </div>
       <template #footer>
-        <Button
-          label="Cancel"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="showReviewDialog = false"
-        />
-        <Button
-          label="Confirm"
-          icon="pi pi-check"
-          :loading="reviewing"
-          @click="reviewCommit"
-          :disabled="reviewForm.approve && !isLatestForFile"
-          v-tooltip="reviewForm.approve && !isLatestForFile ? 'Cannot approve because a newer commit has already been approved.' : ''"
-          class="primary-btn"
-        />
+        <div class="review-footer">
+          <Button
+            label="Cancel"
+            icon="pi pi-times"
+            class="gray-btn"
+            @click="showReviewDialog = false"
+          />
+          <Button
+            :label="reviewForm.approve ? '✅ Approve' : '❌ Reject'"
+            :loading="reviewing"
+            @click="reviewCommit"
+            :disabled="reviewForm.approve && !isLatestForFile"
+            v-tooltip="reviewForm.approve && !isLatestForFile ? 'Cannot approve because a newer commit has already been approved.' : ''"
+            :class="reviewForm.approve ? 'approve-btn' : 'reject-btn'"
+            style="margin-left: 0.5em;"
+          />
+        </div>
       </template>
     </Dialog>
     <!-- View Content Dialog -->
@@ -1212,11 +1260,11 @@ watch(showSubmitDialog, (val: boolean) => {
           <div class="info-column">
             <div class="info-item">
               <span class="info-label">📁 File:</span>
-              <span class="info-value">{{ selectedContent?.filePath || submitForm.filePath || 'No file selected' }}</span>
+              <span class="info-value">{{ fullscreenFilePath || selectedContent?.filePath || submitForm.filePath || 'No file selected' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">📝 Message:</span>
-              <span class="info-value">{{ selectedContent?.message || submitForm.message || 'No message' }}</span>
+              <span class="info-value">{{ fullscreenMessage || selectedContent?.message || submitForm.message || 'No message' }}</span>
             </div>
           </div>
         </div>
@@ -1234,7 +1282,7 @@ watch(showSubmitDialog, (val: boolean) => {
             </div>
           </div>
           <div class="content-container">
-            <pre class="fullscreen-content-view">{{ selectedContent?.contentSnapshot || submitForm.content || 'No content available' }}</pre>
+            <pre class="fullscreen-content-view">{{ fullCommitContent || selectedContent?.contentSnapshot || submitForm.content || 'No content available' }}</pre>
           </div>
         </div>
       </div>
@@ -2071,6 +2119,37 @@ watch(showSubmitDialog, (val: boolean) => {
   font-weight: 600;
   border-radius: 8px;
   padding: 0.5em 1.5em;
+  transition: background 0.18s, color 0.18s;
+}
+.gray-btn:hover {
+  background: #e5e7eb !important;
+  color: #334155 !important;
+}
+.approve-btn {
+  background: #10b981 !important;
+  color: #fff !important;
+  border: none;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  transition: background 0.18s, color 0.18s;
+}
+.approve-btn:hover {
+  background: #059669 !important;
+  color: #fff !important;
+}
+.reject-btn {
+  background: #ef4444 !important;
+  color: #fff !important;
+  border: none;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  transition: background 0.18s, color 0.18s;
+}
+.reject-btn:hover {
+  background: #b91c1c !important;
+  color: #fff !important;
 }
 .secondary-btn {
   background: #a78bfa !important;
@@ -2896,5 +2975,100 @@ pre.content-textarea {
     gap: 0.5rem;
     align-items: flex-start;
   }
+}
+
+.decision-btn-group {
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #e5e7eb;
+  width: fit-content;
+  margin-bottom: 0.5em;
+}
+.decision-btn {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 1em;
+  padding: 0.5em 1.8em;
+  background: #fff;
+  color: #64748b;
+  transition: background 0.18s, color 0.18s;
+  cursor: pointer;
+}
+.decision-btn:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+.decision-btn:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+.decision-btn.selected.approve {
+  background: #10b981;
+  color: #fff;
+}
+.decision-btn.selected.reject {
+  background: #ef4444;
+  color: #fff;
+}
+.decision-btn:not(.selected).approve {
+  color: #10b981;
+  background: #fff;
+}
+.decision-btn:not(.selected).reject {
+  color: #ef4444;
+  background: #fff;
+}
+.decision-btn:not(.selected):hover {
+  background: #f3f4f6;
+}
+
+.review-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1em;
+  padding-right: 1.5em;
+  padding-bottom: 1em;
+}
+
+.review-dialog-header {
+  padding-left: 1.5em;
+  padding-right: 1.5em;
+  padding-top: 1.2em;
+  padding-bottom: 0.5em;
+  font-size: 1.35em;
+  font-weight: 700;
+  color: #1e293b;
+  text-align: center;
+}
+
+.review-commit-dialog-upgrade .p-dialog-content {
+  max-height: 70vh !important;
+  overflow-y: auto !important;
+}
+.review-commit-dialog-upgrade {
+  max-height: 90vh !important;
+}
+
+.review-commit-dialog-upgrade,
+.review-commit-dialog-upgrade .p-dialog,
+.review-commit-dialog-upgrade .p-dialog-content,
+.review-commit-dialog-upgrade .p-dialog-mask {
+  max-height: none !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.review-commit-dialog-upgrade *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  background: transparent !important;
+}
+.review-commit-dialog-upgrade {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 </style>

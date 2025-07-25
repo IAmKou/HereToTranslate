@@ -44,7 +44,7 @@
     "decompress": "^4.2.1",
     "docx-parser": "^0.2.1",
     "docx4js": "^3.3.0",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.6.1",
     "emoji-mart-vue-fast": "^15.0.4",
     "glob": "^11.0.2",
     "google-auth-library": "^9.15.1",

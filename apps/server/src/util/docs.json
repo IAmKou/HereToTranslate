@@ -13,5 +13,10 @@
     "id" : "doc-3",
     "title": "Update profile",
     "content": "To update your project, click on your avatar in the upper right corner of your screen. You can update your profile there."
+  },
+  {
+    "id": "doc-4",
+    "title": "Change password",
+    "content": "To change your password, click on your avatar in the upper right corner of your screen, switch to the tab change password. Enter your old password, new password, confirm password and confirm."
   }
 ]

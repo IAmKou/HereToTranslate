@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateCategoryDto, UpdateCategoryDto } from '#LocalProject/Dtos';
 import { validateName, sanitizeName } from '#LocalProject/Utils/validation';
-import { CategoryEntity, ProjectTagEntity } from '#LocalProject/Entities';
+import { CategoryEntity } from '#LocalProject/Entities';
 
 interface DatabaseError extends Error {
   code?: string;

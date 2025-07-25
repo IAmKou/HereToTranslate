@@ -1,0 +1,17 @@
+[
+  {
+    "id": "doc-1",
+    "title": "Upload a file",
+    "content": "To upload a file, go to Upload page, click the button, select your file, and confirm."
+  },
+  {
+    "id": "doc-2",
+    "title": "Reset password",
+    "content": "Click 'Forgot password' on the login page. Check your email for the reset code."
+  },
+  {
+    "id" : "doc-3",
+    "title": "Update profile",
+    "content": "To update your project, click on your avatar in the upper right corner of your screen. You can update your profile there."
+  }
+]

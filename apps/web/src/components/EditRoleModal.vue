@@ -128,6 +128,7 @@ const permissionDescriptionMap: Record<string, string> = {
   AttachFiles: 'Attach files in discussions',
   ViewThread: 'View discussions',
   ViewProject: 'View project metadata',
+  ManageTranslation: 'Edit and save translations – cho phép sửa và lưu bản dịch',
 };
 const mappedAvailablePermissions = computed(() =>
   availablePermissions.value.map((p: any) => ({
@@ -174,6 +175,7 @@ onMounted(async () => {
   try {
     const { data } = await axiosInstance.get(`/permissions`);
     availablePermissions.value = data;
+    availablePermissions.value.push({ value: 'ManageTranslation', label: 'ManageTranslation' });
   } catch (err) {
     availablePermissions.value = [];
   }
@@ -282,4 +284,4 @@ input[type='text'], input, .multiselect__input {
 .btn-secondary:hover { background: #cbd5e0; }
 .loading-spinner-small { width: 1rem; height: 1rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #4299e1; animation: spin 1s linear infinite; margin-right: 0.5rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
-</style> 
+</style>

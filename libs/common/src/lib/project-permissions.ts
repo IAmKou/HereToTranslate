@@ -58,6 +58,9 @@ export const PermissionFlags = Object.freeze({
   /** Permission to view a workspace. */
   ViewWorkspace: 1n << 26n,
 
+  /** Permission to edit and save translations. */
+  ManageTranslation: 1n << 23n,
+
   // Thread posting permissions
   /** Permission to manage comments in threads. */
   ManageComments: 1n << 15n,

@@ -23,6 +23,7 @@ export const PermissionFlags = {
   ViewThread: 1n << 8n,
   ViewProject: 1n,
   None: 0n,
+  ManageTranslation: 1n << 23n,
 };
 
 export function parsePermissionFlags(bitmask: string | number | bigint | undefined | any): string[] {

@@ -22,7 +22,7 @@ export class FileController {
 
   @UseGuards(JwtAuthGuard)
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadFile(@UploadedFile() file: Express.Multer.File, @Body() body: {
     projectId: bigint,
     branchId: bigint
@@ -32,7 +32,7 @@ export class FileController {
 
   @UseGuards(JwtAuthGuard)
   @Post('upload-temp')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadTempFile(
     @UploadedFile() file: Express.Multer.File,
     @Req() req: AuthenticatedRequest
@@ -56,7 +56,7 @@ export class FileController {
 
   @UseGuards(JwtAuthGuard)
   @Post(':requestId/upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadRequestFile(
     @Param('requestId', BigIntTransformPipe) requestId: bigint,
     @UploadedFile() file: Express.Multer.File,

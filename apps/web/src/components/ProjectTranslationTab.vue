@@ -219,6 +219,8 @@ const { hasPermission } = useProjectPermission(
   computed(() => props.currentUser || null)
 );
 
+const canEditTranslation = computed(() => hasPermission('EditTranslation'));
+
 // Watch cho projectId và branchId thay đổi
 watch([() => props.projectId, () => props.branchId], () => {
   loadFiles();
@@ -383,14 +385,14 @@ async function saveTranslation(str: any) {
                       @input="e => { autoResize(e); onInput(str); }"
                       rows="1"
                       :ref="el => setTextareaRef(str.id, el)"
-                      :disabled="isFileProcessing(file)"
+                      :disabled="!canEditTranslation || isFileProcessing(file)"
                     ></textarea>
                     <div class="card-actions">
                       <button
                         v-if="str.translatedText && str.translatedText.trim()"
                         class="save-btn"
                         @click="saveTranslation(str)"
-                        :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file)"
+                        :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file) || !canEditTranslation"
                         title="Save"
                         type="button"
                       >💾 Save</button>
@@ -408,14 +410,14 @@ async function saveTranslation(str: any) {
                     @input="e => { autoResize(e); onInput(str); }"
                     rows="1"
                     :ref="el => setTextareaRef(str.id, el)"
-                    :disabled="isFileProcessing(file)"
+                    :disabled="!canEditTranslation || isFileProcessing(file)"
                   ></textarea>
                   <div class="card-actions">
                     <button
                       v-if="str.translatedText && str.translatedText.trim()"
                       class="save-btn"
                       @click="saveTranslation(str)"
-                      :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file)"
+                      :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file) || !canEditTranslation"
                       title="Save"
                       type="button"
                     >💾 Save</button>

@@ -139,6 +139,18 @@ async function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   if (!input.files || input.files.length === 0) return;
   const file = input.files[0];
+  // Kiểm tra kích thước file
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  if (file.size > maxSize) {
+    uploadError.value = `File ${file.name} is too large. Maximum size is 10MB.`;
+    toast.add({
+      severity: 'error',
+      summary: 'File too large',
+      detail: uploadError.value,
+      life: 4000,
+    });
+    return;
+  }
   uploading.value = true;
   uploadError.value = '';
   uploadProgress.value = 0;
@@ -480,9 +492,9 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       <i class="pi pi-exclamation-triangle" style="color:#faad14;font-size:1.3em;"></i>
       <span>
         <b>Note:</b><br>
-        - For <b>DOCX</b> files: The exported translation will retain about <b>80–90%</b> of the original formatting and layout . Some complex layouts or advanced styles may not be fully preserved.<br>
+        - For <b>DOCX</b> files: The exported translation will retain about <b>80–90%</b> of the original formatting and layout (similar to Crowdin). Some complex layouts or advanced styles may not be fully preserved.<br>
         - For <b>PDF</b> files:<br>
-        &nbsp;&nbsp;• If the PDF contains selectable text, about <b>60-75%</b> of the original formatting may be preserved.<br>
+        &nbsp;&nbsp;• If the PDF contains selectable text, about <b>70–85%</b> of the original formatting may be preserved.<br>
         &nbsp;&nbsp;• If the PDF is a scanned image (OCR), only the text content will be extracted; formatting and layout will <b>not</b> be preserved.
       </span>
     </div>

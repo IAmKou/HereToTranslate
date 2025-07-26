@@ -29,7 +29,8 @@ export class ChatController {
   constructor(
     private readonly chatService: ChatService,
     private readonly userService: UserManagerService,
-  ) {}
+  ) {
+  }
 
   @Get('rooms/:userId')
   @UseGuards(JwtAuthGuard)
@@ -119,9 +120,9 @@ export class ChatController {
         },
       }),
       fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/^image\/(jpg|jpeg|png|gif)$/)) {
-          cb(new BadRequestException('Only image files are allowed'), false);
-          return;
+        const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowed.includes(file.mimetype)) {
+          return cb(new BadRequestException('❌ Only image files (jpg, png, gif, webp) are allowed.'), false);
         }
         cb(null, true);
       },
@@ -130,17 +131,49 @@ export class ChatController {
       },
     }),
   )
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+  async uploadFile(@UploadedFile() file: Express.Multer.File, @Req() req: AuthenticatedRequest) {
     if (!file) {
-      throw new BadRequestException('No file uploaded');
+      throw new BadRequestException('❌ No file uploaded');
     }
 
-    // Return the file URL that can be accessed through your static file server
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
     return {
-      url: `/uploads/chat/${file.filename}`,
+      url: `${baseUrl}/uploads/chat/${file.filename}`,
       fileName: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
     };
   }
+
+  @Post('create-group')
+  @UseGuards(JwtAuthGuard)
+  async createGroup(
+    @Req() req: AuthenticatedRequest,
+    @Body('name') name: string,
+    @Body('memberIds') memberIds: number[],
+  ) {
+    if (!name || name.trim() === '') {
+      throw new BadRequestException('Group name is required');
+    }
+    const creatorId = Number(req.user.id);
+    const participants = Array.from(new Set([...memberIds, creatorId]));
+    if (participants.length < 3) {
+      throw new BadRequestException('A group chat must have at least 3 participants (including the creator).');
+    }
+
+    const room = await this.chatService.createGroupRoom(name.trim(), creatorId, participants);
+
+    if (!room) {
+      throw new BadRequestException('❌ Failed to create group room');
+    }
+
+    return {
+      ...room,
+      _id: room._id.toString(),
+    }
+  }
+
 
   @Patch('rooms/:id')
   @UseGuards(JwtAuthGuard)

@@ -1,77 +1,74 @@
 import 'dotenv/config';
 import fs from 'fs';
+import path from 'path';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { OpenAIEmbeddings } from '@langchain/openai';
-import { PineconeStore } from '@langchain/community/vectorstores/pinecone';
 
-/**
- * Utility: split text into chunks
- */
 function chunkText(text: string, chunkSize = 1000, overlap = 200): string[] {
   const chunks: string[] = [];
   let start = 0;
   while (start < text.length) {
     const end = Math.min(start + chunkSize, text.length);
-    const chunk = text.slice(start, end);
-    chunks.push(chunk);
-    start += chunkSize - overlap; // overlap for context
+    chunks.push(text.slice(start, end));
+    start += chunkSize - overlap;
   }
   return chunks;
 }
 
 async function ingest() {
-  const raw = fs.readFileSync('apps/server/src/util/docs.json', 'utf-8');
-  const docs = JSON.parse(raw) as {
-    id: string;
-    title: string;
-    content: string;
-  }[];
-  if (
-    process.env.PINECONE_API_KEY === undefined ||
-    process.env.PINECONE_INDEX === undefined ||
-    process.env.PINECONE_INDEX_HOST === undefined ||
-    process.env.OPENAI_API_KEY === undefined
-  ) {
-    console.log('env not found');
+  const { PINECONE_API_KEY, PINECONE_INDEX, PINECONE_INDEX_HOST, OPENAI_API_KEY } = process.env;
+  if (!PINECONE_API_KEY || !PINECONE_INDEX || !PINECONE_INDEX_HOST || !OPENAI_API_KEY) {
+    throw new Error('❌ Missing environment variables');
   }
-  const pinecone = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY,
-  });
 
-  const index = pinecone.Index(
-    process.env.PINECONE_INDEX,
-    process.env.PINECONE_INDEX_HOST
-  );
+  const raw = fs.readFileSync(path.resolve('apps/server/src/util/docs.json'), 'utf-8');
+  const docs = JSON.parse(raw) as { id: string; title: string; content: string }[];
+
+  const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
+  const index = pinecone.Index(PINECONE_INDEX, PINECONE_INDEX_HOST);
 
   const embeddings = new OpenAIEmbeddings({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: OPENAI_API_KEY,
     modelName: 'text-embedding-ada-002',
   });
 
-  console.log('📦 Preparing chunks...');
   const allTexts: string[] = [];
+  const allIds: string[] = [];
   const allMetadatas: any[] = [];
 
   for (const doc of docs) {
-    const chunks = chunkText(doc.content, 1000, 200); // tune size/overlap
+    const chunks = chunkText(doc.content);
     chunks.forEach((chunk, i) => {
+      const vectorId = `${doc.id}_chunk_${i}`; // 🔥 stable id
+      allIds.push(vectorId);
       allTexts.push(chunk);
       allMetadatas.push({
-        id: `${doc.id}_chunk_${i}`,
         title: doc.title,
         originalId: doc.id,
         chunkIndex: i,
+        content: chunk,
       });
     });
   }
 
   console.log(`📦 Total chunks: ${allTexts.length}`);
 
-  console.log('📦 Upserting chunks to Pinecone...');
-  await PineconeStore.fromTexts(allTexts, allMetadatas, embeddings, {
-    pineconeIndex: index,
-  });
-  console.log('✅ Done!');
+  console.log('🔄 Generating embeddings...');
+  const vectors = await embeddings.embedDocuments(allTexts);
+
+  const upsertData = vectors.map((values, i) => ({
+    id: allIds[i],
+    values,
+    metadata: allMetadatas[i],
+  }));
+
+  console.log('🧹 Clearing index before ingest...');
+  await index.deleteAll();
+
+  console.log('📤 Upserting to Pinecone...');
+  await index.upsert(upsertData);
+
+  console.log('✅ Ingestion completed!');
 }
 
-ingest().catch(console.error);
+ingest().catch(err => console.error('❌ Ingestion failed:', err));

@@ -189,7 +189,7 @@ router.beforeEach((to, from, next) => {
 
 
   if (requiresAuth && !isAuthenticated) {
-    next('/login');
+    next('/');
   } else if (requiresAdmin && !isAdmin) {
     next('/userhome');
   } else if (to.path === '/login' && isAuthenticated) {

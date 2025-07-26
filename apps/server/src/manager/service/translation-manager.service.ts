@@ -59,7 +59,10 @@ export class TranslationService {
         text: e.translatedText?.trim() ? e.translatedText : e.originalText,
       }));
       const originalBuffer = fileEntity.fileContent as Buffer;
-      updatedBuffer = await buildTranslatedPdf(originalBuffer, translatedEntries);
+      updatedBuffer = await buildTranslatedPdf(
+        originalBuffer,
+        translatedEntries
+      );
     } else {
       updatedBuffer = await this.applyTranslation(fileId);
     }
@@ -85,8 +88,7 @@ export class TranslationService {
     return entry;
   }
 
-
-    async applyTranslation(fileId: string): Promise<Buffer> {
+  async applyTranslation(fileId: string): Promise<Buffer> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
     });
@@ -185,13 +187,19 @@ export class TranslationService {
           translations.set(e.originalText, e.translatedText);
         }
       }
-      buffer = await replaceDocxText(fileEntity.fileContent as Buffer, translations);
+      buffer = await replaceDocxText(
+        fileEntity.fileContent as Buffer,
+        translations
+      );
     } else if (fileEntity.fileType === 'application/pdf') {
       const entries = await this.translationModel.find({ fileId }).lean();
       const translatedEntries = entries.map((e) => ({
         text: e.translatedText?.trim() ? e.translatedText : e.originalText,
       }));
-      buffer = await buildTranslatedPdf(fileEntity.fileContent as Buffer, translatedEntries);
+      buffer = await buildTranslatedPdf(
+        fileEntity.fileContent as Buffer,
+        translatedEntries
+      );
     } else {
       buffer = await this.applyTranslation(fileId);
     }
@@ -207,7 +215,9 @@ export class TranslationService {
       message: `Exported translation for ${fileEntity.fileName}`,
     });
 
-    const githubUrl = `https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/${repoName}/main/${encodeURIComponent(safeFileName)}`;
+    const githubUrl = `https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/${repoName}/main/${encodeURIComponent(
+      safeFileName
+    )}`;
     return { githubUrl };
   }
 
@@ -246,7 +256,6 @@ export class TranslationService {
       fileName: fileNamesMap[str.fileId] || '',
     }));
   }
-
 }
 
 async function rebuildFileWithManifest(

@@ -53,7 +53,7 @@ async function bootstrap() {
     response => response,
     error => {
       if (error.response && error.response.status === 401) {
-        router.push('/login');
+        router.push('/');
       }
       return Promise.reject(error);
     }

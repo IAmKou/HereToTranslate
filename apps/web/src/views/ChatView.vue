@@ -1,158 +1,281 @@
 <template>
-  <div class="chat-layout">
-    <!-- Sidebar -->
-    <div class="chat-sidebar">
-      <!-- User Profile Section -->
-      <div class="user-profile">
-        <div class="user-avatar">
-          {{ currentUser.username[0]?.toUpperCase() || '?' }}
-        </div>
-        <div class="user-info">
-          <h2 class="username">{{ currentUser.username }}</h2>
-          <span class="user-email">{{ currentUser.email }}</span>
-        </div>
-      </div>
-
-      <!-- Search Section -->
-      <div class="search-section">
-        <div class="search-container">
-          <span class="search-icon">🔍</span>
-          <input
-            v-model="searchQuery"
-            placeholder="Search users by name or email"
-            @keyup.enter="searchAndStartChat"
-          />
-        </div>
-        <button
-          class="search-button"
-          @click="searchAndStartChat"
-          :disabled="!searchQuery.trim()"
-        >
-          Start Chat
-        </button>
-        <p v-if="searchError" class="error-message">
-          <span class="error-icon">⚠️</span>
-          {{ searchError }}
-        </p>
-      </div>
-
-      <!-- Chat Rooms List -->
-      <div class="rooms-section">
-        <div class="rooms-header">
-          <h3>Your Chats</h3>
-          <span class="room-count">{{ chatRooms.length }}</span>
-        </div>
-
-        <div class="room-list" v-if="chatRooms.length > 0">
-          <div
-            v-for="room in chatRooms"
-            :key="getRoomId(room)"
-            class="room-item"
-            :class="{
-              active: selectedRoom && getRoomId(selectedRoom) === getRoomId(room),
-              'is-group': room.isGroupChat
-            }"
-            @click="openRoom(room)"
-          >
-            <!-- Room Avatar -->
-            <div class="room-avatar" :class="{ 'is-group': room.isGroupChat }">
-              {{ room.name[0]?.toUpperCase() || '?' }}
-            </div>
-
-            <!-- Room Info -->
-            <div class="room-info">
-              <div class="room-name-container">
-                <span class="room-name">{{ room.name }}</span>
-                <span class="room-type" v-if="room.isGroupChat">Group</span>
-              </div>
-              <span class="member-count" v-if="room.isGroupChat">
-                {{ room.members?.length || 0 }} members
-              </span>
-            </div>
-
-            <!-- Room Actions -->
-            <div class="room-actions">
-              <button
-                class="action-button edit"
-                @click.stop="renameRoom(room)"
-                :title="'Rename ' + room.name"
-              >
-                ✏️
-              </button>
-              <button
-                class="action-button delete"
-                @click.stop="confirmDeleteRoom(room)"
-                :title="'Delete ' + room.name"
-              >
-                🗑️
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Empty State -->
-        <div v-else class="empty-state">
-          <div class="empty-icon">💬</div>
-          <p>No chats yet</p>
-          <span>Search for users to start chatting</span>
-        </div>
-      </div>
-    </div>
-    <Transition name="fade">
-      <div
-        v-if="showRoomDeleteModal"
-        class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
-      >
-        <div class="bg-white rounded-xl shadow-lg p-6 w-80">
-          <h3 class="text-lg font-semibold mb-4">Delete Room?</h3>
-          <p class="text-sm text-gray-600 mb-6">
-            Are you sure you want to delete
-            <strong>{{ roomToDelete?.name }}</strong>?
-          </p>
-          <div class="flex justify-end space-x-3">
-            <button
-              class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
-              @click="cancelDeleteRoom"
-            >
-              Cancel
-            </button>
-            <button
-              class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
-              @click="handleDeleteRoom"
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- Main Chat Area -->
-    <div class="chat-main">
-      <ChatRoom
-        v-if="selectedRoom && selectedRoom._id"
-        :roomId="getRoomId(selectedRoom)"
-        :currentUserId="currentUser.id"
-        :currentUsername="currentUser.username"
-        :roomName="selectedRoom.name"
-        :createdById="selectedRoom.createdBy"
+  <div class="page-wrapper">
+    <Navbar />
+    <div class="page-body">
+      <Sidebar
+        :collapsed="isCollapsed"
+        @update:collapsed="isCollapsed = $event"
       />
-      <div v-else class="welcome-screen">
-        <div class="welcome-content">
-          <div class="welcome-icon">👋</div>
-          <h2>Welcome to Chat</h2>
-          <p>Select a chat or start a new conversation</p>
+      <div
+        class="page-content"
+        :class="{ collapsed: isCollapsed }"
+      >
+        <div class="chat-layout">
+        <div class="chat-sidebar">
+          <!-- User Profile Section -->
+          <div class="user-profile">
+            <div class="user-avatar">
+              {{ currentUser.username[0]?.toUpperCase() || '?' }}
+            </div>
+            <div class="user-info">
+              <h2 class="username">
+                {{ currentUser.username }}
+              </h2>
+              <span class="user-email">{{ currentUser.email }}</span>
+            </div>
+          </div>
+
+          <!-- Search Section -->
+          <div class="search-section">
+            <div class="search-container">
+              <span class="search-icon">🔍</span>
+              <input
+                v-model="searchQuery"
+                placeholder="Search users by name or email"
+                @keyup.enter="searchAndStartChat"
+              >
+            </div>
+            <button
+              class="search-button"
+              :disabled="!searchQuery.trim()"
+              @click="searchAndStartChat"
+            >
+              Start Chat
+            </button>
+            <p
+              v-if="searchError"
+              class="error-message"
+            >
+              <span class="error-icon">⚠️</span>
+              {{ searchError }}
+            </p>
+          </div>
+
+          <!-- Chat Rooms List -->
+          <div class="rooms-section">
+            <div class="rooms-header">
+              <h3>Your Chats</h3>
+              <span class="room-count">{{ chatRooms.length }}</span>
+            </div>
+
+            <button
+              class="create-group-button"
+              @click="showCreateGroupModal = true"
+            >
+              ➕ Create group
+            </button>
+            <Transition name="fade">
+              <div
+                v-if="showCreateGroupModal"
+                class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+              >
+                <div class="bg-white rounded-xl shadow-lg p-6 w-96">
+                  <h3 class="text-lg font-semibold mb-4">
+                    Creat group chat
+                  </h3>
+
+                  <input
+                    v-model="groupName"
+                    class="w-full border rounded p-2 mb-3"
+                    placeholder="Group name"
+                  >
+
+                  <!-- Search and add members -->
+                  <div class="flex mb-3 gap-2">
+                    <input
+                      v-model="memberQuery"
+                      class="flex-1 border rounded p-2"
+                      placeholder="Enter email/username"
+                      @keyup.enter="searchMember"
+                    >
+                    <button
+                      class="px-3 py-2 bg-indigo-500 text-white rounded"
+                      @click="searchMember"
+                    >
+                      🔍
+                    </button>
+                  </div>
+                  <p
+                    v-if="memberSearchError"
+                    class="text-sm text-red-500 mb-2"
+                  >
+                    {{ memberSearchError }}
+                  </p>
+
+                  <!-- Selected members -->
+                  <div class="flex flex-wrap gap-2 mb-3">
+                    <span
+                      v-for="m in selectedMembers"
+                      :key="m.id"
+                      class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded flex items-center gap-1"
+                    >
+                      {{ m.username }}
+                      <button
+                        class="text-red-500"
+                        @click="removeMember(m.id)"
+                      >✖</button>
+                    </span>
+                  </div>
+
+                  <div class="flex justify-end gap-3">
+                    <button
+                      class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+                      @click="closeCreateGroupModal"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                      :disabled="!canCreateGroup"
+                      @click="handleCreateGroup"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+
+            <div
+              v-if="chatRooms.length > 0"
+              class="room-list"
+            >
+              <div
+                v-for="room in chatRooms"
+                :key="getRoomId(room)"
+                class="room-item"
+                :class="{
+                  active: selectedRoom && getRoomId(selectedRoom) === getRoomId(room),
+                  'is-group': room.isGroupChat
+                }"
+                @click="openRoom(room)"
+              >
+                <!-- Room Avatar -->
+                <div
+                  class="room-avatar"
+                  :class="{ 'is-group': room.isGroupChat }"
+                >
+                  {{ room.name[0]?.toUpperCase() || '?' }}
+                </div>
+
+                <!-- Room Info -->
+                <div class="room-info">
+                  <div class="room-name-container">
+                    <span class="room-name">{{ room.name }}</span>
+                    <span
+                      v-if="room.isGroupChat"
+                      class="room-type"
+                    >Group</span>
+                  </div>
+                  <span
+                    v-if="room.isGroupChat"
+                    class="member-count"
+                  >
+                    {{ room.members?.length || 0 }} members
+                  </span>
+                </div>
+
+                <!-- Room Actions -->
+                <div class="room-actions">
+                  <button
+                    class="action-button edit"
+                    :title="'Rename ' + room.name"
+                    @click.stop="renameRoom(room)"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    class="action-button delete"
+                    :title="'Delete ' + room.name"
+                    @click.stop="confirmDeleteRoom(room)"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div
+              v-else
+              class="empty-state"
+            >
+              <div class="empty-icon">
+                💬
+              </div>
+              <p>No chats yet</p>
+              <span>Search for users to start chatting</span>
+            </div>
+          </div>
+        </div>
+        <Transition name="fade">
+          <div
+            v-if="showRoomDeleteModal"
+            class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+          >
+            <div class="bg-white rounded-xl shadow-lg p-6 w-80">
+              <h3 class="text-lg font-semibold mb-4">
+                Delete Room?
+              </h3>
+              <p class="text-sm text-gray-600 mb-6">
+                Are you sure you want to delete
+                <strong>{{ roomToDelete?.name }}</strong>?
+              </p>
+              <div class="flex justify-end space-x-3">
+                <button
+                  class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+                  @click="cancelDeleteRoom"
+                >
+                  Cancel
+                </button>
+                <button
+                  class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+                  @click="handleDeleteRoom"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+        </div>
+        <!-- Main Chat Area -->
+        <div class="chat-main">
+          <ChatRoom
+            v-if="selectedRoom && selectedRoom._id"
+            :room-id="getRoomId(selectedRoom)"
+            :current-user-id="currentUser.id"
+            :current-username="currentUser.username"
+            :room-name="selectedRoom.name"
+            :created-by-id="selectedRoom.createdBy"
+          />
+          <div
+            v-else
+            class="welcome-screen"
+          >
+            <div class="welcome-content">
+              <div class="welcome-icon">
+                👋
+              </div>
+              <h2>Welcome to Chat</h2>
+              <p>Select a chat or start a new conversation</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+    <AppFooter/>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, toRaw } from 'vue';
+import { computed, onMounted, ref, toRaw } from 'vue';
 import axios from 'axios';
 import ChatRoom from '../components/ChatRoom.vue';
-
+import Navbar from '../components/Navbar.vue'
+import AppFooter from '../components/AppFooter.vue';
+import Sidebar from '../components/Sidebar.vue';
+const isCollapsed = ref(false);
 interface ChatRoomInfo {
   _id: string;
   name: string;
@@ -174,6 +297,88 @@ const chatRooms = ref<ChatRoomInfo[]>([]);
 const selectedRoom = ref<(ChatRoomInfo & { _id: string }) | null>(null);
 const searchQuery = ref('');
 const searchError = ref('');
+const showCreateGroupModal = ref(false)
+const groupName = ref('')
+const memberQuery = ref('')
+const selectedMembers = ref<UserInfo[]>([])
+const memberSearchError = ref('')
+
+const canCreateGroup = computed(() => {
+  const total = selectedMembers.value.length + 1 // +1 là người tạo
+  return groupName.value.trim() !== '' && total >= 3
+})
+
+const closeCreateGroupModal = () => {
+  showCreateGroupModal.value = false
+  groupName.value = ''
+  memberQuery.value = ''
+  selectedMembers.value = []
+  memberSearchError.value = ''
+}
+
+const searchMember = async () => {
+  if (!memberQuery.value.trim()) return
+  try {
+    const res = await axios.get('/api/chat/search', {
+      params: { q: memberQuery.value.trim() },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const user = res.data
+    if (user.id === currentUser.value.id) {
+      memberSearchError.value = '❌ Không thể thêm chính bạn'
+      return
+    }
+    if (selectedMembers.value.find(m => m.id === user.id)) {
+      memberSearchError.value = '❌ Đã thêm người này'
+      return
+    }
+    selectedMembers.value.push(user)
+    memberQuery.value = ''
+    memberSearchError.value = ''
+  } catch (err: any) {
+    memberSearchError.value = err.response?.data?.message || '❌ Không tìm thấy user'
+  }
+}
+
+const removeMember = (id: number) => {
+  selectedMembers.value = selectedMembers.value.filter(m => m.id !== id)
+}
+
+const handleCreateGroup = async () => {
+  try {
+    const memberIds = selectedMembers.value.map(m => m.id);
+
+    if (!memberIds.includes(currentUser.value.id)) {
+      memberIds.push(currentUser.value.id);
+    }
+    if (memberIds.length < 3) {
+      alert('❌ Cần ít nhất 3 người (bao gồm bạn) để tạo nhóm!');
+      return;
+    }
+
+    const res = await axios.post('/api/chat/create-group', {
+      name: groupName.value.trim(),
+      memberIds,
+    }, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      withCredentials: true,
+    });
+
+    const newRoom = {
+      ...res.data,
+      isGroupChat: true,
+      members: res.data.participants || memberIds, // <== cập nhật số member ngay
+    };
+
+    chatRooms.value.unshift(newRoom);
+    closeCreateGroupModal();
+  } catch (err: any) {
+    console.error(err);
+    alert(err.response?.data?.message || '❌ Tạo nhóm thất bại');
+  }
+};
+
+
 
 function getRoomId(room: any): string {
   const rawRoom = toRaw(room);
@@ -626,14 +831,6 @@ onMounted(async () => {
   font-size: 0.875rem;
 }
 
-/* Main Chat Area */
-.chat-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 /* Welcome Screen */
 .welcome-screen {
   flex: 1;
@@ -708,10 +905,6 @@ onMounted(async () => {
       transform: translateX(0);
     }
   }
-
-  .chat-main {
-    width: 100%;
-  }
   .fade-enter-active,
   .fade-leave-active {
     transition: opacity 0.3s ease;
@@ -721,4 +914,65 @@ onMounted(async () => {
     opacity: 0;
   }
 }
+.create-group-button {
+  margin: 0.5rem 1rem;
+  padding: 0.5rem;
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  &:hover {
+    background: #4338ca;
+  }
+}
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page-body {
+  display: flex;
+  flex: 1;
+  margin-top: 64px; /* navbar height */
+}
+
+.page-content {
+  flex: 1;
+  display: flex;
+  background: #f8f9fa;
+  min-height: calc(100vh - 64px); /* adjust for Navbar height */
+}
+
+.chat-layout {
+  display: flex;
+  flex: 1;
+  height: 100%;
+}
+
+.chat-sidebar {
+  flex: 0 0 300px; /* fixed width */
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.chat-main {
+  flex: 1;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+}
+
 </style>

@@ -125,7 +125,10 @@
           >
             {{ group.date }}
           </div>
-          <div v-if="group.showTime" class="time-separator">
+          <div
+            v-if="group.showTime"
+            class="time-separator"
+          >
             {{ group.time }}
           </div>
 
@@ -249,7 +252,9 @@
           class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
         >
           <div class="bg-white rounded-xl shadow-lg p-6 w-80">
-            <h3 class="text-lg font-semibold mb-4">Delete Message?</h3>
+            <h3 class="text-lg font-semibold mb-4">
+              Delete Message?
+            </h3>
             <p class="text-sm text-gray-600 mb-6">
               Are you sure you want to delete this message?
             </p>
@@ -715,7 +720,7 @@ const handleFileUpload = async (e: Event) => {
       roomId: props.roomId,
       senderId: props.currentUserId,
       senderUsername: props.currentUsername,
-      message: '📎',
+      message: '',
       fileUrl: res.data.url,
       fileName: file.name
     })
@@ -1492,6 +1497,12 @@ onUnmounted(() => {
   &::after {
     right: 0;
   }
+}
+.message-image {
+  max-width: 300px;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 </style>

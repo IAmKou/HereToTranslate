@@ -95,6 +95,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       isEdited: plain.isEdited ?? false,
       senderUsername,
       replyTo: replyToData,
+      fileUrl: plain.fileUrl,
+      fileName: plain.fileName,
     };
 
     this.server.to(payload.roomId).emit('new_message', messageWithUsername);

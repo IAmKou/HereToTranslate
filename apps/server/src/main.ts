@@ -11,7 +11,7 @@ import { BigIntSerializerInterceptor } from './util/bigint-serializer.intercepto
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-
+import * as express from 'express';
 
 async function bootstrap() {
   shared();
@@ -19,11 +19,11 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(MainModule);
   app.use(cookieParser());
 
-  // Thêm log kiểm tra đường dẫn serve static
-  console.log('[STATIC SERVE]', join(__dirname, '..', 'uploads'));
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads/',
-  });
+  app.use(
+    '/uploads',
+    express.static(join(__dirname, '..', '..', '..', 'uploads')),
+  );
+
 
   app.useGlobalPipes(new ValidationPipe(
     {
@@ -42,6 +42,7 @@ async function bootstrap() {
   });
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
+
   const port: number = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port, '0.0.0.0');
   Logger.log(

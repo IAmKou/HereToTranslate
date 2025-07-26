@@ -1,8 +1,8 @@
 <template>
-  <div class="layout-wrapper">
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <Navbar />
     <div class="main-content">
-      <Sidebar />
+      <Sidebar :collapsed="sidebarCollapsed" @update:collapsed="sidebarCollapsed = $event" />
       <div class="content">
         <!-- Header (giống bên request, full width) -->
         <div class="header-center-container">
@@ -58,6 +58,11 @@ export default defineComponent({
     Footer,
     CreateProjectForm,
   },
+  data() {
+    return {
+      sidebarCollapsed: false,
+    };
+  },
 });
 </script>
 
@@ -91,13 +96,23 @@ export default defineComponent({
   margin: 0 auto 0 auto;
   padding: 0 0 0 0;
   margin-left: 240px;
+  transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
 }
+
+.layout-wrapper.sidebar-collapsed .header-center-container {
+  margin-left: 72px;
+}
+
 @media (max-width: 1024px) {
   .main-content {
     margin-left: 72px;
   }
   .content {
     width: calc(100vw - 72px);
+  }
+  .header-center-container,
+  .layout-wrapper.sidebar-collapsed .header-center-container {
+    margin-left: 0;
   }
 }
 @media (max-width: 768px) {

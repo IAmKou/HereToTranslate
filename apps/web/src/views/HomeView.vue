@@ -6,10 +6,6 @@ import AppFooter from '../components/AppFooter.vue';
 
 const router = useRouter();
 
-const navigateToRequest = () => {
-  router.push('/create-project');
-};
-
 const navigateToJoin = () => {
   router.push('/register');
 };
@@ -72,20 +68,14 @@ const supportedLanguages = ref([
                 <span class="gradient-text">Simplified.</span>
               </h1>
               <p class="hero-subtitle">
-                Connect with verified translators or submit translation requests in just a few clicks.
-                Experience seamless communication across languages.
+                Join our community of verified translators and start earning by helping people communicate across languages.
+                Experience professional translation opportunities.
               </p>
               <div class="hero-buttons">
                 <Button
-                  label="Request Translation"
-                  icon="pi pi-plus"
-                  class="p-button-primary p-button-lg hero-btn-primary"
-                  @click="navigateToRequest"
-                />
-                <Button
                   label="Join as Translator"
                   icon="pi pi-user-plus"
-                  class="p-button-outlined p-button-lg hero-btn-secondary"
+                  class="p-button-primary p-button-lg hero-btn-primary"
                   @click="navigateToJoin"
                 />
               </div>
@@ -217,20 +207,14 @@ const supportedLanguages = ref([
               <template #content>
                 <div class="cta-content">
                   <div class="cta-text">
-                    <h2>Ready to Get Started?</h2>
-                    <p>Join thousands of users who trust us for their translation needs</p>
+                    <h2>Ready to Start Translating?</h2>
+                    <p>Join thousands of professional translators in our community</p>
                   </div>
                   <div class="cta-buttons">
                     <Button
-                      label="Start Your First Project"
-                      icon="pi pi-rocket"
-                      class="p-button-primary p-button-lg"
-                      @click="navigateToRequest"
-                    />
-                    <Button
                       label="Become a Translator"
                       icon="pi pi-user-plus"
-                      class="p-button-outlined p-button-lg"
+                      class="p-button-primary p-button-lg"
                       @click="navigateToJoin"
                     />
                   </div>
@@ -388,6 +372,7 @@ const supportedLanguages = ref([
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 60px;
+  justify-content: flex-start;
 }
 
 .hero-btn-primary {
@@ -798,6 +783,10 @@ const supportedLanguages = ref([
   }
 
   .cta-buttons {
+    justify-content: center;
+  }
+
+  .hero-buttons {
     justify-content: center;
   }
 

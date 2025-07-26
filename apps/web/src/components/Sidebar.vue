@@ -98,6 +98,13 @@ const toggleSidebar = () => {
   object-fit: contain;
   margin: 0;
   display: block;
+  transition: opacity 0.2s ease, width 0.2s ease;
+}
+
+.sidebar-collapsed .sidebar-logo {
+  opacity: 0;
+  width: 0;
+  margin: 0;
 }
 .collapse-btn {
   background: transparent;

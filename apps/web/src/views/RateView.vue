@@ -30,7 +30,6 @@
 </template>
 
 
-
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
@@ -44,6 +43,7 @@ const props = defineProps({
 const selectedRating = ref(0);
 const commentText = ref('');
 const comments = ref([]);
+const sidebarCollapsed = ref(false);
 
 const headers = {
   Authorization: `Bearer ${props.token}`,

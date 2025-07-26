@@ -6,6 +6,9 @@ import { ref, onMounted, computed } from 'vue';
 import { UserProfile } from '../services/user.service';
 import axiosInstance from '../api';
 
+// Sidebar state
+const sidebarCollapsed = ref(false);
+
 // Interfaces
 interface Project {
   id: string;
@@ -99,10 +102,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="layout-wrapper">
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <TopNavbar />
     <div class="main-content">
-      <Sidebar />
+      <Sidebar :collapsed="sidebarCollapsed" @update:collapsed="sidebarCollapsed = $event" />
       <div class="content">
         <main class="userhome-main">
           <!-- Greeting -->
@@ -237,7 +240,12 @@ onMounted(() => {
   display: flex;
   flex: 1;
   min-width: 0;
-  padding-left: 16rem;
+  padding-left: 240px;
+  transition: padding-left 0.2s cubic-bezier(.4,0,.2,1);
+}
+
+.layout-wrapper.sidebar-collapsed .main-content {
+  padding-left: 72px;
 }
 
 .content {
@@ -623,11 +631,14 @@ tr:last-child td {
   background: #4b5563;
 }
 
-/* Đảm bảo Sidebar luôn width cố định, không bị co lại khi thu nhỏ màn hình */
-.main-content > *:first-child {
-  width: 16rem;
-  min-width: 16rem;
-  max-width: 16rem;
-  flex-shrink: 0;
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+  .main-content {
+    padding-left: 0;
+  }
+
+  .layout-wrapper.sidebar-collapsed .main-content {
+    padding-left: 0;
+  }
 }
 </style>

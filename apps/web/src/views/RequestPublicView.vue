@@ -1,6 +1,6 @@
 <template>
-  <div class="layout-wrapper">
-    <Sidebar />
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <Sidebar :collapsed="sidebarCollapsed" @update:collapsed="sidebarCollapsed = $event" />
     <Navbar />
     <div class="main-content">
       <div class="content">
@@ -186,6 +186,7 @@ const error = ref(null);
 const categories = ref([]);
 const search = ref('');
 const selectedCategory = ref(null);
+const sidebarCollapsed = ref(false);
 const searchFocus = ref(false);
 const categoryFocus = ref(false);
 
@@ -343,10 +344,17 @@ function goToDetail(id) {
   display: flex;
   flex: 1;
   margin-left: 240px; /* Ensure main content is not hidden behind sidebar */
+  transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
 }
+
+.layout-wrapper.sidebar-collapsed .main-content {
+  margin-left: 72px;
+}
+
 @media (max-width: 900px) {
-  .main-content {
-    margin-left: 72px;
+  .main-content,
+  .layout-wrapper.sidebar-collapsed .main-content {
+    margin-left: 0;
   }
 }
 .content {

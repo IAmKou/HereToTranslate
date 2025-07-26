@@ -1,1255 +1,1660 @@
 <template>
-  <div>
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <Navbar />
-    <div class="main-content-wrapper">
-      <Sidebar />
-      <div class="main-content">
-        <div class="wallet-layout">
-          <div class="wallet-left">
-            <div class="wallet-card wallet-upgrade">
-              <div class="wallet-header">
-                <div class="wallet-icon">
-                  <i class="pi pi-wallet"></i>
-                </div>
-                <div>
-                  <h1>Wallet</h1>
-                </div>
-              </div>
-              <div v-if="loading" class="loading">Loading...</div>
-              <div v-else-if="error" class="error">{{ error }}</div>
-              <div v-else-if="wallet">
-                <div class="balance-label">Balance</div>
-                <div class="wallet-balance">
-                  <span class="money-icon">💵</span>
-                  {{ formatCurrency(wallet.balance) }}
-                </div>
-                <div class="withdraw-fee-tip">
-                  <span v-if="wallet && wallet.balance > 0">
-                    If you withdraw all, you will receive: <b>{{ formatCurrency(wallet.balance * 0.95) }}</b> after 5% fee.
-                  </span>
-                </div>
-                <div class="user-info-block">
-                  <div class="user-avatar user-avatar-upgrade">
-                    <template v-if="wallet.user?.avatar">
-                      <img :src="wallet.user.avatar" alt="avatar" class="avatar-img avatar-img-upgrade" />
-                    </template>
-                    <template v-else>
-                      <i class="pi pi-user user-avatar-icon"></i>
-                    </template>
-                  </div>
-                  <div class="user-info user-info-upgrade">
-                    <div class="user-name user-line">
-                      <i class="pi pi-id-card user-info-icon"></i>
-                      <span class="user-name-text">{{ wallet.user?.fullName ?? '' }}</span>
-                      <span v-if="wallet.user?.status" :class="['user-status-badge', wallet.user.status.toLowerCase()]">
-                        <span v-if="wallet.user.status === 'Active'">🟢 Active</span>
-                        <span v-else-if="wallet.user.status === 'Inactive'">🔴 Inactive</span>
-                        <span v-else>🟡 Pending</span>
-                      </span>
-                    </div>
-                    <div class="user-username user-line">
-                      <i class="pi pi-at user-info-icon"></i>
-                      @{{ wallet.user?.username ?? '' }}
-                    </div>
-                    <div class="user-email user-line">
-                      <i class="pi pi-envelope user-info-icon"></i>
-                      <span>{{ wallet.user?.email ?? '' }}</span>
-                      <span v-if="wallet.user?.email" class="copy-icon" @click="copyToClipboard(wallet.user.email)" title="Copy email">
-                        <i class="pi pi-copy"></i>
-                      </span>
-                    </div>
-                    <div class="user-phone user-line" v-if="wallet.user?.phone">
-                      <i class="pi pi-phone user-info-icon"></i>
-                      {{ wallet.user?.phone ?? '' }}
-                    </div>
-                  </div>
-                </div>
-                <!-- Bỏ hoàn toàn phần liên kết PayPal/email PayPal -->
-                <div class="wallet-actions wallet-actions-upgrade">
-                  <button class="wallet-btn withdraw custom-withdraw-btn" title="Withdraw" @click="openWithdrawModal">
-                    ⬆ <span>Withdraw</span>
-                  </button>
-                  <button class="wallet-btn history custom-history-btn" title="View all transactions" @click="goToTransactionHistory">
-                    📄 <span>Transaction History</span>
-                  </button>
-                </div>
-              </div>
-              <div v-else>
-                <p>No wallet information found.</p>
-              </div>
+    <div class="main-content">
+      <Sidebar :collapsed="sidebarCollapsed" @update:collapsed="sidebarCollapsed = $event" />
+      <div class="content">
+        <div class="my-requests-container">
+          <!-- Header -->
+          <div class="my-requests-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem;">
+            <div>
+              <h1 class="requests-title">
+                <span class="emoji">📋</span> Requests
+              </h1>
+              <p class="requests-desc">
+                Manage your requests and assigned tasks
+              </p>
             </div>
-            <!-- XÓA phần Pending Withdrawals Section ở đây -->
+            <router-link to="/requests/create">
+              <button class="btn btn-primary">
+                <span class="material-icons" style="vertical-align: middle;">add_circle</span>
+                Create New Request
+              </button>
+            </router-link>
           </div>
-          <div class="wallet-right">
-            <div v-if="wallet">
-              <div class="wallet-finance-grid">
-                <div class="mini-stat-card deposit" @click="filterTransactions('deposit')" tabindex="0" title="Show only deposits">
-                  <div class="mini-stat-icon">
-                    <!-- SVG icon for deposit -->
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="14" cy="14" r="14" fill="#E0F7EF"/>
-                      <path d="M14 8v8m0 0l-4-4m4 4l4-4" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </div>
-                  <div class="mini-stat-label">Total Deposits</div>
-                  <div class="mini-stat-value" :class="currencyClass(wallet.totalDeposits)">{{ formatCurrency(wallet.totalDeposits) }}</div>
-                </div>
-                <div class="mini-stat-card withdraw" @click="filterTransactions('withdraw')" tabindex="0" title="Show only withdrawals">
-                  <div class="mini-stat-icon">
-                    <!-- SVG icon for withdraw -->
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="14" cy="14" r="14" fill="#FFF7E0"/>
-                      <path d="M14 20v-8m0 0l4 4m-4-4l-4 4" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </div>
-                  <div class="mini-stat-label">Total Withdrawn</div>
-                  <div class="mini-stat-value" :class="currencyClass(wallet.totalWithdrawn)">{{ formatCurrency(wallet.totalWithdrawn) }}</div>
-                </div>
-                <div class="mini-stat-card pending" @click="filterTransactions('pending')" tabindex="0" title="Show only pending withdrawals">
-                  <div class="mini-stat-icon">
-                    <!-- SVG icon for pending -->
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="14" cy="14" r="14" fill="#FEF9C3"/>
-                      <path d="M14 8v6l4 2" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </div>
-                  <div class="mini-stat-label">Pending Withdrawals</div>
-                  <div class="mini-stat-value" :class="currencyClass(wallet.pendingWithdrawals)">{{ formatCurrency(wallet.pendingWithdrawals) }}</div>
-                </div>
-              </div>
-              <div v-if="wallet.latestTransaction" class="latest-transaction-summary">
-                <div class="lts-title">Latest Transaction</div>
-                <div class="lts-row lts-desc">
-                  <span class="lts-desc-icon">
-                    <template v-if="wallet.latestTransaction.type === 'Deposit'">💰</template>
-                    <template v-else-if="wallet.latestTransaction.type === 'Payment'">💳</template>
-                    <template v-else-if="wallet.latestTransaction.type === 'Withdrawal'">💸</template>
-                    <template v-else>🔄</template>
-                  </span>
-                  <span class="lts-desc-text">
-                    <template v-if="wallet.latestTransaction.type === 'Deposit'">
-                      You deposited {{ formatCurrency(wallet.latestTransaction.amount) }} via PayPal.
-                    </template>
-                    <template v-else-if="wallet.latestTransaction.type === 'Payment'">
-                      You received {{ formatCurrency(wallet.latestTransaction.amount) }} for translation work.
-                    </template>
-                    <template v-else-if="wallet.latestTransaction.type === 'Withdrawal'">
-                      You withdrew {{ formatCurrency(Math.abs(wallet.latestTransaction.amount)) }} to PayPal.
-                    </template>
-                    <template v-else>
-                      Transaction of {{ formatCurrency(Math.abs(wallet.latestTransaction.amount)) }}.
-                    </template>
-                  </span>
-                </div>
-                <div class="lts-row">
-                  <span class="lts-label">Amount:</span>
-                  <span :class="['lts-value', currencyClass(wallet.latestTransaction.amount), wallet.latestTransaction.type === 'Deposit' ? 'deposit' : 'withdraw']">
-                    {{ formatCurrency(Math.abs(wallet.latestTransaction.amount)) }}
-                  </span>
-                </div>
-                <div class="lts-row">
-                  <span class="lts-label">Type:</span>
-                  <span class="lts-value">{{ wallet.latestTransaction.type }}</span>
-                </div>
-                <div class="lts-row">
-                  <span class="lts-label">Status:</span>
-                  <span class="lts-value" :class="['status-badge',
-                    wallet.latestTransaction.status === 'COMPLETED' ? 'completed' :
-                    wallet.latestTransaction.status === 'REJECTED' ? 'rejected' :
-                    ['HOLD', 'WAITING_APPROVAL', 'IN_PROGRESS'].includes(wallet.latestTransaction.status) ? 'hold' : 'pending']">
-                    <template v-if="wallet.latestTransaction.status === 'COMPLETED'">
-                      ✅ <span>Completed</span>
-                    </template>
-                    <template v-else-if="wallet.latestTransaction.status === 'REJECTED'">
-                      ❌ <span>Rejected</span>
-                    </template>
-                    <template v-else-if="['HOLD', 'WAITING_APPROVAL', 'IN_PROGRESS'].includes(wallet.latestTransaction.status)">
-                      ⏸ <span>Hold</span>
-                    </template>
-                    <template v-else>
-                      ⏳ <span>Pending</span>
-                    </template>
-                  </span>
-                </div>
-                <div class="lts-row">
-                  <span class="lts-label">Time:</span>
-                  <span class="lts-value">{{ formatDateTime(wallet.latestTransaction.createdAt) }}</span>
-                </div>
-              </div>
-              <div v-else class="latest-transaction-empty">
-                <div class="lts-empty-icon">📄</div>
-                <div class="lts-empty-title">No transactions yet</div>
-                <div class="lts-empty-desc">Your recent transactions will appear here once you make a deposit or withdrawal.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <AppFooter />
-    <!-- Modal dialog ở giữa màn hình -->
-    <div v-if="showWithdrawModal" class="modal-backdrop">
-      <div class="modal-content withdraw-modal">
-        <h3>Withdraw to PayPal</h3>
-        <div class="withdraw-info-tip">
-          💡 <span>Fee: 5%<span class="fee-tooltip" title="A 5% fee will be deducted from your withdrawal amount to cover transaction and processing costs.">ℹ️</span></span> | Processed within 24h<br>
-          <span class="withdraw-admin-tip" title="Withdrawals require admin approval.">Withdrawals will be processed after admin approval.</span>
-        </div>
-        <form @submit.prevent="handleWithdrawSubmit">
-          <div class="form-group">
-            <label for="withdraw-amount"><span class="amount-label-icon">💵</span> Amount (USD):</label>
-            <input id="withdraw-amount" v-model.number="withdrawAmount" type="number" min="1" :max="wallet?.balance || 0" placeholder="Enter amount (e.g. 10)" @input="validateWithdrawAmount" :class="{'input-invalid': withdrawAmountError || withdrawAmount <= 0}" />
-            <div v-if="withdrawAmountError" class="input-error">{{ withdrawAmountError }}</div>
-            <div v-if="withdrawAmount > 0 && !withdrawAmountError" class="after-fee-tip">
-              You will receive <b>{{ formatCurrency(withdrawAmount * 0.95) }}</b> after the 5% fee.
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="withdraw-email"><span class="email-label-icon">📧</span> PayPal Email:</label>
-            <input id="withdraw-email" v-model="withdrawEmail" type="email" placeholder="Enter your PayPal email" @input="validateWithdrawEmail" :class="{'input-invalid': withdrawEmailError}" />
-            <div v-if="withdrawEmailError" class="input-error">{{ withdrawEmailError }}</div>
-            <div class="email-warning" style="color: #ef4444; font-size: 0.97rem; margin-top: 4px;">
-              <i class="pi pi-exclamation-triangle" style="margin-right: 4px;"></i>
-              <b>We are not responsible if you enter the wrong PayPal email. Please double-check before confirming!</b>
-            </div>
-          </div>
-          <div v-if="withdrawError" class="input-error">{{ withdrawError }}</div>
-          <div class="modal-actions">
-            <button type="submit" class="btn btn-primary" :disabled="withdrawLoading || withdrawAmountError || withdrawEmailError || hasPendingWithdraw || withdrawAmount <= 0 || withdrawAmount > (wallet?.balance || 0)">
-              <span v-if="withdrawLoading" class="spinner"></span>
-              <span v-if="withdrawLoading">Processing…</span>
-              <span v-else>Confirm</span>
+
+          <!-- Tabs -->
+          <div class="tabs-container">
+            <button
+              @click="switchTab('my-requests')"
+              :class="['tab-button', { active: activeTab === 'my-requests' }]"
+            >
+              <span class="material-icons">description</span>
+              My Requests
+              <span v-if="myRequestsCount > 0" class="badge">{{ myRequestsCount }}</span>
             </button>
-            <button type="button" class="btn btn-secondary" @click="closeWithdrawModal" :disabled="withdrawLoading">Cancel</button>
+            <button
+              @click="switchTab('assigned-requests')"
+              :class="['tab-button', { active: activeTab === 'assigned-requests' }]"
+            >
+              <span class="material-icons">assignment_ind</span>
+              Private Request Assign To You
+              <span v-if="assignedRequestsCount > 0" class="badge">{{ assignedRequestsCount }}</span>
+            </button>
           </div>
-          <div v-if="hasPendingWithdraw" class="pending-withdraw-tip">
-            You already have a pending withdrawal request. Please wait for admin approval before submitting another.
+
+          <!-- Loading State -->
+          <div v-if="loading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Loading requests...</p>
           </div>
-        </form>
+
+          <!-- Error State -->
+          <div v-else-if="error" class="error-container">
+            <div class="error-content">
+              <div class="error-icon">
+                <i class="pi pi-exclamation-triangle"></i>
+              </div>
+              <h3>Oops! Something went wrong</h3>
+              <p>{{ error }}</p>
+              <button @click="fetchRequests" class="btn btn-secondary">Try Again</button>
+            </div>
+          </div>
+
+          <!-- My Requests Tab -->
+          <div v-else-if="activeTab === 'my-requests'">
+            <!-- Search and Filter Bar for My Requests -->
+            <div class="filter-bar">
+              <div class="search-container">
+                <i class="pi pi-search search-icon"></i>
+                <input
+                  v-model="myRequestsSearch"
+                  type="text"
+                  placeholder="Search requests..."
+                  class="search-input"
+                />
+              </div>
+              <select v-model="myRequestsStatusFilter" class="filter-select">
+                <option value="">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select v-model="myRequestsVisibilityFilter" class="filter-select">
+                <option value="">All Visibility</option>
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+              </select>
+              <button @click="clearMyRequestsFilters" class="btn btn-secondary btn-small">
+                <i class="pi pi-times"></i>
+                Clear
+              </button>
+            </div>
+
+            <!-- Empty State for My Requests -->
+            <div v-if="debugRequests.length === 0" class="empty-container">
+              <div class="empty-content">
+                <div class="empty-icon">
+                  <i class="pi pi-file"></i>
+                </div>
+                <h3>No requests found</h3>
+                <p>You haven't created any requests yet.</p>
+
+              </div>
+            </div>
+
+            <!-- My Requests Table -->
+            <div v-else class="requests-table-container">
+              <div class="table-wrapper">
+                <table class="requests-table">
+                  <thead>
+                  <tr>
+                    <th @click="sortTable('id')" style="cursor: pointer;" class="text-xs font-semibold text-center" width="60">
+                      ID
+                    </th>
+                    <th @click="sortTable('title')" style="cursor: pointer;" class="text-xs font-semibold text-left">
+                      Title
+                      <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    </th>
+                    <th @click="sortTable('project')" style="cursor: pointer;" class="text-xs font-semibold text-left">
+                      Project
+                      <i :class="[ 'sort-icon', sortKey === 'project' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    </th>
+                    <th @click="sortTable('category')" style="cursor: pointer;" class="text-xs font-semibold text-left">
+                      Category
+                    </th>
+                    <th @click="sortTable('dealAmount')" style="cursor: pointer;" class="text-xs font-semibold text-center th-flex" width="120">
+                      <span class="th-flex">Deal Amount <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" /></span>
+                    </th>
+                    <th @click="sortTable('deadline')" style="cursor: pointer;" class="text-xs font-semibold text-left" width="130">
+                      Deadline
+                      <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    </th>
+                    <th class="text-xs font-semibold text-left">Status</th>
+                    <th class="text-xs font-semibold text-left">Visibility</th>
+                    <th class="text-xs font-semibold text-left">Actions</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row table-row-hover">
+                    <td class="text-center text-sm text-gray-700" width="60">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
+                    <td class="request-title text-sm text-gray-700 text-left"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
+                    <td class="text-sm text-gray-700 text-left">{{ req.project?.name || '-' }}</td>
+                    <td class="text-sm text-gray-700 text-left">{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
+                    <td class="text-sm text-gray-500 italic text-left" width="130"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
+                    <td>
+                        <span v-if="req.status === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
+                          ✅ Approved
+                        </span>
+                      <span v-else-if="req.status === 'PENDING'" class="status-badge status-pending custom-badge pending-badge">
+                          ⏳ Pending
+                        </span>
+                      <span v-else :class="['status-badge', `status-${req.status.toLowerCase()}`]">
+                          {{ formatStatus(req.status) }}
+                        </span>
+                    </td>
+                    <td>
+                      <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                        🌐 Public
+                      </span>
+                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge custom-badge private-badge">
+                        🔒 Private
+                      </span>
+                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                        🌐 Public
+                      </span>
+                      <span v-else class="visibility-badge custom-badge private-badge">
+                        🔒 Private
+                      </span>
+                    </td>
+                    <td class="actions text-left">
+                      <button @click="onCancel(req)" class="btn btn-small btn-danger" v-if="!req.project">
+                        <i class="pi pi-times"></i>
+                      </button>
+                      <button v-if="canReview(req) && !req.project" @click="onReview(req)" class="btn btn-small btn-primary">
+                        <i class="pi pi-eye"></i>
+                      </button>
+                      <router-link
+                        v-if="req.isPublic && !req.project"
+                        :to="{ name: 'request-registrants', params: { requestId: req.id } }"
+                        class="btn btn-small btn-candidate"
+                        :class="{ disabled: req.registrantCount === 0 }"
+                        :title="req.registrantCount > 0 ? 'View registered candidates' : 'No candidates yet'"
+                      >
+                        <i class="pi pi-users"></i>
+                        <span>Candidates</span>
+                        <span v-if="typeof req.registrantCount === 'number'" class="badge">{{ req.registrantCount }}</span>
+                      </router-link>
+                    </td>
+                  </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination-controls">
+                <div class="pagination-info">
+                  <span>
+                    Showing {{ (currentPage - 1) * itemsPerPage + 1 }}–{{ Math.min(currentPage * itemsPerPage, filteredMyRequests.length) }} of {{ filteredMyRequests.length }} requests
+                    ({{ totalMyPages }} page{{ totalMyPages > 1 ? 's' : '' }})
+                  </span>
+                </div>
+                <div class="pagination-buttons">
+                  <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-secondary">
+                    <i class="pi pi-chevron-left"></i> Previous
+                  </button>
+                  <span class="page-info">Page {{ currentPage }} of {{ totalMyPages }}</span>
+                  <button @click="nextPage" :disabled="currentPage === totalMyPages" class="btn btn-secondary">
+                    Next <i class="pi pi-chevron-right"></i>
+                  </button>
+                </div>
+                <div class="page-size-selector">
+                  <label for="pageSize">Show:</label>
+                  <select id="pageSize" v-model="itemsPerPage" @change="currentPage = 1" class="page-size-select">
+                    <option value="5">5</option>
+                    <option value="7">7</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                  </select>
+                  <span>per page</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assigned Requests Tab -->
+          <div v-else-if="activeTab === 'assigned-requests'">
+            <!-- Search and Filter Bar for Assigned Requests -->
+            <div class="filter-bar">
+              <div class="search-container">
+                <i class="pi pi-search search-icon"></i>
+                <input
+                  v-model="assignedRequestsSearch"
+                  type="text"
+                  placeholder="Search assigned requests..."
+                  class="search-input"
+                />
+              </div>
+              <select v-model="assignedRequestsStatusFilter" class="filter-select">
+                <option value="">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select v-model="assignedRequestsVisibilityFilter" class="filter-select">
+                <option value="">All Visibility</option>
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+              </select>
+              <button @click="clearAssignedRequestsFilters" class="btn btn-secondary btn-small">
+                <i class="pi pi-times"></i>
+                Clear
+              </button>
+            </div>
+
+            <!-- Empty State for Assigned Requests -->
+            <div v-if="assignedRequests.length === 0" class="empty-container">
+              <div class="empty-content">
+                <div class="empty-icon">
+                  <i class="pi pi-user"></i>
+                </div>
+                <h3>No assigned requests</h3>
+                <p>You don't have any requests assigned to you at the moment.</p>
+              </div>
+            </div>
+
+            <!-- Assigned Requests Table (giống My Requests) -->
+            <div v-else class="requests-table-container">
+              <div class="table-wrapper">
+                <table class="requests-table">
+                  <thead>
+                  <tr>
+                    <th @click="sortTable('id')" style="cursor: pointer;">
+                      ID
+                      <i :class="['sort-icon',sortKey === 'id'? sortOrder === 1? 'pi pi-sort-amount-up-alt'
+                       : 'pi pi-sort-amount-down'
+                       : 'pi pi-sort-alt']" />
+                    </th>
+                    <th @click="sortTable('title')" style="cursor: pointer;">
+                      Title
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'title'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('requester')" style="cursor: pointer;">
+                      Requester
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'requester'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('category')" style="cursor: pointer;">
+                      Category
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'category'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('dealAmount')" style="cursor: pointer;">
+                      Deal Amount
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'dealAmount'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th @click="sortTable('deadline')" style="cursor: pointer;">
+                      Deadline
+                      <i
+                        :class="[
+    'sort-icon',
+    sortKey === 'deadline'
+      ? sortOrder === 1
+        ? 'pi pi-sort-amount-up-alt'
+        : 'pi pi-sort-amount-down'
+      : 'pi pi-sort-alt'
+  ]"
+                      />
+                    </th>
+                    <th>Status</th>
+                    <th>Visibility</th>
+                    <th>Actions</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <tr v-for="(req, index) in paginatedAssignedRequests" :key="req.id" class="request-row">
+                    <td>{{ (currentAssignedPage - 1) * assignedItemsPerPage + index + 1 }}</td>
+                    <td class="request-title">
+                      <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
+                    </td>
+                    <td>{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
+                    <td>{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount">${{ formatAmount(req.dealAmount) }}</td>
+                    <td>{{ formatDate(req.deadline) }}</td>
+                    <td>
+                        <span :class="['status-badge', getStatusClass(req.status)]">
+                          {{ formatStatus(req.status) }}
+                        </span>
+                    </td>
+                    <td>
+                        <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
+                          <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                          {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                        </span>
+                      <span v-else class="visibility-badge visibility-private">
+                          <i class="pi pi-lock"></i>
+                          Private
+                        </span>
+                    </td>
+                    <td class="actions">
+                      <button
+                        v-if="req.status === 'PENDING'"
+                        @click="acceptRequest(req.id)"
+                        class="btn btn-small btn-success"
+                        :disabled="actionLoading"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        v-if="req.status === 'PENDING'"
+                        @click="rejectRequest(req.id)"
+                        class="btn btn-small btn-danger"
+                        :disabled="actionLoading"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        v-if="req.status === 'APPROVED'"
+                        @click="completeRequest(req.id)"
+                        class="btn btn-small btn-primary"
+                        :disabled="actionLoading"
+                      >
+                        Mark Complete
+                      </button>
+                    </td>
+                  </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination-controls">
+                <div class="pagination-info">
+                  <span>Showing {{ (currentAssignedPage - 1) * assignedItemsPerPage + 1 }} to {{ Math.min(currentAssignedPage * assignedItemsPerPage, filteredAssignedRequests.length) }} of {{ filteredAssignedRequests.length }} requests</span>
+                </div>
+                <div class="pagination-buttons">
+                  <button @click="prevAssignedPage" :disabled="currentAssignedPage === 1" class="btn btn-secondary">
+                    <i class="pi pi-chevron-left"></i> Previous
+                  </button>
+                  <span class="page-info">Page {{ currentAssignedPage }} of {{ totalAssignedPages }}</span>
+                  <button @click="nextAssignedPage" :disabled="currentAssignedPage === totalAssignedPages" class="btn btn-secondary">
+                    Next <i class="pi pi-chevron-right"></i>
+                  </button>
+                </div>
+                <div class="page-size-selector">
+                  <label for="assignedPageSize">Show:</label>
+                  <select id="assignedPageSize" v-model="assignedItemsPerPage" @change="currentAssignedPage = 1" class="page-size-select">
+                    <option value="3">3</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="9">9</option>
+                    <option value="12">12</option>
+                  </select>
+                  <span>per page</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dialogs -->
+          <ReviewRequestDialog v-if="showReview" :request="selectedRequest" @close="showReview = false" @reviewed="onRequestReviewed" />
+          <CancelRequestDialog v-if="showCancel" :request="selectedRequest" @close="showCancel = false" @cancelled="onRequestCancelled" />
+        </div>
       </div>
     </div>
-    <!-- Modal xác nhận lần 2 nếu số tiền lớn hơn $100 -->
-    <div v-if="showSecondConfirm" class="modal-backdrop">
-      <div class="modal-content withdraw-modal">
-        <h3>Confirm Withdrawal</h3>
-        <div style="margin-bottom: 18px; color: #f59e0b; font-weight: 500;">
-          You are about to withdraw <b>{{ formatCurrency(withdrawAmount) }}</b>.<br>
-          After fee, you will receive <b>{{ formatCurrency(withdrawAmount * 0.95) }}</b>.<br>
-          Are you sure you want to proceed?
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-primary" @click="doFinalWithdraw" :disabled="withdrawLoading">Yes, Withdraw</button>
-          <button class="btn btn-secondary" @click="showSecondConfirm = false" :disabled="withdrawLoading">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <Footer />
+    <Toast />
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import Navbar from '../components/Navbar.vue';
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import axios from 'axios'
+import { useToast } from 'primevue/usetoast'
+import { useRouter } from 'vue-router'
 import Sidebar from '../components/Sidebar.vue';
-import AppFooter from '../components/AppFooter.vue';
-import axios from 'axios';
-import { useToast } from 'primevue/usetoast';
+import Navbar from '../components/Navbar.vue';
+import Footer from '../components/AppFooter.vue';
+import EditRequestForm from '../views/RequestEditView.vue'
+import ReviewRequestDialog from '../components/ReviewRequestDialog.vue'
+import CancelRequestDialog from '../components/CancelRequestDialog.vue'
 
-interface UserInfo {
-  id: number | string;
-  username: string;
-  email: string;
-  fullName: string;
-  phone?: string;
-  isActive?: boolean;
-  createdAt?: string;
-  avatar?: string;
-  status?: 'Active' | 'Inactive' | 'Pending';
-  paypalEmail?: string;
-}
-interface Wallet {
-  id: number | string;
-  balance: number;
-  user?: UserInfo;
-  totalDeposits: number;
-  totalWithdrawn: number;
-  pendingWithdrawals: number;
-  holdAmount: number;
-  latestTransaction?: {
-    id: number;
-    type: 'Deposit' | 'Withdrawal' | 'Transfer';
-    amount: number;
-    status: 'Pending' | 'Completed' | 'Failed' | 'HOLD' | 'WAITING_APPROVAL' | 'IN_PROGRESS';
-    createdAt: string;
-  };
-}
+const requests = ref([])
+const loading = ref(false)
+const error = ref(null)
+const showEdit = ref(false)
+const showReview = ref(false)
+const showCancel = ref(false)
+const selectedRequest = ref(null)
+const sidebarCollapsed = ref(false)
+const toast = useToast()
+const activeTab = ref('my-requests')
+const myRequests = ref([])
+const assignedRequests = ref([])
+const actionLoading = ref(false)
+const router = useRouter()
 
-const wallet = ref<Wallet | null>(null);
-const loading = ref(true);
-const error = ref('');
-const showWithdrawModal = ref(false);
-const withdrawAmount = ref(0);
-const withdrawEmail = ref('');
-const withdrawError = ref('');
-const withdrawLoading = ref(false);
-const pendingWithdrawals = ref([]);
-const withdrawAmountError = ref('');
-const withdrawEmailError = ref('');
-const withdrawSuccessMsg = ref('');
-const showSecondConfirm = ref(false);
+// Pagination state
+const currentPage = ref(1)
+const itemsPerPage = ref(7)
+const currentAssignedPage = ref(1)
+const assignedItemsPerPage = ref(7)
 
-const router = useRouter();
-const toast = useToast();
+// Search and Filter state
+const myRequestsSearch = ref('')
+const myRequestsStatusFilter = ref('')
+const myRequestsVisibilityFilter = ref('')
+const assignedRequestsSearch = ref('')
+const assignedRequestsStatusFilter = ref('')
+const assignedRequestsVisibilityFilter = ref('')
 
-function getInitials(name: string): string {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase();
-}
-function formatDate(date: any): string {
-  if (!date) return '';
-  try {
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return d.toLocaleDateString();
-  } catch { return ''; }
-}
-function formatCurrency(amount: number | string | undefined | null): string {
-  const num = Number(amount);
-  if (isNaN(num)) return '$0';
-  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
+// Computed properties for counts
+const myRequestsCount = computed(() => myRequests.value.filter(req => req.status !== 'CANCELLED').length)
+const assignedRequestsCount = computed(() => assignedRequests.value.length)
+//Sort
+const sortKey = ref('')
+const sortOrder = ref(1)
 
-function formatDateTime(date: any): string {
-  if (!date) return '';
-  try {
-    const d = typeof date === 'string' ? new Date(date) : date;
-    d.setHours(d.getHours() + 7); // Cộng thêm 7 tiếng để khớp múi giờ Việt Nam
-    return d.toLocaleString('en-US', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', hour12: true
-    });
-  } catch { return ''; }
-}
-
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text);
-}
-
-async function reloadWallet() {
-  loading.value = true;
-  error.value = '';
-  try {
-    const res = await axios.get('/api/wallet');
-    wallet.value = res.data;
-  } catch (err: any) {
-    error.value = err?.response?.data?.message || 'Failed to load wallet info.';
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function loadPendingWithdrawals() {
-  try {
-    const res = await axios.get('/api/wallet/pending-withdrawals');
-    pendingWithdrawals.value = res.data || [];
-  } catch {
-    pendingWithdrawals.value = [];
-  }
-}
-
-async function submitWithdraw() {
-  withdrawError.value = '';
-  withdrawSuccessMsg.value = '';
-  if (!withdrawAmount.value || withdrawAmount.value <= 0) {
-    withdrawError.value = 'Amount must be greater than 0';
-    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
-    return;
-  }
-  if (!withdrawEmail.value || !/^[^\s@]+@[^"\s]+\.[^\s@]+$/.test(withdrawEmail.value)) {
-    withdrawError.value = 'Invalid PayPal email';
-    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
-    return;
-  }
-  if (withdrawAmount.value > (wallet.value?.balance || 0)) {
-    withdrawError.value = 'Insufficient balance';
-    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
-    return;
-  }
-  withdrawLoading.value = true;
-  try {
-    await axios.post('/api/wallet/withdraw', {
-      amount: withdrawAmount.value,
-      paypalEmail: withdrawEmail.value,
-    });
-    await loadPendingWithdrawals();
-    withdrawSuccessMsg.value = 'Your withdrawal request has been submitted and is pending admin approval.';
-    toast.add({ severity: 'success', summary: 'Success', detail: withdrawSuccessMsg.value, life: 3000 });
-    showWithdrawModal.value = false;
-  } catch (e: any) {
-    withdrawError.value = e?.response?.data?.message || 'Withdraw failed';
-    toast.add({ severity: 'error', summary: 'Error', detail: withdrawError.value, life: 3000 });
-  } finally {
-    withdrawLoading.value = false;
-  }
-}
-
-function openWithdrawModal() {
-  withdrawAmount.value = 0;
-  withdrawEmail.value = wallet.value?.user?.email || '';
-  withdrawError.value = '';
-  showWithdrawModal.value = true;
-}
-function closeWithdrawModal() {
-  showWithdrawModal.value = false;
-  withdrawError.value = '';
-}
-
-function validateWithdrawAmount() {
-  withdrawAmountError.value = '';
-  if (!withdrawAmount.value || withdrawAmount.value <= 0) {
-    withdrawAmountError.value = 'Amount must be greater than 0';
-  } else if (withdrawAmount.value > (wallet.value?.balance || 0)) {
-    withdrawAmountError.value = 'Insufficient balance';
-  }
-}
-function validateWithdrawEmail() {
-  withdrawEmailError.value = '';
-  if (!withdrawEmail.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(withdrawEmail.value)) {
-    withdrawEmailError.value = 'Invalid PayPal email';
-  }
-}
-
-function filterTransactions(type: string) {
-  // Gọi hàm filter hoặc emit sự kiện filter theo type
-  // Ví dụ: chuyển sang trang Transaction History và filter theo type
-  // Hoặc set biến filterType trong component này nếu có
-  // alert('Filter: ' + type);
-  // TODO: Thực hiện filter thực tế theo logic của bạn
-}
-
-function currencyClass(amount: number | undefined | null) {
-  if (!amount || amount === 0) return 'currency-zero';
-  return 'currency-positive';
-}
-
-const hasPendingWithdraw = computed(() => {
-  return pendingWithdrawals.value && pendingWithdrawals.value.some(txn => txn.status === 'Pending');
-});
-
-function handleWithdrawSubmit() {
-  if (withdrawAmount.value > 100) {
-    showSecondConfirm.value = true;
+function sortTable(key) {
+  if (sortKey.value === key) {
+    sortOrder.value *= -1
   } else {
-    submitWithdraw();
+    sortKey.value = key
+    sortOrder.value = 1
   }
 }
-function doFinalWithdraw() {
-  showSecondConfirm.value = false;
-  submitWithdraw();
+
+// Debug computed property
+const debugRequests = computed(() => {
+  console.log('Debug - My requests with isPublic:', myRequests.value.map(req => ({
+    id: req.id,
+    title: req.title,
+    isPublic: req.isPublic,
+    type: typeof req.isPublic
+  })))
+  return myRequests.value
+})
+
+// Filtered My Requests
+const filteredMyRequests = computed(() => {
+  let filtered = debugRequests.value
+
+  // Search filter
+  if (myRequestsSearch.value) {
+    const searchTerm = myRequestsSearch.value.toLowerCase()
+    filtered = filtered.filter(req =>
+      req.title?.toLowerCase().includes(searchTerm) ||
+      req.project?.name?.toLowerCase().includes(searchTerm) ||
+      req.category?.name?.toLowerCase().includes(searchTerm) ||
+      req.id?.toString().includes(searchTerm)
+    )
+  }
+
+  // Status filter
+  if (myRequestsStatusFilter.value) {
+    filtered = filtered.filter(req => req.status === myRequestsStatusFilter.value)
+  }
+
+  // Visibility filter
+  if (myRequestsVisibilityFilter.value) {
+    if (myRequestsVisibilityFilter.value === 'public') {
+      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+    } else if (myRequestsVisibilityFilter.value === 'private') {
+      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    }
+  }
+
+  return filtered
+})
+
+// Filtered Assigned Requests
+const filteredAssignedRequests = computed(() => {
+  let filtered = assignedRequests.value
+
+  // Search filter
+  if (assignedRequestsSearch.value) {
+    const searchTerm = assignedRequestsSearch.value.toLowerCase()
+    filtered = filtered.filter(req =>
+      req.title?.toLowerCase().includes(searchTerm) ||
+      req.requester?.name?.toLowerCase().includes(searchTerm) ||
+      req.requester?.email?.toLowerCase().includes(searchTerm) ||
+      req.category?.name?.toLowerCase().includes(searchTerm) ||
+      req.id?.toString().includes(searchTerm)
+    )
+  }
+
+  // Status filter
+  if (assignedRequestsStatusFilter.value) {
+    filtered = filtered.filter(req => req.status === assignedRequestsStatusFilter.value)
+  }
+
+  // Visibility filter
+  if (assignedRequestsVisibilityFilter.value) {
+    if (assignedRequestsVisibilityFilter.value === 'public') {
+      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+    } else if (assignedRequestsVisibilityFilter.value === 'private') {
+      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    }
+  }
+
+  return filtered.filter(req => req.status !== 'CANCELLED')
+})
+
+// Pagination computed properties for My Requests
+const paginatedMyRequests = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filteredMyRequests.value.slice(start, end)
+})
+
+const totalMyPages = computed(() => {
+  return Math.ceil(filteredMyRequests.value.length / itemsPerPage.value)
+})
+
+// Pagination computed properties for Assigned Requests
+const paginatedAssignedRequests = computed(() => {
+  const start = (currentAssignedPage.value - 1) * assignedItemsPerPage.value
+  const end = start + assignedItemsPerPage.value
+  return filteredAssignedRequests.value.slice(start, end)
+})
+
+const totalAssignedPages = computed(() => {
+  return Math.ceil(filteredAssignedRequests.value.length / assignedItemsPerPage.value)
+})
+
+// Pagination methods
+function goToPage(page) {
+  currentPage.value = page
 }
 
-function goToTransactionHistory() {
-  // Chuyển hướng đến trang Transaction History
-  router.push('/transactions');
+function goToAssignedPage(page) {
+  currentAssignedPage.value = page
 }
 
-onMounted(() => {
-  reloadWallet();
-  loadPendingWithdrawals();
-});
+function nextPage() {
+  if (currentPage.value < totalMyPages.value) {
+    currentPage.value++
+  }
+}
+
+function prevPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
+}
+
+function nextAssignedPage() {
+  if (currentAssignedPage.value < totalAssignedPages.value) {
+    currentAssignedPage.value++
+  }
+}
+
+function prevAssignedPage() {
+  if (currentAssignedPage.value > 1) {
+    currentAssignedPage.value--
+  }
+}
+
+// Reset pagination when switching tabs
+function switchTab(tab) {
+  activeTab.value = tab
+  currentPage.value = 1
+  currentAssignedPage.value = 1
+}
+
+// Clear filter functions
+function clearMyRequestsFilters() {
+  myRequestsSearch.value = ''
+  myRequestsStatusFilter.value = ''
+  myRequestsVisibilityFilter.value = ''
+  currentPage.value = 1
+}
+
+function clearAssignedRequestsFilters() {
+  assignedRequestsSearch.value = ''
+  assignedRequestsStatusFilter.value = ''
+  assignedRequestsVisibilityFilter.value = ''
+  currentAssignedPage.value = 1
+}
+
+function fetchRequests() {
+  loading.value = true
+  error.value = null
+
+  // Fetch my requests
+  axios.get('/api/requests/myRequests')
+    .then(res => {
+      console.log('My requests data received:', res.data)
+      myRequests.value = res.data
+    })
+    .catch(err => {
+      console.error('Error fetching my requests:', err)
+    })
+
+  // Fetch assigned requests
+  axios.get('/api/requests/private')
+    .then(res => {
+      console.log('Assigned requests data received:', res.data)
+      assignedRequests.value = res.data
+    })
+    .catch(err => {
+      // If the error is "You have no request", treat it as empty state
+      if (err.response?.data?.message === 'You have no request') {
+        assignedRequests.value = []
+      } else {
+        console.error('Error fetching assigned requests:', err)
+      }
+    })
+    .finally(() => {
+      loading.value = false
+    })
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-'
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
+function formatDeadline(dateString) {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function onReview(req) {
+  selectedRequest.value = req
+  showReview.value = true
+}
+
+function onCancel(req) {
+  selectedRequest.value = req
+  showCancel.value = true
+}
+
+function canReview(req) {
+  // Tùy quyền, ví dụ: return req.status === 'pending' && userIsAdmin
+  return false
+}
+
+function onRequestReviewed() {
+  fetchRequests()
+  toast.add({
+    severity: 'success',
+    summary: 'Success',
+    detail: 'Request reviewed successfully',
+    life: 3000
+  })
+}
+
+function onRequestCancelled() {
+  fetchRequests()
+  toast.add({
+    severity: 'success',
+    summary: 'Success',
+    detail: 'Request cancelled successfully',
+    life: 3000
+  })
+}
+
+function getStatusClass(status) {
+  const classMap = {
+    'PENDING': 'status-pending',
+    'APPROVED': 'status-approved',
+    'REJECTED': 'status-rejected',
+    'COMPLETED': 'status-completed',
+    'CANCELLED': 'status-cancelled'
+  }
+  return classMap[status] || 'status-pending'
+}
+
+function formatStatus(status) {
+  const statusMap = {
+    'PENDING': 'Pending',
+    'APPROVED': 'Approved',
+    'REJECTED': 'Rejected',
+    'COMPLETED': 'Completed',
+    'CANCELLED': 'Cancelled'
+  }
+  return statusMap[status] || status
+}
+
+function getDeadlineClass(deadline) {
+  if (!deadline) return ''
+  const deadlineDate = new Date(deadline)
+  const now = new Date()
+  const daysUntilDeadline = Math.ceil((deadlineDate - now) / (1000 * 60 * 60 * 24))
+
+  if (daysUntilDeadline < 0) return 'deadline-overdue'
+  if (daysUntilDeadline <= 3) return 'deadline-urgent'
+  if (daysUntilDeadline <= 7) return 'deadline-warning'
+  return 'deadline-normal'
+}
+
+function formatAmount(amount) {
+  if (!amount) return '0.00'
+  return parseFloat(amount).toFixed(2)
+}
+
+async function acceptRequest(requestId) {
+  actionLoading.value = true
+  try {
+    await axios.post(`/api/requests/${requestId}/update`, {
+      status: 'APPROVED'
+    })
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Request accepted successfully',
+      life: 3000
+    })
+    fetchRequests()
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: err.response?.data?.message || 'Failed to accept request',
+      life: 3000
+    })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function rejectRequest(requestId) {
+  actionLoading.value = true
+  try {
+    await axios.post(`/api/requests/${requestId}/update`, {
+      status: 'REJECTED'
+    })
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Request rejected successfully',
+      life: 3000
+    })
+    fetchRequests()
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: err.response?.data?.message || 'Failed to reject request',
+      life: 3000
+    })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function completeRequest(requestId) {
+  actionLoading.value = true
+  try {
+    await axios.post(`/api/requests/${requestId}/update`, {
+      status: 'COMPLETED'
+    })
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Request marked as completed',
+      life: 3000
+    })
+    fetchRequests()
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: err.response?.data?.message || 'Failed to complete request',
+      life: 3000
+    })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+function isRequestPublic(isPublic) {
+  // Hỗ trợ cả số, string và boolean
+  return isPublic == 1 || isPublic === true;
+}
+
+function goToRequestDetail(requestId) {
+  router.push({ name: 'request-detail', params: { requestId } })
+}
+
+onMounted(fetchRequests)
 </script>
 
 <style scoped>
-.wallet-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 32px;
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  align-items: flex-start;
-}
-.wallet-left {
-  min-width: 320px;
-  max-width: 420px;
+.layout-wrapper {
   display: flex;
   flex-direction: column;
-}
-.wallet-right {
-  min-width: 320px;
-  max-width: 480px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-@media (max-width: 1100px) {
-  .wallet-layout { grid-template-columns: 1fr; gap: 18px; }
-  .wallet-left, .wallet-right { max-width: 100%; min-width: 0; }
-}
-.wallet-card, .wallet-finance-details, .latest-transaction-summary {
-  transition: box-shadow 0.18s, transform 0.18s;
-}
-.wallet-card:hover, .wallet-finance-details:hover, .latest-transaction-summary:hover {
-  box-shadow: 0 8px 32px rgba(37,99,235,0.13), 0 2px 8px rgba(0,0,0,0.07);
-  transform: translateY(-4px) scale(1.01);
-}
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.leading-6 {
-  line-height: 1.7;
-}
-.user-info-icon {
-  margin-right: 8px;
-  color: #2563eb;
-  font-size: 1.1rem;
-  vertical-align: middle;
-}
-.user-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #2563eb;
-  color: #fff;
-  font-size: 1.5rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(37,99,235,0.08);
-  overflow: hidden;
-}
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-.user-avatar-icon {
-  font-size: 2rem;
-  color: #fff;
-}
-/* Giữ lại các style cũ và nâng cấp khác */
-.wallet-balance {
-  font-size: 2.7rem;
-  font-weight: 800;
-  color: #10b981;
-  margin-bottom: 18px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.money-icon {
-  font-size: 2.1rem;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-.currency {
-  font-size: 1.2rem;
-  color: #10b981;
-  margin-left: 2px;
-  font-weight: 700;
-}
-.wallet-upgrade {
-  margin-top: 2.5rem;
-  margin-left: auto;
-  margin-right: auto;
-  box-shadow: 0 6px 32px rgba(37,99,235,0.10), 0 1.5px 6px rgba(0,0,0,0.04);
-  border-radius: 2rem;
-  transition: box-shadow 0.18s, transform 0.18s;
-  padding: 40px 36px 36px 36px;
-}
-.wallet-upgrade:hover {
-  box-shadow: 0 12px 40px rgba(37,99,235,0.16), 0 2px 8px rgba(0,0,0,0.06);
-  transform: translateY(-2px) scale(1.01);
-}
-.wallet-actions-upgrade {
-  display: flex;
-  gap: 16px;
-  margin: 18px 0 10px 0;
-  justify-content: flex-start;
-  flex-wrap: wrap; /* Cho phép các nút xuống dòng khi thiếu chỗ */
-  width: 100%; /* Đảm bảo container không bị tràn */
-}
-.wallet-btn {
-  padding: 8px 22px;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  background: #f1f5ff;
-  color: #2563eb;
-  box-shadow: 0 1px 4px rgba(37,99,235,0.07);
-  transition: background 0.18s, color 0.18s, transform 0.12s, opacity 0.18s;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 10px;
-  min-width: 0; /* Ngăn nút tràn ngoài khi co nhỏ */
-}
-.wallet-btn:hover {
-  background: #2563eb;
-  color: #fff;
-  transform: scale(1.04);
-  opacity: 0.8;
-}
-.wallet-btn.deposit { background: #e0f7ef; color: #10b981; }
-.wallet-btn.deposit:hover { background: #10b981; color: #fff; }
-.wallet-btn.withdraw { background: #fff7e0; color: #f59e0b; }
-.wallet-btn.withdraw:hover { background: #f59e0b; color: #fff; }
-.wallet-btn.history { background: #f1f5ff; color: #2563eb; }
-.wallet-btn.history:hover { background: #2563eb; color: #fff; }
-.wallet-btn.deposit .action-icon { color: #10b981; }
-.wallet-btn.withdraw .action-icon { color: #f59e0b; }
-.wallet-btn.history .action-icon { color: #2563eb; }
-.wallet-card {
-  max-width: 480px;
-  width: 100%;
-  margin: 0 auto;
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.09);
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.wallet-header {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 8px;
-}
-.wallet-icon {
-  font-size: 2.5rem;
-  color: #2563eb;
-  background: #f1f5ff;
-  border-radius: 50%;
-  width: 54px;
-  height: 54px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(37,99,235,0.08);
-}
-.wallet-header h1 {
-  font-size: 2.1rem;
-  font-weight: 800;
-  color: #2563eb;
-  margin: 0;
-}
-.wallet-id {
-  font-size: 0.95rem;
-  color: #888;
-  margin-top: 2px;
-}
-.balance-label {
-  font-size: 1.1rem;
-  color: #888;
-  margin-bottom: 2px;
-}
-.user-info-block {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 10px;
-}
-.user-status.active { color: #10b981; }
-.user-status.inactive { color: #e53e3e; }
-.loading {
-  color: #888;
-  text-align: center;
-}
-.error {
-  color: #e53e3e;
-  font-weight: 500;
-  text-align: center;
-}
-.wallet-finance-details {
-  margin: 18px 0 10px 0;
-  padding: 18px 18px 10px 18px;
-  background: #f8fafc;
-  border-radius: 14px;
-  box-shadow: 0 1px 6px rgba(37,99,235,0.04);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.finance-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 1.08rem;
-  font-weight: 500;
-  padding: 2px 0;
-}
-.finance-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #475569;
-}
-.finance-value {
-  font-weight: 700;
-}
-.finance-icon {
-  font-size: 1.15rem;
-  vertical-align: middle;
-}
-.finance-value.deposit, .finance-icon.deposit { color: #10b981; }
-.finance-value.withdraw, .finance-icon.withdraw { color: #ef4444; }
-.finance-value.pending, .finance-icon.pending { color: #f59e0b; }
-.finance-value.hold, .finance-icon.hold { color: #2563eb; }
-.latest-transaction-summary {
-  margin: 18px 0 10px 0;
-  padding: 16px 18px 10px 18px;
-  background: #f5f7fa;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(37,99,235,0.04);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.lts-title {
-  font-weight: 700;
-  color: #2563eb;
-  margin-bottom: 6px;
-  font-size: 1.08rem;
-}
-.lts-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 1.01rem;
-  padding: 1px 0;
-}
-.lts-label {
-  color: #475569;
-}
-.lts-value.deposit { color: #10b981; font-weight: 700; }
-.lts-value.withdraw { color: #ef4444; font-weight: 700; }
-.lts-desc {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 1.08rem;
-  margin-bottom: 6px;
-}
-.lts-desc-icon {
-  font-size: 1.5rem;
-}
-.lts-desc-text {
-  font-weight: 500;
-  color: #222;
-}
-.latest-transaction-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 0 18px 0;
-  color: #888;
-  background: #f8fafc;
-  border-radius: 12px;
-  min-height: 120px;
-}
-.lts-empty-icon {
-  font-size: 2.5rem;
-  margin-bottom: 8px;
-}
-.lts-empty-title {
-  font-size: 1.13rem;
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-.lts-empty-desc {
-  font-size: 1.01rem;
-  color: #888;
-}
-.wallet-finance-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin: 24px 0 16px 0;
-}
-@media (max-width: 700px) {
-  .wallet-finance-grid { grid-template-columns: 1fr; gap: 18px; }
-}
-.mini-stat-card {
-  background: #fff;
-  border-radius: 20px; /* rounded-xl */
-  box-shadow: 0 2px 12px rgba(37,99,235,0.07);
-  padding: 24px 18px 18px 18px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  transition: box-shadow 0.18s, transform 0.18s;
-  cursor: pointer;
-  outline: none;
-}
-.mini-stat-card:hover, .mini-stat-card:focus {
-  box-shadow: 0 8px 32px rgba(37,99,235,0.13), 0 2px 8px rgba(0,0,0,0.07);
-  transform: translateY(-2px) scale(1.01);
-  background: #f3f4f6;
-}
-.mini-stat-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.35rem;
-  margin-bottom: 2px;
-}
-.mini-stat-card.deposit .mini-stat-icon { background: #e0f7ef; color: #10b981; }
-.mini-stat-card.withdraw .mini-stat-icon { background: #fff7e0; color: #f59e0b; }
-.mini-stat-card.pending .mini-stat-icon { background: #fef9c3; color: #f59e0b; }
-.mini-stat-card.hold .mini-stat-icon { background: #e0e7ff; color: #2563eb; }
-.mini-stat-label {
-  font-size: 1.01rem;
-  color: #475569;
-  font-weight: 500;
-}
-.mini-stat-value {
-  font-size: 1.18rem;
-  font-weight: 700;
-  /* Mặc định màu xám, sẽ override bằng class */
-  color: #888;
-}
-.currency-positive { color: #10b981 !important; }
-.currency-zero { color: #888 !important; }
-.user-avatar-upgrade {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(37,99,235,0.10);
-}
-.avatar-img-upgrade {
-  border-radius: 12px;
-}
-.user-info-upgrade {
-  line-height: 1.8;
-  font-size: 1.08rem;
-  font-weight: 400;
-  gap: 10px;
-}
-.user-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
-  font-weight: 500;
-}
-.user-name-text {
-  font-weight: 700;
-  font-size: 1.13rem;
-  color: #222;
-}
-.user-status-badge {
-  margin-left: 10px;
-  font-size: 0.98rem;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 12px;
-  background: #f3f4f6;
-  display: flex;
-  align-items: center;
-}
-.user-status-badge.active { color: #10b981; background: #e0f7ef; }
-.user-status-badge.inactive { color: #ef4444; background: #ffe4e6; }
-.user-status-badge.pending { color: #f59e0b; background: #fef9c3; }
-.copy-icon {
-  margin-left: 6px;
-  color: #2563eb;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.15s;
-}
-.copy-icon:hover { opacity: 1; color: #1d4ed8; }
-.modal-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.18);
-  z-index: 3000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Đảm bảo dialog luôn ở giữa màn hình, phủ toàn trang */
-}
-.modal-content {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(37,99,235,0.13);
-  padding: 32px 28px 24px 28px;
-  min-width: 320px;
-  max-width: 90vw;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  align-items: stretch;
-  /* Loại bỏ margin tự động nếu có */
-  margin: 0;
-  /* Đảm bảo không bị lệch khi co nhỏ màn hình */
-  box-sizing: border-box;
-}
-.form-group { margin-bottom: 12px; }
-.form-group label { font-weight: 600; margin-bottom: 4px; display: block; }
-.form-group input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0e7ef; font-size: 1.08rem; }
-.modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
-.pending-withdrawals-section { margin-top: 24px; }
-.pending-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-.pending-table th, .pending-table td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
-.pending-table th { background: #f3f4f6; font-weight: 700; }
-.pending-table tr:last-child td { border-bottom: none; }
-.main-content-wrapper {
-  display: flex;
-  min-height: 80vh;
-  background: #f8f9fb;
+  min-height: 100vh;
 }
 .main-content {
-  flex: 1;
-  min-width: 0;
-  padding: 48px 0;
-  margin-left: 240px;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex: 1;
+  margin-left: 240px;
+  transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
 }
-@media (max-width: 900px) {
-  .main-content {
-    margin-left: 72px;
-  }
+
+.layout-wrapper.sidebar-collapsed .main-content {
+  margin-left: 72px;
 }
-.withdraw-modal {
-  min-width: 340px;
-  max-width: 98vw;
+.content {
+  flex: 1;
+  padding: 32px 20px;
+  background: #f6f8fa;
 }
-.form-group label {
-  font-weight: 600;
-  margin-bottom: 4px;
-  display: block;
-  color: #222;
+.my-requests-container {
+  max-width: 1200px;
+  margin: 0 auto;
 }
-.input-error {
-  color: #e53e3e;
-  font-size: 0.98rem;
-  margin-top: 4px;
-  font-weight: 500;
+.requests-header {
+  margin-bottom: 32px;
 }
-.btn {
-  padding: 8px 22px;
-  border-radius: 10px; /* rounded-md */
-  font-size: 1rem;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s, opacity 0.18s, border 0.18s;
-  margin-right: 8px;
-  outline: none;
-}
-.btn-primary {
-  background: #2563eb;
-  color: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(37,99,235,0.07);
-}
-.btn-primary:disabled {
-  background: #a5b4fc;
-  color: #fff;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-.btn-primary:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-.btn-primary:active:not(:disabled), .btn-primary:focus:not(:disabled) {
-  background: #2563eb;
-}
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-  filter: brightness(1.08);
-}
-.btn-primary:active:not(:disabled) {
-  background: #1e40af;
-}
-.spinner {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border: 2.5px solid #fff;
-  border-top: 2.5px solid #2563eb;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-.btn-secondary {
-  background: #fff;
-  color: #2563eb;
-  border: 2px solid #2563eb;
-  border-radius: 10px;
-}
-.btn-secondary:disabled {
-  background: #e5e7eb;
-  color: #a5b4fc;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-.btn-secondary:hover:not(:disabled) {
-  background: #f3f4f6;
-  color: #1d4ed8;
-  border-color: #1d4ed8;
-}
-.withdraw-info-tip {
-  background: #f3f4f6;
-  color: #2563eb;
-  font-size: 1.01rem;
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 14px;
+.requests-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
   display: flex;
   align-items: center;
-  gap: 28px;
-  font-weight: 500;
-  flex-wrap: wrap;
+  gap: 0.75rem;
 }
-.withdraw-info-tip > span, .withdraw-info-tip > b, .withdraw-info-tip > div {
-  white-space: nowrap;
+.emoji {
+  font-size: 2.5rem;
 }
-@media (max-width: 600px) {
-  .withdraw-info-tip {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
+.requests-desc {
+  font-size: 1.1rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.loading-container,
+.error-container,
+.empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-radius: 50%;
+  border-top-color: #3b82f6;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
-.amount-label-icon, .email-label-icon {
+
+.error-content,
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.error-icon,
+.empty-icon {
+  font-size: 3rem;
+  color: #ef4444;
+}
+
+.empty-icon {
+  color: #9ca3af;
+}
+
+.requests-table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.requests-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.requests-table th {
+  background: #f8fafc;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.requests-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.request-row:hover {
+  background: #f8fafc;
+}
+
+.request-title {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.deal-amount {
+  font-weight: 600;
+  color: #059669;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.status-badge.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge.status-cancelled {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.visibility-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.visibility-public {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.visibility-private {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.btn-small {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tabs-container {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 1rem;
+}
+
+.tab-button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  background: #f3f4f6;
+  color: #6b7280;
+  position: relative;
+}
+
+.tab-button:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.tab-button.active {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.tab-button .material-icons {
+  font-size: 18px;
+}
+
+.badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.25rem;
+}
+
+.assigned-requests-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+.request-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.request-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.request-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #e5e7eb;
+}
+
+.request-card.status-pending::before {
+  background: #f59e0b;
+}
+
+.request-card.status-approved::before {
+  background: #10b981;
+}
+
+.request-card.status-rejected::before {
+  background: #ef4444;
+}
+
+.request-card.status-completed::before {
+  background: #3b82f6;
+}
+
+.request-card.status-cancelled::before {
+  background: #6b7280;
+}
+
+.request-header {
+  margin-bottom: 1rem;
+}
+
+.request-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.request-title h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 1.25rem;
+  font-weight: 600;
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge.status-cancelled {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.request-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.requester,
+.category {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.request-content {
+  margin-bottom: 1.5rem;
+}
+
+.description {
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.request-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  color: #64748b;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.detail-value {
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.deadline-overdue {
+  color: #ef4444;
+}
+
+.deadline-urgent {
+  color: #f59e0b;
+}
+
+.deadline-warning {
+  color: #f97316;
+}
+
+.deadline-normal {
+  color: #10b981;
+}
+
+.request-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.pagination-controls button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pagination-controls button:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.pagination-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.page-info {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0 0.5rem;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.page-size-selector label {
+  font-weight: 500;
+}
+
+.page-size-select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: white;
+  color: #374151;
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  background: #f8fafc;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  flex-wrap: wrap;
+}
+
+.search-container {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem 1rem 0.5rem 2.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.filter-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  color: #374151;
+  min-width: 120px;
+  transition: border-color 0.2s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+@media (max-width: 768px) {
+  .tabs-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .tab-button {
+    justify-content: center;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .search-container {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .filter-select {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .assigned-requests-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .request-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .request-actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .pagination-controls {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .pagination-info {
+    order: 1;
+  }
+
+  .pagination-buttons {
+    order: 2;
+    justify-content: center;
+  }
+
+  .page-size-selector {
+    order: 3;
+    justify-content: center;
+  }
+}
+
+.btn-candidate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  transition: background 0.2s;
+  position: relative;
+  text-decoration: none;
+}
+.btn-candidate .pi-users {
+  font-size: 16px;
+}
+.btn-candidate .badge {
+  background: #f59e42;
+  color: #fff;
+  border-radius: 8px;
+  padding: 2px 7px;
+  font-size: 12px;
+  margin-left: 4px;
+  font-weight: 600;
+}
+.btn-candidate.disabled,
+.btn-candidate[disabled] {
+  background: #cbd5e1;
+  color: #64748b;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.btn-candidate:hover:not(.disabled) {
+  background: #1d4ed8;
+}
+.sort-icon {
+  margin-left: 6px;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+th:hover .sort-icon {
+  color: #1f2937;
+}
+.deadline-icon {
   margin-right: 4px;
   font-size: 1.1em;
   vertical-align: middle;
 }
-.fee-tooltip {
-  margin-left: 4px;
-  color: #f59e0b;
-  cursor: pointer;
-  font-size: 1.08em;
+.custom-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.92em;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+.approved-badge {
+  background: #d1fae5;
+  color: #15803d;
+}
+.pending-badge {
+  background: #fef9c3;
+  color: #b45309;
+}
+.public-badge {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.private-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+.table-row-hover:hover {
+  background: #f9fafb;
+}
+.deal-amount {
+  color: #16a34a !important;
+  font-weight: bold;
+}
+.deal-icon {
+  margin-right: 3px;
+  font-size: 1.1em;
   vertical-align: middle;
 }
-.modal-content.withdraw-modal {
-  background: #fff;
-  border-radius: 22px;
-  box-shadow: 0 12px 48px rgba(37,99,235,0.18), 0 2px 12px rgba(0,0,0,0.10);
-  padding: 56px 48px 40px 48px;
-  min-width: 420px;
-  max-width: 98vw;
-  width: 520px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  align-items: stretch;
-  margin: 0;
-  box-sizing: border-box;
-  position: relative;
-  animation: modal-pop 0.18s cubic-bezier(.4,1.4,.6,1) 1;
-}
-@media (max-width: 700px) {
-  .modal-content.withdraw-modal {
-    min-width: 0;
-    width: 98vw;
-    padding: 28px 4vw 24px 4vw;
-  }
-}
-@keyframes modal-pop {
-  0% { transform: scale(0.92) translateY(30px); opacity: 0; }
-  100% { transform: scale(1) translateY(0); opacity: 1; }
-}
-.withdraw-grid-layout {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 40px;
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  align-items: flex-start;
-}
-.withdraw-grid-left {
-  min-width: 320px;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-}
-.withdraw-grid-right {
-  min-width: 320px;
-  max-width: 600px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.withdraw-modal-static {
-  position: static !important;
-  box-shadow: 0 6px 32px rgba(37,99,235,0.10), 0 1.5px 6px rgba(0,0,0,0.04);
-  margin: 0;
-  min-width: 0;
-  width: 100%;
-  max-width: 480px;
-  border-radius: 22px;
-  animation: none;
-}
-@media (max-width: 1100px) {
-  .withdraw-grid-layout { grid-template-columns: 1fr; gap: 18px; }
-  .withdraw-grid-left, .withdraw-grid-right { max-width: 100%; min-width: 0; }
-}
-.withdraw-success-msg {
-  background: #e0f7ef;
-  color: #10b981;
-  border-radius: 8px;
-  padding: 10px 16px;
-  margin-bottom: 16px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1.05rem;
-}
-.pending-approval-tip {
-  color: #2563eb;
-  font-size: 0.98rem;
-  margin-bottom: 6px;
+.th-flex {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.withdraw-admin-tip {
-  color: #f59e0b;
-  font-size: 0.98rem;
-  font-style: italic;
-  margin-top: 2px;
-  display: inline-block;
-  cursor: help;
-}
-.pending-withdraw-tip {
-  color: #e53e3e;
-  font-size: 1.01rem;
-  margin-top: 10px;
-  font-weight: 500;
-  background: #fef2f2;
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-.input-invalid {
-  border: 1.5px solid #e53e3e !important;
-  background: #fef2f2;
-}
-.after-fee-tip {
-  color: #10b981;
-  font-size: 1.13rem;
-  margin-top: 12px;
-  font-weight: 700;
-  background: #e0f7ef;
-  border-radius: 8px;
-  padding: 8px 14px;
-  display: inline-block;
-}
-.pending-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 0 18px 0;
-  color: #888;
-  background: #f8fafc;
-  border-radius: 12px;
-  min-height: 100px;
-  margin-top: 8px;
-}
-.pending-empty-icon {
-  font-size: 2.2rem;
-  margin-bottom: 8px;
-}
-.pending-empty-title {
-  font-size: 1.13rem;
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-.pending-empty-desc {
-  font-size: 1.01rem;
-  color: #888;
-}
-.status-badge.completed {
-  background: #e6f9ed;
-  color: #16a34a;
-  border-radius: 8px;
-  padding: 2px 10px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.status-badge.rejected {
-  background: #ffeaea;
-  color: #ef4444;
-  border-radius: 8px;
-  padding: 2px 10px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.status-badge.pending {
-  background: #fff7e0;
-  color: #f59e0b;
-  border-radius: 8px;
-  padding: 2px 10px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.custom-withdraw-btn {
-  background: #fef9c3;
-  color: #b45309;
-  font-weight: 600;
-  transition: background 0.18s, color 0.18s;
-}
-.custom-withdraw-btn:hover {
-  background: #fde68a;
-  color: #a16207;
-}
-.custom-history-btn {
-  background: #dbeafe;
-  color: #2563eb;
-  font-weight: 600;
-  transition: background 0.18s, color 0.18s;
-}
-.custom-history-btn:hover {
-  background: #bfdbfe;
-  color: #1d4ed8;
-}
-.withdraw-fee-tip {
-  margin-top: 4px;
-  color: #b45309;
-  font-size: 0.98rem;
-  font-weight: 500;
-}
-.status-badge.hold {
-  background: #e0e7ff;
-  color: #6366f1;
-  border-radius: 8px;
-  padding: 2px 10px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.hold-tip {
-  font-size: 0.95rem;
-  color: #6366f1;
-  margin-top: 2px;
+  white-space: nowrap;
 }
 </style>

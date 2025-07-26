@@ -22,32 +22,32 @@
         <div class="cursor-pointer" @click="setSort('title')">
           Title
           <span v-if="sortKey === 'title'">{{
-            sortOrder === 1 ? '▲' : '▼'
-          }}</span>
+              sortOrder === 1 ? '▲' : '▼'
+            }}</span>
         </div>
         <div class="cursor-pointer" @click="setSort('project')">
           Project
           <span v-if="sortKey === 'project'">{{
-            sortOrder === 1 ? '▲' : '▼'
-          }}</span>
+              sortOrder === 1 ? '▲' : '▼'
+            }}</span>
         </div>
         <div class="cursor-pointer" @click="setSort('category')">
           Category
           <span v-if="sortKey === 'category'">{{
-            sortOrder === 1 ? '▲' : '▼'
-          }}</span>
+              sortOrder === 1 ? '▲' : '▼'
+            }}</span>
         </div>
         <div class="cursor-pointer" @click="setSort('dealAmount')">
           Amount
           <span v-if="sortKey === 'dealAmount'">{{
-            sortOrder === 1 ? '▲' : '▼'
-          }}</span>
+              sortOrder === 1 ? '▲' : '▼'
+            }}</span>
         </div>
         <div class="cursor-pointer" @click="setSort('deadline')">
           Deadline
           <span v-if="sortKey === 'deadline'">{{
-            sortOrder === 1 ? '▲' : '▼'
-          }}</span>
+              sortOrder === 1 ? '▲' : '▼'
+            }}</span>
         </div>
       </div>
 
@@ -79,6 +79,7 @@ export default {
       requests: [],
       sortKey: '',
       sortOrder: 1,
+      sidebarCollapsed: false,
     };
   },
   created() {

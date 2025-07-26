@@ -1,8 +1,8 @@
 <template>
-  <div class="layout-wrapper">
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <Navbar />
     <div class="main-content">
-      <Sidebar />
+      <Sidebar :collapsed="sidebarCollapsed" @update:collapsed="sidebarCollapsed = $event" />
       <div class="content">
         <div class="my-requests-container">
           <!-- Header -->
@@ -462,6 +462,7 @@ const showEdit = ref(false)
 const showReview = ref(false)
 const showCancel = ref(false)
 const selectedRequest = ref(null)
+const sidebarCollapsed = ref(false)
 const toast = useToast()
 const activeTab = ref('my-requests')
 const myRequests = ref([])
@@ -870,7 +871,12 @@ onMounted(fetchRequests)
 .main-content {
   display: flex;
   flex: 1;
-  margin-left: 15rem;
+  margin-left: 240px;
+  transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
+}
+
+.layout-wrapper.sidebar-collapsed .main-content {
+  margin-left: 72px;
 }
 .content {
   flex: 1;

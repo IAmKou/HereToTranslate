@@ -48,7 +48,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   getPaypalConnectUrl(@Req() req: { user: UserEntity }) {
     const clientId = process.env.PAYPAL_CLIENT_ID;
-    const redirectUri = encodeURIComponent(process.env.PAYPAL_REDIRECT_URI || 'http://localhost:3000/api/wallet/paypal/callback');
+    const redirectUri = encodeURIComponent(process.env.PAYPAL_REDIRECT_URI || '${import.meta.env.VITE_API_URL}/wallet/paypal/callback');
     const scope = encodeURIComponent('openid email');
     const state = encodeURIComponent(req.user.id.toString());
     const url = `https://www.sandbox.paypal.com/signin/authorize?client_id=${clientId}&response_type=code&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;

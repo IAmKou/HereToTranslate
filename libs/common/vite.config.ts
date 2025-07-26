@@ -7,7 +7,7 @@ export default defineConfig(() => ({
   cacheDir: '../../node_modules/.vite/apps/web',
   server: {
     port: 4200,
-    host: 'localhost',
+    host: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

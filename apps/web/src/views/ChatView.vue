@@ -81,7 +81,7 @@
               </button>
               <button
                 class="action-button delete"
-                @click.stop="deleteRoom(room)"
+                @click.stop="confirmDeleteRoom(room)"
                 :title="'Delete ' + room.name"
               >
                 🗑️
@@ -98,6 +98,34 @@
         </div>
       </div>
     </div>
+    <Transition name="fade">
+      <div
+        v-if="showRoomDeleteModal"
+        class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+      >
+        <div class="bg-white rounded-xl shadow-lg p-6 w-80">
+          <h3 class="text-lg font-semibold mb-4">Delete Room?</h3>
+          <p class="text-sm text-gray-600 mb-6">
+            Are you sure you want to delete
+            <strong>{{ roomToDelete?.name }}</strong>?
+          </p>
+          <div class="flex justify-end space-x-3">
+            <button
+              class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+              @click="cancelDeleteRoom"
+            >
+              Cancel
+            </button>
+            <button
+              class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+              @click="handleDeleteRoom"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- Main Chat Area -->
     <div class="chat-main">
@@ -178,10 +206,26 @@ const loadChatRooms = async () => {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     chatRooms.value = (res.data as ChatRoomInfo[]).map(normalizeRoomId);
+
+    // ✅ Fetch member list for each group room
+    for (const room of chatRooms.value) {
+      if (room.isGroupChat) {
+        try {
+          const pres = await axios.get(`/api/chat/rooms/${room._id}/participants`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          room.members = pres.data.participants;
+        } catch (err) {
+          console.warn(`Failed to load members for ${room._id}`);
+          room.members = [];
+        }
+      }
+    }
   } catch (err) {
     console.error('Failed to load chat rooms:', err);
   }
 };
+
 
 const openRoom = (room: ChatRoomInfo) => {
   const id = getRoomId(room);
@@ -244,18 +288,34 @@ const renameRoom = async (room: ChatRoomInfo) => {
     alert('Failed to rename room');
   }
 };
+// modal state
+const showRoomDeleteModal = ref(false);
+const roomToDelete = ref<ChatRoomInfo | null>(null);
 
-const deleteRoom = async (room: ChatRoomInfo) => {
-  if (!confirm(`Are you sure you want to delete "${room.name}"?`)) return;
+const confirmDeleteRoom = (room: ChatRoomInfo) => {
+  roomToDelete.value = room;
+  showRoomDeleteModal.value = true;
+};
 
+const cancelDeleteRoom = () => {
+  showRoomDeleteModal.value = false;
+  roomToDelete.value = null;
+};
+
+const handleDeleteRoom = async () => {
+  if (!roomToDelete.value) return;
   try {
-    await axios.delete(`/api/chat/rooms/${getRoomId(room)}`, {
+    await axios.delete(`/api/chat/rooms/${roomToDelete.value._id}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    chatRooms.value = chatRooms.value.filter(r => getRoomId(r) !== getRoomId(room));
-    if (selectedRoom.value && getRoomId(selectedRoom.value) === getRoomId(room)) {
+    chatRooms.value = chatRooms.value.filter(
+      (r) => getRoomId(r) !== getRoomId(roomToDelete.value!)
+    );
+    if (selectedRoom.value && getRoomId(selectedRoom.value) === getRoomId(roomToDelete.value)) {
       selectedRoom.value = null;
     }
+    showRoomDeleteModal.value = false;
+    roomToDelete.value = null;
   } catch (err) {
     alert('Failed to delete room');
   }
@@ -651,6 +711,14 @@ onMounted(async () => {
 
   .chat-main {
     width: 100%;
+  }
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: opacity 0.3s ease;
+  }
+  .fade-enter-from,
+  .fade-leave-to {
+    opacity: 0;
   }
 }
 </style>

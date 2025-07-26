@@ -109,7 +109,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
 import { useToast } from 'primevue/usetoast';
 
-const baseUrl = 'http://localhost:3000/api'
+const baseUrl = ''
 const email = ref('')
 const code = ref('')
 const newPassword = ref('')

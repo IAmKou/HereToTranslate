@@ -17,11 +17,14 @@ import { ChatMessageDocument } from '../db/mongo/schema/chat-message.schema';
   namespace: '/chat',
   path: '/api/chat/socket.io',
   cors: {
-    origin: process.env.NODE_ENV === 'production'
-      ? ['http://localhost:4200']
-      : true, // Allow all origins in development
+    origin: [
+      'http://localhost:4200',
+      'http://26.82.216.71:4200',
+    ],
     credentials: true,
+    methods: ['GET', 'POST'],
   },
+  transports: ['websocket', 'polling'],
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()

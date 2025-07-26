@@ -1,35 +1,35 @@
-  /// <reference types='vitest' />
-  import { defineConfig } from 'vite';
-  import vue from '@vitejs/plugin-vue';
+import { defineConfig, loadEnv } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import path from 'path';
 
-  export default defineConfig(() => ({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, path.resolve(__dirname, '../../.env'), '');
+
+  return {
     root: __dirname,
     cacheDir: '../../node_modules/.vite/apps/web',
     server: {
       port: 4200,
-      host: 'localhost',
+      host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: 'http://localhost:3000',
+          target: env.VITE_SERVER_URL,// ✅ use from root .env
           changeOrigin: true,
           secure: false,
+          ws: true,
         },
         '/socket.io': {
-          target: 'http://localhost:3000',
+          target: env.VITE_SERVER_URL,// ✅ use from root .env
           ws: true,
           changeOrigin: true,
         },
-      }
+      },
     },
     preview: {
       port: 4300,
       host: 'localhost',
     },
     plugins: [vue()],
-    // Uncomment this if you are using workers.
-    // worker: {
-    //  plugins: [ nxViteTsPaths() ],
-    // },
     build: {
       outDir: './dist',
       emptyOutDir: true,
@@ -38,15 +38,5 @@
         transformMixedEsModules: true,
       },
     },
-    test: {
-      watch: false,
-      globals: true,
-      environment: 'jsdom',
-      include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-      reporters: ['default'],
-      coverage: {
-        reportsDirectory: './test-output/vitest/coverage',
-        provider: 'v8' as const,
-      },
-    },
-  }));
+  };
+});

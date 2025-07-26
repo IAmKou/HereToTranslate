@@ -50,6 +50,8 @@ import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { BullModule } from '@nestjs/bull';
+import {AiChatService} from "#LocalProject/Managers/service/ai-manager.service";
+import {AiChatController} from "#LocalProject/Managers/controller/ai-chat.controller";
 
 
 @Global()
@@ -99,6 +101,7 @@ import { BullModule } from '@nestjs/bull';
     TaskManagerService,
     TaskGateway,
     ManifestService,
+    AiChatService,
   ],
   exports: [
     CategoryManagerService,
@@ -118,6 +121,7 @@ import { BullModule } from '@nestjs/bull';
     TranslationService,
     TaskManagerService,
     ManifestService,
+    AiChatService,
   ],
   controllers: [
     CategoryController,
@@ -134,7 +138,8 @@ import { BullModule } from '@nestjs/bull';
     PermissionsController,
     TranslationController,
     AdminTransactionController,
-    ChatController
+    ChatController,
+    AiChatController
   ]
 })
 export class ManagersModule {

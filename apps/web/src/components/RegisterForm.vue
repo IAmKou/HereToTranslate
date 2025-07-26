@@ -349,7 +349,7 @@ const submitForm = async () => {
     roleId: form.roleId,
   };
   try {
-    await axios.post('${import.meta.env.VITE_API_URL}/users/register', payload);
+    await axios.post((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/users/register', payload);
     message.value = 'Register sucess! You will be redirected to login page.';
     messageType.value = 'success';
     Object.assign(form, {

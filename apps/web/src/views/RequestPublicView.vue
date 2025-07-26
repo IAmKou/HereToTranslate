@@ -217,8 +217,8 @@ async function loadRequests() {
   error.value = null;
   try {
     const [reqRes, catRes] = await Promise.all([
-      axios.get('${import.meta.env.VITE_API_URL}/requests/all'),
-      axios.get('${import.meta.env.VITE_API_URL}/categories/all'),
+      axios.get((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/requests/all'),
+      axios.get((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/categories/all'),
     ]);
     categories.value = catRes.data;
     requests.value = reqRes.data.map((req) => {

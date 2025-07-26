@@ -33,7 +33,7 @@ const projectsError = ref<string | null>(null);
 const fetchUserData = async () => {
   try {
     isLoadingUser.value = true;
-    const { data } = await axiosInstance.get('http://localhost:3000/auth/me');
+    const { data } = await axiosInstance.get('/auth/me');
     user.value = data;
   } catch (error) {
     console.error('Error fetching user data:', error);

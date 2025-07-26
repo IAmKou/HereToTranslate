@@ -87,20 +87,20 @@ export default {
   },
   methods: {
     fetchRequests() {
-      axios.get('${import.meta.env.VITE_API_URL}/requests').then((res) => {
+      axios.get((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/requests').then((res) => {
         this.requests = res.data;
       });
     },
     handleReview(id, status) {
       axios
-        .patch('${import.meta.env.VITE_API_URL}/requests/review', { id, status })
+        .patch((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/requests/review', { id, status })
         .then(() => this.fetchRequests());
     },
     handleEdit(request) {
       const updated = prompt('Edit description:', request.description);
       if (updated !== null) {
         axios
-          .patch('${import.meta.env.VITE_API_URL}/requests', {
+          .patch((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/requests', {
             id: request.id,
             description: updated,
           })
@@ -109,13 +109,13 @@ export default {
     },
     handleView(id) {
       axios
-        .get(`${import.meta.env.VITE_API_URL}/requests/${id}`)
+        .get((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + `/requests/${id}`)
         .then((res) => alert(JSON.stringify(res.data, null, 2)));
     },
     handleCancel(id) {
       if (confirm('Are you sure you want to cancel this request?')) {
         axios
-          .delete(`${import.meta.env.VITE_API_URL}/requests/${id}`)
+          .delete((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + `/requests/${id}`)
           .then(() => this.fetchRequests());
       }
     },
@@ -172,10 +172,23 @@ export default {
   padding: 2rem;
   min-height: calc(100vh - 80px);
   background-color: #f9f9f9;
+  transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
 
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+/* If used within a layout with collapsed sidebar */
+.sidebar-collapsed .page-container {
+  margin-left: 72px;
+}
+
+@media (max-width: 900px) {
+  .page-container,
+  .sidebar-collapsed .page-container {
+    margin-left: 0;
+  }
 }
 
 .requests-panel {

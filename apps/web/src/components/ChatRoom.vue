@@ -126,13 +126,23 @@
             {{ group.date }}
           </div>
           <div
+            v-if="group.showTime"
+            class="time-separator"
+          >
+            {{ group.time }}
+          </div>
+
+          <div
             v-for="message in group.messages"
             :key="message._id"
             class="message-wrapper"
             :class="{ mine: message.senderId === currentUserId }"
           >
             <!-- Reply reference -->
-            <div v-if="message.replyTo" class="reply-preview-bubble">
+            <div
+              v-if="message.replyTo"
+              class="reply-preview-bubble"
+            >
               ↪ {{ message.replyTo.senderUsername }}: "{{ message.replyTo.message }}"
             </div>
 
@@ -157,9 +167,6 @@
                   {{ formatMessageTime(message.createdAt) }}
                 </span>
               </div>
-
-
-
 
               <!-- Edit mode -->
               <div
@@ -212,15 +219,63 @@
                   v-if="hoveredMessageId === message._id && editingMessageId !== message._id"
                   class="message-actions"
                 >
-                  <button title="Reply" @click="handleReply(message)">↩️</button>
-                  <button v-if="message.senderId === currentUserId" title="Edit" @click="startEdit(message)">✏️</button>
-                  <button v-if="message.senderId === currentUserId" title="Delete" @click="handleDelete(message)">🗑️</button>
+                  <button
+                    title="Reply"
+                    @click="handleReply(message)"
+                  >
+                    ↩️
+                  </button>
+                  <button
+                    v-if="message.senderId === currentUserId"
+                    title="Edit"
+                    @click="startEdit(message)"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    v-if="message.senderId === currentUserId"
+                    title="Delete"
+                    @click="confirmDelete(message)"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         </template>
       </div>
+      <!-- ✅ Place this near the bottom of your template, OUTSIDE v-for -->
+      <Transition name="fade">
+        <div
+          v-if="showDeleteModal"
+          class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+        >
+          <div class="bg-white rounded-xl shadow-lg p-6 w-80">
+            <h3 class="text-lg font-semibold mb-4">
+              Delete Message?
+            </h3>
+            <p class="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete this message?
+            </p>
+            <div class="flex justify-end space-x-3">
+              <button
+                class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+                @click="cancelDelete"
+              >
+                Cancel
+              </button>
+              <button
+                class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+                @click="performDelete"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
 
       <!-- Participants panel -->
       <aside
@@ -404,14 +459,6 @@ interface ChatMessage {
   }
 }
 
-interface MessageGroup {
-  senderId: number
-  senderUsername: string
-  messages: ChatMessage[]
-  showDate: boolean
-  date: string
-}
-
 interface Participant {
   id: number
   username: string
@@ -484,52 +531,65 @@ const displayNotification = (message: string, type: 'success' | 'error' | 'info'
 }
 
 // Group messages by sender & date
-const messageGroups = computed<MessageGroup[]>(() => {
-  const groups: MessageGroup[] = []
-  let currentGroup: MessageGroup | null = null
+const messageGroups = computed(() => {
+  const groups: {
+    showDate?: boolean;
+    date?: string;
+    showTime?: boolean;
+    time?: string;
+    messages: ChatMessage[];
+  }[] = []
+
+  let currentGroup: any = null
+  let lastMessageTime: dayjs.Dayjs | null = null
 
   messages.value.forEach((m, i) => {
+    const mTime = dayjs(m.createdAt)
     const prev = messages.value[i - 1]
-    const showDate =
-      !prev || !dayjs(m.createdAt).isSame(dayjs(prev.createdAt), 'day')
 
-    if (
+    const newDay = !prev || !dayjs(m.createdAt).isSame(prev.createdAt, 'day')
+    const gapMinutes = lastMessageTime ? mTime.diff(lastMessageTime, 'minute') : Infinity
+    const needNewGroup =
       !prev ||
-      prev.senderId !== m.senderId ||
-      dayjs(m.createdAt).diff(dayjs(prev.createdAt), 'minute') > 5 ||
-      showDate
-    ) {
+      newDay ||
+      m.senderId !== prev.senderId ||
+      mTime.diff(dayjs(prev.createdAt), 'minute') > 5
+
+    // ✅ show time separator if gap > 10 minutes and not a new day
+    const showTime = gapMinutes > 10 && !newDay && i !== 0
+    if (showTime) {
+      groups.push({ messages: [], showTime: true, time: mTime.format('HH:mm') })
+    }
+
+    if (needNewGroup) {
       currentGroup = {
-        senderId: m.senderId,
-        senderUsername: m.senderUsername || 'Unknown',
         messages: [m],
-        showDate,
-        date: dayjs(m.createdAt).format('MMMM D, YYYY')
+        showDate: newDay,
+        date: mTime.format('MMMM D, YYYY')
       }
       groups.push(currentGroup)
     } else {
       currentGroup?.messages.push(m)
     }
+
+    lastMessageTime = mTime
   })
 
   return groups
 })
+
 
 // ======================== Socket Handling ======================
 const connectSocket = () => {
   if (socket.value?.connected) return
   isConnecting.value = true
   error.value = null
+  const baseUrl = import.meta.env.VITE_SERVER_URL || `${location.protocol}//${location.hostname}:3000`
 
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = location.hostname
-  const port = import.meta.env.PROD ? location.port : '3000'
-  const wsUrl = `${protocol}//${host}${port ? `:${port}` : ''}`
-
-  socket.value = io(wsUrl + '/chat', {
+  socket.value = io(baseUrl + '/chat', {
     withCredentials: true,
     path: '/api/chat/socket.io',
-    transports: ['websocket']
+    transports: ['websocket', 'polling'], // ✅ allow fallback
   })
 
   socket.value.on('connect', () => {
@@ -560,7 +620,8 @@ const connectSocket = () => {
     isConnecting.value = true
   })
 
-  socket.value.on('connect_error', () => {
+  socket.value.on('connect_error', (err) => {
+    console.error('❌ Socket connect error:', err)
     error.value = 'Connection error'
   })
 }
@@ -607,22 +668,35 @@ const confirmEdit = async (m: ChatMessage) => {
   cancelEdit()
 }
 
-const handleDelete = async (m: ChatMessage) => {
-  if (!confirm('Delete this message?')) return
-  try {
-    await axios.delete(`/api/chat/messages/${m._id}`)
-    messages.value = messages.value.filter(x => x._id !== m._id)
-    displayNotification('Message deleted', 'success')
-  } catch {
-    displayNotification('Delete failed', 'error')
-  }
+// State for delete confirmation modal
+const showDeleteModal = ref(false)
+const messageToDelete = ref<ChatMessage | null>(null)
+
+const confirmDelete = (message: ChatMessage) => {
+  messageToDelete.value = message
+  showDeleteModal.value = true
 }
+
+const cancelDelete = () => {
+  showDeleteModal.value = false
+  messageToDelete.value = null
+}
+
+const performDelete = () => {
+  if (!messageToDelete.value || !socket.value) return;
+  socket.value.emit('delete_message', {
+    messageId: messageToDelete.value._id,
+    roomId: props.roomId
+  });
+  showDeleteModal.value = false;
+  messageToDelete.value = null;
+}
+
 
 const handleReply = (m: ChatMessage) => {
   replyingTo.value = m
 }
 
-// ======================== File Upload ==========================
 const handleFileUpload = async (e: Event) => {
   const input = e.target as HTMLInputElement
   if (!input.files?.length) return
@@ -646,7 +720,7 @@ const handleFileUpload = async (e: Event) => {
       roomId: props.roomId,
       senderId: props.currentUserId,
       senderUsername: props.currentUsername,
-      message: '📎',
+      message: '',
       fileUrl: res.data.url,
       fileName: file.name
     })
@@ -1075,28 +1149,32 @@ onUnmounted(() => {
 
     .message-actions {
       display: flex;
-      gap: 4px;
       position: absolute;
-      top: -28px;
+      top: -30px;
       right: 0;
-      background: rgba(255, 255, 255, 0.95);
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      padding: 2px 4px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s;
+      display: flex;
+      gap: 4px;
+      background: white;
+      padding: 4px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      z-index: 1;
 
       button {
-        border: none;
         background: none;
-        cursor: pointer;
-        padding: 2px 6px;
-        border-radius: 4px;
+        border: none;
+        padding: 4px 8px;
         font-size: 0.85rem;
+        cursor: pointer;
+        color: #495057;
+        border-radius: 4px;
 
         &:hover {
           background: #f3f4f6;
+        }
+        &.delete:hover {
+          background: #ffe3e3;
+          color: #e03131;
         }
       }
     }
@@ -1394,5 +1472,38 @@ onUnmounted(() => {
     width: 100% !important;
   }
 }
+
+.time-separator {
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.8rem;
+  margin: 8px 0;
+  position: relative;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: #e5e7eb;
+  }
+
+  &::before {
+    left: 0;
+  }
+
+  &::after {
+    right: 0;
+  }
+}
+.message-image {
+  max-width: 300px;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 </style>
 

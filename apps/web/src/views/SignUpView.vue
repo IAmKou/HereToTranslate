@@ -64,7 +64,7 @@ export default defineComponent({
           phone: form.phone.trim(),
         };
 
-        const res = await axios.post('http://localhost:3000/api/auth/register', payload);
+        const res = await axios.post('${import.meta.env.VITE_API_URL}/auth/register', payload);
         alert(res.data.message || 'Sign-up successful!');
         router.push('/userhome')
       } catch (err: any) {

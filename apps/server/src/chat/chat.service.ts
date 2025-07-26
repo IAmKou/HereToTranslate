@@ -25,16 +25,17 @@ export class ChatService {
     private readonly userService: UserManagerService
   ) {}
 
-  async createMessage(data: CreateMessageDto): Promise<ChatMessageDocument> {
+  async createMessage(data: CreateMessageDto & { fileUrl?: string; fileName?: string }): Promise<ChatMessageDocument> {
     const msg = new this.chatMessageModel({
       roomId: new Types.ObjectId(data.roomId),
       senderId: data.senderId,
       message: data.message,
-      replyTo: data.replyToId ? new Types.ObjectId(data.replyToId) : null, // ✅
+      fileUrl: data.fileUrl,
+      fileName: data.fileName,
+      replyTo: data.replyToId ? new Types.ObjectId(data.replyToId) : null,
     });
     return msg.save();
   }
-
   async getMessages(roomId: Types.ObjectId): Promise<any[]> {
     const messages = await this.chatMessageModel
       .find({ roomId })
@@ -58,6 +59,8 @@ export class ChatService {
       senderUsername: userMap.get(msg.senderId) || 'Unknown',
       message: msg.message,
       isEdited: msg.isEdited ?? false,
+      fileUrl: msg.fileUrl || null,
+      fileName: msg.fileName || null,
       createdAt: msg.createdAt
         ? new Date(msg.createdAt).toISOString()
         : null,
@@ -72,6 +75,21 @@ export class ChatService {
   async renameRoom(id: string, name: string) {
     return this.chatRoomModel.findByIdAndUpdate(id, { name }, { new: true });
   }
+
+  async createGroupRoom(name: string, creatorId: number, participants: number[]) {
+    if (!participants.includes(creatorId)) participants.push(creatorId);
+
+    const createdRoom = await this.chatRoomModel.create({
+      name,
+      participants,
+      isGroupChat: true,
+      createdBy: creatorId,
+    });
+
+    const room = await this.chatRoomModel.findById(createdRoom._id).lean();
+    return room;
+  }
+
 
   async deleteRoom(id: string) {
     return this.chatRoomModel.findByIdAndDelete(id);

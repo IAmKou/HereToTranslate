@@ -8,6 +8,8 @@ export class CreateMessageDto {
 
   @IsString()
   @IsNotEmpty()
-  message: string;
+  message?: string;
   replyToId?: string;
+  fileUrl?: string;         // thêm
+  fileName?: string;        // thêm
 }

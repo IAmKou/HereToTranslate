@@ -19,4 +19,10 @@ export class TaskGateway {
       status: task.status,
     });
   }
+
+  emitTaskDelete(taskId: bigint) {
+    this.server.emit('task-deleted', {
+      id: taskId,
+    });
+  }
 }

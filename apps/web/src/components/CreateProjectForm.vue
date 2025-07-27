@@ -230,6 +230,55 @@
             </div>
           </div>
 
+          <!-- Target Languages -->
+          <div class="form-group">
+            <label for="targetLanguages">
+              Target Languages
+              <span class="required-mark">*</span>
+            </label>
+            <Multiselect
+              v-model="form.targetLanguages"
+              :options="SUPPORTED_LANGUAGES"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              :preserve-search="true"
+              placeholder="Select target languages..."
+              :taggable="false"
+              class="multiselect-custom"
+              label="name"
+              track-by="code"
+              @select="validateTargetLanguages"
+              @remove="validateTargetLanguages"
+            >
+              <template #option="props">
+                <div class="language-option">
+                  <span class="language-name">{{ props.option.name }}</span>
+                  <span class="language-native">({{ props.option.nativeName }})</span>
+                </div>
+              </template>
+              <template #tag="props">
+                <span class="multiselect__tag">
+                  <span>{{ props.option.name }}</span>
+                  <i
+                    aria-hidden="true"
+                    tabindex="1"
+                    class="multiselect__tag-icon"
+                    @click="props.remove(props.option)"
+                  ></i>
+                </span>
+              </template>
+            </Multiselect>
+            <div class="input-info">
+              <span v-if="errors.targetLanguages" class="error-message">{{
+                  errors.targetLanguages
+                }}</span>
+              <span v-else class="help-text"
+              >Select one or more languages you want your content to be translated to</span
+              >
+            </div>
+          </div>
+
           <!-- File Upload -->
           <!-- ĐÃ XÓA: Toàn bộ khối <div class="form-group"> ... </div> cho phần upload file -->
         </div>
@@ -374,6 +423,7 @@ import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import InputSwitch from 'primevue/inputswitch';
 import Multiselect from 'vue-multiselect';
+import { SUPPORTED_LANGUAGES, type Language } from '../utils/languages';
 
 interface Category {
   id: string;
@@ -392,6 +442,7 @@ interface CreateProjectData {
   isPublic?: boolean;
   tags?: Tag[];
   categoryId: string;
+  targetLanguages?: Language[];
 }
 
 interface FormErrors {
@@ -399,6 +450,7 @@ interface FormErrors {
   description?: string;
   categoryId?: string;
   tags?: string;
+  targetLanguages?: string;
 }
 
 const router = useRouter();
@@ -409,6 +461,7 @@ const form = ref<CreateProjectData>({
   categoryId: '',
   tags: [],
   isPublic: false,
+  targetLanguages: [],
 });
 
 const errors = ref<FormErrors>({});
@@ -490,6 +543,31 @@ const validateTags = () => {
   return true;
 };
 
+const validateTargetLanguages = () => {
+  if (!form.value.targetLanguages || form.value.targetLanguages.length === 0) {
+    errors.value.targetLanguages = 'Please select at least one target language';
+    return false;
+  }
+
+  if (form.value.targetLanguages.length > 5) {
+    errors.value.targetLanguages = 'You can select up to 5 target languages';
+    return false;
+  }
+
+  // Check if all selected language codes exist in supported languages
+  const invalidLanguages = form.value.targetLanguages.filter(lang =>
+    !SUPPORTED_LANGUAGES.some(supportedLang => supportedLang.code === lang.code)
+  );
+
+  if (invalidLanguages.length > 0) {
+    errors.value.targetLanguages = 'Please select valid languages only';
+    return false;
+  }
+
+  errors.value.targetLanguages = undefined;
+  return true;
+};
+
 // ĐÃ XÓA: Toàn bộ biến, ref, method, validation, computed liên quan đến file upload trong <script setup> (uploadedFiles, fileInput, isDragOver, fileError, triggerFileInput, handleFileDrop, handleFileSelect, removeFile, formatFileSize, validate file, ...)
 
 // Computed property to check if form is valid
@@ -498,9 +576,11 @@ const isFormValid = computed(() => {
     form.value.name.trim().length >= 3 &&
     form.value.name.trim().length <= 50 &&
     form.value.categoryId &&
+    form.value.targetLanguages && form.value.targetLanguages.length > 0 &&
     !errors.value.name &&
     !errors.value.description &&
     !errors.value.categoryId &&
+    !errors.value.targetLanguages &&
     (form.value.tags || []).length <= 10 &&
     !nameExists.value
   );
@@ -605,7 +685,7 @@ const handleSubmit = async () => {
   }
 
   // Validate form before submission
-  if (!validateName() || !validateDescription() || !validateCategory() || !validateTags()) {
+  if (!validateName() || !validateDescription() || !validateCategory() || !validateTags() || !validateTargetLanguages()) {
     return;
   }
 
@@ -626,6 +706,7 @@ const handleSubmit = async () => {
       tags: form.value.tags ? form.value.tags.map((tag: Tag) => tag.name) : [],
       isPrivate: !form.value.isPublic,
       categoryId: String(form.value.categoryId),
+      targetLanguages: form.value.targetLanguages ? form.value.targetLanguages.map((lang: Language) => lang.code) : [],
     };
 
     const result = await apiCall('/projects/create', {
@@ -1410,6 +1491,49 @@ textarea.form-control {
 .success-card p {
   color: #64748b;
   font-size: 1.1rem;
+}
+
+/* Language Selection Styles */
+.language-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.language-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.language-native {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.multiselect__tag {
+  background: #6366f1 !important;
+  color: white !important;
+  border-radius: 6px !important;
+  padding: 0.25rem 0.5rem !important;
+  margin: 0.125rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+}
+
+.multiselect__tag-icon {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-radius: 50% !important;
+  width: 16px !important;
+  height: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+}
+
+.multiselect__tag-icon:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
 }
 </style>
 

@@ -42,6 +42,12 @@ export class CreateProjectDto implements ICreateProjectDto {
   @IsNotEmpty()
   @IsNumberString()
   categoryId: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MinLength(2, { each: true })
+  targetLanguages?: string[];
 }
 
 export class UpdateProjectMetadataDto implements IUpdateProjectDto {

@@ -326,166 +326,196 @@
                   Tasks
                 </button>
               </div>
-              <transition name="fade-tab" mode="out-in">
-
-                <ProjectMemberTab
-                  v-if="activeTab === 'members'"
-                  :project="project"
-                  :members="members"
-                  :current-user="currentUser"
-                />
-                <ProjectRoleTab
-                  v-else-if="activeTab === 'roles'"
-                  :project="project"
-                />
-                <ProjectGroupTab
-                  v-else-if="activeTab === 'groups'"
-                  :project="project"
-                  :groups="groups"
-                  :groups-loading="groupsLoading"
-                  :groups-error="groupsError"
-                  :members="members"
-                  @create-group="handleCreateGroup"
-                  @edit-group="handleEditGroup"
-                  @delete-group="handleDeleteGroup"
-                  @refresh-groups="loadGroups"
-                />
-                <ProjectDisscusionTab
-                  v-else-if="activeTab === 'discussions'"
-                  :project-id="Number(project.id)"
-                  :can-create-discussion="canCreateDiscussion"
-                  :can-manage-discussions="canManageDiscussions"
-                  :project="project"
-                  :members="members"
-                  :current-user="currentUser"
-                />
-                <ProjectFileTab
-                  v-else-if="activeTab === 'files'"
-                  :project-id="project.id"
-                  :branch-id="selectedBranchId"
-                  :project-files="projectFiles"
-                  :files-loading="filesLoading"
-                  :files-error="filesError || ''"
-                  :is-image="isImage"
-                  :is-p-d-f="isPDF"
-                  :download-file="downloadFile"
-                  :load-files="loadFiles"
-                  :project="project"
-                  :members="members"
-                  :current-user="currentUser"
-                  @fileReady="handleFileReady"
-                  key="files"
-                />
-                <ProjectTranslationTab
-                  v-else-if="activeTab === 'translation'"
-                  ref="translationTabRef"
-                  :project-id="project.id"
-                  :branch-id="selectedBranchId"
-                  :project="project"
-                  :members="members"
-                  :current-user="currentUser"
-                  key="translation"
-                />
-                <ProjectCommitTab
-                  v-else-if="activeTab === 'commits'"
-                  :project-id="project.id"
-                  :branch-id="selectedBranchId"
-                  :project="project"
-                  :members="members"
-                  :current-user="currentUser"
-                  key="commits"
-                />
-                <ProjectTaskTab
-                  v-else-if="activeTab === 'task'"
-                  :tasks="tasks"
-                  :loading="tasksLoading"
-                  :error="tasksError"
-                  :on-reload="loadTasks"
-                  custom-title="Tasks"
-                />
-
-                <!-- Tab Description giữ nguyên như cũ -->
-                <div v-else-if="activeTab === 'description'" key="description">
-                  <!-- Project Description Section -->
-                  <div class="project-section description-section">
-                    <div class="section-header">
-                      <h2 class="section-title">
-                        <span class="title-icon">📝</span>
-                        Description
-                      </h2>
-                      <button
-                        v-if="canEditDescription && !editingDescription"
-                        class="edit-desc-btn"
-                        @click="startEditDescription"
+              <!-- Bỏ transition, render trực tiếp tab con -->
+              <ProjectMemberTab
+                v-if="activeTab === 'members'"
+                :project="project"
+                :members="members"
+                :current-user="currentUser"
+              />
+              <ProjectRoleTab
+                v-else-if="activeTab === 'roles'"
+                :project="project"
+              />
+              <ProjectGroupTab
+                v-else-if="activeTab === 'groups'"
+                :project="project"
+                :groups="groups"
+                :groups-loading="groupsLoading"
+                :groups-error="groupsError"
+                :members="members"
+                @create-group="handleCreateGroup"
+                @edit-group="handleEditGroup"
+                @delete-group="handleDeleteGroup"
+                @refresh-groups="loadGroups"
+              />
+              <ProjectDisscusionTab
+                v-else-if="activeTab === 'discussions'"
+                :project-id="Number(project.id)"
+                :can-create-discussion="canCreateDiscussion"
+                :can-manage-discussions="canManageDiscussions"
+                :project="project"
+                :members="members"
+                :current-user="currentUser"
+              />
+              <ProjectFileTab
+                v-else-if="activeTab === 'files'"
+                :project-id="project.id"
+                :branch-id="selectedBranchId"
+                :project-files="projectFiles"
+                :files-loading="filesLoading"
+                :files-error="filesError || ''"
+                :is-image="isImage"
+                :is-p-d-f="isPDF"
+                :download-file="downloadFile"
+                :load-files="loadFiles"
+                :project="project"
+                :members="members"
+                :current-user="currentUser"
+                @fileReady="handleFileReady"
+                key="files"
+              />
+              <ProjectTranslationTab
+                v-else-if="activeTab === 'translation'"
+                ref="translationTabRef"
+                :project-id="project.id"
+                :branch-id="selectedBranchId"
+                :project="project"
+                :members="members"
+                :current-user="currentUser"
+                key="translation"
+              />
+              <ProjectCommitTab
+                v-else-if="activeTab === 'commits'"
+                :project-id="project.id"
+                :branch-id="selectedBranchId"
+                :project="project"
+                :members="members"
+                :current-user="currentUser"
+                key="commits"
+              />
+              <ProjectTaskTab
+                v-else-if="activeTab === 'task'"
+                ref="taskTabRef"
+                :project-id="project.id"
+                :branch-id="selectedBranchId"
+                :project-members="members"
+                :project-groups="groups"
+                :project="project"
+                custom-title="Tasks"
+                key="task"
+              />
+              <div v-else-if="activeTab === 'description'" key="description">
+                <!-- Project Description Section giữ nguyên như cũ -->
+                <div class="project-section description-section">
+                  <div class="section-header">
+                    <h2 class="section-title">
+                      <span class="title-icon">📝</span>
+                      Description
+                    </h2>
+                    <button
+                      v-if="canEditDescription && !editingDescription"
+                      class="edit-desc-btn"
+                      @click="startEditDescription"
+                    >
+                      <span class="icon">✏️</span>
+                    </button>
+                  </div>
+                  <div class="description-content improved-desc-box">
+                    <template v-if="editingDescription">
+                      <textarea
+                        v-model="editedDescription"
+                        :maxlength="maxDescriptionLength"
+                        class="desc-textarea"
+                        rows="3"
+                        @input="updateCharCount"
+                      />
+                      <div
+                        :class="{ 'over-limit': descriptionOverLimit }"
+                        class="desc-char-count"
                       >
-                        <span class="icon">✏️</span>
-                      </button>
-                    </div>
-                    <div class="description-content improved-desc-box">
-                      <template v-if="editingDescription">
-                        <textarea
-                          v-model="editedDescription"
-                          :maxlength="maxDescriptionLength"
-                          class="desc-textarea"
-                          rows="3"
-                          @input="updateCharCount"
-                        />
-                        <div
-                          :class="{ 'over-limit': descriptionOverLimit }"
-                          class="desc-char-count"
+                        {{ descriptionCharCount }}/{{ maxDescriptionLength }}
+                        characters
+                      </div>
+                      <div class="desc-edit-actions">
+                        <button
+                          :disabled="descriptionOverLimit"
+                          class="btn btn-primary btn-sm"
+                          @click="saveDescription"
                         >
-                          {{ descriptionCharCount }}/{{ maxDescriptionLength }}
-                          characters
-                        </div>
-                        <div class="desc-edit-actions">
-                          <button
-                            :disabled="descriptionOverLimit"
-                            class="btn btn-primary btn-sm"
-                            @click="saveDescription"
-                          >
-                            Save
-                          </button>
-                          <button
-                            class="btn btn-secondary btn-sm"
-                            @click="cancelEditDescription"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </template>
-                      <template v-else>
-                        <div
-                          v-if="project.description"
-                          class="description desc-plain"
+                          Save
+                        </button>
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          @click="cancelEditDescription"
                         >
-                          <span v-html="project.description"></span>
-                          <button
-                            v-if="canEditDescription"
-                            class="edit-desc-btn"
-                            title="Edit description"
-                            @click="startEditDescription"
-                          >
-                            <span class="icon">✏️</span>
-                          </button>
-                        </div>
-                        <div v-else class="no-description">
-                          <span class="no-content-icon">📄</span>
-                          <p>No description provided for this project.</p>
-                          <button
-                            v-if="canEditDescription"
-                            class="edit-desc-btn"
-                            title="Edit description"
-                            @click="startEditDescription"
-                          >
-                            <span class="icon">✏️</span>
-                          </button>
-                        </div>
-                      </template>
-                    </div>
+                          Cancel
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div
+                        v-if="project.description"
+                        class="description desc-plain"
+                      >
+                        <span v-html="project.description"></span>
+                        <button
+                          v-if="canEditDescription"
+                          class="edit-desc-btn"
+                          title="Edit description"
+                          @click="startEditDescription"
+                        >
+                          <span class="icon">✏️</span>
+                        </button>
+                      </div>
+                      <div v-else class="no-description">
+                        <span class="no-content-icon">📄</span>
+                        <p>No description provided for this project.</p>
+                        <button
+                          v-if="canEditDescription"
+                          class="edit-desc-btn"
+                          title="Edit description"
+                          @click="startEditDescription"
+                        >
+                          <span class="icon">✏️</span>
+                        </button>
+                      </div>
+                    </template>
                   </div>
                 </div>
 
-              </transition>
+                <!-- Target Languages Section -->
+                <div v-if="formattedTargetLanguages.length > 0" class="project-section target-languages-section">
+                  <div class="section-header">
+                    <h2 class="section-title">
+                      <span class="title-icon">🌍</span>
+                      Target Languages
+                    </h2>
+                  </div>
+                  <div class="target-languages-content">
+                    <div class="languages-grid">
+                      <div
+                        v-for="language in formattedTargetLanguages"
+                        :key="language.code"
+                        class="language-badge"
+                      >
+                        <span class="language-flag">🌐</span>
+                        <div class="language-info">
+                          <span class="language-name">{{ language.name }}</span>
+                          <span class="language-native">{{ language.nativeName }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="target-languages-note">
+                      <span class="note-icon">💡</span>
+                      <span class="note-text">
+                        This project will be translated into {{ formattedTargetLanguages.length }}
+                        {{ formattedTargetLanguages.length === 1 ? 'language' : 'languages' }}.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -688,6 +718,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axiosInstance from '../api';
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
+import { SUPPORTED_LANGUAGES, getLanguageByCode, type Language } from '../utils/languages';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
@@ -715,6 +746,7 @@ interface Project {
   description?: string;
   isPrivate: boolean;
   createdAt: string;
+  targetLanguages?: string[];
   createdBy: {
     id: string;
     username: string;
@@ -821,9 +853,14 @@ const projectFiles = ref<ProjectFile[]>([]);
 const filesLoading = ref(false);
 const filesError = ref<string | null>(null);
 
+
+
 // Dropdown states
 const activeRoleDropdown = ref<string | null>(null);
 const activeGroupDropdown = ref<string | null>(null);
+
+// Tab refs
+const taskTabRef = ref<any>(null);
 
 // Watch for changes in selected permissions to update select all state
 watch(
@@ -1013,6 +1050,7 @@ const addUserToProject = async () => {
       });
     }
     await loadProject();
+    await loadMembers(); // Thêm dòng này để cập nhật danh sách members
     showAddUserSuccessModal.value = true;
     userSearch.value.result = null;
     userSearch.value.identifier = '';
@@ -1127,6 +1165,10 @@ watch(activeTab, (tab: string) => {
     console.log('[DEBUG] groupsError:', groupsError.value);
     loadGroups();
   }
+  else if (tab === 'task') {
+    console.log('[DEBUG] Switching to task tab, tasks will be loaded by ProjectTaskTab component');
+    // ProjectTaskTab sẽ tự động load tasks khi được mount
+  }
   // Có thể thêm các tab khác nếu cần
 });
 
@@ -1180,6 +1222,8 @@ const loadFiles = async () => {
   }
 };
 
+
+
 const refreshFiles = () => {
   console.log('Refresh button clicked, calling loadFiles');
   loadFiles();
@@ -1218,6 +1262,18 @@ const descriptionOverLimit = computed(
 );
 // For demo, allow editing always. Replace with real permission check.
 const canEditDescription = computed(() => true);
+
+// Target Languages computed property
+const formattedTargetLanguages = computed(() => {
+  if (!project.value?.targetLanguages || project.value.targetLanguages.length === 0) {
+    return [];
+  }
+
+  return project.value.targetLanguages.map(langCode => {
+    const language = getLanguageByCode(langCode);
+    return language ? language : { code: langCode, name: langCode, nativeName: langCode };
+  });
+});
 
 function startEditDescription() {
   editedDescription.value = project.value?.description || '';
@@ -2022,7 +2078,7 @@ const handleFileReady = (fileId: string | number) => {
 
 /* Project Sections */
 .project-section {
-  padding: 1rem;
+  padding: 0.75rem;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -2034,6 +2090,11 @@ const handleFileReady = (fileId: string | number) => {
   background: #f8fafc;
 }
 
+.target-languages-section {
+  background: #f0fdf4;
+  border-left: 4px solid #22c55e;
+}
+
 .tags-section {
   background: white;
 }
@@ -2042,23 +2103,23 @@ const handleFileReady = (fileId: string | number) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   margin: 0;
   color: #2d3748;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .title-icon {
-  font-size: 1.5rem;
-  width: 3rem;
-  height: 3rem;
+  font-size: 1.1rem;
+  width: 2.5rem;
+  height: 2.5rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
   display: flex;
@@ -2070,29 +2131,113 @@ const handleFileReady = (fileId: string | number) => {
 
 .description-content {
   background: white;
-  padding: 1.5rem;
-  border-radius: 12px;
+  padding: 1rem;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
 }
 
 .description {
   color: #4a5568;
-  line-height: 1.7;
-  font-size: 1.1rem;
+  line-height: 1.6;
+  font-size: 0.95rem;
   margin: 0;
 }
 
 .no-description {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   color: #a0aec0;
   font-style: italic;
+  font-size: 0.9rem;
 }
 
 .no-content-icon {
-  font-size: 2rem;
+  font-size: 1.5rem;
   opacity: 0.5;
+}
+
+/* Target Languages Styles */
+.target-languages-content {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.languages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.language-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.language-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+  border-color: #22c55e;
+}
+
+.language-flag {
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border-radius: 50%;
+  color: white;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.language-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.language-name {
+  font-weight: 600;
+  color: #15803d;
+  font-size: 0.9rem;
+}
+
+.language-native {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.target-languages-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+  color: #92400e;
+}
+
+.note-icon {
+  font-size: 1rem;
+}
+
+.note-text {
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .tags-container {
@@ -5640,6 +5785,21 @@ const handleFileReady = (fileId: string | number) => {
 @media (max-width: 600px) {
   .role-grid {
     grid-template-columns: 1fr;
+  }
+
+  .languages-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .language-badge {
+    padding: 0.5rem;
+  }
+
+  .language-flag {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.9rem;
   }
 }
 

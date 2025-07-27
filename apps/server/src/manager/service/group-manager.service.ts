@@ -11,7 +11,7 @@ import {
   CreateProjectGroupDto,
   UpdateProjectGroupDto,
 } from '#LocalProject/Dtos';
-import { ProjectGroupEntity, UserEntity } from '#LocalProject/Entities';
+import { ProjectGroupEntity, UserEntity, ProjectEntity } from '#LocalProject/Entities';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 
@@ -24,6 +24,8 @@ export class GroupManagerService extends CommonHttpServiceImpl {
     private readonly projectGroupRepository: Repository<ProjectGroupEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectRepository: Repository<ProjectEntity>,
     private readonly projectManager: ProjectManagerService
   ) {
     super();
@@ -202,16 +204,74 @@ export class GroupManagerService extends CommonHttpServiceImpl {
     const toAddSet = new Set(userIds.map((id) => BigInt(id)));
     const searchIds = Array.from(toAddSet);
 
+    this.logger.debug(`[DEBUG] addUsersToGroup: Searching for users with IDs:`, searchIds);
+    this.logger.debug(`[DEBUG] addUsersToGroup: Project ID:`, projectId);
+
     const usersToAdd = await this.userRepository.findBy({
       id: In(searchIds),
       projects: { id: BigInt(projectId) },
     });
+
+    this.logger.debug(`[DEBUG] addUsersToGroup: Found users:`, usersToAdd.map(u => ({ id: u.id, email: u.email })));
+    this.logger.debug(`[DEBUG] addUsersToGroup: Expected count: ${toAddSet.size}, Found count: ${usersToAdd.length}`);
+
     if (usersToAdd.length !== toAddSet.size) {
-      const missingIds = searchIds.filter((id) => !toAddSet.has(id));
-      throw new BadRequestException({
-        message: `Some users do not exist in the project`,
-        data: missingIds,
+      const missingIds = searchIds.filter((id) => !usersToAdd.some(u => u.id === id));
+      this.logger.debug(`[DEBUG] addUsersToGroup: Missing user IDs:`, missingIds);
+
+      // Kiểm tra xem có phải project owner không
+      const project = await this.projectRepository.findOne({
+        where: { id: BigInt(projectId) },
+        relations: ['createdBy', 'members'],
       });
+
+      if (project && project.createdBy) {
+        const ownerId = project.createdBy.id;
+        const missingOwner = missingIds.some(id => id === ownerId);
+
+        if (missingOwner) {
+          // Thêm project owner vào members nếu chưa có
+          const owner = await this.userRepository.findOne({
+            where: { id: ownerId },
+          });
+
+          if (owner) {
+            project.members = project.members || [];
+            if (!project.members.some((m: any) => m.id === ownerId)) {
+              project.members.push(owner);
+              await this.projectRepository.save(project);
+
+              // Thử lại query
+              const updatedUsersToAdd = await this.userRepository.findBy({
+                id: In(searchIds),
+                projects: { id: BigInt(projectId) },
+              });
+
+              if (updatedUsersToAdd.length === toAddSet.size) {
+                // Nếu bây giờ tìm thấy tất cả, sử dụng kết quả mới
+                usersToAdd.length = 0;
+                usersToAdd.push(...updatedUsersToAdd);
+              } else {
+                // Nếu vẫn còn thiếu, throw error
+                const stillMissingIds = searchIds.filter(id => !updatedUsersToAdd.some((u: any) => u.id === id));
+                throw new BadRequestException({
+                  message: `Some users do not exist in the project`,
+                  data: stillMissingIds.map(id => id.toString()),
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Nếu vẫn còn thiếu user khác
+      if (usersToAdd.length !== toAddSet.size) {
+        const stillMissingIds = searchIds.filter(id => !usersToAdd.some((u: any) => u.id === id));
+        throw new BadRequestException({
+          message: `Some users do not exist in the project`,
+          data: stillMissingIds.map(id => id.toString()),
+        });
+      }
     }
 
     group.members = [...(group.members || []), ...usersToAdd];
@@ -240,29 +300,23 @@ export class GroupManagerService extends CommonHttpServiceImpl {
       `Removing users from group [${groupId}] in project [${projectId}]`,
       { userIds }
     );
-    const toRemoveSet = new Set(userIds.map((id) => BigInt(id)));
-    const searchIds = Array.from(toRemoveSet);
 
-    const affectedUsersCount = await this.projectGroupRepository.countBy({
-      id: groupId,
-      project: { id: projectId },
-      members: { id: In(searchIds) },
+    const group = await this.projectGroupRepository.findOne({
+      where: { id: BigInt(groupId), project: { id: BigInt(projectId) } },
+      relations: ['members'],
     });
 
-    if (affectedUsersCount !== toRemoveSet.size) {
-      const missingIds = searchIds.filter((id) => !toRemoveSet.has(id));
-      throw new BadRequestException({
-        message: `Some users do not exist in the group`,
-        data: missingIds,
-      });
+    if (!group) {
+      throw new NotFoundException(`Unknown group`);
     }
 
+    const toRemoveSet = new Set(userIds.map((id) => BigInt(id)));
+
+    // Lọc ra những user không cần xóa
+    group.members = (group.members || []).filter((member: any) => !toRemoveSet.has(member.id));
+
     try {
-      const updatedGroup = await this.projectGroupRepository.delete({
-        id: groupId,
-        project: { id: projectId },
-        members: { id: In(searchIds) },
-      });
+      const updatedGroup = await this.projectGroupRepository.save(group);
       this.logger.debug(`Users removed from group successfully`, {
         updatedGroup,
       });
@@ -298,12 +352,69 @@ export class GroupManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException(`Unknown group`);
     }
     // Lấy danh sách user hợp lệ
+    const numericUserIds = userIds.map(id => BigInt(id));
     const users = await this.userRepository.findBy({
-      id: In(userIds),
+      id: In(numericUserIds),
       projects: { id: BigInt(projectId) },
     });
+
+    // Nếu có user không tìm thấy, có thể là project owner chưa được thêm vào members
     if (users.length !== userIds.length) {
-      throw new BadRequestException('Some users do not exist in the project');
+      const missingIds = userIds.filter(id => !users.some(u => u.id === BigInt(id)));
+
+      // Kiểm tra xem có phải project owner không
+      const project = await this.projectRepository.findOne({
+        where: { id: BigInt(projectId) },
+        relations: ['createdBy', 'members'],
+      });
+
+      if (project && project.createdBy) {
+        const ownerId = project.createdBy.id;
+        const missingOwner = missingIds.some(id => BigInt(id) === ownerId);
+
+        if (missingOwner) {
+          // Thêm project owner vào members nếu chưa có
+          const owner = await this.userRepository.findOne({
+            where: { id: ownerId },
+          });
+
+          if (owner) {
+            project.members = project.members || [];
+            if (!project.members.some((m: any) => m.id === ownerId)) {
+              project.members.push(owner);
+              await this.projectRepository.save(project);
+
+              // Thử lại query
+              const updatedUsers = await this.userRepository.findBy({
+                id: In(numericUserIds),
+                projects: { id: BigInt(projectId) },
+              });
+
+              if (updatedUsers.length === userIds.length) {
+                // Nếu bây giờ tìm thấy tất cả, sử dụng kết quả mới
+                users.length = 0;
+                users.push(...updatedUsers);
+              } else {
+                // Nếu vẫn còn thiếu, throw error
+                const stillMissingIds = userIds.filter(id => !updatedUsers.some((u: any) => u.id === BigInt(id)));
+                throw new BadRequestException({
+                  message: 'Some users do not exist in the project',
+                  data: stillMissingIds.map(id => id.toString())
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Nếu vẫn còn thiếu user khác
+      if (users.length !== userIds.length) {
+        const stillMissingIds = userIds.filter(id => !users.some((u: any) => u.id === BigInt(id)));
+        throw new BadRequestException({
+          message: 'Some users do not exist in the project',
+          data: stillMissingIds.map(id => id.toString())
+        });
+      }
     }
     group.members = users;
     try {

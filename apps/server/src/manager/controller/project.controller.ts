@@ -81,8 +81,11 @@ export class ProjectController {
 
   @UseGuards(JwtAuthGuard)
   @Delete(':projectId')
-  async delete(@Param('projectId', BigIntTransformPipe) projectId: bigint) {
-    await this.projects.deleteProject(projectId);
+  async delete(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    await this.projects.deleteProject(projectId, req.user.id);
     return { message: `Project with ID ${projectId} deleted successfully` };
   }
 
@@ -97,7 +100,8 @@ export class ProjectController {
   @Post(':projectId/search-user')
   async searchUserToAdd(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body('identifier') identifier: string
+    @Body('identifier') identifier: string,
+    @Req() req: AuthenticatedRequest
   ): Promise<{ users: Array<{ id: bigint; fullName: string; email: string; phone: string }> }> {
     if (!identifier?.trim()) {
       throw new BadRequestException('Identifier is required');
@@ -105,7 +109,8 @@ export class ProjectController {
 
     const users = await this.projects.findUserToProject(
       projectId,
-      identifier.trim()
+      identifier.trim(),
+      req.user.id
     );
 
     return { users };
@@ -116,12 +121,14 @@ export class ProjectController {
   @Post(':projectId/add-user')
   async addUserToProject(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body('userId', BigIntTransformPipe) userId: bigint
+    @Body('userId', BigIntTransformPipe) userId: bigint,
+    @Req() req: AuthenticatedRequest
   ) {
     try {
       const updatedProject = await this.projects.addUserToProject(
         projectId,
-        userId
+        userId,
+        req.user.id
       );
       return {
         message: 'User added successfully',

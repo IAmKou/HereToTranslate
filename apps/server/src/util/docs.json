@@ -1,8 +1,8 @@
 [
   {
     "id": "doc-1",
-    "title": "Upload a file",
-    "content": "To upload a file, go to Upload page, click the button, select your file, and confirm."
+    "title": "Upload a file in project",
+    "content": "To upload a file, go to your home page or press Project in your sidebar, click in the project you want to upload,  then go in the file tab in your project, click Add File button, select your file, and confirm. We currently only support docx, pdf, txt,json file type. If you don't have a project i can guide you to create or join one."
   },
   {
     "id": "doc-2",
@@ -22,16 +22,131 @@
   {
 	"id": "doc-5",
 	"title": "Create project",
-	"content": "To create a project, first you have to log in, then in sidebar on the left of your screen press project, then press the create new project , enter all the information and press create project."
+	"content": "To create a project, in the sidebar on the left of your screen press project, then press the create new project , enter all the information and press create project."
   },
   {
     "id": "doc-6",
     "title": "Create public request",
-    "content": "To create a public request, first you have to log in, then in sidebar on the left of your screen press My Request, then press Create New Request button, choose Public Request type,then enter all the field and the file you want to translate and press create request. We now only support json,txt,docx and pdf file type. Other will be update in the future."
+    "content": "To create a public request, in the sidebar on the left of your screen press My Request, then press Create New Request button, choose Public Request type,then enter all the field and the file you want to translate and press create request. We now only support json,txt,docx and pdf file type. Other will be update in the future."
   },
   {
     "id": "doc-7",
     "title": "Create private request",
-    "content": "To create a private request, first you have to log in, then in sidebar on the left of your screen press My Request, then press Create New Request button, choose Private Request type,then choose the person you want to assign the request, then enter the other field and the file you want to translate and press create request. We now only support json,txt,docx and pdf file type. Other will be update in the future."
+    "content": "To create a private request, in the sidebar on the left of your screen press My Request, then press Create New Request button, choose Private Request type,then choose the person you want to assign the request, then enter the other field and the file you want to translate and press create request. After that you will be redirected to payment the deposit.We now only support json,txt,docx and pdf file type. Other will be update in the future."
+  },
+  {
+    "id": "doc-8",
+    "title": "Update project",
+    "content": "To update a project, go to your project through your home or press in Project in your sidebar, then click in Edit Project button in your project, change the information of your project then click Update Project."
+  },
+  {
+    "id": "doc-9",
+    "title": "Delete project",
+    "content": "To delete a project, go to your project through your home or press in Project in your sidebar, then click in Delete Project button in your project, and confirm."
+  },
+  {
+    "id": "doc-10",
+    "title": "Add user to project",
+    "content": "To add a member to your project, first you have to be the project owner or have a role with Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Member tab in your project, click add user button, there will be a search bar appear, enter email or username of the person you want to add in and press search, it will appear an user in there, if it the person you want to add, click Add To Project, that user will be added into your project."
+  },
+  {
+    "id": "doc-11",
+    "title": "Remove member from project",
+    "content": "To remove a member from your project, first you have to be the project owner or have a role with Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Member tab in your project, in there you will see a list of member , search for the member you want to remove and click remove member, and them confirm."
+  },
+  {
+    "id": "doc-12",
+    "title": "Create project role",
+    "content": "To create a project role, first you have to be the project owner or have a role with Manage Roles or Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Roles tab in your project, in there you will see a table with all the roles in your project and a create role button, click create role button and enter project name and choose a permission for it, then confirm. Do you want me to show how to assign role to member ?"
+  },
+  {
+    "id": "doc-13",
+    "title": "Edit project role",
+    "content": "To edit project role, first you have to be the project owner or have a role with Manage Roles or Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Roles tab in your project,  in there you will see a table with all the roles in your project,click in Edit button in the role you want to edit, change the information you want to change and click confirm. "
+  },
+  {
+    "id": "doc-14",
+    "title": "Delete project role",
+    "content": "To edit project role, first you have to be the project owner or have a role with Manage Roles or Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Roles tab in your project,  in there you will see a table with all the roles in your project,click in Delete button in the role you want to delete, then confirm. "
+  },
+  {
+    "id": "doc-15",
+    "title": "Assign role to member",
+    "content": "To assign role to member, first you have to be the project owner or have a role with Manage Roles or Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Roles tab in your project,  in there you will see a member list ,click in Assign role button and choose the role you want to assign to that member, then confirm. "
+  },
+  {
+    "id": "doc-16",
+    "title": "Remove role from member",
+    "content": "To assign role to member, first you have to be the project owner or have a role with Manage Roles or Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Roles tab in your project,  in there you will see a member list ,click in Assign role button and a modal pop up in there you will see the roles that member have, then click x in the role."
+  },
+  {
+    "id": "doc-17",
+    "title": "Edit request",
+    "content": "To update a request, then in sidebar on the left of your screen press My Request, then press Create New Request button, choose Public Request type,then enter all the field and the file you want to translate and press create request. We now only support json,txt,docx and pdf file type. Other will be update in the future."
+  },
+  {
+    "id": "doc-18",
+    "title": "Approve translator for request",
+    "content": ""
+  },
+  {
+    "id": "doc-19",
+    "title": "Register for public request",
+    "content": ""
+  },
+  {
+    "id": "doc-20",
+    "title": "Cancel request",
+    "content": ""
+  },
+  {
+    "id": "doc-21",
+    "title": "Withdraw",
+    "content": ""
+  },
+  {
+    "id": "doc-22",
+    "title": "View transaction history",
+    "content": ""
+  },
+  {
+    "id": "doc-23",
+    "title": "Add translation",
+    "content": ""
+  },
+  {
+    "id": "doc-24",
+    "title": "Preview translation",
+    "content": ""
+  },
+  {
+    "id": "doc-25",
+    "title": "Delete file",
+    "content": "To delete a file, go to your project, go to file tab, click in dot in the file you want to delete, click delete button then confirm."
+  },
+  {
+    "id": "doc-26",
+    "title": "Send comment",
+    "content": "To send comment in a discussion, go to your project, go to discussion tab, click in the discussion you want to send comment, click view and enter comment then press post comment."
+  },
+  {
+    "id": "doc-27",
+    "title": "Update comment",
+    "content": "To update comment in a discussion, go to your project, go to discussion tab, click in the discussion that have the comment that you want to update, click view and edit the comment you needed, then confirm."
+  },
+  {
+    "id": "doc-28",
+    "title": "Delete comment",
+    "content": "To delete comment in a discussion, go to your project, go to discussion tab, click in the discussion that have the comment that you want to delete, click view and and click delete the comment you want to delete, then confirm."
+  },
+  {
+    "id": "doc-29",
+    "title": "Create Discussion",
+    "content": "To create a discussion, first you need to be the project owner or have a role with Manage Discussions permission. If you have if, then go to your project, then go in Discussion tab, in there you will see list of discussion and create new discussion button, enter title and description then press create discussion."
+  },
+  {
+    "id": "doc-30",
+    "title": "Update Discussion",
+    "content": "To update a discussion, first you need to be the project owner or have a role with Manage Discussions permission. If you have if, then go to your project, then go in Discussion tab, in there you will see list of discussion , click in the action button, in there it will have edit button, change the information you need to change then press save."
   }
 ]

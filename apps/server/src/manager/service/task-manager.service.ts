@@ -38,6 +38,7 @@ export class TaskManagerService {
     branchId?: string;
     fileId?: string;
     filePart?: number;
+    language?: string;
   }) {
     const {
       title,
@@ -50,6 +51,7 @@ export class TaskManagerService {
       branchId,
       fileId,
       filePart,
+      language,
     } = params;
     if (!createdById) {
       throw new BadRequestException('createdById is required');
@@ -90,6 +92,7 @@ export class TaskManagerService {
       branchId,
       fileId,
       filePart,
+      language,
     } as DeepPartial<TaskEntity>);
 
     await this.taskRepository.save(task);
@@ -111,6 +114,7 @@ export class TaskManagerService {
         branchId: true,
         fileId: true,
         filePart: true,
+        language: true,
         dueDate: true,
         createdAt: true,
         startedAt: true,
@@ -146,6 +150,7 @@ export class TaskManagerService {
         branchId: true,
         fileId: true,
         filePart: true,
+        language: true,
         dueDate: true,
         createdAt: true,
         startedAt: true,
@@ -330,6 +335,7 @@ export class TaskManagerService {
         branchId: true,
         fileId: true,
         filePart: true,
+        language: true,
         dueDate: true,
         createdAt: true,
         createdBy: {

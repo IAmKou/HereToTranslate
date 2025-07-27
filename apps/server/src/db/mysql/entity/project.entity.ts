@@ -23,6 +23,9 @@ export class ProjectEntity {
   @Column({ type: 'boolean', default: true })
   isPrivate: boolean;
 
+  @Column({ type: 'json', nullable: true })
+  targetLanguages: string[];
+
   @ManyToOne(() => UserEntity, user => user.createdProjects)
   createdBy: UserEntity;
 

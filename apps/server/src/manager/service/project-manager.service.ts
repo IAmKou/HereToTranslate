@@ -111,7 +111,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   }
 
   async createProject(uid: bigint, data: CreateProjectDto) {
-    const { name, description, isPrivate, tags = [], categoryId } = data;
+    const { name, description, isPrivate, tags = [], categoryId, targetLanguages } = data;
 
     this.logger.debug('Received project data:', data);
 
@@ -158,6 +158,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         createdBy: { id: uid },
         isPrivate,
         tags: projectTags,
+        targetLanguages,
         createdAt: new Date(),
         category: { id: BigInt(categoryId) },
       });
@@ -216,6 +217,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       // Add owner to Everyone role
       savedEveryoneRole.users = [<UserEntity>{ id: uid }];
       await queryRunner.manager.save(savedEveryoneRole);
+
+      // Add owner to project members
+      savedProject.members = [<UserEntity>{ id: uid }];
+      await queryRunner.manager.save(savedProject);
 
       const githubRepoName = `project-${savedProject.id}`;
 
@@ -283,6 +288,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         'project.name',
         'project.description',
         'project.isPrivate',
+        'project.targetLanguages',
         'project.createdAt',
         'createdBy.id',
         'createdBy.username',
@@ -333,6 +339,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         'project.name',
         'project.description',
         'project.isPrivate',
+        'project.targetLanguages',
         'project.createdAt',
         'createdBy.id',
         'createdBy.username',
@@ -560,11 +567,12 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
   async addUserToProject(
     projectId: bigint,
-    userId: bigint
+    userId: bigint,
+    uid: bigint
   ): Promise<ProjectEntity> {
     await this.testPermissions(
       projectId,
-      userId,
+      uid,
       PermissionFlags.ManageMembers
     );
     const project = await this.projectRepository.findOne({

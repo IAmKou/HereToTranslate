@@ -35,6 +35,9 @@ export class TaskEntity {
   @Column({ type: 'int', nullable: true })
   filePart?: number;
 
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  language?: string;
+
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   assignedTo?: UserEntity;
 

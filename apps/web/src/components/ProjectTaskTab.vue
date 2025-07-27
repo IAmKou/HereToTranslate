@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, watch, onBeforeUnmount, type Ref } from 'vue';
 import { taskService, Task, ProjectFile } from '../services/task.service';
 import CreateTaskDialog from './CreateTaskDialog.vue';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
+import { getLanguageName } from '../utils/languages';
 
 const props = defineProps({
   projectId: {
@@ -21,6 +22,10 @@ const props = defineProps({
   projectGroups: {
     type: Array,
     default: () => []
+  },
+  project: {
+    type: Object,
+    default: () => null
   },
   customTitle: {
     type: String,
@@ -142,6 +147,19 @@ async function loadTasks() {
     console.log('API /tasks/project response:', data);
     tasks.value = Array.isArray(data) ? [...data] : [];
     console.log('Tasks loaded for project', props.projectId, ':', tasks.value.length, 'tasks');
+
+    // Debug: Check if tasks have language field
+    console.log('🔍 Language Debug - Tasks with languages:');
+    tasks.value.forEach(task => {
+      console.log(`Task ${task.id}: "${task.title}" -> language: "${task.language}"`);
+    });
+
+    const languagesFound = new Set();
+    tasks.value.forEach(task => {
+      if (task.language) languagesFound.add(task.language);
+    });
+    console.log('🌐 Unique languages found:', Array.from(languagesFound));
+
   } catch (err: any) {
     error.value = err.message || 'Failed to load tasks';
     console.error('Error loading tasks:', err);
@@ -232,7 +250,12 @@ function handleTaskCreated(task: Task) {
   // Add new task to local array
   tasks.value.unshift(task);
   console.log('Task created:', task);
-  showCreateForm.value = false; // Quay lại board view
+
+  // Only close form after the last task is added
+  // The CreateTaskDialog will emit multiple success events for multiple languages
+  setTimeout(() => {
+    showCreateForm.value = false; // Quay lại board view
+  }, 100);
 
   // Clear progress cache to ensure fresh data
   taskProgressData.value.clear();
@@ -337,6 +360,180 @@ const closedTasks = computed(() => {
   console.log('Closed tasks:', filtered.length, 'tasks:', filtered.map((t: Task) => ({ id: t.id, title: t.title, status: t.status })));
   return filtered;
 });
+
+// Computed để lấy danh sách unique languages từ all tasks
+const availableLanguages = computed(() => {
+  const languages = new Set<string>();
+  filteredTasks.value.forEach((task: Task) => {
+    if (task.language) {
+      languages.add(task.language);
+    }
+  });
+  const result = Array.from(languages).sort();
+  console.log('Available languages:', result);
+  console.log('Tasks with languages:', filteredTasks.value.map(t => ({ id: t.id, title: t.title, language: t.language })));
+  return result;
+});
+
+// Check if we need to show language grouping (more than 1 language)
+const shouldShowLanguageGrouping = computed(() => {
+  const shouldShow = availableLanguages.value.length > 1;
+  console.log('Should show language grouping:', shouldShow, 'Languages count:', availableLanguages.value.length);
+  return shouldShow;
+});
+
+
+
+// Function to clean task title (remove language suffix)
+function getCleanTaskTitle(title: string): string {
+  // Remove language suffix like "(EN)", "(BN)", etc.
+  return title.replace(/\s*\([A-Z]{2}\)$/, '');
+}
+
+// Group tasks by language for each status
+const todoTasksByLanguage = computed(() => {
+  if (!shouldShowLanguageGrouping.value) {
+    return { default: todoTasks.value };
+  }
+
+  // Always show all available languages, even if no tasks
+  const grouped = new Map<string, Task[]>();
+
+  // Initialize all available languages with empty arrays
+  availableLanguages.value.forEach(language => {
+    grouped.set(language, []);
+  });
+
+  // Add tasks to their respective languages
+  todoTasks.value.forEach((task: Task) => {
+    const language = task.language || 'Unknown';
+    if (!grouped.has(language)) {
+      grouped.set(language, []);
+    }
+    grouped.get(language)!.push(task);
+  });
+
+  const result = Object.fromEntries(grouped);
+  console.log('🔄 Todo tasks by language updated:', result);
+  return result;
+});
+
+const inProgressTasksByLanguage = computed(() => {
+  if (!shouldShowLanguageGrouping.value) {
+    return { default: inProgressTasks.value };
+  }
+
+  // Always show all available languages, even if no tasks
+  const grouped = new Map<string, Task[]>();
+
+  // Initialize all available languages with empty arrays
+  availableLanguages.value.forEach((language: string) => {
+    grouped.set(language, []);
+  });
+
+  // Add tasks to their respective languages
+  inProgressTasks.value.forEach((task: Task) => {
+    const language = task.language || 'Unknown';
+    if (!grouped.has(language)) {
+      grouped.set(language, []);
+    }
+    grouped.get(language)!.push(task);
+  });
+
+  const result = Object.fromEntries(grouped);
+  console.log('🔄 InProgress tasks by language updated:', result);
+  return result;
+});
+
+const doneTasksByLanguage = computed(() => {
+  if (!shouldShowLanguageGrouping.value) {
+    return { default: doneTasks.value };
+  }
+
+  // Always show all available languages, even if no tasks
+  const grouped = new Map<string, Task[]>();
+
+  // Initialize all available languages with empty arrays
+  availableLanguages.value.forEach((language: string) => {
+    grouped.set(language, []);
+  });
+
+  // Add tasks to their respective languages
+  doneTasks.value.forEach((task: Task) => {
+    const language = task.language || 'Unknown';
+    if (!grouped.has(language)) {
+      grouped.set(language, []);
+    }
+    grouped.get(language)!.push(task);
+  });
+
+  const result = Object.fromEntries(grouped);
+  console.log('🔄 Done tasks by language updated:', result);
+  return result;
+});
+
+// --- Add new computed for language grouping within columns ---
+const tasksByLanguageAndStatus = computed(() => {
+  // { [language]: { todo: Task[], inProgress: Task[], done: Task[] } }
+  const result: Record<string, { todo: Task[]; inProgress: Task[]; done: Task[] }> = {};
+  availableLanguages.value.forEach((lang: string) => {
+    result[lang] = { todo: [], inProgress: [], done: [] };
+  });
+  filteredTasks.value.forEach((task: Task) => {
+    const lang = task.language || 'Unknown';
+    if (!result[lang]) {
+      result[lang] = { todo: [], inProgress: [], done: [] };
+    }
+    if (task.status === 'pending') result[lang].todo.push(task);
+    else if (task.status === 'in_progress') result[lang].inProgress.push(task);
+    else if (task.status === 'completed') result[lang].done.push(task);
+  });
+  return result;
+});
+
+// Crowdin-style: Only show languages that have tasks in each column
+const languagesInTodoColumn = computed(() => {
+  const languages = new Set<string>();
+  todoTasks.value.forEach((task: Task) => {
+    if (task.language) languages.add(task.language);
+  });
+  return Array.from(languages).sort();
+});
+
+const languagesInProgressColumn = computed(() => {
+  const languages = new Set<string>();
+  inProgressTasks.value.forEach((task: Task) => {
+    if (task.language) languages.add(task.language);
+  });
+  return Array.from(languages).sort();
+});
+
+const languagesInDoneColumn = computed(() => {
+  const languages = new Set<string>();
+  doneTasks.value.forEach((task: Task) => {
+    if (task.language) languages.add(task.language);
+  });
+  return Array.from(languages).sort();
+});
+
+
+
+// State for collapsed language sections in swimlanes
+const collapsedLanguagesInSwimlanes = ref<Set<string>>(new Set());
+
+// Function to toggle language section collapse in swimlanes
+function toggleLanguageCollapse(language: string) {
+  if (collapsedLanguagesInSwimlanes.value.has(language)) {
+    collapsedLanguagesInSwimlanes.value.delete(language);
+  } else {
+    collapsedLanguagesInSwimlanes.value.add(language);
+  }
+}
+
+// Function to check if language is collapsed in swimlanes
+function isLanguageCollapsed(language: string): boolean {
+  return collapsedLanguagesInSwimlanes.value.has(language);
+}
 
 const selectedTaskFileName = computed(() => {
   if (!selectedTask.value?.fileId) return '';
@@ -582,7 +779,7 @@ async function moveTaskToColumn(task: Task, targetColumn: 'todo' | 'inProgress' 
     console.log('Sending API request:', { taskId: task.id, newStatus });
     await taskService.updateTask(task.id, { status: newStatus });
 
-    // Update the task status in the local array
+    // Update the task status in the local array immediately for smooth UX
     const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
     if (taskIndex !== -1) {
       // Create a new task object to trigger reactivity
@@ -593,10 +790,6 @@ async function moveTaskToColumn(task: Task, targetColumn: 'todo' | 'inProgress' 
 
     // Clear cached progress data for this task to force refresh
     taskProgressData.value.delete(task.id);
-
-    // Reload tasks from server to get updated data
-    console.log('Reloading tasks after move...');
-    await loadTasks();
 
     // If this is the currently selected task, refresh its progress
     if (selectedTask.value?.id === task.id) {
@@ -612,6 +805,12 @@ async function moveTaskToColumn(task: Task, targetColumn: 'todo' | 'inProgress' 
     });
   } catch (error) {
     console.error('Failed to update task status:', error);
+    // If API call fails, revert the local change
+    const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
+    if (taskIndex !== -1) {
+      const originalTask = { ...tasks.value[taskIndex], status: task.status };
+      tasks.value[taskIndex] = originalTask;
+    }
   }
 }
 
@@ -1085,12 +1284,12 @@ function getStatusText(status: string): string {
       </div>
       <div class="task-detail-header">
         <span class="task-detail-id">#{{ selectedTask.id }}</span>
-        <span class="task-detail-title">{{ selectedTask.title }}</span>
+        <span class="task-detail-title">{{ getCleanTaskTitle(selectedTask.title) }}</span>
       </div>
       <div class="task-detail-meta-box">
         <div class="task-detail-meta-col">
           <div class="meta-label">DETAILS</div>
-          <div>Language: <b>Amharic</b></div>
+          <div>Language: <b>{{ selectedTask.language ? getLanguageName(selectedTask.language) : 'Not specified' }}</b></div>
           <div class="progress-bar-bg">
             <div v-if="selectedTaskProgressLoading" class="progress-loading">
               <i class="pi pi-spin pi-spinner"></i> Loading...
@@ -1172,6 +1371,7 @@ function getStatusText(status: string): string {
         :project-groups="projectGroups"
         :branch-id="branchId"
         :project-files="projectFiles"
+        :project-target-languages="project?.targetLanguages || []"
         :inline="true"
         @close="cancelCreateTask"
         @success="handleTaskCreated"
@@ -1182,18 +1382,26 @@ function getStatusText(status: string): string {
     <div v-else class="kanban-board-view">
       <!-- Tabs for Board and All Tasks -->
       <div class="task-tabs">
-        <button
-          :class="['tab-btn', { active: activeTab === 'board' }]"
-          @click="activeTab = 'board'"
-        >
-          Board
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'all' }]"
-          @click="activeTab = 'all'"
-        >
-          All Tasks
-        </button>
+        <div class="tabs-left">
+          <button
+            :class="['tab-btn', { active: activeTab === 'board' }]"
+            @click="activeTab = 'board'"
+          >
+            Board
+          </button>
+          <button
+            :class="['tab-btn', { active: activeTab === 'all' }]"
+            @click="activeTab = 'all'"
+          >
+            All Tasks
+          </button>
+        </div>
+        <div class="tabs-right">
+          <button v-if="canCreateTask" @click="showCreateTaskForm" class="create-task-btn-header">
+            <i class="pi pi-plus"></i>
+            Create Task
+          </button>
+        </div>
       </div>
 
       <!-- Board View -->
@@ -1391,346 +1599,542 @@ function getStatusText(status: string): string {
           </div>
         </div>
 
-        <div class="kanban-status-header-row">
-          <div class="kanban-status-card todo">
-            <div class="status-bar todo"></div>
-            <span class="status-title">To Do</span>
-            <span class="status-count" v-if="todoTasks.length">{{ todoTasks.length }}</span>
-          </div>
-          <div class="kanban-status-card inprogress">
-            <div class="status-bar inprogress"></div>
-            <span class="status-title">In Progress</span>
-            <span class="status-count" v-if="inProgressTasks.length">{{ inProgressTasks.length }}</span>
-          </div>
-          <div class="kanban-status-card done">
-            <div class="status-bar done"></div>
-            <span class="status-title">Done</span>
-            <span class="status-count" v-if="doneTasks.length">{{ doneTasks.length }}</span>
-            <span class="status-info"><i class="pi pi-info-circle"></i></span>
-          </div>
+        <!-- Global Empty State -->
+        <div v-if="loading" class="global-loading-state">
+          <div class="loading-icon">⏳</div>
+          <div class="loading-text">Loading tasks...</div>
         </div>
-        <div class="kanban-board">
-          <div
-            class="kanban-column"
-            @dragover="handleDragOver($event, 'todo')"
-            @dragleave="handleDragLeave($event)"
-            @drop="handleDrop($event, 'todo')"
-          >
-            <!-- Drag Over Title for Todo Column -->
-            <div v-if="isDragging && dragOverColumn === 'todo'" class="drag-over-title">
-              <div class="drag-over-title-content">
-                <span class="drag-over-icon">📋</span>
-                <span class="drag-over-text">Move to To Do</span>
+
+        <div v-else-if="filteredTasks.length === 0" class="global-empty-state">
+          <div class="global-empty-icon">⏱️</div>
+          <div class="global-empty-text">No tasks yet</div>
+          <div class="global-empty-subtext">Create your first task to get started with this project</div>
+          <button v-if="canCreateTask" @click="showCreateTaskForm" class="global-empty-btn">
+            <i class="pi pi-plus"></i>
+            Create Task
+          </button>
+        </div>
+
+        <!-- Kanban Board with Language Grouping (Crowdin style) -->
+        <div v-else>
+          <!-- Always show status headers at the top like Crowdin -->
+          <div class="kanban-status-header-row">
+            <div class="kanban-status-card todo">
+              <div class="status-bar todo"></div>
+              <span class="status-title">To Do</span>
+              <span class="status-count" v-if="todoTasks.length">{{ todoTasks.length }}</span>
+            </div>
+            <div class="kanban-status-card inprogress">
+              <div class="status-bar inprogress"></div>
+              <span class="status-title">In Progress</span>
+              <span class="status-count" v-if="inProgressTasks.length">{{ inProgressTasks.length }}</span>
+            </div>
+            <div class="kanban-status-card done">
+              <div class="status-bar done"></div>
+              <span class="status-title">Done</span>
+              <span class="status-count" v-if="doneTasks.length">{{ doneTasks.length }}</span>
+              <span class="status-info"><i class="pi pi-info-circle"></i></span>
+            </div>
+          </div>
+
+          <!-- Single Language: Original Column Structure -->
+          <div v-if="!shouldShowLanguageGrouping" class="kanban-board">
+            <!-- TO DO COLUMN -->
+            <div class="kanban-column" @dragover="handleDragOver($event, 'todo')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'todo')">
+              <div v-if="isDragging && dragOverColumn === 'todo'" class="drag-over-title">
+                <div class="drag-over-title-content">
+                  <span class="drag-over-icon">📋</span>
+                  <span class="drag-over-text">Move to To Do</span>
+                </div>
+              </div>
+              <div v-if="loading" class="kanban-loading">Loading...</div>
+              <div v-else>
+                <div v-for="(task, idx) in todoTasks" :key="task.id" class="task-card-link" @click="selectedTask = task">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                    <!-- Task card content -->
+                    <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
+                      <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
+                      <span v-else-if="task.status === 'pending'">To do</span>
+                      <span v-else-if="task.status === 'in_progress'">In progress</span>
+                      <span v-else-if="task.status === 'completed'">Done</span>
+                      <span v-else-if="task.status === 'closed'">Closed</span>
+                    </div>
+                    <div class="crowdin-row-1">
+                      <div class="crowdin-col-left">
+                        <span class="task-id">#{{ idx + 1 }}</span>
+                        <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-2">
+                      <div class="crowdin-col-left">
+                        <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
+                      <div class="crowdin-col-left">
+                        <span class="arrow">→</span>
+                        <span class="due-date-label">
+                          <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                          <span class="due-icon" v-else>⏰</span>
+                          Due date:
+                          <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
+                            {{ formatDateTime(task.dueDate) }}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-4">
+                      <div class="crowdin-col-left">
+                        <div class="task-meta">
+                          <!-- Avatar assignee -->
+                          <div class="assignee-info" v-if="task.assignedTo">
+                            <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                            <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                            <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                          </div>
+                          <!-- File info với icon động và tooltip -->
+                          <div class="file-info" v-if="task.fileId">
+                            <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                            <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-5" v-if="task.type">
+                      <div class="crowdin-col-left">
+                        <div class="task-type-tag crowdin-tag">
+                          {{ task.type }}
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Close button -->
+                    <div class="crowdin-row-6" v-if="task.status === 'completed'">
+                      <div class="crowdin-col-right">
+                        <button
+                          class="close-task-btn"
+                          @click.stop="closeTask(task)"
+                          :disabled="task.status === 'closed'"
+                          :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div v-if="loading" class="kanban-loading">Loading...</div>
-            <div v-else>
-              <div
-                v-for="(task, idx) in todoTasks"
-                :key="task.id"
-                class="task-card-link"
-                style="text-decoration: none;"
-                @click="selectedTask = task"
-              >
-                <div
-                  :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                  tabindex="0"
-                  draggable="true"
-                  @dragstart="handleDragStart($event, task, idx)"
-                  @dragend="handleDragEnd($event)"
-                  @keydown.enter="selectedTask = task"
-                  @click="selectedTask = task"
-                >
-                  <!-- Badge trạng thái -->
-                  <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
-                    <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
-                    <span v-else-if="task.status === 'pending'">To do</span>
-                    <span v-else-if="task.status === 'in_progress'">In progress</span>
-                    <span v-else-if="task.status === 'completed'">Done</span>
-                    <span v-else-if="task.status === 'closed'">Closed</span>
-                  </div>
-                  <div class="crowdin-row-1">
-                    <div class="crowdin-col-left">
-                      <span class="task-id">#{{ idx + 1 }}</span>
-                      <span class="task-label crowdin-title" :class="{ clickable: true }">{{ task.title }}</span>
+            <!-- IN PROGRESS COLUMN -->
+            <div class="kanban-column" @dragover="handleDragOver($event, 'inProgress')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'inProgress')">
+              <div v-if="isDragging && dragOverColumn === 'inProgress'" class="drag-over-title">
+                <div class="drag-over-title-content">
+                  <span class="drag-over-icon">📋</span>
+                  <span class="drag-over-text">Move to In Progress</span>
+                </div>
+              </div>
+              <div v-if="loading" class="kanban-loading">Loading...</div>
+              <div v-else>
+                <div v-for="(task, idx) in inProgressTasks" :key="task.id" class="task-card-link" @click="selectedTask = task">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                    <!-- Same task card content as above -->
+                    <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
+                      <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
+                      <span v-else-if="task.status === 'pending'">To do</span>
+                      <span v-else-if="task.status === 'in_progress'">In progress</span>
+                      <span v-else-if="task.status === 'completed'">Done</span>
+                      <span v-else-if="task.status === 'closed'">Closed</span>
                     </div>
-                  </div>
-                  <!-- Progress bar nếu có -->
-                  <div v-if="task.progress !== undefined" class="task-progress-bar-bg">
-                    <div class="task-progress-bar" :style="{ width: task.progress + '%'}"></div>
-                  </div>
-                  <div class="crowdin-row-2">
-                    <div class="crowdin-col-left">
-                      <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                    <div class="crowdin-row-1">
+                      <div class="crowdin-col-left">
+                        <span class="task-id">#{{ idx + 1 }}</span>
+                        <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
-                    <div class="crowdin-col-left">
-                      <span class="arrow">→</span>
-                      <span class="due-date-label">
-                        <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
-                        <span class="due-icon" v-else>⏰</span>
-                        Due date:
-                        <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
-                          {{ formatDateTime(task.dueDate) }}
+                    <div class="crowdin-row-2">
+                      <div class="crowdin-col-left">
+                        <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
+                      <div class="crowdin-col-left">
+                        <span class="arrow">→</span>
+                        <span class="due-date-label">
+                          <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                          <span class="due-icon" v-else>⏰</span>
+                          Due date:
+                          <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
+                            {{ formatDateTime(task.dueDate) }}
+                          </span>
                         </span>
-                      </span>
+                      </div>
                     </div>
-                  </div>
-                  <div class="crowdin-row-4">
-                    <div class="crowdin-col-left">
-                      <div class="task-meta">
-                        <!-- Avatar assignee -->
-                        <div class="assignee-info" v-if="task.assignedTo">
-                          <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
-                          <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
-                          <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
-                        </div>
-                        <!-- File info với icon động và tooltip -->
-                        <div class="file-info" v-if="task.fileId">
-                          <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                          <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                    <div class="crowdin-row-4">
+                      <div class="crowdin-col-left">
+                        <div class="task-meta">
+                          <!-- Avatar assignee -->
+                          <div class="assignee-info" v-if="task.assignedTo">
+                            <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                            <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                            <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                          </div>
+                          <!-- File info với icon động và tooltip -->
+                          <div class="file-info" v-if="task.fileId">
+                            <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                            <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div class="crowdin-row-5" v-if="task.type">
-                    <div class="crowdin-col-left">
-                      <div class="task-type-tag crowdin-tag">
-                        {{ task.type }}
+                    <div class="crowdin-row-5" v-if="task.type">
+                      <div class="crowdin-col-left">
+                        <div class="task-type-tag crowdin-tag">
+                          {{ task.type }}
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Close button -->
+                    <div class="crowdin-row-6" v-if="task.status === 'completed'">
+                      <div class="crowdin-col-right">
+                        <button
+                          class="close-task-btn"
+                          @click.stop="closeTask(task)"
+                          :disabled="task.status === 'closed'"
+                          :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                        >
+                          Close
+                        </button>
                       </div>
                     </div>
                   </div>
-                  <!-- Close button -->
-                  <div class="crowdin-row-6" v-if="task.status === 'completed'">
-                    <div class="crowdin-col-right">
-                      <button
-                        class="close-task-btn"
-                        @click.stop="closeTask(task)"
-                        :disabled="task.status === 'closed'"
-                        :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                      >
-                        Close
-                      </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- DONE COLUMN -->
+            <div class="kanban-column" @dragover="handleDragOver($event, 'done')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'done')">
+              <div v-if="isDragging && dragOverColumn === 'done'" class="drag-over-title">
+                <div class="drag-over-title-content">
+                  <span class="drag-over-icon">📋</span>
+                  <span class="drag-over-text">Move to Done</span>
+                </div>
+              </div>
+              <div v-if="loading" class="kanban-loading">Loading...</div>
+              <div v-else>
+                <div v-for="(task, idx) in doneTasks" :key="task.id" class="task-card-link" @click="selectedTask = task">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                    <!-- Same task card content as above -->
+                    <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
+                      <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
+                      <span v-else-if="task.status === 'pending'">To do</span>
+                      <span v-else-if="task.status === 'in_progress'">In progress</span>
+                      <span v-else-if="task.status === 'completed'">Done</span>
+                      <span v-else-if="task.status === 'closed'">Closed</span>
+                    </div>
+                    <div class="crowdin-row-1">
+                      <div class="crowdin-col-left">
+                        <span class="task-id">#{{ idx + 1 }}</span>
+                        <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-2">
+                      <div class="crowdin-col-left">
+                        <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
+                      <div class="crowdin-col-left">
+                        <span class="arrow">→</span>
+                        <span class="due-date-label">
+                          <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                          <span class="due-icon" v-else>⏰</span>
+                          Due date:
+                          <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
+                            {{ formatDateTime(task.dueDate) }}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-4">
+                      <div class="crowdin-col-left">
+                        <div class="task-meta">
+                          <!-- Avatar assignee -->
+                          <div class="assignee-info" v-if="task.assignedTo">
+                            <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                            <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                            <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                          </div>
+                          <!-- File info với icon động và tooltip -->
+                          <div class="file-info" v-if="task.fileId">
+                            <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                            <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="crowdin-row-5" v-if="task.type">
+                      <div class="crowdin-col-left">
+                        <div class="task-type-tag crowdin-tag">
+                          {{ task.type }}
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Close button -->
+                    <div class="crowdin-row-6" v-if="task.status === 'completed'">
+                      <div class="crowdin-col-right">
+                        <button
+                          class="close-task-btn"
+                          @click.stop="closeTask(task)"
+                          :disabled="task.status === 'closed'"
+                          :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                        >
+                          Close
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <div
-            class="kanban-column"
-            @dragover="handleDragOver($event, 'inProgress')"
-            @dragleave="handleDragLeave($event)"
-            @drop="handleDrop($event, 'inProgress')"
-          >
-            <!-- Drag Over Title for In Progress Column -->
-            <div v-if="isDragging && dragOverColumn === 'inProgress'" class="drag-over-title">
-              <div class="drag-over-title-content">
-                <span class="drag-over-icon">📋</span>
-                <span class="drag-over-text">Move to In Progress</span>
-              </div>
-            </div>
 
-            <div v-if="loading" class="kanban-loading">Loading...</div>
-            <div v-else>
-              <div
-                v-for="(task, idx) in inProgressTasks"
-                :key="task.id"
-                class="task-card-link"
-                style="text-decoration: none;"
-                @click="selectedTask = task"
-              >
-                <div
-                  :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                  tabindex="0"
-                  draggable="true"
-                  @dragstart="handleDragStart($event, task, idx)"
-                  @dragend="handleDragEnd($event)"
-                  @keydown.enter="selectedTask = task"
-                  @click="selectedTask = task"
-                >
-                  <!-- Badge trạng thái -->
-                  <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
-                    <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
-                    <span v-else-if="task.status === 'pending'">To do</span>
-                    <span v-else-if="task.status === 'in_progress'">In progress</span>
-                    <span v-else-if="task.status === 'completed'">Done</span>
-                    <span v-else-if="task.status === 'closed'">Closed</span>
-                  </div>
-                  <div class="crowdin-row-1">
-                    <div class="crowdin-col-left">
-                      <span class="task-id">#{{ idx + 1 }}</span>
-                      <span class="task-label crowdin-title" :class="{ clickable: true }">{{ task.title }}</span>
-                    </div>
-                  </div>
-                  <!-- Progress bar nếu có -->
-                  <div v-if="task.progress !== undefined" class="task-progress-bar-bg">
-                    <div class="task-progress-bar" :style="{ width: task.progress + '%'}"></div>
-                  </div>
-                  <div class="crowdin-row-2">
-                    <div class="crowdin-col-left">
-                      <span class="date-text">{{ formatDate(task.createdAt) }}</span>
-                    </div>
-                  </div>
-                  <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
-                    <div class="crowdin-col-left">
-                      <span class="arrow">→</span>
-                      <span class="due-date-label">
-                        <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
-                        <span class="due-icon" v-else>⏰</span>
-                        Due date:
-                        <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
-                          {{ formatDateTime(task.dueDate) }}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                  <div class="crowdin-row-4">
-                    <div class="crowdin-col-left">
-                      <div class="task-meta">
-                        <!-- Avatar assignee -->
-                        <div class="assignee-info" v-if="task.assignedTo">
-                          <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
-                          <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
-                          <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
-                        </div>
-                        <!-- File info với icon động và tooltip -->
-                        <div class="file-info" v-if="task.fileId">
-                          <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                          <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+          <!-- Multiple Languages: Swimlanes Structure -->
+          <div v-else class="kanban-swimlanes">
+            <div v-for="language in availableLanguages" :key="language" class="language-swimlane">
+              <!-- Language Header -->
+              <div class="language-swimlane-header" @click="toggleLanguageCollapse(language)">
+                <i class="language-toggle-icon pi" :class="isLanguageCollapsed(language) ? 'pi-chevron-right collapsed' : 'pi-chevron-up'"></i>
+                <div class="language-flag">{{ language.substring(0, 2).toUpperCase() }}</div>
+                <span class="language-name">{{ getLanguageName(language) }}</span>
+                <span class="language-count">({{ tasksByLanguageAndStatus[language].todo.length + tasksByLanguageAndStatus[language].inProgress.length + tasksByLanguageAndStatus[language].done.length }})</span>
+              </div>
+
+              <!-- Language Tasks Row -->
+              <div v-if="!isLanguageCollapsed(language)" class="language-swimlane-content">
+                <div class="kanban-column todo-column" @dragover="handleDragOver($event, 'todo')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'todo')">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].todo" :key="task.id" class="task-card-link" @click="selectedTask = task">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                      <!-- Task card content -->
+                      <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
+                        <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
+                        <span v-else-if="task.status === 'pending'">To do</span>
+                        <span v-else-if="task.status === 'in_progress'">In progress</span>
+                        <span v-else-if="task.status === 'completed'">Done</span>
+                        <span v-else-if="task.status === 'closed'">Closed</span>
+                      </div>
+                      <div class="crowdin-row-1">
+                        <div class="crowdin-col-left">
+                          <span class="task-id">#{{ idx + 1 }}</span>
+                          <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                  <div class="crowdin-row-5" v-if="task.type">
-                    <div class="crowdin-col-left">
-                      <div class="task-type-tag crowdin-tag">
-                        {{ task.type }}
+                      <div class="crowdin-row-2">
+                        <div class="crowdin-col-left">
+                          <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <!-- Close button -->
-                  <div class="crowdin-row-6" v-if="task.status === 'completed'">
-                    <div class="crowdin-col-right">
-                      <button
-                        class="close-task-btn"
-                        @click.stop="closeTask(task)"
-                        :disabled="task.status === 'closed'"
-                        :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                      >
-                        Close
-                      </button>
+                      <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
+                        <div class="crowdin-col-left">
+                          <span class="arrow">→</span>
+                          <span class="due-date-label">
+                            <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                            <span class="due-icon" v-else>⏰</span>
+                            Due date:
+                            <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
+                              {{ formatDateTime(task.dueDate) }}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-4">
+                        <div class="crowdin-col-left">
+                          <div class="task-meta">
+                            <!-- Avatar assignee -->
+                            <div class="assignee-info" v-if="task.assignedTo">
+                              <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                              <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                              <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                            </div>
+                            <!-- File info với icon động và tooltip -->
+                            <div class="file-info" v-if="task.fileId">
+                              <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                              <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-5" v-if="task.type">
+                        <div class="crowdin-col-left">
+                          <div class="task-type-tag crowdin-tag">
+                            {{ task.type }}
+                          </div>
+                        </div>
+                      </div>
+                      <!-- Close button -->
+                      <div class="crowdin-row-6" v-if="task.status === 'completed'">
+                        <div class="crowdin-col-right">
+                          <button
+                            class="close-task-btn"
+                            @click.stop="closeTask(task)"
+                            :disabled="task.status === 'closed'"
+                            :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-          <div
-            class="kanban-column"
-            @dragover="handleDragOver($event, 'done')"
-            @dragleave="handleDragLeave($event)"
-            @drop="handleDrop($event, 'done')"
-          >
-            <!-- Drag Over Title for Done Column -->
-            <div v-if="isDragging && dragOverColumn === 'done'" class="drag-over-title">
-              <div class="drag-over-title-content">
-                <span class="drag-over-icon">📋</span>
-                <span class="drag-over-text">Move to Done</span>
-              </div>
-            </div>
 
-            <div v-if="loading" class="kanban-loading">Loading...</div>
-            <div v-else>
-              <div
-                v-for="(task, idx) in doneTasks"
-                :key="task.id"
-                class="task-card-link"
-                style="text-decoration: none;"
-                @click="selectedTask = task"
-              >
-                <div
-                  :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                  tabindex="0"
-                  draggable="true"
-                  @dragstart="handleDragStart($event, task, idx)"
-                  @dragend="handleDragEnd($event)"
-                  @keydown.enter="selectedTask = task"
-                  @click="selectedTask = task"
-                >
-                  <!-- Badge trạng thái -->
-                  <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
-                    <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
-                    <span v-else-if="task.status === 'pending'">To do</span>
-                    <span v-else-if="task.status === 'in_progress'">In progress</span>
-                    <span v-else-if="task.status === 'completed'">Done</span>
-                    <span v-else-if="task.status === 'closed'">Closed</span>
-                  </div>
-                  <div class="crowdin-row-1">
-                    <div class="crowdin-col-left">
-                      <span class="task-id">#{{ idx + 1 }}</span>
-                      <span class="task-label crowdin-title" :class="{ clickable: true }">{{ task.title }}</span>
-                    </div>
-                  </div>
-                  <!-- Progress bar nếu có -->
-                  <div v-if="task.progress !== undefined" class="task-progress-bar-bg">
-                    <div class="task-progress-bar" :style="{ width: task.progress + '%'}"></div>
-                  </div>
-                  <div class="crowdin-row-2">
-                    <div class="crowdin-col-left">
-                      <span class="date-text">{{ formatDate(task.createdAt) }}</span>
-                    </div>
-                  </div>
-                  <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
-                    <div class="crowdin-col-left">
-                      <span class="arrow">→</span>
-                      <span class="due-date-label">
-                        <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
-                        <span class="due-icon" v-else>⏰</span>
-                        Due date:
-                        <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
-                          {{ formatDateTime(task.dueDate) }}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                  <div class="crowdin-row-4">
-                    <div class="crowdin-col-left">
-                      <div class="task-meta">
-                        <!-- Avatar assignee -->
-                        <div class="assignee-info" v-if="task.assignedTo">
-                          <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
-                          <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
-                          <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                <div class="kanban-column inprogress-column" @dragover="handleDragOver($event, 'inProgress')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'inProgress')">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].inProgress" :key="task.id" class="task-card-link" @click="selectedTask = task">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                      <!-- Same task card content as above -->
+                      <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
+                        <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
+                        <span v-else-if="task.status === 'pending'">To do</span>
+                        <span v-else-if="task.status === 'in_progress'">In progress</span>
+                        <span v-else-if="task.status === 'completed'">Done</span>
+                        <span v-else-if="task.status === 'closed'">Closed</span>
+                      </div>
+                      <div class="crowdin-row-1">
+                        <div class="crowdin-col-left">
+                          <span class="task-id">#{{ idx + 1 }}</span>
+                          <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                         </div>
-                        <!-- File info với icon động và tooltip -->
-                        <div class="file-info" v-if="task.fileId">
-                          <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                          <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                      </div>
+                      <div class="crowdin-row-2">
+                        <div class="crowdin-col-left">
+                          <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
+                        <div class="crowdin-col-left">
+                          <span class="arrow">→</span>
+                          <span class="due-date-label">
+                            <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                            <span class="due-icon" v-else>⏰</span>
+                            Due date:
+                            <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
+                              {{ formatDateTime(task.dueDate) }}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-4">
+                        <div class="crowdin-col-left">
+                          <div class="task-meta">
+                            <!-- Avatar assignee -->
+                            <div class="assignee-info" v-if="task.assignedTo">
+                              <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                              <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                              <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                            </div>
+                            <!-- File info với icon động và tooltip -->
+                            <div class="file-info" v-if="task.fileId">
+                              <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                              <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-5" v-if="task.type">
+                        <div class="crowdin-col-left">
+                          <div class="task-type-tag crowdin-tag">
+                            {{ task.type }}
+                          </div>
+                        </div>
+                      </div>
+                      <!-- Close button -->
+                      <div class="crowdin-row-6" v-if="task.status === 'completed'">
+                        <div class="crowdin-col-right">
+                          <button
+                            class="close-task-btn"
+                            @click.stop="closeTask(task)"
+                            :disabled="task.status === 'closed'"
+                            :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                          >
+                            Close
+                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div class="crowdin-row-5" v-if="task.type">
-                    <div class="crowdin-col-left">
-                      <div class="task-type-tag crowdin-tag">
-                        {{ task.type }}
+                </div>
+
+                <div class="kanban-column done-column" @dragover="handleDragOver($event, 'done')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'done')">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].done" :key="task.id" class="task-card-link" @click="selectedTask = task">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                      <!-- Same task card content as above -->
+                      <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
+                        <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
+                        <span v-else-if="task.status === 'pending'">To do</span>
+                        <span v-else-if="task.status === 'in_progress'">In progress</span>
+                        <span v-else-if="task.status === 'completed'">Done</span>
+                        <span v-else-if="task.status === 'closed'">Closed</span>
                       </div>
-                    </div>
-                  </div>
-                  <!-- Close button -->
-                  <div class="crowdin-row-6" v-if="task.status === 'completed'">
-                    <div class="crowdin-col-right">
-                      <button
-                        class="close-task-btn"
-                        @click.stop="closeTask(task)"
-                        :disabled="task.status === 'closed'"
-                        :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                      >
-                        Close
-                      </button>
+                      <div class="crowdin-row-1">
+                        <div class="crowdin-col-left">
+                          <span class="task-id">#{{ idx + 1 }}</span>
+                          <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-2">
+                        <div class="crowdin-col-left">
+                          <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
+                        <div class="crowdin-col-left">
+                          <span class="arrow">→</span>
+                          <span class="due-date-label">
+                            <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                            <span class="due-icon" v-else>⏰</span>
+                            Due date:
+                            <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
+                              {{ formatDateTime(task.dueDate) }}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-4">
+                        <div class="crowdin-col-left">
+                          <div class="task-meta">
+                            <!-- Avatar assignee -->
+                            <div class="assignee-info" v-if="task.assignedTo">
+                              <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                              <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                              <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                            </div>
+                            <!-- File info với icon động và tooltip -->
+                            <div class="file-info" v-if="task.fileId">
+                              <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                              <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="crowdin-row-5" v-if="task.type">
+                        <div class="crowdin-col-left">
+                          <div class="task-type-tag crowdin-tag">
+                            {{ task.type }}
+                          </div>
+                        </div>
+                      </div>
+                      <!-- Close button -->
+                      <div class="crowdin-row-6" v-if="task.status === 'completed'">
+                        <div class="crowdin-col-right">
+                          <button
+                            class="close-task-btn"
+                            @click.stop="closeTask(task)"
+                            :disabled="task.status === 'closed'"
+                            :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1949,7 +2353,7 @@ function getStatusText(status: string): string {
                 <div class="task-item-left">
                   <div class="task-item-title">
                     <span class="task-id">#{{ task.id }}</span>
-                    <span class="task-title">{{ task.title }}</span>
+                    <span class="task-title">{{ getCleanTaskTitle(task.title) }}</span>
                   </div>
                   <div class="task-item-details">
                     <span class="task-date">{{ formatDate(task.createdAt) }}</span>
@@ -2032,11 +2436,11 @@ function getStatusText(status: string): string {
 .search-filter-container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.8rem;
   background: #f8fafc;
-  padding: 0.7em 1.2em;
-  border-radius: 10px;
-  margin-bottom: 1.2em;
+  padding: 0.5em 1em;
+  border-radius: 8px;
+  margin-bottom: 1em;
 }
 
 .search-section {
@@ -2065,19 +2469,19 @@ function getStatusText(status: string): string {
 
 .search-icon {
   position: absolute;
-  left: 12px;
+  left: 10px;
   color: #6366f1;
-  font-size: 1.2em;
-  margin-right: -0.5em;
+  font-size: 1em;
+  margin-right: -0.4em;
 }
 
 .search-input {
   width: 100%;
-  min-width: 180px;
-  border-radius: 8px;
+  min-width: 160px;
+  border-radius: 6px;
   border: 1.5px solid #e5e7eb;
-  padding: 8px 14px 8px 32px;
-  font-size: 1em;
+  padding: 6px 12px 6px 28px;
+  font-size: 0.9em;
   background: white;
   transition: border-color 0.2s ease;
 }
@@ -2092,13 +2496,13 @@ function getStatusText(status: string): string {
 .filter-btn {
   display: flex;
   align-items: center;
-  gap: 0.5em;
-  padding: 8px 14px;
+  gap: 0.4em;
+  padding: 6px 12px;
   border: 1.5px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 6px;
   background: white;
   color: #374151;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -2171,6 +2575,60 @@ function getStatusText(status: string): string {
 .clear-filter-btn:hover {
   border-color: #ef4444;
   color: #ef4444;
+}
+
+.create-task-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #22c55e;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(34, 197, 94, 0.2);
+}
+
+.create-task-btn:hover {
+  background: #16a34a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(34, 197, 94, 0.3);
+}
+
+.create-task-btn:active {
+  transform: translateY(0);
+}
+
+.create-task-btn-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  background: #22c55e;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(34, 197, 94, 0.2);
+}
+
+.create-task-btn-header:hover {
+  background: #16a34a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(34, 197, 94, 0.3);
+}
+
+.create-task-btn-header:active {
+  transform: translateY(0);
 }
 
 /* Filter Dropdown Styles */
@@ -2526,10 +2984,21 @@ function getStatusText(status: string): string {
 
 .task-tabs {
   display: flex;
-  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 2rem;
   border-bottom: 1px solid #e5e7eb;
   padding-bottom: 1rem;
+}
+
+.tabs-left {
+  display: flex;
+  gap: 1rem;
+}
+
+.tabs-right {
+  display: flex;
+  align-items: center;
 }
 
 .tab-btn {
@@ -2690,6 +3159,12 @@ function getStatusText(status: string): string {
   gap: 2em;
   margin-bottom: 1.5em;
   justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e2e8f0;
 }
 .kanban-status-card {
   background: #f7f8fa;
@@ -2745,18 +3220,18 @@ function getStatusText(status: string): string {
 }
 .kanban-board {
   display: flex;
-  gap: 2em;
-  min-height: 350px;
+  gap: 1.5em;
+  min-height: 300px;
 }
 .kanban-column {
   background: #f8fafc;
-  border-radius: 12px;
+  border-radius: 10px;
   flex: 1 1 0;
-  padding: 1em;
-  min-width: 260px;
+  padding: 0.8em;
+  min-width: 240px;
   display: flex;
   flex-direction: column;
-  gap: 1em;
+  gap: 0.8em;
   transition: background-color 0.2s ease;
 }
 
@@ -2765,13 +3240,13 @@ function getStatusText(status: string): string {
   border: 2px dashed #2563eb;
 }
 .kanban-column-title {
-  font-size: 1.1em;
+  font-size: 1em;
   font-weight: 700;
   color: #374151;
-  margin-bottom: 1em;
+  margin-bottom: 0.8em;
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: 0.4em;
 }
 .done-info {
   background: #e5e7eb;
@@ -2789,6 +3264,160 @@ function getStatusText(status: string): string {
   text-align: center;
   color: #888;
   padding: 2em 0;
+}
+
+/* Global Empty State Styles */
+.global-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+}
+
+.loading-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  animation: pulse 2s infinite;
+}
+
+.loading-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.global-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+  padding: 3rem 2rem;
+}
+
+.global-empty-icon {
+  font-size: 5rem;
+  margin-bottom: 2rem;
+  opacity: 0.6;
+  animation: float 3s ease-in-out infinite;
+}
+
+.global-empty-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.global-empty-subtext {
+  font-size: 1rem;
+  color: #6b7280;
+  margin-bottom: 2rem;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.global-empty-btn {
+  background: #22c55e;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 1rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.global-empty-btn:hover {
+  background: #16a34a;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+}
+
+.global-empty-btn:active {
+  transform: translateY(0);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.kanban-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+  opacity: 0.7;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.empty-state-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state-subtext {
+  font-size: 0.9rem;
+  color: #9ca3af;
+  line-height: 1.4;
+}
+
+.empty-state-btn {
+  margin-top: 1.5rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.empty-state-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.empty-state-btn:active {
+  transform: translateY(0);
 }
 .task-card {
   background: #fff;
@@ -2947,18 +3576,18 @@ function getStatusText(status: string): string {
 .back-btn {
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  padding: 0.75em 1.5em;
-  font-size: 1rem;
+  border-radius: 16px;
+  padding: 0.6em 1.2em;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #374151;
   cursor: pointer;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .back-btn:hover {
@@ -2975,9 +3604,9 @@ function getStatusText(status: string): string {
 .delete-btn {
   background: #dc2626;
   border: 1px solid #dc2626;
-  border-radius: 20px;
-  padding: 0.75em 1.5em;
-  font-size: 1rem;
+  border-radius: 16px;
+  padding: 0.6em 1.2em;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #fff;
   cursor: pointer;
@@ -2985,7 +3614,7 @@ function getStatusText(status: string): string {
   box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .delete-btn:hover {
@@ -3000,41 +3629,41 @@ function getStatusText(status: string): string {
   box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
 }
 .task-detail-header {
-  font-size: 2em;
+  font-size: 1.5em;
   font-weight: 700;
-  margin-bottom: 0.5em;
+  margin-bottom: 0.4em;
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: 0.4em;
 }
 .task-detail-id {
   color: #888;
-  font-size: 0.9em;
+  font-size: 0.8em;
   font-weight: 600;
 }
 .task-detail-title {
   color: #222;
-  font-size: 1.1em;
+  font-size: 1em;
   font-weight: 700;
 }
 .task-detail-meta-box {
   background: #f5f6f7;
-  border-radius: 22px;
+  border-radius: 18px;
   display: flex;
-  gap: 2em;
-  padding: 2em 2em 1.5em 2em;
-  margin-bottom: 2em;
+  gap: 1.5em;
+  padding: 1.5em 1.5em 1em 1.5em;
+  margin-bottom: 1.5em;
 }
 .task-detail-meta-col {
   flex: 1 1 0;
   color: #374151;
-  font-size: 1.05em;
+  font-size: 0.9em;
 }
 .meta-label {
   color: #64748b;
-  font-size: 0.95em;
+  font-size: 0.85em;
   font-weight: 700;
-  margin-bottom: 0.7em;
+  margin-bottom: 0.5em;
   letter-spacing: 0.04em;
 }
 .progress-bar-bg {
@@ -3081,8 +3710,8 @@ function getStatusText(status: string): string {
   margin-top: 0.3em;
 }
 .author-avatar {
-  width: 56px;
-  height: 56px;
+  width: 40px;
+  height: 40px;
   background: #065f46;
   color: #fff;
   border-radius: 50%;
@@ -3090,8 +3719,8 @@ function getStatusText(status: string): string {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 1.2em;
-  margin-bottom: 0.5em;
+  font-size: 0.9em;
+  margin-bottom: 0.4em;
   overflow: hidden;
 }
 .author-avatar img {
@@ -3106,9 +3735,9 @@ function getStatusText(status: string): string {
   margin-top: 2em;
 }
 .members-title {
-  font-size: 1.1em;
+  font-size: 1em;
   font-weight: 600;
-  margin-bottom: 0.7em;
+  margin-bottom: 0.5em;
 }
 .members-table {
   width: 100%;
@@ -3614,16 +4243,16 @@ body.modal-open main {
 .crowdin-style {
   position: relative;
   border: 2px solid #22c55e;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
   box-shadow: 0 4px 16px rgba(34,197,94,0.10);
-  padding: 1.7em 2em 1.3em 2em;
-  margin-bottom: 1em;
+  padding: 1.3em 1.5em 1em 1.5em;
+  margin-bottom: 0.8em;
   transition: box-shadow 0.2s, border 0.2s, background 0.2s, transform 0.18s cubic-bezier(.4,2,.6,1);
   cursor: pointer;
-  min-width: 270px;
-  font-size: 15px;
-  line-height: 1.6;
+  min-width: 250px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .crowdin-style:hover {
   border-color: #2563eb;
@@ -3652,22 +4281,22 @@ body.modal-open main {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  margin-bottom: 0.8em;
+  margin-bottom: 0.6em;
 }
 .crowdin-row-1 {
-  margin-bottom: 1em;
+  margin-bottom: 0.8em;
 }
 .crowdin-row-2 {
-  margin-bottom: 0.6em;
+  margin-bottom: 0.5em;
 }
 .crowdin-row-3 {
-  margin-bottom: 0.6em;
+  margin-bottom: 0.5em;
 }
 .crowdin-row-4 {
-  margin-bottom: 0.6em;
+  margin-bottom: 0.5em;
 }
 .crowdin-row-5 {
-  margin-bottom: 0.3em;
+  margin-bottom: 0.2em;
 }
 .crowdin-row-6 {
   margin-top: 0.5em;
@@ -3684,11 +4313,11 @@ body.modal-open main {
 .crowdin-title {
   color: #2563eb;
   font-weight: 700;
-  font-size: 1.05em;
-  margin-left: 0.5em;
+  font-size: 0.95em;
+  margin-left: 0.4em;
   transition: text-decoration 0.2s;
   white-space: pre-line;
-  line-height: 1.4;
+  line-height: 1.3;
 }
 .crowdin-title.clickable:hover {
   text-decoration: underline;
@@ -3954,6 +4583,140 @@ body.modal-open main {
   font-weight: 600;
 }
 
+/* Language grouping styles */
+.language-group {
+  margin-bottom: 1.5rem;
+}
+
+.language-group.first-language {
+  margin-top: 0;
+}
+
+.language-section {
+  width: 100%;
+}
+
+.language-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  border: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.8rem;
+  position: relative;
+}
+
+.language-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s ease;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.language-toggle-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+.language-toggle-icon i {
+  font-size: 0.75rem;
+}
+
+.language-header:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.language-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s ease;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.language-toggle-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+.language-toggle-icon i {
+  font-size: 0.75rem;
+}
+
+.language-tasks {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.language-header:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #6366f1, #8b5cf6);
+}
+
+.language-flag {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.language-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.language-count {
+  background: #3b82f6;
+  color: white;
+  border-radius: 8px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: auto;
+  min-width: 1.3rem;
+  text-align: center;
+  line-height: 1.2;
+}
+
 .task-item-header {
   display: flex;
   justify-content: space-between;
@@ -3970,5 +4733,139 @@ body.modal-open main {
 .task-item-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+/* Language grouping styles for Crowdin-style board */
+.language-group {
+  margin-bottom: 1.5em;
+}
+.language-section {
+  margin-bottom: 1em;
+}
+.language-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  background: #f1f5f9;
+  color: #374151;
+}
+.language-flag {
+  width: 16px;
+  height: 16px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+.language-name {
+  font-weight: 600;
+  color: #374151;
+}
+.language-count {
+  background: #e0e7ff;
+  color: #2563eb;
+  border-radius: 8px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  min-width: 1.3rem;
+  text-align: center;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+.language-tasks {
+  margin-left: 0.5rem;
+}
+
+/* Swimlanes styles for multiple languages */
+.kanban-swimlanes {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.language-swimlane {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.language-swimlane-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 600;
+  color: #374151;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.language-swimlane-header .language-name {
+  margin-right: 0;
+}
+
+.language-swimlane-header:hover {
+  background: #e2e8f0;
+}
+
+.language-swimlane-content {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  min-height: 200px;
+}
+
+.language-swimlane-content .kanban-column {
+  flex: 1;
+  background: white;
+  border-radius: 6px;
+  padding: 0.8rem;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.language-swimlane-content .task-card {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.language-swimlane-content .task-card-link {
+  width: 100%;
+  max-width: 100%;
+}
+
+.language-swimlane-content .kanban-column {
+  min-height: 100px;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.todo-column {
+  border-left: 4px solid #a3a3a3;
+}
+
+.inprogress-column {
+  border-left: 4px solid #2563eb;
+}
+
+.done-column {
+  border-left: 4px solid #059669;
 }
 </style>

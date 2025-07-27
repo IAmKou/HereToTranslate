@@ -81,8 +81,11 @@ export class ProjectController {
 
   @UseGuards(JwtAuthGuard)
   @Delete(':projectId')
-  async delete(@Param('projectId', BigIntTransformPipe) projectId: bigint) {
-    await this.projects.deleteProject(projectId);
+  async delete(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Req() req: AuthenticatedRequest
+  ) {
+    await this.projects.deleteProject(projectId, req.user.id);
     return { message: `Project with ID ${projectId} deleted successfully` };
   }
 
@@ -111,12 +114,14 @@ export class ProjectController {
   @Post(':projectId/add-user')
   async addUserToProject(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body('userId', BigIntTransformPipe) userId: bigint
+    @Body('userId', BigIntTransformPipe) userId: bigint,
+    @Req() req: AuthenticatedRequest
   ) {
     try {
       const updatedProject = await this.projects.addUserToProject(
         projectId,
-        userId
+        userId,
+        req.user.id
       );
       return {
         message: 'User added successfully',

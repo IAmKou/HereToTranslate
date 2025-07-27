@@ -16,47 +16,75 @@
             v-model="formData.title"
             type="text"
             class="form-control"
+            :class="{ 'error': fieldErrors.title }"
             placeholder="Enter task title"
+            @blur="validateTitle"
+            @input="validateTitle"
             required
           />
+          <div v-if="fieldErrors.title" class="field-error">
+            {{ fieldErrors.title }}
+          </div>
         </div>
 
         <div class="form-group">
           <label for="description">Description</label>
-          <textarea
-            id="description"
-            v-model="formData.description"
-            class="form-control"
-            placeholder="Enter task description (optional)"
-            rows="3"
-          ></textarea>
+          <div class="textarea-container">
+            <textarea
+              id="description"
+              v-model="formData.description"
+              class="form-control"
+              :class="{ 'error': fieldErrors.description }"
+              placeholder="Enter task description (optional)"
+              rows="3"
+              @blur="validateDescription"
+              @input="validateDescription"
+            ></textarea>
+            <div class="char-counter" :class="{ 'warning': descriptionLength > 400, 'error': descriptionLength > 500 }">
+              {{ descriptionLength }}/500
+            </div>
+          </div>
+          <div v-if="fieldErrors.description" class="field-error">
+            {{ fieldErrors.description }}
+          </div>
         </div>
 
         <div class="form-group">
           <label for="fileSelection">File Selection</label>
-          <div style="font-size: 0.8em; color: #666; margin-bottom: 0.5rem;">
-            Debug: {{ projectFilesComputed.length }} files loaded
-            <br>
-            Props files: {{ props.projectFiles?.length || 0 }}
-            <br>
-            Files: {{ projectFilesComputed.map((f: any) => f.fileName).join(', ') }}
-          </div>
-          <select
-            id="fileSelection"
-            v-model="selectedFileId"
-            class="form-control"
-            @change="onFileChange"
-          >
-            <option value="">Select a file</option>
-            <option
-              v-for="file in projectFilesComputed"
-              :key="file.fileId"
-              :value="file.fileId"
-              :disabled="file.status !== 'ready'"
+          <div class="file-selection-container">
+            <select
+              id="fileSelection"
+              v-model="selectedFileId"
+              class="form-control"
+              :class="{ 'error': fieldErrors.fileSelection }"
+              @change="onFileChange"
+              @blur="validateFileSelection"
             >
-              {{ file.fileName }} {{ file.status !== 'ready' ? `(${file.status})` : '' }}
-            </option>
-          </select>
+              <option value="">Select a file</option>
+              <option
+                v-for="file in projectFilesComputed"
+                :key="file.fileId"
+                :value="file.fileId"
+                :disabled="file.status !== 'ready'"
+              >
+                {{ file.fileName }} {{ file.status !== 'ready' ? `(${file.status})` : '' }}
+              </option>
+            </select>
+            <div v-if="projectFilesComputed.length > 0" class="quick-file-actions">
+              <button
+                type="button"
+                class="quick-action-btn"
+                @click="selectFirstFile"
+                :disabled="projectFilesComputed.length === 0"
+                title="Select first available file"
+              >
+                <i class="pi pi-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+          <div v-if="fieldErrors.fileSelection" class="field-error">
+            {{ fieldErrors.fileSelection }}
+          </div>
           <div v-if="projectFilesComputed.length === 0" style="color: #666; font-style: italic; margin-top: 0.5rem;">
             No files found. Please check if files have been uploaded to this project.
           </div>
@@ -115,6 +143,38 @@
           </div>
         </div>
 
+        <div class="form-group">
+          <label for="language">Target Languages</label>
+          <div class="languages-grid" :class="{ 'error': fieldErrors.languages }">
+            <label
+              v-for="language in availableLanguages"
+              :key="language.code"
+              class="language-option"
+            >
+              <input
+                type="checkbox"
+                :value="language.code"
+                v-model="selectedLanguages"
+                class="language-checkbox"
+                @change="validateLanguages"
+              />
+              <div class="language-info">
+                <span class="language-flag">{{ language.code.toUpperCase() }}</span>
+                <div class="language-text">
+                  <span class="language-name">{{ language.name }}</span>
+                  <span class="language-native">{{ language.nativeName }}</span>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div v-if="fieldErrors.languages" class="field-error">
+            {{ fieldErrors.languages }}
+          </div>
+          <div v-if="selectedLanguages.length > 0" class="selected-languages-summary">
+            <strong>Selected:</strong> {{ selectedLanguages.length }} language(s)
+          </div>
+        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="assignedTo">Assign To</label>
@@ -154,24 +214,25 @@
         </div>
 
         <div class="form-group">
-          <label for="dueDate">Due Date & Time</label>
-          <div class="datetime-inputs">
+          <label for="dueDateTime">Due Date & Time</label>
+          <div class="datetime-picker-container">
             <input
-              id="dueDate"
-              v-model="formData.dueDate"
-              type="date"
-              class="form-control"
-              :min="minDate"
-              style="flex: 1; margin-right: 0.5rem;"
+              id="dueDateTime"
+              v-model="formData.dueDateTime"
+              type="datetime-local"
+              class="form-control datetime-picker"
+              :class="{ 'error': fieldErrors.dueDateTime }"
+              :min="minDateTime"
+              @change="validateDueDateTime"
             />
-            <input
-              id="dueTime"
-              v-model="formData.dueTime"
-              type="time"
-              class="form-control"
-              step="300"
-              style="flex: 1;"
-            />
+
+          </div>
+          <div v-if="fieldErrors.dueDateTime" class="field-error">
+            {{ fieldErrors.dueDateTime }}
+          </div>
+          <div v-if="dueDateTimeWarning && !fieldErrors.dueDateTime" class="datetime-warning">
+            <i class="pi pi-exclamation-triangle"></i>
+            {{ dueDateTimeWarning }}
           </div>
         </div>
 
@@ -212,20 +273,37 @@
           v-model="formData.title"
           type="text"
           class="form-control"
+          :class="{ 'error': fieldErrors.title }"
           placeholder="Enter task title"
+          @blur="validateTitle"
+          @input="validateTitle"
           required
         />
+        <div v-if="fieldErrors.title" class="field-error">
+          {{ fieldErrors.title }}
+        </div>
       </div>
 
       <div class="form-group">
         <label for="description">Description</label>
-        <textarea
-          id="description"
-          v-model="formData.description"
-          class="form-control"
-          placeholder="Enter task description (optional)"
-          rows="3"
-        ></textarea>
+        <div class="textarea-container">
+          <textarea
+            id="description"
+            v-model="formData.description"
+            class="form-control"
+            :class="{ 'error': fieldErrors.description }"
+            placeholder="Enter task description (optional)"
+            rows="3"
+            @blur="validateDescription"
+            @input="validateDescription"
+          ></textarea>
+          <div class="char-counter" :class="{ 'warning': descriptionLength > 400, 'error': descriptionLength > 500 }">
+            {{ descriptionLength }}/500
+          </div>
+        </div>
+        <div v-if="fieldErrors.description" class="field-error">
+          {{ fieldErrors.description }}
+        </div>
       </div>
 
       <div class="form-group">
@@ -234,7 +312,9 @@
           id="fileSelection"
           v-model="selectedFileId"
           class="form-control"
+          :class="{ 'error': fieldErrors.fileSelection }"
           @change="onFileChange"
+          @blur="validateFileSelection"
         >
           <option value="">Select a file</option>
           <option
@@ -246,6 +326,9 @@
             {{ file.fileName }} {{ file.status !== 'ready' ? `(${file.status})` : '' }}
           </option>
         </select>
+        <div v-if="fieldErrors.fileSelection" class="field-error">
+          {{ fieldErrors.fileSelection }}
+        </div>
         <div v-if="selectedFileId && fileParts.length > 0" class="file-parts-section">
           <label class="file-parts-label">File Parts:</label>
           <div class="file-parts-info" style="margin-bottom: 0.5rem; font-size: 0.875rem; color: #666;">
@@ -301,6 +384,58 @@
         </div>
       </div>
 
+      <div class="form-group">
+        <label for="language">Target Languages</label>
+        <div class="languages-header">
+          <div class="languages-grid" :class="{ 'error': fieldErrors.languages }">
+            <label
+              v-for="language in availableLanguages"
+              :key="language.code"
+              class="language-option"
+            >
+              <input
+                type="checkbox"
+                :value="language.code"
+                v-model="selectedLanguages"
+                class="language-checkbox"
+                @change="validateLanguages"
+              />
+              <div class="language-info">
+                <span class="language-flag">{{ language.code.toUpperCase() }}</span>
+                <div class="language-text">
+                  <span class="language-name">{{ language.name }}</span>
+                  <span class="language-native">{{ language.nativeName }}</span>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div class="language-quick-actions">
+            <button
+              type="button"
+              class="quick-action-btn"
+              @click="selectAllLanguages"
+              title="Select all languages"
+            >
+              <i class="pi pi-check-square"></i>
+            </button>
+            <button
+              type="button"
+              class="quick-action-btn"
+              @click="clearAllLanguages"
+              title="Clear all selections"
+            >
+              <i class="pi pi-square"></i>
+            </button>
+          </div>
+        </div>
+        <div v-if="fieldErrors.languages" class="field-error">
+          {{ fieldErrors.languages }}
+        </div>
+        <div v-if="selectedLanguages.length > 0" class="selected-languages-summary">
+          <strong>Selected:</strong> {{ selectedLanguages.length }} language(s)
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label for="assignedTo">Assign To</label>
@@ -340,24 +475,25 @@
       </div>
 
       <div class="form-group">
-        <label for="dueDate">Due Date & Time</label>
-        <div class="datetime-inputs">
+        <label for="dueDateTime">Due Date & Time</label>
+        <div class="datetime-picker-container">
           <input
-            id="dueDate"
-            v-model="formData.dueDate"
-            type="date"
-            class="form-control"
-            :min="minDate"
-            style="flex: 1; margin-right: 0.5rem;"
+            id="dueDateTime"
+            v-model="formData.dueDateTime"
+            type="datetime-local"
+            class="form-control datetime-picker"
+            :class="{ 'error': fieldErrors.dueDateTime }"
+            :min="minDateTime"
+            @change="validateDueDateTime"
           />
-          <input
-            id="dueTime"
-            v-model="formData.dueTime"
-            type="time"
-            class="form-control"
-            step="300"
-            style="flex: 1;"
-          />
+
+        </div>
+        <div v-if="fieldErrors.dueDateTime" class="field-error">
+          {{ fieldErrors.dueDateTime }}
+        </div>
+        <div v-if="dueDateTimeWarning && !fieldErrors.dueDateTime" class="datetime-warning">
+          <i class="pi pi-exclamation-triangle"></i>
+          {{ dueDateTimeWarning }}
         </div>
       </div>
 
@@ -390,6 +526,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { taskService, CreateTaskDto, ProjectFile, FilePart } from '../services/task.service';
+import { SUPPORTED_LANGUAGES, Language } from '../utils/languages';
 
 interface Props {
   visible: boolean;
@@ -408,6 +545,7 @@ interface Props {
     fileName: string;
     status: string;
   }>;
+  projectTargetLanguages?: string[];
   branchId?: string;
   fileId?: string;
   filePart?: number;
@@ -431,6 +569,10 @@ const props = defineProps({
     default: () => []
   },
   projectFiles: {
+    type: Array,
+    default: () => []
+  },
+  projectTargetLanguages: {
     type: Array,
     default: () => []
   },
@@ -460,6 +602,18 @@ const emit = defineEmits<{
 const loading = ref(false);
 const error = ref('');
 
+// Field validation errors
+const fieldErrors = ref({
+  title: '',
+  description: '',
+  fileSelection: '',
+  languages: '',
+  dueDateTime: ''
+});
+
+// Track if form has been submitted to show all errors
+const hasSubmitted = ref(false);
+
 const formData = ref<CreateTaskDto>({
   title: '',
   description: '',
@@ -468,16 +622,40 @@ const formData = ref<CreateTaskDto>({
   groupId: '',
   dueDate: '',
   dueTime: '',
+  dueDateTime: '',
   branchId: props.branchId,
   fileId: props.fileId,
-  filePart: props.filePart
+  filePart: props.filePart,
+  language: ''
 });
+
+// Due date time warning state
+const dueDateTimeWarning = ref('');
+
+// Languages selection state
+const selectedLanguages = ref<string[]>([]);
 
 // File selection state
 const projectFilesComputed = computed(() => props.projectFiles || []);
 const selectedFileId = ref('');
 const fileParts = ref<FilePart[]>([]);
 const selectedFileParts = ref<number[]>([]);
+
+// Language options computed from project target languages
+const availableLanguages = computed(() => {
+  if (!props.projectTargetLanguages || props.projectTargetLanguages.length === 0) {
+    return SUPPORTED_LANGUAGES; // Fallback to all languages if no target languages
+  }
+
+  return SUPPORTED_LANGUAGES.filter(lang =>
+    props.projectTargetLanguages.includes(lang.code)
+  );
+});
+
+// Character count for description
+const descriptionLength = computed(() => {
+  return formData.value.description?.length || 0;
+});
 
 // Reset form when dialog opens/closes
 watch(() => props.visible, (newVal: boolean) => {
@@ -493,14 +671,28 @@ watch(() => props.visible, (newVal: boolean) => {
       groupId: '',
       dueDate: '',
       dueTime: '',
+      dueDateTime: '',
       branchId: props.branchId,
       fileId: props.fileId,
-      filePart: props.filePart
+      filePart: props.filePart,
+      language: ''
     };
     selectedFileId.value = '';
+    selectedLanguages.value = [];
     fileParts.value = [];
     selectedFileParts.value = [];
     error.value = '';
+    dueDateTimeWarning.value = '';
+
+    // Clear field errors
+    fieldErrors.value = {
+      title: '',
+      description: '',
+      fileSelection: '',
+      languages: '',
+      dueDateTime: ''
+    };
+    hasSubmitted.value = false;
 
     // Use projectFiles from props if available, otherwise load them
     if (props.projectFiles && props.projectFiles.length > 0) {
@@ -659,9 +851,123 @@ function clearAllParts() {
   onFilePartChange();
 }
 
-async function onSubmit() {
+// Select first available file
+function selectFirstFile() {
+  const firstReadyFile = projectFilesComputed.value.find((file: any) => file.status === 'ready');
+  if (firstReadyFile) {
+    selectedFileId.value = firstReadyFile.fileId;
+    onFileChange();
+  }
+}
+
+// Select all languages
+function selectAllLanguages() {
+  selectedLanguages.value = availableLanguages.value.map(lang => lang.code);
+  validateLanguages();
+}
+
+// Clear all languages
+function clearAllLanguages() {
+  selectedLanguages.value = [];
+  validateLanguages();
+}
+
+// Validate due date time and show warnings
+function validateDueDateTime() {
+  if (!formData.value.dueDateTime) {
+    dueDateTimeWarning.value = '';
+    fieldErrors.value.dueDateTime = '';
+    return;
+  }
+
+  const selectedDateTime = new Date(formData.value.dueDateTime);
+  const now = new Date();
+  const timeDiff = selectedDateTime.getTime() - now.getTime();
+  const hoursDiff = timeDiff / (1000 * 60 * 60);
+
+  // Clear previous warning and error
+  dueDateTimeWarning.value = '';
+  fieldErrors.value.dueDateTime = '';
+
+  // Check if date is in the past
+  if (timeDiff < 0) {
+    dueDateTimeWarning.value = '⚠️ Deadline cannot be in the past';
+    fieldErrors.value.dueDateTime = 'Deadline cannot be in the past';
+    return;
+  }
+
+  // Check if deadline is too close (less than 1 hour)
+  if (hoursDiff < 1) {
+    dueDateTimeWarning.value = '⚠️ Deadline is very close (less than 1 hour)';
+    return;
+  }
+
+  // Check if deadline is too close (less than 24 hours)
+  if (hoursDiff < 24) {
+    dueDateTimeWarning.value = '⚠️ Deadline is close (less than 24 hours)';
+    return;
+  }
+}
+
+// Validate title field
+function validateTitle() {
   if (!formData.value.title.trim()) {
-    error.value = 'Please enter a task title';
+    fieldErrors.value.title = 'Task Title is required';
+    return false;
+  }
+  if (formData.value.title.trim().length < 3) {
+    fieldErrors.value.title = 'Task Title must be at least 3 characters';
+    return false;
+  }
+  fieldErrors.value.title = '';
+  return true;
+}
+
+// Validate file selection
+function validateFileSelection() {
+  if (!selectedFileId.value) {
+    fieldErrors.value.fileSelection = 'Please select a file';
+    return false;
+  }
+  fieldErrors.value.fileSelection = '';
+  return true;
+}
+
+// Validate languages selection
+function validateLanguages() {
+  if (selectedLanguages.value.length === 0) {
+    fieldErrors.value.languages = 'Please select at least one target language';
+    return false;
+  }
+  fieldErrors.value.languages = '';
+  return true;
+}
+
+// Validate description (optional field)
+function validateDescription() {
+  if (formData.value.description && formData.value.description.trim().length > 500) {
+    fieldErrors.value.description = 'Description must be less than 500 characters';
+    return false;
+  }
+  fieldErrors.value.description = '';
+  return true;
+}
+
+// Validate all fields
+function validateForm() {
+  hasSubmitted.value = true;
+
+  const isTitleValid = validateTitle();
+  const isDescriptionValid = validateDescription();
+  const isFileValid = validateFileSelection();
+  const isLanguagesValid = validateLanguages();
+
+  return isTitleValid && isDescriptionValid && isFileValid && isLanguagesValid;
+}
+
+async function onSubmit() {
+  // Validate all fields
+  if (!validateForm()) {
     return;
   }
 
@@ -669,24 +975,32 @@ async function onSubmit() {
   error.value = '';
 
   try {
-    // Clean up empty values
-    const dto: CreateTaskDto = {
-      title: formData.value.title.trim(),
-      projectId: props.projectId,
-      description: formData.value.description?.trim() || undefined,
-      assignedToId: formData.value.assignedToId || undefined,
-      groupId: formData.value.groupId || undefined,
-      dueDate: formatDateTimeForSubmission(formData.value.dueDate, formData.value.dueTime),
-      branchId: props.branchId || undefined,
-      fileId: formData.value.fileId || undefined,
-      filePart: formData.value.filePart
-    };
+    const createdTasks = [];
 
-    const task = await taskService.createTask(dto);
-    emit('success', task);
+    // Create one task per selected language (Crowdin-style)
+    for (const language of selectedLanguages.value) {
+      const dto: CreateTaskDto = {
+        title: formData.value.title.trim(),
+        projectId: props.projectId,
+        description: formData.value.description?.trim() || undefined,
+        assignedToId: formData.value.assignedToId || undefined,
+        groupId: formData.value.groupId || undefined,
+        dueDate: formData.value.dueDateTime ? new Date(formData.value.dueDateTime).toISOString() : undefined,
+        branchId: props.branchId || undefined,
+        fileId: formData.value.fileId || undefined,
+        filePart: formData.value.filePart,
+        language: language
+      };
+
+      const task = await taskService.createTask(dto);
+      createdTasks.push(task);
+    }
+
+    // Emit all created tasks
+    createdTasks.forEach(task => emit('success', task));
     emit('close');
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Failed to create task';
+    error.value = err.response?.data?.message || 'Failed to create task(s)';
   } finally {
     loading.value = false;
   }
@@ -1012,6 +1326,303 @@ input[type="datetime-local"]::-webkit-datetime-edit {
 
   .file-parts-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Languages Grid Styles */
+.languages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1px;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #e5e7eb;
+}
+
+.language-option {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.language-option:hover {
+  background: #f8fafc;
+}
+
+.language-option:has(.language-checkbox:checked) {
+  background: #f0f9ff;
+  position: relative;
+}
+
+.language-option:has(.language-checkbox:checked)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #3b82f6;
+}
+
+.language-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+  border-radius: 2px;
+  margin: 0;
+}
+
+.language-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+}
+
+.language-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 24px;
+  background: #6b7280;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.language-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.language-name {
+  font-weight: 500;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.language-native {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.selected-languages-summary {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  color: #0c4a6e;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* DateTime Picker Styles */
+.datetime-picker-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.datetime-picker {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 14px;
+  width: 100%;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.datetime-picker:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+
+
+.datetime-warning {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.datetime-warning i {
+  color: #f59e0b;
+  font-size: 14px;
+}
+
+/* Field Error Styles */
+.field-error {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-error::before {
+  content: "⚠️";
+  font-size: 14px;
+}
+
+.form-control.error {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 102, 0.1);
+}
+
+.languages-grid.error {
+  border: 1px solid #dc2626;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fef2f2;
+}
+
+/* Textarea Container and Character Counter */
+.textarea-container {
+  position: relative;
+}
+
+.char-counter {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 11px;
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.char-counter.warning {
+  color: #f59e0b;
+}
+
+.char-counter.error {
+  color: #dc2626;
+}
+
+/* File Selection Container */
+.file-selection-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-selection-container select {
+  flex: 1;
+}
+
+.quick-file-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Languages Header */
+.languages-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.languages-grid {
+  flex: 1;
+}
+
+.language-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* Quick Action Buttons */
+.quick-action-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.quick-action-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.quick-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quick-action-btn i {
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .languages-grid {
+    grid-template-columns: 1fr;
+    max-height: 240px;
+  }
+
+  .language-option {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .language-info {
+    gap: 12px;
+  }
+
+  .language-flag {
+    width: 32px;
+    height: 22px;
+    font-size: 9px;
+  }
+
+  .language-name {
+    font-size: 14px;
+  }
+
+  .language-native {
+    font-size: 12px;
   }
 }
 </style>

@@ -9,6 +9,7 @@ export interface Task {
   branchId?: string;
   fileId?: string;
   filePart?: number;
+  language?: string;
   assignedTo?: {
     id: string;
     username: string;
@@ -36,9 +37,11 @@ export interface CreateTaskDto {
   assignedToId?: string;
   groupId?: string;
   dueDate?: string;
+  dueDateTime?: string;
   branchId?: string;
   fileId?: string;
   filePart?: number;
+  language?: string;
 }
 
 export interface UpdateTaskDto {

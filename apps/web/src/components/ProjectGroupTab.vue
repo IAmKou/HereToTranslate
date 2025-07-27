@@ -17,7 +17,7 @@ const editingGroup = ref(null);
 const editGroupNameError = ref('');
 const isEditingGroup = ref(false);
 
-const emit = defineEmits(['create-group', 'edit-group', 'delete-group']);
+const emit = defineEmits(['create-group', 'edit-group', 'delete-group', 'refresh-groups']);
 
 const props = defineProps({
   project: Object,
@@ -110,31 +110,73 @@ const createGroup = async () => {
   }
   isCreatingGroup.value = true;
   try {
-    // 1. Tạo group
-    const res = await emit('create-group', { ...newGroup.value });
-    let groupId: string | number | null = null;
-    if (res && res.id) {
-      groupId = res.id;
-    } else if (props.groups && props.groups.length > 0) {
-      groupId = props.groups[props.groups.length - 1].id;
-    }
-    // 2. Nếu có chọn thành viên, gọi API assign
-    const userIds = selectedMembers.value.map((m: any) => m.id);
+    // 1. Tạo group trực tiếp bằng API
+    const createRes = await axiosInstance.post(`/projects/${props.project.id}/groups/create`, { ...newGroup.value });
+    console.log('[DEBUG] Create group response:', createRes.data);
+
+    // 2. Lấy groupId từ response
+    const groupId = createRes.data.id || createRes.data.groupId || createRes.data.group?.id;
+    console.log('[DEBUG] Create group response:', createRes.data);
+    console.log('[DEBUG] Group ID:', groupId);
+
+    // 3. Nếu có chọn thành viên, gọi API assign
+    const userIds = selectedMembers.value.map((m: any) => Number(m.id));
+    console.log('[DEBUG] Selected members:', selectedMembers.value);
+    console.log('[DEBUG] User IDs to assign:', userIds);
+    console.log('[DEBUG] Project members:', props.members);
+    console.log('[DEBUG] Project ID:', props.project?.id);
+
     if (props.project && groupId && userIds.length > 0) {
-      const assignRes = await axiosInstance.post(`/projects/${props.project.id}/groups/${groupId}/users/add`, {
-        userIds
-      });
-      console.log('[DEBUG] Assign members to group:', { groupId, userIds, assignRes: assignRes.data });
+      console.log('[DEBUG] Assigning members:', { groupId, userIds });
+      try {
+        // Convert string IDs to numbers for the API
+        const numericUserIds = userIds.map(id => Number(id));
+        console.log('[DEBUG] Numeric user IDs:', numericUserIds);
+
+        // First, ensure all users are members of the project
+        for (const userId of numericUserIds) {
+          try {
+            await axiosInstance.post(`/projects/${props.project.id}/add-user`, {
+              userId: userId
+            });
+            console.log(`[DEBUG] Added user ${userId} to project`);
+          } catch (addUserErr: any) {
+            // If user is already a member, this will fail but that's OK
+            console.log(`[DEBUG] User ${userId} might already be a member:`, addUserErr?.response?.data?.message || addUserErr.message);
+          }
+        }
+
+        // Now assign users to group
+        const assignRes = await axiosInstance.post(`/projects/${props.project.id}/groups/${groupId}/users/add`, {
+          userIds: numericUserIds
+        });
+        console.log('[DEBUG] Assign members response:', assignRes.data);
+      } catch (assignErr: any) {
+        console.error('[DEBUG] Assign members error:', assignErr);
+        // Không throw error để không làm fail việc tạo group
+        toast.add({ severity: 'warn', summary: 'Warning', detail: 'Group created but failed to assign members. Please try editing the group.', life: 3000 });
+      }
+    } else {
+      console.log('[DEBUG] No members to assign or missing groupId:', { groupId, userIds });
     }
-    // Sau khi tạo group và assign member, reload lại danh sách group
-    const refreshRes = await emit('refresh-groups');
-    console.log('[DEBUG] After refresh-groups, current groups:', props.groups);
+
+    // 4. Reload lại danh sách group
+    await emit('refresh-groups');
+
+    // 5. Reset form và đóng modal
     showCreateGroupModal.value = false;
     newGroup.value = { name: '' };
     selectedMembers.value = [];
     toast.add({ severity: 'success', summary: 'Success', detail: 'Group created successfully!', life: 2200 });
   } catch (err: any) {
-    alert('Failed to create group: ' + err.message);
+    console.error('[DEBUG] Create group error:', err);
+    let errorMsg = 'Failed to create group';
+    if (err.response?.data?.message) {
+      errorMsg = err.response.data.message;
+    } else if (err.message) {
+      errorMsg = err.message;
+    }
+    toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 5000 });
   } finally {
     isCreatingGroup.value = false;
   }
@@ -194,7 +236,7 @@ const performEditGroup = async () => {
     // 1. Cập nhật tên group
     await emit('edit-group', { id: editingGroup.value.id, name: editGroupName.value });
     // 2. Đồng bộ lại toàn bộ thành viên group
-    const userIds = editSelectedMembers.value.map((m: any) => m.id);
+    const userIds = editSelectedMembers.value.map((m: any) => Number(m.id));
     if (props.project && editingGroup.value.id) {
       await axiosInstance.post(`/projects/${props.project.id}/groups/${editingGroup.value.id}/users/set`, { userIds });
     }
@@ -204,7 +246,14 @@ const performEditGroup = async () => {
     toast.add({ severity: 'success', summary: 'Success', detail: 'Group updated successfully!', life: 2000 });
     await emit('refresh-groups');
   } catch (err: any) {
-    alert('Failed to update group: ' + err.message);
+    console.error('[DEBUG] Edit group error:', err);
+    let errorMsg = 'Failed to update group';
+    if (err.response?.data?.message) {
+      errorMsg = err.response.data.message;
+    } else if (err.message) {
+      errorMsg = err.message;
+    }
+    toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 5000 });
   } finally {
     isEditingGroup.value = false;
   }
@@ -224,7 +273,14 @@ const handleDeleteGroup = async () => {
     await emit('refresh-groups');
     toast.add({ severity: 'success', summary: 'Success', detail: 'Group deleted successfully!', life: 2000 });
   } catch (err: any) {
-    alert('Failed to delete group: ' + err.message);
+    console.error('[DEBUG] Delete group error:', err);
+    let errorMsg = 'Failed to delete group';
+    if (err.response?.data?.message) {
+      errorMsg = err.response.data.message;
+    } else if (err.message) {
+      errorMsg = err.message;
+    }
+    toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 5000 });
   } finally {
     isDeleting.value = false;
   }
@@ -241,14 +297,21 @@ const performDeleteGroup = async () => {
     showDeleteConfirmModal.value = false;
     groupToDelete.value = null;
   } catch (err: any) {
-    alert('Failed to delete group: ' + err.message);
+    console.error('[DEBUG] Perform delete group error:', err);
+    let errorMsg = 'Failed to delete group';
+    if (err.response?.data?.message) {
+      errorMsg = err.response.data.message;
+    } else if (err.message) {
+      errorMsg = err.message;
+    }
+    toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 5000 });
   }
 };
 
 const showGroupDetailModal = ref(false);
 const selectedGroup = ref(null);
 
-function viewGroupDetail(group) {
+function viewGroupDetail(group: any) {
   selectedGroup.value = group;
   showGroupDetailModal.value = true;
 }
@@ -327,10 +390,9 @@ function closeGroupDetailModal() {
         </div>
       </div>
     </div>
-    <!-- Modal tạo group (nếu cần) sẽ render ở ProjectDetailView.vue -->
+    <!-- Modal tạo group -->
     <Teleport to="body">
-      <div v-if="showCreateGroupModal" class="global-modal-overlay-fixed"></div>
-      <div v-if="showCreateGroupModal" class="modal-portal">
+      <div v-if="showCreateGroupModal" class="modal-overlay" @click.self="closeCreateGroupModal">
         <div class="modal-content group-modal-harmonize">
           <div class="modal-title-harmonize">
             <span class="modal-title-icon-harmonize">👥</span>

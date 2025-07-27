@@ -32,6 +32,10 @@ export class CreateTaskDto {
   @IsOptional()
   @IsNumber()
   filePart?: number;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
 }
 
 export class UpdateTaskDto {

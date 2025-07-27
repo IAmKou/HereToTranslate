@@ -16,7 +16,8 @@ import {
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
-  RequestEntity, CommitStatus
+  RequestEntity,
+  CommitStatus,
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -64,7 +65,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     uid: bigint,
     against: IntoPermission
   ): Promise<Permission> {
-    // against có thể là bigint hoặc string, luôn convert về bigint
     const permissionValue = BigInt(against);
     this.logger.debug(
       `Checking if user [${uid}] has permission [${permissionValue}] for project [${projectId}]`
@@ -102,7 +102,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.logger.debug(
         `User [${uid}] does NOT have permission [${permissionValue}] for project [${projectId}]`
       );
-      throw new ForbiddenException('You do not have permission to perform this action');
+      throw new ForbiddenException(
+        'You do not have permission to perform this action'
+      );
     }
 
     return new Permission(userPermissionFlags);
@@ -113,14 +115,19 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     this.logger.debug('Received project data:', data);
 
-    const userExists = await this.userRepository.exists({ where: { id: BigInt(uid) } });
+    const userExists = await this.userRepository.exists({
+      where: { id: BigInt(uid) },
+    });
     if (!userExists) throw new BadRequestException('Unknown user');
 
-    const categoryExists = await this.categoryRepository.exists({ where: { id: BigInt(categoryId) } });
+    const categoryExists = await this.categoryRepository.exists({
+      where: { id: BigInt(categoryId) },
+    });
     if (!categoryExists) throw new BadRequestException('Unknown category');
 
     const queryRunner = this.dataSource.createQueryRunner();
-    if (!queryRunner) throw new InternalServerErrorException('Database connection error');
+    if (!queryRunner)
+      throw new InternalServerErrorException('Database connection error');
 
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -129,11 +136,16 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       // Handle tags
       const projectTags: Array<Partial<ProjectTagEntity>> = [];
       for (const tag of tags) {
-        const existingTag = await queryRunner.manager.findOne(ProjectTagEntity, { where: { name: tag } });
+        const existingTag = await queryRunner.manager.findOne(
+          ProjectTagEntity,
+          { where: { name: tag } }
+        );
         if (existingTag) {
           projectTags.push({ id: existingTag.id });
         } else {
-          const newTag = queryRunner.manager.create(ProjectTagEntity, { name: tag });
+          const newTag = queryRunner.manager.create(ProjectTagEntity, {
+            name: tag,
+          });
           const savedTag = await queryRunner.manager.save(newTag);
           projectTags.push({ id: savedTag.id });
         }
@@ -221,7 +233,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       await queryRunner.commitTransaction();
 
-      this.logger.debug(`Project created successfully with ID: ${savedProject.id}`);
+      this.logger.debug(
+        `Project created successfully with ID: ${savedProject.id}`
+      );
 
       return {
         message: 'Project created successfully',
@@ -346,7 +360,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     try {
       return await projectMetadataQuery
         .leftJoinAndSelect('project.projectRoles', 'projectRoles')
-        .andWhere('projectRoles.name != :systemRole', { systemRole: 'Everyone' })
+        .andWhere('projectRoles.name != :systemRole', {
+          systemRole: 'Everyone',
+        })
         .getOne();
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to fetch project metadata');
@@ -469,7 +485,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     // Chỉ cho phép owner xóa project
     if (!project.createdBy || String(project.createdBy.id) !== String(userId)) {
-      this.logger.debug(`User [${userId}] không phải owner, không được xóa project [${projectId}]`);
+      this.logger.debug(
+        `User [${userId}] không phải owner, không được xóa project [${projectId}]`
+      );
       throw new ForbiddenException('Only project owner can delete the project');
     }
 
@@ -499,8 +517,12 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
   async findUserToProject(
     projectId: bigint,
-    identifier: string
-  ): Promise<Array<{ id: bigint; fullName: string; email: string; phone: string }>> {
+    identifier: string,
+    uid: bigint
+  ): Promise<
+    Array<{ id: bigint; fullName: string; email: string; phone: string }>
+  > {
+    await this.testPermissions(projectId, uid, PermissionFlags.ManageMembers);
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
@@ -519,9 +541,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         `(user.email = :identifier OR user.fullName LIKE :likeIdentifier)`,
         { identifier, likeIdentifier: `%${identifier}%` }
       )
-      .andWhere(existingMemberIds.length ? 'user.id NOT IN (:...existingMemberIds)' : '1=1', {
-        existingMemberIds,
-      })
+      .andWhere(
+        existingMemberIds.length
+          ? 'user.id NOT IN (:...existingMemberIds)'
+          : '1=1',
+        {
+          existingMemberIds,
+        }
+      )
       .andWhere(`user.roleId NOT IN (:...excludedRoles)`, {
         excludedRoles: [2, 1],
       })
@@ -531,11 +558,15 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     return users;
   }
 
-
   async addUserToProject(
     projectId: bigint,
     userId: bigint
   ): Promise<ProjectEntity> {
+    await this.testPermissions(
+      projectId,
+      userId,
+      PermissionFlags.ManageMembers
+    );
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
@@ -569,13 +600,16 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       await queryRunner.manager.save(project);
 
       // Add user to Everyone role
-      const everyoneRole = await queryRunner.manager.findOne(ProjectRoleEntity, {
-        where: {
-          project: { id: projectId },
-          name: 'Everyone',
-        },
-        relations: ['users'],
-      });
+      const everyoneRole = await queryRunner.manager.findOne(
+        ProjectRoleEntity,
+        {
+          where: {
+            project: { id: projectId },
+            name: 'Everyone',
+          },
+          relations: ['users'],
+        }
+      );
 
       if (!everyoneRole) {
         // If Everyone role doesn't exist, create it
@@ -590,16 +624,26 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         });
         await queryRunner.manager.save(newEveryoneRole);
         // LOG: Tạo role Everyone mới
-        console.log(`[addUserToProject] Created new role 'Everyone' for project ${projectId} with permissionFlags:`, newEveryoneRole.permissionFlags.value.toString(), newEveryoneRole.permissionFlags.resolveNames());
+        console.log(
+          `[addUserToProject] Created new role 'Everyone' for project ${projectId} with permissionFlags:`,
+          newEveryoneRole.permissionFlags.value.toString(),
+          newEveryoneRole.permissionFlags.resolveNames()
+        );
       } else {
         // Add user to existing Everyone role
-        const existingUserIds = new Set(everyoneRole.users.map((u) => u.id.toString()));
+        const existingUserIds = new Set(
+          everyoneRole.users.map((u) => u.id.toString())
+        );
         if (!existingUserIds.has(user.id.toString())) {
           everyoneRole.users.push(user);
           await queryRunner.manager.save(everyoneRole);
         }
         // LOG: Đã thêm user vào role Everyone
-        console.log(`[addUserToProject] Added user ${userId} to existing role 'Everyone' for project ${projectId} with permissionFlags:`, everyoneRole.permissionFlags.value.toString(), everyoneRole.permissionFlags.resolveNames());
+        console.log(
+          `[addUserToProject] Added user ${userId} to existing role 'Everyone' for project ${projectId} with permissionFlags:`,
+          everyoneRole.permissionFlags.value.toString(),
+          everyoneRole.permissionFlags.resolveNames()
+        );
       }
 
       await queryRunner.commitTransaction();
@@ -651,7 +695,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         username: string;
         fullName: string;
         email: string;
-        roles: { id: string; name: string; permissionFlags?: string | number | bigint }[];
+        roles: {
+          id: string;
+          name: string;
+          permissionFlags?: string | number | bigint;
+        }[];
       }
     > = {};
 
@@ -683,9 +731,17 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       username: string;
       fullName: string;
       email: string;
-      roles: { id: string; name: string; permissionFlags?: string | number | bigint }[];
+      roles: {
+        id: string;
+        name: string;
+        permissionFlags?: string | number | bigint;
+      }[];
     }[];
-    projectRoles: { id: string; name: string; permissionFlags: string | number | bigint }[];
+    projectRoles: {
+      id: string;
+      name: string;
+      permissionFlags: string | number | bigint;
+    }[];
   }> {
     // Get project with members first
     const project = await this.projectRepository.findOne({
@@ -701,7 +757,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     const roles = await this.projectRoleRepository.find({
       where: {
         project: { id: projectId },
-        name: Not('Everyone')
+        name: Not('Everyone'),
       },
       relations: ['users'],
     });
@@ -710,14 +766,16 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     const everyoneRole = await this.projectRoleRepository.findOne({
       where: {
         project: { id: projectId },
-        name: 'Everyone'
+        name: 'Everyone',
       },
       relations: ['users'],
     });
 
     // If Everyone role doesn't exist or has wrong permissions, fix it
     if (!everyoneRole) {
-      this.logger.warn(`Everyone role not found for project ${projectId}, creating it`);
+      this.logger.warn(
+        `Everyone role not found for project ${projectId}, creating it`
+      );
       const newEveryoneRole = this.projectRoleRepository.create({
         project: { id: projectId },
         permissionFlags: new Permission(BigInt(PermissionFlags.ViewProject)),
@@ -725,12 +783,22 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         users: project.members, // Add all project members to Everyone role
       });
       await this.projectRoleRepository.save(newEveryoneRole);
-    } else if (everyoneRole.permissionFlags.value !== BigInt(PermissionFlags.ViewProject)) {
-      this.logger.warn(`Fixing Everyone role permissions for project ${projectId}`);
-      everyoneRole.permissionFlags = new Permission(BigInt(PermissionFlags.ViewProject));
+    } else if (
+      everyoneRole.permissionFlags.value !== BigInt(PermissionFlags.ViewProject)
+    ) {
+      this.logger.warn(
+        `Fixing Everyone role permissions for project ${projectId}`
+      );
+      everyoneRole.permissionFlags = new Permission(
+        BigInt(PermissionFlags.ViewProject)
+      );
       // Add any missing members to Everyone role
-      const everyoneUserIds = new Set(everyoneRole.users.map(u => u.id.toString()));
-      const missingUsers = project.members.filter(m => !everyoneUserIds.has(m.id.toString()));
+      const everyoneUserIds = new Set(
+        everyoneRole.users.map((u) => u.id.toString())
+      );
+      const missingUsers = project.members.filter(
+        (m) => !everyoneUserIds.has(m.id.toString())
+      );
       if (missingUsers.length > 0) {
         everyoneRole.users = [...everyoneRole.users, ...missingUsers];
       }
@@ -744,7 +812,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         username: string;
         fullName: string;
         email: string;
-        roles: { id: string; name: string; permissionFlags?: string | number | bigint }[];
+        roles: {
+          id: string;
+          name: string;
+          permissionFlags?: string | number | bigint;
+        }[];
       }
     > = {};
 
@@ -810,11 +882,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     return {
       members: Object.values(memberMap),
-      projectRoles: roles.map(role => ({
+      projectRoles: roles.map((role) => ({
         id: role.id.toString(),
         name: role.name,
         permissionFlags: role.permissionFlags.value.toString(), // Ensure proper serialization
-      }))
+      })),
     };
   }
 
@@ -891,7 +963,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
           if (mainErr.status !== 422 && mainErr.status !== 404) throw mainErr;
         }
         // Thử lại tạo branch mới
-        await this.githubService.createBranch(repoName, githubBranchName, baseBranchName);
+        await this.githubService.createBranch(
+          repoName,
+          githubBranchName,
+          baseBranchName
+        );
         // Push initial file cho branch mới
         await this.githubService.pushInitialFile({
           repo: repoName,
@@ -938,7 +1014,12 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     projectId: bigint,
     userId: bigint
   ): Promise<BranchEntity[]> {
-    console.log('listBranchesForProject called with projectId:', projectId, 'userId:', userId);
+    console.log(
+      'listBranchesForProject called with projectId:',
+      projectId,
+      'userId:',
+      userId
+    );
     await this.testPermissions(projectId, userId, PermissionFlags.ViewProject);
 
     const result = await this.branchRepository
@@ -979,7 +1060,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     approve: boolean,
     reviewMessage?: string
   ) {
-    await this.testPermissions(projectId, reviewerId, PermissionFlags.ReviewCommit);
+    await this.testPermissions(
+      projectId,
+      reviewerId,
+      PermissionFlags.ReviewCommit
+    );
 
     const commit = await this.commitRepository.findOneOrFail({
       where: { id: commitId },
@@ -995,11 +1080,15 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     if (approve) {
       const githubRepo = `project-${commit.project.id}`;
       // Lấy tên branch thực tế từ DB
-      const branchEntity = await this.branchRepository.findOne({ where: { id: commit.branch.id } });
+      const branchEntity = await this.branchRepository.findOne({
+        where: { id: commit.branch.id },
+      });
       if (!branchEntity) throw new Error('Branch not found');
       const githubBranch = branchEntity.name;
 
-      this.logger.log(`[GITHUB] Start pushing commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`);
+      this.logger.log(
+        `[GITHUB] Start pushing commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`
+      );
       try {
         await this.githubService.commitChange({
           repo: githubRepo,
@@ -1008,9 +1097,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
           content: commit.contentSnapshot,
           message: commit.message,
         });
-        this.logger.log(`[GITHUB] Successfully pushed commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`);
+        this.logger.log(
+          `[GITHUB] Successfully pushed commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`
+        );
       } catch (err) {
-        this.logger.error(`[GITHUB] Failed to push commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`, err);
+        this.logger.error(
+          `[GITHUB] Failed to push commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`,
+          err
+        );
         throw err;
       }
     }
@@ -1022,12 +1116,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     return this.commitRepository.find({
       where: { project: { id: projectId }, branch: { id: branchId } },
       relations: ['author'],
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
   }
 
   async listCommits(projectId: bigint, branchId: bigint) {
     return this.githubService.listCommits(projectId, branchId);
   }
-
 }

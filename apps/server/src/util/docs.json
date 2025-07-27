@@ -1,8 +1,8 @@
 [
   {
     "id": "doc-1",
-    "title": "Upload a file",
-    "content": "To upload a file, go to Upload page, click the button, select your file, and confirm."
+    "title": "Upload a file in project",
+    "content": "To upload a file, go to your home page or press Project in your sidebar, click in the project you want to upload,  then go in the file tab in your project, click Add File button, select your file, and confirm. We currently only support docx, pdf, txt,json file type. If you don't have a project i can guide you to create or join one."
   },
   {
     "id": "doc-2",
@@ -33,5 +33,30 @@
     "id": "doc-7",
     "title": "Create private request",
     "content": "To create a private request, first you have to log in, then in sidebar on the left of your screen press My Request, then press Create New Request button, choose Private Request type,then choose the person you want to assign the request, then enter the other field and the file you want to translate and press create request. We now only support json,txt,docx and pdf file type. Other will be update in the future."
+  },
+  {
+    "id": "doc-8",
+    "title": "Update project",
+    "content": "To update a project, go to your project through your home or press in Project in your sidebar, then click in Edit Project button in your project, change the information of your project then click Update Project."
+  },
+  {
+    "id": "doc-9",
+    "title": "Delete project",
+    "content": "To delete a project, go to your project through your home or press in Project in your sidebar, then click in Delete Project button in your project, and confirm."
+  },
+  {
+    "id": "doc-10",
+    "title": "Add user to project",
+    "content": "To add a member to your project, first you have to be the project owner or have a role with Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Member tab in your project, click add user button, there will be a search bar appear, enter email or username of the person you want to add in and press search, it will appear an user in there, if it the person you want to add, click Add To Project, that user will be added into your project."
+  },
+  {
+    "id": "doc-11",
+    "title": "Remove member from project",
+    "content": "To remove a member from your project, first you have to be the project owner or have a role with Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Member tab in your project, in there you will see a list of member , search for the member you want to remove and click remove member, and them confirm."
+  },
+  {
+    "id": "doc-12",
+    "title": "Create project role",
+    "content": "To create a project role, first you have to be the project owner or have a role with Manage Roles or Manage Member permission to do this, if you have it go to your project through your home or press in Project in your sidebar, then go to Roles tab in your project, in there you will see a table with all the roles in your project and a create role button, click create role button and enter project name and choose a permission for it, then confirm."
   }
 ]

@@ -111,7 +111,7 @@ export class FileService {
 
     // Tìm file trùng tên trong cùng project + branch
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    let existingFile = await this.fileRepository.findOne({
+    const existingFile = await this.fileRepository.findOne({
       where: {
         fileName,
         project: projectId ? { id: projectId } : undefined,

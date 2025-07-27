@@ -90,7 +90,8 @@ export class ProjectController {
   @Post(':projectId/search-user')
   async searchUserToAdd(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body('identifier') identifier: string
+    @Body('identifier') identifier: string,
+    @Req() req: AuthenticatedRequest
   ): Promise<{ users: Array<{ id: bigint; fullName: string; email: string; phone: string }> }> {
     if (!identifier?.trim()) {
       throw new BadRequestException('Identifier is required');
@@ -98,7 +99,8 @@ export class ProjectController {
 
     const users = await this.projects.findUserToProject(
       projectId,
-      identifier.trim()
+      identifier.trim(),
+      req.user.id
     );
 
     return { users };

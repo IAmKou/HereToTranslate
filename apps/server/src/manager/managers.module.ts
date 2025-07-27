@@ -9,7 +9,7 @@ import {
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
   UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
-  BranchEntity, CommitEntity, FileEntity, TaskEntity
+  BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -49,6 +49,8 @@ import { ChatController } from '../chat/chat.controller';
 import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
+import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
+import { NotificationController } from '#LocalProject/Managers/controller/notification.controller';
 import { BullModule } from '@nestjs/bull';
 
 
@@ -77,6 +79,7 @@ import { BullModule } from '@nestjs/bull';
       CommitEntity,
       FileEntity,
       TaskEntity,
+      NotificationEntity,
     ]),
     BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
   ],
@@ -99,6 +102,7 @@ import { BullModule } from '@nestjs/bull';
     TaskManagerService,
     TaskGateway,
     ManifestService,
+    NotificationManagerService,
   ],
   exports: [
     CategoryManagerService,
@@ -118,6 +122,7 @@ import { BullModule } from '@nestjs/bull';
     TranslationService,
     TaskManagerService,
     ManifestService,
+    NotificationManagerService,
   ],
   controllers: [
     CategoryController,
@@ -134,7 +139,8 @@ import { BullModule } from '@nestjs/bull';
     PermissionsController,
     TranslationController,
     AdminTransactionController,
-    ChatController
+    ChatController,
+    NotificationController
   ]
 })
 export class ManagersModule {

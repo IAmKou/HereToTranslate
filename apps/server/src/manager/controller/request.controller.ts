@@ -66,6 +66,13 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('pending/count')
+  async getPendingRequestsCount(@Req() req: AuthenticatedRequest) {
+    const count = await this.requests.getPendingRequestsCount();
+    return { count };
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post(':requestId/update')
   async updateRequest(
     @Param('requestId', BigIntTransformPipe) requestId: bigint,

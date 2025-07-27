@@ -361,8 +361,8 @@ const fetchTags = async () => {
 
 const fetchCategories = async () => {
   try {
-    const response = await fetch('/api/categories/all');
-    categories.value = await response.json();
+    const response = await axiosInstance.get('/categories/all');
+    categories.value = response.data;
   } catch (error) {
     console.error('Error fetching categories:', error);
   }

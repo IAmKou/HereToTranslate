@@ -2,6 +2,7 @@ export * from './branch.entity';
 export * from './category.entity';
 export * from './commit.entity';
 export * from './file.entity';
+export * from './notification.entity';
 export * from './project.entity';
 export * from './project-discussion.entity';
 export * from './project-group.entity';

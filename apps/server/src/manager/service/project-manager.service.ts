@@ -255,6 +255,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     return this.createProject(uid, createProjectDto);
   }
 
+  async getProjectsCount(): Promise<number> {
+    return await this.projectRepository.count();
+  }
+
   async fetchAllUserProjects(userId: bigint): Promise<ProjectEntity[]> {
     const qb = this.projectRepository
       .createQueryBuilder('project')

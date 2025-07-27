@@ -1,8 +1,8 @@
 <template>
-  <div class="layout-wrapper">
+  <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <Navbar />
     <div class="main-content">
-      <Sidebar />
+      <Sidebar :collapsed="sidebarCollapsed" @update:collapsed="sidebarCollapsed = $event" />
       <div class="content">
         <!-- Enhanced Header with better visual hierarchy -->
         <div class="header-center-container">
@@ -68,22 +68,25 @@
 
 <script setup>
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
 import Navbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
 import CreateRequestForm from '../components/CreateRequestForm.vue';
 
+const router = useRouter();
 const showSuccess = ref(false);
+const sidebarCollapsed = ref(false);
 
 function onSuccess() {
   showSuccess.value = true;
   setTimeout(() => {
-    window.location.href = '/my-requests'
+    router.push('/my-requests');
   }, 3000)
 }
 
 function onCancel() {
-  window.history.back()
+  router.back();
 }
 </script>
 
@@ -99,25 +102,33 @@ function onCancel() {
   display: flex;
   flex: 1;
   width: 100vw;
-  margin-left: 150px;
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-left: 240px;
+  transition: margin-left 0.2s cubic-bezier(.4, 0, .2, 1);
 }
 
-/* Khi sidebar collapsed */
+.layout-wrapper.sidebar-collapsed .main-content {
+  margin-left: 72px;
+}
+
+/* Responsive design */
 @media (max-width: 1024px) {
-  .main-content {
-    margin-left: 72px;
+  .main-content,
+  .layout-wrapper.sidebar-collapsed .main-content {
+    margin-left: 0;
   }
+
   .content {
-    width: calc(100vw - 72px);
+    width: 100vw;
   }
 }
 
 /* Mobile view - ẩn sidebar */
 @media (max-width: 768px) {
-  .main-content {
+  .main-content,
+  .layout-wrapper.sidebar-collapsed .main-content {
     margin-left: 0;
   }
+
   .content {
     width: 100vw;
   }
@@ -129,12 +140,18 @@ function onCancel() {
   padding: 32px 0;
   background: transparent;
   position: relative;
+  transition: width 0.2s cubic-bezier(.4, 0, .2, 1);
+}
+
+.layout-wrapper.sidebar-collapsed .content {
+  width: calc(100vw - 72px);
 }
 
 .header-center-container {
   max-width: 1250px;
   margin: 0 auto 40px auto;
   padding: 0 32px;
+  transition: margin-left 0.2s cubic-bezier(.4, 0, .2, 1);
 }
 
 .create-header {
@@ -145,9 +162,8 @@ function onCancel() {
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   border-radius: 16px;
   padding: 12px 16px;
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.08),
-    0 8px 16px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08),
+  0 8px 16px rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(20px);
   position: relative;
@@ -266,8 +282,12 @@ function onCancel() {
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .floating-elements {
@@ -329,9 +349,8 @@ function onCancel() {
 .create-form-card {
   background: #ffffff;
   border-radius: 24px;
-  box-shadow:
-    0 25px 50px rgba(0, 0, 0, 0.1),
-    0 10px 20px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1),
+  0 10px 20px rgba(0, 0, 0, 0.05);
   padding: 0;
   margin-top: 0;
   width: 100%;
@@ -433,8 +452,12 @@ function onCancel() {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .success-content {
@@ -464,9 +487,15 @@ function onCancel() {
 }
 
 @keyframes bounce {
-  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-10px); }
-  60% { transform: translateY(-5px); }
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
 }
 
 .success-content h2 {
@@ -496,8 +525,13 @@ function onCancel() {
   animation: loadingDot 1.4s ease-in-out infinite both;
 }
 
-.loading-dots .dot:nth-child(1) { animation-delay: -0.32s; }
-.loading-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+.loading-dots .dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots .dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
 
 @keyframes loadingDot {
   0%, 80%, 100% {

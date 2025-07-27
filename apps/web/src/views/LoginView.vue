@@ -58,7 +58,7 @@
                   color: #4caf50;
                   text-decoration: underline;
                 "
-                >Forgot Password?</router-link
+              >Forgot Password?</router-link
               >
             </div>
           </div>
@@ -141,8 +141,8 @@ const goToRegister = () => {
 };
 
 const signInWithGoogleRedirect = () => {
-  const clientId = '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com';
-  const redirectUri = 'http://localhost:4200/oauth-callback';
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com';
+  const redirectUri = `${window.location.origin}/oauth-callback`;
 
   const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token id_token&scope=openid%20email%20profile&nonce=secure_nonce`;
 

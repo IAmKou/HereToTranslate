@@ -35,7 +35,8 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:4200',
-      'http://26.82.216.71:4200'
+      'http://26.82.216.71:4200',
+      /^http:\/\/26\.82\.216\.\d+:4200$/  // Allow any IP in RadVPN range
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,

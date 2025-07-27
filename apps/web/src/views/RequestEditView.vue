@@ -85,7 +85,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
+import axiosInstance from '../api'
 import { useToast } from 'primevue/usetoast'
 
 const props = defineProps({
@@ -173,7 +173,7 @@ async function handleSubmit() {
       deadline: form.value.deadline
     })
 
-    const response = await axios.post(`/api/requests/${props.request.id}/update`, {
+    const response = await axiosInstance.post(`/requests/${props.request.id}/update`, {
       title: form.value.title,
       description: form.value.description,
       dealAmount: Number(form.value.dealAmount),

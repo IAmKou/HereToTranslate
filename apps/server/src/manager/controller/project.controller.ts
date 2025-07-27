@@ -87,6 +87,13 @@ export class ProjectController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('admin/count')
+  async getAdminProjectsCount(@Req() req: AuthenticatedRequest) {
+    const count = await this.projects.getProjectsCount();
+    return { count };
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post(':projectId/search-user')
   async searchUserToAdd(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,

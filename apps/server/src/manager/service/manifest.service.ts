@@ -32,8 +32,8 @@ async function extractTextWithOcrSpace(fileBuffer: Buffer, apiKey: string): Prom
       return response.data.ParsedResults.map(result => result.ParsedText).join('\n');
     }
     return '';
-  } catch (error) {
-    console.error('OCR.space API error:', error.response ? error.response.data : error.message);
+  } catch (error: any) {
+    console.error('OCR.space API error:', error?.response ? error.response.data : error?.message || error);
     throw new Error('Failed to extract text using OCR service.');
   }
 }
@@ -111,6 +111,12 @@ export class ManifestService {
   ) {}
 
   async generateManifest(file: FileEntity): Promise<void> {
+    // Check if file has required project and branch relationships
+    if (!file.project || !file.branch) {
+      console.warn(`Skipping manifest generation for file ${file.id}: missing project or branch relationship`);
+      return;
+    }
+
     const manifestEntries: Partial<TranslationString>[] = [];
     const apiKey = 'K89333403988957'; // API key bạn cung cấp
 
@@ -128,15 +134,15 @@ export class ManifestService {
           } else {
             throw new Error("No text found with parser, falling back to OCR.");
           }
-        } catch (err) {
+        } catch (err: any) {
           // 2. Nếu parser lỗi -> Fallback sang OCR.space
           try {
             text = await extractTextWithOcrSpace(file.fileContent, apiKey);
             usedOcr = true;
             console.log('[PDF][OCR.space] Text extracted:', text ? text.slice(0, 200) : '[EMPTY]');
-          } catch (ocrError) {
-            console.error('[PDF][OCR.space] OCR failed:', ocrError.message);
-            throw new Error('Failed to extract text from PDF: ' + ocrError.message);
+          } catch (ocrError: any) {
+            console.error('[PDF][OCR.space] OCR failed:', ocrError?.message || ocrError);
+            throw new Error('Failed to extract text from PDF: ' + (ocrError?.message || ocrError));
           }
         }
 
@@ -271,7 +277,7 @@ export class ManifestService {
         let jsonContent: any;
         try {
           jsonContent = JSON.parse(file.fileContent.toString());
-        } catch (e) {
+        } catch (e: any) {
           break;
         }
         const strings = extractStrings(jsonContent);
@@ -401,5 +407,3 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
 
   return { text: fullText, items: allItems };
 }
-
-

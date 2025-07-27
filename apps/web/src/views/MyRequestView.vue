@@ -445,7 +445,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
+import axiosInstance from '../api'
 import { useToast } from 'primevue/usetoast'
 import { useRouter } from 'vue-router'
 import Sidebar from '../components/Sidebar.vue';
@@ -658,7 +658,7 @@ function fetchRequests() {
   error.value = null
 
   // Fetch my requests
-  axios.get('/api/requests/myRequests')
+  axiosInstance.get('/requests/myRequests')
     .then(res => {
       console.log('My requests data received:', res.data)
       myRequests.value = res.data
@@ -668,7 +668,7 @@ function fetchRequests() {
     })
 
   // Fetch assigned requests
-  axios.get('/api/requests/private')
+  axiosInstance.get('/requests/private')
     .then(res => {
       console.log('Assigned requests data received:', res.data)
       assignedRequests.value = res.data
@@ -778,7 +778,7 @@ function formatAmount(amount) {
 async function acceptRequest(requestId) {
   actionLoading.value = true
   try {
-    await axios.post(`/api/requests/${requestId}/update`, {
+    await axiosInstance.post(`/requests/${requestId}/update`, {
       status: 'APPROVED'
     })
     toast.add({
@@ -803,7 +803,7 @@ async function acceptRequest(requestId) {
 async function rejectRequest(requestId) {
   actionLoading.value = true
   try {
-    await axios.post(`/api/requests/${requestId}/update`, {
+    await axiosInstance.post(`/requests/${requestId}/update`, {
       status: 'REJECTED'
     })
     toast.add({
@@ -828,7 +828,7 @@ async function rejectRequest(requestId) {
 async function completeRequest(requestId) {
   actionLoading.value = true
   try {
-    await axios.post(`/api/requests/${requestId}/update`, {
+    await axiosInstance.post(`/requests/${requestId}/update`, {
       status: 'COMPLETED'
     })
     toast.add({

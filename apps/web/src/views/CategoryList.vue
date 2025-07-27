@@ -446,7 +446,7 @@ interface Tag {
   updatedAt?: Date;
 }
 
-const API_BASE_URL = '${import.meta.env.VITE_API_URL}/';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/';
 
 const categories = ref<Category[]>([]);
 const loading = ref(false);
@@ -492,7 +492,7 @@ const isSidebarCollapsed = ref(false);
 const fetchCategories = async () => {
   loading.value = true;
   try {
-    const response = await axiosInstance.get(`${API_BASE_URL}/categories/all`);
+    const response = await axiosInstance.get('/categories/all');
     console.log('API Response:', response.data); // Debug log
     categories.value = response.data;
     console.log('Categories after update:', categories.value); // Debug log
@@ -512,7 +512,7 @@ const fetchCategories = async () => {
 const fetchTags = async () => {
   tagLoading.value = true;
   try {
-    const res = await axios.get(`${API_BASE_URL}/project-tag/all`);
+    const res = await axiosInstance.get('/project-tag/all');
     tags.value = res.data;
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load tags', life: 3000 });

@@ -4,7 +4,6 @@ import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } fr
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import  { Express } from 'express';
-import  { Multer } from 'multer';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
@@ -111,7 +110,7 @@ export class FileService {
 
     // Tìm file trùng tên trong cùng project + branch
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    let existingFile = await this.fileRepository.findOne({
+    const existingFile = await this.fileRepository.findOne({
       where: {
         fileName,
         project: projectId ? { id: projectId } : undefined,
@@ -220,7 +219,7 @@ export class FileService {
       order: { createdAt: 'DESC' }
     });
 
-    return files.map(file => ({
+    return files.map((file: any) => ({
       fileId: file.id.toString(),
       fileName: file.fileName,
       fileType: file.fileType,
@@ -370,7 +369,7 @@ export class FileService {
             branch: 'main',
           });
           appendLog('Manifest pushed to GitHub.');
-        } catch (err) {
+        } catch (err: any) {
           appendLog('Error pushing manifest to GitHub: ' + (err?.message || err));
         }
       }
@@ -382,7 +381,7 @@ export class FileService {
         fileId: file.id.toString(),
         fileName: file.fileName
       };
-    } catch (error) {
+    } catch (error: any) {
       appendLog('Error generating manifest: ' + (error?.message || error));
       await this.fileRepository.save(file);
       this.logger.error(`Error generating manifest for file ${file.fileName}:`, error);
@@ -452,7 +451,13 @@ export class FileService {
     });
 
     if (fileEntity) {
-      await this.manifestService.generateManifest(fileEntity);
+      try {
+        await this.manifestService.generateManifest(fileEntity);
+      } catch (error) {
+        this.logger.error(`Failed to generate manifest for file ${fileEntity.id}:`, error);
+        // Continue execution even if manifest generation fails
+      }
+
       // Optionally push manifest to GitHub if project/branch info is present
       if (fileEntity.project && fileEntity.branch) {
         const manifestEntries = await this.translationModel.find({ fileId: fileEntity.id.toString() }).lean();

@@ -673,7 +673,7 @@
 
 <script setup>
 import { computed, defineEmits, onMounted, ref } from 'vue';
-import axios from 'axios';
+import axiosInstance from '../api';
 import { useToast } from 'primevue/usetoast';
 import Multiselect from 'vue-multiselect';
 import 'vue-multiselect/dist/vue-multiselect.min.css';
@@ -803,7 +803,7 @@ const isFormValid = computed(() => {
 
 onMounted(async () => {
   try {
-    const categoriesRes = await axios.get('/api/categories/all');
+    const categoriesRes = await axiosInstance.get('/categories/all');
     categories.value = categoriesRes.data;
   } catch (e) {
     toast.add({
@@ -815,7 +815,7 @@ onMounted(async () => {
   }
 
   try {
-    const tagsRes = await axios.get('/api/project-tag/all');
+    const tagsRes = await axiosInstance.get('/project-tag/all');
     allTags.value = tagsRes.data;
   } catch (e) {
     toast.add({
@@ -892,8 +892,8 @@ async function handleSubmit() {
       isPublic = false;
 
       try {
-        const response = await axios.get(
-          `/api/requests/search?keyword=${encodeURIComponent(assigneeEmail.value)}`
+        const response = await axiosInstance.get(
+          `/requests/search?keyword=${encodeURIComponent(assigneeEmail.value)}`
         );
         const user = response.data.find((u) => u.email === assigneeEmail.value);
 
@@ -937,8 +937,8 @@ async function handleSubmit() {
 
     const endpoint =
       requestType.value === 'private'
-        ? '/api/requests/create/private'
-        : '/api/requests/create';
+        ? '/requests/create/private'
+        : '/requests/create';
 
     const formData = new FormData();
     formData.append('title', title.value);
@@ -960,7 +960,7 @@ async function handleSubmit() {
       formData.append('files', file);
     });
 
-    const response = await axios.post(endpoint, formData, {
+    const response = await axiosInstance.post(endpoint, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 

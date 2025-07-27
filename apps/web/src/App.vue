@@ -142,4 +142,9 @@ body {
     padding: 0.75rem;
   }
 }
+
+body.modal-open .header,
+body.modal-open .sidebar {
+  z-index: 10 !important;
+}
 </style>

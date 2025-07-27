@@ -49,6 +49,7 @@ import { ChatController } from '../chat/chat.controller';
 import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
+import { TaskController } from './controller/task.controller';
 import { BullModule } from '@nestjs/bull';
 import {AiChatService} from "#LocalProject/Managers/service/ai-manager.service";
 import {AiChatController} from "#LocalProject/Managers/controller/ai-chat.controller";
@@ -79,8 +80,7 @@ import {AiChatController} from "#LocalProject/Managers/controller/ai-chat.contro
       CommitEntity,
       FileEntity,
       TaskEntity,
-    ]),
-    BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
+    ])
   ],
   providers: [
     CategoryManagerService,
@@ -139,6 +139,7 @@ import {AiChatController} from "#LocalProject/Managers/controller/ai-chat.contro
     TranslationController,
     AdminTransactionController,
     ChatController,
+    TaskController,
     AiChatController
   ]
 })

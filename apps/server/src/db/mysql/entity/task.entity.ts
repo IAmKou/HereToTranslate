@@ -3,9 +3,10 @@ import { UserEntity } from './user.entity';
 import { ProjectGroupEntity } from './project-group.entity';
 
 export enum TaskStatus {
-  Pending = 'PENDING',
-  InProgress = 'IN_PROGRESS',
-  Completed = 'COMPLETED',
+  Pending = 'pending',
+  InProgress = 'in_progress',
+  Completed = 'completed',
+  Closed = 'closed',
 }
 
 @Entity('task')
@@ -48,5 +49,11 @@ export class TaskEntity {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  startedAt?: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  completedAt?: Date;
 }
 

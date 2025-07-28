@@ -2,7 +2,7 @@
   <div v-if="visible && !inline" class="modal-overlay">
     <div class="modal-container" @click.stop>
       <div class="modal-header">
-        <h2>{{ props.editTask ? 'Edit Task' : 'Create New Task' }}</h2>
+        <h2>Edit Task</h2>
         <button class="close-btn" @click="onCancel">
           <span>&times;</span>
         </button>
@@ -144,75 +144,22 @@
         </div>
 
         <div class="form-group">
-          <label for="language">{{ props.editTask ? 'Language' : 'Target Languages' }}</label>
-          <div class="languages-grid" :class="{ 'error': fieldErrors.languages }">
-            <label
-              v-for="language in availableLanguages"
-              :key="language.code"
-              class="language-option"
-            >
-              <input
-                type="checkbox"
-                :value="language.code"
-                v-model="selectedLanguages"
-                class="language-checkbox"
-                @change="validateLanguages"
-                :disabled="props.editTask && selectedLanguages.length === 1 && selectedLanguages[0] !== language.code"
-              />
-              <div class="language-info">
-                <span class="language-flag">{{ language.code.toUpperCase() }}</span>
-                <div class="language-text">
-                  <span class="language-name">{{ language.name }}</span>
-                  <span class="language-native">{{ language.nativeName }}</span>
-                </div>
+          <label for="language">Language</label>
+          <div class="language-display">
+            <div v-if="formData.language" class="language-info-display">
+              <span class="language-flag">{{ formData.language.toUpperCase() }}</span>
+              <div class="language-text">
+                <span class="language-name">{{ getLanguageName(formData.language) }}</span>
+                <span class="language-native">{{ getLanguageNativeName(formData.language) }}</span>
               </div>
-            </label>
-          </div>
-          <div v-if="fieldErrors.languages" class="field-error">
-            {{ fieldErrors.languages }}
-          </div>
-          <div v-if="selectedLanguages.length > 0" class="selected-languages-summary">
-            <strong>Selected:</strong> {{ selectedLanguages.length }} language(s)
+            </div>
+            <div v-else class="no-language">
+              <span style="color: #666; font-style: italic;">No language specified</span>
+            </div>
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="assignedTo">Assign To</label>
-            <select
-              id="assignedTo"
-              v-model="formData.assignedToId"
-              class="form-control"
-            >
-              <option value="">Unassigned</option>
-              <option
-                v-for="member in projectMembers"
-                :key="member.id"
-                :value="member.id"
-              >
-                {{ member.fullName || member.username }}
-              </option>
-            </select>
-          </div>
 
-          <div class="form-group">
-            <label for="group">Group</label>
-            <select
-              id="group"
-              v-model="formData.groupId"
-              class="form-control"
-            >
-              <option value="">No Group</option>
-              <option
-                v-for="group in projectGroups"
-                :key="group.id"
-                :value="group.id"
-              >
-                {{ group.name }}
-              </option>
-            </select>
-          </div>
-        </div>
 
         <div class="form-group">
           <label for="dueDateTime">Due Date & Time</label>
@@ -255,8 +202,8 @@
             class="btn btn-primary"
             :disabled="loading || !formData.title"
           >
-            <span v-if="loading">Creating...</span>
-            <span v-else>Create Task</span>
+            <span v-if="loading">Updating...</span>
+            <span v-else>Update Task</span>
           </button>
         </div>
       </form>
@@ -265,7 +212,7 @@
 
   <div v-else-if="visible && inline" class="inline-task-form">
     <form @submit.prevent="onSubmit" class="task-form">
-      <h2 class="form-title">Create New Task</h2>
+      <h2 class="form-title">Edit Task</h2>
 
       <div class="form-group">
         <label for="title" class="required">Task Title</label>
@@ -386,94 +333,22 @@
       </div>
 
       <div class="form-group">
-        <label for="language">Target Languages</label>
-        <div class="languages-header">
-          <div class="languages-grid" :class="{ 'error': fieldErrors.languages }">
-            <label
-              v-for="language in availableLanguages"
-              :key="language.code"
-              class="language-option"
-            >
-              <input
-                type="checkbox"
-                :value="language.code"
-                v-model="selectedLanguages"
-                class="language-checkbox"
-                @change="validateLanguages"
-              />
-              <div class="language-info">
-                <span class="language-flag">{{ language.code.toUpperCase() }}</span>
-                <div class="language-text">
-                  <span class="language-name">{{ language.name }}</span>
-                  <span class="language-native">{{ language.nativeName }}</span>
-                </div>
-              </div>
-            </label>
+        <label for="language">Language</label>
+        <div class="language-display">
+          <div v-if="formData.language" class="language-info-display">
+            <span class="language-flag">{{ formData.language.toUpperCase() }}</span>
+            <div class="language-text">
+              <span class="language-name">{{ getLanguageName(formData.language) }}</span>
+              <span class="language-native">{{ getLanguageNativeName(formData.language) }}</span>
+            </div>
           </div>
-          <div class="language-quick-actions">
-            <button
-              type="button"
-              class="quick-action-btn"
-              @click="selectAllLanguages"
-              title="Select all languages"
-            >
-              <i class="pi pi-check-square"></i>
-            </button>
-            <button
-              type="button"
-              class="quick-action-btn"
-              @click="clearAllLanguages"
-              title="Clear all selections"
-            >
-              <i class="pi pi-square"></i>
-            </button>
+          <div v-else class="no-language">
+            <span style="color: #666; font-style: italic;">No language specified</span>
           </div>
-        </div>
-        <div v-if="fieldErrors.languages" class="field-error">
-          {{ fieldErrors.languages }}
-        </div>
-        <div v-if="selectedLanguages.length > 0" class="selected-languages-summary">
-          <strong>Selected:</strong> {{ selectedLanguages.length }} language(s)
         </div>
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label for="assignedTo">Assign To</label>
-          <select
-            id="assignedTo"
-            v-model="formData.assignedToId"
-            class="form-control"
-          >
-            <option value="">Unassigned</option>
-            <option
-              v-for="member in projectMembers"
-              :key="member.id"
-              :value="member.id"
-            >
-              {{ member.fullName || member.username }}
-            </option>
-          </select>
-        </div>
 
-        <div class="form-group">
-          <label for="group">Group</label>
-          <select
-            id="group"
-            v-model="formData.groupId"
-            class="form-control"
-          >
-            <option value="">No Group</option>
-            <option
-              v-for="group in projectGroups"
-              :key="group.id"
-              :value="group.id"
-            >
-              {{ group.name }}
-            </option>
-          </select>
-        </div>
-      </div>
 
       <div class="form-group">
         <label for="dueDateTime">Due Date & Time</label>
@@ -516,8 +391,8 @@
           class="btn btn-primary"
           :disabled="loading || !formData.title"
         >
-          <span v-if="loading">Creating...</span>
-          <span v-else>Create Task</span>
+          <span v-if="loading">Updating...</span>
+          <span v-else>Update Task</span>
         </button>
       </div>
     </form>
@@ -637,8 +512,16 @@ const formData = ref<CreateTaskDto>({
 
 // Khởi tạo form với dữ liệu task cũ nếu đang edit
 const initializeFormWithEditData = () => {
+  console.log('🔄 initializeFormWithEditData called');
+  console.log('📋 props.editTask:', props.editTask);
+  console.log('📋 props.editTask type:', typeof props.editTask);
+  console.log('📋 props.editTask keys:', props.editTask ? Object.keys(props.editTask) : 'null');
+
   if (props.editTask) {
-    console.log('Initializing form with edit data:', props.editTask);
+    console.log('✅ Initializing form with edit data:', props.editTask);
+
+    console.log('📝 Setting form data with title:', props.editTask.title);
+
     formData.value = {
       title: props.editTask.title || '',
       description: props.editTask.description || '',
@@ -647,30 +530,47 @@ const initializeFormWithEditData = () => {
       groupId: props.editTask.groupId || '',
       dueDate: props.editTask.dueDate ? new Date(props.editTask.dueDate).toISOString().split('T')[0] : '',
       dueTime: props.editTask.dueDate ? new Date(props.editTask.dueDate).toTimeString().slice(0, 5) : '',
-      dueDateTime: props.editTask.dueDate || '',
+      dueDateTime: props.editTask.dueDate ? formatDateTimeForLocalInput(props.editTask.dueDate) : '',
       branchId: props.branchId,
       fileId: props.editTask.fileId || props.fileId,
       filePart: props.editTask.filePart !== undefined ? props.editTask.filePart : props.filePart,
       language: props.editTask.language || ''
     };
 
+    console.log('📝 Form data set:', formData.value);
+    console.log('📝 Form data title:', formData.value.title);
+    console.log('📝 Form data title type:', typeof formData.value.title);
+    console.log('📝 Form data title length:', formData.value.title?.length);
+    console.log('📅 Due date debug - props.editTask.dueDate:', props.editTask.dueDate);
+    console.log('📅 Due date debug - formData.dueDateTime:', formData.value.dueDateTime);
+
     // Set selected languages
     if (props.editTask.language) {
       selectedLanguages.value = [props.editTask.language];
       formData.value.language = props.editTask.language;
+      console.log('🌐 Selected language:', selectedLanguages.value);
     }
 
-    // When editing, only allow one language selection
-    if (props.editTask) {
-      // Disable multiple language selection for edit mode
-      selectedLanguages.value = selectedLanguages.value.slice(0, 1);
-    }
+    // Only allow one language selection for edit mode
+    selectedLanguages.value = selectedLanguages.value.slice(0, 1);
 
     // Set selected file
     if (props.editTask.fileId) {
       selectedFileId.value = props.editTask.fileId;
-      onFileChange();
+      console.log('📁 Selected file ID:', selectedFileId.value);
+
+      // Load file parts first, then set the selected part
+      onFileChange().then(() => {
+        // Set selected file part based on edit task data
+        if (props.editTask.filePart !== undefined) {
+          console.log('📄 Setting selected file part:', props.editTask.filePart);
+          selectedFileParts.value = [props.editTask.filePart];
+          console.log('📄 Selected file parts after setting:', selectedFileParts.value);
+        }
+      });
     }
+  } else {
+    console.log('❌ No edit task data provided');
   }
 };
 
@@ -702,31 +602,26 @@ const descriptionLength = computed(() => {
   return formData.value.description?.length || 0;
 });
 
+// Helper functions for language display
+const getLanguageName = (languageCode: string) => {
+  const language = SUPPORTED_LANGUAGES.find(lang => lang.code === languageCode);
+  return language ? language.name : languageCode.toUpperCase();
+};
+
+const getLanguageNativeName = (languageCode: string) => {
+  const language = SUPPORTED_LANGUAGES.find(lang => lang.code === languageCode);
+  return language ? language.nativeName : '';
+};
+
 // Reset form when dialog opens/closes
 watch(() => props.visible, (newVal: boolean) => {
+  console.log('🔍 Watch triggered - props.visible changed to:', newVal);
   if (newVal) {
-    console.log('CreateTaskDialog: Dialog opened, checking props.projectFiles:', props.projectFiles);
-    console.log('CreateTaskDialog: props.projectFiles length:', props.projectFiles?.length);
+    console.log('EditTaskDialog: Dialog opened, checking props.projectFiles:', props.projectFiles);
+    console.log('EditTaskDialog: props.projectFiles length:', props.projectFiles?.length);
+    console.log('EditTaskDialog: Edit task data:', props.editTask);
 
-    formData.value = {
-      title: '',
-      description: '',
-      projectId: props.projectId,
-      assignedToId: '',
-      groupId: '',
-      dueDate: '',
-      dueTime: '',
-      dueDateTime: '',
-      branchId: props.branchId,
-      fileId: props.fileId,
-      filePart: props.filePart,
-      language: ''
-    };
-
-    // Initialize form with edit data if editing
-    initializeFormWithEditData();
-    selectedFileId.value = '';
-    selectedLanguages.value = [];
+    // Clear other states first
     fileParts.value = [];
     selectedFileParts.value = [];
     error.value = '';
@@ -742,29 +637,52 @@ watch(() => props.visible, (newVal: boolean) => {
     };
     hasSubmitted.value = false;
 
+    console.log('🔍 About to call initializeFormWithEditData()');
+    // Initialize form with edit data AFTER clearing states
+    initializeFormWithEditData();
+
+    console.log('EditTaskDialog: Form data after initialization:', formData.value);
+
     // Use projectFiles from props if available, otherwise load them
     if (props.projectFiles && props.projectFiles.length > 0) {
-      // projectFiles.value = props.projectFiles as ProjectFile[]; // This line is removed
-      console.log('CreateTaskDialog: Using projectFiles from props:', projectFilesComputed.value.length, 'files');
-      console.log('CreateTaskDialog: Files from props:', projectFilesComputed.value);
+      console.log('EditTaskDialog: Using projectFiles from props:', projectFilesComputed.value.length, 'files');
+      console.log('EditTaskDialog: Files from props:', projectFilesComputed.value);
     } else {
-      console.log('CreateTaskDialog: No projectFiles from props, loading them...');
-      // loadProjectFiles(); // This function is removed
+      console.log('EditTaskDialog: No projectFiles from props, loading them...');
     }
   }
 });
 
+// Also watch for editTask prop changes
+watch(() => props.editTask, (newTask) => {
+  console.log('🔍 EditTask watch triggered:', newTask);
+  if (newTask && props.visible) {
+    console.log('🔍 EditTask changed and dialog is visible, calling initializeFormWithEditData()');
+    initializeFormWithEditData();
+  }
+}, { immediate: true });
+
+// Watch for fileParts changes to set selected file part in edit mode
+watch(() => fileParts.value, (newFileParts) => {
+  if (props.editTask?.filePart !== undefined && newFileParts.length > 0) {
+    console.log('📄 File parts loaded, setting selected part:', props.editTask.filePart);
+    selectedFileParts.value = [props.editTask.filePart];
+    console.log('📄 Selected file parts after setting:', selectedFileParts.value);
+  }
+});
+
 // Debug: Log component lifecycle
-console.log('CreateTaskDialog component script setup executed');
+console.log('EditTaskDialog component script setup executed');
 
 // Thêm onMounted để kiểm tra component có được mount không
 onMounted(() => {
-  console.log('CreateTaskDialog: Component mounted');
-  console.log('CreateTaskDialog: Props received:', {
+  console.log('EditTaskDialog: Component mounted');
+  console.log('EditTaskDialog: Props received:', {
     visible: props.visible,
     projectId: props.projectId,
     projectFilesLength: props.projectFiles?.length,
-    inline: props.inline
+    inline: props.inline,
+    editTask: props.editTask
   });
 });
 
@@ -776,6 +694,43 @@ function formatDateTimeForSubmission(dateString: string, timeString: string): st
   const dateTimeString = `${dateString}T${timeString}`;
   const date = new Date(dateTimeString);
   return date.toISOString();
+}
+
+// Format datetime for local input (datetime-local)
+function formatDateTimeForLocalInput(dateTimeString: string): string {
+  if (!dateTimeString) return '';
+
+  // Create date in local timezone to avoid timezone conversion issues
+  const date = new Date(dateTimeString);
+
+  // Get local date components
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  console.log('🕐 Formatting datetime for local input:');
+  console.log('🕐 Original:', dateTimeString);
+  console.log('🕐 Date object:', date);
+  console.log('🕐 Local hours:', hours, 'minutes:', minutes);
+  console.log('🕐 Result:', `${year}-${month}-${day}T${hours}:${minutes}`);
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Format datetime for API (preserve local time without timezone conversion)
+function formatDateTimeForAPI(dateTimeString: string): string {
+  if (!dateTimeString) return '';
+  const date = new Date(dateTimeString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  // KHÔNG có Z ở cuối!
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
 
 // Format datetime for display
@@ -791,25 +746,6 @@ function formatDateTimeForDisplay(dateTimeString: string): string {
     minute: '2-digit',
     hour12: false
   });
-}
-
-// Format datetime for API (preserve local time without timezone conversion)
-function formatDateTimeForAPI(dateTimeString: string): string {
-  if (!dateTimeString) return '';
-
-  // Create date from the datetime-local input value
-  const date = new Date(dateTimeString);
-
-  // Get local date components to avoid timezone issues
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-
-  // Create ISO string in local timezone
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
 
 // Compute minimum date (today)
@@ -845,13 +781,13 @@ onUnmounted(() => {
 
 // Load project files (only if not provided via props)
 async function loadProjectFiles() {
-  console.log('CreateTaskDialog: Loading project files for projectId:', props.projectId);
+  console.log('EditTaskDialog: Loading project files for projectId:', props.projectId);
   try {
     // projectFiles.value = await taskService.getProjectFiles(props.projectId); // This line is removed
-    console.log('CreateTaskDialog: Project files loaded successfully:', projectFilesComputed.value.length, 'files');
-    console.log('CreateTaskDialog: Files:', projectFilesComputed.value);
+    console.log('EditTaskDialog: Project files loaded successfully:', projectFilesComputed.value.length, 'files');
+    console.log('EditTaskDialog: Files:', projectFilesComputed.value);
   } catch (err) {
-    console.error('CreateTaskDialog: Failed to load project files:', err);
+    console.error('EditTaskDialog: Failed to load project files:', err);
     // projectFiles.value = []; // This line is removed
   }
 }
@@ -882,7 +818,11 @@ async function onFileChange() {
     );
 
     console.log('File parts loaded:', fileParts.value);
-    selectedFileParts.value = [];
+
+    // Don't clear selectedFileParts if we're in edit mode and have filePart data
+    if (!props.editTask?.filePart) {
+      selectedFileParts.value = [];
+    }
   } catch (err) {
     console.error('Failed to load file parts:', err);
     fileParts.value = [];
@@ -927,17 +867,7 @@ function selectFirstFile() {
   }
 }
 
-// Select all languages
-function selectAllLanguages() {
-  selectedLanguages.value = availableLanguages.value.map(lang => lang.code);
-  validateLanguages();
-}
 
-// Clear all languages
-function clearAllLanguages() {
-  selectedLanguages.value = [];
-  validateLanguages();
-}
 
 // Validate due date time and show warnings
 function validateDueDateTime() {
@@ -958,20 +888,20 @@ function validateDueDateTime() {
 
   // Check if date is in the past
   if (timeDiff < 0) {
-    dueDateTimeWarning.value = '⚠️ Deadline cannot be in the past';
+    dueDateTimeWarning.value = ' Deadline cannot be in the past';
     fieldErrors.value.dueDateTime = 'Deadline cannot be in the past';
     return;
   }
 
   // Check if deadline is too close (less than 1 hour)
   if (hoursDiff < 1) {
-    dueDateTimeWarning.value = '⚠️ Deadline is very close (less than 1 hour)';
+    dueDateTimeWarning.value = ' Deadline is very close (less than 1 hour)';
     return;
   }
 
   // Check if deadline is too close (less than 24 hours)
   if (hoursDiff < 24) {
-    dueDateTimeWarning.value = '⚠️ Deadline is close (less than 24 hours)';
+    dueDateTimeWarning.value = ' Deadline is close (less than 24 hours)';
     return;
   }
 }
@@ -1003,13 +933,13 @@ function validateFileSelection() {
 // Validate languages selection
 function validateLanguages() {
   if (selectedLanguages.value.length === 0) {
-    fieldErrors.value.languages = props.editTask ? 'Please select a language' : 'Please select at least one target language';
+    fieldErrors.value.languages = 'Please select a language';
     return false;
   }
 
-  // When editing, only allow one language
-  if (props.editTask && selectedLanguages.value.length > 1) {
-    fieldErrors.value.languages = 'Please select only one language when editing a task';
+  // Only allow one language for edit
+  if (selectedLanguages.value.length > 1) {
+    fieldErrors.value.languages = 'Please select only one language';
     return false;
   }
 
@@ -1049,51 +979,31 @@ async function onSubmit() {
   error.value = '';
 
   try {
-    if (props.editTask) {
-      // Update existing task
-      const updateDto = {
-        title: formData.value.title.trim(),
-        description: formData.value.description?.trim() || undefined,
-        assignedToId: formData.value.assignedToId || undefined,
-        groupId: formData.value.groupId || undefined,
-        dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
-        fileId: formData.value.fileId || undefined,
-        filePart: formData.value.filePart,
-        language: formData.value.language
-      };
+    // Update existing task
+    const updateDto = {
+      title: formData.value.title.trim(),
+      description: formData.value.description?.trim() || undefined,
+      assignedToId: formData.value.assignedToId || undefined,
+      groupId: formData.value.groupId || undefined,
+      dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
+      fileId: formData.value.fileId || undefined,
+      filePart: formData.value.filePart,
+      language: formData.value.language
+    };
 
-      const updatedTask = await taskService.updateTask(props.editTask.id, updateDto);
-      emit('success', updatedTask);
-      emit('close');
-    } else {
-      // Create new tasks
-      const createdTasks = [];
+    console.log('📤 Sending update DTO:', updateDto);
+    console.log('📤 Due date being sent:', updateDto.dueDate);
+    console.log('📤 Original dueDateTime value:', formData.value.dueDateTime);
+    console.log('📤 Due date ISO string:', formData.value.dueDateTime ? new Date(formData.value.dueDateTime).toISOString() : 'undefined');
+    console.log('📤 Due date local string:', formData.value.dueDateTime ? new Date(formData.value.dueDateTime).toString() : 'undefined');
 
-      // Create one task per selected language (Crowdin-style)
-      for (const language of selectedLanguages.value) {
-        const dto: CreateTaskDto = {
-          title: formData.value.title.trim(),
-          projectId: props.projectId,
-          description: formData.value.description?.trim() || undefined,
-          assignedToId: formData.value.assignedToId || undefined,
-          groupId: formData.value.groupId || undefined,
-          dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
-          branchId: props.branchId || undefined,
-          fileId: formData.value.fileId || undefined,
-          filePart: formData.value.filePart,
-          language: language
-        };
-
-        const task = await taskService.createTask(dto);
-        createdTasks.push(task);
-      }
-
-      // Emit all created tasks
-      createdTasks.forEach(task => emit('success', task));
-      emit('close');
-    }
+    const updatedTask = await taskService.updateTask(props.editTask.id, updateDto);
+    console.log('📥 Received updated task:', updatedTask);
+    console.log('📥 Updated task due date:', updatedTask.dueDate);
+    emit('success', updatedTask);
+    emit('close');
   } catch (err: any) {
-    error.value = err.response?.data?.message || (props.editTask ? 'Failed to update task' : 'Failed to create task(s)');
+    error.value = err.response?.data?.message || 'Failed to update task';
   } finally {
     loading.value = false;
   }
@@ -1717,5 +1627,58 @@ input[type="datetime-local"]::-webkit-datetime-edit {
   .language-native {
     font-size: 12px;
   }
+}
+
+/* Language Display Styles */
+.language-display {
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.language-info-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.language-info-display .language-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 24px;
+  background: #3b82f6;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.language-info-display .language-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.language-info-display .language-name {
+  font-weight: 500;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.language-info-display .language-native {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.no-language {
+  padding: 8px 0;
 }
 </style>

@@ -47,7 +47,7 @@ export class TaskEntity {
   @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
   createdBy: UserEntity;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'datetime', nullable: true })
   dueDate: Date;
 
   @CreateDateColumn()

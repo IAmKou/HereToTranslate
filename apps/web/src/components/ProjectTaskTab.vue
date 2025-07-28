@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onBeforeUnmount, type Ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { taskService, Task, ProjectFile } from '../services/task.service';
 import CreateTaskDialog from './CreateTaskDialog.vue';
+import EditTaskDialog from './EditTaskDialog.vue';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
 import { getLanguageName } from '../utils/languages';
@@ -120,7 +122,13 @@ const showCreateForm = ref(false);
 const showDeleteModal = ref(false);
 const taskToDelete = ref<Task|null>(null);
 const isDeleting = ref(false);
+const router = useRouter();
 const toast = useToast();
+
+// Task action menu state
+const showTaskActionMenu = ref(false);
+const taskActionMenuPosition = ref({ x: 0, y: 0 });
+const currentTaskForAction = ref<Task|null>(null);
 
 // Search and filter functions
 function toggleFilters() {
@@ -836,15 +844,77 @@ function closeDeleteModal() {
   if (taskToDelete.value && selectedTask.value?.id === taskToDelete.value.id) {
     selectedTask.value = null;
   }
+
+  // Close task action menu
+  closeTaskActionMenu();
+}
+
+// Function để mở task action menu
+function openTaskActionMenu(event: MouseEvent, task: Task) {
+  event.stopPropagation();
+  currentTaskForAction.value = task;
+  taskActionMenuPosition.value = { x: event.clientX, y: event.clientY };
+  showTaskActionMenu.value = true;
+}
+
+// Function để đóng task action menu
+function closeTaskActionMenu() {
+  showTaskActionMenu.value = false;
+  currentTaskForAction.value = null;
 }
 
 // Function để mở modal xóa task
 function openDeleteModal() {
-  if (!selectedTask.value) return;
-  taskToDelete.value = selectedTask.value;
+  if (!currentTaskForAction.value) return;
+  taskToDelete.value = currentTaskForAction.value;
   showDeleteModal.value = true;
+  closeTaskActionMenu();
   // Add body class when modal opens
   document.body.classList.add('modal-open');
+}
+
+// Function để edit task
+function editTask() {
+  console.log('🔧 Edit task function called');
+  if (!currentTaskForAction.value) {
+    console.log('❌ No current task for action');
+    return;
+  }
+
+  console.log('📝 Current task for action:', currentTaskForAction.value);
+
+  // Close task detail view first
+  selectedTask.value = null;
+
+  // Prepare data for edit inline form
+  const editData = {
+    projectId: props.projectId,
+    branchId: props.branchId || '',
+    projectMembers: props.projectMembers,
+    projectGroups: props.projectGroups,
+    projectFiles: projectFiles.value,
+    projectTargetLanguages: props.project?.targetLanguages || [],
+    task: currentTaskForAction.value // Pass the entire task object
+  };
+
+  console.log('📋 Edit data prepared:', editData);
+
+  editTaskInlineData.value = editData;
+  showEditTaskInline.value = true;
+
+  console.log('✅ Edit form state set:', {
+    showEditTaskInline: showEditTaskInline.value,
+    editTaskInlineData: editTaskInlineData.value
+  });
+
+  closeTaskActionMenu();
+}
+
+// Function để close task
+function closeTaskFromMenu() {
+  if (!currentTaskForAction.value) return;
+  closeTask(currentTaskForAction.value);
+  // closeTaskActionMenu() sẽ được gọi trong closeTask function
 }
 
 // Function để xóa task
@@ -867,6 +937,9 @@ async function deleteSelectedTask() {
 
     // Close task detail view to return to board
     selectedTask.value = null;
+
+    // Close task action menu
+    closeTaskActionMenu();
 
     // Reload tasks from server to get actual state
     console.log('Reloading tasks from server...');
@@ -892,6 +965,9 @@ async function deleteSelectedTask() {
     // Close modal
     closeDeleteModal();
 
+    // Close task action menu
+    closeTaskActionMenu();
+
     // Reload tasks to check actual server state
     console.log('Reloading tasks to check actual server state...');
     await reloadTasks();
@@ -911,6 +987,9 @@ async function deleteSelectedTask() {
       // Task was actually deleted, show success
       // Close task detail view to return to board
       selectedTask.value = null;
+
+      // Close task action menu
+      closeTaskActionMenu();
 
       toast.add({
         severity: 'success',
@@ -1142,6 +1221,21 @@ onMounted(() => {
       showDatePicker.value = false;
     }
   });
+
+  // Add click outside listener for task action menu
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.task-action-menu') && !target.closest('.task-action-menu-btn')) {
+      closeTaskActionMenu();
+    }
+  });
+
+  // Add ESC key listener for task action menu
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && showTaskActionMenu.value) {
+      closeTaskActionMenu();
+    }
+  });
 });
 
 onBeforeUnmount(() => {
@@ -1207,6 +1301,12 @@ async function closeTask(task: Task) {
       life: 3000
     });
 
+    // Close task action menu
+    closeTaskActionMenu();
+
+    // Quay về board task sau khi đóng
+    selectedTask.value = null;
+
     console.log('Task closed successfully:', task.id);
   } catch (error: any) {
     console.error('Failed to close task:', error);
@@ -1243,6 +1343,9 @@ async function reopenTask(task: Task) {
       life: 3000
     });
 
+    // Close task action menu
+    closeTaskActionMenu();
+
     console.log('Task reopened successfully:', task.id);
   } catch (error: any) {
     console.error('Failed to reopen task:', error);
@@ -1272,6 +1375,55 @@ function getStatusText(status: string): string {
       return status;
   }
 }
+
+// Edit task inline form state
+const showEditTaskInline = ref(false);
+const editTaskInlineData = ref(null);
+
+
+
+const handleTaskUpdatedInline = (updatedTask: Task) => {
+  console.log('✅ Task updated inline, refreshing tasks:', updatedTask);
+  console.log('✅ Updated task due date:', updatedTask.dueDate);
+  console.log('✅ Selected task before update:', selectedTask.value?.dueDate);
+
+  // Update the task in the current list
+  const taskIndex = tasks.value.findIndex(t => t.id === updatedTask.id);
+  if (taskIndex !== -1) {
+    tasks.value[taskIndex] = updatedTask;
+  }
+
+  // Update selectedTask nếu là task đang edit
+  if (selectedTask.value && selectedTask.value.id === updatedTask.id) {
+    console.log('🔄 Updating selectedTask with new data');
+    selectedTask.value = updatedTask;
+    console.log('🔄 Selected task after update:', selectedTask.value.dueDate);
+  } else {
+    // Nếu đang ở form edit, sau khi update thì chuyển sang detail của task đó
+    selectedTask.value = updatedTask;
+  }
+
+  // Refresh tasks to ensure consistency
+  loadTasks();
+
+  // Close inline edit form
+  showEditTaskInline.value = false;
+  editTaskInlineData.value = null;
+
+  // Show success message
+  toast.add({
+    severity: 'success',
+    summary: 'Task Updated',
+    detail: 'Task has been successfully updated.',
+    life: 3000
+  });
+};
+
+const closeEditTaskInline = () => {
+  showEditTaskInline.value = false;
+  editTaskInlineData.value = null;
+};
+
 </script>
 
 <template>
@@ -1280,7 +1432,15 @@ function getStatusText(status: string): string {
     <div v-if="selectedTask" class="task-detail-view">
       <div class="task-detail-header-row">
         <button class="back-btn" @click="selectedTask = null">← Board</button>
-        <button class="delete-btn" @click="openDeleteModal">Delete Task</button>
+        <div class="task-action-menu-wrapper">
+          <button
+            class="task-action-menu-btn"
+            @click="openTaskActionMenu($event, selectedTask)"
+            title="Task actions"
+          >
+            <i class="pi pi-ellipsis-v"></i>
+          </button>
+        </div>
       </div>
       <div class="task-detail-header">
         <span class="task-detail-id">#{{ selectedTask.id }}</span>
@@ -1347,13 +1507,25 @@ function getStatusText(status: string): string {
           <thead>
           <tr>
             <th>Project members</th>
-            <th>Assigned words</th>
-            <th>Words left</th>
-            <th>Actions</th>
+            <th>Assigned strings</th>
           </tr>
           </thead>
           <tbody>
-          <tr><td colspan="4" class="empty-row">Nothing to display</td></tr>
+          <tr v-if="selectedTask.assignedTo">
+            <td>
+              <div class="assignee-info">
+                <img v-if="selectedTask.assignedTo.avatarUrl" :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)" :alt="selectedTask.assignedTo.fullName" class="assignee-avatar" />
+                <span v-else class="assignee-avatar-placeholder">{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
+                <span class="assignee-name">{{ selectedTask.assignedTo.fullName || selectedTask.assignedTo.username }}</span>
+              </div>
+            </td>
+            <td>
+              {{ currentPartInfo?.stringCount !== undefined ? currentPartInfo.stringCount : (selectedTask.fileId ? (filePartsData.value.get(selectedTask.fileId)?.reduce((sum: number, p: { stringCount: number }) => sum + (p.stringCount || 0), 0) ?? '-') : '-') }}
+            </td>
+          </tr>
+          <tr v-else>
+            <td colspan="2" class="empty-row">Nothing to display</td>
+          </tr>
           </tbody>
         </table>
       </div>
@@ -1377,6 +1549,33 @@ function getStatusText(status: string): string {
         @success="handleTaskCreated"
       />
     </div>
+
+    <!-- Edit Task View -->
+    <div v-else-if="showEditTaskInline" class="edit-task-view">
+      <div class="edit-task-header">
+        <button class="back-btn" @click="closeEditTaskInline">← Back to Task Detail</button>
+      </div>
+      <div v-if="editTaskInlineData">
+        <EditTaskDialog
+          :visible="true"
+          :project-id="editTaskInlineData.projectId"
+          :project-members="editTaskInlineData.projectMembers"
+          :project-groups="editTaskInlineData.projectGroups"
+          :branch-id="editTaskInlineData.branchId"
+          :project-files="editTaskInlineData.projectFiles"
+          :project-target-languages="editTaskInlineData.projectTargetLanguages"
+          :edit-task="editTaskInlineData.task"
+          :inline="true"
+          @close="closeEditTaskInline"
+          @success="handleTaskUpdatedInline"
+        />
+      </div>
+      <div v-else>
+        <p>Loading edit form...</p>
+      </div>
+    </div>
+
+
 
     <!-- Kanban Board View -->
     <div v-else class="kanban-board-view">
@@ -2386,6 +2585,33 @@ function getStatusText(status: string): string {
 
 
 
+  <!-- Task Action Menu -->
+  <Teleport to="body">
+    <div v-if="showTaskActionMenu" class="task-action-menu-overlay" @click="closeTaskActionMenu">
+      <div
+        class="task-action-menu"
+        :style="{
+          left: taskActionMenuPosition.x + 'px',
+          top: taskActionMenuPosition.y + 'px'
+        }"
+        @click.stop
+      >
+        <button class="task-action-item" @click="editTask">
+          <i class="pi pi-pencil"></i>
+          Edit
+        </button>
+        <button class="task-action-item" @click="closeTaskFromMenu">
+          <i class="pi pi-times"></i>
+          Close
+        </button>
+        <button class="task-action-item delete" @click="openDeleteModal">
+          <i class="pi pi-trash"></i>
+          Delete
+        </button>
+      </div>
+    </div>
+  </Teleport>
+
   <!-- Delete Task Modal -->
   <Teleport to="body">
     <div v-if="showDeleteModal" class="modal-overlay" @click="closeDeleteModal">
@@ -2425,6 +2651,9 @@ function getStatusText(status: string): string {
       </div>
     </div>
   </Teleport>
+
+
+
 </template>
 
 <style scoped>
@@ -3628,6 +3857,94 @@ function getStatusText(status: string): string {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
 }
+
+/* Edit Task Overlay */
+.edit-task-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #f5f5f5;
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+/* Task Action Menu Styles */
+.task-action-menu-wrapper {
+  position: relative;
+}
+
+.task-action-menu-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.5rem;
+  font-size: 1rem;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+
+.task-action-menu-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.task-action-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.task-action-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 0.5rem 0;
+  min-width: 160px;
+  z-index: 1001;
+  transform: translate(-50%, -100%);
+  margin-top: -10px;
+}
+
+.task-action-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  border: none;
+  background: none;
+  color: #374151;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  text-align: left;
+}
+
+.task-action-item:hover {
+  background: #f9fafb;
+}
+
+.task-action-item.delete {
+  color: #dc2626;
+}
+
+.task-action-item.delete:hover {
+  background: #fef2f2;
+}
 .task-detail-header {
   font-size: 1.5em;
   font-weight: 700;
@@ -3776,6 +4093,21 @@ function getStatusText(status: string): string {
   margin-bottom: 1.5em;
 }
 .create-task-header h2 {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #222;
+}
+
+.edit-task-view {
+  padding: 0 0 1.2em 0;
+}
+.edit-task-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 1.5em;
+}
+.edit-task-header h2 {
   font-size: 1.5em;
   font-weight: 700;
   color: #222;

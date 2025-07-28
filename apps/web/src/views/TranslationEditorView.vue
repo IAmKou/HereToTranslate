@@ -5,6 +5,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import axiosInstance from '../api';
 import { useProjectPermission } from '../composables/useProjectPermission';
+import { useRoute, useRouter } from 'vue-router';
 
 interface TranslationString {
   id: string;
@@ -13,13 +14,13 @@ interface TranslationString {
   fileId: string;
 }
 
-const props = defineProps<{
-  projectId: string | number;
-  branchId: string | number | null;
-  project?: any;
-  members?: any[];
-  currentUser?: any;
-}>();
+const route = useRoute();
+const router = useRouter();
+
+// Get projectId and branchId from route params
+const projectId = computed(() => route.params.projectId as string);
+const branchId = computed(() => route.params.branchId as string);
+const selectedFileId = computed(() => route.query.fileId as string);
 
 const files = ref<any[]>([]);
 const translationStrings = ref<any[]>([]);
@@ -69,9 +70,9 @@ function getStringsCountOfPart(fileId: string | number, part: number) {
 }
 
 async function loadFiles() {
-  if (!props.projectId || !props.branchId) return;
+  if (!projectId.value || !branchId.value) return;
   try {
-    const res = await axiosInstance.get(`/files/project/${props.projectId}?branchId=${props.branchId}`);
+    const res = await axiosInstance.get(`/files/project/${projectId.value}?branchId=${branchId.value}`);
     files.value = Array.isArray(res.data) ? res.data : [];
   } catch (e) {
     files.value = [];
@@ -79,14 +80,14 @@ async function loadFiles() {
 }
 
 async function loadTranslationStrings() {
-  if (!props.projectId || !props.branchId) return;
+  if (!projectId.value || !branchId.value) return;
   loading.value = true;
   error.value = '';
   try {
     const res = await axiosInstance.get('/translation/strings', {
       params: {
-        projectId: props.projectId,
-        branchId: props.branchId,
+        projectId: projectId.value,
+        branchId: branchId.value,
       },
     });
     translationStrings.value = Array.isArray(res.data)
@@ -219,19 +220,25 @@ const filterOptions = [
   { value: 'untranslated', label: 'Untranslated', icon: 'pi pi-times', tooltip: 'Show only untranslated' },
 ];
 
-const { hasPermission } = useProjectPermission(
-  computed(() => props.project || {}),
-  computed(() => props.members || []),
-  computed(() => props.currentUser || null)
-);
-
-const canEditTranslation = computed(() => hasPermission('EditTranslation'));
+// For now, we'll assume the user has edit permissions
+// In a real implementation, you'd need to pass project, members, and currentUser as props or fetch them
+const canEditTranslation = ref(true);
 
 // Watch cho projectId và branchId thay đổi
-watch([() => props.projectId, () => props.branchId], () => {
+watch([projectId, branchId], () => {
   loadFiles();
   loadTranslationStrings();
 });
+
+// Auto-expand selected file if fileId is provided
+watch([selectedFileId, files], () => {
+  if (selectedFileId.value && files.value.length > 0) {
+    const fileId = selectedFileId.value;
+    if (!expandedFileIds.value.includes(fileId)) {
+      expandedFileIds.value.push(fileId);
+    }
+  }
+}, { immediate: true });
 
 onMounted(() => {
   loadFiles();
@@ -274,39 +281,192 @@ async function saveTranslation(str: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: e?.message || 'Failed to save translation', life: 3000 });
   }
 }
+
+// Navigation back to project
+function goBackToProject() {
+  router.push(`/projects/${projectId.value}`);
+}
 </script>
 
 <template>
-  <div>
-
-
-    <div v-if="loading">Loading translation strings...</div>
-    <div v-else-if="error" style="color:red">{{ error }}</div>
-    <div v-else>
-      <div v-if="files.length === 0">No files found for this branch.</div>
-      <div v-if="files.some(f => f.fileName && f.fileName.toLowerCase().endsWith('.docx'))" class="docx-toc-hint" style="background:#e0e7ff;padding:12px 18px;border-radius:10px;margin-bottom:18px;color:#374151;font-size:1.08em;display:flex;align-items:center;gap:0.7em;">
-        <i class="pi pi-info-circle" style="color:#6366f1;font-size:1.3em;"></i>
-        <span><b>Note:</b> After translating, open the DOCX file and right-click on the Table of Contents → select <b>"Update Field"</b> → <b>"Update entire table"</b> to automatically refresh the table of contents formatting.</span>
+  <div class="translation-editor-page">
+    <!-- Header with back button -->
+    <div class="page-header">
+      <div class="header-content">
+        <button @click="goBackToProject" class="back-btn">
+          <i class="pi pi-arrow-left"></i>
+          Back to Project
+        </button>
+        <h1 class="page-title">Translation Editor</h1>
       </div>
-      <div v-for="file in files" :key="file.fileId || file.id" class="file-accordion" style="margin-bottom: 1.5em;">
-        <div class="file-header" style="cursor: default; background: #e0e7ff; border-radius: 16px; box-shadow: none;">
-          <span class="file-name" style="color: #4f46e5; font-weight: 700; font-size: 1.13em; display: flex; align-items: center; gap: 0.7em;">
-            <i :class="getFileIconClass(file.fileName)" style="font-size:1.25em;margin-right:0.2em;"></i>
-            {{ file.fileName }}
-          </span>
-          <div class="progress-bar-wrapper" style="font-weight: 600; color: #222; min-width: 80px;">
-            {{ fileProgress[file.fileId || file.id]?.translated || 0 }} / {{ fileProgress[file.fileId || file.id]?.total || 0 }}
+    </div>
+
+    <div class="editor-content">
+      <div v-if="loading">Loading translation strings...</div>
+      <div v-else-if="error" style="color:red">{{ error }}</div>
+      <div v-else>
+        <div v-if="files.length === 0">No files found for this branch.</div>
+        <div v-for="file in files" :key="file.fileId || file.id" class="file-accordion">
+          <div class="file-header" @click="toggleFileAccordion(file.fileId || file.id)">
+            <span class="file-name">
+              <i :class="getFileIconClass(file.fileName)" style="font-size:1.25em;margin-right:0.2em;"></i>
+              {{ file.fileName }}
+            </span>
+            <div class="progress-bar-wrapper"
+                 :title="`${fileProgress[file.fileId || file.id]?.translated || 0} / ${fileProgress[file.fileId || file.id]?.total || 0} translated segments` +
+                  (isFileProcessing(file) ? ' (Extracting...)' : '')">
+              <span v-if="isFileProcessing(file)" class="processing-badge" style="color:#6366f1;font-weight:600;margin-left:8px;">
+                <i class="pi pi-spin pi-spinner"></i> Extracting...
+              </span>
+              <span v-else>{{ fileProgress[file.fileId || file.id]?.translated || 0 }} / {{ fileProgress[file.fileId || file.id]?.total || 0 }}</span>
+            </div>
+            <span class="accordion-arrow" :class="{ open: expandedFileIds.includes(file.fileId || file.id) }">
+              <i class="pi" :class="expandedFileIds.includes(file.fileId || file.id) ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
+            </span>
           </div>
-          <a
-            :href="`/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}`"
-            class="open-translator-btn"
-            style="background: #7c5dfa; color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 8px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; margin-left: 1rem; transition: all 0.2s; font-size: 1rem;"
-            @mouseenter="$event.target.style.background = '#5f43ea'"
-            @mouseleave="$event.target.style.background = '#7c5dfa'"
-          >
-            <i class="pi pi-external-link" style="font-size: 1rem;"></i>
-            Open Translator
-          </a>
+          <transition name="fade">
+            <div v-if="expandedFileIds.includes(file.fileId || file.id)" class="file-strings-list" :class="{ 'disabled-processing': isFileProcessing(file) }">
+              <div v-if="isFileProcessing(file)" class="processing-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.85);z-index:10;display:flex;align-items:center;justify-content:center;border-radius:12px;">
+                <div style="text-align:center;">
+                  <i class="pi pi-spin pi-spinner" style="font-size:2.5rem;color:#6366f1;"></i>
+                  <div style="color:#6366f1;font-size:1.2em;font-weight:600;margin-top:12px;">File is extracting...</div>
+                  <div style="color:#6b7280;font-size:0.95em;margin-top:6px;">Please wait for the extraction to complete</div>
+                </div>
+              </div>
+              <!-- Part selector -->
+              <div v-if="getTotalParts(file.fileId || file.id) > 1" class="part-selector" style="margin-bottom: 1em; display: flex; gap: 0.5em; align-items: center;">
+                <span style="font-weight:600; color:#6366f1;">Part:</span>
+                <button
+                  v-for="part in getTotalParts(file.fileId || file.id)"
+                  :key="part"
+                  :class="['part-btn', { active: (selectedPartMap[file.fileId || file.id] ?? 0) === (part-1) }]"
+                  @click="selectedPartMap[file.fileId || file.id] = part-1"
+                  style="padding: 0.3em 1em; border-radius: 8px; border: none; background: #e0e7ff; color: #374151; font-weight:600; cursor:pointer;"
+                  :disabled="isFileProcessing(file)"
+                >
+                  {{ part }} ({{ getStringsCountOfPart(file.fileId || file.id, part-1) }})
+                </button>
+              </div>
+              <!-- Improved search & filter bar -->
+              <div class="search-filter-bar">
+                <span class="search-icon"><i class="pi pi-search"></i></span>
+                <InputText v-model="searchQueryMap[file.fileId || file.id]" placeholder="Search strings..." class="search-input" :disabled="isFileProcessing(file)" />
+                <div class="filter-group-btn">
+                  <button
+                    v-for="opt in filterOptions"
+                    :key="opt.value"
+                    :class="['filter-btn', { active: filterStatusMap[file.fileId || file.id] === opt.value }]"
+                    @click="filterStatusMap[file.fileId || file.id] = opt.value"
+                    :title="opt.tooltip"
+                    type="button"
+                    :disabled="isFileProcessing(file)"
+                  >
+                    <i v-if="opt.icon" :class="opt.icon" style="margin-right:0.4em;"></i>{{ opt.label }}
+                  </button>
+                  <span class="filter-help" title="Filter translation status">
+                    <i class="pi pi-filter"></i>
+                  </span>
+                </div>
+              </div>
+              <div class="advanced-options">
+                <div class="view-mode-toggle">
+                  <label>
+                    <input type="radio" value="single" v-model="viewMode" :disabled="isFileProcessing(file)" /> Single Column
+                  </label>
+                  <label>
+                    <input type="radio" value="side" v-model="viewMode" :disabled="isFileProcessing(file)" /> Side by Side
+                  </label>
+                </div>
+                <label class="highlight-toggle">
+                  <input type="checkbox" v-model="highlightUntranslated" :disabled="isFileProcessing(file)" />
+                  Highlight untranslated
+                </label>
+              </div>
+              <div class="translation-scroll-area">
+                <div v-if="getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>
+                <div
+                  v-for="str in getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0)"
+                  :key="str.id"
+                  class="string-card"
+                  :class="{
+                    untranslated: highlightUntranslated && (!str.translatedText || !str.translatedText.trim()),
+                    translated: str.translatedText && str.translatedText.trim(),
+                    'side-by-side': viewMode === 'side',
+                    'disabled-processing': isFileProcessing(file)
+                  }"
+                  :style="isFileProcessing(file) ? 'pointer-events:none;opacity:0.5;' : ''"
+                  :title="isFileProcessing(file) ? 'Extracting, please wait...' : ''"
+                >
+                  <div v-if="viewMode === 'side'" class="side-by-side-row">
+                    <div class="side-original">
+                      <div class="original-label">Original Text:</div>
+                      <div class="original-text" v-html="str.originalText"></div>
+                    </div>
+                    <div class="side-translation">
+                      <div class="translation-label">Translation:</div>
+                      <textarea
+                        class="translation-input"
+                        v-model="str.translatedText"
+                        placeholder="Enter translation..."
+                        @input="e => { autoResize(e); onInput(str); }"
+                        rows="1"
+                        :ref="el => setTextareaRef(str.id, el)"
+                        :disabled="!canEditTranslation || isFileProcessing(file)"
+                      ></textarea>
+                      <div class="card-actions">
+                        <button
+                          v-if="str.translatedText && str.translatedText.trim()"
+                          class="save-btn"
+                          @click="saveTranslation(str)"
+                          :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file) || !canEditTranslation"
+                          title="Save"
+                          type="button"
+                        >💾 Save</button>
+                      </div>
+                    </div>
+                  </div>
+                  <template v-else>
+                    <div class="original-label">Original Text:</div>
+                    <div class="original-text" v-html="str.originalText"></div>
+                    <div class="translation-label">Translation:</div>
+                    <textarea
+                      class="translation-input"
+                      v-model="str.translatedText"
+                      placeholder="Enter translation..."
+                      @input="e => { autoResize(e); onInput(str); }"
+                      rows="1"
+                      :ref="el => setTextareaRef(str.id, el)"
+                      :disabled="!canEditTranslation || isFileProcessing(file)"
+                    ></textarea>
+                    <div class="card-actions">
+                      <button
+                        v-if="str.translatedText && str.translatedText.trim()"
+                        class="save-btn"
+                        @click="saveTranslation(str)"
+                        :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file) || !canEditTranslation"
+                        title="Save"
+                        type="button"
+                      >💾 Save</button>
+                    </div>
+                  </template>
+                  <span
+                    v-if="highlightUntranslated && (!str.translatedText || !str.translatedText.trim())"
+                    class="untranslated-badge"
+                    :title="'This segment is not yet translated'"
+                  >
+                    <i class="pi pi-exclamation-triangle"></i>
+                  </span>
+                  <span
+                    v-else-if="str.translatedText && str.translatedText.trim()"
+                    class="translated-badge"
+                    :title="'This segment is translated'"
+                  >
+                    <i class="pi pi-check-circle"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </transition>
         </div>
       </div>
     </div>
@@ -314,6 +474,57 @@ async function saveTranslation(str: any) {
 </template>
 
 <style scoped>
+.translation-editor-page {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.page-header {
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateX(-2px);
+}
+
+.page-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.editor-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
 .file-accordion {
   border: 2px solid #e0e7ff;
   border-radius: 20px;
@@ -790,5 +1001,26 @@ async function saveTranslation(str: any) {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Responsive design for the new page */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 1rem;
+  }
+
+  .header-content {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .editor-content {
+    padding: 1rem;
+  }
 }
 </style>

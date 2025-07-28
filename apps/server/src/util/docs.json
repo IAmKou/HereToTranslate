@@ -92,7 +92,7 @@
   {
     "id": "doc-19",
     "title": "Register for public request",
-    "content": ""
+    "content": "To register a public request, go to public request through your sidebar, there will be a list of public request , choose the one that suit you , click in and press Register for this request."
   },
   {
     "id": "doc-20",
@@ -102,17 +102,17 @@
   {
     "id": "doc-21",
     "title": "Withdraw",
-    "content": ""
+    "content": "To make a withdraw, click Wallet in your sidebar, in there will be a Withdraw button, click in enter the amount money you want to withdraw and your paypal email, make sure you not enter the wrong email. After that the withdraw will be process in about 24h."
   },
   {
     "id": "doc-22",
     "title": "View transaction history",
-    "content": ""
+    "content": "To see your transaction history, click Transaction History in your sidebar."
   },
   {
     "id": "doc-23",
     "title": "Add translation",
-    "content": ""
+    "content": "To add translation , go to your project, go in translation tab, choose the file you want to add translation, enter your translation then click save."
   },
   {
     "id": "doc-24",
@@ -148,5 +148,45 @@
     "id": "doc-30",
     "title": "Update Discussion",
     "content": "To update a discussion, first you need to be the project owner or have a role with Manage Discussions permission. If you have if, then go to your project, then go in Discussion tab, in there you will see list of discussion , click in the action button, in there it will have edit button, change the information you need to change then press save."
+  },
+  {
+    "id": "doc-31",
+    "title": "Review Translation",
+    "content": "To review translation, go to your project, go to commit tab, there will be a list of translation need to be review, click review and see the content, then approve or reject it."
+  },
+  {
+    "id": "doc-32",
+    "title": "Create group",
+    "content": "To create a group, go to your project, go to group tab, there will be list of group have been created, click in create new group button, enter group name and add member then confirm."
+  },
+  {
+    "id": "doc-33",
+    "title": "Edit group",
+    "content": "To edit a group, go to your project, go to group tab, there will be list of group have been created, click in edit button in the group you want to edit, modify group name and member then confirm."
+  },
+  {
+    "id": "doc-34",
+    "title": "Delete group",
+    "content": "To delete a group, go to your project, go to group tab, there will be list of group have been created, click in delete button in the group you want to delete, then confirm."
+  },
+  {
+    "id": "doc-35",
+    "title": "Add member to group",
+    "content": "To add member to a group, go to your project, go to group tab, if you don't have any group create one, in there you can add member to your group, id you already have one click edit in the group you want to add, then add more member to that group."
+  },
+  {
+    "id": "doc-36",
+    "title": "Create task",
+    "content": "To create task, go to your project, go to task tab, enter title, description, choose the file and the part for the task, choose the language, assign to a member or a group, and choose the due date, then confirm."
+  },
+  {
+    "id": "doc-37",
+    "title": "Edit task",
+    "content": ""
+  },
+  {
+    "id": "doc-38",
+    "title": "Delete task",
+    "content": ""
   }
 ]

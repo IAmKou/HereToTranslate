@@ -3,10 +3,21 @@
   "compilerOptions": {
     "outDir": "./out-tsc/jest",
     "types": ["jest", "node"],
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "es2020",
+    "moduleResolution": "node",
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "baseUrl": "./",
+    "paths": {
+      "#LocalProject/Dtos": ["src/dto/index.ts"],
+      "#LocalProject/Services/*": ["src/service/*"],
+      "#LocalProject/Entities": ["src/db/mysql/entity/index.ts"],
+      "#LocalProject/SqliteEntities": ["src/db/sqlite/entity/index.ts"],
+      "#LocalProject/Utils/*": ["src/util/*"],
+      "#LocalProject/Exceptions": ["src/util/exceptions/index.ts"],
+      "#LocalProject/Managers/*": ["src/manager/*"],
+      "#LocalProject/Auth/*": ["src/auth/*"]
+    }
   },
   "include": [
     "jest.config.ts",

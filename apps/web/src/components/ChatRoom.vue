@@ -194,7 +194,7 @@
                   cy="11"
                   r="8"
                 />
-                <path d="21 21l-4.35-4.35" />
+                <path d="M21 21l-4.35-4.35" />
               </svg>
               <input
                 v-model="newMemberUsernameOrEmail"
@@ -794,7 +794,7 @@
                           cy="11"
                           r="8"
                         />
-                        <path d="21 21l-4.35-4.35" />
+                        <path d="M21 21l-4.35-4.35" />
                       </svg>
                       <input
                         v-model="emojiSearch"
@@ -928,6 +928,7 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import localizedFormat from 'dayjs/plugin/localizedFormat'
 import utc from 'dayjs/plugin/utc'
+import { getChatConfig, getSocketIOConfig } from '../utils/chat-config'
 
 dayjs.extend(utc)
 dayjs.extend(relativeTime)
@@ -1093,26 +1094,36 @@ const connectSocket = () => {
   if (socket.value?.connected) return
   isConnecting.value = true
   error.value = null
-  const baseUrl = (import.meta.env.VITE_SERVER_URL as string) || `${location.protocol}//${location.hostname}:3000`
 
-  socket.value = io(baseUrl + '/chat', {
-    withCredentials: true,
-    path: '/api/chat/socket.io',
-    transports: ['websocket', 'polling'], // ✅ allow fallback
-  })
+  // Use chat config utility for better RadVPN support
+  const config = getChatConfig()
+  const socketConfig = getSocketIOConfig(config)
+
+  console.log('🔌 Chat Config:', config)
+  console.log('🔌 Connecting to chat server:', config.serverUrl + '/chat')
+
+  socket.value = io(config.serverUrl + '/chat', socketConfig)
 
   socket.value.on('connect', () => {
+    console.log('✅ Socket connected successfully')
     isConnecting.value = false
+    error.value = null
     socket.value?.emit('join_room', props.roomId)
   })
 
+  socket.value.on('joined_room', (roomId: string) => {
+    console.log('✅ Successfully joined room:', roomId)
+  })
+
   socket.value.on('new_message', (message: ChatMessage) => {
+    console.log('📩 Received new message:', message)
     messages.value.push(message)
     scrollToBottom()
     emit('message-received', message)
   })
 
   socket.value.on('message_edited', (updated: ChatMessage) => {
+    console.log('✏️ Message edited:', updated)
     const idx = messages.value.findIndex((m: ChatMessage) => m._id === updated._id)
     if (idx !== -1) {
       messages.value[idx] = { ...messages.value[idx], ...updated, isEdited: true }
@@ -1121,17 +1132,39 @@ const connectSocket = () => {
   })
 
   socket.value.on('message_deleted', (deletedId: string) => {
+    console.log('🗑️ Message deleted:', deletedId)
     messages.value = messages.value.filter((m: ChatMessage) => m._id !== deletedId)
     emit('message-deleted', deletedId)
   })
 
-  socket.value.on('disconnect', () => {
+  socket.value.on('disconnect', (reason: string) => {
+    console.log('🔌 Socket disconnected:', reason)
     isConnecting.value = true
+    error.value = `Disconnected: ${reason}`
   })
 
   socket.value.on('connect_error', (err: any) => {
     console.error('❌ Socket connect error:', err)
-    error.value = 'Connection error'
+    isConnecting.value = false
+
+    // Handle specific error types
+    if (err.message?.includes('401') || err.message?.includes('Unauthorized')) {
+      error.value = 'Authentication failed. JWT token may have expired. Please refresh the page.'
+    } else if (err.message?.includes('CORS')) {
+      error.value = 'CORS error. Server may not allow connections from your IP.'
+    } else {
+      error.value = `Connection failed: ${err.message || 'Unknown error'}`
+    }
+  })
+
+  socket.value.on('reconnect', (attemptNumber: number) => {
+    console.log('🔄 Socket reconnected after', attemptNumber, 'attempts')
+    error.value = null
+  })
+
+  socket.value.on('reconnect_error', (err: any) => {
+    console.error('🔄❌ Reconnect failed:', err)
+    error.value = `Reconnection failed: ${err.message || 'Unknown error'}`
   })
 }
 
@@ -1141,7 +1174,15 @@ const sendMessage = () => {
   if ((!text || text.replace(/\s/g, '') === '') && !replyingTo.value) {
     return // nothing to send
   }
-  if (!msg.value.trim() || !socket.value?.connected) return
+  if (!msg.value.trim()) return
+
+  if (!socket.value?.connected) {
+    console.warn('⚠️ Socket not connected, attempting to reconnect...')
+    connectSocket()
+    return
+  }
+
+  console.log('📤 Sending message:', msg.value.trim())
   socket.value.emit('send_message', {
     roomId: props.roomId,
     senderId: props.currentUserId,
@@ -1151,6 +1192,29 @@ const sendMessage = () => {
   })
   msg.value = ''
   replyingTo.value = null
+}
+
+const manualReconnect = () => {
+  console.log('🔄 Manual reconnect triggered')
+  if (socket.value) {
+    socket.value.disconnect()
+    socket.value = null
+  }
+  setTimeout(() => {
+    connectSocket()
+  }, 1000)
+}
+
+const debugConnection = () => {
+  console.log('=== CHAT DEBUG INFO ===')
+  console.log('Socket connected:', socket.value?.connected)
+  console.log('Socket ID:', socket.value?.id)
+  console.log('Is connecting:', isConnecting.value)
+  console.log('Error:', error.value)
+  console.log('Room ID:', props.roomId)
+  console.log('Current user:', props.currentUserId, props.currentUsername)
+  console.log('Messages count:', messages.value.length)
+  console.log('Participants count:', participants.value.length)
 }
 
 const startEdit = (m: ChatMessage) => {

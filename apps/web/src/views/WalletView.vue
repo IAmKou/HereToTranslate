@@ -424,7 +424,6 @@ function filterTransactions(type: string) {
   // Ví dụ: chuyển sang trang Transaction History và filter theo type
   // Hoặc set biến filterType trong component này nếu có
   // alert('Filter: ' + type);
-  // TODO: Thực hiện filter thực tế theo logic của bạn
 }
 
 function currencyClass(amount: number | undefined | null) {

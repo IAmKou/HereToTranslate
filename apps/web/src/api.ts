@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { authService } from './services/auth.service';
+import { getEnvironmentConfig } from './utils/environment';
 import router from './router';
 
 export interface CrudItem {
@@ -7,8 +8,9 @@ export interface CrudItem {
   name: string;
 }
 
+// Dynamic baseURL that updates based on current environment
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  baseURL: getEnvironmentConfig().apiUrl,
   withCredentials: true,
 });
 

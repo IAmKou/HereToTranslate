@@ -5,15 +5,19 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, '../../.env'), '');
 
-  // Mixed environment: localhost for API, remote for chat
-  const API_SERVER_URL = 'http://localhost:3000';
-  const CHAT_SERVER_URL = env.VITE_SERVER_URL || 'http://26.82.216.71:3000';
+  // Flexible environment configuration
+  const LOCALHOST_SERVER = 'http://localhost:3000';
+  const RADV_PN_SERVER = 'http://26.82.216.71:3000';
+
+  // Smart detection: Use localhost by default, RadVPN when specified
+  const API_SERVER_URL = env.VITE_API_URL?.replace('/api', '') || LOCALHOST_SERVER;
+  const CHAT_SERVER_URL = env.VITE_SERVER_URL || RADV_PN_SERVER;
 
   return {
     root: __dirname,
     cacheDir: '../../node_modules/.vite/apps/web',
     define: {
-      'import.meta.env.VITE_API_URL': JSON.stringify('http://localhost:3000/api'),
+      'import.meta.env.VITE_API_URL': JSON.stringify(API_SERVER_URL + '/api'),
       'import.meta.env.VITE_SERVER_URL': JSON.stringify(CHAT_SERVER_URL),
     },
     server: {

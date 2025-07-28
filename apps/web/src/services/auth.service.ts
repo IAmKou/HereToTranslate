@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { getEnvironmentConfig } from '../utils/environment';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+// Dynamic BASE_URL that updates based on current environment
+const getBaseUrl = () => getEnvironmentConfig().apiUrl;
 
 export interface LoginCredentials {
   username: string;
@@ -37,18 +39,18 @@ class AuthService {
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/login`, credentials);
+    const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials);
     this.user = response.data.user as User;
     return response.data;
   }
 
   async register(data: RegisterData): Promise<any> {
-    const response = await axios.post(`${BASE_URL}/auth/register`, data);
+    const response = await axios.post(`${getBaseUrl()}/auth/register`, data);
     return response.data;
   }
 
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
-    const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/google`, { idToken }, {
+    const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/google`, { idToken }, {
       withCredentials: true,
     });
     this.user = response.data.user as User;
@@ -58,7 +60,7 @@ class AuthService {
 
   async refreshTokens(): Promise<AuthResponse> {
     try {
-      const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/refresh`);
+      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/refresh`);
       this.user = response.data.user as User;
       return response.data;
     } catch (error) {
@@ -69,7 +71,7 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      await axios.post(`${BASE_URL}/auth/logout`);
+      await axios.post(`${getBaseUrl()}/auth/logout`);
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
@@ -79,7 +81,7 @@ class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const response = await axios.get<User>(`${BASE_URL}/auth/me`, {
+      const response = await axios.get<User>(`${getBaseUrl()}/auth/me`, {
         withCredentials: true,
       });
 

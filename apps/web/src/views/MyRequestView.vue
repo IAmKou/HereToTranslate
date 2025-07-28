@@ -57,7 +57,10 @@
               </div>
               <h3>Oops! Something went wrong</h3>
               <p>{{ error }}</p>
-              <button @click="fetchRequests" class="btn btn-secondary">Try Again</button>
+              <div class="error-actions">
+                <button @click="fetchRequests" class="btn btn-secondary">Try Again</button>
+                <button @click="debugConnection" class="btn btn-primary">Debug Connection</button>
+              </div>
             </div>
           </div>
 
@@ -657,33 +660,69 @@ function fetchRequests() {
   loading.value = true
   error.value = null
 
+  const promises = []
+
   // Fetch my requests
-  axiosInstance.get('/requests/myRequests')
+  const myRequestsPromise = axiosInstance.get('/requests/myRequests')
     .then(res => {
       console.log('My requests data received:', res.data)
       myRequests.value = res.data
     })
     .catch(err => {
       console.error('Error fetching my requests:', err)
+      if (err.code === 'ECONNREFUSED' || err.message.includes('Network Error')) {
+        error.value = 'Không thể kết nối đến server. Vui lòng kiểm tra server có đang chạy không.'
+        return
+      }
     })
 
   // Fetch assigned requests
-  axiosInstance.get('/requests/private')
+  console.log('Fetching assigned requests from:', '/requests/private')
+  const assignedRequestsPromise = axiosInstance.get('/requests/private')
     .then(res => {
       console.log('Assigned requests data received:', res.data)
       assignedRequests.value = res.data
     })
     .catch(err => {
-      // If the error is "You have no request", treat it as empty state
-      if (err.response?.data?.message === 'You have no request') {
-        assignedRequests.value = []
-      } else {
-        console.error('Error fetching assigned requests:', err)
+      console.error('Full error details:', {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data,
+        config: {
+          url: err.config?.url,
+          baseURL: err.config?.baseURL,
+          headers: err.config?.headers
+        }
+      })
+
+      // Handle different error scenarios
+      if (err.code === 'ECONNREFUSED' || err.message.includes('Network Error')) {
+        error.value = 'Không thể kết nối đến server. Vui lòng kiểm tra server có đang chạy không.'
+        return
       }
+
+      if (err.response?.status === 404) {
+        error.value = 'Endpoint /api/requests/private không tồn tại. Vui lòng kiểm tra server có đúng version không.'
+        return
+      }
+
+      if (err.response?.status === 401) {
+        error.value = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+        // Optionally redirect to login
+        // router.push('/login')
+        return
+      }
+
+      // Handle the error
+      console.error('Error fetching assigned requests:', err)
+      error.value = `Lỗi khi tải requests: ${err.response?.status} ${err.response?.statusText || err.message}`
     })
-    .finally(() => {
-      loading.value = false
-    })
+
+  promises.push(myRequestsPromise, assignedRequestsPromise)
+
+  Promise.all(promises).finally(() => {
+    loading.value = false
+  })
 }
 
 function formatDate(dateString) {
@@ -859,6 +898,56 @@ function goToRequestDetail(requestId) {
   router.push({ name: 'request-detail', params: { requestId } })
 }
 
+async function debugConnection() {
+  console.log('=== DEBUG CONNECTION ===')
+  console.log('Base URL:', axiosInstance.defaults.baseURL)
+  console.log('With credentials:', axiosInstance.defaults.withCredentials)
+
+  try {
+    // Test basic connectivity
+    console.log('Testing basic connectivity...')
+    const response = await fetch('http://localhost:3000/api/auth/me', {
+      credentials: 'include'
+    })
+    console.log('Fetch response status:', response.status)
+    console.log('Fetch response headers:', Object.fromEntries(response.headers.entries()))
+
+    if (response.status === 200) {
+      const data = await response.json()
+      console.log('User data:', data)
+      toast.add({
+        severity: 'success',
+        summary: 'Connection OK',
+        detail: 'Server đang chạy và authentication OK',
+        life: 3000
+      })
+    } else if (response.status === 401) {
+      console.log('Authentication failed')
+      toast.add({
+        severity: 'warn',
+        summary: 'Authentication Issue',
+        detail: 'Server chạy nhưng bạn chưa đăng nhập hoặc session hết hạn',
+        life: 5000
+      })
+    } else if (response.status === 404) {
+      toast.add({
+        severity: 'error',
+        summary: 'Endpoint Not Found',
+        detail: 'Server chạy nhưng endpoint không tồn tại',
+        life: 5000
+      })
+    }
+  } catch (err) {
+    console.error('Connection test failed:', err)
+    toast.add({
+      severity: 'error',
+      summary: 'Connection Failed',
+      detail: 'Không thể kết nối đến server. Vui lòng kiểm tra server có đang chạy trên port 3000 không.',
+      life: 5000
+    })
+  }
+}
+
 onMounted(fetchRequests)
 </script>
 
@@ -942,6 +1031,13 @@ onMounted(fetchRequests)
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .error-icon,

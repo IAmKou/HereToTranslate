@@ -281,10 +281,8 @@ export class RequestManagerService {
       .leftJoin('requests.category', 'category')
       .leftJoinAndSelect('requests.tags', 'tags');
     const result = await query.getMany();
-    if (!result || result.length === 0) {
-      throw new NotFoundException('You have no request');
-    }
-    return result;
+    // Return empty array instead of throwing exception when no requests found
+    return result || [];
   }
 
   async fetchRequestDetails(requestId: bigint, userId: bigint) {

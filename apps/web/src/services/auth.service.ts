@@ -24,10 +24,16 @@ export interface AuthResponse {
 export interface User {
   id: string;
   username: string;
+  email: string;
+  fullName: string;
   role: {
     id: number;
     name: string;
   };
+  isActive: boolean;
+  phone?: string;
+  createdAt: string;
+  avatarUrl?: string;
 }
 
 class AuthService {
@@ -50,11 +56,33 @@ class AuthService {
   }
 
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
-    const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/google`, { idToken }, {
-      withCredentials: true,
-    });
-    this.user = response.data.user as User;
-    return response.data;
+    console.log('🔍 AuthService - loginWithGoogle called with token:', idToken ? `${idToken.substring(0, 50)}...` : 'No token');
+    console.log('🔍 AuthService - Current API URL:', getBaseUrl());
+
+    try {
+      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/google`, { idToken }, {
+        withCredentials: true,
+      });
+
+      console.log('🔍 AuthService - Backend response status:', response.status);
+      console.log('🔍 AuthService - Backend response data:', response.data);
+      console.log('🔍 AuthService - Response headers:', response.headers);
+
+      if (!response.data || !response.data.user) {
+        throw new Error('Invalid response from server - no user data');
+      }
+
+      this.user = response.data.user as User;
+      console.log('🔍 AuthService - User stored in service:', this.user);
+      console.log('🔍 AuthService - User role:', this.user?.role);
+
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ AuthService - loginWithGoogle failed:', error);
+      console.error('❌ AuthService - Error response:', error.response?.data);
+      console.error('❌ AuthService - Error status:', error.response?.status);
+      throw error;
+    }
   }
 
 

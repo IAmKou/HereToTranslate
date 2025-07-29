@@ -10,6 +10,7 @@ export interface UserProfile {
     name: string;
   } | null;
   createdAt: Date;
+  avatarUrl?: string;
 }
 
 export interface UpdateProfileData {
@@ -41,7 +42,7 @@ export interface UpdateUserRoleDto {
 }
 
 export class UserService {
-  private api;
+  api;
 
   constructor() {
     this.api = axios.create({

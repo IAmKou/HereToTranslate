@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue';
 import { authService } from '../services/auth.service';
 import AdminUserManagement from '../views/AdminUserManagement.vue';
 import AdminWithdrawals from '../views/AdminWithdrawals.vue';
+import OauthCallback from '../components/OauthCallback.vue';
 
 
 const router = createRouter({
@@ -155,8 +156,8 @@ const router = createRouter({
     {
       path: '/oauth-callback',
       name: 'oauth-callback',
-      component: () => import('../components/OauthCallback.vue'),
-      meta: {requireAuth: false}
+      component: OauthCallback,
+      meta: { requiresAuth: false }
     },
     {
       path: '/wallet',
@@ -181,12 +182,6 @@ const router = createRouter({
       name: 'test',
       component: () => import('../views/TestView.vue'),
       meta: {requiresAuth: true},
-    },
-    {
-      path: '/projects/:projectId/branches/:branchId/translate',
-      name: 'translation-editor',
-      component: () => import('../views/TranslationEditorView.vue'),
-      meta: { requiresAuth: true },
     }
 
   ],
@@ -198,15 +193,26 @@ router.beforeEach((to, from, next) => {
   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
   const isAuthenticated = authService.isAuthenticated();
   const isAdmin = authService.isAdmin();
+  const currentUser = authService.getUser();
 
+  console.log('🔍 Router Guard - Navigation from:', from.path, 'to:', to.path);
+  console.log('🔍 Router Guard - Requires auth:', requiresAuth);
+  console.log('🔍 Router Guard - Requires admin:', requiresAdmin);
+  console.log('🔍 Router Guard - Is authenticated:', isAuthenticated);
+  console.log('🔍 Router Guard - Is admin:', isAdmin);
+  console.log('🔍 Router Guard - Current user:', currentUser);
 
   if (requiresAuth && !isAuthenticated) {
+    console.log('🔍 Router Guard - Redirecting to / (not authenticated)');
     next('/');
   } else if (requiresAdmin && !isAdmin) {
+    console.log('🔍 Router Guard - Redirecting to /userhome (not admin)');
     next('/userhome');
   } else if (to.path === '/login' && isAuthenticated) {
+    console.log('🔍 Router Guard - Redirecting authenticated user from login');
     next(isAdmin ? '/adminhome' : '/userhome');
   } else {
+    console.log('🔍 Router Guard - Allowing navigation to:', to.path);
     next();
   }
 });

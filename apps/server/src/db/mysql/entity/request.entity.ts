@@ -21,6 +21,8 @@ export enum RequestStatus {
   Approved = 'APPROVED',
   Rejected = 'REJECTED',
   Completed = 'COMPLETED',
+  DeliveryPending = 'DELIVERYPENDING',
+  Failed = 'FAILED',
 }
 
 @Entity('requests')

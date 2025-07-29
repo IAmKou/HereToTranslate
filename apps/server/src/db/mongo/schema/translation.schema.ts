@@ -1,6 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import type { Buffer } from 'buffer';
 
 export type TranslationStringDocument = TranslationString & Document;
 

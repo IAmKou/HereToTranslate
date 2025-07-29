@@ -176,7 +176,7 @@
                     <div class="user-info">
                       <Avatar
                         v-if="data.avatarUrl"
-                        :image="data.avatarUrl"
+                        :image="getFullAvatarUrl(data.avatarUrl)"
                         size="large"
                         shape="circle"
                         class="user-avatar enhanced-avatar"
@@ -340,6 +340,12 @@ import { DataTableFilterMetaData } from 'primevue/datatable';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import AdminSidebar from '../components/AdminSidebar.vue';
 import RoleEditDialog from '../components/RoleEditDialog.vue';
+const getFullAvatarUrl = (avatarUrl: string) => {
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  const base = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3000';
+  return base + avatarUrl;
+};
 
 // Register directives
 const vTooltip = Tooltip;

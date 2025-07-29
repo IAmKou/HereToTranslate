@@ -3,7 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
-import { UserEntity } from '#LocalProject/Entities';
+import { UserEntity, UserTypeEntity } from '#LocalProject/Entities';
 import { AuthEntity } from '#LocalProject/SqliteEntities';
 import { AuthController } from './auth.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -12,7 +12,7 @@ import { JwtFallthroughGuard } from './guards/jwt-fallthrough.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity]),
+    TypeOrmModule.forFeature([UserEntity, UserTypeEntity]),
     TypeOrmModule.forFeature([AuthEntity], 'sqlite'),
     JwtModule.registerAsync({
       imports: [ConfigModule],

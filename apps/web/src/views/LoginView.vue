@@ -142,9 +142,17 @@ const goToRegister = () => {
 
 const signInWithGoogleRedirect = () => {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com';
+
+  // Use current window origin to support both localhost and network IP
   const redirectUri = `${window.location.origin}/oauth-callback`;
 
+  console.log('🔍 Google OAuth - Client ID:', clientId);
+  console.log('🔍 Google OAuth - Redirect URI:', redirectUri);
+  console.log('🔍 Google OAuth - Window origin:', window.location.origin);
+
   const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token id_token&scope=openid%20email%20profile&nonce=secure_nonce`;
+
+  console.log('🔍 Google OAuth - Full URL:', googleOAuthUrl);
 
   window.location.href = googleOAuthUrl;
 };

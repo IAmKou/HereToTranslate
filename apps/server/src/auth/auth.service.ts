@@ -20,6 +20,7 @@ import { MailerService } from '@nestjs-modules/mailer';
 import * as crypto from 'crypto';
 import { setInterval } from 'timers';
 import { LessThan } from 'typeorm';
+import { UserTypeEntity } from '#LocalProject/Entities';
 
 type ResetSession = {
   code: string;
@@ -43,7 +44,9 @@ export class AuthService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(AuthEntity, 'sqlite')
-    private readonly authRepository: Repository<AuthEntity>
+    private readonly authRepository: Repository<AuthEntity>,
+    @InjectRepository(UserTypeEntity)
+    private readonly roleRepository: Repository<UserTypeEntity>
   ) {
     const googleClientId = this.configService.get<string>(
       'GOOGLE_OAUTH2_CLIENT'
@@ -182,7 +185,10 @@ export class AuthService {
       relations: ['role'],
     });
 
-    if (!user?.isActive) {
+    console.log('Found user for Google login:', user);
+
+    // Check if existing user is active
+    if (user && !user.isActive) {
       throw new UnauthorizedException('Your account has been deactivated');
     }
 
@@ -191,13 +197,23 @@ export class AuthService {
       const existingUser = await this.userRepository.findOne({ where: { username } });
       if (existingUser) throw new BadRequestException('User with this email already exists');
 
+      // Find Member role from database
+      const memberRole = await this.roleRepository.findOne({
+        where: { name: 'MEMBER' }
+      });
+
+      if (!memberRole) {
+        throw new Error('Member role not found in database');
+      }
+
       user = this.userRepository.create({
         username,
         email,
         passwordHash: '',
         fullName: name,
         phone: '',
-        role: { id: BigInt(UserRole.Member) },
+        role: memberRole,
+        isActive: true,
       });
       await this.userRepository.save(user);
     }

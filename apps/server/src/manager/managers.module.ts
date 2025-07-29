@@ -47,12 +47,14 @@ import { TranslationController } from './controller/translation.controller';
 import { AdminTransactionController } from './controller/admin-transaction.controller';
 import { ChatController } from '../chat/chat.controller';
 import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
+import { TaskController } from './controller/task.controller';
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 import { NotificationController } from '#LocalProject/Managers/controller/notification.controller';
 import { BullModule } from '@nestjs/bull';
-
+import { AiChatService } from '#LocalProject/Managers/service/ai-manager.service';
+import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.controller';
 
 @Global()
 @Module({
@@ -103,6 +105,7 @@ import { BullModule } from '@nestjs/bull';
     TaskGateway,
     ManifestService,
     NotificationManagerService,
+    AiChatService,
   ],
   exports: [
     CategoryManagerService,
@@ -123,6 +126,7 @@ import { BullModule } from '@nestjs/bull';
     TaskManagerService,
     ManifestService,
     NotificationManagerService,
+    AiChatService,
   ],
   controllers: [
     CategoryController,
@@ -140,7 +144,9 @@ import { BullModule } from '@nestjs/bull';
     TranslationController,
     AdminTransactionController,
     ChatController,
-    NotificationController
+    TaskController,
+    NotificationController,
+    AiChatController,
   ]
 })
 export class ManagersModule {

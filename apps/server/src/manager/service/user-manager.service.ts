@@ -162,6 +162,7 @@ export class UserManagerService {
         fullName: true,
         isActive: true,
         createdAt: true,
+        avatarUrl: true, // ✅ Thêm dòng này
         role: {
           id: true,
           name: true,
@@ -169,6 +170,7 @@ export class UserManagerService {
       },
     });
   }
+
 
   async updateUserRole(
     userId: bigint,

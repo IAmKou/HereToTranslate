@@ -64,9 +64,24 @@
               >
                 <!-- User Info -->
                 <div class="user-info">
-                  <div class="avatar-initials" :style="{ background: getRandomColor(currentUser.username) }">
-                    {{ getInitials(currentUser.fullName) }}
+                  <div class="dropdown-avatar">
+                    <template v-if="currentUser.avatarUrl">
+                      <img
+                        :src="getFullAvatarUrl(currentUser.avatarUrl)"
+                        alt="Avatar"
+                        class="dropdown-avatar-img"
+                      />
+                    </template>
+                    <template v-else>
+                      <div
+                        class="avatar-initials"
+                        :style="{ background: getRandomColor(currentUser.username) }"
+                      >
+                        {{ getInitials(currentUser.fullName) }}
+                      </div>
+                    </template>
                   </div>
+
                   <div>
                     <div class="user-name">{{ currentUser.fullName }}</div>
                     <div class="user-username">@{{ currentUser.username }}</div>
@@ -441,4 +456,18 @@ onMounted(() => {
     margin-right: 4px;
   }
 }
+.dropdown-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e7ef;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.dropdown-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 </style>

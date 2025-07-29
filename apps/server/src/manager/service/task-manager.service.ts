@@ -1,10 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   ProjectGroupEntity,
   TaskEntity,
   UserEntity,
-} from '../../db/mysql/entity/index';
+} from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { ProjectManagerService } from './project-manager.service';
 import { PermissionFlags } from '@here-to-translate/common';
@@ -66,19 +70,18 @@ export class TaskManagerService {
       PermissionFlags.ViewProject
     );
 
-
     const createdBy = await this.userRepository.findOneOrFail({
       where: { id: BigInt(createdById) },
     });
     const assignedTo = assignedToId
       ? await this.userRepository.findOne({
-        where: { id: BigInt(assignedToId) },
-      })
+          where: { id: BigInt(assignedToId) },
+        })
       : undefined;
     const group = groupId
       ? await this.projectGroupRepository.findOne({
-        where: { id: BigInt(groupId) },
-      })
+          where: { id: BigInt(groupId) },
+        })
       : undefined;
 
     const task = this.taskRepository.create({
@@ -202,13 +205,17 @@ export class TaskManagerService {
 
     if (dto.assignedToId !== undefined) {
       task.assignedTo = dto.assignedToId
-        ? await this.userRepository.findOne({ where: { id: BigInt(dto.assignedToId) } })
+        ? await this.userRepository.findOne({
+            where: { id: BigInt(dto.assignedToId) },
+          })
         : null;
     }
 
     if (dto.groupId !== undefined) {
       task.group = dto.groupId
-        ? await this.projectGroupRepository.findOne({ where: { id: BigInt(dto.groupId) } })
+        ? await this.projectGroupRepository.findOne({
+            where: { id: BigInt(dto.groupId) },
+          })
         : null;
     }
 
@@ -429,7 +436,7 @@ export class TaskManagerService {
       // Get the actual task to show creation history
       const task = await this.taskRepository.findOne({
         where: { id: BigInt(taskId) },
-        relations: ['createdBy']
+        relations: ['createdBy'],
       });
 
       if (!task) {
@@ -445,7 +452,7 @@ export class TaskManagerService {
         action: 'created' as const,
         description: 'Task was created',
         performedAt: task.createdAt.toISOString(),
-        metadata: {}
+        metadata: {},
       });
 
       // Show status changes based on current task state
@@ -458,8 +465,8 @@ export class TaskManagerService {
           performedAt: task.startedAt.toISOString(),
           metadata: {
             fromStatus: 'pending',
-            toStatus: 'in_progress'
-          }
+            toStatus: 'in_progress',
+          },
         });
       }
 
@@ -472,8 +479,8 @@ export class TaskManagerService {
           performedAt: task.completedAt.toISOString(),
           metadata: {
             fromStatus: 'in_progress',
-            toStatus: 'completed'
-          }
+            toStatus: 'completed',
+          },
         });
       }
 
@@ -483,8 +490,9 @@ export class TaskManagerService {
           taskId: taskId,
           action: 'closed' as const,
           description: 'Task was closed',
-          performedAt: task.completedAt?.toISOString() || new Date().toISOString(),
-          metadata: {}
+          performedAt:
+            task.completedAt?.toISOString() || new Date().toISOString(),
+          metadata: {},
         });
       }
 

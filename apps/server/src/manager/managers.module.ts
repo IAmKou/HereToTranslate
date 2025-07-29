@@ -47,13 +47,13 @@ import { TranslationController } from './controller/translation.controller';
 import { AdminTransactionController } from './controller/admin-transaction.controller';
 import { ChatController } from '../chat/chat.controller';
 import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
+import { TaskController } from './controller/task.controller';
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 import { NotificationController } from '#LocalProject/Managers/controller/notification.controller';
 import { BullModule } from '@nestjs/bull';
-import { AiChatService } from '#LocalProject/Managers/service/ai-manager.service';
-import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.controller';
+
 
 @Global()
 @Module({
@@ -104,7 +104,6 @@ import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.cont
     TaskGateway,
     ManifestService,
     NotificationManagerService,
-    AiChatService,
   ],
   exports: [
     CategoryManagerService,
@@ -125,7 +124,6 @@ import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.cont
     TaskManagerService,
     ManifestService,
     NotificationManagerService,
-    AiChatService,
   ],
   controllers: [
     CategoryController,
@@ -143,8 +141,8 @@ import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.cont
     TranslationController,
     AdminTransactionController,
     ChatController,
-    NotificationController,
-    AiChatController,
+    TaskController,
+    NotificationController
   ]
 })
 export class ManagersModule {

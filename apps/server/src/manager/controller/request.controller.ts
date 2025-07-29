@@ -17,6 +17,7 @@ import { RequestManagerService } from '../service/request-manager.service';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
 
 @Controller('requests')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -53,10 +54,13 @@ export class RequestController {
     return this.requests.getMyRequests(req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @IsPublicEndpoint()
   @Get('all')
-  async getAllRequests(@Req() req: AuthenticatedRequest) {
-    return this.requests.fetchRequests(BigInt(req.user.id));
+  async getAllRequests(@Req() req?: AuthenticatedRequest) {
+    // If user is authenticated, pass their ID, otherwise pass a special value (0)
+    // that won't match any real user ID
+    const userId = req?.user?.id ? BigInt(req.user.id) : BigInt(0);
+    return this.requests.fetchRequests(userId);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -66,14 +66,14 @@ export class AuthController {
     const { accessToken, refreshToken, user } =
       await this.authService.loginWithGoogle(idToken);
     logger.log(idToken);
-    res.cookie('accessToken', accessToken, {
+    res.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 1000 * 60 * 15, // 15 mins
     });
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -148,8 +148,11 @@ export class AuthController {
     //   await this.authRepository.delete({ refreshToken });
     // }
 
+    // Clear both old and new cookie names for backward compatibility
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
 
     return res.json({ message: 'Logged out successfully' });
   }

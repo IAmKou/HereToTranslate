@@ -9,9 +9,10 @@ import {
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { logger } from 'nx/src/utils/logger';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { replaceDocxText } from '../../util/extensions/docx-utils.extension';
 import { buildTranslatedPdf } from '../../util/extensions/pdf-utils.extension';
+import type { Buffer } from 'buffer';
 
 @Injectable()
 export class TranslationService {
@@ -23,12 +24,44 @@ export class TranslationService {
     private readonly githubService: GitHubService
   ) {}
 
-  async addTranslation(id: string, translatedText: string) {
-    const entry = await this.translationModel.findById(id);
-    if (!entry) throw new Error('Manifest entry not found');
+  async addTranslation(id: string, translatedText: string, language: string) {
+    // Tìm bản ghi gốc để lấy thông tin
+    const originalEntry = await this.translationModel.findById(id);
+    if (!originalEntry) throw new Error('Manifest entry not found');
 
-    entry.translatedText = translatedText;
-    await entry.save();
+    // Luôn tìm hoặc tạo bản ghi mới cho ngôn ngữ được chọn
+    const existingTranslation = await this.translationModel.findOne({
+      projectId: originalEntry.projectId,
+      branchId: originalEntry.branchId,
+      fileId: originalEntry.fileId,
+      originalText: originalEntry.originalText,
+      language: language
+    });
+
+    let entry;
+
+    if (existingTranslation) {
+      // Update bản dịch hiện có
+      existingTranslation.translatedText = translatedText;
+      await existingTranslation.save();
+      entry = existingTranslation;
+    } else {
+      // Tạo bản ghi mới cho ngôn ngữ này
+      entry = await this.translationModel.create({
+        projectId: originalEntry.projectId,
+        branchId: originalEntry.branchId,
+        fileId: originalEntry.fileId,
+        manifestEntryId: originalEntry.manifestEntryId,
+        originalText: originalEntry.originalText,
+        translatedText: translatedText,
+        language: language,
+        filePart: originalEntry.filePart,
+        font: originalEntry.font,
+        style: originalEntry.style,
+        position: originalEntry.position,
+        obsolete: false
+      });
+    }
 
     const fileId = entry.fileId;
     const fileEntity = await this.fileRepository.findOne({
@@ -44,7 +77,7 @@ export class TranslationService {
       fileEntity.fileType ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ) {
-      const entries = await this.translationModel.find({ fileId }).lean();
+      const entries = await this.translationModel.find({ fileId, language }).lean();
       const translations = new Map<string, string>();
       for (const e of entries) {
         if (e.translatedText && e.translatedText.trim().length > 0) {
@@ -54,7 +87,7 @@ export class TranslationService {
       const originalBuffer = fileEntity.fileContent as Buffer;
       updatedBuffer = await replaceDocxText(originalBuffer, translations);
     } else if (fileEntity.fileType === 'application/pdf') {
-      const entries = await this.translationModel.find({ fileId }).lean();
+      const entries = await this.translationModel.find({ fileId, language }).lean();
       const translatedEntries = entries.map((e) => ({
         text: e.translatedText?.trim() ? e.translatedText : e.originalText,
       }));
@@ -64,13 +97,13 @@ export class TranslationService {
         translatedEntries
       );
     } else {
-      updatedBuffer = await this.applyTranslation(fileId);
+      updatedBuffer = await this.applyTranslation(fileId, language);
     }
 
     // --- Commit to GitHub ---
     const repoName = `project-${fileEntity.project.id}`;
     const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
-    const path = safeFileName;
+    const path = `${language}/${safeFileName}`;
 
     try {
       await this.githubService.commitChange({
@@ -78,7 +111,7 @@ export class TranslationService {
         branch: 'main',
         path,
         content: updatedBuffer,
-        message: `Update translations for ${fileEntity.fileName}`,
+        message: `Update translations for ${fileEntity.fileName} (${language})`,
       });
       logger.log(`✅ Translation committed to GitHub: ${repoName}/${path}`);
     } catch (err) {
@@ -88,14 +121,14 @@ export class TranslationService {
     return entry;
   }
 
-  async applyTranslation(fileId: string): Promise<Buffer> {
+  async applyTranslation(fileId: string, language: string): Promise<Buffer> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
     });
     if (!fileEntity) throw new Error('File not found');
 
-    const entriesRaw = await this.translationModel.find({ fileId }).lean();
-    const entries = entriesRaw.map((e) => ({
+    const entriesRaw = await this.translationModel.find({ fileId, language }).lean();
+    const entries = entriesRaw.map((e: any) => ({
       text:
         e.translatedText && e.translatedText.trim().length > 0
           ? e.translatedText
@@ -128,7 +161,8 @@ export class TranslationService {
   }
 
   async previewTranslation(
-    fileId: string
+    fileId: string,
+    language: string = 'en',
   ): Promise<{ fileType: string; preview: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
@@ -136,7 +170,7 @@ export class TranslationService {
     if (!fileEntity) throw new Error('File not found');
 
     // Build translated file buffer
-    const buffer = await this.applyTranslation(fileId);
+    const buffer = await this.applyTranslation(fileId, language);
 
     // Return preview based on type
     switch (fileEntity.fileType) {
@@ -166,7 +200,7 @@ export class TranslationService {
     }
   }
 
-  async exportTranslation(fileId: string): Promise<{ githubUrl: string }> {
+  async exportTranslation(fileId: string, language: string): Promise<{ githubUrl: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -180,7 +214,7 @@ export class TranslationService {
       fileEntity.fileType ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ) {
-      const entries = await this.translationModel.find({ fileId }).lean();
+      const entries = await this.translationModel.find({ fileId, language }).lean();
       const translations = new Map<string, string>();
       for (const e of entries) {
         if (e.translatedText && e.translatedText.trim().length > 0) {
@@ -192,7 +226,7 @@ export class TranslationService {
         translations
       );
     } else if (fileEntity.fileType === 'application/pdf') {
-      const entries = await this.translationModel.find({ fileId }).lean();
+      const entries = await this.translationModel.find({ fileId, language }).lean();
       const translatedEntries = entries.map((e) => ({
         text: e.translatedText?.trim() ? e.translatedText : e.originalText,
       }));
@@ -201,7 +235,7 @@ export class TranslationService {
         translatedEntries
       );
     } else {
-      buffer = await this.applyTranslation(fileId);
+      buffer = await this.applyTranslation(fileId, language);
     }
 
     const repoName = `project-${fileEntity.project.id}`;
@@ -210,12 +244,12 @@ export class TranslationService {
     await this.githubService.commitChange({
       repo: repoName,
       branch: 'main',
-      path: safeFileName,
+      path: `${language}/${safeFileName}`,
       content: buffer,
-      message: `Exported translation for ${fileEntity.fileName}`,
+      message: `Exported translation for ${fileEntity.fileName} (${language})`,
     });
 
-    const githubUrl = `https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/${repoName}/main/${encodeURIComponent(
+    const githubUrl = `https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/${repoName}/main/${language}/${encodeURIComponent(
       safeFileName
     )}`;
     return { githubUrl };
@@ -224,30 +258,58 @@ export class TranslationService {
   async getAllString(
     projectId: string,
     branchId: string,
+    language: string,
     fileId?: string,
     filePart?: number
   ) {
-    const query: any = { projectId, branchId };
-    if (fileId) query.fileId = fileId;
-    if (filePart !== undefined) query.filePart = filePart;
+    // Lấy tất cả strings gốc (không phân biệt language) làm base
+    const baseQuery: any = { projectId, branchId };
+    if (fileId) baseQuery.fileId = fileId;
+    if (filePart !== undefined) baseQuery.filePart = filePart;
 
-    const strings = await this.translationModel
-      .find(query)
+    const baseStrings = await this.translationModel
+      .find(baseQuery)
       .sort({ filePart: 1, _id: 1 })
       .lean();
 
-    // Lấy danh sách fileId duy nhất
-    const fileIds = Array.from(new Set(strings.map((str) => str.fileId)));
-    // Lấy tên file từ MySQL
+    // Lấy bản dịch của ngôn ngữ được chọn
+    const translationQuery: any = { projectId, branchId, language };
+    if (fileId) translationQuery.fileId = fileId;
+    if (filePart !== undefined) translationQuery.filePart = filePart;
+
+    const translatedStrings = await this.translationModel
+      .find(translationQuery)
+      .sort({ filePart: 1, _id: 1 })
+      .lean();
+
+    // Tạo map để merge nhanh: originalText -> translatedText
+    const translationMap = new Map();
+    translatedStrings.forEach(str => {
+      translationMap.set(str.originalText, str.translatedText);
+    });
+
+    // Merge base strings với bản dịch của ngôn ngữ được chọn
+    const mergedStrings = baseStrings.map(str => {
+      const translatedText = translationMap.get(str.originalText) || '';
+      return {
+        ...str,
+        translatedText
+      };
+    });
+
+    // Lấy tên file
+    const fileIds = Array.from(new Set(mergedStrings.map((str) => str.fileId)));
     const fileNamesMap: Record<string, string> = {};
     if (fileIds.length > 0) {
-      const files = await this.fileRepository.findByIds(fileIds);
+      const files = await this.fileRepository.find({
+        where: { id: In(fileIds.map(id => BigInt(id))) }
+      });
       files.forEach((f) => {
         fileNamesMap[String(f.id)] = f.fileName;
       });
     }
 
-    return strings.map((str) => ({
+    return mergedStrings.map((str) => ({
       id: str._id.toString(),
       originalText: str.originalText,
       translatedText: str.translatedText || '',
@@ -269,7 +331,7 @@ async function rebuildFileWithManifest(
     }
 
     case 'application/json': {
-      const jsonArray = entries.map((e) => e.text);
+      const jsonArray = entries.map((e: any) => e.text);
       return Buffer.from(JSON.stringify(jsonArray, null, 2), 'utf8');
     }
 
@@ -313,7 +375,7 @@ async function rebuildFileWithManifest(
     }
 
     default: {
-      const defaultCombined = entries.map((e) => e.text).join('\n');
+      const defaultCombined = entries.map((e: any) => e.text).join('\n');
       return Buffer.from(defaultCombined, 'utf8');
     }
   }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onBeforeUnmount, type Ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { taskService, Task, ProjectFile } from '../services/task.service';
+import { taskService, Task, ProjectFile, TaskHistory } from '../services/task.service';
 import CreateTaskDialog from './CreateTaskDialog.vue';
 import EditTaskDialog from './EditTaskDialog.vue';
 import { useToast } from 'primevue/usetoast';
@@ -122,6 +122,18 @@ const showCreateForm = ref(false);
 const showDeleteModal = ref(false);
 const taskToDelete = ref<Task|null>(null);
 const isDeleting = ref(false);
+
+// Close task confirmation modal state
+const showCloseTaskModal = ref(false);
+const taskToClose = ref<Task|null>(null);
+const isClosingTask = ref(false);
+
+// Reopen task confirmation modal state
+const showReopenTaskModal = ref(false);
+const taskToReopen = ref<Task|null>(null);
+const isReopeningTask = ref(false);
+const reopenReason = ref('');
+
 const router = useRouter();
 const toast = useToast();
 
@@ -129,6 +141,11 @@ const toast = useToast();
 const showTaskActionMenu = ref(false);
 const taskActionMenuPosition = ref({ x: 0, y: 0 });
 const currentTaskForAction = ref<Task|null>(null);
+
+// Task history state
+const taskHistory = ref<TaskHistory[]>([]);
+const taskHistoryLoading = ref(false);
+const activeTaskDetailTab = ref<'details' | 'history'>('details');
 
 // Search and filter functions
 function toggleFilters() {
@@ -200,6 +217,68 @@ async function checkTaskExists(taskId: string): Promise<boolean> {
     console.error('Error checking task existence:', error);
     return false;
   }
+}
+
+// Function để load task history
+async function loadTaskHistory(taskId: string) {
+  if (!taskId) return;
+
+  taskHistoryLoading.value = true;
+  try {
+    const history = await taskService.getTaskHistory(taskId);
+    taskHistory.value = history;
+    console.log('Task history loaded:', history);
+  } catch (error) {
+    console.error('Error loading task history:', error);
+    taskHistory.value = [];
+  } finally {
+    taskHistoryLoading.value = false;
+  }
+}
+
+// Function để format history action
+function formatHistoryAction(action: string): string {
+  const actionMap: Record<string, string> = {
+    'status_change': 'Status changed',
+    'assignment_change': 'Assignment changed',
+    'due_date_change': 'Due date changed',
+    'created': 'Task created',
+    'closed': 'Task closed',
+    'reopened': 'Task reopened'
+  };
+  return actionMap[action] || action;
+}
+
+// Function để get status display name
+function getStatusDisplayName(status: string): string {
+  const statusMap: Record<string, string> = {
+    'pending': 'To do',
+    'in_progress': 'In progress',
+    'completed': 'Done',
+    'closed': 'Closed',
+    'cancelled': 'Cancelled'
+  };
+  return statusMap[status] || status;
+}
+
+// Function để format time only
+function formatTimeOnly(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+// Function để format date only
+function formatDateOnly(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
 }
 
 async function loadProjectFiles() {
@@ -641,6 +720,16 @@ async function loadTaskProgress(taskId: string) {
 const selectedTaskProgress = ref(0);
 const selectedTaskProgressText = ref('0%');
 const selectedTaskProgressLoading = ref(false);
+
+// Function để select task và clear cache
+function selectTask(task: Task | null) {
+  if (task) {
+    // Clear cache cho task này để đảm bảo lấy dữ liệu mới nhất
+    taskProgressData.value.delete(task.id);
+    console.log('Cleared progress cache for task:', task.id);
+  }
+  selectedTask.value = task;
+}
 
 // Function để update progress cho selected task
 async function updateSelectedTaskProgress() {
@@ -1236,10 +1325,15 @@ onMounted(() => {
       closeTaskActionMenu();
     }
   });
+
+  // Add keyboard event listener for close task modal
+  document.addEventListener('keydown', handleKeydown);
 });
 
 onBeforeUnmount(() => {
   // Không clear data để giữ lại khi re-mount
+  // Remove keyboard event listener
+  document.removeEventListener('keydown', handleKeydown);
 });
 
 // Watch cho projectId và branchId thay đổi - giống như ProjectTranslationTab
@@ -1257,6 +1351,12 @@ watch(() => selectedTask.value, async (task: Task | null) => {
   updatePartInfo();
   // Update progress khi task thay đổi
   await updateSelectedTaskProgress();
+  // Load task history khi task thay đổi
+  if (task) {
+    await loadTaskHistory(task.id);
+  } else {
+    taskHistory.value = [];
+  }
 });
 
 // Expose methods for parent component
@@ -1280,15 +1380,26 @@ function getFileIcon(fileName: string) {
   return '📄';
 }
 
-async function closeTask(task: Task) {
+// Function to show close task confirmation modal
+function showCloseTaskConfirmation(task: Task) {
+  taskToClose.value = task;
+  showCloseTaskModal.value = true;
+}
+
+// Function to handle close task confirmation
+async function confirmCloseTask() {
+  if (!taskToClose.value) return;
+
+  isClosingTask.value = true;
+
   try {
-    console.log('Closing task:', task.id, task.title);
+    console.log('Closing task:', taskToClose.value.id, taskToClose.value.title);
 
     // Call API to close task
-    await taskService.closeTask(task.id);
+    await taskService.closeTask(taskToClose.value.id);
 
     // Update task status in local array
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
+    const taskIndex = tasks.value.findIndex((t: Task) => t.id === taskToClose.value!.id);
     if (taskIndex !== -1) {
       tasks.value[taskIndex] = { ...tasks.value[taskIndex], status: 'closed' };
     }
@@ -1297,7 +1408,7 @@ async function closeTask(task: Task) {
     toast.add({
       severity: 'success',
       summary: 'Task Closed',
-      detail: `Task "${task.title}" has been closed successfully.`,
+      detail: `Task "${taskToClose.value.title}" has been closed successfully.`,
       life: 3000
     });
 
@@ -1307,7 +1418,7 @@ async function closeTask(task: Task) {
     // Quay về board task sau khi đóng
     selectedTask.value = null;
 
-    console.log('Task closed successfully:', task.id);
+    console.log('Task closed successfully:', taskToClose.value.id);
   } catch (error: any) {
     console.error('Failed to close task:', error);
 
@@ -1318,19 +1429,41 @@ async function closeTask(task: Task) {
       detail: error.response?.data?.message || 'Failed to close task. Please try again.',
       life: 4000
     });
+  } finally {
+    // Reset modal state
+    showCloseTaskModal.value = false;
+    taskToClose.value = null;
+    isClosingTask.value = false;
   }
 }
 
-// Function để mở lại task đã đóng
-async function reopenTask(task: Task) {
+// Function to cancel close task
+function cancelCloseTask() {
+  showCloseTaskModal.value = false;
+  taskToClose.value = null;
+}
+
+// Function to show reopen task confirmation modal
+function showReopenTaskConfirmation(task: Task) {
+  taskToReopen.value = task;
+  reopenReason.value = '';
+  showReopenTaskModal.value = true;
+}
+
+// Function to handle reopen task confirmation
+async function confirmReopenTask() {
+  if (!taskToReopen.value) return;
+
+  isReopeningTask.value = true;
+
   try {
-    console.log('Reopening task:', task.id, task.title);
+    console.log('Reopening task:', taskToReopen.value.id, taskToReopen.value.title);
 
     // Call API to reopen task
-    await taskService.reopenTask(task.id);
+    await taskService.reopenTask(taskToReopen.value.id);
 
     // Update task status in local array
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
+    const taskIndex = tasks.value.findIndex((t: Task) => t.id === taskToReopen.value!.id);
     if (taskIndex !== -1) {
       tasks.value[taskIndex] = { ...tasks.value[taskIndex], status: 'pending' };
     }
@@ -1339,14 +1472,18 @@ async function reopenTask(task: Task) {
     toast.add({
       severity: 'success',
       summary: 'Task Reopened',
-      detail: `Task "${task.title}" has been reopened successfully.`,
+      detail: `Task "${taskToReopen.value.title}" has been reopened successfully.`,
       life: 3000
     });
 
     // Close task action menu
     closeTaskActionMenu();
 
-    console.log('Task reopened successfully:', task.id);
+    // Quay về board task sau khi reopen
+    selectedTask.value = null;
+    activeTab.value = 'board';
+
+    console.log('Task reopened successfully:', taskToReopen.value.id);
   } catch (error: any) {
     console.error('Failed to reopen task:', error);
 
@@ -1357,7 +1494,50 @@ async function reopenTask(task: Task) {
       detail: error.response?.data?.message || 'Failed to reopen task. Please try again.',
       life: 4000
     });
+  } finally {
+    // Reset modal state
+    showReopenTaskModal.value = false;
+    taskToReopen.value = null;
+    isReopeningTask.value = false;
+    reopenReason.value = '';
   }
+}
+
+// Function to cancel reopen task
+function cancelReopenTask() {
+  showReopenTaskModal.value = false;
+  taskToReopen.value = null;
+  reopenReason.value = '';
+}
+
+// Handle keyboard events for modal
+function handleKeydown(event: KeyboardEvent) {
+  if (showCloseTaskModal.value) {
+    if (event.key === 'Escape') {
+      cancelCloseTask();
+    } else if (event.key === 'Enter' && !isClosingTask.value) {
+      confirmCloseTask();
+    }
+  }
+
+  if (showReopenTaskModal.value) {
+    if (event.key === 'Escape') {
+      cancelReopenTask();
+    } else if (event.key === 'Enter' && !isReopeningTask.value) {
+      confirmReopenTask();
+    }
+  }
+}
+
+
+
+async function closeTask(task: Task) {
+  showCloseTaskConfirmation(task);
+}
+
+// Function để mở lại task đã đóng
+async function reopenTask(task: Task) {
+  showReopenTaskConfirmation(task);
 }
 
 // Function để lấy text status dựa trên trạng thái của task
@@ -1431,7 +1611,10 @@ const closeEditTaskInline = () => {
     <!-- Task Detail View -->
     <div v-if="selectedTask" class="task-detail-view">
       <div class="task-detail-header-row">
-        <button class="back-btn" @click="selectedTask = null">← Board</button>
+        <button class="back-btn" @click="selectedTask = null">
+          <i class="pi pi-arrow-left"></i>
+          Board
+        </button>
         <div class="task-action-menu-wrapper">
           <button
             class="task-action-menu-btn"
@@ -1446,95 +1629,182 @@ const closeEditTaskInline = () => {
         <span class="task-detail-id">#{{ selectedTask.id }}</span>
         <span class="task-detail-title">{{ getCleanTaskTitle(selectedTask.title) }}</span>
       </div>
-      <div class="task-detail-meta-box">
-        <div class="task-detail-meta-col">
-          <div class="meta-label">DETAILS</div>
-          <div>Language: <b>{{ selectedTask.language ? getLanguageName(selectedTask.language) : 'Not specified' }}</b></div>
-          <div class="progress-bar-bg">
-            <div v-if="selectedTaskProgressLoading" class="progress-loading">
-              <i class="pi pi-spin pi-spinner"></i> Loading...
+
+      <!-- Task Detail Tabs -->
+      <div class="task-detail-tabs">
+        <button
+          :class="['task-detail-tab-btn', { active: activeTaskDetailTab === 'details' }]"
+          @click="activeTaskDetailTab = 'details'"
+        >
+          Details
+        </button>
+        <button
+          :class="['task-detail-tab-btn', { active: activeTaskDetailTab === 'history' }]"
+          @click="activeTaskDetailTab = 'history'"
+        >
+          History
+        </button>
+      </div>
+
+      <!-- Details Tab Content -->
+      <div v-if="activeTaskDetailTab === 'details'" class="task-detail-content">
+        <div class="task-detail-meta-box">
+          <div class="task-detail-meta-col">
+            <div class="meta-label">DETAILS</div>
+            <div>Language: <b>{{ selectedTask.language ? getLanguageName(selectedTask.language) : 'Not specified' }}</b></div>
+            <div class="progress-bar-bg">
+              <div v-if="selectedTaskProgressLoading" class="progress-loading">
+                <i class="pi pi-spin pi-spinner"></i> Loading...
+              </div>
+              <div v-else class="progress-bar" :style="{width: selectedTaskProgress + '%'}"></div>
             </div>
-            <div v-else class="progress-bar" :style="{width: selectedTaskProgress + '%'}"></div>
+            <div class="progress-text">{{ selectedTaskProgressText }}</div>
           </div>
-          <div class="progress-text">{{ selectedTaskProgressText }}</div>
-        </div>
-        <div class="task-detail-meta-col">
-          <div class="meta-label">DATES</div>
-          <div>Created: {{ formatDate(selectedTask.createdAt) }}</div>
-          <div>Modified: {{ formatDate(selectedTask.createdAt) }}</div>
-          <div v-if="selectedTask.startedAt">Started: {{ formatDateTime(selectedTask.startedAt) }}</div>
-          <div v-if="selectedTask.completedAt">Resolved at: {{ formatDateTime(selectedTask.completedAt) }}</div>
-          <div v-else>Not resolved yet</div>
-          <div v-if="selectedTask.dueDate">
-            <span>Due date:</span>
-            <span :class="{ 'overdue': isOverdue(selectedTask.dueDate) }">
+          <div class="task-detail-meta-col">
+            <div class="meta-label">DATES</div>
+            <div>Created: {{ formatDate(selectedTask.createdAt) }}</div>
+            <div>Modified: {{ formatDate(selectedTask.createdAt) }}</div>
+            <div v-if="selectedTask.startedAt">Started: {{ formatDateTime(selectedTask.startedAt) }}</div>
+            <div v-if="selectedTask.completedAt">Resolved at: {{ formatDateTime(selectedTask.completedAt) }}</div>
+            <div v-else>Not resolved yet</div>
+            <div v-if="selectedTask.dueDate">
+              <span>Due date:</span>
+              <span :class="{ 'overdue': isOverdue(selectedTask.dueDate) }">
               <span v-if="isOverdue(selectedTask.dueDate)">⚠️</span>
               {{ formatDateTime(selectedTask.dueDate) }}
             </span>
-          </div>
-          <div v-else>No due date</div>
-        </div>
-        <div class="task-detail-meta-col">
-          <div class="meta-label">RESOURCES</div>
-          <div v-if="selectedTask.fileId">
-            <div class="file-name-container" :title="selectedTaskFileName">
-              File: <b>{{ selectedTaskTruncatedFileName }}</b>
             </div>
-            <div v-if="selectedTask.filePart !== undefined">
-              Part: <b>{{ currentPartInfo?.partNumber }}</b> ({{ currentPartInfo?.stringCount }})
+            <div v-else>No due date</div>
+          </div>
+          <div class="task-detail-meta-col">
+            <div class="meta-label">RESOURCES</div>
+            <div v-if="selectedTask.fileId">
+              <div class="file-name-container" :title="selectedTaskFileName">
+                File: <b>{{ selectedTaskTruncatedFileName }}</b>
+              </div>
+              <div v-if="selectedTask.filePart !== undefined">
+                Part: <b>{{ currentPartInfo?.partNumber }}</b> ({{ currentPartInfo?.stringCount }})
+              </div>
+              <div v-else>
+                Parts: <b>All parts</b>
+              </div>
             </div>
             <div v-else>
-              Parts: <b>All parts</b>
+              <div>Files: <b>0</b></div>
             </div>
+            <div>Words: 0</div>
           </div>
-          <div v-else>
-            <div>Files: <b>0</b></div>
+          <div class="task-detail-meta-col">
+            <div class="meta-label">AUTHOR</div>
+            <div class="author-avatar">
+              <img v-if="selectedTask.createdBy.avatarUrl" :src="getAvatarUrl(selectedTask.createdBy.avatarUrl)" alt="avatar" />
+              <span v-else>{{ selectedTask.createdBy.fullName ? selectedTask.createdBy.fullName[0] : selectedTask.createdBy.username[0] }}</span>
+            </div>
+            <div><b>{{ selectedTask.createdBy.fullName }}</b> {{ selectedTask.createdBy.username }}</div>
           </div>
-          <div>Words: 0</div>
         </div>
-        <div class="task-detail-meta-col">
-          <div class="meta-label">AUTHOR</div>
-          <div class="author-avatar">
-            <img v-if="selectedTask.createdBy.avatarUrl" :src="getAvatarUrl(selectedTask.createdBy.avatarUrl)" alt="avatar" />
-            <span v-else>{{ selectedTask.createdBy.fullName ? selectedTask.createdBy.fullName[0] : selectedTask.createdBy.username[0] }}</span>
-          </div>
-          <div><b>{{ selectedTask.createdBy.fullName }}</b> {{ selectedTask.createdBy.username }}</div>
+        <div class="task-detail-members">
+          <div class="members-title">Members</div>
+          <table class="members-table">
+            <thead>
+            <tr>
+              <th>Project members</th>
+              <th>Assigned strings</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-if="selectedTask.assignedTo">
+              <td>
+                <div class="assignee-info">
+                  <img v-if="selectedTask.assignedTo.avatarUrl" :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)" :alt="selectedTask.assignedTo.fullName" class="assignee-avatar" />
+                  <span v-else class="assignee-avatar-placeholder">{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
+                  <span class="assignee-name">{{ selectedTask.assignedTo.fullName || selectedTask.assignedTo.username }}</span>
+                </div>
+              </td>
+              <td>
+                {{ currentPartInfo?.stringCount !== undefined ? currentPartInfo.stringCount : (selectedTask.fileId ? (filePartsData.value.get(selectedTask.fileId)?.reduce((sum: number, p: { stringCount: number }) => sum + (p.stringCount || 0), 0) ?? '-') : '-') }}
+              </td>
+            </tr>
+            <tr v-else>
+              <td colspan="2" class="empty-row">Nothing to display</td>
+            </tr>
+            </tbody>
+          </table>
         </div>
       </div>
-      <div class="task-detail-members">
-        <div class="members-title">Members</div>
-        <table class="members-table">
-          <thead>
-          <tr>
-            <th>Project members</th>
-            <th>Assigned strings</th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr v-if="selectedTask.assignedTo">
-            <td>
-              <div class="assignee-info">
-                <img v-if="selectedTask.assignedTo.avatarUrl" :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)" :alt="selectedTask.assignedTo.fullName" class="assignee-avatar" />
-                <span v-else class="assignee-avatar-placeholder">{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
-                <span class="assignee-name">{{ selectedTask.assignedTo.fullName || selectedTask.assignedTo.username }}</span>
+
+      <!-- History Tab Content -->
+      <div v-if="activeTaskDetailTab === 'history'" class="task-detail-content">
+        <div class="task-history-container">
+          <div class="history-header">
+            <h3>Task History</h3>
+            <div v-if="taskHistoryLoading" class="history-loading">
+              <i class="pi pi-spin pi-spinner"></i> Loading history...
+            </div>
+          </div>
+
+          <div v-if="!taskHistoryLoading && taskHistory.length === 0" class="no-history">
+            <p>No history available for this task.</p>
+          </div>
+
+          <div v-else-if="!taskHistoryLoading" class="history-timeline">
+            <div v-for="(item, index) in taskHistory" :key="item.id" class="timeline-item">
+              <div class="timeline-dot"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div class="timeline-action">
+                    <span class="action-icon">
+                      <span v-if="item.action === 'created'">🆕</span>
+                      <span v-else-if="item.action === 'status_change'">🔁</span>
+                      <span v-else-if="item.action === 'assignment_change'">👤</span>
+                      <span v-else-if="item.action === 'due_date_change'">📅</span>
+                      <span v-else-if="item.action === 'closed'">✅</span>
+                      <span v-else-if="item.action === 'reopened'">🔄</span>
+                      <span v-else>ℹ️</span>
+                    </span>
+                    <span class="action-text">{{ formatHistoryAction(item.action) }}</span>
+                  </div>
+                  <div class="timeline-time">
+                    <span class="time-icon">🕒</span>
+                    {{ formatDateOnly(item.performedAt) }} at {{ formatTimeOnly(item.performedAt) }}
+                  </div>
+                </div>
+
+                <div class="timeline-description">{{ item.description }}</div>
+
+                <div v-if="item.metadata && item.metadata.fromStatus && item.metadata.toStatus" class="timeline-status-change">
+                  <div class="status-badges">
+                    <span class="status-badge old-status">
+                      <span class="status-indicator">🔴</span>
+                      {{ getStatusDisplayName(item.metadata.fromStatus) }}
+                    </span>
+                    <span class="status-arrow">→</span>
+                    <span class="status-badge new-status">
+                      <span class="status-indicator">
+                        <span v-if="item.metadata.toStatus === 'pending'">🔴</span>
+                        <span v-else-if="item.metadata.toStatus === 'in_progress'">🟡</span>
+                        <span v-else-if="item.metadata.toStatus === 'completed'">🟢</span>
+                        <span v-else-if="item.metadata.toStatus === 'closed'">✅</span>
+                        <span v-else>⚪</span>
+                      </span>
+                      {{ getStatusDisplayName(item.metadata.toStatus) }}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </td>
-            <td>
-              {{ currentPartInfo?.stringCount !== undefined ? currentPartInfo.stringCount : (selectedTask.fileId ? (filePartsData.value.get(selectedTask.fileId)?.reduce((sum: number, p: { stringCount: number }) => sum + (p.stringCount || 0), 0) ?? '-') : '-') }}
-            </td>
-          </tr>
-          <tr v-else>
-            <td colspan="2" class="empty-row">Nothing to display</td>
-          </tr>
-          </tbody>
-        </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Create Task View -->
     <div v-else-if="showCreateForm" class="create-task-view">
       <div class="create-task-header">
-        <button class="back-btn" @click="cancelCreateTask">← Back to Board</button>
+        <button class="back-btn" @click="cancelCreateTask">
+          <i class="pi pi-arrow-left"></i>
+          Back to Board
+        </button>
       </div>
       <CreateTaskDialog
         :visible="true"
@@ -1553,7 +1823,10 @@ const closeEditTaskInline = () => {
     <!-- Edit Task View -->
     <div v-else-if="showEditTaskInline" class="edit-task-view">
       <div class="edit-task-header">
-        <button class="back-btn" @click="closeEditTaskInline">← Back to Task Detail</button>
+        <button class="back-btn" @click="closeEditTaskInline">
+          <i class="pi pi-arrow-left"></i>
+          Back to Task Detail
+        </button>
       </div>
       <div v-if="editTaskInlineData">
         <EditTaskDialog
@@ -1848,8 +2121,8 @@ const closeEditTaskInline = () => {
               </div>
               <div v-if="loading" class="kanban-loading">Loading...</div>
               <div v-else>
-                <div v-for="(task, idx) in todoTasks" :key="task.id" class="task-card-link" @click="selectedTask = task">
-                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                <div v-for="(task, idx) in todoTasks" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                     <!-- Task card content -->
                     <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                       <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
@@ -1934,8 +2207,8 @@ const closeEditTaskInline = () => {
               </div>
               <div v-if="loading" class="kanban-loading">Loading...</div>
               <div v-else>
-                <div v-for="(task, idx) in inProgressTasks" :key="task.id" class="task-card-link" @click="selectedTask = task">
-                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                <div v-for="(task, idx) in inProgressTasks" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                     <!-- Same task card content as above -->
                     <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                       <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
@@ -2020,8 +2293,8 @@ const closeEditTaskInline = () => {
               </div>
               <div v-if="loading" class="kanban-loading">Loading...</div>
               <div v-else>
-                <div v-for="(task, idx) in doneTasks" :key="task.id" class="task-card-link" @click="selectedTask = task">
-                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                <div v-for="(task, idx) in doneTasks" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                     <!-- Same task card content as above -->
                     <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                       <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
@@ -2111,8 +2384,8 @@ const closeEditTaskInline = () => {
               <!-- Language Tasks Row -->
               <div v-if="!isLanguageCollapsed(language)" class="language-swimlane-content">
                 <div class="kanban-column todo-column" @dragover="handleDragOver($event, 'todo')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'todo')">
-                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].todo" :key="task.id" class="task-card-link" @click="selectedTask = task">
-                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].todo" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                       <!-- Task card content -->
                       <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                         <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
@@ -2187,8 +2460,8 @@ const closeEditTaskInline = () => {
                 </div>
 
                 <div class="kanban-column inprogress-column" @dragover="handleDragOver($event, 'inProgress')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'inProgress')">
-                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].inProgress" :key="task.id" class="task-card-link" @click="selectedTask = task">
-                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].inProgress" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                       <!-- Same task card content as above -->
                       <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                         <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
@@ -2263,8 +2536,8 @@ const closeEditTaskInline = () => {
                 </div>
 
                 <div class="kanban-column done-column" @dragover="handleDragOver($event, 'done')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'done')">
-                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].done" :key="task.id" class="task-card-link" @click="selectedTask = task">
-                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectedTask = task" @click="selectedTask = task">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].done" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                       <!-- Same task card content as above -->
                       <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                         <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
@@ -2546,32 +2819,47 @@ const closeEditTaskInline = () => {
               v-for="task in filteredTasks"
               :key="task.id"
               class="all-task-item"
-              @click="selectedTask = task"
+              @click="selectTask(task)"
             >
               <div class="task-item-content">
                 <div class="task-item-left">
-                  <div class="task-item-title">
-                    <span class="task-id">#{{ task.id }}</span>
-                    <span class="task-title">{{ getCleanTaskTitle(task.title) }}</span>
+                  <div class="task-item-header">
+                    <div class="task-item-title">
+                      <span class="task-id">#{{ task.id }}</span>
+                      <span class="task-title">{{ getCleanTaskTitle(task.title) }}</span>
+                      <span v-if="task.status === 'closed'" class="task-status-inline" :class="task.status">
+                        <i class="pi pi-lock status-icon"></i>
+                        {{ getStatusText(task.status) }}
+                      </span>
+                    </div>
                   </div>
                   <div class="task-item-details">
-                    <span class="task-date">{{ formatDate(task.createdAt) }}</span>
-                    <span v-if="task.dueDate" class="task-due-date" :class="{ overdue: isOverdue(task.dueDate) }">
-                      Due: {{ formatDateTime(task.dueDate) }}
-                    </span>
-                    <span v-if="task.assignedTo" class="task-assignee">
-                      Assigned to: {{ task.assignedTo.fullName || task.assignedTo.username }}
-                    </span>
+                    <div class="task-detail-row">
+                      <i class="pi pi-calendar detail-icon"></i>
+                      <span class="task-date">{{ formatDate(task.createdAt) }}</span>
+                    </div>
+                    <div v-if="task.dueDate" class="task-detail-row">
+                      <i class="pi pi-clock detail-icon" :class="{ 'overdue-icon': isOverdue(task.dueDate) }"></i>
+                      <span class="task-due-date" :class="{ overdue: isOverdue(task.dueDate) }">
+                        Due: {{ formatDateTime(task.dueDate) }}
+                      </span>
+                    </div>
+                    <div v-if="task.assignedTo" class="task-detail-row">
+                      <i class="pi pi-user detail-icon"></i>
+                      <span class="task-assignee">
+                        Assigned to: {{ task.assignedTo.fullName || task.assignedTo.username }}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div class="task-item-right">
-                  <span class="task-status" :class="task.status">{{ getStatusText(task.status) }}</span>
                   <button
                     v-if="task.status === 'closed'"
                     class="reopen-btn"
                     @click.stop="reopenTask(task)"
                     title="Reopen task"
                   >
+                    <i class="pi pi-refresh"></i>
                     Reopen
                   </button>
                 </div>
@@ -2652,7 +2940,65 @@ const closeEditTaskInline = () => {
     </div>
   </Teleport>
 
+  <!-- Close Task Confirmation Modal -->
+  <Teleport to="body">
+    <div v-if="showCloseTaskModal" class="modal-overlay" @click="cancelCloseTask">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Confirm Close Task</h3>
+          <button class="modal-close-btn" @click="cancelCloseTask">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to close task <strong>"{{ taskToClose?.title }}"</strong>?</p>
+          <p class="modal-warning">You can reopen this task later from the "All tasks" tab.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-cancel" @click="cancelCloseTask">
+            Cancel
+          </button>
+          <button class="modal-btn modal-btn-confirm" @click="confirmCloseTask" :disabled="isClosingTask">
+            <span v-if="isClosingTask" class="loading-spinner"></span>
+            {{ isClosingTask ? 'Closing...' : 'Close Task' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
+  <!-- Reopen Task Confirmation Modal -->
+  <Teleport to="body">
+    <div v-if="showReopenTaskModal" class="modal-overlay" @click="cancelReopenTask">
+      <div class="modal-content reopen-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Confirm Reopen Task</h3>
+          <button class="modal-close-btn" @click="cancelReopenTask">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to reopen task <strong>"{{ taskToReopen?.title }}"</strong>?</p>
+          <div class="reopen-reason-section">
+            <label for="reopen-reason" class="reopen-reason-label">Reason for reopening (optional):</label>
+            <textarea
+              id="reopen-reason"
+              v-model="reopenReason"
+              class="reopen-reason-input"
+              placeholder="Enter the reason for reopening this task..."
+              rows="5"
+            ></textarea>
+          </div>
+          <p class="modal-warning">This will change the task status back to "To do".</p>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-cancel" @click="cancelReopenTask">
+            Cancel
+          </button>
+          <button class="modal-btn modal-btn-confirm" @click="confirmReopenTask" :disabled="isReopeningTask">
+            <span v-if="isReopeningTask" class="loading-spinner"></span>
+            {{ isReopeningTask ? 'Reopening...' : 'Reopen Task' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
 </template>
 
@@ -3276,52 +3622,113 @@ const closeEditTaskInline = () => {
 .all-tasks-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .all-task-item {
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-height: auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.all-task-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: #e5e7eb;
+  transition: background-color 0.2s ease;
+}
+
+.all-task-item:hover::before {
+  background: #3b82f6;
 }
 
 .all-task-item:hover {
   border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateY(-1px);
 }
 
 .task-item-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  min-height: 60px;
+}
+
+.task-item-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.task-item-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
 }
 
-.task-item-left {
-  flex: 1;
-}
-
 .task-item-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.task-item-status {
+  flex-shrink: 0;
+}
+
+.task-status-inline {
+  padding: 0.2rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+}
+
+.task-status-inline.closed {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.task-status-inline .status-icon {
+  font-size: 0.65rem;
+  color: #6b7280;
 }
 
 .task-item-details {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.3rem;
 }
 
 .task-item-right {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .task-status {
@@ -3329,6 +3736,9 @@ const closeEditTaskInline = () => {
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .task-status.pending {
@@ -3351,6 +3761,58 @@ const closeEditTaskInline = () => {
   color: #6b7280;
 }
 
+.status-icon {
+  font-size: 0.7rem;
+}
+
+/* Status icon colors */
+.task-status.pending .status-icon {
+  color: #3b82f6; /* Blue for pending */
+}
+
+.task-status.in_progress .status-icon {
+  color: #f59e0b; /* Orange for in progress */
+}
+
+.task-status.completed .status-icon {
+  color: #10b981; /* Green for completed */
+}
+
+.task-status.closed .status-icon {
+  color: #6b7280; /* Gray for closed */
+}
+
+.task-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.detail-icon {
+  font-size: 0.8rem;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Icon colors for different types */
+.detail-icon.pi-calendar {
+  color: #3b82f6; /* Blue for calendar */
+}
+
+.detail-icon.pi-clock {
+  color: #f59e0b; /* Orange for clock */
+}
+
+.detail-icon.pi-user {
+  color: #10b981; /* Green for user */
+}
+
+.overdue-icon {
+  color: #dc2626; /* Red for overdue */
+}
+
 .task-id {
   font-weight: 600;
   color: #6b7280;
@@ -3361,6 +3823,7 @@ const closeEditTaskInline = () => {
   font-weight: 600;
   color: #1e293b;
   font-size: 1rem;
+  line-height: 1.3;
 }
 
 .task-date {
@@ -3803,31 +4266,47 @@ const closeEditTaskInline = () => {
   margin-bottom: 1rem;
 }
 .back-btn {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 0.6em 1.2em;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: 50px;
+  padding: 0.75rem 1.5rem;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #374151;
+  color: white;
   cursor: pointer;
   margin-bottom: 0.4rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.back-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
 }
 
 .back-btn:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+
+.back-btn:hover::before {
+  left: 100%;
 }
 
 .back-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
 }
 
 .delete-btn {
@@ -4873,17 +5352,51 @@ body.modal-open main {
   background: #2563eb;
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
 }
 
 .reopen-btn:hover:not(:disabled) {
   background: #1d4ed8;
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
+}
+
+.reopen-btn i {
+  font-size: 0.7rem;
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+  .task-item-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .task-item-header {
+    width: 100%;
+  }
+
+  .task-item-right {
+    align-self: flex-end;
+  }
+
+  .task-detail-row {
+    font-size: 0.8rem;
+  }
+
+  .task-title {
+    font-size: 0.95rem;
+  }
 }
 
 .close-btn {
@@ -5200,4 +5713,467 @@ body.modal-open main {
 .done-column {
   border-left: 4px solid #059669;
 }
+
+/* Close Task Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #374151;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 2rem;
+}
+
+.modal-body p {
+  margin: 0 0 0.5rem 0;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.modal-warning {
+  color: #dc2626 !important;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.reopen-reason-section {
+  margin: 1.5rem 0;
+}
+
+.reopen-reason-label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  font-size: 1rem;
+}
+
+.reopen-reason-input {
+  width: 100%;
+  padding: 1.25rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 150px;
+  max-height: 250px;
+  transition: border-color 0.2s ease;
+  line-height: 1.6;
+}
+
+.reopen-reason-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.reopen-reason-input::placeholder {
+  color: #9ca3af;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.modal-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.2s ease;
+}
+
+.modal-btn-cancel {
+  background: white;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.modal-btn-cancel:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.modal-btn-confirm {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.modal-btn-confirm:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* Reopen modal confirm button - use blue instead of red */
+.reopen-modal .modal-btn-confirm {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.reopen-modal .modal-btn-confirm:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.modal-btn-confirm:disabled {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Task Detail Tabs */
+.task-detail-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.task-detail-tab-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: none;
+  color: #6b7280;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.task-detail-tab-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.task-detail-tab-btn.active {
+  background: #6366f1;
+  color: white;
+}
+
+/* Task History Styles */
+.task-history-container {
+  padding: 1rem 0;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.history-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.history-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.no-history {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px dashed #d1d5db;
+}
+
+/* Timeline Design */
+.history-timeline {
+  position: relative;
+  padding-left: 2rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: timelineFadeIn 0.5s ease-out;
+}
+
+@keyframes timelineFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.history-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, #6366f1 0%, #8b5cf6 50%, #6366f1 100%);
+  border-radius: 0 2px 2px 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.5rem;
+  padding-left: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.timeline-item:last-child .timeline-dot::after {
+  display: none;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -0.5rem;
+  top: 0.5rem;
+  width: 14px;
+  height: 14px;
+  background: #6366f1;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #e5e7eb;
+  z-index: 1;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.timeline-dot::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 3px;
+  height: 1.5rem;
+  background: linear-gradient(to bottom, #6366f1 0%, #8b5cf6 100%);
+  transform: translateX(-50%);
+  border-radius: 0 0 2px 2px;
+}
+
+.timeline-item:hover .timeline-dot {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 3px #e5e7eb, 0 4px 8px rgba(99, 102, 241, 0.3);
+}
+
+.timeline-content {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+}
+
+.timeline-content:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.timeline-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.action-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.action-text {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.timeline-time {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: right;
+  min-width: 140px;
+  justify-content: flex-end;
+  background: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.time-icon {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.timeline-description {
+  color: #4b5563;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+}
+
+.timeline-status-change {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.status-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.status-badge.old-status {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.status-badge.new-status {
+  background: #f0fdf4;
+  color: #059669;
+  border-color: #bbf7d0;
+}
+
+.status-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.status-indicator {
+  font-size: 0.7rem;
+}
+
+.status-arrow {
+  color: #6b7280;
+  font-weight: bold;
+  font-size: 0.9rem;
+  margin: 0 0.25rem;
+}
+
+
 </style>

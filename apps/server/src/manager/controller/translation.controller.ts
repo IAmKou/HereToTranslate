@@ -11,18 +11,21 @@ export class TranslationController {
   async getAllTranslationStrings(
     @Query('projectId') projectId: string,
     @Query('branchId') branchId: string,
-    @Query('fileId') fileId?: string
+    @Query('language') language: string = 'en',
+    @Query('fileId') fileId?: string,
+    @Query('filePart') filePart?: number
   ) {
-    return this.translationService.getAllString(projectId, branchId, fileId);
+    return this.translationService.getAllString(projectId, branchId, language, fileId, filePart);
   }
 
   @Post('translate/:id')
   async translateString(
     @Param('id') id: string,
-    @Body('translatedText') translatedText: string
+    @Body('translatedText') translatedText: string,
+    @Body('language') language: string = 'en'
   ) {
     try {
-      return await this.translationService.addTranslation(id, translatedText);
+      return await this.translationService.addTranslation(id, translatedText, language);
     } catch (err: any) {
       if (err?.message && err.message.includes('DOCX body not found')) {
         // Trả về lỗi 400 với message rõ ràng cho FE
@@ -33,6 +36,24 @@ export class TranslationController {
       }
       throw err;
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('preview/:fileId')
+  async previewTranslation(
+    @Param('fileId') fileId: string,
+    @Query('language') language: string = 'en'
+  ) {
+    return this.translationService.previewTranslation(fileId, language);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('export/:fileId')
+  async exportTranslation(
+    @Param('fileId') fileId: string,
+    @Body('language') language: string = 'en'
+  ) {
+    return this.translationService.exportTranslation(fileId, language);
   }
 
 

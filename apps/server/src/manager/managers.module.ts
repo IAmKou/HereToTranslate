@@ -46,6 +46,7 @@ import { PermissionsController } from './controller/project-role.controller';
 import { TranslationController } from './controller/translation.controller';
 import { AdminTransactionController } from './controller/admin-transaction.controller';
 import { ChatController } from '../chat/chat.controller';
+import { TaskController } from './controller/task.controller';
 import { TaskManagerService } from '#LocalProject/Managers/service/task-manager.service';
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
@@ -104,7 +105,6 @@ import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.cont
     TaskGateway,
     ManifestService,
     NotificationManagerService,
-    AiChatService,
   ],
   exports: [
     CategoryManagerService,
@@ -143,6 +143,7 @@ import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.cont
     TranslationController,
     AdminTransactionController,
     ChatController,
+    TaskController,
     NotificationController,
     AiChatController,
   ]

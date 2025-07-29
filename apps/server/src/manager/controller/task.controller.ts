@@ -9,6 +9,8 @@ import {
   UseGuards,
   UseInterceptors,
   Req,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { JsonSerializerInterceptor } from '../../util/json-serializer.interceptor';
 import { TaskManagerService } from '../service/task-manager.service';
@@ -67,5 +69,31 @@ export class TaskController {
   @Get('/user/:userId')
   async getUserTasks(@Param('userId') userId: string) {
     return await this.taskService.getTasksByUser(userId);
+  }
+
+  @Get(':id/progress')
+  async getTaskProgress(@Param('id') id: string) {
+    try {
+      const progress = await this.taskService.getTaskProgress(id);
+      return progress;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to get task progress',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get(':id/history')
+  async getTaskHistory(@Param('id') id: string) {
+    try {
+      const history = await this.taskService.getTaskHistory(id);
+      return history;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to get task history',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }

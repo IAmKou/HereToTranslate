@@ -30,6 +30,9 @@
             <router-link to="/login" class="button is-primary">Sign In</router-link>
           </div>
           <div v-else class="user-menu" style="position: relative;">
+            <!-- Realtime Notifications -->
+            <RealtimeNotifications />
+
             <div class="user-info-display">
               <span class="username-display">{{ currentUser.username }}</span>
               <Button
@@ -110,6 +113,7 @@ import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
+import RealtimeNotifications from './RealtimeNotifications.vue';
 
 interface User {
   id: string;
@@ -311,6 +315,9 @@ onMounted(() => {
 
 .user-menu {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .avatar-button {

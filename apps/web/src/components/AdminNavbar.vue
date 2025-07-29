@@ -17,10 +17,10 @@
         <div class="navbar-start">
           <!-- Quick Actions -->
           <div class="quick-actions">
-            <button class="action-btn" @click="showNotifications = !showNotifications" title="Notifications">
+            <router-link to="/admin/notifications" class="action-btn notification-link" title="Notification Management">
               <i class="pi pi-bell"></i>
               <span class="notification-badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
-            </button>
+            </router-link>
 
             <button class="action-btn" @click="showSystemStatus = !showSystemStatus" title="System Status">
               <i class="pi pi-server"></i>
@@ -85,6 +85,9 @@
                   <router-link to="/admin/users" class="menu-item" tabindex="0">
                     <i class="pi pi-users"></i> User Management <span class="shortcut">⌘U</span>
                   </router-link>
+                  <router-link to="/admin/notifications" class="menu-item" tabindex="0">
+                    <i class="pi pi-bell"></i> Notification Management <span class="shortcut">⌘N</span>
+                  </router-link>
                   <router-link to="/admin/settings" class="menu-item" tabindex="0">
                     <i class="pi pi-cog"></i> System Settings <span class="shortcut">⌘S</span>
                   </router-link>
@@ -128,29 +131,7 @@
       </div>
     </div>
 
-    <!-- Notifications Panel -->
-    <transition name="slide-down">
-      <div v-if="showNotifications" class="notifications-panel">
-        <div class="panel-header">
-          <h3>Notifications</h3>
-          <button @click="showNotifications = false" class="close-btn">
-            <i class="pi pi-times"></i>
-          </button>
-        </div>
-        <div class="notifications-list">
-          <div v-for="notification in notifications" :key="notification.id" class="notification-item">
-            <div class="notification-icon" :class="notification.type">
-              <i :class="getNotificationIcon(notification.type)"></i>
-            </div>
-            <div class="notification-content">
-              <div class="notification-title">{{ notification.title }}</div>
-              <div class="notification-message">{{ notification.message }}</div>
-              <div class="notification-time">{{ getTimeAgo(notification.timestamp) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </transition>
+
 
     <!-- System Status Panel -->
     <transition name="slide-down">
@@ -197,6 +178,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
+import { adminNotificationService } from '../services/admin-notification.service';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
 
@@ -232,34 +214,9 @@ interface SystemMetrics {
 
 const router = useRouter();
 const menuVisible = ref(false);
-const showNotifications = ref(false);
 const showSystemStatus = ref(false);
 const currentUser = ref<User | null>(null);
-
-// Mock data - replace with real API calls
-const notifications = ref<Notification[]>([
-  {
-    id: '1',
-    type: 'warning',
-    title: 'High CPU Usage',
-    message: 'Server CPU usage is above 80%',
-    timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString()
-  },
-  {
-    id: '2',
-    type: 'info',
-    title: 'New User Registration',
-    message: 'User john.doe@example.com has registered',
-    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString()
-  },
-  {
-    id: '3',
-    type: 'success',
-    title: 'Backup Completed',
-    message: 'System backup completed successfully',
-    timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  }
-]);
+const notificationCount = ref(0);
 
 const systemMetrics = ref<SystemMetrics>({
   cpu: 65,
@@ -268,7 +225,14 @@ const systemMetrics = ref<SystemMetrics>({
   activeUsers: 127
 });
 
-const notificationCount = computed(() => notifications.value.length);
+const loadNotificationCount = async () => {
+  try {
+    const response = await adminNotificationService.getGlobalNotificationCount();
+    notificationCount.value = response.count;
+  } catch (error) {
+    console.error('Error loading notification count:', error);
+  }
+};
 const systemStatus = computed(() => {
   const avgUsage = (systemMetrics.value.cpu + systemMetrics.value.memory) / 2;
   if (avgUsage > 80) return 'critical';
@@ -305,25 +269,7 @@ const getRandomColor = (seed: string): string => {
   return colors[index % colors.length];
 };
 
-const getNotificationIcon = (type: string): string => {
-  switch (type) {
-    case 'warning': return 'pi pi-exclamation-triangle';
-    case 'error': return 'pi pi-times-circle';
-    case 'success': return 'pi pi-check-circle';
-    default: return 'pi pi-info-circle';
-  }
-};
 
-const getTimeAgo = (timestamp: string): string => {
-  const now = new Date();
-  const time = new Date(timestamp);
-  const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
-
-  if (diffInMinutes < 1) return 'Just now';
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-  if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-  return `${Math.floor(diffInMinutes / 1440)}d ago`;
-};
 
 const openSystemLogs = () => {
   router.push('/admin/logs');
@@ -358,6 +304,11 @@ const getFullAvatarUrl = (avatarUrl: string) => {
 
 onMounted(() => {
   loadUserInfo();
+  loadNotificationCount();
+
+  // Refresh notification count every 30 seconds
+  setInterval(loadNotificationCount, 30000);
+
   document.addEventListener('sign-out', async () => {
     try {
       await authService.logout();
@@ -450,11 +401,21 @@ onMounted(() => {
   justify-content: center;
   transition: all 0.2s ease;
   position: relative;
+  text-decoration: none;
 }
 
 .action-btn:hover {
   background: rgba(255,255,255,0.1);
   color: #f8fafc;
+}
+
+.notification-link {
+  color: #cbd5e1 !important;
+  text-decoration: none !important;
+}
+
+.notification-link:hover {
+  color: #f8fafc !important;
 }
 
 .notification-badge {

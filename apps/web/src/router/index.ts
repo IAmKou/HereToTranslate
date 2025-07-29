@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue';
 import { authService } from '../services/auth.service';
 import AdminUserManagement from '../views/AdminUserManagement.vue';
 import AdminWithdrawals from '../views/AdminWithdrawals.vue';
+import AdminNotificationView from '../views/AdminNotificationView.vue';
 import OauthCallback from '../components/OauthCallback.vue';
 
 
@@ -98,6 +99,15 @@ const router = createRouter({
       path: '/admin/withdrawals',
       name: 'admin-withdrawals',
       component: AdminWithdrawals,
+    },
+    {
+      path: '/admin/notifications',
+      name: 'admin-notifications',
+      component: AdminNotificationView,
+      meta: {
+        requiresAuth: true,
+        requiresAdmin: true
+      },
     },
     {
       path: '/chat',

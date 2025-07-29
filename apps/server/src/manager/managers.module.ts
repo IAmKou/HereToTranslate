@@ -55,6 +55,8 @@ import { NotificationController } from '#LocalProject/Managers/controller/notifi
 import { BullModule } from '@nestjs/bull';
 import { AiChatService } from '#LocalProject/Managers/service/ai-manager.service';
 import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.controller';
+import { NotificationGateway } from '#LocalProject/Utils/gateway/notification.gateway';
+import { AdminNotificationController } from '#LocalProject/Managers/controller/admin-notification.controller';
 
 @Global()
 @Module({
@@ -102,10 +104,11 @@ import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.cont
     FileService,
     TranslationService,
     TaskManagerService,
-    TaskGateway,
     ManifestService,
     NotificationManagerService,
     AiChatService,
+    TaskGateway,
+    NotificationGateway,
   ],
   exports: [
     CategoryManagerService,
@@ -147,6 +150,8 @@ import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.cont
     TaskController,
     NotificationController,
     AiChatController,
+    NotificationController,
+    AdminNotificationController
   ]
 })
 export class ManagersModule {

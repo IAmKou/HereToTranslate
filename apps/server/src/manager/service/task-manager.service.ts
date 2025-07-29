@@ -4,13 +4,13 @@ import {
   ProjectGroupEntity,
   TaskEntity,
   UserEntity,
-} from '#LocalProject/Entities';
+} from '../../db/mysql/entity/index';
 import { DeepPartial, Repository } from 'typeorm';
-import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
+import { ProjectManagerService } from './project-manager.service';
 import { PermissionFlags } from '@here-to-translate/common';
-import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
-import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
-import { UpdateTaskDto } from '#LocalProject/DTOs/task.dto';
+import { TranslationService } from './translation-manager.service';
+import { TaskGateway } from '../../util/gateway/task.gateway';
+import { UpdateTaskDto } from '../../dto/task.dto';
 
 @Injectable()
 export class TaskManagerService {
@@ -369,6 +369,7 @@ export class TaskManagerService {
     const strings = await this.translationService.getAllString(
       params.projectId,
       params.branchId,
+      'en',
       params.fileId,
       params.filePart
     );
@@ -377,7 +378,7 @@ export class TaskManagerService {
 
     const example = strings
       .slice(0, 3)
-      .map((s) => `- ${s.originalText}`)
+      .map((s: any) => `- ${s.originalText}`)
       .join('\n');
     const description = `Contains ${strings.length} strings:\n${example}`;
     const title = `Translate part ${params.filePart}`;
@@ -410,11 +411,88 @@ export class TaskManagerService {
     );
     const total = strings.length;
     const translated = strings.filter(
-      (s) => s.translatedText && s.translatedText.trim() !== ''
+      (s: any) => s.translatedText && s.translatedText.trim() !== ''
     ).length;
     const percent = total === 0 ? 0 : Math.round((translated / total) * 100);
 
     return { total, translated, percent };
+  }
+
+  async getTaskHistory(taskId: string) {
+    // For now, return only the creation history since we don't have a real history table yet
+    // In a real implementation, you would:
+    // 1. Create a TaskHistory entity/table
+    // 2. Log all task changes to that table
+    // 3. Query the history from the database
+
+    try {
+      // Get the actual task to show creation history
+      const task = await this.taskRepository.findOne({
+        where: { id: BigInt(taskId) },
+        relations: ['createdBy']
+      });
+
+      if (!task) {
+        return [];
+      }
+
+      const history = [];
+
+      // Always show creation history
+      history.push({
+        id: '1',
+        taskId: taskId,
+        action: 'created' as const,
+        description: 'Task was created',
+        performedAt: task.createdAt.toISOString(),
+        metadata: {}
+      });
+
+      // Show status changes based on current task state
+      if (task.startedAt && task.status !== 'pending') {
+        history.push({
+          id: '2',
+          taskId: taskId,
+          action: 'status_change' as const,
+          description: 'Task status was changed from To do to In progress',
+          performedAt: task.startedAt.toISOString(),
+          metadata: {
+            fromStatus: 'pending',
+            toStatus: 'in_progress'
+          }
+        });
+      }
+
+      if (task.completedAt && task.status === 'completed') {
+        history.push({
+          id: '3',
+          taskId: taskId,
+          action: 'status_change' as const,
+          description: 'Task status was changed from In progress to Done',
+          performedAt: task.completedAt.toISOString(),
+          metadata: {
+            fromStatus: 'in_progress',
+            toStatus: 'completed'
+          }
+        });
+      }
+
+      if (task.status === 'closed') {
+        history.push({
+          id: '4',
+          taskId: taskId,
+          action: 'closed' as const,
+          description: 'Task was closed',
+          performedAt: task.completedAt?.toISOString() || new Date().toISOString(),
+          metadata: {}
+        });
+      }
+
+      return history;
+    } catch (error) {
+      console.error('Error getting task history:', error);
+      return [];
+    }
   }
 
   async listTasks(page = 1, pageSize = 20) {

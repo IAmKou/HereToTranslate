@@ -77,6 +77,22 @@ export interface TaskProgress {
   percentage: number;
 }
 
+export interface TaskHistory {
+  id: string;
+  taskId: string;
+  action: 'status_change' | 'assignment_change' | 'due_date_change' | 'created' | 'closed' | 'reopened';
+  description: string;
+  performedAt: string;
+  metadata?: {
+    fromStatus?: string;
+    toStatus?: string;
+    fromAssignee?: string;
+    toAssignee?: string;
+    fromDueDate?: string;
+    toDueDate?: string;
+  };
+}
+
 export const taskService = {
   async createTask(dto: CreateTaskDto): Promise<Task> {
     const { data } = await axiosInstance.post('/tasks', dto);
@@ -129,6 +145,7 @@ export const taskService = {
         projectId,
         branchId,
         fileId,
+        language: 'en', // Thêm tham số language mặc định
       },
     });
 
@@ -167,12 +184,16 @@ export const taskService = {
         return { total: 0, translated: 0, percentage: 0 };
       }
 
+      // Sử dụng ngôn ngữ của task, fallback về 'en' nếu không có
+      const taskLanguage = task.language || 'en';
+
       // Lấy translation strings cho file của task
       const { data } = await axiosInstance.get('/translation/strings', {
         params: {
           projectId: task.projectId,
           branchId: task.branchId,
           fileId: task.fileId,
+          language: taskLanguage, // Sử dụng ngôn ngữ của task
         },
       });
 
@@ -196,5 +217,10 @@ export const taskService = {
       console.error('Error getting task progress:', error);
       return { total: 0, translated: 0, percentage: 0 };
     }
-  }
+  },
+
+  async getTaskHistory(taskId: string): Promise<TaskHistory[]> {
+    const { data } = await axiosInstance.get(`/tasks/${taskId}/history`);
+    return data;
+  },
 };

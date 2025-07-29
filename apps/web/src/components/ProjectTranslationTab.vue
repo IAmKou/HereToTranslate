@@ -3,8 +3,10 @@ import { ref, defineProps, watch, onMounted, computed, nextTick, onBeforeUnmount
 import { useToast } from 'primevue/usetoast';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
+import Dropdown from 'primevue/dropdown';
 import axiosInstance from '../api';
 import { useProjectPermission } from '../composables/useProjectPermission';
+import { SUPPORTED_LANGUAGES, type Language } from '../utils/languages';
 
 interface TranslationString {
   id: string;
@@ -21,11 +23,43 @@ const props = defineProps<{
   currentUser?: any;
 }>();
 
+// Computed để lấy danh sách ngôn ngữ của project
+const projectLanguages = computed(() => {
+  if (!props.project?.targetLanguages || props.project.targetLanguages.length === 0) {
+    return SUPPORTED_LANGUAGES; // Fallback to all languages if no target languages
+  }
+
+  return SUPPORTED_LANGUAGES.filter(lang =>
+    props.project.targetLanguages.includes(lang.code)
+  );
+});
+
 const files = ref<any[]>([]);
 const translationStrings = ref<any[]>([]);
 const loading = ref(false);
 const error = ref('');
 const expandedFileIds = ref<(string|number)[]>([]);
+
+// Thêm state để track current language để tránh load lại dữ liệu không cần thiết
+const currentLoadedLanguage = ref<string>('');
+
+// Thêm state cho ngôn ngữ được chọn
+const selectedLanguage = ref<Language | null>(null);
+
+// Computed để set ngôn ngữ mặc định từ project languages
+const defaultLanguage = computed(() => {
+  if (projectLanguages.value.length > 0) {
+    return projectLanguages.value[0];
+  }
+  return SUPPORTED_LANGUAGES.find(lang => lang.code === 'en') || SUPPORTED_LANGUAGES[0];
+});
+
+// Watch để set selectedLanguage khi projectLanguages thay đổi
+watch(projectLanguages, (newLanguages) => {
+  if (newLanguages.length > 0 && (!selectedLanguage.value || !newLanguages.find(lang => lang.code === selectedLanguage.value?.code))) {
+    selectedLanguage.value = newLanguages[0];
+  }
+}, { immediate: true });
 
 // Thay vì searchQuery/filterStatus toàn cục, dùng map cho từng file
 const searchQueryMap = ref<Record<string, string>>({});
@@ -34,6 +68,8 @@ const highlightUntranslated = ref(true);
 const sideBySide = ref(false);
 const viewMode = ref<'single' | 'side'>('single');
 const focusUntranslated = ref(false);
+
+
 
 const PART_SIZE = 250;
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
@@ -46,6 +82,24 @@ function isFileProcessing(file: any): boolean {
 // Expose method để component cha có thể gọi reload files
 function reloadFiles() {
   loadFiles();
+}
+
+
+
+// Function để deduplicate strings
+function deduplicateStrings(strings: any[]): any[] {
+  const seen = new Set<string>();
+  const uniqueStrings: any[] = [];
+
+  for (const str of strings) {
+    const key = `${str.fileId}_${str.originalText}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueStrings.push(str);
+    }
+  }
+
+  return uniqueStrings;
 }
 
 defineExpose({
@@ -80,6 +134,14 @@ async function loadFiles() {
 
 async function loadTranslationStrings() {
   if (!props.projectId || !props.branchId) return;
+
+  const currentLanguage = selectedLanguage.value?.code || defaultLanguage.value.code;
+
+  // Kiểm tra xem có cần load lại không
+  if (currentLoadedLanguage.value === currentLanguage && translationStrings.value.length > 0) {
+    return;
+  }
+
   loading.value = true;
   error.value = '';
   try {
@@ -87,9 +149,11 @@ async function loadTranslationStrings() {
       params: {
         projectId: props.projectId,
         branchId: props.branchId,
+        language: currentLanguage,
       },
     });
-    translationStrings.value = Array.isArray(res.data)
+
+    const newStrings = Array.isArray(res.data)
       ? res.data.map(str => {
         let id = '';
         if (typeof str.id === 'string') {
@@ -100,7 +164,11 @@ async function loadTranslationStrings() {
         return { ...str, id };
       })
       : [];
+
+    translationStrings.value = newStrings;
+    currentLoadedLanguage.value = currentLanguage;
   } catch (e: any) {
+    console.error('❌ Error loading translation strings:', e);
     error.value = e.message || 'Failed to load translation strings';
     translationStrings.value = [];
   } finally {
@@ -110,10 +178,13 @@ async function loadTranslationStrings() {
 
 const stringsByFile = computed(() => {
   const map: Record<string, any[]> = {};
+
+  // Group by fileId (giữ nguyên dữ liệu gốc cho việc hiển thị)
   for (const str of translationStrings.value) {
     if (!map[str.fileId]) map[str.fileId] = [];
     map[str.fileId].push(str);
   }
+
   return map;
 });
 
@@ -122,9 +193,15 @@ const fileProgress = computed(() => {
   for (const file of files.value) {
     const fileId = file.fileId || file.id;
     const arr = stringsByFile.value[fileId] || [];
+
+    // Luôn deduplicate khi đếm progress
+    const uniqueStrings = deduplicateStrings(arr);
+    const translatedStrings = uniqueStrings.filter(s => s.translatedText && s.translatedText.trim().length > 0);
+    const translatedCount = translatedStrings.length;
+
     progress[fileId] = {
-      total: arr.length,
-      translated: arr.filter(s => s.translatedText && s.translatedText.trim().length > 0).length,
+      total: uniqueStrings.length,
+      translated: translatedCount,
     };
   }
   return progress;
@@ -227,10 +304,17 @@ const { hasPermission } = useProjectPermission(
 
 const canEditTranslation = computed(() => hasPermission('EditTranslation'));
 
-// Watch cho projectId và branchId thay đổi
+// Watch cho projectId, branchId và selectedLanguage thay đổi
 watch([() => props.projectId, () => props.branchId], () => {
   loadFiles();
   loadTranslationStrings();
+});
+
+// Watch riêng cho selectedLanguage thay đổi
+watch(selectedLanguage, (newLanguage, oldLanguage) => {
+  if (newLanguage?.code !== oldLanguage?.code) {
+    loadTranslationStrings();
+  }
 });
 
 onMounted(() => {
@@ -278,33 +362,70 @@ async function saveTranslation(str: any) {
 
 <template>
   <div>
+    <!-- Language Selector -->
+    <div class="language-selector" style="background: #f8fafc; padding: 0.8rem 1.2rem; border-radius: 10px; margin-bottom: 1.2rem; border: 2px solid #e0e7ff; display: flex; align-items: center; gap: 0.8rem;">
+      <div class="language-label" style="display: flex; align-items: center; gap: 0.4rem; font-weight: 600; color: #4f46e5; min-width: 100px; font-size: 0.9rem;">
+        <i class="pi pi-globe" style="font-size: 1em;"></i>
+        <span>Target Language:</span>
+      </div>
+      <Dropdown
+        v-model="selectedLanguage"
+        :options="projectLanguages"
+        optionLabel="name"
+        placeholder="Select language"
+        class="language-dropdown"
+        style="min-width: 200px;"
+        :disabled="projectLanguages.length === 0"
+      >
+        <template #option="slotProps">
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="font-weight: 500; font-size: 0.9rem;">{{ slotProps.option.name }}</span>
+            <span style="color: #6b7280; font-size: 0.8rem;">({{ slotProps.option.nativeName }})</span>
+          </div>
+        </template>
+        <template #value="slotProps">
+          <div v-if="slotProps.value" style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="font-weight: 600; font-size: 0.9rem;">{{ slotProps.value.name }}</span>
+            <span style="color: #6b7280; font-size: 0.8rem;">({{ slotProps.value.nativeName }})</span>
+          </div>
+        </template>
+      </Dropdown>
+      <div v-if="projectLanguages.length > 0" class="language-info" style="display: flex; align-items: center; gap: 0.4rem; color: #6b7280; font-size: 0.8rem;">
+        <i class="pi pi-info-circle" style="font-size: 0.8rem;"></i>
+        <span>{{ projectLanguages.length }} language{{ projectLanguages.length > 1 ? 's' : '' }} available</span>
+      </div>
+      <div v-else class="language-info" style="display: flex; align-items: center; gap: 0.4rem; color: #ef4444; font-size: 0.8rem;">
+        <i class="pi pi-exclamation-triangle" style="font-size: 0.8rem;"></i>
+        <span>No target languages configured for this project</span>
+      </div>
 
+    </div>
 
     <div v-if="loading">Loading translation strings...</div>
     <div v-else-if="error" style="color:red">{{ error }}</div>
     <div v-else>
       <div v-if="files.length === 0">No files found for this branch.</div>
-      <div v-if="files.some(f => f.fileName && f.fileName.toLowerCase().endsWith('.docx'))" class="docx-toc-hint" style="background:#e0e7ff;padding:12px 18px;border-radius:10px;margin-bottom:18px;color:#374151;font-size:1.08em;display:flex;align-items:center;gap:0.7em;">
-        <i class="pi pi-info-circle" style="color:#6366f1;font-size:1.3em;"></i>
+      <div v-if="files.some(f => f.fileName && f.fileName.toLowerCase().endsWith('.docx'))" class="docx-toc-hint" style="background:#e0e7ff;padding:10px 15px;border-radius:8px;margin-bottom:15px;color:#374151;font-size:0.95rem;display:flex;align-items:center;gap:0.6em;">
+        <i class="pi pi-info-circle" style="color:#6366f1;font-size:1.1rem;"></i>
         <span><b>Note:</b> After translating, open the DOCX file and right-click on the Table of Contents → select <b>"Update Field"</b> → <b>"Update entire table"</b> to automatically refresh the table of contents formatting.</span>
       </div>
       <div v-for="file in files" :key="file.fileId || file.id" class="file-accordion" style="margin-bottom: 1.5em;">
-        <div class="file-header" style="cursor: default; background: #e0e7ff; border-radius: 16px; box-shadow: none;">
-          <span class="file-name" style="color: #4f46e5; font-weight: 700; font-size: 1.13em; display: flex; align-items: center; gap: 0.7em;">
-            <i :class="getFileIconClass(file.fileName)" style="font-size:1.25em;margin-right:0.2em;"></i>
+        <div class="file-header" style="cursor: default; background: #e0e7ff; border-radius: 14px; box-shadow: none;">
+          <span class="file-name" style="color: #4f46e5; font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.6em;">
+            <i :class="getFileIconClass(file.fileName)" style="font-size:1.1rem;margin-right:0.15em;"></i>
             {{ file.fileName }}
           </span>
-          <div class="progress-bar-wrapper" style="font-weight: 600; color: #222; min-width: 80px;">
+          <div class="progress-bar-wrapper" style="font-weight: 600; color: #222; min-width: 70px; font-size: 0.9rem;">
             {{ fileProgress[file.fileId || file.id]?.translated || 0 }} / {{ fileProgress[file.fileId || file.id]?.total || 0 }}
           </div>
           <a
-            :href="`/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}`"
+            :href="`/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}&language=${selectedLanguage?.code || 'en'}`"
             class="open-translator-btn"
-            style="background: #7c5dfa; color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 8px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; margin-left: 1rem; transition: all 0.2s; font-size: 1rem;"
+            style="background: #7c5dfa; color: white; border: none; padding: 0.4rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; margin-left: 0.8rem; transition: all 0.2s; font-size: 0.9rem;"
             @mouseenter="$event.target.style.background = '#5f43ea'"
             @mouseleave="$event.target.style.background = '#7c5dfa'"
           >
-            <i class="pi pi-external-link" style="font-size: 1rem;"></i>
+            <i class="pi pi-external-link" style="font-size: 0.9rem;"></i>
             Open Translator
           </a>
         </div>
@@ -316,10 +437,10 @@ async function saveTranslation(str: any) {
 <style scoped>
 .file-accordion {
   border: 2px solid #e0e7ff;
-  border-radius: 20px;
-  margin-bottom: 2.2em;
+  border-radius: 16px;
+  margin-bottom: 1.8em;
   background: #f7f8fd;
-  box-shadow: 0 4px 18px #b3b3e622;
+  box-shadow: 0 3px 15px #b3b3e622;
   transition: box-shadow 0.22s, border 0.22s;
   overflow: hidden;
 }
@@ -331,16 +452,16 @@ async function saveTranslation(str: any) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.3em 2em 1.3em 2.2em;
+  padding: 1.1em 1.8em 1.1em 2em;
   font-weight: 700;
-  font-size: 1.15em;
+  font-size: 1rem;
   cursor: pointer;
   background: linear-gradient(90deg, #f8fafc 60%, #e0e7ff 100%);
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0;
   box-shadow: 0 2px 8px #b3b3e611;
   transition: background 0.18s, box-shadow 0.18s;
   position: relative;
-  min-height: 64px;
+  min-height: 56px;
 }
 .file-header:hover {
   background: linear-gradient(90deg, #e0e7ff 60%, #ececff 100%);
@@ -349,21 +470,21 @@ async function saveTranslation(str: any) {
 .file-name {
   flex: 1;
   color: #4f46e5;
-  font-size: 1.13em;
+  font-size: 1rem;
   display: flex;
   align-items: center;
-  gap: 0.7em;
+  gap: 0.6em;
 }
 .file-folder-icon {
   color: #6366f1;
-  font-size: 1.25em;
-  margin-right: 0.2em;
+  font-size: 1.1rem;
+  margin-right: 0.15em;
 }
 .progress-bar-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.7em;
-  min-width: 140px;
+  gap: 0.6em;
+  min-width: 120px;
 }
 .progress-bar {
   width: 140px;
@@ -790,5 +911,95 @@ async function saveTranslation(str: any) {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Language Selector Styles */
+.language-selector {
+  background: #f8fafc;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border: 2px solid #e0e7ff;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.language-selector:hover {
+  border-color: #6366f1;
+  box-shadow: 0 2px 8px #6366f122;
+}
+
+.language-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #4f46e5;
+  min-width: 120px;
+}
+
+.language-dropdown {
+  min-width: 200px;
+}
+
+.language-dropdown .p-dropdown {
+  border: 2px solid #e0e7ff;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.language-dropdown .p-dropdown:not(.p-disabled):hover {
+  border-color: #6366f1;
+  box-shadow: 0 2px 8px #6366f122;
+}
+
+.language-dropdown .p-dropdown:not(.p-disabled).p-focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px #6366f122;
+}
+
+.language-dropdown .p-dropdown-label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.language-dropdown .p-dropdown-trigger {
+  color: #6366f1;
+}
+
+.language-dropdown .p-dropdown.p-disabled {
+  opacity: 0.6;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.language-dropdown .p-dropdown.p-disabled .p-dropdown-label {
+  color: #9ca3af;
+}
+
+.language-dropdown .p-dropdown.p-disabled .p-dropdown-trigger {
+  color: #9ca3af;
+}
+
+
+
+@media (max-width: 768px) {
+  .language-selector {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.8rem;
+  }
+
+  .language-label {
+    min-width: auto;
+    justify-content: center;
+  }
+
+  .language-dropdown {
+    min-width: 100%;
+  }
 }
 </style>

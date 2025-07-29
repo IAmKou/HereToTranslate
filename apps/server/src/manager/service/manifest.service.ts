@@ -156,6 +156,7 @@ export class ManifestService {
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
               originalText: lineObj.text,
+              language: 'en',
               font: lineObj.items[0]?.font || 'default',
               fontSize: lineObj.items[0]?.fontSize,
               style: {
@@ -183,6 +184,7 @@ export class ManifestService {
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
               originalText: line,
+              language: 'en',
               font: 'default',
               style: {},
               position: { x: 0, y: 0 },
@@ -218,6 +220,7 @@ export class ManifestService {
                 fileId: String(file.id),
                 manifestEntryId: uuidv4(),
                 originalText: `Picture ${pictureCount}`,
+                language: 'en',
                 font: 'default',
                 style: {},
                 position: { x: 0, y: 0 },
@@ -232,6 +235,7 @@ export class ManifestService {
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
               originalText: html,
+              language: 'en',
               font: 'default',
               style: {},
               position: { x: 0, y: 0 },
@@ -254,6 +258,7 @@ export class ManifestService {
             fileId: String(file.id),
             manifestEntryId: uuidv4(),
             originalText: line,
+            language: 'en',
             font: 'default',
             style: {},
             position: { x: 0, y: 0 },
@@ -289,6 +294,7 @@ export class ManifestService {
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
               originalText: str,
+              language: 'en',
               font: 'default',
               style: {},
               position: { x: 0, y: 0 },
@@ -311,6 +317,7 @@ export class ManifestService {
             fileId: String(file.id),
             manifestEntryId: uuidv4(),
             originalText: line,
+            language: 'en',
             font: 'default',
             style: {},
             position: { x: 0, y: 0 },
@@ -323,11 +330,12 @@ export class ManifestService {
     for (const entry of manifestEntries) {
       entry.obsolete = false;
     }
-    // Không insert duplicate: Nếu đã có string cũ (cùng fileId, originalText), chỉ update obsolete: false
+    // Không insert duplicate: Nếu đã có string cũ (cùng fileId, originalText, language), chỉ update obsolete: false
     for (const entry of manifestEntries) {
       const existing = await this.translationModel.findOne({
         fileId: entry.fileId,
-        originalText: entry.originalText
+        originalText: entry.originalText,
+        language: entry.language
       });
       if (existing) {
         // Nếu đã có, chỉ update obsolete: false

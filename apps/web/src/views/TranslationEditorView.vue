@@ -3,10 +3,11 @@ import { ref, defineProps, watch, onMounted, computed, nextTick, onBeforeUnmount
 import { useToast } from 'primevue/usetoast';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Dropdown from 'primevue/dropdown';
 import axiosInstance from '../api';
 import { useProjectPermission } from '../composables/useProjectPermission';
 import { useRoute, useRouter } from 'vue-router';
+import { getLanguageName } from '../utils/languages';
+import TranslationValidationDialog from '../components/TranslationValidationDialog.vue';
 
 interface TranslationString {
   id: string;
@@ -53,6 +54,13 @@ const isSaving = ref<Record<string, boolean>>({});
 
 // Thêm state để track input đang focus
 const focusedInputId = ref<string | null>(null);
+
+// Thêm state cho validation dialog
+const showValidationDialog = ref(false);
+const currentValidationString = ref<any>(null);
+
+// Thêm state cho inline validation warnings
+const validationWarnings = ref<Record<string, any[]>>({});
 
 const PART_SIZE = 250;
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
@@ -269,6 +277,7 @@ function getFilteredStringsOfPart(fileId: string | number, part: number) {
 function getFileIconClass(fileName: string) {
   if (!fileName) return 'pi pi-file';
   const ext = fileName.split('.').pop()?.toLowerCase();
+  if (!ext) return 'pi pi-file';
   if (["doc", "docx"].includes(ext)) return "pi pi-file-word";
   if (["xls", "xlsx"].includes(ext)) return "pi pi-file-excel";
   if (["pdf"].includes(ext)) return "pi pi-file-pdf";
@@ -296,7 +305,7 @@ const languageOptions = computed(() => {
   if (!projectInfo.value || !projectInfo.value.targetLanguages) {
     return [{ label: 'English', value: 'en' }];
   }
-  return projectInfo.value.targetLanguages.map(lang => ({
+  return projectInfo.value.targetLanguages.map((lang: string) => ({
     label: getLanguageLabel(lang),
     value: lang
   }));
@@ -304,29 +313,7 @@ const languageOptions = computed(() => {
 
 // Hàm helper để lấy tên ngôn ngữ
 function getLanguageLabel(langCode: string): string {
-  const languageMap: Record<string, string> = {
-    'en': 'English',
-    'vi': 'Tiếng Việt',
-    'fr': 'Français',
-    'de': 'Deutsch',
-    'es': 'Español',
-    'it': 'Italiano',
-    'pt': 'Português',
-    'ru': 'Русский',
-    'ja': '日本語',
-    'ko': '한국어',
-    'zh': '中文',
-    'ar': 'العربية',
-    'hi': 'हिन्दी',
-    'th': 'ไทย',
-    'id': 'Bahasa Indonesia',
-    'ms': 'Bahasa Melayu',
-    'tl': 'Tagalog',
-    'km': 'ភាសាខ្មែរ',
-    'lo': 'ພາສາລາວ',
-    'my': 'မြန်မာဘာသာ'
-  };
-  return languageMap[langCode] || langCode.toUpperCase();
+  return getLanguageName(langCode);
 }
 
 // Watch cho selectedLanguage để reload translation strings
@@ -418,11 +405,13 @@ onMounted(() => {
   loadProjectInfo();
   window.addEventListener('file-ready-for-translation', reloadFiles);
   document.addEventListener('keydown', handleKeydown);
+  document.addEventListener('click', closeDropdown);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('file-ready-for-translation', reloadFiles);
   document.removeEventListener('keydown', handleKeydown);
+  document.removeEventListener('click', closeDropdown);
   if (autoSaveTimeout) {
     clearTimeout(autoSaveTimeout);
   }
@@ -456,6 +445,229 @@ function onInput(str: any) {
   str._dirty = true;
   str._saved = false;
   scheduleAutoSave(str);
+
+  // Cập nhật validation warnings khi user nhập
+  updateValidationWarnings(str);
+}
+
+// Hàm cập nhật validation warnings cho một string
+function updateValidationWarnings(str: any) {
+  const warnings = calculateValidationWarnings(str);
+  validationWarnings.value[str.id] = warnings;
+}
+
+// Hàm tính toán validation warnings - Crowdin-style
+function calculateValidationWarnings(str: any): any[] {
+  const warnings: any[] = [];
+  const originalText = str.originalText || '';
+  const translatedText = str.translatedText || '';
+
+  if (!originalText || !translatedText) {
+    return warnings;
+  }
+
+  // 1. HTML/XML Tags Validation
+  const originalTags = (originalText.match(/<[^>]+>/g) || []) as string[];
+  const translatedTags = (translatedText.match(/<[^>]+>/g) || []) as string[];
+  originalTags.forEach((tag: string) => {
+    if (!translatedTags.includes(tag)) {
+      warnings.push({
+        type: 'missing_html_tag',
+        message: `Missing HTML tag: ${tag}`,
+        severity: 'error',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + tag
+      });
+    }
+  });
+
+  // 2. URL/Email Validation
+  const urlRegex = /https?:\/\/[^\s]+|[\w.-]+@[\w.-]+\.\w+/g;
+  const originalUrls = (originalText.match(urlRegex) || []) as string[];
+  const translatedUrls = (translatedText.match(urlRegex) || []) as string[];
+  originalUrls.forEach((url: string) => {
+    if (!translatedUrls.includes(url)) {
+      const isEmail = url.includes('@');
+      warnings.push({
+        type: 'missing_url',
+        message: `Missing ${isEmail ? 'email' : 'URL'}: ${url}`,
+        severity: 'error',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + ' ' + url
+      });
+    }
+  });
+
+  // 3. Character Case Validation
+  const originalStartsWithUpper = /^[A-Z]/.test(originalText);
+  const translatedStartsWithUpper = /^[A-Z]/.test(translatedText);
+  if (originalStartsWithUpper && !translatedStartsWithUpper) {
+    warnings.push({
+      type: 'case_mismatch',
+      message: 'Translation should start with uppercase letter',
+      severity: 'warning',
+      canAutoFix: true,
+      autoFixAction: () => translatedText.charAt(0).toUpperCase() + translatedText.slice(1)
+    });
+  }
+
+  // Check for ALL CAPS words
+  const allCapsWords = (originalText.match(/\b[A-Z]{2,}\b/g) || []) as string[];
+  allCapsWords.forEach((word: string) => {
+    if (!translatedText.includes(word)) {
+      warnings.push({
+        type: 'case_mismatch',
+        message: `Missing capitalized word: ${word}`,
+        severity: 'warning',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + ' ' + word
+      });
+    }
+  });
+
+  // 4. Currency Validation
+  const currencyRegex = /[\$€£¥₹₽₩₪₦₨₱₴₸₺₼₾₿]/g;
+  const originalCurrencies = (originalText.match(currencyRegex) || []) as string[];
+  const translatedCurrencies = (translatedText.match(currencyRegex) || []) as string[];
+  originalCurrencies.forEach((currency: string) => {
+    if (!translatedCurrencies.includes(currency)) {
+      warnings.push({
+        type: 'missing_currency',
+        message: `Missing currency symbol: ${currency}`,
+        severity: 'error',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + currency
+      });
+    }
+  });
+
+  // 5. Date/Time Format Validation
+  const dateRegex = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4}/g;
+  const originalDates = (originalText.match(dateRegex) || []) as string[];
+  const translatedDates = (translatedText.match(dateRegex) || []) as string[];
+  originalDates.forEach((date: string) => {
+    if (!translatedDates.includes(date)) {
+      warnings.push({
+        type: 'date_format_mismatch',
+        message: `Missing date format: ${date}`,
+        severity: 'warning',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + ' ' + date
+      });
+    }
+  });
+
+  // 6. Context-Aware Validation
+  const contextKeywords = {
+    error: ['ERROR', 'FAILED', 'CRITICAL', 'EXCEPTION', 'INVALID'],
+    success: ['SUCCESS', 'COMPLETED', 'DONE', 'FINISHED', 'OK'],
+    warning: ['WARNING', 'CAUTION', 'ATTENTION', 'NOTICE', 'ALERT'],
+    action: ['CLICK', 'PRESS', 'SELECT', 'CHOOSE', 'ENTER']
+  };
+
+  Object.entries(contextKeywords).forEach(([context, keywords]) => {
+    const hasKeyword = keywords.some(keyword =>
+      originalText.toUpperCase().includes(keyword)
+    );
+
+    if (hasKeyword) {
+      const hasSimilarContext = keywords.some(keyword =>
+        translatedText.toUpperCase().includes(keyword) ||
+        translatedText.toLowerCase().includes(keyword.toLowerCase())
+      );
+
+      if (!hasSimilarContext) {
+        warnings.push({
+          type: 'context_mismatch',
+          message: `Translation should maintain ${context} context`,
+          severity: 'warning',
+          canAutoFix: false
+        });
+      }
+    }
+  });
+
+  // 7. Enhanced Number Validation
+  const originalNumbers = (originalText.match(/\d+/g) || []) as string[];
+  const translatedNumbers = (translatedText.match(/\d+/g) || []) as string[];
+  originalNumbers.forEach((num: string) => {
+    if (!translatedNumbers.includes(num)) {
+      warnings.push({
+        type: 'missing_number',
+        message: `Missing number "${num}"`,
+        severity: 'warning',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + num
+      });
+    }
+  });
+
+  // 8. Enhanced Whitespace Validation
+  const originalNbsp = (originalText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+  const translatedNbsp = (translatedText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+  if (originalNbsp > translatedNbsp) {
+    warnings.push({
+      type: 'missing_space',
+      message: `Missing ${originalNbsp - translatedNbsp} non-breaking space(s)`,
+      severity: 'warning',
+      canAutoFix: true,
+      autoFixAction: () => translatedText + '&nbsp;'.repeat(originalNbsp - translatedNbsp)
+    });
+  }
+
+  // Check for extra spaces at the end
+  if (translatedText.endsWith(' ') && !originalText.endsWith(' ')) {
+    warnings.push({
+      type: 'extra_space',
+      message: 'Source text doesn\'t end with a space, please remove trailing space',
+      severity: 'warning',
+      canAutoFix: true,
+      autoFixAction: () => translatedText.trimEnd()
+    });
+  }
+
+  // 9. Enhanced Punctuation Validation
+  const originalPunct = (originalText.match(/[.,!?;:]/g) || []) as string[];
+  const translatedPunct = (translatedText.match(/[.,!?;:]/g) || []) as string[];
+  originalPunct.forEach((punct: string) => {
+    if (!translatedPunct.includes(punct)) {
+      warnings.push({
+        type: 'missing_punctuation',
+        message: `Missing punctuation "${punct}"`,
+        severity: 'warning',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + punct
+      });
+    }
+  });
+
+  // 10. Enhanced Length Validation
+  const lengthRatio = translatedText.length / originalText.length;
+  if (lengthRatio < 0.3 || lengthRatio > 3) {
+    warnings.push({
+      type: 'length_mismatch',
+      message: `Length differs significantly (${Math.round(lengthRatio * 100)}% of original)`,
+      severity: 'warning',
+      canAutoFix: false
+    });
+  }
+
+  // 11. Enhanced Placeholder Validation
+  const originalPlaceholders = (originalText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
+  const translatedPlaceholders = (translatedText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
+  originalPlaceholders.forEach((placeholder: string) => {
+    if (!translatedPlaceholders.includes(placeholder)) {
+      warnings.push({
+        type: 'placeholder_mismatch',
+        message: `Missing placeholder "${placeholder}"`,
+        severity: 'error',
+        canAutoFix: true,
+        autoFixAction: () => translatedText + placeholder
+      });
+    }
+  });
+
+  return warnings;
 }
 const toast = useToast();
 // Cải thiện hàm saveTranslation
@@ -464,6 +676,69 @@ async function saveTranslation(str: any) {
   const id = str.id;
 
   if (isSaving.value[id]) return; // Prevent double save
+
+  // Kiểm tra validation trước khi save
+  const warnings = calculateValidationWarnings(str);
+
+  if (warnings.length > 0) {
+    // Show validation dialog nếu có vấn đề (giống Crowdin)
+    currentValidationString.value = str;
+    showValidationDialog.value = true;
+  } else {
+    // Save trực tiếp nếu không có vấn đề
+    performSave(str);
+  }
+}
+
+// Hàm kiểm tra validation issues
+function checkValidationIssues(str: any): boolean {
+  const originalText = str.originalText || '';
+  const translatedText = str.translatedText || '';
+
+  if (!originalText || !translatedText) {
+    return false; // Không validate nếu chưa có text
+  }
+
+  // Check for missing numbers
+  const originalNumbers = originalText.match(/\d+/g) || [];
+  const translatedNumbers = translatedText.match(/\d+/g) || [];
+  if (originalNumbers.some((num: string) => !translatedNumbers.includes(num))) {
+    return true;
+  }
+
+  // Check for missing non-breaking spaces
+  const originalNbsp = (originalText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+  const translatedNbsp = (translatedText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+  if (originalNbsp > translatedNbsp) {
+    return true;
+  }
+
+  // Check for missing punctuation
+  const originalPunct = originalText.match(/[.,!?;:]/g) || [];
+  const translatedPunct = translatedText.match(/[.,!?;:]/g) || [];
+  if (originalPunct.some((punct: string) => !translatedPunct.includes(punct))) {
+    return true;
+  }
+
+  // Check for placeholder mismatches
+  const originalPlaceholders = originalText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || [];
+  const translatedPlaceholders = translatedText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || [];
+  if (originalPlaceholders.some((placeholder: string) => !translatedPlaceholders.includes(placeholder))) {
+    return true;
+  }
+
+  // Check for significant length difference
+  const lengthRatio = translatedText.length / originalText.length;
+  if (lengthRatio < 0.3 || lengthRatio > 3) {
+    return true;
+  }
+
+  return false;
+}
+
+// Hàm thực hiện save sau khi validation
+async function performSave(str: any) {
+  const id = str.id;
 
   isSaving.value[id] = true;
   lastSavedTime.value[id] = Date.now();
@@ -492,6 +767,79 @@ async function saveTranslation(str: any) {
     });
   } finally {
     isSaving.value[id] = false;
+  }
+}
+
+// Hàm xử lý validation dialog
+function handleValidationClose() {
+  showValidationDialog.value = false;
+  currentValidationString.value = null;
+}
+
+function handleValidationSaveAnyway() {
+  if (currentValidationString.value) {
+    performSave(currentValidationString.value);
+  }
+  showValidationDialog.value = false;
+  currentValidationString.value = null;
+}
+
+function handleValidationSkip() {
+  // Skip this validation and close dialog
+  showValidationDialog.value = false;
+  currentValidationString.value = null;
+  toast.add({
+    severity: 'info',
+    summary: 'Skipped',
+    detail: 'Validation issues skipped',
+    life: 2000
+  });
+}
+
+function handleValidationAutoFix(warning: any, index: number) {
+  if (currentValidationString.value && warning.autoFixAction) {
+    // Apply auto-fix
+    const fixedText = warning.autoFixAction();
+    currentValidationString.value.translatedText = fixedText;
+
+    // Update validation warnings
+    updateValidationWarnings(currentValidationString.value);
+
+    toast.add({
+      severity: 'success',
+      summary: 'Auto-fixed',
+      detail: warning.autoFixDescription || 'Issue auto-fixed',
+      life: 2000
+    });
+  }
+}
+
+function handleValidationAutoFixAll() {
+  if (currentValidationString.value) {
+    // Get all auto-fixable warnings
+    const warnings = calculateValidationWarnings(currentValidationString.value);
+    const autoFixableWarnings = warnings.filter(w => w.canAutoFix);
+
+    let fixedText = currentValidationString.value.translatedText;
+
+    // Apply all auto-fixes
+    autoFixableWarnings.forEach(warning => {
+      if (warning.autoFixAction) {
+        fixedText = warning.autoFixAction();
+      }
+    });
+
+    currentValidationString.value.translatedText = fixedText;
+
+    // Update validation warnings
+    updateValidationWarnings(currentValidationString.value);
+
+    toast.add({
+      severity: 'success',
+      summary: 'Auto-fixed All',
+      detail: `Fixed ${autoFixableWarnings.length} issues automatically`,
+      life: 2000
+    });
   }
 }
 
@@ -547,6 +895,28 @@ function getStatusAriaLabel(str: any): string {
 function goBackToProject() {
   router.push(`/projects/${projectId.value}`);
 }
+
+// Custom dropdown state
+const isDropdownOpen = ref(false);
+const dropdownRef = ref<HTMLElement | null>(null);
+
+// Custom dropdown functions
+function toggleDropdown() {
+  isDropdownOpen.value = !isDropdownOpen.value;
+}
+
+function selectLanguage(langCode: string | undefined) {
+  if (langCode) {
+    selectedLanguage.value = langCode;
+    isDropdownOpen.value = false;
+  }
+}
+
+function closeDropdown(event: Event) {
+  if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
+    isDropdownOpen.value = false;
+  }
+}
 </script>
 
 <template>
@@ -560,17 +930,30 @@ function goBackToProject() {
         </button>
         <h1 class="page-title">Translation Editor</h1>
         <div class="language-selector">
-          <label for="language-dropdown" class="language-label">Target Language:</label>
-          <Dropdown
-            id="language-dropdown"
-            v-model="selectedLanguage"
-            :options="languageOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select Language"
-            class="language-dropdown"
-            :disabled="!projectInfo || !projectInfo.targetLanguages || projectInfo.targetLanguages.length === 0"
-          />
+          <label class="language-label">Target Language:</label>
+          <div class="custom-dropdown" ref="dropdownRef">
+            <button
+              class="dropdown-trigger"
+              @click="toggleDropdown"
+              :disabled="!projectInfo || !projectInfo.targetLanguages || projectInfo.targetLanguages.length === 0"
+            >
+              <span class="selected-language">
+                {{ languageOptions.find(opt => opt.value === selectedLanguage)?.label || 'Select Language' }}
+              </span>
+              <i class="dropdown-arrow" :class="{ 'open': isDropdownOpen }">▼</i>
+            </button>
+            <div class="dropdown-menu" :class="{ 'open': isDropdownOpen }">
+              <div
+                v-for="option in languageOptions"
+                :key="option.value"
+                class="dropdown-item"
+                :class="{ 'active': selectedLanguage === option.value }"
+                @click="selectLanguage(option.value)"
+              >
+                {{ option.label }}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -661,6 +1044,12 @@ function goBackToProject() {
                     <span class="shortcut-text">Ctrl+S: Save | Tab: Next field</span>
                   </span>
                 </div>
+                <div class="validation-info">
+                  <span class="validation-hint" title="Translation validation is active">
+                    <i class="pi pi-shield-check"></i>
+                    <span class="validation-text">Validation Active</span>
+                  </span>
+                </div>
               </div>
               <div class="translation-scroll-area">
                 <div v-if="getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>
@@ -718,24 +1107,22 @@ function goBackToProject() {
                             </span>
                           </div>
                         </div>
-                        <button
-                          v-if="str.translatedText && str.translatedText.trim()"
-                          class="save-btn-icon"
-                          @click="saveTranslation(str)"
-                          :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file) || !canEditTranslation"
-                          :class="{
-                            saving: isSaving[str.id],
-                            saved: str._saved && !str._dirty,
-                            dirty: str._dirty
-                          }"
-                          :title="str._dirty ? 'Save changes (Ctrl+S)' : 'Saved'"
-                        >
-                          <i v-if="isSaving[str.id]" class="pi pi-spin pi-spinner"></i>
-                          <i v-else-if="str._saved && !str._dirty" class="pi pi-check"></i>
-                          <i v-else class="pi pi-save"></i>
-                        </button>
+
                       </div>
                     </div>
+
+                    <!-- Validation Warnings for Side-by-Side - HIDDEN -->
+                    <!-- <div v-if="validationWarnings[str.id] && validationWarnings[str.id].length > 0" class="validation-warnings">
+                      <div
+                        v-for="(warning, index) in validationWarnings[str.id]"
+                        :key="index"
+                        class="validation-warning-item"
+                        :class="warning.severity"
+                      >
+                        <i :class="warning.severity === 'error' ? 'pi pi-exclamation-triangle' : 'pi pi-exclamation-circle'"></i>
+                        <span>{{ warning.message }}</span>
+                      </div>
+                    </div> -->
                   </div>
                   <template v-else>
                     <div class="original-label">Original Text:</div>
@@ -775,23 +1162,21 @@ function goBackToProject() {
                           </span>
                         </div>
                       </div>
-                      <button
-                        v-if="str.translatedText && str.translatedText.trim()"
-                        class="save-btn-icon"
-                        @click="saveTranslation(str)"
-                        :disabled="!str._dirty || !str.translatedText || !str.translatedText.trim() || isFileProcessing(file) || !canEditTranslation"
-                        :class="{
-                          saving: isSaving[str.id],
-                          saved: str._saved && !str._dirty,
-                          dirty: str._dirty
-                        }"
-                        :title="str._dirty ? 'Save changes (Ctrl+S)' : 'Saved'"
-                      >
-                        <i v-if="isSaving[str.id]" class="pi pi-spin pi-spinner"></i>
-                        <i v-else-if="str._saved && !str._dirty" class="pi pi-check"></i>
-                        <i v-else class="pi pi-save"></i>
-                      </button>
+
                     </div>
+
+                    <!-- Validation Warnings - HIDDEN -->
+                    <!-- <div v-if="validationWarnings[str.id] && validationWarnings[str.id].length > 0" class="validation-warnings">
+                      <div
+                        v-for="(warning, index) in validationWarnings[str.id]"
+                        :key="index"
+                        class="validation-warning-item"
+                        :class="warning.severity"
+                      >
+                        <i :class="warning.severity === 'error' ? 'pi pi-exclamation-triangle' : 'pi pi-exclamation-circle'"></i>
+                        <span>{{ warning.message }}</span>
+                      </div>
+                    </div> -->
                   </template>
                   <span
                     v-if="highlightUntranslated && (!str.translatedText || !str.translatedText.trim())"
@@ -815,6 +1200,18 @@ function goBackToProject() {
       </div>
     </div>
   </div>
+
+  <!-- Translation Validation Dialog -->
+  <TranslationValidationDialog
+    :show="showValidationDialog"
+    :original-text="currentValidationString?.originalText || ''"
+    :translated-text="currentValidationString?.translatedText || ''"
+    @close="handleValidationClose"
+    @save-anyway="handleValidationSaveAnyway"
+    @skip="handleValidationSkip"
+    @auto-fix="handleValidationAutoFix"
+    @auto-fix-all="handleValidationAutoFixAll"
+  />
 </template>
 
 <style scoped>
@@ -825,63 +1222,70 @@ function goBackToProject() {
 }
 
 .page-header {
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  color: white;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: #e2e8f0;
   padding: 1.5rem 2rem;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+  position: relative;
+  z-index: 1;
 }
 
 .header-content {
   display: flex;
   align-items: center;
   gap: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
+  padding: 0 1rem;
 }
 
 .back-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  padding: 0.4rem 0.8rem; /* Giảm padding từ 0.5rem 1rem */
-  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  padding: 0.3rem 0.6rem; /* Giảm padding từ 0.4rem 0.8rem */
+  border-radius: 6px; /* Giảm từ 8px xuống 6px */
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.4rem; /* Giảm gap từ 0.5rem */
+  gap: 0.3rem; /* Giảm gap từ 0.4rem */
   font-weight: 500;
-  font-size: 0.9rem; /* Thêm font-size nhỏ hơn */
+  font-size: 0.8rem; /* Giảm từ 0.9rem xuống 0.8rem */
   transition: all 0.2s;
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #c7d2fe;
   transform: translateX(-2px);
 }
 
 .page-title {
-  font-size: 1.6rem; /* Giảm từ 1.8rem xuống 1.6rem */
+  font-size: 1.3rem; /* Giảm từ 1.6rem xuống 1.3rem */
   font-weight: 700;
   margin: 0;
+  color: #e2e8f0;
 }
 
 .editor-content {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 2rem 1rem;
+  width: 100%;
+  margin: 0;
+  padding: 1rem 0.5rem;
   background: #0f172a;
 }
 
 /* Cải thiện responsive cho desktop */
 @media (min-width: 1200px) {
   .editor-content {
-    padding: 2rem 2rem; /* Tăng padding cho màn hình lớn */
+    padding: 1rem 1rem;
   }
 }
 
 @media (min-width: 1400px) {
   .editor-content {
-    padding: 2rem 3rem; /* Tăng padding cho màn hình rất lớn */
+    padding: 1rem 1.5rem;
   }
 }
 
@@ -907,16 +1311,16 @@ function goBackToProject() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.1em 1.8em 1.1em 2em;
+  padding: 0.9em 1.5em 0.9em 1.7em; /* Giảm padding */
   font-weight: 700;
-  font-size: 1.05em;
+  font-size: 0.9em; /* Giảm từ 1.05em xuống 0.9em */
   cursor: pointer;
   background: linear-gradient(135deg, #334155 0%, #475569 100%);
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0; /* Giảm từ 20px xuống 16px */
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   position: relative;
-  min-height: 56px;
+  min-height: 48px; /* Giảm từ 56px xuống 48px */
   border: none;
 }
 
@@ -928,14 +1332,14 @@ function goBackToProject() {
 .file-name {
   flex: 1;
   color: #a5b4fc;
-  font-size: 1.05em;
+  font-size: 0.9em; /* Giảm từ 1.05em xuống 0.9em */
   display: flex;
   align-items: center;
-  gap: 0.6em;
+  gap: 0.4em; /* Giảm từ 0.6em xuống 0.4em */
 }
 
 .file-name i {
-  font-size: 1.1em !important; /* Giảm icon size */
+  font-size: 0.9em !important; /* Giảm từ 1.1em xuống 0.9em */
 }
 
 .file-folder-icon {
@@ -988,9 +1392,9 @@ function goBackToProject() {
 }
 
 .accordion-arrow {
-  font-size: 1.3em; /* Giảm từ 1.5em xuống 1.3em */
+  font-size: 1.1em; /* Giảm từ 1.3em xuống 1.1em */
   color: #888;
-  margin-left: 0.6em; /* Giảm từ 0.7em */
+  margin-left: 0.5em; /* Giảm từ 0.6em xuống 0.5em */
   transition: transform 0.22s;
   display: flex;
   align-items: center;
@@ -1018,20 +1422,20 @@ function goBackToProject() {
     min-height: 48px;
   }
   .file-strings-list {
-    padding: 1.2em 1em 1em 1em; /* Tăng padding cho mobile */
+    padding: 1.2em 0.8em 1em 0.8em; /* Giảm padding cho mobile */
   }
   .editor-content {
-    padding: 1rem 0.5rem; /* Giảm padding cho mobile */
+    padding: 0.8rem 0.3rem; /* Giảm padding cho mobile */
   }
 }
 /* Làm mềm mại translation cards - TỐI ƯU HÓA */
 .string-card {
   background: #1e293b;
-  border-radius: 12px;
-  padding: 0.6em 1em 0.5em 1em;
+  border-radius: 10px; /* Giảm từ 12px xuống 10px */
+  padding: 0.5em 0.8em 0.4em 0.8em; /* Giảm padding */
   border: 1px solid rgba(99, 102, 241, 0.2);
   position: relative;
-  margin-bottom: 0.6em;
+  margin-bottom: 0.5em; /* Giảm từ 0.6em xuống 0.5em */
   transition: all 0.3s ease;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   width: 100%;
@@ -1058,12 +1462,12 @@ function goBackToProject() {
 
 /* Tối ưu original text box */
 .original-text {
-  font-size: 0.95em;
+  font-size: 0.85em; /* Giảm từ 0.95em xuống 0.85em */
   color: #e2e8f0;
-  margin-bottom: 0.2em;
+  margin-bottom: 0.15em; /* Giảm từ 0.2em xuống 0.15em */
   background: linear-gradient(135deg, #334155 0%, #475569 100%);
-  border-radius: 8px;
-  padding: 0.4em 0.6em;
+  border-radius: 6px; /* Giảm từ 8px xuống 6px */
+  padding: 0.3em 0.5em; /* Giảm padding */
   border: 1px solid rgba(99, 102, 241, 0.2);
   word-break: break-word;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -1072,17 +1476,18 @@ function goBackToProject() {
 /* Tối ưu translation input */
 .translation-input {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 6px; /* Giảm từ 8px xuống 6px */
   border: 1px solid rgba(179, 179, 230, 0.3);
-  padding: 0.4em 0.6em;
-  font-size: 0.95em;
-  min-height: 28px;
+  padding: 0.3em 0.5em; /* Giảm padding */
+  font-size: 0.85em; /* Giảm từ 0.95em xuống 0.85em */
+  min-height: 24px; /* Giảm từ 28px xuống 24px */
   resize: none;
   transition: all 0.3s ease;
   font-family: inherit;
-  padding-right: 2.8em; /* Tăng từ 2.4em lên 2.8em vì không còn focus indicator */
-  background: #ffffff;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.03);
+  padding-right: 2.4em; /* Giảm từ 2.8em xuống 2.4em */
+  background: #334155;
+  color: #e2e8f0;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
 }
 
 .translation-input:focus {
@@ -1149,130 +1554,44 @@ function goBackToProject() {
   }
 }
 
-/* Tối ưu save button - Thiết kế mới đẹp hơn */
-.save-btn-icon {
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px; /* Tăng từ 6px lên 8px */
-  padding: 0.25em; /* Tăng từ 0.2em lên 0.25em */
-  font-size: 0.85em; /* Tăng từ 0.8em lên 0.85em */
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2); /* Tăng shadow */
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px; /* Tăng từ 24px lên 26px */
-  height: 26px; /* Tăng từ 24px lên 26px */
-  position: absolute;
-  right: 6px; /* Tăng từ 4px lên 6px */
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
-  opacity: 0.9; /* Thêm opacity */
-}
 
-.save-btn-icon:hover {
-  background: linear-gradient(135deg, #2f855a 0%, #38a169 100%);
-  transform: translateY(-50%) scale(1.15); /* Tăng scale */
-  box-shadow: 0 4px 16px rgba(56, 161, 105, 0.3); /* Tăng shadow */
-  opacity: 1;
-}
-
-.save-btn-icon.saved {
-  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
-  box-shadow: 0 2px 8px rgba(56, 161, 105, 0.2);
-  opacity: 0.8; /* Giảm opacity khi đã save */
-}
-
-.save-btn-icon.dirty {
-  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-  animation: pulse-gentle 2s infinite;
-  opacity: 1;
-}
-
-/* Thiết kế mới cho save button - Floating style */
-.save-btn-icon {
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  color: #fff;
-  border: none;
-  border-radius: 50%; /* Thay đổi thành hình tròn */
-  padding: 0.3em;
-  font-size: 0.9em;
-  cursor: pointer;
-  box-shadow: 0 3px 12px rgba(99, 102, 241, 0.25);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
-  opacity: 0.85;
-  backdrop-filter: blur(4px);
-}
-
-.save-btn-icon:hover {
-  background: linear-gradient(135deg, #2f855a 0%, #38a169 100%);
-  transform: translateY(-50%) scale(1.15); /* Tăng scale */
-  box-shadow: 0 4px 16px rgba(56, 161, 105, 0.3); /* Tăng shadow */
-  opacity: 1;
-}
-
-.save-btn-icon.saved {
-  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
-  box-shadow: 0 2px 8px rgba(56, 161, 105, 0.2);
-  opacity: 0.9;
-}
-
-.save-btn-icon.dirty {
-  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-  animation: pulse-gentle 2s infinite;
-  opacity: 1;
-  box-shadow: 0 3px 12px rgba(229, 62, 62, 0.3);
-}
 
 /* Cải thiện status indicators - Thiết kế mới */
 .status-indicator {
   position: absolute;
-  top: 6px; /* Tăng từ 4px lên 6px */
-  right: 8px; /* Tăng từ 6px lên 8px */
+  top: 4px; /* Giảm từ 6px xuống 4px */
+  right: 6px; /* Giảm từ 8px xuống 6px */
   display: flex;
   align-items: center;
-  gap: 4px; /* Tăng từ 3px lên 4px */
+  gap: 3px; /* Giảm từ 4px xuống 3px */
   z-index: 2;
   pointer-events: none;
 }
 
 .status-dot {
-  width: 6px; /* Tăng từ 5px lên 6px */
-  height: 6px; /* Tăng từ 5px lên 6px */
+  width: 5px; /* Giảm từ 6px xuống 5px */
+  height: 5px; /* Giảm từ 6px xuống 5px */
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   cursor: help;
 }
 
 .status-dot:hover {
-  transform: scale(1.4); /* Tăng từ 1.3 lên 1.4 */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: scale(1.3); /* Giảm từ 1.4 xuống 1.3 */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .status-text {
-  font-size: 0.7em;
+  font-size: 0.65em; /* Giảm từ 0.7em xuống 0.65em */
   font-weight: 600;
   color: #e2e8f0;
   background: rgba(30, 41, 59, 0.95);
-  padding: 2px 6px;
-  border-radius: 6px;
+  padding: 1px 4px; /* Giảm padding */
+  border-radius: 4px; /* Giảm từ 6px xuống 4px */
   white-space: nowrap;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   pointer-events: auto;
   border: 1px solid rgba(99, 102, 241, 0.2);
   transition: all 0.3s ease;
@@ -1320,15 +1639,15 @@ function goBackToProject() {
 /* Tối ưu badges */
 .untranslated-badge, .translated-badge {
   position: absolute;
-  top: 6px; /* Giảm từ 8px xuống 6px */
-  right: 8px; /* Giảm từ 12px xuống 8px */
-  font-size: 0.75em; /* Giảm từ 0.85em xuống 0.75em */
-  border-radius: 6px; /* Giảm từ 10px xuống 6px */
-  padding: 1px 4px; /* Giảm từ 1px 6px */
+  top: 4px; /* Giảm từ 6px xuống 4px */
+  right: 6px; /* Giảm từ 8px xuống 6px */
+  font-size: 0.65em; /* Giảm từ 0.75em xuống 0.65em */
+  border-radius: 4px; /* Giảm từ 6px xuống 4px */
+  padding: 1px 3px; /* Giảm từ 1px 4px */
   display: flex;
   align-items: center;
   z-index: 2;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06); /* Giảm shadow */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06); /* Giảm shadow */
   border: none;
   transition: all 0.3s ease;
 }
@@ -1345,51 +1664,51 @@ function goBackToProject() {
 
 /* Tối ưu labels */
 .original-label, .translation-label {
-  font-size: 0.85em;
+  font-size: 0.75em; /* Giảm từ 0.85em xuống 0.75em */
   color: #a5b4fc;
   font-weight: 600;
-  margin-bottom: 0.05em;
+  margin-bottom: 0.03em; /* Giảm từ 0.05em xuống 0.03em */
   display: flex;
   align-items: center;
-  gap: 0.2em;
+  gap: 0.15em; /* Giảm từ 0.2em xuống 0.15em */
 }
 
 .original-label::before {
   content: '\f15c';
   font-family: 'PrimeIcons';
-  font-size: 0.9em;
+  font-size: 0.8em; /* Giảm từ 0.9em xuống 0.8em */
   color: #64748b;
-  margin-right: 0.15em;
+  margin-right: 0.1em; /* Giảm từ 0.15em xuống 0.1em */
 }
 
 .translation-label::before {
   content: '\f040';
   font-family: 'PrimeIcons';
-  font-size: 0.9em;
+  font-size: 0.8em; /* Giảm từ 0.9em xuống 0.8em */
   color: #10b981;
-  margin-right: 0.15em;
+  margin-right: 0.1em; /* Giảm từ 0.15em xuống 0.1em */
 }
 
 /* Tối ưu search filter bar */
 .search-filter-bar {
   display: flex;
   align-items: center;
-  gap: 0.8em;
+  gap: 0.6em; /* Giảm từ 0.8em xuống 0.6em */
   background: linear-gradient(135deg, #334155 0%, #475569 100%);
-  padding: 0.5em 0.8em;
-  border-radius: 12px;
-  margin-bottom: 0.8em;
+  padding: 0.4em 0.6em; /* Giảm padding */
+  border-radius: 10px; /* Giảm từ 12px xuống 10px */
+  margin-bottom: 0.6em; /* Giảm từ 0.8em xuống 0.6em */
   flex-wrap: wrap;
   border: 1px solid rgba(99, 102, 241, 0.2);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
 .search-input {
-  min-width: 140px;
-  border-radius: 8px;
+  min-width: 120px; /* Giảm từ 140px xuống 120px */
+  border-radius: 6px; /* Giảm từ 8px xuống 6px */
   border: 1px solid rgba(99, 102, 241, 0.3);
-  padding: 5px 10px 5px 24px;
-  font-size: 0.85em;
+  padding: 4px 8px 4px 20px; /* Giảm padding */
+  font-size: 0.8em; /* Giảm từ 0.85em xuống 0.8em */
   background: #475569;
   color: #e2e8f0;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
@@ -1409,13 +1728,13 @@ function goBackToProject() {
   border: none;
   background: linear-gradient(135deg, #475569 0%, #64748b 100%);
   color: #e2e8f0;
-  padding: 0.3em 0.8em;
-  border-radius: 8px;
+  padding: 0.25em 0.6em; /* Giảm padding */
+  border-radius: 6px; /* Giảm từ 8px xuống 6px */
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   outline: none;
-  font-size: 0.85em;
+  font-size: 0.8em; /* Giảm từ 0.85em xuống 0.8em */
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
 }
 
@@ -1434,32 +1753,32 @@ function goBackToProject() {
 .advanced-options {
   display: flex;
   align-items: center;
-  gap: 1em; /* Giảm từ 1.2em xuống 1em */
-  margin-bottom: 0.8em; /* Giảm từ 1em xuống 0.8em */
-  margin-top: 0.3em; /* Giảm từ 0.4em xuống 0.3em */
+  gap: 0.8em; /* Giảm từ 1em xuống 0.8em */
+  margin-bottom: 0.6em; /* Giảm từ 0.8em xuống 0.6em */
+  margin-top: 0.2em; /* Giảm từ 0.3em xuống 0.2em */
 }
 
 .highlight-toggle {
-  font-size: 0.85em;
+  font-size: 0.8em; /* Giảm từ 0.85em xuống 0.8em */
   color: #e2e8f0;
   display: flex;
   align-items: center;
-  gap: 0.3em;
+  gap: 0.25em; /* Giảm từ 0.3em xuống 0.25em */
 }
 
 .view-mode-toggle {
   display: inline-flex;
-  gap: 0.8em; /* Giảm từ 1em xuống 0.8em */
+  gap: 0.6em; /* Giảm từ 0.8em xuống 0.6em */
   align-items: center;
-  margin-right: 1em; /* Giảm từ 1.2em xuống 1em */
+  margin-right: 0.8em; /* Giảm từ 1em xuống 0.8em */
 }
 
 .view-mode-toggle label {
   font-weight: 500;
   color: #a5b4fc;
   cursor: pointer;
-  margin-right: 0.4em;
-  font-size: 0.85em;
+  margin-right: 0.3em; /* Giảm từ 0.4em xuống 0.3em */
+  font-size: 0.8em; /* Giảm từ 0.85em xuống 0.8em */
 }
 
 .keyboard-shortcuts {
@@ -1469,13 +1788,13 @@ function goBackToProject() {
 .shortcut-hint {
   display: flex;
   align-items: center;
-  gap: 0.3em;
+  gap: 0.25em; /* Giảm từ 0.3em xuống 0.25em */
   color: #a5b4fc;
-  font-size: 0.75em;
+  font-size: 0.7em; /* Giảm từ 0.75em xuống 0.7em */
   cursor: help;
-  padding: 0.15em 0.4em;
+  padding: 0.1em 0.3em; /* Giảm padding */
   background: linear-gradient(135deg, #475569 0%, #64748b 100%);
-  border-radius: 6px;
+  border-radius: 5px; /* Giảm từ 6px xuống 5px */
   transition: all 0.3s ease;
   border: none;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
@@ -1489,7 +1808,7 @@ function goBackToProject() {
 
 .shortcut-text {
   font-weight: 500;
-  font-size: 0.8em; /* Giảm từ 0.85em xuống 0.8em */
+  font-size: 0.75em; /* Giảm từ 0.8em xuống 0.75em */
 }
 
 /* Tối ưu side-by-side layout */
@@ -1552,39 +1871,40 @@ function goBackToProject() {
 .language-selector {
   display: flex;
   align-items: center;
-  gap: 0.4rem; /* Giảm từ 0.5rem xuống 0.4rem */
+  gap: 0.6rem;
   margin-left: auto;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+  padding: 0.5rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 9999;
+}
+
+.language-selector:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%);
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+  transform: translateY(-1px);
 }
 
 .language-label {
-  color: white;
+  color: #a5b4fc;
   font-weight: 600;
-  font-size: 0.8rem; /* Giảm từ 0.85rem xuống 0.8rem */
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
-.language-dropdown {
-  min-width: 130px; /* Giảm từ 140px xuống 130px */
-}
-
-.language-dropdown .p-dropdown {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px; /* Giảm từ 8px xuống 6px */
-  color: white;
-}
-
-.language-dropdown .p-dropdown:not(.p-disabled):hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.language-dropdown .p-dropdown-label {
-  color: white;
-  font-weight: 500;
-}
-
-.language-dropdown .p-dropdown-trigger {
-  color: white;
+.language-label::before {
+  content: '\f1ab';
+  font-family: 'PrimeIcons';
+  font-size: 0.9rem;
+  color: #6366f1;
 }
 
 /* Tối ưu file strings list */
@@ -1628,10 +1948,11 @@ function goBackToProject() {
     margin-left: 0;
     width: 100%;
     justify-content: space-between;
+    padding: 0.4rem 0.6rem;
   }
 
   .language-dropdown {
-    min-width: 110px; /* Giảm từ 120px xuống 110px */
+    min-width: 100px;
   }
 
   .page-header {
@@ -1649,11 +1970,11 @@ function goBackToProject() {
   }
 
   .editor-content {
-    padding: 1rem 0.4rem; /* Giảm từ 0.5rem xuống 0.4rem */
+    padding: 0.8rem 0.2rem; /* Giảm padding cho mobile */
   }
 
   .file-strings-list {
-    padding: 1em 0.8em 0.8em 0.8em; /* Giảm padding cho mobile */
+    padding: 1em 0.6em 0.8em 0.6em; /* Giảm padding cho mobile */
   }
 }
 
@@ -1672,7 +1993,9 @@ function goBackToProject() {
 /* Tối ưu hóa cho màn hình lớn */
 @media (min-width: 1400px) {
   .string-card {
-    padding: 0.8em 1.5em 0.6em 1.5em; /* Giảm padding cho màn hình lớn */
+    padding: 0.8em 1.5em 0.6em 1.5em;
+    background: #1e293b;
+    border: 1px solid rgba(99, 102, 241, 0.2);
   }
 
   .side-by-side-row {
@@ -1683,33 +2006,39 @@ function goBackToProject() {
 /* Cải thiện responsive cho tablet */
 @media (min-width: 768px) and (max-width: 1024px) {
   .editor-content {
-    padding: 1.5rem 1.2rem; /* Giảm từ 2rem 1.5rem */
+    padding: 1rem 0.8rem;
+    background: #0f172a;
   }
 
   .file-strings-list {
-    padding: 1.5em 1.2em 1em 1.2em; /* Giảm padding */
+    padding: 1.5em 1em 1em 1em;
+    background: #0f172a;
   }
 }
 
 /* Cải thiện responsive cho desktop lớn */
 @media (min-width: 1600px) {
   .editor-content {
-    padding: 2rem 3rem; /* Giảm từ 4rem xuống 3rem */
+    padding: 1rem 2rem;
+    background: #0f172a;
   }
 
   .file-strings-list {
-    padding: 1.5em 2.5em 1em 2.5em; /* Giảm padding */
+    padding: 1.5em 2em 1em 2em;
+    background: #0f172a;
   }
 }
 
 /* Tối ưu hóa layout cho màn hình rất lớn */
 @media (min-width: 1920px) {
   .editor-content {
-    padding: 2rem 4rem; /* Giảm từ 6rem xuống 4rem */
+    padding: 1rem 2.5rem;
+    background: #0f172a;
   }
 
   .file-strings-list {
-    padding: 1.5em 3em 1em 3em; /* Giảm padding */
+    padding: 1.5em 2.5em 1em 2.5em;
+    background: #0f172a;
   }
 }
 
@@ -1787,38 +2116,40 @@ function goBackToProject() {
 
 /* Responsive improvements cho mobile nhỏ */
 @media (max-width: 600px) {
+  .editor-content {
+    padding: 0.4rem 0.1rem;
+  }
+
   .string-card {
-    padding: 0.5em 0.8em 0.4em 0.8em; /* Giảm padding */
-    border-radius: 8px; /* Giảm từ 12px xuống 8px */
-    font-size: 0.85em; /* Giảm từ 0.9em xuống 0.85em */
-    margin-bottom: 0.5em; /* Giảm từ 0.6em xuống 0.5em */
+    padding: 0.4em 0.6em 0.3em 0.6em; /* Giảm padding */
+    border-radius: 6px; /* Giảm từ 8px xuống 6px */
+    font-size: 0.8em; /* Giảm từ 0.85em xuống 0.8em */
+    margin-bottom: 0.4em; /* Giảm từ 0.5em xuống 0.4em */
+    background: #1e293b;
+    border: 1px solid rgba(99, 102, 241, 0.2);
   }
 
   .original-text, .translation-input {
-    font-size: 0.85em; /* Giảm từ 0.9em xuống 0.85em */
-    padding: 0.3em 0.5em; /* Giảm padding */
+    font-size: 0.8em; /* Giảm từ 0.85em xuống 0.8em */
+    padding: 0.25em 0.4em; /* Giảm padding */
+    background: #334155;
+    color: #e2e8f0;
   }
 
   .card-actions {
-    margin-top: 0.1em; /* Giảm từ 0.15em xuống 0.1em */
+    margin-top: 0.08em; /* Giảm từ 0.1em xuống 0.08em */
   }
 
   .translation-input-container {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.2em; /* Giảm từ 0.25em xuống 0.2em */
+    gap: 0.15em; /* Giảm từ 0.2em xuống 0.15em */
   }
 
-  /* Cải thiện save button cho mobile */
-  .save-btn-icon {
-    width: 18px; /* Giảm từ 22px xuống 18px */
-    height: 18px; /* Giảm từ 22px xuống 18px */
-    font-size: 0.65em; /* Giảm từ 0.75em xuống 0.65em */
-    right: 2px; /* Giảm từ 3px xuống 2px */
-  }
+
 
   .translation-input {
-    padding-right: 2.4em; /* Tăng từ 2em lên 2.4em vì không còn focus indicator */
+    padding-right: 2.2em; /* Giảm từ 2.4em xuống 2.2em */
   }
 
   .translation-input.input-focused {
@@ -1828,7 +2159,7 @@ function goBackToProject() {
   .advanced-options {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.6em; /* Giảm từ 0.8em xuống 0.6em */
+    gap: 0.5em; /* Giảm từ 0.6em xuống 0.5em */
   }
 
   .view-mode-toggle {
@@ -1836,49 +2167,49 @@ function goBackToProject() {
   }
 
   .status-indicator {
-    top: 3px; /* Giảm từ 6px xuống 3px */
-    right: 4px; /* Giảm từ 8px xuống 4px */
-    gap: 2px; /* Giảm từ 4px xuống 2px */
+    top: 2px; /* Giảm từ 3px xuống 2px */
+    right: 3px; /* Giảm từ 4px xuống 3px */
+    gap: 1px; /* Giảm từ 2px xuống 1px */
   }
 
   .status-dot {
-    width: 4px; /* Giảm từ 6px xuống 4px */
-    height: 4px; /* Giảm từ 6px xuống 4px */
+    width: 3px; /* Giảm từ 4px xuống 3px */
+    height: 3px; /* Giảm từ 4px xuống 3px */
   }
 
   .status-text {
-    font-size: 0.6em; /* Giảm từ 0.7em xuống 0.6em */
-    padding: 1px 4px; /* Giảm padding */
+    font-size: 0.55em; /* Giảm từ 0.6em xuống 0.55em */
+    padding: 1px 3px; /* Giảm padding */
   }
 
   .untranslated-badge, .translated-badge {
-    top: 4px; /* Giảm từ 6px xuống 4px */
-    right: 6px; /* Giảm từ 8px xuống 6px */
-    font-size: 0.7em; /* Giảm từ 0.75em xuống 0.7em */
-    padding: 1px 3px; /* Giảm padding */
+    top: 3px; /* Giảm từ 4px xuống 3px */
+    right: 4px; /* Giảm từ 6px xuống 4px */
+    font-size: 0.6em; /* Giảm từ 0.7em xuống 0.6em */
+    padding: 1px 2px; /* Giảm padding */
   }
 
   .search-filter-bar {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.6em; /* Giảm từ 0.7em xuống 0.6em */
-    padding: 0.6em 0.4em; /* Giảm padding */
+    gap: 0.5em; /* Giảm từ 0.6em xuống 0.5em */
+    padding: 0.5em 0.3em; /* Giảm padding */
   }
 
   .search-input {
-    min-width: 100px;
+    min-width: 90px; /* Giảm từ 100px xuống 90px */
     width: 100%;
   }
 
   .filter-group-btn {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.25em; /* Giảm từ 0.3em xuống 0.25em */
+    gap: 0.2em; /* Giảm từ 0.25em xuống 0.2em */
   }
 
   .filter-btn {
     width: 100%;
-    padding: 0.6em 0.8em; /* Giảm padding */
+    padding: 0.5em 0.6em; /* Giảm padding */
   }
 }
 
@@ -1898,47 +2229,619 @@ function goBackToProject() {
   font-size: 1.2rem;
 }
 
-/* Thiết kế mới cho save button - Nằm gọn trong input */
-.save-btn-icon {
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  color: #fff;
-  border: none;
-  border-radius: 50%;
-  padding: 0.2em; /* Giảm từ 0.25em xuống 0.2em */
-  font-size: 0.7em; /* Giảm từ 0.8em xuống 0.7em */
+/* Override tất cả background trắng cho dark mode */
+.translation-editor-page * {
+  background-color: inherit;
+}
+
+.translation-editor-page input,
+.translation-editor-page textarea,
+.translation-editor-page select,
+.translation-editor-page button:not(.back-btn) {
+  background-color: #334155 !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.translation-editor-page input:focus,
+.translation-editor-page textarea:focus,
+.translation-editor-page select:focus {
+  background-color: #475569 !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(99, 102, 241, 0.6) !important;
+}
+
+/* Override PrimeVue components */
+.translation-editor-page .p-inputtext,
+.translation-editor-page .p-dropdown,
+.translation-editor-page .p-multiselect {
+  background-color: #334155 !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.translation-editor-page .p-inputtext:focus,
+.translation-editor-page .p-dropdown:focus,
+.translation-editor-page .p-multiselect:focus {
+  background-color: #475569 !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(99, 102, 241, 0.6) !important;
+}
+
+.translation-editor-page .p-dropdown-panel,
+.translation-editor-page .p-multiselect-panel {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  border: 1px solid rgba(99, 102, 241, 0.4) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.translation-editor-page .p-dropdown-item,
+.translation-editor-page .p-multiselect-item {
+  background-color: transparent !important;
+  color: #e2e8f0 !important;
+  padding: 0.6rem 1rem !important;
+  border-radius: 6px !important;
+  margin: 0.1rem 0.3rem !important;
+  transition: all 0.2s ease !important;
+  border: 1px solid transparent !important;
+}
+
+.translation-editor-page .p-dropdown-item:hover,
+.translation-editor-page .p-multiselect-item:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  transform: translateX(2px) !important;
+}
+
+.translation-editor-page .p-dropdown-item.p-highlight,
+.translation-editor-page .p-multiselect-item.p-highlight {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(124, 58, 237, 0.3) 100%) !important;
+  color: #c7d2fe !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  font-weight: 600 !important;
+}
+
+/* Override radio buttons và checkboxes */
+.translation-editor-page input[type="radio"],
+.translation-editor-page input[type="checkbox"] {
+  background-color: #334155 !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.translation-editor-page input[type="radio"]:checked,
+.translation-editor-page input[type="checkbox"]:checked {
+  background-color: #6366f1 !important;
+  border-color: #6366f1 !important;
+}
+
+/* Override part buttons */
+.translation-editor-page .part-btn {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+}
+
+.translation-editor-page .part-btn:hover {
+  background: #475569 !important;
+  color: #f1f5f9 !important;
+}
+
+.translation-editor-page .part-btn.active {
+  background: linear-gradient(90deg, #6366f1 0%, #7c3aed 100%) !important;
+  color: #fff !important;
+}
+
+/* Override filter buttons */
+.translation-editor-page .filter-btn {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+}
+
+.translation-editor-page .filter-btn:hover {
+  background: #475569 !important;
+  color: #f1f5f9 !important;
+}
+
+.translation-editor-page .filter-btn.active {
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%) !important;
+  color: #fff !important;
+}
+
+/* Override scrollbar */
+.translation-editor-page ::-webkit-scrollbar {
+  background-color: #1e293b !important;
+}
+
+.translation-editor-page ::-webkit-scrollbar-thumb {
+  background-color: #64748b !important;
+}
+
+.translation-editor-page ::-webkit-scrollbar-track {
+  background-color: #1e293b !important;
+}
+
+/* Override placeholder text */
+.translation-editor-page input::placeholder,
+.translation-editor-page textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Override file header background */
+.translation-editor-page .file-header {
+  background: linear-gradient(135deg, #334155 0%, #475569 100%) !important;
+}
+
+/* Override search filter bar */
+.translation-editor-page .search-filter-bar {
+  background: linear-gradient(135deg, #334155 0%, #475569 100%) !important;
+}
+
+/* Override original text background */
+.translation-editor-page .original-text {
+  background: linear-gradient(135deg, #334155 0%, #475569 100%) !important;
+  color: #e2e8f0 !important;
+}
+
+/* Override translation input background */
+.translation-editor-page .translation-input {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+/* Override search input */
+.translation-editor-page .search-input {
+  background: #475569 !important;
+  color: #e2e8f0 !important;
+}
+
+
+
+/* Override language selector container */
+.translation-editor-page .language-selector {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%) !important;
+  border: 1px solid rgba(99, 102, 241, 0.2) !important;
+  backdrop-filter: blur(8px) !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+.translation-editor-page .language-selector:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15) !important;
+}
+
+.translation-editor-page .language-label {
+  color: #a5b4fc !important;
+}
+
+.translation-editor-page .language-label::before {
+  content: '\f1ab' !important;
+  font-family: 'PrimeIcons' !important;
+  color: #6366f1 !important;
+}
+
+/* Override any remaining white backgrounds */
+.translation-editor-page *[style*="background: white"],
+.translation-editor-page *[style*="background: #fff"],
+.translation-editor-page *[style*="background-color: white"],
+.translation-editor-page *[style*="background-color: #fff"] {
+  background: #334155 !important;
+  background-color: #334155 !important;
+}
+
+/* Force dark mode for dropdown panels with maximum specificity */
+.translation-editor-page .p-dropdown-panel,
+.translation-editor-page .p-multiselect-panel,
+.translation-editor-page .p-overlay-panel,
+.translation-editor-page .p-dropdown-panel *,
+.translation-editor-page .p-multiselect-panel *,
+.translation-editor-page .p-overlay-panel *,
+.translation-editor-page div[class*="p-dropdown"],
+.translation-editor-page div[class*="p-multiselect"],
+.translation-editor-page div[class*="p-overlay"],
+.translation-editor-page ul[class*="p-dropdown"],
+.translation-editor-page ul[class*="p-multiselect"],
+.translation-editor-page li[class*="p-dropdown"],
+.translation-editor-page li[class*="p-multiselect"] {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  background-color: #1e293b !important;
+  border: 1px solid rgba(99, 102, 241, 0.4) !important;
+  color: #e2e8f0 !important;
+}
+
+/* Force dark mode for all dropdown items */
+.translation-editor-page .p-dropdown-item,
+.translation-editor-page .p-multiselect-item,
+.translation-editor-page .p-overlay-panel *,
+.translation-editor-page .p-dropdown-panel li,
+.translation-editor-page .p-multiselect-panel li,
+.translation-editor-page li[class*="p-dropdown-item"],
+.translation-editor-page li[class*="p-multiselect-item"] {
+  background-color: transparent !important;
+  color: #e2e8f0 !important;
+  padding: 0.6rem 1rem !important;
+  border-radius: 6px !important;
+  margin: 0.1rem 0.3rem !important;
+  transition: all 0.2s ease !important;
+  border: 1px solid transparent !important;
+}
+
+/* Override any white text in dropdowns */
+.translation-editor-page .p-dropdown-panel *,
+.translation-editor-page .p-multiselect-panel *,
+.translation-editor-page .p-overlay-panel *,
+.translation-editor-page div[class*="p-dropdown"] *,
+.translation-editor-page div[class*="p-multiselect"] *,
+.translation-editor-page ul[class*="p-dropdown"] *,
+.translation-editor-page ul[class*="p-multiselect"] *,
+.translation-editor-page li[class*="p-dropdown"] *,
+.translation-editor-page li[class*="p-multiselect"] * {
+  color: #e2e8f0 !important;
+  background-color: transparent !important;
+}
+
+/* Force dark mode for all elements */
+.translation-editor-page div,
+.translation-editor-page span,
+.translation-editor-page p,
+.translation-editor-page label {
+  color: #e2e8f0 !important;
+}
+
+/* Override any light backgrounds that might be inherited */
+.translation-editor-page .p-component,
+.translation-editor-page .p-element {
+  background-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+/* Ensure all form elements are dark */
+.translation-editor-page form * {
+  background-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+/* Override any remaining light elements */
+.translation-editor-page * {
+  background-color: inherit;
+}
+
+.translation-editor-page *:not(.back-btn):not(.page-header) {
+  background-color: transparent !important;
+}
+
+/* Custom Dropdown Styles */
+.custom-dropdown {
+  position: relative;
+  display: inline-block;
+  min-width: 140px;
+  z-index: 9999;
+}
+
+.dropdown-trigger {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 8px;
+  color: #e2e8f0;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2); /* Giảm shadow */
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 20px; /* Giảm từ 24px xuống 20px */
-  height: 20px; /* Giảm từ 24px xuống 20px */
+  justify-content: space-between;
+  width: 100%;
+  min-width: 140px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dropdown-trigger:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(124, 58, 237, 0.3) 100%);
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+  transform: translateY(-1px);
+}
+
+.dropdown-trigger:focus {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.4) 0%, rgba(124, 58, 237, 0.4) 100%);
+  border-color: rgba(99, 102, 241, 0.8);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), 0 4px 16px rgba(99, 102, 241, 0.3);
+  outline: none;
+}
+
+.dropdown-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, rgba(100, 116, 139, 0.2) 0%, rgba(71, 85, 105, 0.2) 100%);
+  border-color: rgba(100, 116, 139, 0.3);
+}
+
+.selected-language {
+  color: #e2e8f0;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.dropdown-arrow {
+  color: #a5b4fc;
+  font-size: 0.7rem;
+  transition: all 0.3s ease;
+  margin-left: 0.5rem;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+  color: #c7d2fe;
+}
+
+.dropdown-menu {
   position: absolute;
-  right: 3px; /* Giảm từ 4px xuống 3px */
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
-  opacity: 0.9;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 0.25rem;
 }
 
-.save-btn-icon:hover {
-  background: linear-gradient(135deg, #2f855a 0%, #38a169 100%);
-  transform: translateY(-50%) scale(1.1); /* Giảm scale từ 1.15 xuống 1.1 */
-  box-shadow: 0 3px 10px rgba(56, 161, 105, 0.25); /* Giảm shadow */
+.dropdown-menu.open {
   opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
-.save-btn-icon.saved {
-  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
-  box-shadow: 0 2px 6px rgba(56, 161, 105, 0.15); /* Giảm shadow */
-  opacity: 0.9;
+.dropdown-item {
+  padding: 0.6rem 1rem;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 6px;
+  margin: 0.1rem 0.3rem;
+  border: 1px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
-.save-btn-icon.dirty {
-  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-  animation: pulse-gentle 2s infinite;
-  opacity: 1;
-  box-shadow: 0 2px 6px rgba(229, 62, 62, 0.2); /* Giảm shadow */
+.dropdown-item:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%);
+  color: #f1f5f9;
+  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateX(2px);
 }
+
+.dropdown-item.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(124, 58, 237, 0.3) 100%);
+  color: #c7d2fe;
+  border-color: rgba(99, 102, 241, 0.5);
+  font-weight: 600;
+}
+
+/* Custom scrollbar for dropdown */
+.dropdown-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dropdown-menu::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 2px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.4);
+  border-radius: 2px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.6);
+}
+
+/* Responsive adjustments for dropdown */
+@media (max-width: 768px) {
+  .custom-dropdown {
+    min-width: 120px;
+  }
+
+  .dropdown-trigger {
+    min-width: 120px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .selected-language {
+    font-size: 0.8rem;
+  }
+
+  .dropdown-arrow {
+    font-size: 0.6rem;
+    margin-left: 0.3rem;
+  }
+
+  .dropdown-item {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Additional dark mode overrides for dropdowns */
+.translation-editor-page .p-component-overlay {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Force dark mode for ALL dropdown panels with maximum specificity */
+.translation-editor-page .p-dropdown-panel,
+.translation-editor-page .p-multiselect-panel,
+.translation-editor-page .p-overlay-panel,
+.translation-editor-page .p-dropdown-panel *,
+.translation-editor-page .p-multiselect-panel *,
+.translation-editor-page .p-overlay-panel *,
+.translation-editor-page div[class*="p-dropdown-panel"],
+.translation-editor-page div[class*="p-multiselect-panel"],
+.translation-editor-page div[class*="p-overlay-panel"] {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  border: 1px solid rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  color: #e2e8f0 !important;
+}
+
+/* Force dark mode for ALL dropdown items */
+.translation-editor-page .p-dropdown-item,
+.translation-editor-page .p-multiselect-item,
+.translation-editor-page .p-overlay-panel li,
+.translation-editor-page .p-dropdown-panel li,
+.translation-editor-page .p-multiselect-panel li,
+.translation-editor-page div[class*="p-dropdown-item"],
+.translation-editor-page div[class*="p-multiselect-item"] {
+  background-color: transparent !important;
+  color: #e2e8f0 !important;
+  padding: 0.6rem 1rem !important;
+  border-radius: 6px !important;
+  margin: 0.1rem 0.3rem !important;
+  transition: all 0.2s ease !important;
+  border: 1px solid transparent !important;
+}
+
+/* Hover states for dropdown items */
+.translation-editor-page .p-dropdown-item:hover,
+.translation-editor-page .p-multiselect-item:hover,
+.translation-editor-page .p-overlay-panel li:hover,
+.translation-editor-page .p-dropdown-panel li:hover,
+.translation-editor-page .p-multiselect-panel li:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  transform: translateX(2px) !important;
+}
+
+/* Selected/highlighted items */
+.translation-editor-page .p-dropdown-item.p-highlight,
+.translation-editor-page .p-multiselect-item.p-highlight,
+.translation-editor-page .p-overlay-panel li.p-highlight,
+.translation-editor-page .p-dropdown-panel li.p-highlight,
+.translation-editor-page .p-multiselect-panel li.p-highlight {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(124, 58, 237, 0.3) 100%) !important;
+  color: #c7d2fe !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  font-weight: 600 !important;
+}
+
+/* Override any white backgrounds with maximum specificity */
+.translation-editor-page .p-dropdown-panel,
+.translation-editor-page .p-multiselect-panel,
+.translation-editor-page .p-overlay-panel,
+.translation-editor-page .p-dropdown-panel *,
+.translation-editor-page .p-multiselect-panel *,
+.translation-editor-page .p-overlay-panel *,
+.translation-editor-page div[class*="p-dropdown"],
+.translation-editor-page div[class*="p-multiselect"],
+.translation-editor-page div[class*="p-overlay"] {
+  background-color: #1e293b !important;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  color: #e2e8f0 !important;
+}
+
+/* Validation Warnings Styles */
+.validation-warnings {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.validation-warning-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.validation-warning-item:last-child {
+  margin-bottom: 0;
+}
+
+.validation-warning-item.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.validation-warning-item.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.validation-warning-item i {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.validation-warning-item span {
+  line-height: 1.4;
+}
+
+/* Animation for validation warnings */
+.validation-warnings {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Validation Info Styles */
+.validation-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.validation-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #10b981;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.3rem 0.6rem;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 6px;
+}
+
+.validation-hint i {
+  font-size: 0.9rem;
+}
+
+.validation-text {
+  font-size: 0.8rem;
+}
+
 </style>

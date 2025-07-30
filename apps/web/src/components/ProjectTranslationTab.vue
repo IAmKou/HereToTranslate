@@ -426,7 +426,7 @@ async function saveTranslation(str: any) {
             @mouseleave="$event.target.style.background = '#7c5dfa'"
           >
             <i class="pi pi-external-link" style="font-size: 0.9rem;"></i>
-            Open Translator
+            Open Editor
           </a>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Injectable } from '@nestjs/common';
+import {BadRequestException, ForbiddenException, Injectable} from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import {
   TranslationString,
@@ -167,7 +167,7 @@ export class TranslationService {
 
   async previewTranslation(
     fileId: string,
-    language: 'en'
+    language: string
   ): Promise<{ fileType: string; preview: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
@@ -203,6 +203,33 @@ export class TranslationService {
         };
       }
     }
+  }
+
+  async previewTranslationPart(
+    fileId: string,
+    language: string,
+    limit = 3,
+    skip = 0
+  ): Promise<{ fileType: string; previews: string[] }> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+    });
+    if (!fileEntity) throw new Error('File not found');
+
+    const entries = await this.translationModel
+      .find({ fileId, language })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const previews = entries.map((e) =>
+      e.translatedText?.trim() ? e.translatedText : e.originalText
+    );
+
+    return {
+      fileType: fileEntity.fileType,
+      previews,
+    };
   }
 
   async exportTranslation(
@@ -261,7 +288,7 @@ export class TranslationService {
       message: `Exported translation for ${fileEntity.fileName} (${language})`,
     });
 
-    const githubUrl = `https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/${repoName}/main/${language}/${encodeURIComponent(
+    const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${language}/${encodeURIComponent(
       safeFileName
     )}`;
     return { githubUrl };

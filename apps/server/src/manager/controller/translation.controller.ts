@@ -11,7 +11,7 @@ export class TranslationController {
   async getAllTranslationStrings(
     @Query('projectId') projectId: string,
     @Query('branchId') branchId: string,
-    @Query('language') language: string = 'en',
+    @Query('language') language: string ,
     @Query('fileId') fileId?: string,
     @Query('filePart') filePart?: number
   ) {
@@ -22,7 +22,7 @@ export class TranslationController {
   async translateString(
     @Param('id') id: string,
     @Body('translatedText') translatedText: string,
-    @Body('language') language: string = 'en'
+    @Body('language') language: string
   ) {
     try {
       return await this.translationService.addTranslation(id, translatedText, language);
@@ -42,7 +42,7 @@ export class TranslationController {
   @Get('preview/:fileId')
   async previewTranslation(
     @Param('fileId') fileId: string,
-    @Query('language') language: string = 'en'
+    @Query('language') language: string
   ) {
     return this.translationService.previewTranslation(fileId, language);
   }
@@ -51,7 +51,7 @@ export class TranslationController {
   @Post('export/:fileId')
   async exportTranslation(
     @Param('fileId') fileId: string,
-    @Body('language') language: string = 'en'
+    @Body('language') language: string
   ) {
     return this.translationService.exportTranslation(fileId, language);
   }

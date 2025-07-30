@@ -176,12 +176,12 @@ export class WalletManagerService implements OnModuleInit {
         project = {
           id: txn.request.project.id?.toString() || null,
           name: txn.request.project.name || null,
-          status: txn.request.project.status || null,
-          assignee: txn.request.project.assignee ? {
-            id: txn.request.project.assignee.id?.toString() || null,
-            fullName: txn.request.project.assignee.fullName || null,
-            email: txn.request.project.assignee.email || null,
-            phone: txn.request.project.assignee.phone || null
+          status: txn.request.status || null,
+          assignee: txn.request.assignee ? {
+            id: txn.request.assignee.id?.toString() || null,
+            fullName: txn.request.assignee.fullName || null,
+            email: txn.request.assignee.email || null,
+            phone: txn.request.assignee.phone || null
           } : null
         };
       }

@@ -97,12 +97,14 @@ export class NotificationManagerService {
     return notifications;
   }
 
-  async getNotificationsByUserId(userId: bigint, limit = 50): Promise<NotificationEntity[]> {
+  async getNotificationsByUserId(userId: bigint, limit = 50, unreadOnly = false): Promise<NotificationEntity[]> {
+    const whereConditions = [
+      { userId, ...(unreadOnly ? { isRead: false } : {}) },
+      { isGlobal: true, ...(unreadOnly ? { isRead: false } : {}) }
+    ];
+
     return await this.notificationRepository.find({
-      where: [
-        { userId },
-        { isGlobal: true }
-      ],
+      where: whereConditions,
       order: { createdAt: 'DESC' },
       take: limit,
       relations: ['creator'],
@@ -198,6 +200,44 @@ export class NotificationManagerService {
         { isGlobal: true }
       ],
     });
+  }
+
+  async getUnreadNotificationCount(userId: bigint): Promise<number> {
+    return await this.notificationRepository.count({
+      where: [
+        { userId, isRead: false },
+        { isGlobal: true, isRead: false }
+      ],
+    });
+  }
+
+  async markAsRead(notificationId: bigint, userId: bigint): Promise<void> {
+    const notification = await this.getNotificationById(notificationId);
+
+    // Check if user has access to this notification
+    if (!notification.isGlobal && notification.userId !== userId) {
+      throw new Error('Unauthorized access to notification');
+    }
+
+    // Only mark as read if not already read
+    if (!notification.isRead) {
+      notification.isRead = true;
+      notification.readAt = new Date();
+      await this.notificationRepository.save(notification);
+    }
+  }
+
+  async markAllAsRead(userId: bigint): Promise<void> {
+    await this.notificationRepository.update(
+      [
+        { userId, isRead: false },
+        { isGlobal: true, isRead: false }
+      ],
+      {
+        isRead: true,
+        readAt: new Date()
+      }
+    );
   }
 
   async getGlobalNotificationCount(): Promise<number> {

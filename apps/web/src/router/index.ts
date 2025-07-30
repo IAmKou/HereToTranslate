@@ -194,6 +194,18 @@ const router = createRouter({
       meta: {requiresAuth: true},
     },
     {
+      path: '/notifications',
+      name: 'user-notifications',
+      component: () => import('../views/UserNotificationView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/notifications/:id',
+      name: 'notification-detail',
+      component: () => import('../views/NotificationDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/projects/:projectId/branches/:branchId/translate',
       name: 'translation-editor',
       component: () => import('../views/TranslationEditorView.vue'),

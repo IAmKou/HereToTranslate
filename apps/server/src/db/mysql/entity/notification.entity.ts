@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 
 @Entity('notification')
@@ -21,8 +21,17 @@ export class NotificationEntity {
   @Column({ type: 'bigint', unsigned: true, nullable: true })
   createdBy: bigint;
 
+  @Column({ type: 'boolean', default: false })
+  isRead: boolean;
+
+  @Column({ type: 'datetime', nullable: true })
+  readAt: Date;
+
   @CreateDateColumn({ type: 'datetime' })
   createdAt: Date;
+
+  @UpdateDateColumn({ type: 'datetime' })
+  updatedAt: Date;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })

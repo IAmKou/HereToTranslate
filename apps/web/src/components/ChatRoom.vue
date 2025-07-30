@@ -461,13 +461,32 @@
                   v-else
                   class="message-content"
                 >
-                  <img
+                  <div
                     v-if="message.fileUrl"
-                    :src="message.fileUrl"
-                    :alt="message.fileName || 'Image'"
-                    class="message-image"
-                    @load="scrollToBottom"
+                    class="image-container"
                   >
+                    <img
+                      :src="message.fileUrl"
+                      :alt="message.fileName || 'Image'"
+                      class="message-image"
+                      @load="scrollToBottom"
+                      @error="handleImageError(message)"
+                      loading="lazy"
+                    >
+                    <div
+                      v-if="message.imageError"
+                      class="image-error"
+                    >
+                      <i class="pi pi-exclamation-triangle"></i>
+                      <span>Failed to load image</span>
+                      <button
+                        @click="retryImage(message)"
+                        class="retry-btn"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </div>
                   <div
                     v-else
                     class="text-content"
@@ -967,6 +986,7 @@ interface ChatMessage {
     senderUsername?: string
     message: string
   }
+  imageError?: boolean
 }
 
 interface Participant {
@@ -1459,6 +1479,23 @@ onUnmounted(() => {
   socket.value?.disconnect()
   if (socket.value) socket.value = null
 })
+
+const handleImageError = (message: ChatMessage) => {
+  message.imageError = true
+  displayNotification('Failed to load image', 'error')
+}
+
+const retryImage = (message: ChatMessage) => {
+  message.imageError = false
+  displayNotification('Retrying image load', 'info')
+  // Force refresh the image by adding a timestamp parameter
+  const img = document.querySelector(`img[src="${message.fileUrl}"]`) as HTMLImageElement
+  if (img && message.fileUrl) {
+    const originalSrc = message.fileUrl
+    const separator = originalSrc.includes('?') ? '&' : '?'
+    img.src = `${originalSrc}${separator}t=${Date.now()}`
+  }
+}
 </script>
 
 
@@ -1868,10 +1905,22 @@ onUnmounted(() => {
   }
 
   .message-image {
-    max-width: 300px;
-    max-height: 300px;
+    max-width: 500px;
+    max-height: 400px;
+    width: auto;
+    height: auto;
     object-fit: contain;
     border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+
+    &:hover {
+      transform: scale(1.02);
+    }
+
+    /* Ensure images load completely */
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
   }
 
   .text-content {
@@ -2720,6 +2769,53 @@ onUnmounted(() => {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+.image-container {
+  position: relative;
+}
+
+.image-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 8px;
+  box-sizing: border-box;
+
+  i {
+    font-size: 24px;
+    color: #dc2626;
+    margin-bottom: 8px;
+  }
+
+  span {
+    font-size: 0.9rem;
+    color: #6b7280;
+    text-align: center;
+  }
+
+  .retry-btn {
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+
+    &:hover {
+      background: #4338ca;
+    }
   }
 }
 

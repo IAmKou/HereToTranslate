@@ -4,7 +4,21 @@ export interface Notification {
   id: string;
   type: string;
   message: string;
+  isRead: boolean;
+  readAt?: string;
   createdAt: string;
+  updatedAt: string;
+  isGlobal: boolean;
+  createdBy?: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+}
+
+export interface NotificationCount {
+  total: number;
+  unread: number;
 }
 
 export interface CreateNotificationData {
@@ -13,19 +27,32 @@ export interface CreateNotificationData {
 }
 
 class NotificationService {
-  async getUserNotifications(limit?: number): Promise<{ notifications: Notification[] }> {
-    const params = limit ? { limit } : {};
+  async getUserNotifications(limit?: number, unreadOnly = false): Promise<{ notifications: Notification[] }> {
+    const params: any = {};
+    if (limit) params.limit = limit;
+    if (unreadOnly) params.unreadOnly = 'true';
+
     const response = await axiosInstance.get('/notifications', { params });
     return response.data;
   }
 
-  async getNotificationCount(): Promise<{ count: number }> {
+  async getNotificationCount(): Promise<NotificationCount> {
     const response = await axiosInstance.get('/notifications/count');
     return response.data;
   }
 
   async getNotificationById(id: string): Promise<Notification> {
     const response = await axiosInstance.get(`/notifications/${id}`);
+    return response.data;
+  }
+
+  async markAsRead(id: string): Promise<{ message: string }> {
+    const response = await axiosInstance.patch(`/notifications/${id}/read`);
+    return response.data;
+  }
+
+  async markAllAsRead(): Promise<{ message: string }> {
+    const response = await axiosInstance.patch('/notifications/mark-all-read');
     return response.data;
   }
 

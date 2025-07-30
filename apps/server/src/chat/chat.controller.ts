@@ -127,7 +127,7 @@ export class ChatController {
         cb(null, true);
       },
       limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB
+        fileSize: 10 * 1024 * 1024, // Increased to 10MB
       },
     }),
   )
@@ -136,10 +136,31 @@ export class ChatController {
       throw new BadRequestException('❌ No file uploaded');
     }
 
+    // Log upload details for debugging
+    console.log('📸 File upload details:', {
+      originalname: file.originalname,
+      filename: file.filename,
+      mimetype: file.mimetype,
+      size: file.size,
+      path: file.path
+    });
+
     const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const fileUrl = `${baseUrl}/uploads/chat/${file.filename}`;
+
+    // Verify file exists after upload
+    const fs = require('fs');
+    const filePath = `./uploads/chat/${file.filename}`;
+
+    if (!fs.existsSync(filePath)) {
+      console.error('❌ File was not saved properly:', filePath);
+      throw new BadRequestException('❌ File upload failed - file not saved');
+    }
+
+    console.log('✅ File uploaded successfully:', fileUrl);
 
     return {
-      url: `${baseUrl}/uploads/chat/${file.filename}`,
+      url: fileUrl,
       fileName: file.originalname,
       mimetype: file.mimetype,
       size: file.size,

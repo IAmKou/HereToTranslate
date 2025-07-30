@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   Query,
   ParseIntPipe,
+  Patch,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
@@ -29,10 +30,12 @@ export class NotificationController {
   async getUserNotifications(
     @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('unreadOnly') unreadOnly?: string,
   ) {
     const notifications = await this.notificationService.getNotificationsByUserId(
       req.user.id,
       limit || 50,
+      unreadOnly === 'true',
     );
 
     return {
@@ -40,7 +43,16 @@ export class NotificationController {
         id: notification.id.toString(),
         type: notification.type,
         message: notification.message,
+        isRead: notification.isRead,
+        readAt: notification.readAt,
         createdAt: notification.createdAt,
+        updatedAt: notification.updatedAt,
+        isGlobal: notification.isGlobal,
+        createdBy: notification.creator ? {
+          id: notification.creator.id.toString(),
+          username: notification.creator.username,
+          fullName: notification.creator.fullName,
+        } : null,
       })),
     };
   }
@@ -48,8 +60,13 @@ export class NotificationController {
   @UseGuards(JwtAuthGuard)
   @Get('count')
   async getUserNotificationCount(@Req() req: AuthenticatedRequest) {
-    const count = await this.notificationService.getNotificationCount(req.user.id);
-    return { count };
+    const totalCount = await this.notificationService.getNotificationCount(req.user.id);
+    const unreadCount = await this.notificationService.getUnreadNotificationCount(req.user.id);
+
+    return {
+      total: totalCount,
+      unread: unreadCount
+    };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -60,8 +77,8 @@ export class NotificationController {
   ) {
     const notification = await this.notificationService.getNotificationById(id);
 
-    // Check if notification belongs to the authenticated user
-    if (notification.userId !== req.user.id) {
+    // Check if notification belongs to the authenticated user or is global
+    if (!notification.isGlobal && notification.userId !== req.user.id) {
       throw new Error('Unauthorized access to notification');
     }
 
@@ -69,8 +86,34 @@ export class NotificationController {
       id: notification.id.toString(),
       type: notification.type,
       message: notification.message,
+      isRead: notification.isRead,
+      readAt: notification.readAt,
       createdAt: notification.createdAt,
+      updatedAt: notification.updatedAt,
+      isGlobal: notification.isGlobal,
+      createdBy: notification.creator ? {
+        id: notification.creator.id.toString(),
+        username: notification.creator.username,
+        fullName: notification.creator.fullName,
+      } : null,
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/read')
+  async markNotificationAsRead(
+    @Param('id', BigIntTransformPipe) id: bigint,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    await this.notificationService.markAsRead(id, req.user.id);
+    return { message: 'Notification marked as read' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('mark-all-read')
+  async markAllNotificationsAsRead(@Req() req: AuthenticatedRequest) {
+    await this.notificationService.markAllAsRead(req.user.id);
+    return { message: 'All notifications marked as read' };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -100,7 +143,7 @@ export class NotificationController {
   ) {
     // First check if notification belongs to user
     const notification = await this.notificationService.getNotificationById(id);
-    if (notification.userId !== req.user.id) {
+    if (!notification.isGlobal && notification.userId !== req.user.id) {
       throw new Error('Unauthorized access to notification');
     }
 

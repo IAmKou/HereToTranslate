@@ -12,7 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { replaceDocxText } from '../../util/extensions/docx-utils.extension';
 import { buildTranslatedPdf } from '../../util/extensions/pdf-utils.extension';
-import type { Buffer } from 'buffer';
+import { Buffer } from 'buffer';
 
 @Injectable()
 export class TranslationService {
@@ -29,13 +29,12 @@ export class TranslationService {
     const originalEntry = await this.translationModel.findById(id);
     if (!originalEntry) throw new Error('Manifest entry not found');
 
-    // Luôn tìm hoặc tạo bản ghi mới cho ngôn ngữ được chọn
     const existingTranslation = await this.translationModel.findOne({
       projectId: originalEntry.projectId,
       branchId: originalEntry.branchId,
       fileId: originalEntry.fileId,
       originalText: originalEntry.originalText,
-      language: language
+      language: language,
     });
 
     let entry;
@@ -59,7 +58,7 @@ export class TranslationService {
         font: originalEntry.font,
         style: originalEntry.style,
         position: originalEntry.position,
-        obsolete: false
+        obsolete: false,
       });
     }
 
@@ -77,7 +76,9 @@ export class TranslationService {
       fileEntity.fileType ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ) {
-      const entries = await this.translationModel.find({ fileId, language }).lean();
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
       const translations = new Map<string, string>();
       for (const e of entries) {
         if (e.translatedText && e.translatedText.trim().length > 0) {
@@ -87,7 +88,9 @@ export class TranslationService {
       const originalBuffer = fileEntity.fileContent as Buffer;
       updatedBuffer = await replaceDocxText(originalBuffer, translations);
     } else if (fileEntity.fileType === 'application/pdf') {
-      const entries = await this.translationModel.find({ fileId, language }).lean();
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
       const translatedEntries = entries.map((e) => ({
         text: e.translatedText?.trim() ? e.translatedText : e.originalText,
       }));
@@ -127,7 +130,9 @@ export class TranslationService {
     });
     if (!fileEntity) throw new Error('File not found');
 
-    const entriesRaw = await this.translationModel.find({ fileId, language }).lean();
+    const entriesRaw = await this.translationModel
+      .find({ fileId, language })
+      .lean();
     const entries = entriesRaw.map((e: any) => ({
       text:
         e.translatedText && e.translatedText.trim().length > 0
@@ -162,7 +167,7 @@ export class TranslationService {
 
   async previewTranslation(
     fileId: string,
-    language: string = 'en',
+    language: 'en'
   ): Promise<{ fileType: string; preview: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
@@ -200,7 +205,10 @@ export class TranslationService {
     }
   }
 
-  async exportTranslation(fileId: string, language: string): Promise<{ githubUrl: string }> {
+  async exportTranslation(
+    fileId: string,
+    language: string
+  ): Promise<{ githubUrl: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -214,7 +222,9 @@ export class TranslationService {
       fileEntity.fileType ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ) {
-      const entries = await this.translationModel.find({ fileId, language }).lean();
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
       const translations = new Map<string, string>();
       for (const e of entries) {
         if (e.translatedText && e.translatedText.trim().length > 0) {
@@ -226,7 +236,9 @@ export class TranslationService {
         translations
       );
     } else if (fileEntity.fileType === 'application/pdf') {
-      const entries = await this.translationModel.find({ fileId, language }).lean();
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
       const translatedEntries = entries.map((e) => ({
         text: e.translatedText?.trim() ? e.translatedText : e.originalText,
       }));
@@ -284,16 +296,16 @@ export class TranslationService {
 
     // Tạo map để merge nhanh: originalText -> translatedText
     const translationMap = new Map();
-    translatedStrings.forEach(str => {
+    translatedStrings.forEach((str) => {
       translationMap.set(str.originalText, str.translatedText);
     });
 
     // Merge base strings với bản dịch của ngôn ngữ được chọn
-    const mergedStrings = baseStrings.map(str => {
+    const mergedStrings = baseStrings.map((str) => {
       const translatedText = translationMap.get(str.originalText) || '';
       return {
         ...str,
-        translatedText
+        translatedText,
       };
     });
 
@@ -302,7 +314,7 @@ export class TranslationService {
     const fileNamesMap: Record<string, string> = {};
     if (fileIds.length > 0) {
       const files = await this.fileRepository.find({
-        where: { id: In(fileIds.map(id => BigInt(id))) }
+        where: { id: In(fileIds.map((id) => BigInt(id))) },
       });
       files.forEach((f) => {
         fileNamesMap[String(f.id)] = f.fileName;

@@ -10,8 +10,8 @@ import {
 import { Model } from 'mongoose';
 import { MailerService } from '@nestjs-modules/mailer';
 import { addDays, subDays } from 'date-fns';
-import { PaymentService } from '../service/payment-manager.service';
-import { ProjectService } from '../service/project-manager.service';
+import { PaypalService } from '../service/payment-manager.service';
+import { ProjectManagerService } from '../service/project-manager.service';
 import { InjectModel } from '@nestjs/mongoose';
 
 @Injectable()
@@ -21,8 +21,8 @@ export class DeadlineCheckerService {
     private readonly requestRepo: Repository<RequestEntity>,
 
     private readonly mailerService: MailerService,
-    private readonly paymentService: PaymentService,
-    private readonly projectService: ProjectService,
+    private readonly paymentService: PaypalService,
+    private readonly projectService: ProjectManagerService,
 
     @InjectModel(TranslationString.name)
     private readonly translationModel: Model<TranslationStringDocument>
@@ -105,9 +105,7 @@ export class DeadlineCheckerService {
       });
       const percent = (done / Math.max(total, 1)) * 100;
 
-      if (percent >= 90) {
-        req.status = RequestStatus.Completed;
-      } else {
+      if (percent !== 100) {
         req.status = RequestStatus.Failed;
         await this.paymentService.refundDeposit(req);
         await this.mailerService.sendMail({

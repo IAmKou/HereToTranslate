@@ -5,8 +5,6 @@ import {
   TranslationString,
   TranslationStringDocument,
 } from '../../db/mongo/schema/translation.schema';
-import PDFParser from 'pdf2json';
-import * as Docx4js from 'docx4js';
 import { v4 as uuidv4 } from 'uuid';
 import { FileEntity } from '#LocalProject/Entities';
 import axios from 'axios';
@@ -82,12 +80,10 @@ function groupTextByLine(items, yThreshold = 5) {
         const prev = lineItems[i-1];
         const curr = lineItems[i];
 
-        // Heuristic để chèn khoảng trắng một cách thông minh.
-        // Ngưỡng khoảng cách sẽ dựa trên 25% chiều cao của text trước đó.
+
         const spaceThreshold = (prev.height || 10) * 0.25;
         const gap = curr.x - (prev.x + (prev.width || 0));
 
-        // Nếu khoảng trống lớn hơn ngưỡng, ta coi đó là một "dấu cách".
         if (gap > spaceThreshold) {
           lineText += ' ';
         }
@@ -118,7 +114,7 @@ export class ManifestService {
     }
 
     const manifestEntries: Partial<TranslationString>[] = [];
-    const apiKey = 'K89333403988957'; // API key bạn cung cấp
+    const apiKey = 'K89333403988957';
 
     switch (file.fileType) {
       case 'application/pdf': {

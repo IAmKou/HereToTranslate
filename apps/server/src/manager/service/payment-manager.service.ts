@@ -22,6 +22,7 @@ import { WalletManagerService } from './wallet-manager.service';
 import { WithdrawDto } from '../../dto/withdraw.dto';
 import { logger } from 'nx/src/utils/logger';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
+import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 
 @Injectable()
 export class PaypalService {
@@ -45,7 +46,8 @@ export class PaypalService {
     private readonly projectService: ProjectManagerService,
     private readonly mailService: MailService,
     private readonly walletManagerService: WalletManagerService,
-    private readonly translationService: TranslationService
+    private readonly translationService: TranslationService,
+    private readonly manifestService: ManifestService,
   ) {}
 
   private async getAccessToken(): Promise<string> {
@@ -94,7 +96,6 @@ export class PaypalService {
     const accessToken = await this.getAccessToken();
 
     try {
-      // Chuyển location sang tiếng Anh nếu là Hà Nội hoặc TP.HCM
       let locationEn = 'N/A';
       if (user.location) {
         if (user.location.toLowerCase().includes('hà nội')) locationEn = 'Hanoi';
@@ -369,8 +370,6 @@ export class PaypalService {
         payerUserEmail: payerUser.email
       });
 
-      // ✅ SỬA: Tìm translator từ registrants để gán làm assignee
-      // PayerUser là người thanh toán (requester), không phải translator
       const translator = request.registrants.find(registrant =>
         registrant.id !== payerUser.id
       );
@@ -396,18 +395,21 @@ export class PaypalService {
       try {
         const createResult = await this.projectService.createProjectFromRequest(
           request,
-          translator.id // ✅ SỬA: Sử dụng translator.id thay vì selectedUser.id
+          translator.id
         );
 
         const newProject = await this.projectRepository.findOneOrFail({
           where: { id: createResult.projectId },
         });
 
-        request.assignee = translator; // ✅ SỬA: Gán translator làm assignee
+        request.assignee = translator;
         request.registrants = [];
         request.project = newProject;
         request.status = RequestStatus.Approved;
         transaction.status = TransactionStatus.On_Hold;
+
+        // Get translator's wallet to access paypalEmail
+        const translatorWallet = await this.walletManagerService.getOrCreateWallet(translator.id);
 
         console.log('🔄 Creating translator transaction:', {
           userId: translator.id,
@@ -422,8 +424,11 @@ export class PaypalService {
           request: request,
           amount: Math.abs(transaction.amount), // Số tiền translator nhận được (dương)
           status: TransactionStatus.On_Hold,
-          paypalEmail: translator.paypalEmail || null,
+          paypalEmail: translatorWallet.paypalEmail || null,
         });
+
+        // Get payer's wallet to access paypalEmail
+        const payerWallet = await this.walletManagerService.getOrCreateWallet(payerUser.id);
 
         console.log('🔄 Creating requester transaction:', {
           userId: payerUser.id,
@@ -432,13 +437,12 @@ export class PaypalService {
           requestId: request.id
         });
 
-        // ✅ Tạo transaction cho requester - copy hệt translator nhưng thay user
         const requesterTransaction = this.transactionRepo.create({
-          user: payerUser, // Thay translator thành requester
+          user: payerUser,
           request: request,
           amount: Math.abs(transaction.amount),
           status: TransactionStatus.On_Hold,
-          paypalEmail: payerUser.paypalEmail || null,
+          paypalEmail: payerWallet.paypalEmail || null,
         });
 
         console.log('✅ Created requester transaction:', {
@@ -469,7 +473,21 @@ export class PaypalService {
           status: requesterTransaction.status,
         });
 
-        await this.translationService.extractStringsForRequestFiles(request.id);
+        // Generate manifest for each file associated with the request
+        if (request.files && request.files.length > 0) {
+          console.log(`🔄 Generating manifests for ${request.files.length} files...`);
+          for (const file of request.files) {
+            try {
+              await this.manifestService.generateManifest(file);
+              console.log(`✅ Generated manifest for file: ${file.fileName}`);
+            } catch (error) {
+              console.error(`❌ Failed to generate manifest for file ${file.fileName}:`, error);
+              // Continue with other files even if one fails
+            }
+          }
+        } else {
+          console.log('ℹ️ No files found for request, skipping manifest generation');
+        }
 
         console.log('🔄 Saving all transactions to database...');
         await queryRunner.manager.save([request, transaction, translatorTransaction, requesterTransaction]);
@@ -579,7 +597,6 @@ export class PaypalService {
       });
       const user = transaction.user;
       let request = transaction.request;
-      // Luôn load lại request với quan hệ category nếu là public
       if (request.isPublic && !request.category) {
         request = await this.requestRepository.findOneOrFail({
           where: { id: request.id },
@@ -591,18 +608,18 @@ export class PaypalService {
         throw new Error('Invalid request or user information.');
       }
 
-      // Mark transaction and request status
       transaction.status = TransactionStatus.On_Hold;
 
-      // ✅ THÊM: Tạo transaction cho translator (payment) nếu có assignee
       let translatorTransaction = null;
       if (request.assignee && request.assignee.id !== user.id) {
+        const assigneeWallet = await this.walletManagerService.getOrCreateWallet(request.assignee.id);
+
         translatorTransaction = this.transactionRepo.create({
           user: request.assignee,
           request: request,
-          amount: transaction.amount, // Số tiền translator nhận được
+          amount: transaction.amount,
           status: TransactionStatus.On_Hold,
-          paypalEmail: request.assignee.paypalEmail || null,
+          paypalEmail: assigneeWallet.paypalEmail || null,
         });
       }
 
@@ -611,13 +628,14 @@ export class PaypalService {
         await this.transactionRepo.save(translatorTransaction);
       }
 
-      // ✅ THÊM: Tạo transaction cho requester (deposit)
+      const requesterWallet = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+
       const requesterTransaction = this.transactionRepo.create({
-        user: request.requester, // Đúng là requester
+        user: request.requester,
         request: request,
-        amount: Math.abs(transaction.amount), // dương
+        amount: Math.abs(transaction.amount),
         status: TransactionStatus.Completed,
-        paypalEmail: request.requester?.paypalEmail || null,
+        paypalEmail: requesterWallet.paypalEmail || null,
       });
       await this.transactionRepo.save(requesterTransaction);
       // Log để debug
@@ -662,7 +680,7 @@ export class PaypalService {
             console.error('[PayPal] Error creating project from public request:', err);
             return {
               success: false,
-              error: 'Payment succeeded but failed to create project: ' + (err?.message || err),
+              error: 'Payment succeeded but failed to create project: ' + (err),
               requestId: request.id,
               amount: transaction.amount,
               payerEmail: user.email,
@@ -769,7 +787,9 @@ export class PaypalService {
       throw new BadRequestException('Transaction is not pending approval.');
     }
 
-    const paypalEmail = transaction.user.email;
+    // Get user's wallet to access paypalEmail
+    const userWallet = await this.walletManagerService.getOrCreateWallet(transaction.user.id);
+    const paypalEmail = userWallet.paypalEmail || transaction.user.email;
     const amount = Math.abs(Number(transaction.amount));
 
     // Luôn lấy access token mới cho payout

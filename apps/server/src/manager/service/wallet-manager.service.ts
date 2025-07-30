@@ -188,7 +188,7 @@ export class WalletManagerService implements OnModuleInit {
       return {
         ...txn,
         createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
-        paypalEmail: txn.paypalEmail || txn.user?.paypalEmail || null,
+        paypalEmail: txn.paypalEmail || null,
         status: (txn.amount > 0 && txn.status !== TransactionStatus.Approved && txn.status !== TransactionStatus.Completed) ? TransactionStatus.On_Hold : txn.status,
         requestId: txn.request?.id?.toString() || null,
         isRequester: result,

@@ -26,7 +26,7 @@
             <button
               v-if="warning.canAutoFix"
               class="auto-fix-btn"
-              @click="handleAutoFix(warning, index)"
+              @click="handleAutoFixSingle(warning, index)"
               :title="`Auto-fix: ${warning.autoFixDescription}`"
             >
               <i class="pi pi-magic"></i>
@@ -37,14 +37,15 @@
 
       <div class="validation-actions">
         <button
+          v-if="shouldShowAutoFixButton"
           class="btn btn-autofix"
-          @click="handleAutoFixAll"
-          :disabled="!hasAutoFixableIssues"
+          @click="handleAutoFix"
         >
           <i class="pi pi-magic"></i>
-          AUTOFIX ALL
+          AUTOFIX
         </button>
         <button
+          v-if="shouldShowSkipButton"
           class="btn btn-skip"
           @click="handleSkip"
         >
@@ -86,6 +87,8 @@ interface Props {
   originalText: string;
   translatedText: string;
   language?: string; // For language-specific rules
+  warnings?: ValidationWarning[]; // Pass warnings from parent
+  mode?: 'auto-fixable' | 'non-auto-fixable'; // Modal mode
 }
 
 interface Emits {
@@ -93,49 +96,63 @@ interface Emits {
   (e: 'save-anyway'): void;
   (e: 'skip'): void;
   (e: 'auto-fix', warning: ValidationWarning, index: number): void;
-  (e: 'auto-fix-all'): void;
+  (e: 'auto-fix'): void;
 }
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 
-// Enhanced validation logic - Crowdin-style
+// Use warnings from props or compute them if not provided
 const warnings = computed((): ValidationWarning[] => {
-  const warnings: ValidationWarning[] = [];
-
-  if (!props.originalText || !props.translatedText) {
-    return warnings;
+  // If warnings are passed from parent, use them
+  if (props.warnings) {
+    return props.warnings;
   }
 
-  // 1. HTML/XML Tags Validation (Crowdin feature)
-  validateHtmlTags(props.originalText, props.translatedText, warnings);
+  // Otherwise compute them (fallback)
+  const computedWarnings: ValidationWarning[] = [];
 
-  // 2. URL/Email Validation (Crowdin feature)
-  validateUrlsAndEmails(props.originalText, props.translatedText, warnings);
+  if (!props.originalText || !props.translatedText) {
+    return computedWarnings;
+  }
 
-  // 3. Character Case Validation (Crowdin feature)
-  validateCharacterCase(props.originalText, props.translatedText, warnings);
+  // 1. HTML/XML Tags Validation (Crowdin allows)
+  validateHtmlTags(props.originalText, props.translatedText, computedWarnings);
 
-  // 4. Currency Validation (Crowdin feature)
-  validateCurrency(props.originalText, props.translatedText, warnings);
+  // 2. Placeholders Validation (Crowdin allows)
+  validatePlaceholders(props.originalText, props.translatedText, computedWarnings);
 
-  // 5. Date/Time Format Validation (Crowdin feature)
-  validateDateTimeFormat(props.originalText, props.translatedText, warnings);
+  // 3. Whitespace Validation (Crowdin allows)
+  validateWhitespace(props.originalText, props.translatedText, computedWarnings);
 
-  // 6. Context-Aware Validation (Crowdin feature)
-  validateContext(props.originalText, props.translatedText, warnings);
+  // 4. Character Case Validation (Crowdin doesn't allow)
+  validateCharacterCase(props.originalText, props.translatedText, computedWarnings);
 
-  // 7. Existing validations (enhanced)
-  validateNumbers(props.originalText, props.translatedText, warnings);
-  validateWhitespace(props.originalText, props.translatedText, warnings);
-  validatePunctuation(props.originalText, props.translatedText, warnings);
-  validateLength(props.originalText, props.translatedText, warnings);
-  validatePlaceholders(props.originalText, props.translatedText, warnings);
+  // 5. URL/Email Validation (Crowdin doesn't allow)
+  validateUrlsAndEmails(props.originalText, props.translatedText, computedWarnings);
 
-  return warnings;
+  // 6. Currency Validation (Crowdin doesn't allow)
+  validateCurrency(props.originalText, props.translatedText, computedWarnings);
+
+  // 7. Date/Time Format Validation (Crowdin doesn't allow)
+  validateDateTimeFormat(props.originalText, props.translatedText, computedWarnings);
+
+  // 8. Context-Aware Validation (Crowdin doesn't allow)
+  validateContext(props.originalText, props.translatedText, computedWarnings);
+
+  // 9. Number Validation (Crowdin doesn't allow)
+  validateNumbers(props.originalText, props.translatedText, computedWarnings);
+
+  // 10. Punctuation Validation (Crowdin doesn't allow)
+  validatePunctuation(props.originalText, props.translatedText, computedWarnings);
+
+  // 11. Length Validation (Crowdin doesn't allow)
+  validateLength(props.originalText, props.translatedText, computedWarnings);
+
+  return computedWarnings;
 });
 
-// 1. HTML/XML Tags Validation
+// 1. HTML/XML Tags Validation - CROWDIN ALLOWS
 function validateHtmlTags(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   const originalTags = (originalText.match(/<[^>]+>/g) || []) as string[];
   const translatedTags = (translatedText.match(/<[^>]+>/g) || []) as string[];
@@ -148,7 +165,7 @@ function validateHtmlTags(originalText: string, translatedText: string, warnings
         severity: 'error',
         originalText,
         translatedText,
-        canAutoFix: true,
+        canAutoFix: true, // Crowdin allows HTML tag auto-fix
         autoFixDescription: `Add HTML tag ${tag}`,
         autoFixAction: () => translatedText + tag
       });
@@ -156,30 +173,76 @@ function validateHtmlTags(originalText: string, translatedText: string, warnings
   });
 }
 
-// 2. URL/Email Validation
-function validateUrlsAndEmails(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
-  const urlRegex = /https?:\/\/[^\s]+|[\w.-]+@[\w.-]+\.\w+/g;
-  const originalUrls = (originalText.match(urlRegex) || []) as string[];
-  const translatedUrls = (translatedText.match(urlRegex) || []) as string[];
+// 2. Placeholders Validation - CROWDIN ALLOWS
+function validatePlaceholders(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
+  const originalPlaceholders = (originalText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
+  const translatedPlaceholders = (translatedText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
 
-  originalUrls.forEach((url: string) => {
-    if (!translatedUrls.includes(url)) {
-      const isEmail = url.includes('@');
+  originalPlaceholders.forEach((placeholder: string) => {
+    if (!translatedPlaceholders.includes(placeholder)) {
       warnings.push({
-        type: 'missing_url',
-        message: `Missing ${isEmail ? 'email' : 'URL'}: ${url}`,
+        type: 'placeholder_mismatch',
+        message: `Missing placeholder "${placeholder}"`,
         severity: 'error',
         originalText,
         translatedText,
-        canAutoFix: true,
-        autoFixDescription: `Add ${isEmail ? 'email' : 'URL'}`,
-        autoFixAction: () => translatedText + ' ' + url
+        canAutoFix: true, // Crowdin allows placeholder auto-fix
+        autoFixDescription: `Add placeholder "${placeholder}"`,
+        autoFixAction: () => translatedText + placeholder
       });
     }
   });
 }
 
-// 3. Character Case Validation
+// 3. Whitespace Validation - CROWDIN ALLOWS
+function validateWhitespace(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
+  // Check for missing non-breaking spaces
+  const originalNbsp = (originalText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+  const translatedNbsp = (translatedText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+
+  if (originalNbsp > translatedNbsp) {
+    warnings.push({
+      type: 'missing_space',
+      message: `Missing ${originalNbsp - translatedNbsp} non-breaking space(s)`,
+      severity: 'warning',
+      originalText,
+      translatedText,
+      canAutoFix: true, // Crowdin allows whitespace auto-fix
+      autoFixDescription: `Add ${originalNbsp - translatedNbsp} non-breaking space(s)`,
+      autoFixAction: () => translatedText + '&nbsp;'.repeat(originalNbsp - translatedNbsp)
+    });
+  }
+
+  // Check for extra spaces at the end
+  if (translatedText.endsWith(' ') && !originalText.endsWith(' ')) {
+    warnings.push({
+      type: 'extra_space',
+      message: `Source text doesn't end with a space, please remove trailing space`,
+      severity: 'warning',
+      originalText,
+      translatedText,
+      canAutoFix: true, // Crowdin allows trailing space removal
+      autoFixDescription: 'Remove trailing space',
+      autoFixAction: () => translatedText.trimEnd()
+    });
+  }
+
+  // Check for extra spaces at the beginning
+  if (translatedText.startsWith(' ') && !originalText.startsWith(' ')) {
+    warnings.push({
+      type: 'extra_space',
+      message: `Source text doesn't start with a space, please remove leading space`,
+      severity: 'warning',
+      originalText,
+      translatedText,
+      canAutoFix: true, // Crowdin allows leading space removal
+      autoFixDescription: 'Remove leading space',
+      autoFixAction: () => translatedText.trimStart()
+    });
+  }
+}
+
+// 4. Character Case Validation - CROWDIN DOESN'T ALLOW
 function validateCharacterCase(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   // Check if original starts with uppercase and translation doesn't
   const originalStartsWithUpper = /^[A-Z]/.test(originalText);
@@ -192,7 +255,7 @@ function validateCharacterCase(originalText: string, translatedText: string, war
       severity: 'warning',
       originalText,
       translatedText,
-      canAutoFix: true,
+      canAutoFix: false, // Crowdin doesn't allow case auto-fix
       autoFixDescription: 'Capitalize first letter',
       autoFixAction: () => translatedText.charAt(0).toUpperCase() + translatedText.slice(1)
     });
@@ -207,7 +270,7 @@ function validateCharacterCase(originalText: string, translatedText: string, war
         severity: 'warning',
         originalText,
         translatedText,
-        canAutoFix: true,
+        canAutoFix: false, // Crowdin doesn't allow case auto-fix
         autoFixDescription: `Add capitalized word ${word}`,
         autoFixAction: () => translatedText + ' ' + word
       });
@@ -215,7 +278,30 @@ function validateCharacterCase(originalText: string, translatedText: string, war
   });
 }
 
-// 4. Currency Validation
+// 5. URL/Email Validation - CROWDIN DOESN'T ALLOW
+function validateUrlsAndEmails(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
+  const urlRegex = /https?:\/\/[^\s]+|[\w.-]+@[\w.-]+\.\w+/g;
+  const originalUrls = (originalText.match(urlRegex) || []) as string[];
+  const translatedUrls = (translatedText.match(urlRegex) || []) as string[];
+
+  originalUrls.forEach((url: string) => {
+    if (!translatedUrls.includes(url)) {
+      const isEmail = url.includes('@');
+      warnings.push({
+        type: 'missing_url',
+        message: `Missing ${isEmail ? 'email' : 'URL'}: ${url}`,
+        severity: 'error',
+        originalText,
+        translatedText,
+        canAutoFix: false, // Crowdin doesn't allow URL/email auto-fix
+        autoFixDescription: `Add ${isEmail ? 'email' : 'URL'}`,
+        autoFixAction: () => translatedText + ' ' + url
+      });
+    }
+  });
+}
+
+// 6. Currency Validation - CROWDIN DOESN'T ALLOW
 function validateCurrency(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   const currencyRegex = /[\$€£¥₹₽₩₪₦₨₱₴₸₺₼₾₿]/g;
   const originalCurrencies = (originalText.match(currencyRegex) || []) as string[];
@@ -229,7 +315,7 @@ function validateCurrency(originalText: string, translatedText: string, warnings
         severity: 'error',
         originalText,
         translatedText,
-        canAutoFix: true,
+        canAutoFix: false, // Crowdin doesn't allow currency auto-fix
         autoFixDescription: `Add currency symbol ${currency}`,
         autoFixAction: () => translatedText + currency
       });
@@ -237,7 +323,7 @@ function validateCurrency(originalText: string, translatedText: string, warnings
   });
 }
 
-// 5. Date/Time Format Validation
+// 7. Date/Time Format Validation - CROWDIN DOESN'T ALLOW
 function validateDateTimeFormat(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   const dateRegex = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4}/g;
   const originalDates = (originalText.match(dateRegex) || []) as string[];
@@ -251,7 +337,7 @@ function validateDateTimeFormat(originalText: string, translatedText: string, wa
         severity: 'warning',
         originalText,
         translatedText,
-        canAutoFix: true,
+        canAutoFix: false, // Crowdin doesn't allow date auto-fix
         autoFixDescription: `Add date ${date}`,
         autoFixAction: () => translatedText + ' ' + date
       });
@@ -259,7 +345,7 @@ function validateDateTimeFormat(originalText: string, translatedText: string, wa
   });
 }
 
-// 6. Context-Aware Validation
+// 8. Context-Aware Validation - CROWDIN DOESN'T ALLOW
 function validateContext(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   const contextKeywords = {
     error: ['ERROR', 'FAILED', 'CRITICAL', 'EXCEPTION', 'INVALID'],
@@ -287,82 +373,48 @@ function validateContext(originalText: string, translatedText: string, warnings:
           severity: 'warning',
           originalText,
           translatedText,
-          canAutoFix: false
+          canAutoFix: false // Crowdin doesn't allow context auto-fix
         });
       }
     }
   });
 }
 
-// 7. Enhanced Number Validation
+// 9. Number Validation - CROWDIN DOESN'T ALLOW
 function validateNumbers(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   const originalNumbers = (originalText.match(/\d+/g) || []) as string[];
   const translatedNumbers = (translatedText.match(/\d+/g) || []) as string[];
 
-  (originalNumbers as string[]).forEach((num: string) => {
+  originalNumbers.forEach((num: string) => {
     if (!translatedNumbers.includes(num)) {
       warnings.push({
         type: 'missing_number',
-        message: `The translation is missing the number "${num}" present in the source text.`,
+        message: `Missing number "${num}"`,
         severity: 'warning',
         originalText,
         translatedText,
-        canAutoFix: true,
-        autoFixDescription: `Add number "${num}" to translation`,
+        canAutoFix: false, // Crowdin doesn't allow number auto-fix
+        autoFixDescription: `Add number "${num}"`,
         autoFixAction: () => translatedText + num
       });
     }
   });
 }
 
-// 8. Enhanced Whitespace Validation
-function validateWhitespace(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
-  // Check for missing non-breaking spaces
-  const originalNbsp = (originalText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
-  const translatedNbsp = (translatedText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
-
-  if (originalNbsp > translatedNbsp) {
-    warnings.push({
-      type: 'missing_space',
-      message: `Translation is missing ${originalNbsp - translatedNbsp} non-breaking space(s).`,
-      severity: 'warning',
-      originalText,
-      translatedText,
-      canAutoFix: true,
-      autoFixDescription: `Add ${originalNbsp - translatedNbsp} non-breaking space(s)`,
-      autoFixAction: () => translatedText + '&nbsp;'.repeat(originalNbsp - translatedNbsp)
-    });
-  }
-
-  // Check for extra spaces at the end
-  if (translatedText.endsWith(' ') && !originalText.endsWith(' ')) {
-    warnings.push({
-      type: 'extra_space',
-      message: `Source text doesn't end with a space, please remove 1 space at the end of the translation.`,
-      severity: 'warning',
-      originalText,
-      translatedText,
-      canAutoFix: true,
-      autoFixDescription: 'Remove trailing space',
-      autoFixAction: () => translatedText.trimEnd()
-    });
-  }
-}
-
-// 9. Enhanced Punctuation Validation
+// 10. Punctuation Validation - CROWDIN DOESN'T ALLOW
 function validatePunctuation(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   const originalPunct = (originalText.match(/[.,!?;:]/g) || []) as string[];
   const translatedPunct = (translatedText.match(/[.,!?;:]/g) || []) as string[];
 
-  (originalPunct as string[]).forEach((punct: string) => {
+  originalPunct.forEach((punct: string) => {
     if (!translatedPunct.includes(punct)) {
       warnings.push({
         type: 'missing_punctuation',
-        message: `The translation is missing the punctuation "${punct}" present in the source text.`,
+        message: `Missing punctuation "${punct}"`,
         severity: 'warning',
         originalText,
         translatedText,
-        canAutoFix: true,
+        canAutoFix: false, // Crowdin doesn't allow punctuation auto-fix
         autoFixDescription: `Add punctuation "${punct}"`,
         autoFixAction: () => translatedText + punct
       });
@@ -370,46 +422,35 @@ function validatePunctuation(originalText: string, translatedText: string, warni
   });
 }
 
-// 10. Enhanced Length Validation
+// 11. Length Validation - CROWDIN DOESN'T ALLOW
 function validateLength(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
   const lengthRatio = translatedText.length / originalText.length;
 
   if (lengthRatio < 0.3 || lengthRatio > 3) {
     warnings.push({
       type: 'length_mismatch',
-      message: `The translation length differs significantly from the source text (${Math.round(lengthRatio * 100)}% of original length).`,
+      message: `Length differs significantly (${Math.round(lengthRatio * 100)}% of original)`,
       severity: 'warning',
       originalText,
       translatedText,
-      canAutoFix: false // Cannot auto-fix length issues
+      canAutoFix: false // Crowdin doesn't allow length auto-fix
     });
   }
-}
-
-// 11. Enhanced Placeholder Validation
-function validatePlaceholders(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
-  const originalPlaceholders = (originalText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
-  const translatedPlaceholders = (translatedText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
-
-  (originalPlaceholders as string[]).forEach((placeholder: string) => {
-    if (!translatedPlaceholders.includes(placeholder)) {
-      warnings.push({
-        type: 'placeholder_mismatch',
-        message: `The translation is missing the placeholder "${placeholder}" present in the source text.`,
-        severity: 'error',
-        originalText,
-        translatedText,
-        canAutoFix: true,
-        autoFixDescription: `Add placeholder "${placeholder}"`,
-        autoFixAction: () => translatedText + placeholder
-      });
-    }
-  });
 }
 
 // Computed properties for auto-fix functionality
 const hasAutoFixableIssues = computed(() => {
   return warnings.value.some(warning => warning.canAutoFix);
+});
+
+// Check if we should show auto-fix button based on mode
+const shouldShowAutoFixButton = computed(() => {
+  return props.mode === 'auto-fixable' && hasAutoFixableIssues.value;
+});
+
+// Check if we should show skip button (only for auto-fixable issues)
+const shouldShowSkipButton = computed(() => {
+  return props.mode === 'auto-fixable' && hasAutoFixableIssues.value;
 });
 
 function getWarningIcon(severity: string): string {
@@ -428,12 +469,12 @@ function handleSkip() {
   emit('skip');
 }
 
-function handleAutoFix(warning: ValidationWarning, index: number) {
+function handleAutoFixSingle(warning: ValidationWarning, index: number) {
   emit('auto-fix', warning, index);
 }
 
-function handleAutoFixAll() {
-  emit('auto-fix-all');
+function handleAutoFix() {
+  emit('auto-fix');
 }
 </script>
 
@@ -458,15 +499,17 @@ function handleAutoFixAll() {
   border: 2px solid #fbbf24;
   border-radius: 8px;
   padding: 0;
-  max-width: 400px;
+  max-width: 380px;
   width: auto;
-  min-height: 300px;
-  max-height: 60vh;
+  min-height: auto;
+  max-height: 70vh;
   overflow: hidden;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   margin-top: 0.5rem;
   animation: slideDown 0.2s ease-out;
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes slideDown {
@@ -484,7 +527,7 @@ function handleAutoFixAll() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem;
+  padding: 0.6rem 0.75rem;
   background: #1e293b;
   border-bottom: 1px solid #475569;
 }
@@ -492,7 +535,7 @@ function handleAutoFixAll() {
 .validation-header h3 {
   margin: 0;
   color: #fbbf24;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
@@ -514,8 +557,9 @@ function handleAutoFixAll() {
 
 .validation-content {
   padding: 0.75rem;
-  max-height: 250px;
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
+  flex: 1;
 }
 
 /* Responsive design for smaller screens */
@@ -523,11 +567,11 @@ function handleAutoFixAll() {
   .validation-dialog {
     max-width: 95%;
     margin-top: 0.5rem;
-    min-height: 250px;
+    min-height: auto;
   }
 
   .validation-content {
-    max-height: 200px;
+    max-height: none;
     padding: 0.5rem;
   }
 
@@ -600,27 +644,28 @@ function handleAutoFixAll() {
 
 .validation-actions {
   display: flex;
-  gap: 0.4rem;
-  padding: 0.75rem;
+  gap: 0.3rem;
+  padding: 0.5rem;
   background: #0f172a;
   border-top: 1px solid #475569;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .btn {
-  padding: 0.4rem 0.8rem;
+  padding: 0.3rem 0.6rem;
   border: none;
   border-radius: 3px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.2rem;
   flex: 1;
-  min-width: 80px;
+  min-width: 70px;
 }
 
 .btn-autofix {

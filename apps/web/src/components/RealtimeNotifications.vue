@@ -25,10 +25,11 @@
           No notifications
         </div>
         <div
-          v-for="notification in notifications"
+          v-for="notification in notifications.slice(0, 5)"
           :key="notification.id"
           class="notification-item"
           :class="{ 'unread': !notification.isRead }"
+          @click="viewNotificationDetail(notification.id)"
         >
           <div class="notification-content">
             <div class="notification-header">
@@ -37,8 +38,8 @@
             </div>
             <p class="notification-message">{{ notification.message }}</p>
           </div>
-          <div class="notification-actions">
-            <button v-if="!notification.isRead" @click="markAsRead(notification.id)" class="mark-read">
+          <div class="notification-actions" @click.stop>
+            <button v-if="!notification.isRead" @click="markAsRead(notification)" class="mark-read">
               <i class="pi pi-check"></i>
             </button>
           </div>
@@ -80,10 +81,15 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { io, Socket } from 'socket.io-client'
 import { notificationService } from '../services/notification.service'
 import { useAuthStore } from '../store/auth'
 import { getChatConfig } from '../utils/chat-config'
+import { useNotificationSync } from '../composables/useNotificationSync'
+
+const router = useRouter()
+const { onNotificationDeleted, onNotificationMarkedRead, onAllNotificationsDeleted, onAllNotificationsMarkedRead, emitNotificationMarkedRead, emitAllNotificationsMarkedRead } = useNotificationSync()
 
 interface Notification {
   id: string
@@ -92,6 +98,7 @@ interface Notification {
   createdAt: string
   isRead?: boolean
   isGlobal?: boolean
+  readAt?: string
 }
 
 interface ToastNotification extends Notification {
@@ -128,7 +135,7 @@ const loadNotifications = async () => {
     const response = await notificationService.getUserNotifications(20)
     notifications.value = response.notifications.map(notif => ({
       ...notif,
-      isRead: false // Assuming all are unread initially
+      isRead: notif.isRead // Preserve actual read status from server
     }))
 
     // Update unread count
@@ -150,26 +157,40 @@ const loadMoreNotifications = async () => {
   }
 }
 
-const markAsRead = (notification: Notification) => {
+const markAsRead = async (notification: Notification) => {
   if (!notification.isRead) {
-    notification.isRead = true
-    updateUnreadCount()
-    // Here you would call API to mark as read on server
+    try {
+      await notificationService.markAsRead(notification.id)
+      notification.isRead = true
+      notification.readAt = new Date().toISOString()
+      updateUnreadCount()
+      emitNotificationMarkedRead(notification.id)
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+    }
   }
 }
 
-const markAllAsRead = () => {
-  notifications.value.forEach(notif => {
-    notif.isRead = true
-  })
-  updateUnreadCount()
-  // Here you would call API to mark all as read on server
+const markAllAsRead = async () => {
+  try {
+    await notificationService.markAllAsRead()
+    notifications.value.forEach(notif => {
+      if (!notif.isRead) {
+        notif.isRead = true
+        notif.readAt = new Date().toISOString()
+      }
+    })
+    updateUnreadCount()
+    emitAllNotificationsMarkedRead()
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error)
+  }
 }
 
 const updateUnreadCount = async () => {
   try {
     const response = await notificationService.getNotificationCount()
-    unreadCount.value = response.count
+    unreadCount.value = response.unread // Use unread count instead of total
   } catch (error) {
     console.error('Error updating unread count:', error)
   }
@@ -248,21 +269,59 @@ const connectToNotificationSocket = () => {
     })
 
     // Show toast
-    addToast({
-      ...notification,
-      isGlobal: true
-    })
+    addToast(notification)
 
     // Update unread count
     unreadCount.value++
   })
 
   socket.on('notification_deleted', (data: { id: string }) => {
+    console.log('🗑️ Notification deleted:', data.id)
+
+    // Remove from local notifications list
     const index = notifications.value.findIndex(n => n.id === data.id)
     if (index > -1) {
+      const deletedNotification = notifications.value[index]
       notifications.value.splice(index, 1)
-      updateUnreadCount()
+
+      // Update unread count if the deleted notification was unread
+      if (!deletedNotification.isRead) {
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
+      }
     }
+  })
+
+  socket.on('notification_marked_read', (data: { id: string }) => {
+    console.log('✅ Notification marked as read:', data.id)
+
+    // Update local notification status
+    const notification = notifications.value.find(n => n.id === data.id)
+    if (notification && !notification.isRead) {
+      notification.isRead = true
+      notification.readAt = new Date().toISOString()
+      unreadCount.value = Math.max(0, unreadCount.value - 1)
+    }
+  })
+
+  socket.on('all_notifications_deleted', () => {
+    console.log('🗑️ All notifications deleted')
+
+    // Clear local notifications list
+    notifications.value = []
+    unreadCount.value = 0
+  })
+
+  socket.on('all_notifications_marked_read', () => {
+    console.log('✅ All notifications marked as read')
+
+    // Update all notifications to read status
+    notifications.value.forEach(notification => {
+      if (!notification.isRead) {
+        notification.isRead = true
+        notification.readAt = new Date().toISOString()
+      }
+    })
+    unreadCount.value = 0
   })
 
   socket.on('disconnect', () => {
@@ -331,13 +390,56 @@ const formatTime = (dateString: string) => {
 }
 
 const navigateToNotifications = () => {
-  // Navigate to notifications page
-  closePanel()
+  router.push('/notifications')
+  showNotificationPanel.value = false
+}
+
+const viewNotificationDetail = (notificationId: string) => {
+  router.push(`/notifications/${notificationId}`)
+  showNotificationPanel.value = false
 }
 
 onMounted(() => {
-  updateUnreadCount()
+  loadNotifications()
   connectToNotificationSocket()
+
+  // Set up notification sync listeners
+  onNotificationDeleted((id: string) => {
+    const index = notifications.value.findIndex(n => n.id === id)
+    if (index > -1) {
+      const deletedNotification = notifications.value[index]
+      notifications.value.splice(index, 1)
+
+      // Update unread count if the deleted notification was unread
+      if (!deletedNotification.isRead) {
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
+      }
+    }
+  })
+
+  onNotificationMarkedRead((id: string) => {
+    const notification = notifications.value.find(n => n.id === id)
+    if (notification && !notification.isRead) {
+      notification.isRead = true
+      notification.readAt = new Date().toISOString()
+      unreadCount.value = Math.max(0, unreadCount.value - 1)
+    }
+  })
+
+  onAllNotificationsDeleted(() => {
+    notifications.value = []
+    unreadCount.value = 0
+  })
+
+  onAllNotificationsMarkedRead(() => {
+    notifications.value.forEach(notification => {
+      if (!notification.isRead) {
+        notification.isRead = true
+        notification.readAt = new Date().toISOString()
+      }
+    })
+    unreadCount.value = 0
+  })
 })
 
 onUnmounted(() => {

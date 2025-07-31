@@ -8,7 +8,7 @@
       <div class="header-actions">
         <RealtimeNotifications />
         <button class="icon-btn"><span class="material-icons">chat_bubble_outline</span></button>
-        <img src="../assets/avatar.png" class="avatar" alt="avatar" />
+        <img src="../assets/logo.png" class="avatar" alt="avatar" />
       </div>
     </div>
   </header>

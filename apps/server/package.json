@@ -11,7 +11,7 @@
           "outputPath": "dist/apps/server",
           "main": "apps/server/src/main.ts",
           "tsConfig": "apps/server/tsconfig.app.json",
-          "webpackConfig": "apps/server/webpack.config.js"
+          "webpackConfig": "apps/server/webpack.config.cjs"
         },
         "configurations": {
           "production": {

@@ -117,7 +117,6 @@ import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
     NotificationGateway,
     ProjectInvitationService,
     FeeService,
-
   ],
   exports: [
     CategoryManagerService,

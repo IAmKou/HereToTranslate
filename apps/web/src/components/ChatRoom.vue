@@ -1214,29 +1214,6 @@ const sendMessage = () => {
   replyingTo.value = null
 }
 
-const manualReconnect = () => {
-  console.log('🔄 Manual reconnect triggered')
-  if (socket.value) {
-    socket.value.disconnect()
-    socket.value = null
-  }
-  setTimeout(() => {
-    connectSocket()
-  }, 1000)
-}
-
-const debugConnection = () => {
-  console.log('=== CHAT DEBUG INFO ===')
-  console.log('Socket connected:', socket.value?.connected)
-  console.log('Socket ID:', socket.value?.id)
-  console.log('Is connecting:', isConnecting.value)
-  console.log('Error:', error.value)
-  console.log('Room ID:', props.roomId)
-  console.log('Current user:', props.currentUserId, props.currentUsername)
-  console.log('Messages count:', messages.value.length)
-  console.log('Participants count:', participants.value.length)
-}
-
 const startEdit = (m: ChatMessage) => {
   editingMessageId.value = m._id
   editingText.value = m.message

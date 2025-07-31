@@ -58,6 +58,8 @@ const focusedInputId = ref<string | null>(null);
 // Thêm state cho validation dialog
 const showValidationDialog = ref(false);
 const currentValidationString = ref<any>(null);
+const currentValidationMode = ref<'auto-fixable' | 'non-auto-fixable'>('auto-fixable');
+const skippedWarnings = ref<Set<string>>(new Set()); // Track skipped warnings by their message
 
 // Thêm state cho inline validation warnings
 const validationWarnings = ref<Record<string, any[]>>({});
@@ -287,13 +289,7 @@ function getFileIconClass(fileName: string) {
   return "pi pi-file";
 }
 
-// Hàm icon trạng thái dịch
-function getStatusIcon(progress: { total: number; translated: number }) {
-  if (!progress) return '';
-  if (progress.translated === 0) return 'pi pi-ban text-red'; // ⛔
-  if (progress.translated === progress.total && progress.total > 0) return 'pi pi-check-circle text-green';
-  return 'pi pi-exclamation-circle text-yellow';
-}
+
 const filterOptions = [
   { value: 'all', label: 'All', icon: 'pi pi-list', tooltip: 'Show all segments' },
   { value: 'translated', label: 'Translated', icon: 'pi pi-check', tooltip: 'Show only translated' },
@@ -466,7 +462,7 @@ function calculateValidationWarnings(str: any): any[] {
     return warnings;
   }
 
-  // 1. HTML/XML Tags Validation
+  // 1. HTML/XML Tags Validation - CROWDIN ALLOWS
   const originalTags = (originalText.match(/<[^>]+>/g) || []) as string[];
   const translatedTags = (translatedText.match(/<[^>]+>/g) || []) as string[];
   originalTags.forEach((tag: string) => {
@@ -475,30 +471,64 @@ function calculateValidationWarnings(str: any): any[] {
         type: 'missing_html_tag',
         message: `Missing HTML tag: ${tag}`,
         severity: 'error',
-        canAutoFix: true,
+        canAutoFix: true, // Crowdin allows HTML tag auto-fix
         autoFixAction: () => translatedText + tag
       });
     }
   });
 
-  // 2. URL/Email Validation
-  const urlRegex = /https?:\/\/[^\s]+|[\w.-]+@[\w.-]+\.\w+/g;
-  const originalUrls = (originalText.match(urlRegex) || []) as string[];
-  const translatedUrls = (translatedText.match(urlRegex) || []) as string[];
-  originalUrls.forEach((url: string) => {
-    if (!translatedUrls.includes(url)) {
-      const isEmail = url.includes('@');
+  // 2. Placeholders Validation - CROWDIN ALLOWS
+  const originalPlaceholders = (originalText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
+  const translatedPlaceholders = (translatedText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
+  originalPlaceholders.forEach((placeholder: string) => {
+    if (!translatedPlaceholders.includes(placeholder)) {
       warnings.push({
-        type: 'missing_url',
-        message: `Missing ${isEmail ? 'email' : 'URL'}: ${url}`,
+        type: 'placeholder_mismatch',
+        message: `Missing placeholder "${placeholder}"`,
         severity: 'error',
-        canAutoFix: true,
-        autoFixAction: () => translatedText + ' ' + url
+        canAutoFix: true, // Crowdin allows placeholder auto-fix
+        autoFixAction: () => translatedText + placeholder
       });
     }
   });
 
-  // 3. Character Case Validation
+  // 3. Whitespace Validation - CROWDIN ALLOWS
+  // Check for missing non-breaking spaces
+  const originalNbsp = (originalText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+  const translatedNbsp = (translatedText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
+  if (originalNbsp > translatedNbsp) {
+    warnings.push({
+      type: 'missing_space',
+      message: `Missing ${originalNbsp - translatedNbsp} non-breaking space(s)`,
+      severity: 'warning',
+      canAutoFix: true, // Crowdin allows whitespace auto-fix
+      autoFixAction: () => translatedText + '&nbsp;'.repeat(originalNbsp - translatedNbsp)
+    });
+  }
+
+  // Check for extra spaces at the end
+  if (translatedText.endsWith(' ') && !originalText.endsWith(' ')) {
+    warnings.push({
+      type: 'extra_space',
+      message: 'Source text doesn\'t end with a space, please remove trailing space',
+      severity: 'warning',
+      canAutoFix: true, // Crowdin allows trailing space removal
+      autoFixAction: () => translatedText.trimEnd()
+    });
+  }
+
+  // Check for extra spaces at the beginning
+  if (translatedText.startsWith(' ') && !originalText.startsWith(' ')) {
+    warnings.push({
+      type: 'extra_space',
+      message: 'Source text doesn\'t start with a space, please remove leading space',
+      severity: 'warning',
+      canAutoFix: true, // Crowdin allows leading space removal
+      autoFixAction: () => translatedText.trimStart()
+    });
+  }
+
+  // 4. Character Case Validation - CROWDIN DOESN'T ALLOW
   const originalStartsWithUpper = /^[A-Z]/.test(originalText);
   const translatedStartsWithUpper = /^[A-Z]/.test(translatedText);
   if (originalStartsWithUpper && !translatedStartsWithUpper) {
@@ -506,7 +536,7 @@ function calculateValidationWarnings(str: any): any[] {
       type: 'case_mismatch',
       message: 'Translation should start with uppercase letter',
       severity: 'warning',
-      canAutoFix: true,
+      canAutoFix: false, // Crowdin doesn't allow case auto-fix
       autoFixAction: () => translatedText.charAt(0).toUpperCase() + translatedText.slice(1)
     });
   }
@@ -519,13 +549,30 @@ function calculateValidationWarnings(str: any): any[] {
         type: 'case_mismatch',
         message: `Missing capitalized word: ${word}`,
         severity: 'warning',
-        canAutoFix: true,
+        canAutoFix: false, // Crowdin doesn't allow case auto-fix
         autoFixAction: () => translatedText + ' ' + word
       });
     }
   });
 
-  // 4. Currency Validation
+  // 5. URL/Email Validation - CROWDIN DOESN'T ALLOW
+  const urlRegex = /https?:\/\/[^\s]+|[\w.-]+@[\w.-]+\.\w+/g;
+  const originalUrls = (originalText.match(urlRegex) || []) as string[];
+  const translatedUrls = (translatedText.match(urlRegex) || []) as string[];
+  originalUrls.forEach((url: string) => {
+    if (!translatedUrls.includes(url)) {
+      const isEmail = url.includes('@');
+      warnings.push({
+        type: 'missing_url',
+        message: `Missing ${isEmail ? 'email' : 'URL'}: ${url}`,
+        severity: 'error',
+        canAutoFix: false, // Crowdin doesn't allow URL/email auto-fix
+        autoFixAction: () => translatedText + ' ' + url
+      });
+    }
+  });
+
+  // 6. Currency Validation - CROWDIN DOESN'T ALLOW
   const currencyRegex = /[\$€£¥₹₽₩₪₦₨₱₴₸₺₼₾₿]/g;
   const originalCurrencies = (originalText.match(currencyRegex) || []) as string[];
   const translatedCurrencies = (translatedText.match(currencyRegex) || []) as string[];
@@ -535,13 +582,13 @@ function calculateValidationWarnings(str: any): any[] {
         type: 'missing_currency',
         message: `Missing currency symbol: ${currency}`,
         severity: 'error',
-        canAutoFix: true,
+        canAutoFix: false, // Crowdin doesn't allow currency auto-fix
         autoFixAction: () => translatedText + currency
       });
     }
   });
 
-  // 5. Date/Time Format Validation
+  // 7. Date/Time Format Validation - CROWDIN DOESN'T ALLOW
   const dateRegex = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4}/g;
   const originalDates = (originalText.match(dateRegex) || []) as string[];
   const translatedDates = (translatedText.match(dateRegex) || []) as string[];
@@ -551,13 +598,54 @@ function calculateValidationWarnings(str: any): any[] {
         type: 'date_format_mismatch',
         message: `Missing date format: ${date}`,
         severity: 'warning',
-        canAutoFix: true,
+        canAutoFix: false, // Crowdin doesn't allow date auto-fix
         autoFixAction: () => translatedText + ' ' + date
       });
     }
   });
 
-  // 6. Context-Aware Validation
+  // 8. Number Validation - CROWDIN DOESN'T ALLOW
+  const originalNumbers = (originalText.match(/\d+/g) || []) as string[];
+  const translatedNumbers = (translatedText.match(/\d+/g) || []) as string[];
+  originalNumbers.forEach((num: string) => {
+    if (!translatedNumbers.includes(num)) {
+      warnings.push({
+        type: 'missing_number',
+        message: `Missing number "${num}"`,
+        severity: 'warning',
+        canAutoFix: false, // Crowdin doesn't allow number auto-fix
+        autoFixAction: () => translatedText + num
+      });
+    }
+  });
+
+  // 9. Punctuation Validation - CROWDIN DOESN'T ALLOW
+  const originalPunct = (originalText.match(/[.,!?;:]/g) || []) as string[];
+  const translatedPunct = (translatedText.match(/[.,!?;:]/g) || []) as string[];
+  originalPunct.forEach((punct: string) => {
+    if (!translatedPunct.includes(punct)) {
+      warnings.push({
+        type: 'missing_punctuation',
+        message: `Missing punctuation "${punct}"`,
+        severity: 'warning',
+        canAutoFix: false, // Crowdin doesn't allow punctuation auto-fix
+        autoFixAction: () => translatedText + punct
+      });
+    }
+  });
+
+  // 10. Length Validation - CROWDIN DOESN'T ALLOW
+  const lengthRatio = translatedText.length / originalText.length;
+  if (lengthRatio < 0.3 || lengthRatio > 3) {
+    warnings.push({
+      type: 'length_mismatch',
+      message: `Length differs significantly (${Math.round(lengthRatio * 100)}% of original)`,
+      severity: 'warning',
+      canAutoFix: false // Crowdin doesn't allow length auto-fix
+    });
+  }
+
+  // 11. Context-Aware Validation - CROWDIN DOESN'T ALLOW
   const contextKeywords = {
     error: ['ERROR', 'FAILED', 'CRITICAL', 'EXCEPTION', 'INVALID'],
     success: ['SUCCESS', 'COMPLETED', 'DONE', 'FINISHED', 'OK'],
@@ -581,93 +669,14 @@ function calculateValidationWarnings(str: any): any[] {
           type: 'context_mismatch',
           message: `Translation should maintain ${context} context`,
           severity: 'warning',
-          canAutoFix: false
+          canAutoFix: false // Crowdin doesn't allow context auto-fix
         });
       }
     }
   });
 
-  // 7. Enhanced Number Validation
-  const originalNumbers = (originalText.match(/\d+/g) || []) as string[];
-  const translatedNumbers = (translatedText.match(/\d+/g) || []) as string[];
-  originalNumbers.forEach((num: string) => {
-    if (!translatedNumbers.includes(num)) {
-      warnings.push({
-        type: 'missing_number',
-        message: `Missing number "${num}"`,
-        severity: 'warning',
-        canAutoFix: true,
-        autoFixAction: () => translatedText + num
-      });
-    }
-  });
-
-  // 8. Enhanced Whitespace Validation
-  const originalNbsp = (originalText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
-  const translatedNbsp = (translatedText.match(/&nbsp;|&#160;|\u00A0/g) || []).length;
-  if (originalNbsp > translatedNbsp) {
-    warnings.push({
-      type: 'missing_space',
-      message: `Missing ${originalNbsp - translatedNbsp} non-breaking space(s)`,
-      severity: 'warning',
-      canAutoFix: true,
-      autoFixAction: () => translatedText + '&nbsp;'.repeat(originalNbsp - translatedNbsp)
-    });
-  }
-
-  // Check for extra spaces at the end
-  if (translatedText.endsWith(' ') && !originalText.endsWith(' ')) {
-    warnings.push({
-      type: 'extra_space',
-      message: 'Source text doesn\'t end with a space, please remove trailing space',
-      severity: 'warning',
-      canAutoFix: true,
-      autoFixAction: () => translatedText.trimEnd()
-    });
-  }
-
-  // 9. Enhanced Punctuation Validation
-  const originalPunct = (originalText.match(/[.,!?;:]/g) || []) as string[];
-  const translatedPunct = (translatedText.match(/[.,!?;:]/g) || []) as string[];
-  originalPunct.forEach((punct: string) => {
-    if (!translatedPunct.includes(punct)) {
-      warnings.push({
-        type: 'missing_punctuation',
-        message: `Missing punctuation "${punct}"`,
-        severity: 'warning',
-        canAutoFix: true,
-        autoFixAction: () => translatedText + punct
-      });
-    }
-  });
-
-  // 10. Enhanced Length Validation
-  const lengthRatio = translatedText.length / originalText.length;
-  if (lengthRatio < 0.3 || lengthRatio > 3) {
-    warnings.push({
-      type: 'length_mismatch',
-      message: `Length differs significantly (${Math.round(lengthRatio * 100)}% of original)`,
-      severity: 'warning',
-      canAutoFix: false
-    });
-  }
-
-  // 11. Enhanced Placeholder Validation
-  const originalPlaceholders = (originalText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
-  const translatedPlaceholders = (translatedText.match(/\{[^}]+\}|\%[^%]+\%|\$[^$]+\$/g) || []) as string[];
-  originalPlaceholders.forEach((placeholder: string) => {
-    if (!translatedPlaceholders.includes(placeholder)) {
-      warnings.push({
-        type: 'placeholder_mismatch',
-        message: `Missing placeholder "${placeholder}"`,
-        severity: 'error',
-        canAutoFix: true,
-        autoFixAction: () => translatedText + placeholder
-      });
-    }
-  });
-
-  return warnings;
+  // Filter out skipped warnings
+  return warnings.filter(warning => !skippedWarnings.value.has(warning.message));
 }
 const toast = useToast();
 // Cải thiện hàm saveTranslation
@@ -681,9 +690,25 @@ async function saveTranslation(str: any) {
   const warnings = calculateValidationWarnings(str);
 
   if (warnings.length > 0) {
-    // Show validation dialog nếu có vấn đề (giống Crowdin)
+    // Reset skipped warnings for new validation
+    skippedWarnings.value.clear();
+
+    // Tách riêng lỗi auto-fix được và không auto-fix được
+    const autoFixableWarnings = warnings.filter(w => w.canAutoFix);
+    const nonAutoFixableWarnings = warnings.filter(w => !w.canAutoFix);
+
+    // Hiển thị modal theo thứ tự: auto-fix được trước, không auto-fix được sau
     currentValidationString.value = str;
-    showValidationDialog.value = true;
+
+    if (autoFixableWarnings.length > 0) {
+      // Hiển thị modal với lỗi auto-fix được
+      currentValidationMode.value = 'auto-fixable';
+      showValidationDialog.value = true;
+    } else if (nonAutoFixableWarnings.length > 0) {
+      // Hiển thị modal với lỗi không auto-fix được
+      currentValidationMode.value = 'non-auto-fixable';
+      showValidationDialog.value = true;
+    }
   } else {
     // Save trực tiếp nếu không có vấn đề
     performSave(str);
@@ -785,62 +810,128 @@ function handleValidationSaveAnyway() {
 }
 
 function handleValidationSkip() {
-  // Skip this validation and close dialog
-  showValidationDialog.value = false;
-  currentValidationString.value = null;
-  toast.add({
-    severity: 'info',
-    summary: 'Skipped',
-    detail: 'Validation issues skipped',
-    life: 2000
-  });
-}
+  if (currentValidationString.value) {
+    // Get current warnings
+    const warnings = calculateValidationWarnings(currentValidationString.value);
+    const autoFixableWarnings = warnings.filter(w => w.canAutoFix);
 
-function handleValidationAutoFix(warning: any, index: number) {
-  if (currentValidationString.value && warning.autoFixAction) {
-    // Apply auto-fix
-    const fixedText = warning.autoFixAction();
-    currentValidationString.value.translatedText = fixedText;
+    if (autoFixableWarnings.length > 0) {
+      // Skip the first auto-fixable warning by adding it to skipped set
+      const firstWarning = autoFixableWarnings[0];
+      skippedWarnings.value.add(firstWarning.message);
 
-    // Update validation warnings
-    updateValidationWarnings(currentValidationString.value);
+      // Check if there are still auto-fixable warnings (excluding skipped ones)
+      const remainingAutoFixableWarnings = autoFixableWarnings.filter(w => !skippedWarnings.value.has(w.message));
 
-    toast.add({
-      severity: 'success',
-      summary: 'Auto-fixed',
-      detail: warning.autoFixDescription || 'Issue auto-fixed',
-      life: 2000
-    });
+      if (remainingAutoFixableWarnings.length === 0) {
+        // No more auto-fixable warnings, check for non-auto-fixable
+        const nonAutoFixableWarnings = warnings.filter(w => !w.canAutoFix);
+
+        if (nonAutoFixableWarnings.length > 0) {
+          // Show modal with non-auto-fixable issues
+          currentValidationMode.value = 'non-auto-fixable';
+          showValidationDialog.value = true;
+        } else {
+          // All issues handled, close dialog and save
+          showValidationDialog.value = false;
+          performSave(currentValidationString.value);
+        }
+      }
+      // If there are still auto-fixable warnings, modal stays open and will show next warning
+    }
   }
 }
 
-function handleValidationAutoFixAll() {
+
+
+function handleValidationAutoFix() {
   if (currentValidationString.value) {
     // Get all auto-fixable warnings
     const warnings = calculateValidationWarnings(currentValidationString.value);
     const autoFixableWarnings = warnings.filter(w => w.canAutoFix);
 
-    let fixedText = currentValidationString.value.translatedText;
+    if (autoFixableWarnings.length === 0) {
+      toast.add({
+        severity: 'info',
+        summary: 'No Auto-fixable Issues',
+        detail: 'No issues can be automatically fixed',
+        life: 2000
+      });
+      return;
+    }
 
-    // Apply all auto-fixes
-    autoFixableWarnings.forEach(warning => {
-      if (warning.autoFixAction) {
-        fixedText = warning.autoFixAction();
+    // Fix issues one by one with delay
+    let currentIndex = 0;
+
+    const fixNextIssue = () => {
+      if (currentIndex >= autoFixableWarnings.length) {
+        // All auto-fixable issues fixed, check if there are non-auto-fixable issues
+        const remainingWarnings = calculateValidationWarnings(currentValidationString.value);
+        const nonAutoFixableWarnings = remainingWarnings.filter(w => !w.canAutoFix);
+
+        if (nonAutoFixableWarnings.length > 0) {
+          // Show modal with non-auto-fixable issues
+          currentValidationMode.value = 'non-auto-fixable';
+          showValidationDialog.value = true;
+        } else {
+          // All issues fixed, close dialog and save
+          showValidationDialog.value = false;
+          performSave(currentValidationString.value);
+        }
+
+        toast.add({
+          severity: 'success',
+          summary: 'Auto-fixed',
+          detail: `Fixed ${autoFixableWarnings.length} issues automatically`,
+          life: 2000
+        });
+        return;
       }
-    });
 
-    currentValidationString.value.translatedText = fixedText;
+      const warning = autoFixableWarnings[currentIndex];
+      if (warning.autoFixAction) {
+        // Apply the fix
+        const fixedText = warning.autoFixAction();
+        currentValidationString.value.translatedText = fixedText;
 
-    // Update validation warnings
-    updateValidationWarnings(currentValidationString.value);
+        // Update validation warnings to remove the fixed issue
+        updateValidationWarnings(currentValidationString.value);
 
-    toast.add({
-      severity: 'success',
-      summary: 'Auto-fixed All',
-      detail: `Fixed ${autoFixableWarnings.length} issues automatically`,
-      life: 2000
-    });
+        // Show progress toast
+        toast.add({
+          severity: 'success',
+          summary: 'Fixed Issue',
+          detail: warning.message,
+          life: 1000
+        });
+
+        currentIndex++;
+
+        // Fix next issue after a short delay
+        setTimeout(fixNextIssue, 300);
+      }
+    };
+
+    // Start fixing issues
+    fixNextIssue();
   }
+}
+
+// Hàm helper để lấy status icon
+function getStatusIcon(str: any): string {
+  if (isSaving.value[str.id]) {
+    return 'pi pi-spin pi-spinner';
+  }
+  if (str._dirty) {
+    return 'pi pi-clock';
+  }
+  if (str._error) {
+    return 'pi pi-exclamation-triangle';
+  }
+  if (str._saved && !str._dirty) {
+    return 'pi pi-check-circle';
+  }
+  return 'pi pi-circle';
 }
 
 // Hàm helper để lấy status text
@@ -860,18 +951,18 @@ function getStatusText(str: any): string {
 // Hàm helper để lấy status tooltip
 function getStatusTooltip(str: any): string {
   if (isSaving.value[str.id]) {
-    return '🟡 Saving translation...';
+    return '💾 Saving translation... Please wait';
   }
   if (str._dirty) {
-    return '🟡 Unsaved - Press Ctrl+S or click Save button';
+    return '⏰ Unsaved changes - Press Ctrl+S to save or wait for auto-save';
   }
   if (str._error) {
-    return '🔴 Error saving - Try again';
+    return '❌ Error saving translation - Click to retry';
   }
   if (str._saved && !str._dirty) {
-    return '🟢 Saved successfully';
+    return '✅ Translation saved successfully';
   }
-  return '';
+  return '⭕ No status available';
 }
 
 // Hàm helper để lấy aria-label cho status indicator
@@ -1038,18 +1129,7 @@ function closeDropdown(event: Event) {
                   <input type="checkbox" v-model="highlightUntranslated" :disabled="isFileProcessing(file)" />
                   Highlight untranslated
                 </label>
-                <div class="keyboard-shortcuts">
-                  <span class="shortcut-hint" title="Keyboard shortcuts">
-                    <i class="pi pi-keyboard"></i>
-                    <span class="shortcut-text">Ctrl+S: Save | Tab: Next field</span>
-                  </span>
-                </div>
-                <div class="validation-info">
-                  <span class="validation-hint" title="Translation validation is active">
-                    <i class="pi pi-shield-check"></i>
-                    <span class="validation-text">Validation Active</span>
-                  </span>
-                </div>
+
               </div>
               <div class="translation-scroll-area">
                 <div v-if="getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>
@@ -1091,7 +1171,7 @@ function closeDropdown(event: Event) {
                           <!-- Status indicator -->
                           <div class="status-indicator" v-if="str.translatedText && str.translatedText.trim()">
                             <div
-                              class="status-dot"
+                              class="status-icon"
                               :class="{
                                 'status-saved': str._saved && !str._dirty,
                                 'status-dirty': str._dirty,
@@ -1101,8 +1181,10 @@ function closeDropdown(event: Event) {
                               :title="getStatusTooltip(str)"
                               role="status"
                               :aria-label="getStatusAriaLabel(str)"
-                            ></div>
-                            <span class="status-text" v-if="str._dirty || isSaving[str.id]">
+                            >
+                              <i :class="getStatusIcon(str)"></i>
+                            </div>
+                            <span class="status-text" v-if="str._dirty || isSaving[str.id] || str._error">
                               {{ getStatusText(str) }}
                             </span>
                           </div>
@@ -1146,7 +1228,7 @@ function closeDropdown(event: Event) {
                         <!-- Status indicator -->
                         <div class="status-indicator" v-if="str.translatedText && str.translatedText.trim()">
                           <div
-                            class="status-dot"
+                            class="status-icon"
                             :class="{
                               'status-saved': str._saved && !str._dirty,
                               'status-dirty': str._dirty,
@@ -1156,8 +1238,10 @@ function closeDropdown(event: Event) {
                             :title="getStatusTooltip(str)"
                             role="status"
                             :aria-label="getStatusAriaLabel(str)"
-                          ></div>
-                          <span class="status-text" v-if="str._dirty || isSaving[str.id]">
+                          >
+                            <i :class="getStatusIcon(str)"></i>
+                          </div>
+                          <span class="status-text" v-if="str._dirty || isSaving[str.id] || str._error">
                             {{ getStatusText(str) }}
                           </span>
                         </div>
@@ -1206,11 +1290,16 @@ function closeDropdown(event: Event) {
     :show="showValidationDialog"
     :original-text="currentValidationString?.originalText || ''"
     :translated-text="currentValidationString?.translatedText || ''"
+    :warnings="currentValidationString ?
+      (currentValidationMode === 'auto-fixable'
+        ? calculateValidationWarnings(currentValidationString).filter(w => w.canAutoFix)
+        : calculateValidationWarnings(currentValidationString).filter(w => !w.canAutoFix)
+      ) : []"
+    :mode="currentValidationMode"
     @close="handleValidationClose"
     @save-anyway="handleValidationSaveAnyway"
     @skip="handleValidationSkip"
     @auto-fix="handleValidationAutoFix"
-    @auto-fix-all="handleValidationAutoFixAll"
   />
 </template>
 
@@ -1556,40 +1645,49 @@ function closeDropdown(event: Event) {
 
 
 
-/* Cải thiện status indicators - Thiết kế mới */
+/* Cải thiện status indicators - Thiết kế mới với icons */
 .status-indicator {
   position: absolute;
-  top: 4px; /* Giảm từ 6px xuống 4px */
-  right: 6px; /* Giảm từ 8px xuống 6px */
+  top: 4px;
+  right: 20px; /* Tăng khoảng cách từ right để tránh đè lên scrollbar */
   display: flex;
   align-items: center;
-  gap: 3px; /* Giảm từ 4px xuống 3px */
+  gap: 4px;
   z-index: 2;
   pointer-events: none;
 }
 
-.status-dot {
-  width: 5px; /* Giảm từ 6px xuống 5px */
-  height: 5px; /* Giảm từ 6px xuống 5px */
+.status-icon {
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   cursor: help;
+  font-size: 8px;
 }
 
-.status-dot:hover {
-  transform: scale(1.3); /* Giảm từ 1.4 xuống 1.3 */
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+.status-icon:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.status-icon i {
+  color: inherit;
+  font-size: 8px;
 }
 
 .status-text {
-  font-size: 0.65em; /* Giảm từ 0.7em xuống 0.65em */
+  font-size: 0.65em;
   font-weight: 600;
   color: #e2e8f0;
   background: rgba(30, 41, 59, 0.95);
-  padding: 1px 4px; /* Giảm padding */
-  border-radius: 4px; /* Giảm từ 6px xuống 4px */
+  padding: 1px 4px;
+  border-radius: 4px;
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   pointer-events: auto;
@@ -1601,6 +1699,45 @@ function closeDropdown(event: Event) {
   background: rgba(51, 65, 85, 1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   transform: translateY(-1px);
+}
+
+/* Status icon states */
+.status-icon.status-saved {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.status-icon.status-dirty {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border-color: rgba(245, 158, 11, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.status-icon.status-saving {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.status-icon.status-error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border-color: rgba(239, 68, 68, 0.3);
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
 }
 
 
@@ -1616,7 +1753,7 @@ function closeDropdown(event: Event) {
   resize: none;
   transition: all 0.3s ease;
   font-family: inherit;
-  padding-right: 2.4em;
+  padding-right: 3.5em; /* Tăng padding-right để tránh text bị che bởi status indicator */
   background: #334155;
   color: #e2e8f0;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
@@ -1639,15 +1776,15 @@ function closeDropdown(event: Event) {
 /* Tối ưu badges */
 .untranslated-badge, .translated-badge {
   position: absolute;
-  top: 4px; /* Giảm từ 6px xuống 4px */
-  right: 6px; /* Giảm từ 8px xuống 6px */
-  font-size: 0.65em; /* Giảm từ 0.75em xuống 0.65em */
-  border-radius: 4px; /* Giảm từ 6px xuống 4px */
-  padding: 1px 3px; /* Giảm từ 1px 4px */
+  top: 4px;
+  right: 20px; /* Đồng nhất với status indicator */
+  font-size: 0.65em;
+  border-radius: 4px;
+  padding: 1px 3px;
   display: flex;
   align-items: center;
   z-index: 2;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06); /* Giảm shadow */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border: none;
   transition: all 0.3s ease;
 }

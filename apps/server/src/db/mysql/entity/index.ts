@@ -15,5 +15,6 @@ export * from './task.entity';
 export * from './transaction.entity';
 export * from './user.entity';
 export * from './translation-approval.entity';
-export * from './wallet.entity'
+export * from './wallet.entity';
+export * from './setting.entity'
 

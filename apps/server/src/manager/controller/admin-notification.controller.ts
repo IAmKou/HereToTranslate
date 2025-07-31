@@ -15,7 +15,6 @@ import {
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { RolesGuard } from '#LocalProject/Auth/guards/role.guard';
 import { ForRoles } from '#LocalProject/Auth/decorators/for-role.decorator';
-import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';

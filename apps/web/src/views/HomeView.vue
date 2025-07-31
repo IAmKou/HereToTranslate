@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import Navbar from '../components/Navbar.vue';
+import HomeNavbar from '../components/HomeNavbar.vue';
 import AppFooter from '../components/AppFooter.vue';
 
 const router = useRouter();
@@ -45,7 +45,7 @@ const supportedLanguages = ref([
 
 <template>
   <div class="app-layout">
-    <Navbar />
+    <HomeNavbar />
     <div class="main-content">
       <main class="landing-page">
         <!-- Hero Section -->
@@ -85,12 +85,12 @@ const supportedLanguages = ref([
                   <div class="stat-label">Languages</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-number">1000+</div>
-                  <div class="stat-label">Translators</div>
+                  <div class="stat-number">24/7</div>
+                  <div class="stat-label">Support</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-number">24h</div>
-                  <div class="stat-label">Delivery</div>
+                  <div class="stat-number">Secure</div>
+                  <div class="stat-label">Platform</div>
                 </div>
               </div>
             </div>
@@ -234,13 +234,15 @@ const supportedLanguages = ref([
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  font-family: 'Inter', sans-serif;
 }
 
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 56px);
+  min-height: 100vh;
+  padding-top: 70px; /* Account for fixed navbar */
 }
 
 .landing-page {
@@ -255,7 +257,7 @@ const supportedLanguages = ref([
 
 /* Hero Section */
 .hero-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #7B61FF 0%, #8F6EFF 100%);
   color: white;
   padding: 120px 0 100px;
   min-height: 90vh;
@@ -357,6 +359,7 @@ const supportedLanguages = ref([
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  font-family: 'Inter', sans-serif;
 }
 
 .hero-subtitle {
@@ -383,6 +386,7 @@ const supportedLanguages = ref([
   padding: 16px 32px !important;
   border-radius: 12px !important;
   transition: all 0.3s ease !important;
+  font-family: 'Inter', sans-serif !important;
 }
 
 .hero-btn-primary:hover {

@@ -65,7 +65,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     uid: bigint,
     against: IntoPermission
   ): Promise<Permission> {
-    const permissionValue = BigInt(against);
+    const permissionValue = normalizePermission(against);
     this.logger.debug(
       `Checking if user [${uid}] has permission [${permissionValue}] for project [${projectId}]`
     );
@@ -1135,4 +1135,13 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   async listCommits(projectId: bigint, branchId: bigint) {
     return this.githubService.listCommits(projectId, branchId);
   }
+}
+function normalizePermission(input: IntoPermission): bigint {
+  if (typeof input === 'bigint') return input;
+  if (typeof input === 'number') return BigInt(input);
+  if (typeof input === 'string') {
+    return PermissionFlags[input as keyof typeof PermissionFlags] ?? 0n;
+  }
+  return input.value;
+  throw new Error('Invalid permission input type');
 }

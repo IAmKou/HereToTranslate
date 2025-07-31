@@ -588,7 +588,7 @@ const createRole = async () => {
   }
 };
 
-// State cho modal confirm delete
+// State cho modal confirm delete role
 const showDeleteConfirmModal = ref(false);
 const roleToDelete = ref<Role | null>(null);
 
@@ -647,6 +647,98 @@ const confirmDeleteRole = async () => {
 const cancelDeleteRole = () => {
   showDeleteConfirmModal.value = false;
   roleToDelete.value = null;
+};
+
+// State cho modal confirm delete member
+const showDeleteMemberConfirmModal = ref(false);
+const memberToDelete = ref<Member | null>(null);
+
+// Function để xóa member (mở modal confirm)
+const removeMember = async (member: Member) => {
+  if (!props.project?.id || !member.id) return;
+  // Không cho phép xóa Project Owner
+  if (member.roles.some(r => r.name === 'Project Owner')) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Cannot remove Project Owner',
+      life: 3000
+    });
+    return;
+  }
+  // Lấy tất cả roleId mà user đang có (trừ Project Owner)
+  const memberRoleIds = member.roles
+    .filter(r => r.name !== 'Project Owner')
+    .map(r => r.id);
+  if (memberRoleIds.length === 0) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'User has no removable roles',
+      life: 3000
+    });
+    return;
+  }
+
+  memberToDelete.value = member;
+  showDeleteMemberConfirmModal.value = true;
+};
+
+// Thêm state cho loading khi xóa member
+const isDeletingMember = ref(false);
+
+// Function để confirm delete member
+const confirmDeleteMember = async () => {
+  if (!memberToDelete.value || !props.project?.id) return;
+  isDeletingMember.value = true;
+
+  try {
+    // Lấy tất cả roleId mà user đang có (trừ Project Owner)
+    const memberRoleIds = memberToDelete.value.roles
+      .filter(r => r.name !== 'Project Owner')
+      .map(r => r.id);
+
+    // Xóa user khỏi tất cả các role
+    await Promise.all(
+      memberRoleIds.map(roleId =>
+        axiosInstance.post(`/projects/${props.project.id}/roles/${roleId}/users/remove`, {
+          userIds: [memberToDelete.value.id]
+        })
+      )
+    );
+    // Xóa user khỏi bảng members (DB)
+    await axiosInstance.post(`/projects/${props.project.id}/remove-user`, {
+      userId: memberToDelete.value.id
+    });
+    await loadMembers();
+
+    showDeleteMemberConfirmModal.value = false;
+    memberToDelete.value = null;
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Member removed successfully',
+      life: 3000
+    });
+  } catch (err: any) {
+    console.error('Failed to remove member:', err);
+    const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to remove member';
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: errorMsg,
+      life: 5000
+    });
+  } finally {
+    isDeletingMember.value = false;
+  }
+};
+
+// Function để cancel delete member
+const cancelDeleteMember = () => {
+  showDeleteMemberConfirmModal.value = false;
+  memberToDelete.value = null;
 };
 
 const showAllPermissions = (role: Role) => {
@@ -965,66 +1057,7 @@ watch(
   { immediate: true }
 );
 
-// Function to remove member
-const removeMember = async (member: Member) => {
-  if (!props.project?.id || !member.id) return;
-  // Không cho phép xóa Project Owner
-  if (member.roles.some(r => r.name === 'Project Owner')) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Warning',
-      detail: 'Cannot remove Project Owner',
-      life: 3000
-    });
-    return;
-  }
-  // Lấy tất cả roleId mà user đang có (trừ Project Owner)
-  const memberRoleIds = member.roles
-    .filter(r => r.name !== 'Project Owner')
-    .map(r => r.id);
-  if (memberRoleIds.length === 0) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Warning',
-      detail: 'User has no removable roles',
-      life: 3000
-    });
-    return;
-  }
-  removingMember.value = member.id;
-  try {
-    // Xóa user khỏi tất cả các role
-    await Promise.all(
-      memberRoleIds.map(roleId =>
-        axiosInstance.post(`/projects/${props.project.id}/roles/${roleId}/users/remove`, {
-          userIds: [member.id]
-        })
-      )
-    );
-    // Xóa user khỏi bảng members (DB)
-    await axiosInstance.post(`/projects/${props.project.id}/remove-user`, {
-      userId: member.id
-    });
-    await loadMembers();
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Member removed successfully',
-      life: 3000
-    });
-  } catch (err: any) {
-    console.error('Failed to remove member:', err);
-    const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to remove member';
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: errorMsg,
-      life: 5000
-    });
-  } finally {
-    removingMember.value = null;
-  }
-};
+
 
 const { hasPermission, isProjectOwner, isProjectAdmin, currentMember, currentUserId } = useProjectPermission(props.project, computed(() => members.value), computed(() => props.currentUser || null));
 const canManageMembers = computed(() => isProjectOwner.value || isProjectAdmin.value || hasPermission('ManageMembers'));
@@ -1542,6 +1575,48 @@ watch(() => props.members, (val) => {
           </div>
         </div>
       </Transition>
+    </Teleport>
+
+    <!-- Confirm Delete Member Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showDeleteMemberConfirmModal"
+        class="delete-dialog-modal"
+      >
+        <div class="modal-overlay" @click="cancelDeleteMember"></div>
+        <div class="modal-content">
+          <!-- Add Toast inside modal -->
+          <Toast position="top-right" group="modal-messages" />
+          <div class="modal-header">
+            <h3>Remove Member</h3>
+            <button class="close-btn" @click="cancelDeleteMember">
+              ×
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="warning-message">
+              <div class="warning-icon">
+                ⚠️
+              </div>
+              <h4>Are you sure you want to remove "{{ memberToDelete?.fullName || memberToDelete?.username }}" from this project?</h4>
+              <p>This action cannot be undone. The member will lose access to all project resources and permissions.</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="cancelDeleteMember" :disabled="isDeletingMember">
+              Keep Member
+            </button>
+            <button
+              class="btn btn-danger"
+              @click="confirmDeleteMember"
+              :disabled="isDeletingMember"
+            >
+              <span v-if="isDeletingMember" class="loading-spinner-small"></span>
+              {{ isDeletingMember ? 'Removing...' : 'Remove Member' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -4458,6 +4533,89 @@ button:disabled,
   width: 90%;
   max-width: 500px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1;
+  padding: 0;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.warning-message {
+  text-align: center;
+}
+
+.warning-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.warning-message h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.warning-message p {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.loading-spinner-small {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Style cho các modal khác */
@@ -4478,5 +4636,25 @@ button:disabled,
   background: white !important;
   border-radius: 12px !important;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* PrimeIcons styles */
+.pi {
+  font-family: "PrimeIcons" !important;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.pi-times:before {
+  content: "\e909";
+}
+
+.pi-exclamation-triangle:before {
+  content: "\e936";
 }
 </style>

@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: htt-server
+    runtime: node
+    rootDir: .
+    buildCommand: npm install && nx build @here-to-translate/server --configuration=production
+    startCommand: node dist/apps/server/main.js
+    plan: free
+    autoDeploy: true
+   

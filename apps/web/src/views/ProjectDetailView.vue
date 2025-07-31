@@ -1092,6 +1092,12 @@ const loadMembers = async () => {
     const memberMap: Record<string, any> = {};
     if (data.members) {
       for (const m of data.members) {
+        console.log('🔍 Processing member in ProjectDetailView:', {
+          id: m.id,
+          name: m.fullName || m.username,
+          joinedAt: m.joinedAt,
+          roles: m.roles
+        });
         // Nếu API trả về roles lồng trong user
         console.log('roleMap:', roleMap);
         let roles = Array.isArray(m.roles)
@@ -1113,7 +1119,7 @@ const loadMembers = async () => {
             };
           })
           : [];
-        memberMap[m.id] = { ...m, roles, selectedRole: '' };
+        memberMap[m.id] = { ...m, roles, selectedRole: '', joinedAt: m.joinedAt };
       }
     }
     // Nếu API trả về projectRoles có users, map lại roles cho từng user
@@ -1122,7 +1128,13 @@ const loadMembers = async () => {
         if (role.users) {
           for (const user of role.users) {
             if (!memberMap[user.id]) {
-              memberMap[user.id] = { ...user, roles: [], selectedRole: '' };
+              // For users not in the main members array, use role.createdAt as joinedAt
+              memberMap[user.id] = {
+                ...user,
+                roles: [],
+                selectedRole: '',
+                joinedAt: role.createdAt ? new Date(role.createdAt).toISOString() : undefined
+              };
             }
             // Nếu đã có role này, merge lại permissions và permissionFlags
             const existingRole = memberMap[user.id].roles.find((r: any) => r.id === role.id);
@@ -1137,6 +1149,16 @@ const loadMembers = async () => {
                 permissionFlags: role.permissionFlags
               });
             }
+
+            // Update joinedAt to the earliest role creation time if this role is earlier
+            if (role.createdAt) {
+              const roleCreatedAt = new Date(role.createdAt);
+              const currentJoinedAt = memberMap[user.id].joinedAt ? new Date(memberMap[user.id].joinedAt) : null;
+
+              if (!currentJoinedAt || roleCreatedAt < currentJoinedAt) {
+                memberMap[user.id].joinedAt = roleCreatedAt.toISOString();
+              }
+            }
           }
         }
       }
@@ -1147,6 +1169,15 @@ const loadMembers = async () => {
         console.warn('User has no roles:', m);
       }
     });
+
+    // Log final memberMap to debug joinedAt
+    console.log('🔍 Final memberMap with joinedAt:', Object.values(memberMap).map((m: any) => ({
+      id: m.id,
+      name: m.fullName || m.username,
+      joinedAt: m.joinedAt,
+      roles: m.roles?.length || 0
+    })));
+
     members.value = Object.values(memberMap);
     console.log('members (with permissions):', members.value);
   } catch (err: any) {

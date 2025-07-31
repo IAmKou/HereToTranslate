@@ -6,6 +6,7 @@ export * from './notification.entity';
 export * from './project.entity';
 export * from './project-discussion.entity';
 export * from './project-group.entity';
+export * from './project-invitation.entity';
 export * from './project-role.entity';
 export * from './project-tag.entity';
 export * from './report.entity';

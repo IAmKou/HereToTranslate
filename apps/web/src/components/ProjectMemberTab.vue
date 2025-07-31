@@ -5,6 +5,7 @@ import { useToast } from "primevue/usetoast";
 import Toast from 'primevue/toast';
 import { useAuthStore } from '../store/auth';
 import { useProjectPermission } from '../composables/useProjectPermission';
+import { projectInvitationService, type ProjectInvitation } from '../services/project-invitation.service';
 
 const emit = defineEmits<{
   (e: 'update-role-count', count: number): void
@@ -214,6 +215,9 @@ const loadMembers = async () => {
   membersError.value = '';
   try {
     const { data } = await axiosInstance.get(`/projects/${props.project.id}/members`);
+    console.log('🔍 Raw members data from backend:', data);
+    console.log('🔍 Members array:', data.members);
+
     const memberMap: MemberMap = {};
 
     if (data.members) {
@@ -349,23 +353,30 @@ const searchUser = async () => {
   }
 };
 
-const addUserToProject = async (user: User) => {
+// State cho modal invite user
+const showInviteUserModal = ref(false);
+const inviteForm = ref({
+  emails: '',
+  message: ''
+});
+const invitingUsers = ref(false);
+
+const sendProjectInvitation = async (user: User) => {
   if (!props.project || !user) return;
   userSearch.value.addingId = user.id;
   try {
-    console.log('Adding user to project:', {
+    console.log('Sending project invitation:', {
       projectId: props.project.id,
       userId: user.id,
       user: user
     });
 
-    // First, add user to project using the add-user endpoint
-    await axiosInstance.post(`/projects/${props.project.id}/add-user`, {
-      userId: user.id.toString()
+    // Send invitation to user
+    await projectInvitationService.createInvitation(props.project.id, {
+      invitedUserId: user.id.toString()
     });
 
-    // Refresh member list
-    await loadMembers();
+    // Clear search results and identifier
     userSearch.value.results = userSearch.value.results.filter(u => u.id !== user.id);
     userSearch.value.identifier = '';
 
@@ -373,12 +384,12 @@ const addUserToProject = async (user: User) => {
     toast.add({
       severity: 'success',
       summary: 'Success',
-      detail: 'User added successfully',
+      detail: 'Project invitation sent successfully',
       life: 3000
     });
   } catch (err: any) {
-    console.error('Add user error:', err);
-    let errorMsg = 'Failed to add user';
+    console.error('Send invitation error:', err);
+    let errorMsg = 'Failed to send invitation';
     if (err.response?.data?.message) {
       errorMsg = err.response.data.message;
     }
@@ -392,6 +403,222 @@ const addUserToProject = async (user: User) => {
   } finally {
     userSearch.value.addingId = null;
   }
+};
+
+// Function to open invite user modal
+const openInviteUserModal = () => {
+  inviteForm.value = {
+    emails: '',
+    message: `You're invited to join the project ${props.project?.name || 'this project'}.`
+  };
+  showInviteUserModal.value = true;
+};
+
+// Function to send invitation via modal
+const sendInvitationsFromModal = async () => {
+  if (!props.project?.id || !inviteForm.value.emails.trim()) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Please enter at least one email or username',
+      life: 3000
+    });
+    return;
+  }
+
+  invitingUsers.value = true;
+  try {
+    // Parse emails/usernames (comma separated)
+    const identifiers = inviteForm.value.emails
+      .split(',')
+      .map(email => email.trim())
+      .filter(email => email.length > 0);
+
+    if (identifiers.length === 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Warning',
+        detail: 'Please enter at least one valid email or username',
+        life: 3000
+      });
+      return;
+    }
+
+    // First, search for users by their identifiers
+    const userSearchPromises = identifiers.map(async (identifier) => {
+      try {
+        const { data } = await axiosInstance.post(
+          `/projects/${props.project.id}/search-user`,
+          { identifier }
+        );
+        console.log(`Search result for ${identifier}:`, data);
+
+        // The endpoint returns { users: Array<{ user_id, user_fullName, user_email, user_phone }> }
+        if (data.users && data.users.length > 0) {
+          const user = data.users[0];
+          // Map backend fields to frontend fields
+          const mappedUser = {
+            id: user.user_id || user.id || user.userId,
+            email: user.user_email || user.email || user.userEmail,
+            phone: user.user_phone || user.phone || user.userPhone,
+            fullName: user.user_fullName || user.fullName || user.userFullName || user.name,
+            username: user.user_username || user.username || user.userUsername,
+          };
+          console.log('Mapped user:', mappedUser);
+          return { success: true, identifier, user: mappedUser };
+        } else {
+          return { success: false, identifier, error: 'No user found' };
+        }
+      } catch (err) {
+        console.error(`Search error for ${identifier}:`, err);
+        return { success: false, identifier, error: err };
+      }
+    });
+
+    const searchResults = await Promise.all(userSearchPromises);
+    const foundUsers = searchResults.filter(r => r.success && r.user);
+    const notFoundUsers = searchResults.filter(r => !r.success || !r.user);
+
+    // Send invitations to found users
+    const invitationPromises = foundUsers.map(async (result) => {
+      try {
+        console.log('Sending invitation to user:', result.user);
+        console.log('Project ID:', props.project.id);
+        console.log('Invitation data:', {
+          invitedUserId: result.user.id.toString(),
+          message: inviteForm.value.message
+        });
+
+        // Check if user is already a member
+        const isAlreadyMember = members.value.some(member => member.id === result.user.id);
+        console.log('Is user already a member?', isAlreadyMember);
+
+        if (isAlreadyMember) {
+          console.log('User is already a member, skipping invitation');
+          return { success: false, identifier: result.identifier, error: 'User is already a member of this project' };
+        }
+
+        // Check if there's already a pending invitation (optional check)
+        try {
+          const existingInvitations = await projectInvitationService.getProjectInvitations(props.project.id);
+          const hasPendingInvitation = existingInvitations.invitations.some(inv =>
+            inv.invitedUserId === result.user.id && inv.status === 'pending'
+          );
+          console.log('Has pending invitation?', hasPendingInvitation);
+          if (hasPendingInvitation) {
+            return { success: false, identifier: result.identifier, error: 'User already has a pending invitation' };
+          }
+        } catch (err) {
+          console.log('Could not check existing invitations:', err);
+        }
+
+        // Log the exact data being sent
+        const invitationData = {
+          invitedUserId: result.user.id.toString(),
+          message: inviteForm.value.message
+        };
+        console.log('Sending invitation data to server:', invitationData);
+
+        await projectInvitationService.createInvitation(props.project.id, invitationData);
+        console.log('Invitation sent successfully for:', result.identifier);
+        return { success: true, identifier: result.identifier, user: result.user };
+      } catch (err) {
+        console.error('Failed to send invitation for:', result.identifier, err);
+        console.error('Error details:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status,
+          statusText: err.response?.statusText
+        });
+        return { success: false, identifier: result.identifier, error: err };
+      }
+    });
+
+    const invitationResults = await Promise.all(invitationPromises);
+    const successful = invitationResults.filter(r => r.success);
+    const failed = invitationResults.filter(r => !r.success);
+
+    // Close modal
+    showInviteUserModal.value = false;
+    inviteForm.value = { emails: '', message: '' };
+
+    // Show results
+    if (successful.length > 0) {
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: `Successfully sent ${successful.length} invitation(s)`,
+        life: 3000
+      });
+    }
+
+    if (notFoundUsers.length > 0) {
+      const notFoundIdentifiers = notFoundUsers.map(r => r.identifier).join(', ');
+      toast.add({
+        severity: 'warn',
+        summary: 'Warning',
+        detail: `Could not find users: ${notFoundIdentifiers}`,
+        life: 5000
+      });
+    }
+
+    if (failed.length > 0) {
+      // Check for specific error types and show appropriate message
+      const hasPendingInvitation = failed.some(f =>
+        f.error === 'User already has a pending invitation to this project' ||
+        f.error?.response?.data?.message === 'User already has a pending invitation to this project'
+      );
+
+      const hasAlreadyMember = failed.some(f =>
+        f.error === 'User is already a member of this project'
+      );
+
+      if (hasPendingInvitation) {
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'User already has a pending invitation to this project',
+          life: 5000
+        });
+      } else if (hasAlreadyMember) {
+        const memberEmails = failed
+          .filter(f => f.error === 'User is already a member of this project')
+          .map(f => f.identifier)
+          .join(', ');
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: `Cannot send invitation to: ${memberEmails} (already a member)`,
+          life: 5000
+        });
+      } else {
+        const failedEmails = failed.map(f => f.identifier).join(', ');
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: `Cannot send invitation to: ${failedEmails}`,
+          life: 5000
+        });
+      }
+    }
+  } catch (err: any) {
+    console.error('Send invitations error:', err);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: err.response?.data?.message || 'Failed to send invitations',
+      life: 5000
+    });
+  } finally {
+    invitingUsers.value = false;
+  }
+};
+
+// Function to close invite user modal
+const closeInviteUserModal = () => {
+  showInviteUserModal.value = false;
+  inviteForm.value = { emails: '', message: '' };
+  invitingUsers.value = false;
 };
 
 function displayRoles(member: Member, project: Project): Role[] {
@@ -415,7 +642,7 @@ function getRoleBadgeClass(roleName: string) {
 function getRoleCount(roles: Role[] | undefined) {
   return roles ? roles.length : 0;
 }
-function sortBy(key: 'name' | 'roles') {
+function sortBy(key: 'name' | 'roles' | 'joined') {
   if (!members.value.length) return;
   members.value.sort((a, b) => {
     // Project owner should always be first
@@ -432,8 +659,61 @@ function sortBy(key: 'name' | 'roles') {
     if (key === 'roles') {
       return getRoleCount(b.roles) - getRoleCount(a.roles);
     }
+    if (key === 'joined') {
+      const aDate = getJoinedDateValue(a);
+      const bDate = getJoinedDateValue(b);
+      if (!aDate || !bDate) return 0;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    }
     return 0;
   });
+}
+
+// Function to get joined date display text
+function getJoinedDate(member: any): string {
+  const joinedDate = getJoinedDateValue(member);
+  if (!joinedDate) return 'Unknown';
+
+  const date = new Date(joinedDate);
+
+  // Format: "Dec 15, 2024 at 14:30"
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  }) + ' at ' + date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+}
+
+// Function to get joined date value for sorting
+function getJoinedDateValue(member: any): string | null {
+  console.log('🔍 getJoinedDateValue for member:', {
+    id: member.id,
+    name: member.fullName || member.username,
+    joinedAt: member.joinedAt,
+    createdAt: member.createdAt,
+    projectCreatedAt: props.project?.createdAt,
+    isOwner: member.id === props.project?.createdBy?.id
+  });
+
+  // Always use joinedAt from backend if available (including for project owner)
+  if (member.joinedAt) {
+    console.log('🔍 Using joinedAt from backend:', member.joinedAt);
+    return member.joinedAt;
+  }
+
+  // For project owner without joinedAt, use project creation date
+  if (member.id === props.project?.createdBy?.id) {
+    console.log('🔍 Using project creation date for owner (no joinedAt)');
+    return props.project?.createdAt;
+  }
+
+  // Fallback to user creation date or project creation date
+  console.log('🔍 Using fallback date:', member.createdAt || props.project?.createdAt);
+  return member.createdAt || props.project?.createdAt || null;
 }
 
 // Helper to get avatar text safely
@@ -859,7 +1139,7 @@ const assignableRoles = computed(() => {
   const currentMember = members.value.find(m => m.id === userToAssignRole.value.id);
   if (!currentMember) return roles.value;
 
-  // Lấy danh sách role names mà user đã có (dùng name thay vì id để chắc chắn)
+  // Get list of role names that user already has (use name instead of id to be sure)
   const userRoleNames = new Set(currentMember.roles.map(r => r.name));
 
   console.log('Current member roles:', currentMember.roles);
@@ -945,7 +1225,7 @@ const removeRoleFromUser = async (roleId: string | number | bigint) => {
 
 // Sửa lại hàm isRoleInUse để kiểm tra chính xác hơn
 const isRoleInUse = (role: Role) => {
-  // Project Owner role không thể xóa
+  // Project Owner role cannot be deleted
   if (role.name === 'Project Owner') return true;
 
   return members.value.some(member =>
@@ -1089,79 +1369,21 @@ watch(() => props.members, (val) => {
     <div class="management-section user-section">
       <div class="section-header">
         <h2 class="section-title">
-          <span class="title-icon">➕</span>
-          Add User to Project
+          <span class="title-icon">📧</span>
+          Invite User to Project
         </h2>
-        <span :title="!canManageMembers ? 'You do not have permission to add members' : ''">
-          <button
-            class="btn btn-outline btn-sm toggle-btn"
-            @click="showAddUserSection = !showAddUserSection"
-            :disabled="!canManageMembers"
-          >
-            <span class="icon">{{ showAddUserSection ? '−' : '+' }}</span>
-            {{ showAddUserSection ? 'Hide' : 'Add User' }}
-          </button>
-        </span>
+        <span :title="!canManageMembers ? 'You do not have permission to invite members' : ''">
+            <button
+              class="btn btn-outline btn-sm toggle-btn"
+              @click="openInviteUserModal"
+              :disabled="!canManageMembers"
+            >
+              <span class="icon">📧</span>
+              Invite User
+            </button>
+          </span>
       </div>
-      <div v-if="showAddUserSection" class="section-content">
-        <form autocomplete="off" class="add-user-form" @submit.prevent="searchUser">
-          <div class="form-row">
-            <div class="form-group" style="flex: 1; margin-bottom: 0; position: relative;">
-              <label for="userIdentifier" class="form-label">
-                <span class="label-icon">🔍</span>
-                Search by Email or Name
-              </label>
-              <input
-                id="userIdentifier"
-                v-model="userSearch.identifier"
-                type="text"
-                required
-                class="form-control"
-                placeholder="Enter email or full name"
-                autocomplete="off"
-                :disabled="!canManageMembers"
-              />
-            </div>
-            <div class="form-actions" style="margin-bottom: 0; align-self: flex-end">
-              <button
-                type="submit"
-                class="btn btn-primary"
-                :disabled="!userSearch.identifier || userSearch.loading || !canManageMembers"
-                :title="!userSearch.identifier ? 'Please enter a name or email to search' : ''"
-              >
-                <span v-if="userSearch.loading" class="loading-spinner-small"></span>
-                <span v-else class="icon">🔍</span>
-                {{ userSearch.loading ? 'Searching...' : 'Search User' }}
-              </button>
-            </div>
-          </div>
-        </form>
-        <div v-if="userSearch.error" class="error-message">
-          <span class="error-icon">❌</span>
-          <p>{{ userSearch.error }}</p>
-        </div>
-        <div v-if="userSearch.results && userSearch.results.length > 0" class="found-user" style="flex-direction: column; align-items: stretch;">
-          <div v-for="user in userSearch.results" :key="user.id" class="user-info user-card">
-            <div class="user-card-left">
-              <div class="user-avatar big-avatar">
-                <span class="avatar-text">{{ getAvatarText(user) }}</span>
-              </div>
-              <div class="user-details">
-                <h4 class="user-name">{{ user.fullName || user.username || user.email || user.phone || 'Unknown' }}</h4>
-                <p v-if="user.email" class="user-meta">Email: {{ user.email }}</p>
-                <p v-if="user.phone" class="user-meta">Phone: {{ user.phone }}</p>
-              </div>
-            </div>
-            <span :title="!canManageMembers ? 'You do not have permission to add members' : ''">
-              <button class="btn btn-primary btn-sm user-add-btn" @click="addUserToProject(user)" :disabled="!canManageMembers || userSearch.addingId === user.id">
-                <span v-if="userSearch.addingId === user.id" class="loading-spinner-small"></span>
-                <span v-else class="icon">➕</span>
-                {{ userSearch.addingId === user.id ? 'Adding...' : 'Add to Project' }}
-              </button>
-            </span>
-          </div>
-        </div>
-      </div>
+
     </div>
 
     <!-- Members Section -->
@@ -1189,6 +1411,7 @@ watch(() => props.members, (val) => {
               <th>No.</th>
               <th @click="sortBy('name')">User</th>
               <th @click="sortBy('roles')">Roles</th>
+              <th @click="sortBy('joined')">Joined Date</th>
               <th>Actions</th>
             </tr>
             </thead>
@@ -1223,6 +1446,11 @@ watch(() => props.members, (val) => {
                       +{{ getRoleCount(displayRoles(member, props.project)) - 3 }} more
                     </span>
                   </span>
+                </div>
+              </td>
+              <td>
+                <div class="joined-date">
+                  {{ getJoinedDate(member) }}
                 </div>
               </td>
               <td>
@@ -1618,6 +1846,61 @@ watch(() => props.members, (val) => {
         </div>
       </div>
     </Teleport>
+
+    <!-- Invite User Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showInviteUserModal"
+        class="new-modal-overlay"
+        @click.self="closeInviteUserModal"
+      >
+        <div class="invite-modal-content">
+          <div class="invite-modal-header">
+            <h3>Invite People</h3>
+            <button class="invite-modal-close" @click="closeInviteUserModal">×</button>
+          </div>
+          <div class="invite-modal-body">
+            <div class="form-group">
+              <label for="emails" class="invite-form-label">
+                Emails or usernames
+              </label>
+              <textarea
+                id="emails"
+                v-model="inviteForm.emails"
+                placeholder="james, joe@example.net, jane@example.com"
+                class="invite-form-control"
+                rows="2"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="message" class="invite-form-label">
+                Message
+              </label>
+              <textarea
+                id="message"
+                v-model="inviteForm.message"
+                placeholder="Enter a personal message"
+                class="invite-form-control"
+                rows="3"
+              ></textarea>
+            </div>
+          </div>
+          <div class="invite-modal-footer">
+            <button class="invite-btn invite-btn-cancel" @click="closeInviteUserModal">
+              Cancel
+            </button>
+            <button
+              class="invite-btn invite-btn-primary"
+              @click="sendInvitationsFromModal"
+              :disabled="invitingUsers || !inviteForm.emails.trim()"
+            >
+              <span v-if="invitingUsers" class="loading-spinner-small"></span>
+              {{ invitingUsers ? 'Sending...' : 'Send Invitations' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1882,6 +2165,36 @@ watch(() => props.members, (val) => {
   font-size: 0.9rem;
 }
 
+/* Invite Section Styles */
+.invite-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+  text-align: center;
+  padding: 1rem;
+}
+
+.invite-description {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.info-icon {
+  font-size: 1.1rem;
+  color: #3182ce;
+}
+
+.invite-actions {
+  display: flex;
+  justify-content: center;
+}
+
 /* User Card Styles */
 .found-user {
   display: flex;
@@ -2060,6 +2373,12 @@ watch(() => props.members, (val) => {
   align-items: center;
   gap: 0.2rem;
   cursor: pointer;
+}
+
+.joined-date {
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .discord-badge-group {
@@ -4444,6 +4763,132 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
   font-weight: 500;
   color: #6b7280;
   text-transform: uppercase;
+}
+
+/* Invite Modal Styles */
+.invite-modal-content {
+  background: white;
+  border-radius: 8px;
+  width: 600px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.invite-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.invite-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.invite-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.invite-modal-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.invite-modal-body {
+  padding: 1rem 1.5rem;
+}
+
+.invite-form-label {
+  display: block;
+  color: #374151;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.invite-form-control {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  color: #1f2937;
+  transition: all 0.2s;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.invite-form-control:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.invite-form-control::placeholder {
+  color: #9ca3af;
+}
+
+.invite-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.invite-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.invite-btn-cancel {
+  background: none;
+  color: #6b7280;
+}
+
+.invite-btn-cancel:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.invite-btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.invite-btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.invite-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Đảm bảo nút bị disable luôn mờ và không bấm được */

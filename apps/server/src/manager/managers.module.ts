@@ -9,8 +9,9 @@ import {
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
   UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
-  BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity
+  BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
+import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '#LocalProject/Auth/auth.module';
@@ -57,6 +58,9 @@ import { AiChatService } from '#LocalProject/Managers/service/ai-manager.service
 import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.controller';
 import { NotificationGateway } from '#LocalProject/Utils/gateway/notification.gateway';
 import { AdminNotificationController } from '#LocalProject/Managers/controller/admin-notification.controller';
+import { ProjectInvitationController } from './controller/project-invitation.controller';
+import { ProjectInvitationService } from './service/project-invitation.service';
+import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
 
 @Global()
 @Module({
@@ -84,6 +88,8 @@ import { AdminNotificationController } from '#LocalProject/Managers/controller/a
       FileEntity,
       TaskEntity,
       NotificationEntity,
+      ProjectInvitationEntity,
+      SettingsEntity,
     ]),
     BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
   ],
@@ -109,6 +115,9 @@ import { AdminNotificationController } from '#LocalProject/Managers/controller/a
     AiChatService,
     TaskGateway,
     NotificationGateway,
+    ProjectInvitationService,
+    FeeService,
+
   ],
   exports: [
     CategoryManagerService,
@@ -130,6 +139,8 @@ import { AdminNotificationController } from '#LocalProject/Managers/controller/a
     ManifestService,
     NotificationManagerService,
     AiChatService,
+    ProjectInvitationService,
+    FeeService
   ],
   controllers: [
     CategoryController,
@@ -151,7 +162,8 @@ import { AdminNotificationController } from '#LocalProject/Managers/controller/a
     NotificationController,
     AiChatController,
     NotificationController,
-    AdminNotificationController
+    AdminNotificationController,
+    ProjectInvitationController
   ]
 })
 export class ManagersModule {

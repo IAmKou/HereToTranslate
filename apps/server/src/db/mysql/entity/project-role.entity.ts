@@ -1,4 +1,4 @@
-import { Column, Entity, JoinTable, ManyToMany, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinTable, ManyToMany, ManyToOne, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectEntity } from './project.entity';
 import { Permission, PermissionFlags } from '@here-to-translate/common';
@@ -36,5 +36,8 @@ export class ProjectRoleEntity {
 
   @ManyToMany(() => BranchEntity, branch => branch.visibleToRoles)
   branch: BranchEntity;
+
+  @CreateDateColumn()
+  createdAt: Date;
 }
 

@@ -2,15 +2,79 @@
   <div class="app-layout">
     <Toast position="top-right" />
     <router-view />
+
+    <!-- Project Invitation Popup - Disabled to avoid duplicate notifications -->
+    <!-- <ProjectInvitationPopup
+      v-if="showInvitationPopup"
+      :invitation="currentInvitation"
+      :show="showInvitationPopup"
+      @dismiss="dismissInvitationPopup"
+      @see-all="navigateToInvitations"
+      @invitation-responded="handleInvitationResponse"
+    /> -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { authService } from './services/auth.service';
+import { projectInvitationService, type ProjectInvitation } from './services/project-invitation.service';
+import ProjectInvitationPopup from './components/ProjectInvitationPopup.vue';
+
+const router = useRouter();
+const showInvitationPopup = ref(false);
+const currentInvitation = ref<ProjectInvitation | null>(null);
+let invitationCheckInterval: NodeJS.Timeout | null = null;
+
+const checkForNewInvitations = async () => {
+  try {
+    const response = await projectInvitationService.getMyInvitations('pending');
+    if (response.invitations.length > 0 && !showInvitationPopup.value) {
+      // Show the first pending invitation
+      currentInvitation.value = response.invitations[0];
+      showInvitationPopup.value = true;
+
+      // Auto hide after 10 seconds
+      setTimeout(() => {
+        dismissInvitationPopup();
+      }, 10000);
+    }
+  } catch (error) {
+    console.error('Error checking for invitations:', error);
+  }
+};
+
+const dismissInvitationPopup = () => {
+  showInvitationPopup.value = false;
+  currentInvitation.value = null;
+};
+
+const navigateToInvitations = () => {
+  router.push('/project-invitations');
+  dismissInvitationPopup();
+};
+
+const handleInvitationResponse = (invitation: ProjectInvitation) => {
+  dismissInvitationPopup();
+  // Check for more invitations
+  setTimeout(checkForNewInvitations, 1000);
+};
 
 onMounted(() => {
   authService.getCurrentUser();
+
+  // Check for invitations every 30 seconds - Disabled to avoid duplicate notifications
+  // invitationCheckInterval = setInterval(checkForNewInvitations, 30000);
+
+  // Initial check after 5 seconds - Disabled to avoid duplicate notifications
+  // setTimeout(checkForNewInvitations, 5000);
+});
+
+onUnmounted(() => {
+  if (invitationCheckInterval) {
+    clearInterval(invitationCheckInterval);
+  }
 });
 </script>
 

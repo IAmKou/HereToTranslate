@@ -41,6 +41,9 @@ export class MySqlConnection {
       username: this.config.get<string>('MYSQL_USER'),
       password: this.config.get<string>('MYSQL_PASSWORD'),
       database: this.config.get<string>('MYSQL_DATABASE'),
+      ssl : {
+        rejectUnauthorized: false,
+      },
       synchronize: true,
       logging: true,
       supportBigNumbers: true,

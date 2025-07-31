@@ -1279,7 +1279,7 @@ onUnmounted(() => {
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   .notification-panel {
     background: #1f2937;
     border: 1px solid #374151;

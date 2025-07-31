@@ -120,16 +120,18 @@ const login = async () => {
     });
 
     const user = authService.getUser();
-    console.log(user.role);
-    if (user?.role?.id === 1) {
-      await router.push('/adminhome');
-    } else if (user?.role?.id === 2) {
+
+    if (!user) {
+      throw new Error('Invalid login response. Please try again.');
+    }
+
+    if (user?.role?.id === 1 || user?.role?.id === 2) {
       await router.push('/adminhome');
     } else {
       await router.push('/userhome');
     }
-
   } catch (err) {
+    console.error('Login failed:', err);
     error.value = err.response?.data?.message || err.message || 'Login failed.';
   } finally {
     isSubmitting.value = false;
@@ -145,15 +147,7 @@ const signInWithGoogleRedirect = () => {
 
   // Use current window origin to support both localhost and network IP
   const redirectUri = `${window.location.origin}/oauth-callback`;
-
-  console.log('🔍 Google OAuth - Client ID:', clientId);
-  console.log('🔍 Google OAuth - Redirect URI:', redirectUri);
-  console.log('🔍 Google OAuth - Window origin:', window.location.origin);
-
   const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token id_token&scope=openid%20email%20profile&nonce=secure_nonce`;
-
-  console.log('🔍 Google OAuth - Full URL:', googleOAuthUrl);
-
   window.location.href = googleOAuthUrl;
 };
 </script>

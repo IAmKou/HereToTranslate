@@ -18,6 +18,8 @@ import {
   UserEntity,
   RequestEntity,
   CommitStatus,
+  ProjectInvitationEntity,
+  InvitationStatus,
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -668,6 +670,15 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
   }
 
+  async isUserProjectMember(projectId: bigint, userId: bigint): Promise<boolean> {
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: ['members'],
+    });
+    if (!project) return false;
+    return project.members.some(member => member.id === userId);
+  }
+
   async removeUserFromProject(projectId: bigint, userId: bigint) {
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
@@ -743,6 +754,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       username: string;
       fullName: string;
       email: string;
+      joinedAt?: string;
       roles: {
         id: string;
         name: string;
@@ -758,12 +770,32 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     // Get project with members first
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
-      relations: ['members'],
+      relations: ['members', 'createdBy'],
     });
 
     if (!project) {
       throw new NotFoundException('Project not found');
     }
+
+    // Get accepted invitations to determine join times
+    const acceptedInvitations = await this.dataSource
+      .getRepository(ProjectInvitationEntity)
+      .createQueryBuilder('invitation')
+      .where('invitation.projectId = :projectId', { projectId })
+      .andWhere('invitation.status = :status', { status: InvitationStatus.ACCEPTED })
+      .select(['invitation.invitedUserId', 'invitation.updatedAt'])
+      .getMany();
+
+    // Create a map of user join times from invitations
+    const userJoinTimes = new Map<string, Date>();
+    console.log('🔍 Accepted invitations for project', projectId, ':', acceptedInvitations);
+    for (const invitation of acceptedInvitations) {
+      const userId = invitation.invitedUserId.toString();
+      const joinTime = invitation.updatedAt;
+      userJoinTimes.set(userId, joinTime);
+      console.log('🔍 Setting join time for user', userId, ':', joinTime);
+    }
+    console.log('🔍 Final userJoinTimes map:', Object.fromEntries(userJoinTimes));
 
     // Get all roles except Everyone role first
     const roles = await this.projectRoleRepository.find({
@@ -824,6 +856,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         username: string;
         fullName: string;
         email: string;
+        joinedAt?: string;
         roles: {
           id: string;
           name: string;
@@ -840,7 +873,19 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         fullName: member.fullName,
         email: member.email,
         roles: [],
+        // For project owner, use project creation date as joinedAt
+        joinedAt: project.createdBy && member.id === project.createdBy.id ? project.createdAt.toISOString() : undefined,
       };
+    }
+
+    // Update joinedAt for non-owner members using invitation times
+    for (const member of project.members) {
+      if (project.createdBy && member.id !== project.createdBy.id) {
+        const joinTime = userJoinTimes.get(member.id.toString());
+        if (joinTime) {
+          memberMap[member.id.toString()].joinedAt = joinTime.toISOString();
+        }
+      }
     }
 
     // Then add roles to members
@@ -862,6 +907,17 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
           name: role.name,
           permissionFlags: role.permissionFlags.value.toString(), // Ensure proper serialization
         });
+
+        // Use invitation accept time if available, otherwise use role creation time
+        const joinTime = userJoinTimes.get(key);
+        console.log('🔍 Looking up join time for user', key, ':', joinTime);
+        if (joinTime && !memberMap[key].joinedAt) {
+          memberMap[key].joinedAt = joinTime.toISOString();
+          console.log('🔍 Set joinedAt for user', key, 'to:', joinTime.toISOString());
+        } else if (role.createdAt && (!memberMap[key].joinedAt || role.createdAt < new Date(memberMap[key].joinedAt!))) {
+          memberMap[key].joinedAt = role.createdAt.toISOString();
+          console.log('🔍 Set joinedAt for user', key, 'to role creation time:', role.createdAt.toISOString());
+        }
       }
     }
 

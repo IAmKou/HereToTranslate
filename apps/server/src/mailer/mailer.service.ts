@@ -33,4 +33,26 @@ export class MailService {
     // TODO: Implement actual mail notification logic for all other registrants
     return;
   }
+
+  async sendProjectInvitation(
+    to: string,
+    invitationData: {
+      projectName: string;
+      invitedByUsername: string;
+      message?: string;
+      projectId: string;
+    }
+  ) {
+    await this.mailerService.sendMail({
+      to,
+      subject: `You're invited to join project: ${invitationData.projectName}`,
+      template: './project-invitation',
+      context: {
+        projectName: invitationData.projectName,
+        invitedByUsername: invitationData.invitedByUsername,
+        message: invitationData.message || `You're invited to join the project ${invitationData.projectName}.`,
+        projectId: invitationData.projectId,
+      },
+    });
+  }
 }

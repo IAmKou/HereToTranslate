@@ -10,6 +10,7 @@ import {
   FileEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
+  ProjectInvitationEntity,
   ProjectDiscussionCommentEntity,
   ProjectDiscussionThreadEntity,
   DiscussionAccessPolicyEntity,
@@ -45,7 +46,7 @@ export class MySqlConnection {
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
       entities: [UserEntity, BranchEntity, ProjectEntity, CategoryEntity, FileEntity,
-        ProjectGroupEntity, ProjectRoleEntity, ReportEntity, RequestEntity, TaskEntity,
+        ProjectGroupEntity, ProjectRoleEntity, ProjectInvitationEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,
         ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity, NotificationEntity],
     });

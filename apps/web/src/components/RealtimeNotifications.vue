@@ -21,28 +21,68 @@
       </div>
 
       <div class="notifications-list">
-        <div v-if="notifications.length === 0" class="empty-state">
-          No notifications
-        </div>
-        <div
-          v-for="notification in notifications.slice(0, 5)"
-          :key="notification.id"
-          class="notification-item"
-          :class="{ 'unread': !notification.isRead }"
-          @click="viewNotificationDetail(notification.id)"
-        >
-          <div class="notification-content">
-            <div class="notification-header">
-              <span class="notification-type">{{ getTypeLabel(notification.type) }}</span>
-              <span class="notification-time">{{ formatTime(notification.createdAt) }}</span>
+        <!-- Project Invitations Section -->
+        <div v-if="projectInvitations.length > 0" class="invitations-section">
+          <div class="section-header">
+            <h4>Project Invitations</h4>
+          </div>
+          <div
+            v-for="invitation in projectInvitations"
+            :key="invitation.id"
+            class="project-invitation-item"
+          >
+            <div class="invitation-content">
+              <div class="invitation-header">
+                <span class="invitation-type">📧 Project Invite</span>
+                <span class="invitation-time">{{ formatTime(invitation.createdAt) }}</span>
+              </div>
+              <div class="invitation-message">
+                <p><strong>{{ invitation.invitedByUser?.fullName || invitation.invitedByUser?.username }}</strong> invited you to join <strong>{{ invitation.project?.name }}</strong></p>
+                <p v-if="invitation.message" class="invitation-custom-message">{{ invitation.message }}</p>
+              </div>
+              <div class="invitation-actions">
+                <button @click="acceptProjectInvitation(invitation)" class="accept-btn">
+                  <i class="pi pi-check"></i>
+                  Join Project
+                </button>
+                <button @click="declineProjectInvitation(invitation)" class="decline-btn">
+                  <i class="pi pi-times"></i>
+                  Decline
+                </button>
+              </div>
             </div>
-            <p class="notification-message">{{ notification.message }}</p>
           </div>
-          <div class="notification-actions" @click.stop>
-            <button v-if="!notification.isRead" @click="markAsRead(notification)" class="mark-read">
-              <i class="pi pi-check"></i>
-            </button>
+        </div>
+
+        <!-- Regular Notifications Section -->
+        <div v-if="notifications.length > 0" class="notifications-section">
+          <div class="section-header">
+            <h4>Other Notifications</h4>
           </div>
+          <div
+            v-for="notification in notifications.slice(0, 5)"
+            :key="notification.id"
+            class="notification-item"
+            :class="{ 'unread': !notification.isRead }"
+            @click="viewNotificationDetail(notification.id)"
+          >
+            <div class="notification-content">
+              <div class="notification-header">
+                <span class="notification-type">{{ getTypeLabel(notification.type) }}</span>
+                <span class="notification-time">{{ formatTime(notification.createdAt) }}</span>
+              </div>
+              <p class="notification-message">{{ notification.message }}</p>
+            </div>
+            <div class="notification-actions" @click.stop>
+              <button v-if="!notification.isRead" @click="markAsRead(notification)" class="mark-read">
+                <i class="pi pi-check"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="notifications.length === 0 && projectInvitations.length === 0" class="empty-state">
+          No notifications
         </div>
       </div>
 
@@ -50,9 +90,14 @@
         <button @click="loadMoreNotifications" v-if="hasMore" class="load-more">
           Load More
         </button>
-        <button @click="navigateToNotifications" class="view-all">
-          View All
-        </button>
+        <div class="view-all-buttons">
+          <button @click="navigateToProjectInvitations" class="view-all" v-if="projectInvitations.length > 0">
+            View Invitations
+          </button>
+          <button @click="navigateToNotifications" class="view-all">
+            View All Notifications
+          </button>
+        </div>
       </div>
     </div>
 
@@ -84,6 +129,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { io, Socket } from 'socket.io-client'
 import { notificationService } from '../services/notification.service'
+import { projectInvitationService, type ProjectInvitation } from '../services/project-invitation.service'
 import { useAuthStore } from '../store/auth'
 import { getChatConfig } from '../utils/chat-config'
 import { useNotificationSync } from '../composables/useNotificationSync'
@@ -109,6 +155,7 @@ const authStore = useAuthStore()
 const config = getChatConfig()
 
 const notifications = ref<Notification[]>([])
+const projectInvitations = ref<ProjectInvitation[]>([])
 const toastNotifications = ref<ToastNotification[]>([])
 const showNotificationPanel = ref(false)
 const loading = ref(false)
@@ -138,12 +185,24 @@ const loadNotifications = async () => {
       isRead: notif.isRead // Preserve actual read status from server
     }))
 
+    // Load project invitations
+    await loadProjectInvitations()
+
     // Update unread count
     updateUnreadCount()
   } catch (error) {
     console.error('Error loading notifications:', error)
   } finally {
     loading.value = false
+  }
+}
+
+const loadProjectInvitations = async () => {
+  try {
+    const response = await projectInvitationService.getMyInvitations('pending')
+    projectInvitations.value = response.invitations
+  } catch (error) {
+    console.error('Error loading project invitations:', error)
   }
 }
 
@@ -190,7 +249,9 @@ const markAllAsRead = async () => {
 const updateUnreadCount = async () => {
   try {
     const response = await notificationService.getNotificationCount()
-    unreadCount.value = response.unread // Use unread count instead of total
+    // Add project invitations count to unread notifications
+    const invitationCount = projectInvitations.value.length
+    unreadCount.value = response.unread + invitationCount
   } catch (error) {
     console.error('Error updating unread count:', error)
   }
@@ -324,6 +385,40 @@ const connectToNotificationSocket = () => {
     unreadCount.value = 0
   })
 
+  // Listen for new project invitations
+  socket.on('new_project_invitation', (invitation: any) => {
+    console.log('📧 New project invitation received:', invitation)
+
+    // Add to project invitations list
+    projectInvitations.value.unshift(invitation)
+
+    // Show toast notification
+    addToast({
+      id: `invitation-${invitation.id}`,
+      type: 'project_invite',
+      message: `${invitation.invitedByUser?.fullName || invitation.invitedByUser?.username} invited you to join ${invitation.project?.name}`,
+      createdAt: invitation.createdAt,
+      isRead: false
+    })
+
+    // Update unread count
+    updateUnreadCount()
+  })
+
+  // Listen for invitation status changes
+  socket.on('invitation_responded', (data: { invitationId: string, status: string }) => {
+    console.log('📧 Invitation responded:', data)
+
+    // Remove from pending invitations
+    const index = projectInvitations.value.findIndex(inv => inv.id === data.invitationId)
+    if (index > -1) {
+      projectInvitations.value.splice(index, 1)
+    }
+
+    // Update unread count
+    updateUnreadCount()
+  })
+
   socket.on('disconnect', () => {
     console.log('❌ Disconnected from notification socket')
   })
@@ -379,18 +474,31 @@ const getTypeLabel = (type: string): string => {
 }
 
 const formatTime = (dateString: string) => {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date'
+    }
+    const now = new Date()
+    const diff = now.getTime() - date.getTime()
 
-  if (diff < 60000) return 'Just now'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} minutes ago`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`
-  return date.toLocaleDateString('vi-VN')
+    if (diff < 60000) return 'Just now'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)} minutes ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`
+    return date.toLocaleDateString('en-US')
+  } catch (error) {
+    console.error('Error formatting time:', dateString, error)
+    return 'Invalid Date'
+  }
 }
 
 const navigateToNotifications = () => {
   router.push('/notifications')
+  showNotificationPanel.value = false
+}
+
+const navigateToProjectInvitations = () => {
+  router.push('/project-invitations')
   showNotificationPanel.value = false
 }
 
@@ -399,9 +507,74 @@ const viewNotificationDetail = (notificationId: string) => {
   showNotificationPanel.value = false
 }
 
+const acceptProjectInvitation = async (invitation: ProjectInvitation) => {
+  try {
+    const result = await projectInvitationService.respondToInvitation(
+      invitation.id,
+      'accepted'
+    )
+
+    // Remove from pending invitations
+    const index = projectInvitations.value.findIndex(inv => inv.id === invitation.id)
+    if (index > -1) {
+      projectInvitations.value.splice(index, 1)
+    }
+
+    // Show success toast
+    addToast({
+      id: `invitation-${invitation.id}`,
+      type: 'project_invite',
+      message: `You've successfully joined ${invitation.project?.name}`,
+      createdAt: new Date().toISOString(),
+      isRead: false
+    })
+
+    // Redirect to project detail after successful acceptance
+    if (invitation.project?.id) {
+      router.push(`/projects/${invitation.project.id}`)
+    }
+
+  } catch (error: any) {
+    console.error('Error accepting invitation:', error)
+    addToast({
+      id: `error-${invitation.id}`,
+      type: 'error',
+      message: error.response?.data?.message || 'Failed to accept invitation',
+      createdAt: new Date().toISOString(),
+      isRead: false
+    })
+  }
+}
+
+const declineProjectInvitation = async (invitation: ProjectInvitation) => {
+  try {
+    const result = await projectInvitationService.respondToInvitation(
+      invitation.id,
+      'declined'
+    )
+
+    // Remove from pending invitations
+    const index = projectInvitations.value.findIndex(inv => inv.id === invitation.id)
+    if (index > -1) {
+      projectInvitations.value.splice(index, 1)
+    }
+
+  } catch (error: any) {
+    console.error('Error declining invitation:', error)
+  }
+}
+
 onMounted(() => {
   loadNotifications()
   connectToNotificationSocket()
+
+  // Set up periodic refresh for project invitations
+  const invitationRefreshInterval = setInterval(async () => {
+    if (authStore.user) {
+      await loadProjectInvitations()
+      updateUnreadCount()
+    }
+  }, 30000) // Refresh every 30 seconds
 
   // Set up notification sync listeners
   onNotificationDeleted((id: string) => {
@@ -439,6 +612,11 @@ onMounted(() => {
       }
     })
     unreadCount.value = 0
+  })
+
+  // Cleanup interval on unmount
+  onUnmounted(() => {
+    clearInterval(invitationRefreshInterval)
   })
 })
 
@@ -772,6 +950,11 @@ onUnmounted(() => {
   background: #f8fafc;
 }
 
+.view-all-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .load-more, .view-all {
   background: none;
   border: none;
@@ -909,6 +1092,150 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
 }
 
+/* Project Invitation Styles */
+.invitations-section {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.section-header {
+  padding: 0 24px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 12px;
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.project-invitation-item {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-left: 4px solid #3b82f6;
+  position: relative;
+}
+
+.project-invitation-item::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 20px;
+  width: 8px;
+  height: 8px;
+  background: #3b82f6;
+  border-radius: 50%;
+  animation: unreadPulse 2s infinite;
+}
+
+.invitation-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.invitation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.invitation-type {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.invitation-time {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.invitation-message p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+  margin: 0 0 8px 0;
+}
+
+.invitation-message p:last-child {
+  margin-bottom: 0;
+}
+
+.invitation-custom-message {
+  font-style: italic;
+  color: #64748b;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border-left: 3px solid #3b82f6;
+  margin-top: 8px;
+}
+
+.invitation-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.accept-btn, .decline-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.accept-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.accept-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.decline-btn {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.decline-btn:hover {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #dc2626;
+  border-color: #fca5a5;
+  transform: translateY(-1px);
+}
+
+.notifications-section {
+  padding-top: 8px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .notification-panel {
@@ -924,6 +1251,15 @@ onUnmounted(() => {
 
   .toast-notification {
     padding: 12px 16px;
+  }
+
+  .invitation-actions {
+    flex-direction: column;
+  }
+
+  .accept-btn, .decline-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 

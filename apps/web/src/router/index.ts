@@ -206,6 +206,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/project-invitations',
+      name: 'project-invitations',
+      component: () => import('../views/ProjectInvitationsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/projects/:projectId/branches/:branchId/translate',
       name: 'translation-editor',
       component: () => import('../views/TranslationEditorView.vue'),

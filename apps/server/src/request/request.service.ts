@@ -96,6 +96,47 @@ export class RequestService {
     return request;
   }
 
+  async getMyRegisteredRequests(uid: bigint) {
+    console.log('🔍 getMyRegisteredRequests called with uid:', uid);
+
+    // First, let's check if there are any registrations in the join table
+    const rawQuery = `
+      SELECT COUNT(*) as count
+      FROM request_registrants
+      WHERE user_id = ?
+    `;
+    const registrationCount = await this.requestRepo.query(rawQuery, [uid.toString()]);
+    console.log('🔍 Registration count in join table:', registrationCount);
+
+    // Now let's try a simpler approach first
+    const requests = await this.requestRepo
+      .createQueryBuilder('requests')
+      .leftJoinAndSelect('requests.registrants', 'registrants')
+      .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.tags', 'tags')
+      .getMany();
+
+    console.log('🔍 All requests with registrants:', requests.map(r => ({
+      id: r.id,
+      title: r.title,
+      registrantsCount: r.registrants?.length || 0,
+      registrantIds: r.registrants?.map(reg => reg.id) || []
+    })));
+
+    // Filter requests where the user is a registrant
+    const myRegisteredRequests = requests.filter(request =>
+      request.registrants?.some(registrant => registrant.id.toString() === uid.toString())
+    );
+
+    console.log('🔍 My registered requests after filtering:', myRegisteredRequests.map(r => ({
+      id: r.id,
+      title: r.title
+    })));
+
+    return myRegisteredRequests;
+  }
+
   async remove(id: number, userId: number): Promise<RequestEntity> {
     const request = await this.requestRepo.findOne({
       where: { id: BigInt(id)},

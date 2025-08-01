@@ -435,10 +435,12 @@
                   v-if="request && request.isPublic && !request.assignee && userId !== null && request.requester && request.requester.id !== userId && request.status === 'PENDING'"
                   class="action-btn primary"
                   @click="registerForRequest"
-                  :disabled="request?.isRegistered"
+                  :disabled="request?.isRegistered || registerLoading"
                 >
-                  <i class="pi pi-user-plus"></i>
+                  <i v-if="registerLoading" class="pi pi-spin pi-spinner"></i>
+                  <i v-else class="pi pi-user-plus"></i>
                   <span v-if="request?.isRegistered">Registered</span>
+                  <span v-else-if="registerLoading">Registering...</span>
                   <span v-else>Register for this request</span>
                 </button>
 
@@ -557,6 +559,7 @@ const loading = ref<boolean>(true);
 const userId = ref<number | null>(null);
 const showEdit = ref(false)
 const showCancelDialog = ref(false);
+const registerLoading = ref<boolean>(false);
 const toast = useToast();
 
 const timeRemaining = computed(() => {
@@ -689,18 +692,87 @@ async function downloadFile(file: FileInfo) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to download file', life: 3000 });
   }
 }
-function contactRequester() {
-  if (request.value?.requester?.email) {
-    window.open(`mailto:${request.value.requester.email}`);
-  } else {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Requester email not available', life: 3000 });
+async function contactRequester() {
+  console.log('Contact Requester - Requester data:', request.value?.requester);
+  console.log('Contact Requester - Requester username:', request.value?.requester?.username);
+
+  if (!request.value?.requester?.username) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Requester information not available', life: 3000 });
+    return;
+  }
+
+  try {
+    console.log('Making API call to /chat/open-dm with targetIdentifier:', request.value.requester.username);
+    // Create a direct chat with the requester
+    const response = await axiosInstance.post('/chat/open-dm', {
+      targetIdentifier: request.value.requester.username
+    });
+
+    console.log('API response:', response);
+    console.log('Response data:', response.data);
+
+    if (response.data && response.data._id) {
+      console.log('Chat created successfully, navigating to chat view with chat ID:', response.data._id);
+      // Navigate to the chat view with the chat ID
+      router.push({ name: 'chat', query: { chatId: response.data._id } });
+    } else {
+      console.log('Failed to create chat room - no _id in response');
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create chat room', life: 3000 });
+    }
+  } catch (error: any) {
+    console.error('Error creating chat:', error);
+    console.error('Error response:', error?.response);
+    console.error('Error message:', error?.message);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error?.response?.data?.message || 'Failed to create chat with requester',
+      life: 3000
+    });
   }
 }
-function contactTranslator() {
-  if (request.value?.assignee?.email) {
-    window.open(`mailto:${request.value.assignee.email}`);
-  } else {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator email not available', life: 3000 });
+async function contactTranslator() {
+  console.log('Contact Translator - Assignee data:', request.value?.assignee);
+  console.log('Contact Translator - Assignee username:', request.value?.assignee?.username);
+
+  if (!request.value?.assignee) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator information not available', life: 3000 });
+    return;
+  }
+
+  if (!request.value.assignee.username) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator username not available', life: 3000 });
+    return;
+  }
+
+  try {
+    console.log('Making API call to /chat/open-dm with targetIdentifier:', request.value.assignee.username);
+    // Create a direct chat with the translator
+    const response = await axiosInstance.post('/chat/open-dm', {
+      targetIdentifier: request.value.assignee.username
+    });
+
+    console.log('API response:', response);
+    console.log('Response data:', response.data);
+
+    if (response.data && response.data._id) {
+      console.log('Chat created successfully, navigating to chat view with chat ID:', response.data._id);
+      // Navigate to the chat view with the chat ID
+      router.push({ name: 'chat', query: { chatId: response.data._id } });
+    } else {
+      console.log('Failed to create chat room - no _id in response');
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create chat room', life: 3000 });
+    }
+  } catch (error: any) {
+    console.error('Error creating chat:', error);
+    console.error('Error response:', error?.response);
+    console.error('Error message:', error?.message);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error?.response?.data?.message || 'Failed to create chat with translator',
+      life: 3000
+    });
   }
 }
 function viewProfile(userId: number | undefined) {
@@ -743,6 +815,8 @@ async function fetchRequestDetail() {
     console.log('All fields:', Object.keys(res.data));
     console.log('Target languages:', res.data.targetLanguages);
     console.log('Target language (singular):', res.data.targetLanguage);
+    console.log('Assignee data:', res.data.assignee);
+    console.log('Assignee username:', res.data.assignee?.username);
     request.value = res.data;
   } catch (e) {
     console.error('Error fetching request detail:', e);
@@ -773,12 +847,15 @@ function rejectRequest() {
 
 async function registerForRequest() {
   if (!request.value?.id) return;
+  registerLoading.value = true;
   try {
     await axiosInstance.post(`/requests/${request.value.id}/register`);
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Successfully registered for this request! Please check your chat or email.', life: 3000 });
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Successfully registered for this request!', life: 3000 });
     await fetchRequestDetail();
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Failed', detail: e?.response?.data?.message || 'Registration failed.', life: 3000 });
+  } finally {
+    registerLoading.value = false;
   }
 }
 
@@ -1335,6 +1412,19 @@ body, .request-detail-wrapper {
 .action-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.action-btn .pi-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .tag-badge {
   display: inline-block;

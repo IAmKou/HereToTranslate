@@ -11,6 +11,8 @@ import {
   UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
   BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
+import { RequestRegistrationEntity } from '#LocalProject/Entities';
+
 import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -89,6 +91,7 @@ import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
       TaskEntity,
       NotificationEntity,
       ProjectInvitationEntity,
+      RequestRegistrationEntity,
       SettingsEntity,
     ]),
     BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),

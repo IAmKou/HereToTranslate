@@ -9,6 +9,7 @@ import {
   UserEntity,
   WalletEntity
 } from '#LocalProject/Entities';
+import { RequestRegistrationEntity, RegistrationStatus } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import {
@@ -48,6 +49,8 @@ export class RequestManagerService {
     private readonly fileRepository: Repository<FileEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
+    @InjectRepository(RequestRegistrationEntity)
+    private readonly requestRegistrationRepository: Repository<RequestRegistrationEntity>,
     private readonly walletService: WalletManagerService,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
@@ -335,6 +338,48 @@ export class RequestManagerService {
     return result || [];
   }
 
+  async getMyRegisteredRequests(uid: bigint) {
+    console.log('🔍 getMyRegisteredRequests called with uid:', uid);
+
+    // Use the old logic for now since we haven't migrated the data yet
+    const requests = await this.requestRepository
+      .createQueryBuilder('requests')
+      .leftJoinAndSelect('requests.registrants', 'registrants')
+      .leftJoinAndSelect('requests.requester', 'requester')
+      .leftJoinAndSelect('requests.category', 'category')
+      .leftJoinAndSelect('requests.tags', 'tags')
+      .getMany();
+
+    console.log('🔍 All requests with registrants:', requests.map(r => ({
+      id: r.id,
+      title: r.title,
+      registrantsCount: r.registrants?.length || 0,
+      registrantIds: r.registrants?.map(reg => reg.id) || [],
+      requester: r.requester ? { id: r.requester.id, fullName: r.requester.fullName, email: r.requester.email } : null,
+      category: r.category ? { id: r.category.id, name: r.category.name } : null
+    })));
+
+    // Filter requests where the user is a registrant
+    const myRegisteredRequests = requests.filter(request =>
+      request.registrants?.some(registrant => registrant.id.toString() === uid.toString())
+    );
+
+    console.log('🔍 My registered requests after filtering:', myRegisteredRequests.map(r => ({
+      id: r.id,
+      title: r.title,
+      requester: r.requester?.fullName || r.requester?.email || 'Unknown',
+      category: r.category?.name || '-'
+    })));
+
+    // Add registrationStatus for frontend compatibility
+    const result = myRegisteredRequests.map(request => ({
+      ...request,
+      registrationStatus: 'PENDING' // Default to PENDING for now
+    }));
+
+    return result;
+  }
+
   async fetchRequestDetails(requestId: bigint, userId: bigint) {
     const query = this.requestRepository
       .createQueryBuilder('requests')
@@ -356,6 +401,7 @@ export class RequestManagerService {
         'requester.phone',
 
         'assignee.id',
+        'assignee.username',
         'assignee.fullName',
         'assignee.email',
         'assignee.phone',
@@ -566,8 +612,29 @@ export class RequestManagerService {
       throw new BadRequestException('Request is not open for registration.');
     }
 
-    if (!request.registrants) request.registrants = [];
+    // Check if user already registered using new entity
+    const existingRegistration = await this.requestRegistrationRepository.findOne({
+      where: {
+        request: { id: requestId },
+        user: { id: BigInt(uid) }
+      }
+    });
 
+    if (existingRegistration) {
+      throw new BadRequestException('You have already registered for this request.');
+    }
+
+    // Create new registration record
+    const registration = this.requestRegistrationRepository.create({
+      request: { id: requestId } as any,
+      user: { id: BigInt(uid) } as any,
+      status: RegistrationStatus.Pending
+    });
+
+    await this.requestRegistrationRepository.save(registration);
+
+    // Also update the old registrants array for backward compatibility
+    if (!request.registrants) request.registrants = [];
     if (!request.registrants.some((u) => u.id === register.id)) {
       request.registrants.push(register);
       await this.requestRepository.save(request);

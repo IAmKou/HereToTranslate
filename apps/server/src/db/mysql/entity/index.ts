@@ -11,6 +11,7 @@ export * from './project-role.entity';
 export * from './project-tag.entity';
 export * from './report.entity';
 export * from './request.entity';
+export * from './request-registration.entity';
 export * from './user-type.entity';
 export * from './task.entity';
 export * from './transaction.entity';

@@ -336,6 +336,9 @@ const uploadAvatar = async () => {
     avatarUrl.value = url;
     user.value.avatarUrl = url;
     avatarChanged.value = false;
+    // Thông báo cho Navbar.vue cập nhật avatar mới
+    window.dispatchEvent(new Event('user-avatar-updated'));
+
     toast.add({
       severity: 'success',
       summary: 'Success',

@@ -438,7 +438,7 @@ const sendInvitationsFromModal = async () => {
       toast.add({
         severity: 'warn',
         summary: 'Warning',
-        detail: 'Please enter at least one valid email or username',
+        detail: 'Please enter at least one valid email ',
         life: 3000
       });
       return;

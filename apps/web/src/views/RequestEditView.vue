@@ -1,86 +1,90 @@
 <template>
-  <div class="edit-request-modal">
-    <div class="modal-overlay" @click="$emit('close')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Edit Request</h3>
-        <button class="close-btn" @click="$emit('close')">
-          <i class="pi pi-times"></i>
-        </button>
+  <Teleport to="body">
+    <div class="edit-request-modal">
+      <div class="modal-overlay" @click="$emit('close')"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Edit Request</h3>
+          <button class="close-btn" @click="$emit('close')">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+
+        <form @submit.prevent="handleSubmit" class="edit-form">
+          <div class="form-group">
+            <label for="title">Title <span class="required">*</span></label>
+            <input
+              id="title"
+              v-model="form.title"
+              type="text"
+              required
+              class="form-control"
+              :class="{ 'error': errors.title }"
+              placeholder="Enter request title"
+              style="width: 100%;"
+            >
+            <span v-if="errors.title" class="error-message">{{ errors.title }}</span>
+          </div>
+
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea
+              id="description"
+              v-model="form.description"
+              class="form-control"
+              :class="{ 'error': errors.description }"
+              rows="8"
+              placeholder="Enter request description"
+              style="width: 100%; resize: vertical;"
+            ></textarea>
+            <span v-if="errors.description" class="error-message">{{ errors.description }}</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="dealAmount">Deal Amount <span class="required">*</span></label>
+              <input
+                id="dealAmount"
+                v-model.number="form.dealAmount"
+                type="number"
+                min="0"
+                required
+                class="form-control"
+                :class="{ 'error': errors.dealAmount }"
+                placeholder="Enter deal amount"
+              >
+              <span v-if="errors.dealAmount" class="error-message">{{ errors.dealAmount }}</span>
+            </div>
+
+            <div class="form-group">
+              <label for="deadline">Deadline <span class="required">*</span></label>
+              <input
+                id="deadline"
+                v-model="form.deadline"
+                type="date"
+                :min="minDateString"
+                required
+                class="form-control"
+                :class="{ 'error': errors.deadline }"
+              >
+              <span v-if="errors.deadline" class="error-message">{{ errors.deadline }}</span>
+              <span v-else class="help-text">Deadline must be at least 7 days from now</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" @click="$emit('close')">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" :disabled="loading">
+              <span v-if="loading" class="loading-spinner"></span>
+              {{ loading ? 'Updating...' : 'Update Request' }}
+            </button>
+          </div>
+        </form>
       </div>
-
-      <form @submit.prevent="handleSubmit" class="edit-form">
-        <div class="form-group">
-          <label for="title">Title <span class="required">*</span></label>
-          <input
-            id="title"
-            v-model="form.title"
-            type="text"
-            required
-            class="form-control"
-            :class="{ 'error': errors.title }"
-            placeholder="Enter request title"
-            style="width: 100%;"
-          >
-          <span v-if="errors.title" class="error-message">{{ errors.title }}</span>
-        </div>
-
-        <div class="form-group">
-          <label for="description">Description</label>
-          <textarea
-            id="description"
-            v-model="form.description"
-            class="form-control"
-            :class="{ 'error': errors.description }"
-            rows="8"
-            placeholder="Enter request description"
-            style="width: 100%; resize: vertical;"
-          ></textarea>
-          <span v-if="errors.description" class="error-message">{{ errors.description }}</span>
-        </div>
-
-        <div class="form-group">
-          <label for="dealAmount">Deal Amount <span class="required">*</span></label>
-          <input
-            id="dealAmount"
-            v-model.number="form.dealAmount"
-            type="number"
-            min="0"
-            required
-            class="form-control"
-            :class="{ 'error': errors.dealAmount }"
-            placeholder="Enter deal amount"
-          >
-          <span v-if="errors.dealAmount" class="error-message">{{ errors.dealAmount }}</span>
-        </div>
-
-        <div class="form-group">
-          <label for="deadline">Deadline <span class="required">*</span></label>
-          <input
-            id="deadline"
-            v-model="form.deadline"
-            type="date"
-            :min="minDateString"
-            required
-            class="form-control"
-            :class="{ 'error': errors.deadline }"
-          >
-          <span v-if="errors.deadline" class="error-message">{{ errors.deadline }}</span>
-          <span v-else class="help-text">Deadline must be at least 7 days from now</span>
-        </div>
-
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" @click="$emit('close')">
-            Cancel
-          </button>
-          <button type="submit" class="btn btn-primary" :disabled="loading">
-            <span v-if="loading" class="loading-spinner"></span>
-            {{ loading ? 'Updating...' : 'Update Request' }}
-          </button>
-        </div>
-      </form>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -220,7 +224,7 @@ async function handleSubmit() {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -239,10 +243,10 @@ async function handleSubmit() {
   background: white;
   border-radius: 12px;
   padding: 2.5rem 2rem;
-  width: 600px;
-  max-width: 90vw;
-  max-height: 800px;
-  overflow-y: visible;
+  width: 750px;
+  max-width: 95vw;
+  max-height: 700px;
+  overflow-y: auto;
   position: relative;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
@@ -281,6 +285,17 @@ async function handleSubmit() {
 
 .edit-form {
   padding: 1.5rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
 }
 
 .form-group {

@@ -1,6 +1,6 @@
 <template>
   <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-    <Header />
+    <Navbar />
     <div class="main-content">
       <Sidebar v-model:collapsed="sidebarCollapsed" />
       <div class="content">
@@ -163,7 +163,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import Header from '../components/Header.vue'
+import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
 import { notificationService, type Notification, type NotificationCount } from '../services/notification.service'
 import { useNotificationSync } from '../composables/useNotificationSync'
@@ -407,12 +407,7 @@ onMounted(() => {
 .main-content {
   display: flex;
   flex: 1;
-  margin-left: 260px;
   transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
-}
-
-.layout-wrapper.sidebar-collapsed .main-content {
-  margin-left: 72px;
 }
 
 .content {

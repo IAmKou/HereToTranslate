@@ -57,3 +57,10 @@ export const getLanguageName = (code: string): string => {
   const language = getLanguageByCode(code);
   return language ? language.name : code;
 };
+
+// Re-export for better compatibility
+export default {
+  SUPPORTED_LANGUAGES,
+  getLanguageByCode,
+  getLanguageName
+};

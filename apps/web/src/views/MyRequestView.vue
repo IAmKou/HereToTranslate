@@ -41,6 +41,14 @@
               Private Request Assign To You
               <span v-if="assignedRequestsCount > 0" class="badge">{{ assignedRequestsCount }}</span>
             </button>
+            <button
+              @click="switchTab('my-registrations')"
+              :class="['tab-button', { active: activeTab === 'my-registrations' }]"
+            >
+              <span class="material-icons">history</span>
+              My Registrations
+              <span v-if="myRegistrationsCount > 0" class="badge">{{ myRegistrationsCount }}</span>
+            </button>
           </div>
 
           <!-- Loading State -->
@@ -174,14 +182,29 @@
                       </span>
                     </td>
                     <td class="actions text-left">
-                      <button @click="onCancel(req)" class="btn btn-small btn-danger" v-if="!req.project">
+                      <!-- Cancel button - only show for PENDING requests without project -->
+                      <button
+                        @click="onCancel(req)"
+                        class="btn btn-small btn-danger"
+                        v-if="req.status === 'PENDING' && !req.project"
+                        title="Cancel Request"
+                      >
                         <i class="pi pi-times"></i>
                       </button>
-                      <button v-if="canReview(req) && !req.project" @click="onReview(req)" class="btn btn-small btn-primary">
+
+                      <!-- Review button - only show for PENDING requests without project -->
+                      <button
+                        v-if="canReview(req) && req.status === 'PENDING' && !req.project"
+                        @click="onReview(req)"
+                        class="btn btn-small btn-primary"
+                        title="Review Request"
+                      >
                         <i class="pi pi-eye"></i>
                       </button>
+
+                      <!-- Candidates button - only show for PENDING public requests without project -->
                       <router-link
-                        v-if="req.isPublic && !req.project"
+                        v-if="req.status === 'PENDING' && req.isPublic && !req.project"
                         :to="{ name: 'request-registrants', params: { requestId: req.id } }"
                         class="btn btn-small btn-candidate"
                         :class="{ disabled: req.registrantCount === 0 }"
@@ -191,6 +214,21 @@
                         <span>Candidates</span>
                         <span v-if="typeof req.registrantCount === 'number'" class="badge">{{ req.registrantCount }}</span>
                       </router-link>
+
+                      <!-- Show message for cancelled requests -->
+                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
+                        Request cancelled
+                      </span>
+
+                      <!-- Show message for completed requests -->
+                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
+                        ✓ Completed
+                      </span>
+
+                      <!-- Show message for rejected requests -->
+                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
+                        ✗ Rejected
+                      </span>
                     </td>
                   </tr>
                   </tbody>
@@ -378,30 +416,53 @@
                         </span>
                     </td>
                     <td class="actions">
+                      <!-- Accept button - only for PENDING requests -->
                       <button
                         v-if="req.status === 'PENDING'"
                         @click="acceptRequest(req.id)"
                         class="btn btn-small btn-success"
                         :disabled="actionLoading"
+                        title="Accept Request"
                       >
                         Accept
                       </button>
+
+                      <!-- Reject button - only for PENDING requests -->
                       <button
                         v-if="req.status === 'PENDING'"
                         @click="rejectRequest(req.id)"
                         class="btn btn-small btn-danger"
                         :disabled="actionLoading"
+                        title="Reject Request"
                       >
                         Reject
                       </button>
+
+                      <!-- Mark Complete button - only for APPROVED requests -->
                       <button
                         v-if="req.status === 'APPROVED'"
                         @click="completeRequest(req.id)"
                         class="btn btn-small btn-primary"
                         :disabled="actionLoading"
+                        title="Mark as Complete"
                       >
                         Mark Complete
                       </button>
+
+                      <!-- Show message for completed requests -->
+                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
+                        ✓ Completed
+                      </span>
+
+                      <!-- Show message for rejected requests -->
+                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
+                        ✗ Rejected
+                      </span>
+
+                      <!-- Show message for cancelled requests -->
+                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
+                        Request cancelled
+                      </span>
                     </td>
                   </tr>
                   </tbody>
@@ -428,6 +489,181 @@
                     <option value="7">7</option>
                     <option value="9">9</option>
                     <option value="12">12</option>
+                  </select>
+                  <span>per page</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- My Registrations Tab -->
+          <div v-else-if="activeTab === 'my-registrations'">
+            <!-- Search and Filter Bar for My Registrations -->
+            <div class="filter-bar">
+              <div class="search-container">
+                <i class="pi pi-search search-icon"></i>
+                <input
+                  v-model="myRegistrationsSearch"
+                  type="text"
+                  placeholder="Search registered requests..."
+                  class="search-input"
+                />
+              </div>
+              <select v-model="myRegistrationsStatusFilter" class="filter-select">
+                <option value="">All Status</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select v-model="myRegistrationsVisibilityFilter" class="filter-select">
+                <option value="">All Visibility</option>
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+              </select>
+              <button @click="clearMyRegistrationsFilters" class="btn btn-secondary btn-small">
+                <i class="pi pi-times"></i>
+                Clear
+              </button>
+
+            </div>
+
+            <!-- Empty State for My Registrations -->
+            <div v-if="myRegistrations.length === 0" class="empty-container">
+              <div class="empty-content">
+                <div class="empty-icon">
+                  <i class="pi pi-history"></i>
+                </div>
+                <h3>No registered requests</h3>
+                <p>You haven't registered for any requests yet.</p>
+              </div>
+            </div>
+
+
+
+            <!-- My Registrations Table -->
+            <div v-if="myRegistrations.length > 0" class="requests-table-container">
+              <div class="table-wrapper">
+                <table class="requests-table">
+                  <thead>
+                  <tr>
+                    <th @click="sortTable('id')" style="cursor: pointer;" class="text-xs font-semibold text-center" width="60">
+                      ID
+                    </th>
+                    <th @click="sortTable('title')" style="cursor: pointer;" class="text-xs font-semibold text-left">
+                      Title
+                      <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    </th>
+                    <th @click="sortTable('requester')" style="cursor: pointer;" class="text-xs font-semibold text-left">
+                      Requester
+                      <i :class="[ 'sort-icon', sortKey === 'requester' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    </th>
+                    <th @click="sortTable('category')" style="cursor: pointer;" class="text-xs font-semibold text-left">
+                      Category
+                    </th>
+                    <th @click="sortTable('dealAmount')" style="cursor: pointer;" class="text-xs font-semibold text-center th-flex" width="120">
+                      <span class="th-flex">Deal Amount <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" /></span>
+                    </th>
+                    <th @click="sortTable('deadline')" style="cursor: pointer;" class="text-xs font-semibold text-left" width="130">
+                      Deadline
+                      <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    </th>
+                    <th class="text-xs font-semibold text-left">Status</th>
+                    <th class="text-xs font-semibold text-left">Visibility</th>
+                    <th class="text-xs font-semibold text-left">Actions</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+
+                  <tr v-for="(req, index) in paginatedMyRegistrations" :key="req.id" class="request-row table-row-hover">
+                    <td class="text-center text-sm text-gray-700" width="60">{{ (currentRegistrationsPage - 1) * registrationsItemsPerPage + index + 1 }}</td>
+                    <td class="request-title text-sm text-gray-700 text-left"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
+                    <td class="text-sm text-gray-700 text-left">{{ req.requester?.fullName || req.requester?.email || 'Unknown' }}</td>
+                    <td class="text-sm text-gray-700 text-left">{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
+                    <td class="text-sm text-gray-500 italic text-left" width="130"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
+                    <td>
+                        <span v-if="req.registrationStatus === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
+                          ✅ Approved
+                        </span>
+                      <span v-else-if="req.registrationStatus === 'PENDING'" class="status-badge status-registered custom-badge registered-badge">
+                          📝 Registered
+                        </span>
+                      <span v-else-if="req.registrationStatus === 'REJECTED'" class="status-badge status-rejected custom-badge rejected-badge">
+                          ❌ Rejected
+                        </span>
+                      <span v-else :class="['status-badge', `status-${req.registrationStatus?.toLowerCase() || req.status.toLowerCase()}`]">
+                          {{ formatStatus(req.registrationStatus || req.status) }}
+                        </span>
+                    </td>
+                    <td>
+                      <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                        🌐 Public
+                      </span>
+                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge custom-badge private-badge">
+                        🔒 Private
+                      </span>
+                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                        🌐 Public
+                      </span>
+                      <span v-else class="visibility-badge custom-badge private-badge">
+                        🔒 Private
+                      </span>
+                    </td>
+                    <td class="actions text-left">
+                      <!-- View Details button -->
+                      <router-link
+                        :to="{ name: 'request-detail', params: { requestId: req.id } }"
+                        class="btn btn-small btn-primary"
+                        title="View Request Details"
+                      >
+                        <i class="pi pi-eye"></i>
+                        View
+                      </router-link>
+
+                      <!-- Show message for completed requests -->
+                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
+                        ✓ Completed
+                      </span>
+
+                      <!-- Show message for rejected requests -->
+                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
+                        ✗ Rejected
+                      </span>
+
+                      <!-- Show message for cancelled requests -->
+                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
+                        Request cancelled
+                      </span>
+                    </td>
+                  </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination-controls">
+                <div class="pagination-info">
+                  <span>
+                    Showing {{ (currentRegistrationsPage - 1) * registrationsItemsPerPage + 1 }}–{{ Math.min(currentRegistrationsPage * registrationsItemsPerPage, filteredMyRegistrations.length) }} of {{ filteredMyRegistrations.length }} registrations
+                    ({{ totalRegistrationsPages }} page{{ totalRegistrationsPages > 1 ? 's' : '' }})
+                  </span>
+                </div>
+                <div class="pagination-buttons">
+                  <button @click="prevRegistrationsPage" :disabled="currentRegistrationsPage === 1" class="btn btn-secondary">
+                    <i class="pi pi-chevron-left"></i> Previous
+                  </button>
+                  <span class="page-info">Page {{ currentRegistrationsPage }} of {{ totalRegistrationsPages }}</span>
+                  <button @click="nextRegistrationsPage" :disabled="currentRegistrationsPage === totalRegistrationsPages" class="btn btn-secondary">
+                    Next <i class="pi pi-chevron-right"></i>
+                  </button>
+                </div>
+                <div class="page-size-selector">
+                  <label for="registrationsPageSize">Show:</label>
+                  <select id="registrationsPageSize" v-model="registrationsItemsPerPage" @change="currentRegistrationsPage = 1" class="page-size-select">
+                    <option value="5">5</option>
+                    <option value="7">7</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
                   </select>
                   <span>per page</span>
                 </div>
@@ -470,6 +706,7 @@ const toast = useToast()
 const activeTab = ref('my-requests')
 const myRequests = ref([])
 const assignedRequests = ref([])
+const myRegistrations = ref([])
 const actionLoading = ref(false)
 const router = useRouter()
 
@@ -478,6 +715,8 @@ const currentPage = ref(1)
 const itemsPerPage = ref(7)
 const currentAssignedPage = ref(1)
 const assignedItemsPerPage = ref(7)
+const currentRegistrationsPage = ref(1)
+const registrationsItemsPerPage = ref(7)
 
 // Search and Filter state
 const myRequestsSearch = ref('')
@@ -486,10 +725,16 @@ const myRequestsVisibilityFilter = ref('')
 const assignedRequestsSearch = ref('')
 const assignedRequestsStatusFilter = ref('')
 const assignedRequestsVisibilityFilter = ref('')
+const myRegistrationsSearch = ref('')
+const myRegistrationsStatusFilter = ref('')
+const myRegistrationsVisibilityFilter = ref('')
 
 // Computed properties for counts
 const myRequestsCount = computed(() => myRequests.value.filter(req => req.status !== 'CANCELLED').length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
+const myRegistrationsCount = computed(() => myRegistrations.value.length)
+
+
 //Sort
 const sortKey = ref('')
 const sortOrder = ref(1)
@@ -579,6 +824,42 @@ const filteredAssignedRequests = computed(() => {
   return filtered.filter(req => req.status !== 'CANCELLED')
 })
 
+// Filtered My Registrations
+const filteredMyRegistrations = computed(() => {
+  let filtered = myRegistrations.value
+
+  // Search filter
+  if (myRegistrationsSearch.value) {
+    const searchTerm = myRegistrationsSearch.value.toLowerCase()
+    filtered = filtered.filter(req =>
+      req.title?.toLowerCase().includes(searchTerm) ||
+      req.requester?.fullName?.toLowerCase().includes(searchTerm) ||
+      req.requester?.email?.toLowerCase().includes(searchTerm) ||
+      req.category?.name?.toLowerCase().includes(searchTerm) ||
+      req.id?.toString().includes(searchTerm)
+    )
+  }
+
+  // Status filter
+  if (myRegistrationsStatusFilter.value) {
+    filtered = filtered.filter(req => {
+      const status = req.registrationStatus || req.status;
+      return status === myRegistrationsStatusFilter.value;
+    });
+  }
+
+  // Visibility filter
+  if (myRegistrationsVisibilityFilter.value) {
+    if (myRegistrationsVisibilityFilter.value === 'public') {
+      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+    } else if (myRegistrationsVisibilityFilter.value === 'private') {
+      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    }
+  }
+
+  return filtered
+})
+
 // Pagination computed properties for My Requests
 const paginatedMyRequests = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value
@@ -601,6 +882,17 @@ const totalAssignedPages = computed(() => {
   return Math.ceil(filteredAssignedRequests.value.length / assignedItemsPerPage.value)
 })
 
+// Pagination computed properties for My Registrations
+const paginatedMyRegistrations = computed(() => {
+  const start = (currentRegistrationsPage.value - 1) * registrationsItemsPerPage.value
+  const end = start + registrationsItemsPerPage.value
+  return filteredMyRegistrations.value.slice(start, end)
+})
+
+const totalRegistrationsPages = computed(() => {
+  return Math.ceil(filteredMyRegistrations.value.length / registrationsItemsPerPage.value)
+})
+
 // Pagination methods
 function goToPage(page) {
   currentPage.value = page
@@ -608,6 +900,10 @@ function goToPage(page) {
 
 function goToAssignedPage(page) {
   currentAssignedPage.value = page
+}
+
+function goToRegistrationsPage(page) {
+  currentRegistrationsPage.value = page
 }
 
 function nextPage() {
@@ -634,11 +930,24 @@ function prevAssignedPage() {
   }
 }
 
+function nextRegistrationsPage() {
+  if (currentRegistrationsPage.value < totalRegistrationsPages.value) {
+    currentRegistrationsPage.value++
+  }
+}
+
+function prevRegistrationsPage() {
+  if (currentRegistrationsPage.value > 1) {
+    currentRegistrationsPage.value--
+  }
+}
+
 // Reset pagination when switching tabs
 function switchTab(tab) {
   activeTab.value = tab
   currentPage.value = 1
   currentAssignedPage.value = 1
+  currentRegistrationsPage.value = 1
 }
 
 // Clear filter functions
@@ -654,6 +963,13 @@ function clearAssignedRequestsFilters() {
   assignedRequestsStatusFilter.value = ''
   assignedRequestsVisibilityFilter.value = ''
   currentAssignedPage.value = 1
+}
+
+function clearMyRegistrationsFilters() {
+  myRegistrationsSearch.value = ''
+  myRegistrationsStatusFilter.value = ''
+  myRegistrationsVisibilityFilter.value = ''
+  currentRegistrationsPage.value = 1
 }
 
 function fetchRequests() {
@@ -718,7 +1034,18 @@ function fetchRequests() {
       error.value = `Lỗi khi tải requests: ${err.response?.status} ${err.response?.statusText || err.message}`
     })
 
-  promises.push(myRequestsPromise, assignedRequestsPromise)
+  // Fetch my registrations
+  const myRegistrationsPromise = axiosInstance.get('/requests/myRegistrations')
+    .then(res => {
+      myRegistrations.value = res.data
+    })
+    .catch(err => {
+      console.error('Error fetching my registrations:', err)
+      // Don't set error for registrations as it's optional
+      myRegistrations.value = []
+    })
+
+  promises.push(myRequestsPromise, assignedRequestsPromise, myRegistrationsPromise)
 
   Promise.all(promises).finally(() => {
     loading.value = false
@@ -898,6 +1225,8 @@ function goToRequestDetail(requestId) {
   router.push({ name: 'request-detail', params: { requestId } })
 }
 
+
+
 async function debugConnection() {
   console.log('=== DEBUG CONNECTION ===')
   console.log('Base URL:', axiosInstance.defaults.baseURL)
@@ -980,7 +1309,7 @@ onMounted(fetchRequests)
   margin-bottom: 32px;
 }
 .requests-title {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   font-weight: 700;
   color: #1e293b;
   margin: 0 0 0.5rem 0;
@@ -989,10 +1318,10 @@ onMounted(fetchRequests)
   gap: 0.75rem;
 }
 .emoji {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
 }
 .requests-desc {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: #64748b;
   margin: 0;
   line-height: 1.6;
@@ -1064,12 +1393,12 @@ onMounted(fetchRequests)
 .requests-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .requests-table th {
   background: #f8fafc;
-  padding: 1rem;
+  padding: 0.8rem;
   text-align: left;
   font-weight: 600;
   color: #374151;
@@ -1077,7 +1406,7 @@ onMounted(fetchRequests)
 }
 
 .requests-table td {
-  padding: 1rem;
+  padding: 0.8rem;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
 }
@@ -1097,8 +1426,9 @@ onMounted(fetchRequests)
 }
 
 .status-badge {
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
+  font-size: 0.7rem;
 }
 
 .status-badge.status-pending {
@@ -1127,14 +1457,14 @@ onMounted(fetchRequests)
 }
 
 .visibility-badge {
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   letter-spacing: 0.05em;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .visibility-public {
@@ -1153,22 +1483,22 @@ onMounted(fetchRequests)
 }
 
 .btn {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border: none;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   text-decoration: none;
 }
 
 .btn-small {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
 }
 
 .btn-primary {
@@ -1212,16 +1542,16 @@ onMounted(fetchRequests)
 }
 
 .tab-button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1.2rem;
   border: none;
   border-radius: 8px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   text-decoration: none;
   background: #f3f4f6;
   color: #6b7280;
@@ -1240,7 +1570,7 @@ onMounted(fetchRequests)
 }
 
 .tab-button .material-icons {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .badge {
@@ -1465,18 +1795,18 @@ onMounted(fetchRequests)
 }
 
 .pagination-controls button {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border: 1px solid #d1d5db;
   background: white;
   color: #374151;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .pagination-controls button:hover:not(:disabled) {
@@ -1565,10 +1895,10 @@ onMounted(fetchRequests)
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 1rem 0.5rem 2.5rem;
+  padding: 0.4rem 0.8rem 0.4rem 2.2rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   background: white;
   transition: border-color 0.2s ease;
 }
@@ -1580,10 +1910,10 @@ onMounted(fetchRequests)
 }
 
 .filter-select {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   background: white;
   color: #374151;
   min-width: 120px;
@@ -1663,12 +1993,12 @@ onMounted(fetchRequests)
 .btn-candidate {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   background: #2563eb;
   color: #fff;
   border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 14px;
+  padding: 3px 10px;
+  font-size: 12px;
   font-weight: 500;
   border: none;
   transition: background 0.2s;
@@ -1676,7 +2006,7 @@ onMounted(fetchRequests)
   text-decoration: none;
 }
 .btn-candidate .pi-users {
-  font-size: 16px;
+  font-size: 14px;
 }
 .btn-candidate .badge {
   background: #f59e42;
@@ -1698,25 +2028,25 @@ onMounted(fetchRequests)
   background: #1d4ed8;
 }
 .sort-icon {
-  margin-left: 6px;
-  font-size: 0.85rem;
+  margin-left: 4px;
+  font-size: 0.75rem;
   color: #9ca3af;
 }
 th:hover .sort-icon {
   color: #1f2937;
 }
 .deadline-icon {
-  margin-right: 4px;
-  font-size: 1.1em;
+  margin-right: 3px;
+  font-size: 1em;
   vertical-align: middle;
 }
 .custom-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.92em;
+  gap: 3px;
+  font-size: 0.8em;
   font-weight: 600;
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
 }
 .approved-badge {
@@ -1726,6 +2056,19 @@ th:hover .sort-icon {
 .pending-badge {
   background: #fef9c3;
   color: #b45309;
+}
+
+.registered-badge {
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.9em;
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+}
+
+.rejected-badge {
+  background: #fee2e2;
+  color: #991b1b;
 }
 .public-badge {
   background: #eff6ff;
@@ -1743,14 +2086,14 @@ th:hover .sort-icon {
   font-weight: bold;
 }
 .deal-icon {
-  margin-right: 3px;
-  font-size: 1.1em;
+  margin-right: 2px;
+  font-size: 1em;
   vertical-align: middle;
 }
 .th-flex {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
 }
 </style>

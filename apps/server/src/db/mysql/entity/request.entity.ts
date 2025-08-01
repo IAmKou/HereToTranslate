@@ -84,4 +84,7 @@ export class RequestEntity {
   })
   files: FileEntity[];
 
+  @Column({ type: 'json', nullable: true })
+  targetLanguages: string[];
+
 }

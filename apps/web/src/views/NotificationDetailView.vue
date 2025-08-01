@@ -1,6 +1,6 @@
 <template>
   <div class="layout-wrapper" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-    <Header />
+    <Navbar />
     <div class="main-content">
       <Sidebar v-model:collapsed="sidebarCollapsed" />
       <div class="content">
@@ -116,7 +116,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import Header from '../components/Header.vue'
+import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
 import { notificationService, type Notification } from '../services/notification.service'
 

@@ -20,7 +20,7 @@ import {
   TransactionEntity,
   CommitEntity,
   ProjectTagEntity, TranslationApprovalEntity, WalletEntity,
-  NotificationEntity,
+  NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
 
 
@@ -41,6 +41,9 @@ export class MySqlConnection {
       username: this.config.get<string>('MYSQL_USER'),
       password: this.config.get<string>('MYSQL_PASSWORD'),
       database: this.config.get<string>('MYSQL_DATABASE'),
+      ssl : {
+        rejectUnauthorized: false,
+      },
       synchronize: true,
       logging: true,
       supportBigNumbers: true,
@@ -48,7 +51,7 @@ export class MySqlConnection {
       entities: [UserEntity, BranchEntity, ProjectEntity, CategoryEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, ProjectInvitationEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,
-        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity, NotificationEntity],
+        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity, NotificationEntity, SettingsEntity],
     });
     MySqlConnection.instance = this;
   }

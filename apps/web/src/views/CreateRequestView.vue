@@ -48,18 +48,20 @@
         </div>
 
         <!-- Success Animation Overlay -->
-        <div v-if="showSuccess" class="success-overlay">
-          <div class="success-content">
-            <div class="success-icon">🎉</div>
-            <h2>Request Created Successfully!</h2>
-            <p>Your translation request has been submitted. Redirecting to your requests...</p>
-            <div class="loading-dots">
-              <div class="dot"></div>
-              <div class="dot"></div>
-              <div class="dot"></div>
+        <Teleport to="body">
+          <div v-if="showSuccess" class="success-overlay">
+            <div class="success-content">
+              <div class="success-icon">🎉</div>
+              <h2>Request Created Successfully!</h2>
+              <p>Your translation request has been submitted. Redirecting to your requests...</p>
+              <div class="loading-dots">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+              </div>
             </div>
           </div>
-        </div>
+        </Teleport>
       </div>
     </div>
     <Footer />
@@ -101,24 +103,24 @@ function onCancel() {
 .main-content {
   display: flex;
   flex: 1;
-  width: 100vw;
-  margin-left: 240px;
-  transition: margin-left 0.2s cubic-bezier(.4, 0, .2, 1);
+  min-width: 0;
+  padding-left: 240px;
+  transition: padding-left 0.2s cubic-bezier(.4, 0, .2, 1);
 }
 
 .layout-wrapper.sidebar-collapsed .main-content {
-  margin-left: 72px;
+  padding-left: 72px;
 }
 
 /* Responsive design */
 @media (max-width: 1024px) {
   .main-content,
   .layout-wrapper.sidebar-collapsed .main-content {
-    margin-left: 0;
+    padding-left: 0;
   }
 
   .content {
-    width: 100vw;
+    width: 100%;
   }
 }
 
@@ -126,44 +128,38 @@ function onCancel() {
 @media (max-width: 768px) {
   .main-content,
   .layout-wrapper.sidebar-collapsed .main-content {
-    margin-left: 0;
+    padding-left: 0;
   }
 
   .content {
-    width: 100vw;
+    width: 100%;
   }
 }
 
 .content {
   flex: 1;
-  width: calc(100vw - 240px);
-  padding: 32px 0;
+  padding: 16px;
+  min-width: 0;
   background: transparent;
   position: relative;
-  transition: width 0.2s cubic-bezier(.4, 0, .2, 1);
-}
-
-.layout-wrapper.sidebar-collapsed .content {
-  width: calc(100vw - 72px);
 }
 
 .header-center-container {
-  max-width: 1250px;
-  margin: 0 auto 40px auto;
-  padding: 0 32px;
-  transition: margin-left 0.2s cubic-bezier(.4, 0, .2, 1);
+  max-width: 1000px;
+  margin: 0 auto 24px auto;
+  padding: 0;
 }
 
 .create-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: 16px;
-  padding: 12px 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08),
-  0 8px 16px rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08),
+  0 4px 8px rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(20px);
   position: relative;
@@ -185,40 +181,40 @@ function onCancel() {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 20px;
 }
 
 .title-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .title-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 0.875rem;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 0.75rem;
   font-weight: 600;
   width: fit-content;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .badge-text {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
 .create-title {
-  font-size: 2.5rem;
-  font-weight: 800;
+  font-size: 1.875rem;
+  font-weight: 700;
   color: #1e293b;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.3;
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -227,9 +223,9 @@ function onCancel() {
 
 .create-desc {
   color: #64748b;
-  font-size: 1.125rem;
+  font-size: 1rem;
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.5;
   max-width: 500px;
 }
 
@@ -274,10 +270,10 @@ function onCancel() {
 }
 
 .create-illustration {
-  width: 200px;
+  width: 140px;
   height: auto;
   display: block;
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.1));
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
   animation: float 6s ease-in-out infinite;
 }
 
@@ -301,8 +297,8 @@ function onCancel() {
 
 .floating-dot {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
   animation: float-dot 4s ease-in-out infinite;
@@ -339,22 +335,21 @@ function onCancel() {
 
 .form-card-row {
   width: 100%;
-  margin-right: 2rem;
   display: flex;
-  padding: 0 32px;
+  padding: 0;
   justify-content: center;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .create-form-card {
   background: #ffffff;
-  border-radius: 24px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1),
-  0 10px 20px rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1),
+  0 4px 8px rgba(0, 0, 0, 0.05);
   padding: 0;
   margin-top: 0;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1000px;
   margin-left: 0;
   margin-right: 0;
   border: 1px solid rgba(255, 255, 255, 0.8);
@@ -374,7 +369,7 @@ function onCancel() {
 }
 
 .form-header {
-  padding: 32px 48px 24px 48px;
+  padding: 24px 32px 16px 32px;
   border-bottom: 1px solid #f1f5f9;
   background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
 }
@@ -447,7 +442,7 @@ function onCancel() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
   animation: fadeIn 0.3s ease;
 }
 
@@ -462,10 +457,10 @@ function onCancel() {
 
 .success-content {
   background: white;
-  border-radius: 24px;
-  padding: 48px;
+  border-radius: 16px;
+  padding: 32px;
   text-align: center;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
   animation: slideUp 0.5s ease;
 }
 
@@ -481,8 +476,8 @@ function onCancel() {
 }
 
 .success-icon {
-  font-size: 4rem;
-  margin-bottom: 24px;
+  font-size: 3rem;
+  margin-bottom: 16px;
   animation: bounce 1s ease;
 }
 
@@ -499,16 +494,16 @@ function onCancel() {
 }
 
 .success-content h2 {
-  font-size: 1.75rem;
+  font-size: 1.375rem;
   font-weight: 700;
   color: #1e293b;
-  margin: 0 0 16px 0;
+  margin: 0 0 12px 0;
 }
 
 .success-content p {
   color: #64748b;
-  font-size: 1.125rem;
-  margin: 0 0 32px 0;
+  font-size: 1rem;
+  margin: 0 0 24px 0;
 }
 
 .loading-dots {
@@ -518,8 +513,8 @@ function onCancel() {
 }
 
 .loading-dots .dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: #667eea;
   border-radius: 50%;
   animation: loadingDot 1.4s ease-in-out infinite both;
@@ -549,7 +544,7 @@ function onCancel() {
   .create-header {
     flex-direction: column;
     text-align: center;
-    gap: 32px;
+    gap: 20px;
   }
 
   .header-stats {
@@ -557,35 +552,35 @@ function onCancel() {
   }
 
   .create-title {
-    font-size: 2rem;
+    font-size: 1.5rem;
   }
 
   .create-illustration {
-    width: 150px;
+    width: 120px;
   }
 }
 
 @media (max-width: 768px) {
   .header-center-container {
-    padding: 0 16px;
+    padding: 0 12px;
   }
 
   .create-header {
-    padding: 32px 24px;
-    border-radius: 16px;
+    padding: 20px 16px;
+    border-radius: 12px;
   }
 
   .create-title {
-    font-size: 1.75rem;
+    font-size: 1.375rem;
   }
 
   .create-desc {
-    font-size: 1rem;
+    font-size: 0.875rem;
   }
 
   .header-stats {
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
   }
 
   .stat-item {
@@ -595,16 +590,16 @@ function onCancel() {
   }
 
   .form-card-row {
-    padding: 0 16px;
+    padding: 0 12px;
   }
 
   .form-header {
-    padding: 24px 24px 16px 24px;
+    padding: 16px 16px 12px 16px;
   }
 
   .success-content {
-    margin: 16px;
-    padding: 32px 24px;
+    margin: 12px;
+    padding: 24px 16px;
   }
 }
 </style>

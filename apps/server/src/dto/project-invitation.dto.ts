@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsNumberString, Min, Max } from 'class-validator';
 import { InvitationStatus } from '../db/mysql/entity/project-invitation.entity';
 
 export class CreateProjectInvitationDto {
@@ -8,6 +8,9 @@ export class CreateProjectInvitationDto {
   @IsOptional()
   @IsString()
   message?: string;
+
+  @IsOptional()
+  expiresIn?: string; // Number of days until expiration (as string from form)
 }
 
 export class UpdateInvitationStatusDto {

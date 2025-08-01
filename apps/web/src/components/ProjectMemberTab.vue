@@ -357,7 +357,8 @@ const searchUser = async () => {
 const showInviteUserModal = ref(false);
 const inviteForm = ref({
   emails: '',
-  message: ''
+  message: '',
+  expiresIn: 7 // Default 7 days
 });
 const invitingUsers = ref(false);
 
@@ -409,7 +410,8 @@ const sendProjectInvitation = async (user: User) => {
 const openInviteUserModal = () => {
   inviteForm.value = {
     emails: '',
-    message: `You're invited to join the project ${props.project?.name || 'this project'}.`
+    message: `You're invited to join the project ${props.project?.name || 'this project'}.`,
+    expiresIn: 7 // Default 7 days
   };
   showInviteUserModal.value = true;
 };
@@ -515,7 +517,8 @@ const sendInvitationsFromModal = async () => {
         // Log the exact data being sent
         const invitationData = {
           invitedUserId: result.user.id.toString(),
-          message: inviteForm.value.message
+          message: inviteForm.value.message,
+          expiresIn: inviteForm.value.expiresIn.toString()
         };
         console.log('Sending invitation data to server:', invitationData);
 
@@ -540,7 +543,7 @@ const sendInvitationsFromModal = async () => {
 
     // Close modal
     showInviteUserModal.value = false;
-    inviteForm.value = { emails: '', message: '' };
+    inviteForm.value = { emails: '', message: '', expiresIn: 7 };
 
     // Show results
     if (successful.length > 0) {
@@ -617,7 +620,7 @@ const sendInvitationsFromModal = async () => {
 // Function to close invite user modal
 const closeInviteUserModal = () => {
   showInviteUserModal.value = false;
-  inviteForm.value = { emails: '', message: '' };
+  inviteForm.value = { emails: '', message: '', expiresIn: 7 };
   invitingUsers.value = false;
 };
 
@@ -1862,12 +1865,12 @@ watch(() => props.members, (val) => {
           <div class="invite-modal-body">
             <div class="form-group">
               <label for="emails" class="invite-form-label">
-                Email
+                Emails
               </label>
               <textarea
                 id="emails"
                 v-model="inviteForm.emails"
-                placeholder="james, joe@example.net, jane@example.com"
+                placeholder=" joe@example.net, jane@example.com"
                 class="invite-form-control"
                 rows="2"
               ></textarea>
@@ -1883,6 +1886,25 @@ watch(() => props.members, (val) => {
                 class="invite-form-control"
                 rows="3"
               ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="expiresIn" class="invite-form-label">
+                <span class="label-icon">⏰</span>
+                Invitation Expires In
+              </label>
+              <select
+                id="expiresIn"
+                v-model="inviteForm.expiresIn"
+                class="invite-form-control"
+              >
+                <option value="1">1 day</option>
+                <option value="3">3 days</option>
+                <option value="7">7 days</option>
+                <option value="14">14 days</option>
+                <option value="30">30 days</option>
+                <option value="60">60 days</option>
+                <option value="90">90 days</option>
+              </select>
             </div>
           </div>
           <div class="invite-modal-footer">

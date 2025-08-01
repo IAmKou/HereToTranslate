@@ -4,11 +4,13 @@
     <Navbar />
 
     <div class="main-container">
-      <!-- Sidebar -->
-      <Sidebar />
+      <!-- Sidebar - hidden when delete modal is open -->
+      <transition name="sidebar-fade" mode="out-in">
+        <Sidebar v-if="isSidebarVisible" key="sidebar" />
+      </transition>
 
       <!-- Main Content -->
-      <div class="content-wrapper" @click="closeDropdowns">
+      <div :class="['content-wrapper', { 'sidebar-hidden': !isSidebarVisible }]" @click="closeDropdowns">
         <!-- Page Header -->
         <div class="page-header">
           <div class="page-header-content">
@@ -804,6 +806,9 @@ const isCreatingGroup = ref(false);
 const showDeleteModal = ref(false);
 const showSuccessModal = ref(false);
 const showAddUserSuccessModal = ref(false);
+
+// Computed property to check if sidebar should be visible
+const isSidebarVisible = computed(() => !showDeleteModal.value);
 const showRoleModal = ref(false);
 const showEditUserRoleModal = ref(false);
 const memberToEdit = ref<any>(null);
@@ -1654,6 +1659,11 @@ const handleFileReady = (fileId: string | number) => {
   font-size: 15px;
 }
 
+/* Hide sidebar when delete modal is open */
+.project-detail-page:has(.modal-overlay[style*="display: flex"]) .sidebar {
+  display: none !important;
+}
+
 .main-container {
   display: flex;
   flex: 1;
@@ -1666,6 +1676,27 @@ const handleFileReady = (fileId: string | number) => {
   padding: 2rem 2rem 2rem 17rem;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   margin-right: 0;
+  transition: padding-left 0.3s ease;
+}
+
+.content-wrapper.sidebar-hidden {
+  padding-left: 2rem;
+}
+
+/* Sidebar transition effects */
+.sidebar-fade-enter-active,
+.sidebar-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.sidebar-fade-enter-from {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.sidebar-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-100%);
 }
 
 /* Page Header */

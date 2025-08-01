@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotificationEntity, UserEntity } from '#LocalProject/Entities';
+import { NotificationGateway } from '../../util/gateway/notification.gateway';
 
 export interface CreateNotificationDto {
   userId?: bigint;
@@ -29,6 +30,7 @@ export class NotificationManagerService {
     private readonly notificationRepository: Repository<NotificationEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async createNotification(data: CreateNotificationDto): Promise<NotificationEntity> {
@@ -42,24 +44,29 @@ export class NotificationManagerService {
 
     const savedNotification = await this.notificationRepository.save(notification);
 
-    // TODO: Send realtime notification
-    // if (data.isGlobal) {
-    //   this.notificationGateway.emitToAll({
-    //     id: savedNotification.id.toString(),
-    //     type: savedNotification.type,
-    //     message: savedNotification.message,
-    //     createdAt: savedNotification.createdAt,
-    //     isGlobal: true,
-    //   });
-    // } else if (data.userId) {
-    //   this.notificationGateway.emitToUser(data.userId, {
-    //     id: savedNotification.id.toString(),
-    //     type: savedNotification.type,
-    //     message: savedNotification.message,
-    //     createdAt: savedNotification.createdAt,
-    //     isGlobal: false,
-    //   });
-    // }
+    // Send realtime notification
+    try {
+      if (data.isGlobal) {
+        this.notificationGateway.emitToAll({
+          id: savedNotification.id.toString(),
+          type: savedNotification.type,
+          message: savedNotification.message,
+          createdAt: savedNotification.createdAt,
+          isGlobal: true,
+        });
+      } else if (data.userId) {
+        this.notificationGateway.emitToUser(data.userId, {
+          id: savedNotification.id.toString(),
+          type: savedNotification.type,
+          message: savedNotification.message,
+          createdAt: savedNotification.createdAt,
+          isGlobal: false,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send realtime notification:', error);
+      // Don't fail the notification creation if realtime fails
+    }
 
     return savedNotification;
   }

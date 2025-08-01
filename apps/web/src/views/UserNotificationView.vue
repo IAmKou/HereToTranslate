@@ -111,7 +111,51 @@
                   <div class="notification-time">{{ formatTime(notification.createdAt) }}</div>
                 </div>
 
-                <div class="notification-message">{{ notification.message }}</div>
+                <div class="notification-message">{{ getCleanMessage(notification) }}</div>
+
+                <!-- Add action buttons for project_invite notifications -->
+                <div v-if="notification.type === 'project_invite' && !isNotificationProcessed(notification)" class="invitation-actions" @click.stop>
+                  <!-- Show expire time if available -->
+                  <div v-if="getProjectInvitation(notification)" class="expire-info">
+                    <span v-if="isInvitationExpired(getProjectInvitation(notification)!)" class="expire-expired">
+                      <i class="pi pi-clock"></i>
+                      Expired
+                    </span>
+                    <span v-else class="expire-time">
+                      <i class="pi pi-clock"></i>
+                      {{ formatExpireTime(getProjectInvitation(notification)!.expiresAt) }}
+                    </span>
+                  </div>
+
+                  <div v-if="!getProjectInvitation(notification) || !isInvitationExpired(getProjectInvitation(notification)!)" class="action-buttons-row">
+                    <button
+                      @click="acceptProjectInvitationFromNotification(notification)"
+                      class="accept-btn"
+                    >
+                      <i class="pi pi-check"></i>
+                      Join Project
+                    </button>
+                    <button
+                      @click="declineProjectInvitationFromNotification(notification)"
+                      class="decline-btn"
+                    >
+                      <i class="pi pi-times"></i>
+                      Decline
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Show status for processed notifications -->
+                <div v-if="notification.type === 'project_invite' && isNotificationProcessed(notification)" class="invitation-status" @click.stop>
+                  <span v-if="isNotificationAccepted(notification)" class="status-accepted">
+                    <i class="pi pi-check"></i>
+                    Accepted
+                  </span>
+                  <span v-else-if="isNotificationDeclined(notification)" class="status-declined">
+                    <i class="pi pi-times"></i>
+                    Declined
+                  </span>
+                </div>
 
                 <div class="notification-meta">
                   <span v-if="notification.isGlobal" class="global-badge">
@@ -167,6 +211,7 @@ import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
 import { notificationService, type Notification, type NotificationCount } from '../services/notification.service'
 import { useNotificationSync } from '../composables/useNotificationSync'
+import { projectInvitationService, type ProjectInvitation } from '../services/project-invitation.service'
 
 const router = useRouter()
 const { emitNotificationDeleted, emitNotificationMarkedRead, emitAllNotificationsDeleted, emitAllNotificationsMarkedRead } = useNotificationSync()
@@ -186,6 +231,10 @@ const markingAllAsRead = ref(false)
 const deletingAll = ref(false)
 const hasMore = ref(true)
 const currentLimit = ref(20)
+
+// Project invitation state
+const projectInvitations = ref<ProjectInvitation[]>([])
+const loadingInvitations = ref(false)
 
 // Computed
 const unreadOnly = computed(() => activeFilter.value === 'unread')
@@ -218,11 +267,26 @@ const loadNotifications = async (reset = true) => {
     const stats = await notificationService.getNotificationCount()
     notificationStats.value = stats
 
+    // Load project invitations for expire time display
+    await loadProjectInvitations()
+
   } catch (error) {
     console.error('Error loading notifications:', error)
   } finally {
     loading.value = false
     loadingMore.value = false
+  }
+}
+
+const loadProjectInvitations = async () => {
+  try {
+    loadingInvitations.value = true
+    const response = await projectInvitationService.getMyInvitations('pending')
+    projectInvitations.value = response.invitations
+  } catch (error) {
+    console.error('Error loading project invitations:', error)
+  } finally {
+    loadingInvitations.value = false
   }
 }
 
@@ -334,6 +398,62 @@ const viewNotification = (notificationId: string) => {
   router.push(`/notifications/${notificationId}`)
 }
 
+// Methods for handling project invitations from notifications
+const acceptProjectInvitationFromNotification = async (notification: Notification) => {
+  try {
+    // Extract project name from notification message
+    const projectName = notification.message.match(/project "([^"]+)"/)?.[1]
+
+    if (projectName) {
+      // Get project invitations to find the matching one
+      const response = await projectInvitationService.getMyInvitations('pending')
+      const invitation = response.invitations.find(inv => inv.project?.name === projectName)
+
+      if (invitation) {
+        await projectInvitationService.respondToInvitation(invitation.id, 'accepted')
+
+        // Mark notification as read instead of deleting
+        await markAsRead(notification.id)
+
+        // Redirect to project detail
+        if (invitation.project?.id) {
+          router.push(`/projects/${invitation.project.id}`)
+        }
+      } else {
+        alert('Project invitation not found. Please try again.')
+      }
+    }
+  } catch (error: any) {
+    console.error('Error accepting invitation from notification:', error)
+    alert(error.response?.data?.message || 'Failed to accept invitation')
+  }
+}
+
+const declineProjectInvitationFromNotification = async (notification: Notification) => {
+  try {
+    // Extract project name from notification message
+    const projectName = notification.message.match(/project "([^"]+)"/)?.[1]
+
+    if (projectName) {
+      // Get project invitations to find the matching one
+      const response = await projectInvitationService.getMyInvitations('pending')
+      const invitation = response.invitations.find(inv => inv.project?.name === projectName)
+
+      if (invitation) {
+        await projectInvitationService.respondToInvitation(invitation.id, 'declined')
+
+        // Mark notification as read instead of deleting
+        await markAsRead(notification.id)
+      } else {
+        alert('Project invitation not found. Please try again.')
+      }
+    }
+  } catch (error: any) {
+    console.error('Error declining invitation from notification:', error)
+    alert(error.response?.data?.message || 'Failed to decline invitation')
+  }
+}
+
 const getTypeIcon = (type: string): string => {
   const icons: Record<string, string> = {
     info: 'pi pi-info-circle',
@@ -370,6 +490,10 @@ const getTypeLabel = (type: string): string => {
 
 const formatTime = (dateString: string): string => {
   const date = new Date(dateString)
+
+  // Fix múi giờ - cộng thêm 7 tiếng để khớp với giờ Việt Nam
+  date.setHours(date.getHours() + 7)
+
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 
@@ -383,6 +507,61 @@ const formatTime = (dateString: string): string => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// Helper functions to check notification status
+// For now, we'll use a simple approach: if notification is read and is project_invite, consider it processed
+const isNotificationProcessed = (notification: Notification): boolean => {
+  return notification.type === 'project_invite' && !!notification.isRead
+}
+
+const isNotificationAccepted = (notification: Notification): boolean => {
+  // For now, we'll assume all processed project_invite notifications are accepted
+  // In a real implementation, you might want to check against a separate status field
+  return notification.type === 'project_invite' && !!notification.isRead
+}
+
+const isNotificationDeclined = (notification: Notification): boolean => {
+  // For now, we'll assume declined notifications are not shown in popup
+  // In a real implementation, you might want to check against a separate status field
+  return false
+}
+
+// Helper function to get clean message (no longer needed since we don't modify message)
+const getCleanMessage = (notification: Notification): string => {
+  return notification.message
+}
+
+// Helper functions for project invitation expire time
+const getProjectInvitation = (notification: Notification): ProjectInvitation | undefined => {
+  if (notification.type !== 'project_invite') return undefined
+
+  // Extract project name from notification message
+  const projectName = notification.message.match(/project "([^"]+)"/)?.[1]
+  if (!projectName) return undefined
+
+  return projectInvitations.value.find(inv => inv.project?.name === projectName)
+}
+
+const isInvitationExpired = (invitation: ProjectInvitation): boolean => {
+  return new Date(invitation.expiresAt) < new Date()
+}
+
+const formatExpireTime = (expiresAt: string): string => {
+  const expireDate = new Date(expiresAt)
+  const now = new Date()
+  const diff = expireDate.getTime() - now.getTime()
+
+  if (diff < 0) return 'Expired'
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+
+  if (days > 0) return `Expires in ${days} day${days > 1 ? 's' : ''}`
+  if (hours > 0) return `Expires in ${hours} hour${hours > 1 ? 's' : ''}`
+  if (minutes > 0) return `Expires in ${minutes} minute${minutes > 1 ? 's' : ''}`
+  return 'Expires soon'
 }
 
 // Watchers
@@ -799,6 +978,113 @@ onMounted(() => {
 .delete-btn:hover {
   background: #dc2626;
   color: white;
+}
+
+/* Invitation Action Buttons */
+.invitation-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.expire-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.expire-time {
+  color: #059669;
+  background: rgba(34, 197, 94, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.expire-expired {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-buttons-row {
+  display: flex;
+  gap: 8px;
+}
+
+.accept-btn, .decline-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.accept-btn {
+  background: rgba(34, 197, 94, 0.1);
+  color: #059669;
+}
+
+.accept-btn:hover {
+  background: #059669;
+  color: white;
+}
+
+.decline-btn {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.decline-btn:hover {
+  background: #dc2626;
+  color: white;
+}
+
+/* Status indicators for processed notifications */
+.invitation-status {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.status-accepted, .status-declined {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-accepted {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.status-declined {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #dc2626;
+  border: 1px solid #fca5a5;
 }
 
 /* Load More */

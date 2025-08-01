@@ -8,6 +8,7 @@ import { CreateProjectInvitationDto, UpdateInvitationStatusDto, ProjectInvitatio
 import { ProjectManagerService } from './project-manager.service';
 import { NotificationGateway } from '../../util/gateway/notification.gateway';
 import { MailService } from '../../mailer/mailer.service';
+import { NotificationManagerService } from './notification-manager.service';
 
 @Injectable()
 export class ProjectInvitationService {
@@ -21,21 +22,25 @@ export class ProjectInvitationService {
     private readonly dataSource: DataSource,
     private readonly projectManagerService: ProjectManagerService,
     private readonly notificationGateway: NotificationGateway,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    private readonly notificationManagerService: NotificationManagerService
   ) {}
 
   async createInvitation(
     projectId: bigint,
     invitedUserId: bigint,
     invitedByUserId: bigint,
-    message?: string
+    message?: string,
+    expiresIn?: string
   ): Promise<ProjectInvitationResponseDto> {
     try {
+      const expiresInDays = expiresIn ? parseInt(expiresIn) : 7;
       console.log('Starting createInvitation with params:', {
         projectId: projectId.toString(),
         invitedUserId: invitedUserId.toString(),
         invitedByUserId: invitedByUserId.toString(),
-        message
+        message,
+        expiresIn: expiresInDays
       });
 
       // Check if project exists
@@ -77,35 +82,75 @@ export class ProjectInvitationService {
           existingInvitation.status = InvitationStatus.PENDING;
           existingInvitation.message = message;
           existingInvitation.expiresAt = new Date();
-          existingInvitation.expiresAt.setDate(existingInvitation.expiresAt.getDate() + 7);
+          existingInvitation.expiresAt.setDate(existingInvitation.expiresAt.getDate() + expiresInDays);
           existingInvitation.invitedByUserId = invitedByUserId;
 
           const updatedInvitation = await this.invitationRepository.save(existingInvitation);
           console.log('Updated invitation:', updatedInvitation);
 
-          // Emit socket event for updated invitation
+          // Note: Removed socket emit to avoid popup notification
+          // Project invitation will only appear in My Notifications page
           const invitationResponse = this.mapToResponseDto(updatedInvitation);
-          console.log(`📧 Emitting updated_project_invitation to user ${invitedUserId.toString()}:`, invitationResponse);
 
+          // Send email notification for updated invitation
           try {
-            this.notificationGateway.server.to(`user_${invitedUserId.toString()}`).emit('new_project_invitation', invitationResponse);
-          } catch (socketError) {
-            console.error('Socket emit error:', socketError);
+            // Get inviter's username
+            const inviter = await this.userRepository.findOne({
+              where: { id: invitedByUserId }
+            });
+
+            console.log('📧 Preparing to send email for updated invitation with data:', {
+              to: invitedUser.email,
+              projectName: project.name,
+              invitedByUsername: inviter?.username || 'Unknown User',
+              message: message,
+              projectId: projectId.toString(),
+              expiresIn: expiresInDays
+            });
+
+            await this.mailService.sendProjectInvitation(
+              invitedUser.email,
+              {
+                projectName: project.name,
+                invitedByUsername: inviter?.username || 'Unknown User',
+                message: message,
+                projectId: projectId.toString(),
+                expiresIn: expiresInDays
+              }
+            );
+            console.log(`📧 Email sent successfully to ${invitedUser.email} for updated project invitation`);
+          } catch (emailError) {
+            console.error('📧 Email send error for updated invitation:', emailError);
+            console.error('📧 Email error stack:', emailError.stack);
+            // Don't fail the invitation update if email fails
+          }
+
+          // Create notification for updated invitation (for My Notifications page)
+          try {
+            await this.notificationManagerService.notifyUserProjectInvite(
+              invitedUserId,
+              project.name
+            );
+            console.log(`📧 Notification created for updated project invitation to user ${invitedUserId.toString()}`);
+          } catch (notificationError) {
+            console.error('📧 Notification creation error for updated invitation:', notificationError);
+            // Don't fail the invitation update if notification fails
           }
 
           return invitationResponse;
         }
       }
 
-      // Create invitation with 7 days expiration
+      // Create invitation with custom expiration
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
       console.log('Creating invitation with data:', {
         projectId: projectId.toString(),
         invitedUserId: invitedUserId.toString(),
         invitedByUserId: invitedByUserId.toString(),
         message,
+        expiresIn: expiresInDays,
         expiresAt,
         status: InvitationStatus.PENDING
       });
@@ -124,16 +169,9 @@ export class ProjectInvitationService {
       const savedInvitation = await this.invitationRepository.save(invitation);
       console.log('Saved invitation:', savedInvitation);
 
-      // Emit socket event for new invitation
+      // Note: Removed socket emit to avoid popup notification
+      // Project invitation will only appear in My Notifications page
       const invitationResponse = this.mapToResponseDto(savedInvitation);
-      console.log(`📧 Emitting new_project_invitation to user ${invitedUserId.toString()}:`, invitationResponse);
-
-      try {
-        this.notificationGateway.server.to(`user_${invitedUserId.toString()}`).emit('new_project_invitation', invitationResponse);
-      } catch (socketError) {
-        console.error('Socket emit error:', socketError);
-        // Don't fail the invitation creation if socket fails
-      }
 
       // Send email notification
       try {
@@ -142,19 +180,42 @@ export class ProjectInvitationService {
           where: { id: invitedByUserId }
         });
 
+        console.log('📧 Preparing to send email with data:', {
+          to: invitedUser.email,
+          projectName: project.name,
+          invitedByUsername: inviter?.username || 'Unknown User',
+          message: message,
+          projectId: projectId.toString(),
+          expiresIn: expiresInDays
+        });
+
         await this.mailService.sendProjectInvitation(
           invitedUser.email,
           {
             projectName: project.name,
             invitedByUsername: inviter?.username || 'Unknown User',
             message: message,
-            projectId: projectId.toString()
+            projectId: projectId.toString(),
+            expiresIn: expiresInDays
           }
         );
-        console.log(`📧 Email sent to ${invitedUser.email} for project invitation`);
+        console.log(`📧 Email sent successfully to ${invitedUser.email} for project invitation`);
       } catch (emailError) {
-        console.error('Email send error:', emailError);
+        console.error('📧 Email send error:', emailError);
+        console.error('📧 Email error stack:', emailError.stack);
         // Don't fail the invitation creation if email fails
+      }
+
+      // Create notification for new invitation (for My Notifications page)
+      try {
+        await this.notificationManagerService.notifyUserProjectInvite(
+          invitedUserId,
+          project.name
+        );
+        console.log(`📧 Notification created for new project invitation to user ${invitedUserId.toString()}`);
+      } catch (notificationError) {
+        console.error('📧 Notification creation error for new invitation:', notificationError);
+        // Don't fail the invitation creation if notification fails
       }
 
       return invitationResponse;

@@ -2,8 +2,8 @@
   <div class="realtime-notifications">
     <!-- Notification Bell Icon -->
     <div class="notification-bell" @click="toggleNotificationPanel">
-      <i class="pi pi-bell" :class="{ 'has-unread': unreadCount > 0 }"></i>
-      <span v-if="unreadCount > 0" class="unread-badge">{{ unreadCount }}</span>
+      <i class="pi pi-bell" :class="{ 'has-unread': filteredUnreadCount > 0 }"></i>
+      <span v-if="filteredUnreadCount > 0" class="unread-badge">{{ filteredUnreadCount }}</span>
     </div>
 
     <!-- Notification Panel -->
@@ -21,46 +21,16 @@
       </div>
 
       <div class="notifications-list">
-        <!-- Project Invitations Section -->
-        <div v-if="projectInvitations.length > 0" class="invitations-section">
-          <div class="section-header">
-            <h4>Project Invitations</h4>
-          </div>
-          <div
-            v-for="invitation in projectInvitations"
-            :key="invitation.id"
-            class="project-invitation-item"
-          >
-            <div class="invitation-content">
-              <div class="invitation-header">
-                <span class="invitation-type">📧 Project Invite</span>
-                <span class="invitation-time">{{ formatTime(invitation.createdAt) }}</span>
-              </div>
-              <div class="invitation-message">
-                <p><strong>{{ invitation.invitedByUser?.fullName || invitation.invitedByUser?.username }}</strong> invited you to join <strong>{{ invitation.project?.name }}</strong></p>
-                <p v-if="invitation.message" class="invitation-custom-message">{{ invitation.message }}</p>
-              </div>
-              <div class="invitation-actions">
-                <button @click="acceptProjectInvitation(invitation)" class="accept-btn">
-                  <i class="pi pi-check"></i>
-                  Join Project
-                </button>
-                <button @click="declineProjectInvitation(invitation)" class="decline-btn">
-                  <i class="pi pi-times"></i>
-                  Decline
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- Note: Removed Project Invitations Section to avoid duplication -->
+        <!-- Project invitations will only appear in My Notifications page -->
 
         <!-- Regular Notifications Section -->
-        <div v-if="notifications.length > 0" class="notifications-section">
+        <div v-if="filteredNotifications.length > 0" class="notifications-section">
           <div class="section-header">
             <h4>Other Notifications</h4>
           </div>
           <div
-            v-for="notification in notifications.slice(0, 5)"
+            v-for="notification in filteredNotifications.slice(0, 5)"
             :key="notification.id"
             class="notification-item"
             :class="{ 'unread': !notification.isRead }"
@@ -72,6 +42,30 @@
                 <span class="notification-time">{{ formatTime(notification.createdAt) }}</span>
               </div>
               <p class="notification-message">{{ notification.message }}</p>
+
+              <!-- Add action buttons for project_invite notifications -->
+              <div v-if="notification.type === 'project_invite' && !isNotificationProcessed(notification)" class="invitation-actions" @click.stop>
+                <button @click="acceptProjectInvitationFromNotification(notification)" class="accept-btn">
+                  <i class="pi pi-check"></i>
+                  Join Project
+                </button>
+                <button @click="declineProjectInvitationFromNotification(notification)" class="decline-btn">
+                  <i class="pi pi-times"></i>
+                  Decline
+                </button>
+              </div>
+
+              <!-- Show status for processed notifications -->
+              <div v-if="notification.type === 'project_invite' && isNotificationProcessed(notification)" class="invitation-status" @click.stop>
+                <span v-if="isNotificationAccepted(notification)" class="status-accepted">
+                  <i class="pi pi-check"></i>
+                  Accepted
+                </span>
+                <span v-else-if="isNotificationDeclined(notification)" class="status-declined">
+                  <i class="pi pi-times"></i>
+                  Declined
+                </span>
+              </div>
             </div>
             <div class="notification-actions" @click.stop>
               <button v-if="!notification.isRead" @click="markAsRead(notification)" class="mark-read">
@@ -81,7 +75,7 @@
           </div>
         </div>
 
-        <div v-if="notifications.length === 0 && projectInvitations.length === 0" class="empty-state">
+        <div v-if="filteredNotifications.length === 0" class="empty-state">
           No notifications
         </div>
       </div>
@@ -91,9 +85,6 @@
           Load More
         </button>
         <div class="view-all-buttons">
-          <button @click="navigateToProjectInvitations" class="view-all" v-if="projectInvitations.length > 0">
-            View Invitations
-          </button>
           <button @click="navigateToNotifications" class="view-all">
             View All Notifications
           </button>
@@ -161,6 +152,48 @@ const showNotificationPanel = ref(false)
 const loading = ref(false)
 const hasMore = ref(true)
 const unreadCount = ref(0)
+const currentRoute = ref(router.currentRoute.value)
+
+// Computed property to filter notifications based on current route
+const filteredNotifications = computed(() => {
+  console.log('🔍 Computing filtered notifications, current route:', currentRoute.value.path)
+
+  let filtered = notifications.value
+
+  // If user is in project detail page, hide project_invite notifications
+  if (currentRoute.value.path.startsWith('/projects/') && currentRoute.value.params.id) {
+    console.log('🏠 Filtering out project_invite notifications due to project detail location')
+    filtered = filtered.filter((n: Notification) => n.type !== 'project_invite')
+  }
+
+  // Hide processed project_invite notifications from popup (show only in My Notifications)
+  filtered = filtered.filter((n: Notification) => {
+    if (n.type === 'project_invite' && isNotificationProcessed(n)) {
+      console.log('🚫 Hiding processed notification from popup:', n.message)
+      return false
+    }
+    return true
+  })
+
+  console.log('📋 Original notifications count:', notifications.value.length)
+  console.log('📋 Filtered notifications count:', filtered.length)
+  return filtered
+})
+
+// Computed property for filtered unread count
+const filteredUnreadCount = computed(() => {
+  // If user is in project detail page, exclude project_invite notifications from unread count
+  if (currentRoute.value.path.startsWith('/projects/') && currentRoute.value.params.id) {
+    const nonProjectInviteUnread = notifications.value.filter((n: Notification) =>
+      n.type !== 'project_invite' && !n.isRead
+    ).length
+    console.log('📊 Filtered unread count (excluding project_invite):', nonProjectInviteUnread)
+    return nonProjectInviteUnread
+  }
+
+  console.log('📊 Using original unread count:', unreadCount.value)
+  return unreadCount.value
+})
 
 let socket: Socket | null = null
 let toastIdCounter = 0
@@ -169,6 +202,20 @@ const toggleNotificationPanel = async () => {
   showNotificationPanel.value = !showNotificationPanel.value
   if (showNotificationPanel.value && notifications.value.length === 0) {
     await loadNotifications()
+  }
+
+  // Log current route for debugging
+  if (showNotificationPanel.value) {
+    console.log('🔔 Opening notification panel, current route:', currentRoute.value.path)
+    console.log('📋 Current notifications in popup:', notifications.value.map((n: Notification) => ({
+      id: n.id,
+      type: n.type,
+      message: n.message.substring(0, 50) + '...',
+      isRead: n.isRead
+    })))
+    if (currentRoute.value.path.startsWith('/projects/') && currentRoute.value.params.id) {
+      console.log('🏠 User is in project detail, notifications will be filtered automatically')
+    }
   }
 }
 
@@ -179,11 +226,26 @@ const closePanel = () => {
 const loadNotifications = async () => {
   loading.value = true
   try {
+    console.log('🔄 Loading notifications from server...')
     const response = await notificationService.getUserNotifications(20)
+    console.log('📋 Server response notifications:', response.notifications.map((n: any) => ({
+      id: n.id,
+      type: n.type,
+      message: n.message.substring(0, 50) + '...',
+      isRead: n.isRead
+    })))
+
     notifications.value = response.notifications.map(notif => ({
       ...notif,
       isRead: notif.isRead // Preserve actual read status from server
     }))
+
+    console.log('📋 Updated local notifications:', notifications.value.map((n: Notification) => ({
+      id: n.id,
+      type: n.type,
+      message: n.message.substring(0, 50) + '...',
+      isRead: n.isRead
+    })))
 
     // Load project invitations
     await loadProjectInvitations()
@@ -249,9 +311,8 @@ const markAllAsRead = async () => {
 const updateUnreadCount = async () => {
   try {
     const response = await notificationService.getNotificationCount()
-    // Add project invitations count to unread notifications
-    const invitationCount = projectInvitations.value.length
-    unreadCount.value = response.unread + invitationCount
+    // Note: Removed project invitations count since they're not shown in popup anymore
+    unreadCount.value = response.unread
   } catch (error) {
     console.error('Error updating unread count:', error)
   }
@@ -299,6 +360,15 @@ const connectToNotificationSocket = () => {
   socket.on('new_notification', (notification: any) => {
     console.log('🔔 New notification received:', notification)
 
+    // Check if this is a project_invite notification and user is in project detail
+    const currentRoute = router.currentRoute.value
+    if (notification.type === 'project_invite' &&
+      currentRoute.path.startsWith('/projects/') &&
+      currentRoute.params.id) {
+      console.log('🚫 Ignoring project_invite notification because user is in project detail')
+      return
+    }
+
     // Add to notifications list
     notifications.value.unshift({
       id: notification.id,
@@ -318,6 +388,15 @@ const connectToNotificationSocket = () => {
 
   socket.on('global_notification', (notification: any) => {
     console.log('📢 Global notification received:', notification)
+
+    // Check if this is a project_invite notification and user is in project detail
+    const currentRoute = router.currentRoute.value
+    if (notification.type === 'project_invite' &&
+      currentRoute.path.startsWith('/projects/') &&
+      currentRoute.params.id) {
+      console.log('🚫 Ignoring global project_invite notification because user is in project detail')
+      return
+    }
 
     // Add to notifications list
     notifications.value.unshift({
@@ -385,39 +464,30 @@ const connectToNotificationSocket = () => {
     unreadCount.value = 0
   })
 
-  // Listen for new project invitations
-  socket.on('new_project_invitation', (invitation: any) => {
-    console.log('📧 New project invitation received:', invitation)
+  // Note: Removed project invitation socket listener to avoid popup notification
+  // Project invitations will only appear in My Notifications page
+  // socket.on('new_project_invitation', (invitation: any) => {
+  //   console.log('📧 New project invitation received:', invitation)
+  //   projectInvitations.value.unshift(invitation)
+  //   addToast({
+  //     id: `invitation-${invitation.id}`,
+  //     type: 'project_invite',
+  //     message: `${invitation.invitedByUser?.fullName || invitation.invitedByUser?.username} invited you to join ${invitation.project?.name}`,
+  //     createdAt: invitation.createdAt,
+  //     isRead: false
+  //   })
+  //   updateUnreadCount()
+  // })
 
-    // Add to project invitations list
-    projectInvitations.value.unshift(invitation)
-
-    // Show toast notification
-    addToast({
-      id: `invitation-${invitation.id}`,
-      type: 'project_invite',
-      message: `${invitation.invitedByUser?.fullName || invitation.invitedByUser?.username} invited you to join ${invitation.project?.name}`,
-      createdAt: invitation.createdAt,
-      isRead: false
-    })
-
-    // Update unread count
-    updateUnreadCount()
-  })
-
-  // Listen for invitation status changes
-  socket.on('invitation_responded', (data: { invitationId: string, status: string }) => {
-    console.log('📧 Invitation responded:', data)
-
-    // Remove from pending invitations
-    const index = projectInvitations.value.findIndex(inv => inv.id === data.invitationId)
-    if (index > -1) {
-      projectInvitations.value.splice(index, 1)
-    }
-
-    // Update unread count
-    updateUnreadCount()
-  })
+  // Note: Removed invitation status listener since project invitations are handled in My Notifications page
+  // socket.on('invitation_responded', (data: { invitationId: string, status: string }) => {
+  //   console.log('📧 Invitation responded:', data)
+  //   const index = projectInvitations.value.findIndex(inv => inv.id === data.invitationId)
+  //   if (index > -1) {
+  //     projectInvitations.value.splice(index, 1)
+  //   }
+  //   updateUnreadCount()
+  // })
 
   socket.on('disconnect', () => {
     console.log('❌ Disconnected from notification socket')
@@ -479,6 +549,10 @@ const formatTime = (dateString: string) => {
     if (isNaN(date.getTime())) {
       return 'Invalid Date'
     }
+
+    // Fix múi giờ - cộng thêm 7 tiếng để khớp với giờ Việt Nam
+    date.setHours(date.getHours() + 7)
+
     const now = new Date()
     const diff = now.getTime() - date.getTime()
 
@@ -490,6 +564,19 @@ const formatTime = (dateString: string) => {
     console.error('Error formatting time:', dateString, error)
     return 'Invalid Date'
   }
+}
+
+// Helper functions to check notification status
+const isNotificationProcessed = (notification: Notification): boolean => {
+  return notification.message.includes(' - ACCEPTED') || notification.message.includes(' - DECLINED')
+}
+
+const isNotificationAccepted = (notification: Notification): boolean => {
+  return notification.message.includes(' - ACCEPTED')
+}
+
+const isNotificationDeclined = (notification: Notification): boolean => {
+  return notification.message.includes(' - DECLINED')
 }
 
 const navigateToNotifications = () => {
@@ -564,6 +651,360 @@ const declineProjectInvitation = async (invitation: ProjectInvitation) => {
   }
 }
 
+// New methods for handling project invitations from notifications
+const acceptProjectInvitationFromNotification = async (notification: any) => {
+  try {
+    console.log('🔔 Accepting invitation from notification:', notification)
+
+    // Extract project name from notification message
+    const projectName = notification.message.match(/project "([^"]+)"/)?.[1]
+    console.log('📋 Extracted project name:', projectName)
+
+    if (projectName) {
+      // First, try to find invitation via API
+      try {
+        const response = await projectInvitationService.getMyInvitations()
+        console.log('📋 API invitations response:', response)
+
+        // Try multiple ways to find the invitation
+        let apiInvitation = response.invitations.find((inv: any) => inv.project?.name === projectName)
+
+        // If not found by name, try to find by projectId if available in notification
+        if (!apiInvitation && notification.projectId) {
+          apiInvitation = response.invitations.find((inv: any) => inv.projectId === notification.projectId)
+          console.log('📋 Trying to find by projectId:', notification.projectId)
+        }
+
+        // If still not found, try to find any invitation for this project name
+        if (!apiInvitation) {
+          apiInvitation = response.invitations.find((inv: any) =>
+            inv.project?.name?.toLowerCase().includes(projectName.toLowerCase()) ||
+            projectName.toLowerCase().includes(inv.project?.name?.toLowerCase())
+          )
+          console.log('📋 Trying fuzzy match for project name')
+        }
+
+        console.log('📋 Found API invitation:', apiInvitation)
+
+        if (apiInvitation) {
+          console.log('✅ Accepting invitation via API...')
+
+          // REMOVE NOTIFICATION FIRST - before accepting invitation
+          console.log('🗑️ Removing notification from popup FIRST...')
+          console.log('📋 Current notifications in popup:', notifications.value.map(n => ({ id: n.id, type: n.type, message: n.message })))
+
+          // Remove notification immediately by multiple methods
+          let notificationRemoved = false
+
+          // Method 1: Remove by exact ID
+          const notificationIndex = notifications.value.findIndex(n => n.id === notification.id)
+          if (notificationIndex > -1) {
+            notifications.value.splice(notificationIndex, 1)
+            notificationRemoved = true
+            console.log('✅ Notification removed by exact ID')
+          }
+
+          // Method 2: Remove by message content and type
+          if (!notificationRemoved) {
+            const messageIndex = notifications.value.findIndex(n =>
+              n.type === 'project_invite' &&
+              n.message.includes(projectName)
+            )
+            if (messageIndex > -1) {
+              notifications.value.splice(messageIndex, 1)
+              notificationRemoved = true
+              console.log('✅ Notification removed by message content')
+            }
+          }
+
+          // Method 3: Remove any project_invite notification for this project
+          if (!notificationRemoved) {
+            const projectInviteIndex = notifications.value.findIndex(n =>
+              n.type === 'project_invite' &&
+              (n.message.includes(projectName) ||
+                n.message.includes('invited you to join') ||
+                n.message.includes('invite you to join'))
+            )
+            if (projectInviteIndex > -1) {
+              notifications.value.splice(projectInviteIndex, 1)
+              notificationRemoved = true
+              console.log('✅ Notification removed by project_invite type and content')
+            }
+          }
+
+          // Method 4: Remove ALL project_invite notifications (aggressive fallback)
+          if (!notificationRemoved) {
+            const projectInviteNotifications = notifications.value.filter(n => n.type === 'project_invite')
+            if (projectInviteNotifications.length > 0) {
+              // Remove ALL project_invite notifications
+              notifications.value = notifications.value.filter(n => n.type !== 'project_invite')
+              notificationRemoved = true
+              console.log('✅ Removed ALL project_invite notifications as aggressive fallback')
+            }
+          }
+
+          if (notificationRemoved) {
+            console.log('📋 Remaining notifications:', notifications.value.length)
+
+            // Update unread count immediately
+            if (!notification.isRead) {
+              unreadCount.value = Math.max(0, unreadCount.value - 1)
+              console.log('📊 Updated unread count:', unreadCount.value)
+            }
+          } else {
+            console.log('❌ Could not find notification to remove!')
+            console.log('📋 Available notifications:', notifications.value.map(n => ({
+              id: n.id,
+              type: n.type,
+              message: n.message.substring(0, 50) + '...'
+            })))
+          }
+
+          // NOW accept the invitation
+          await acceptProjectInvitation(apiInvitation)
+
+          // MARK NOTIFICATION AS READ and UPDATE MESSAGE after successful acceptance
+          console.log('✅ Marking notification as read...')
+          try {
+            await notificationService.markAsRead(notification.id)
+            console.log('✅ Notification marked as read successfully')
+
+            // Update notification message to show accepted status
+            const updatedMessage = `You have been invited to join project "${projectName}" - ACCEPTED ✅`
+            await notificationService.updateNotification(notification.id, {
+              message: updatedMessage
+            })
+            console.log('📝 Notification message updated to show accepted status')
+          } catch (markError) {
+            console.error('❌ Failed to mark notification as read:', markError)
+          }
+
+          // Update unread count from server
+          await updateUnreadCount()
+
+          // Show success message
+          addToast({
+            id: `success-${notification.id}`,
+            type: 'success',
+            message: `Successfully joined project "${projectName}"`,
+            createdAt: new Date().toISOString(),
+            isRead: false
+          })
+
+          console.log('🎉 Successfully accepted invitation and removed from popup')
+        } else {
+          console.log('❌ Invitation not found in API response')
+          console.log('📋 Available invitations:', response.invitations.map((inv: any) => ({
+            id: inv.id,
+            projectName: inv.project?.name,
+            projectId: inv.projectId
+          })))
+
+          // If not found, redirect to My Notifications page
+          router.push('/notifications')
+          addToast({
+            id: `redirect-${notification.id}`,
+            type: 'info',
+            message: 'Please go to My Notifications to accept this invitation',
+            createdAt: new Date().toISOString(),
+            isRead: false
+          })
+        }
+      } catch (apiError) {
+        console.error('❌ Error fetching invitations from API:', apiError)
+        router.push('/notifications')
+      }
+    } else {
+      console.log('❌ Could not extract project name from message:', notification.message)
+    }
+  } catch (error: any) {
+    console.error('❌ Error accepting invitation from notification:', error)
+    addToast({
+      id: `error-${notification.id}`,
+      type: 'error',
+      message: 'Failed to accept invitation. Please try again.',
+      createdAt: new Date().toISOString(),
+      isRead: false
+    })
+  }
+}
+
+const declineProjectInvitationFromNotification = async (notification: any) => {
+  try {
+    console.log('🔔 Declining invitation from notification:', notification)
+
+    // Extract project name from notification message
+    const projectName = notification.message.match(/project "([^"]+)"/)?.[1]
+    console.log('📋 Extracted project name:', projectName)
+
+    if (projectName) {
+      // First, try to find invitation via API
+      try {
+        const response = await projectInvitationService.getMyInvitations()
+        console.log('📋 API invitations response:', response)
+
+        // Try multiple ways to find the invitation
+        let apiInvitation = response.invitations.find((inv: any) => inv.project?.name === projectName)
+
+        // If not found by name, try to find by projectId if available in notification
+        if (!apiInvitation && notification.projectId) {
+          apiInvitation = response.invitations.find((inv: any) => inv.projectId === notification.projectId)
+          console.log('📋 Trying to find by projectId:', notification.projectId)
+        }
+
+        // If still not found, try to find any invitation for this project name
+        if (!apiInvitation) {
+          apiInvitation = response.invitations.find((inv: any) =>
+            inv.project?.name?.toLowerCase().includes(projectName.toLowerCase()) ||
+            projectName.toLowerCase().includes(inv.project?.name?.toLowerCase())
+          )
+          console.log('📋 Trying fuzzy match for project name')
+        }
+
+        console.log('📋 Found API invitation:', apiInvitation)
+
+        if (apiInvitation) {
+          console.log('✅ Declining invitation via API...')
+
+          // REMOVE NOTIFICATION FIRST - before declining invitation
+          console.log('🗑️ Removing notification from popup FIRST...')
+
+          // Remove notification immediately by multiple methods
+          let notificationRemoved = false
+
+          // Method 1: Remove by exact ID
+          const notificationIndex = notifications.value.findIndex(n => n.id === notification.id)
+          if (notificationIndex > -1) {
+            notifications.value.splice(notificationIndex, 1)
+            notificationRemoved = true
+            console.log('✅ Notification removed by exact ID')
+          }
+
+          // Method 2: Remove by message content and type
+          if (!notificationRemoved) {
+            const messageIndex = notifications.value.findIndex(n =>
+              n.type === 'project_invite' &&
+              n.message.includes(projectName)
+            )
+            if (messageIndex > -1) {
+              notifications.value.splice(messageIndex, 1)
+              notificationRemoved = true
+              console.log('✅ Notification removed by message content')
+            }
+          }
+
+          // Method 3: Remove any project_invite notification for this project
+          if (!notificationRemoved) {
+            const projectInviteIndex = notifications.value.findIndex(n =>
+              n.type === 'project_invite' &&
+              (n.message.includes(projectName) ||
+                n.message.includes('invited you to join') ||
+                n.message.includes('invite you to join'))
+            )
+            if (projectInviteIndex > -1) {
+              notifications.value.splice(projectInviteIndex, 1)
+              notificationRemoved = true
+              console.log('✅ Notification removed by project_invite type and content')
+            }
+          }
+
+          // Method 4: Remove ALL project_invite notifications (aggressive fallback)
+          if (!notificationRemoved) {
+            const projectInviteNotifications = notifications.value.filter(n => n.type === 'project_invite')
+            if (projectInviteNotifications.length > 0) {
+              // Remove ALL project_invite notifications
+              notifications.value = notifications.value.filter(n => n.type !== 'project_invite')
+              notificationRemoved = true
+              console.log('✅ Removed ALL project_invite notifications as aggressive fallback')
+            }
+          }
+
+          if (notificationRemoved) {
+            console.log('📋 Remaining notifications:', notifications.value.length)
+
+            // Update unread count immediately
+            if (!notification.isRead) {
+              unreadCount.value = Math.max(0, unreadCount.value - 1)
+              console.log('📊 Updated unread count:', unreadCount.value)
+            }
+          } else {
+            console.log('❌ Could not find notification to remove!')
+            console.log('📋 Available notifications:', notifications.value.map(n => ({
+              id: n.id,
+              type: n.type,
+              message: n.message.substring(0, 50) + '...'
+            })))
+          }
+
+          // NOW decline the invitation
+          await declineProjectInvitation(apiInvitation)
+
+          // MARK NOTIFICATION AS READ and UPDATE MESSAGE after successful decline
+          console.log('✅ Marking notification as read...')
+          try {
+            await notificationService.markAsRead(notification.id)
+            console.log('✅ Notification marked as read successfully')
+
+            // Update notification message to show declined status
+            const updatedMessage = `You have been invited to join project "${projectName}" - DECLINED ❌`
+            await notificationService.updateNotification(notification.id, {
+              message: updatedMessage
+            })
+            console.log('📝 Notification message updated to show declined status')
+          } catch (markError) {
+            console.error('❌ Failed to mark notification as read:', markError)
+          }
+
+          // Update unread count from server
+          await updateUnreadCount()
+
+          // Show success message
+          addToast({
+            id: `declined-${notification.id}`,
+            type: 'info',
+            message: `Declined invitation to project "${projectName}"`,
+            createdAt: new Date().toISOString(),
+            isRead: false
+          })
+
+          console.log('🎉 Successfully declined invitation and removed from popup')
+        } else {
+          console.log('❌ Invitation not found in API response')
+          console.log('📋 Available invitations:', response.invitations.map((inv: any) => ({
+            id: inv.id,
+            projectName: inv.project?.name,
+            projectId: inv.projectId
+          })))
+
+          // If not found, redirect to My Notifications page
+          router.push('/notifications')
+          addToast({
+            id: `redirect-${notification.id}`,
+            type: 'info',
+            message: 'Please go to My Notifications to decline this invitation',
+            createdAt: new Date().toISOString(),
+            isRead: false
+          })
+        }
+      } catch (apiError) {
+        console.error('❌ Error fetching invitations from API:', apiError)
+        router.push('/notifications')
+      }
+    } else {
+      console.log('❌ Could not extract project name from message:', notification.message)
+    }
+  } catch (error: any) {
+    console.error('❌ Error declining invitation from notification:', error)
+    addToast({
+      id: `error-${notification.id}`,
+      type: 'error',
+      message: 'Failed to decline invitation. Please try again.',
+      createdAt: new Date().toISOString(),
+      isRead: false
+    })
+  }
+}
+
 onMounted(() => {
   loadNotifications()
   connectToNotificationSocket()
@@ -614,9 +1055,34 @@ onMounted(() => {
     unreadCount.value = 0
   })
 
-  // Cleanup interval on unmount
+  // Watch for route changes to update currentRoute and log when user navigates to project detail
+  const unwatchRoute = router.afterEach((to) => {
+    // Update currentRoute ref
+    currentRoute.value = to
+    console.log('🔄 Route changed to:', to.path)
+
+    // If user navigates to a project detail page, log for debugging
+    if (to.path.startsWith('/projects/') && to.params.id) {
+      const projectId = to.params.id as string
+      console.log('🏠 User navigated to project detail:', projectId)
+      console.log('🔔 Notifications will be automatically filtered due to project location')
+
+      // Force a reactive update by triggering a small change
+      if (showNotificationPanel.value) {
+        console.log('🔔 Notification panel is open, forcing reactive update')
+        // This will trigger computed properties to recalculate
+        showNotificationPanel.value = false
+        setTimeout(() => {
+          showNotificationPanel.value = true
+        }, 10)
+      }
+    }
+  })
+
+  // Cleanup interval and route watcher on unmount
   onUnmounted(() => {
     clearInterval(invitationRefreshInterval)
+    unwatchRoute()
   })
 })
 
@@ -1230,6 +1696,37 @@ onUnmounted(() => {
   color: #dc2626;
   border-color: #fca5a5;
   transform: translateY(-1px);
+}
+
+/* Status indicators for processed notifications */
+.invitation-status {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.status-accepted, .status-declined {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-accepted {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.status-declined {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #dc2626;
+  border: 1px solid #fca5a5;
 }
 
 .notifications-section {

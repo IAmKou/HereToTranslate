@@ -193,12 +193,6 @@
                 </div>
 
                 <div class="project-meta">
-                  <div class="meta-item" v-if="project.createdBy">
-                    <i class="pi pi-user-edit meta-icon"></i>
-                    <span class="meta-value">{{
-                        project.createdBy.username
-                      }}</span>
-                  </div>
                   <div class="meta-item">
                     <i class="pi pi-calendar-plus meta-icon"></i>
                     <span class="meta-value">{{
@@ -209,11 +203,55 @@
                     <i class="pi pi-tag meta-icon"></i>
                     <span class="meta-value">{{ project.category.name }}</span>
                   </div>
-                  <div class="meta-item" v-if="project.updatedAt">
+                  <div class="meta-item" v-if="project.updatedAt && project.updatedAt !== project.createdAt">
                     <i class="pi pi-refresh meta-icon"></i>
                     <span class="meta-value"
                     >Updated: {{ formatDate(project.updatedAt) }}</span
                     >
+                  </div>
+                </div>
+
+                <!-- Thêm thông tin chi tiết hơn -->
+                <div class="project-details">
+                  <div class="detail-row">
+                    <div class="detail-item" v-if="project.members && project.members.length > 0">
+                      <i class="pi pi-users detail-icon"></i>
+                      <span class="detail-label">Members:</span>
+                      <span class="detail-value">{{ project.members.length }}</span>
+                    </div>
+                    <div class="detail-item" v-if="project.tags && project.tags.length > 0">
+                      <i class="pi pi-tags detail-icon"></i>
+                      <span class="detail-label">Tags:</span>
+                      <span class="detail-value">{{ project.tags.length }}</span>
+                    </div>
+                  </div>
+
+                  <div class="detail-row" v-if="project.createdBy">
+                    <div class="detail-item">
+                      <i class="pi pi-user detail-icon"></i>
+                      <span class="detail-label">Owner:</span>
+                      <span class="detail-value">
+                         {{ project.createdBy.fullName || project.createdBy.username }}
+                       </span>
+                    </div>
+                  </div>
+
+                  <div class="detail-row" v-if="project.status">
+                    <div class="detail-item">
+                      <i class="pi pi-circle-fill detail-icon status-indicator" :class="`status-${project.status}`"></i>
+                      <span class="detail-label">Status:</span>
+                      <span class="detail-value status-text" :class="`status-${project.status}`">
+                        {{ project.status === 'archived' ? 'Archived' : 'Active' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="detail-row" v-if="project.updatedAt && project.updatedAt !== project.createdAt">
+                    <div class="detail-item">
+                      <i class="pi pi-clock detail-icon"></i>
+                      <span class="detail-label">Last Updated:</span>
+                      <span class="detail-value">{{ formatRelativeTime(project.updatedAt) }}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -399,6 +437,25 @@ export default defineComponent({
       });
     };
 
+    const formatRelativeTime = (date: string) => {
+      const now = new Date();
+      const targetDate = new Date(date);
+      const diffInMs = now.getTime() - targetDate.getTime();
+      const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+      const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+      const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+
+      if (diffInDays > 0) {
+        return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+      } else if (diffInHours > 0) {
+        return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+      } else if (diffInMinutes > 0) {
+        return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+      } else {
+        return 'Just now';
+      }
+    };
+
     const viewProject = (projectId: string) => {
       router.push(`/projects/${projectId}`);
     };
@@ -432,6 +489,7 @@ export default defineComponent({
       sortBy,
       filteredProjects,
       formatDate,
+      formatRelativeTime,
       loadProjects,
       viewProject,
       editProject,
@@ -857,7 +915,7 @@ export default defineComponent({
 }
 
 .project-meta {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .meta-item {
@@ -876,6 +934,79 @@ export default defineComponent({
 .meta-value {
   color: #475569;
   font-weight: 500;
+}
+
+/* Project Details Styles */
+.project-details {
+  background: rgba(102, 126, 234, 0.03);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.detail-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-icon {
+  color: #667eea;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.detail-label {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.detail-value {
+  color: #1e293b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-indicator {
+  font-size: 0.6rem;
+}
+
+.status-text {
+  font-weight: 700;
+}
+
+.status-text.status-active {
+  color: #059669;
+}
+
+.status-text.status-archived {
+  color: #dc2626;
+}
+
+.status-indicator.status-active {
+  color: #10b981;
+}
+
+.status-indicator.status-archived {
+  color: #ef4444;
 }
 
 .project-actions {
@@ -1069,6 +1200,15 @@ export default defineComponent({
 
   .project-actions {
     flex-direction: column;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .detail-item {
+    justify-content: flex-start;
   }
 
   .projects-title {

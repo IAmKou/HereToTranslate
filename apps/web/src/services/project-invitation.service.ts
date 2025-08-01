@@ -32,6 +32,7 @@ export interface ProjectInvitation {
 export interface CreateInvitationData {
   invitedUserId: string;
   message?: string;
+  expiresIn?: number; // Number of days until expiration
 }
 
 export interface UpdateInvitationStatusData {

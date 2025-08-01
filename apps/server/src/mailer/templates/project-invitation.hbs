@@ -58,6 +58,10 @@
 
         <p>To accept this invitation, please log in to your HereToTranslate account and check your project invitations.</p>
 
+        {{#if expiresIn}}
+        <p><strong>Note:</strong> This invitation will expire in {{expiresIn}} day(s).</p>
+        {{/if}}
+
         <p>If you have any questions, please contact the project owner or our support team.</p>
     </div>
 

@@ -28,14 +28,15 @@ export class ProjectInvitationController {
   @Post(':projectId/invitations')
   async createInvitation(
     @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Body(ValidationPipe) createInvitationDto: CreateProjectInvitationDto,
+    @Body() createInvitationDto: CreateProjectInvitationDto,
     @Req() req: AuthenticatedRequest
   ) {
     const invitation = await this.invitationService.createInvitation(
       projectId,
       BigInt(createInvitationDto.invitedUserId),
       req.user.id,
-      createInvitationDto.message
+      createInvitationDto.message,
+      createInvitationDto.expiresIn
     );
 
     return {

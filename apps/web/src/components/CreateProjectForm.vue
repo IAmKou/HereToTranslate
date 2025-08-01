@@ -70,37 +70,6 @@
                 @input="validateName"
                 @blur="validateName"
               />
-              <div class="input-icon">
-                <svg
-                  fill="none"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  width="16"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M12 2L2 7L12 12L22 7L12 2Z"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                  <path
-                    d="M2 17L12 22L22 17"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                  <path
-                    d="M2 12L12 17L22 12"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                </svg>
-              </div>
             </div>
             <div class="input-info">
               <span class="char-count">{{ form.name.length }}/50</span>
@@ -130,51 +99,6 @@
                 @input="validateDescription"
                 @blur="validateDescription"
               ></textarea>
-              <div class="textarea-icon">
-                <svg
-                  fill="none"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  width="16"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                  <path
-                    d="M14 2V8H20"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                  <path
-                    d="M16 13H8"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                  <path
-                    d="M16 17H8"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                  <path
-                    d="M10 9H9H8"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  />
-                </svg>
-              </div>
             </div>
             <div class="input-info">
               <span class="char-count"
@@ -232,7 +156,7 @@
 
           <!-- Target Languages -->
           <div class="form-group">
-            <label for="targetLanguages">
+            <label for="targetLanguages" class="form-label">
               Target Languages
               <span class="required-mark">*</span>
             </label>
@@ -423,6 +347,7 @@ import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import InputSwitch from 'primevue/inputswitch';
 import Multiselect from 'vue-multiselect';
+import 'vue-multiselect/dist/vue-multiselect.min.css';
 import { SUPPORTED_LANGUAGES, type Language } from '../utils/languages';
 
 interface Category {
@@ -813,18 +738,18 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: flex-start;
   background: #f8fafc;
-  width: 100vw;
-  max-width: 100vw;
+  width: 100%;
+  max-width: 100%;
 }
 
 .create-project-form {
-  width: 100vw;
-  max-width: 100vw;
+  width: 100%;
+  max-width: 100%;
   background: white;
   border-radius: 24px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  margin-left: -8rem;
+  margin-left: 0;
 }
 
 .form {
@@ -833,7 +758,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 2rem;
   width: 100%;
-  max-width: none;
+  max-width: 100%;
 }
 
 .form-section {
@@ -876,6 +801,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+  position: relative;
 }
 
 .form-group:last-child {
@@ -913,10 +839,10 @@ label {
 
 .form-control {
   width: 100%;
-  max-width: none;
+  max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 1rem 1rem 1rem 3.5rem;
+  padding: 1rem;
   border: 2px solid #e5e7eb;
   border-radius: 12px;
   font-size: 1.1rem;
@@ -962,37 +888,7 @@ textarea.form-control {
   padding-bottom: 1rem;
 }
 
-.input-icon,
-.textarea-icon,
-.select-icon {
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9ca3af;
-  transition: color 0.3s ease;
-}
 
-.textarea-icon {
-  top: 1.5rem;
-  transform: none;
-}
-
-.form-control:focus + .input-icon,
-.form-control:focus + .textarea-icon {
-  color: #667eea;
-}
-
-.form-control.error + .input-icon,
-.form-control.error + .textarea-icon {
-  color: #ef4444;
-}
-
-.select-icon {
-  right: 1rem;
-  left: auto;
-  pointer-events: none;
-}
 
 .input-info {
   display: flex;
@@ -1132,7 +1028,7 @@ textarea.form-control {
 
 /* Multiselect custom styles */
 .multiselect-custom {
-  margin-bottom: 0.5rem;
+  width: 100%;
 }
 
 /* Responsive adjustments */
@@ -1422,6 +1318,34 @@ textarea.form-control {
   }
 }
 
+/* Additional responsive fixes */
+@media (max-width: 768px) {
+  .create-project-container {
+    padding: 1rem 0;
+  }
+
+  .create-project-form {
+    border-radius: 16px;
+    margin-left: 0;
+  }
+
+  .form {
+    padding: 1.5rem;
+    gap: 1.5rem;
+  }
+
+  .form-section {
+    padding: 1rem;
+  }
+
+  .form-control {
+    font-size: 1rem;
+    padding: 0.875rem;
+  }
+
+
+}
+
 .loading-overlay {
   position: fixed;
   z-index: 2000;
@@ -1519,6 +1443,14 @@ textarea.form-control {
   display: inline-flex !important;
   align-items: center !important;
   gap: 0.25rem !important;
+  max-width: 150px !important;
+  overflow: hidden !important;
+}
+
+.multiselect__tag span {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .multiselect__tag-icon {
@@ -1535,6 +1467,110 @@ textarea.form-control {
 .multiselect__tag-icon:hover {
   background: rgba(255, 255, 255, 0.3) !important;
 }
-</style>
 
-<style src="vue-multiselect/dist/vue-multiselect.min.css"></style>
+/* Fix input field position */
+.multiselect__input {
+  position: relative !important;
+  z-index: 1 !important;
+  min-width: 120px !important;
+  flex: 1 !important;
+  border: none !important;
+  background: transparent !important;
+  outline: none !important;
+  padding: 0.25rem 0 !important;
+  margin: 0 !important;
+  font-size: 1rem !important;
+}
+
+.multiselect__content-wrapper {
+  position: relative !important;
+}
+
+
+
+
+
+.multiselect-custom .multiselect__tags {
+  min-height: 48px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background-color: #f9fafb;
+  padding: 0.5rem;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.multiselect-custom .multiselect__tags-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.multiselect-custom .multiselect__tags:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background-color: white;
+  transform: translateY(-1px);
+}
+
+.multiselect-custom .multiselect__tag {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  padding: 0.25rem 0.75rem;
+  margin: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.multiselect-custom .multiselect__tag-icon {
+  color: white;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  padding-left: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.multiselect-custom .multiselect__tag-icon:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.multiselect-custom .multiselect__option {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.multiselect-custom .multiselect__option--highlight {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.multiselect-custom .multiselect__option--selected {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.multiselect-custom .multiselect__input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1rem;
+  color: #374151;
+  font-weight: 500;
+  padding: 0.5rem;
+  display: block !important;
+  width: 100% !important;
+  margin-top: 0.5rem !important;
+}
+
+.multiselect-custom .multiselect__input::placeholder {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+
+</style>

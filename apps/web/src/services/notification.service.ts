@@ -26,6 +26,11 @@ export interface CreateNotificationData {
   message: string;
 }
 
+export interface UpdateNotificationData {
+  type?: string;
+  message?: string;
+}
+
 class NotificationService {
   async getUserNotifications(limit?: number, unreadOnly = false): Promise<{ notifications: Notification[] }> {
     const params: any = {};
@@ -68,6 +73,11 @@ class NotificationService {
 
   async deleteAllNotifications(): Promise<{ message: string }> {
     const response = await axiosInstance.delete('/notifications');
+    return response.data;
+  }
+
+  async updateNotification(id: string, data: UpdateNotificationData): Promise<Notification> {
+    const response = await axiosInstance.put(`/notifications/${id}`, data);
     return response.data;
   }
 }

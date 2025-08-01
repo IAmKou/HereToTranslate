@@ -1862,7 +1862,7 @@ watch(() => props.members, (val) => {
           <div class="invite-modal-body">
             <div class="form-group">
               <label for="emails" class="invite-form-label">
-                Emails or usernames
+                Email
               </label>
               <textarea
                 id="emails"

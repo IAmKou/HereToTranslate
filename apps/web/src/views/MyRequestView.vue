@@ -174,14 +174,29 @@
                       </span>
                     </td>
                     <td class="actions text-left">
-                      <button @click="onCancel(req)" class="btn btn-small btn-danger" v-if="!req.project">
+                      <!-- Cancel button - only show for PENDING requests without project -->
+                      <button
+                        @click="onCancel(req)"
+                        class="btn btn-small btn-danger"
+                        v-if="req.status === 'PENDING' && !req.project"
+                        title="Cancel Request"
+                      >
                         <i class="pi pi-times"></i>
                       </button>
-                      <button v-if="canReview(req) && !req.project" @click="onReview(req)" class="btn btn-small btn-primary">
+
+                      <!-- Review button - only show for PENDING requests without project -->
+                      <button
+                        v-if="canReview(req) && req.status === 'PENDING' && !req.project"
+                        @click="onReview(req)"
+                        class="btn btn-small btn-primary"
+                        title="Review Request"
+                      >
                         <i class="pi pi-eye"></i>
                       </button>
+
+                      <!-- Candidates button - only show for PENDING public requests without project -->
                       <router-link
-                        v-if="req.isPublic && !req.project"
+                        v-if="req.status === 'PENDING' && req.isPublic && !req.project"
                         :to="{ name: 'request-registrants', params: { requestId: req.id } }"
                         class="btn btn-small btn-candidate"
                         :class="{ disabled: req.registrantCount === 0 }"
@@ -191,6 +206,21 @@
                         <span>Candidates</span>
                         <span v-if="typeof req.registrantCount === 'number'" class="badge">{{ req.registrantCount }}</span>
                       </router-link>
+
+                      <!-- Show message for cancelled requests -->
+                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
+                        Request cancelled
+                      </span>
+
+                      <!-- Show message for completed requests -->
+                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
+                        ✓ Completed
+                      </span>
+
+                      <!-- Show message for rejected requests -->
+                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
+                        ✗ Rejected
+                      </span>
                     </td>
                   </tr>
                   </tbody>
@@ -378,30 +408,53 @@
                         </span>
                     </td>
                     <td class="actions">
+                      <!-- Accept button - only for PENDING requests -->
                       <button
                         v-if="req.status === 'PENDING'"
                         @click="acceptRequest(req.id)"
                         class="btn btn-small btn-success"
                         :disabled="actionLoading"
+                        title="Accept Request"
                       >
                         Accept
                       </button>
+
+                      <!-- Reject button - only for PENDING requests -->
                       <button
                         v-if="req.status === 'PENDING'"
                         @click="rejectRequest(req.id)"
                         class="btn btn-small btn-danger"
                         :disabled="actionLoading"
+                        title="Reject Request"
                       >
                         Reject
                       </button>
+
+                      <!-- Mark Complete button - only for APPROVED requests -->
                       <button
                         v-if="req.status === 'APPROVED'"
                         @click="completeRequest(req.id)"
                         class="btn btn-small btn-primary"
                         :disabled="actionLoading"
+                        title="Mark as Complete"
                       >
                         Mark Complete
                       </button>
+
+                      <!-- Show message for completed requests -->
+                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
+                        ✓ Completed
+                      </span>
+
+                      <!-- Show message for rejected requests -->
+                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
+                        ✗ Rejected
+                      </span>
+
+                      <!-- Show message for cancelled requests -->
+                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
+                        Request cancelled
+                      </span>
                     </td>
                   </tr>
                   </tbody>
@@ -980,7 +1033,7 @@ onMounted(fetchRequests)
   margin-bottom: 32px;
 }
 .requests-title {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   font-weight: 700;
   color: #1e293b;
   margin: 0 0 0.5rem 0;
@@ -989,10 +1042,10 @@ onMounted(fetchRequests)
   gap: 0.75rem;
 }
 .emoji {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
 }
 .requests-desc {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: #64748b;
   margin: 0;
   line-height: 1.6;
@@ -1064,12 +1117,12 @@ onMounted(fetchRequests)
 .requests-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .requests-table th {
   background: #f8fafc;
-  padding: 1rem;
+  padding: 0.8rem;
   text-align: left;
   font-weight: 600;
   color: #374151;
@@ -1077,7 +1130,7 @@ onMounted(fetchRequests)
 }
 
 .requests-table td {
-  padding: 1rem;
+  padding: 0.8rem;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
 }
@@ -1097,8 +1150,9 @@ onMounted(fetchRequests)
 }
 
 .status-badge {
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
+  font-size: 0.7rem;
 }
 
 .status-badge.status-pending {
@@ -1127,14 +1181,14 @@ onMounted(fetchRequests)
 }
 
 .visibility-badge {
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   letter-spacing: 0.05em;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .visibility-public {
@@ -1153,22 +1207,22 @@ onMounted(fetchRequests)
 }
 
 .btn {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border: none;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   text-decoration: none;
 }
 
 .btn-small {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
 }
 
 .btn-primary {
@@ -1212,16 +1266,16 @@ onMounted(fetchRequests)
 }
 
 .tab-button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1.2rem;
   border: none;
   border-radius: 8px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   text-decoration: none;
   background: #f3f4f6;
   color: #6b7280;
@@ -1240,7 +1294,7 @@ onMounted(fetchRequests)
 }
 
 .tab-button .material-icons {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .badge {
@@ -1465,18 +1519,18 @@ onMounted(fetchRequests)
 }
 
 .pagination-controls button {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border: 1px solid #d1d5db;
   background: white;
   color: #374151;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .pagination-controls button:hover:not(:disabled) {
@@ -1565,10 +1619,10 @@ onMounted(fetchRequests)
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 1rem 0.5rem 2.5rem;
+  padding: 0.4rem 0.8rem 0.4rem 2.2rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   background: white;
   transition: border-color 0.2s ease;
 }
@@ -1580,10 +1634,10 @@ onMounted(fetchRequests)
 }
 
 .filter-select {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   background: white;
   color: #374151;
   min-width: 120px;
@@ -1663,12 +1717,12 @@ onMounted(fetchRequests)
 .btn-candidate {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   background: #2563eb;
   color: #fff;
   border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 14px;
+  padding: 3px 10px;
+  font-size: 12px;
   font-weight: 500;
   border: none;
   transition: background 0.2s;
@@ -1676,7 +1730,7 @@ onMounted(fetchRequests)
   text-decoration: none;
 }
 .btn-candidate .pi-users {
-  font-size: 16px;
+  font-size: 14px;
 }
 .btn-candidate .badge {
   background: #f59e42;
@@ -1698,25 +1752,25 @@ onMounted(fetchRequests)
   background: #1d4ed8;
 }
 .sort-icon {
-  margin-left: 6px;
-  font-size: 0.85rem;
+  margin-left: 4px;
+  font-size: 0.75rem;
   color: #9ca3af;
 }
 th:hover .sort-icon {
   color: #1f2937;
 }
 .deadline-icon {
-  margin-right: 4px;
-  font-size: 1.1em;
+  margin-right: 3px;
+  font-size: 1em;
   vertical-align: middle;
 }
 .custom-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.92em;
+  gap: 3px;
+  font-size: 0.8em;
   font-weight: 600;
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
 }
 .approved-badge {
@@ -1743,14 +1797,14 @@ th:hover .sort-icon {
   font-weight: bold;
 }
 .deal-icon {
-  margin-right: 3px;
-  font-size: 1.1em;
+  margin-right: 2px;
+  font-size: 1em;
   vertical-align: middle;
 }
 .th-flex {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
 }
 </style>

@@ -51,6 +51,13 @@ export class CreateRequestDto {
   @IsString({ each: true })
   @MinLength(1, { each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  targetLanguages?: string[];
+
   @IsOptional()
   @IsArray()
   files?: FileEntity[];

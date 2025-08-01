@@ -14,6 +14,7 @@ import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import {
   BadRequestException,
   Injectable, InternalServerErrorException,
+  Logger,
   NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -27,6 +28,8 @@ import { ProjectManagerService } from '#LocalProject/Managers/service/project-ma
 
 @Injectable()
 export class RequestManagerService {
+  private readonly logger = new Logger(RequestManagerService.name);
+
   constructor(
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
@@ -75,6 +78,23 @@ export class RequestManagerService {
       fileEntities.push(entity);
     }
 
+    // Process tags
+    const requestTags: ProjectTagEntity[] = [];
+    if (dto.tags && dto.tags.length > 0) {
+      for (const tag of dto.tags) {
+        let tagEntity = await this.projectTagRepository.findOne({
+          where: { name: tag },
+        });
+
+        if (!tagEntity) {
+          const newTag = this.projectTagRepository.create({ name: tag });
+          tagEntity = await this.projectTagRepository.save(newTag);
+        }
+
+        requestTags.push(tagEntity);
+      }
+    }
+
     const request = this.requestRepository.create({
       requester: { id: uid } as any,
       project: dto.projectId ? ({ id: BigInt(dto.projectId) } as any) : undefined,
@@ -89,6 +109,8 @@ export class RequestManagerService {
       isPublic : true,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
       files: fileEntities,
+      targetLanguages: dto.targetLanguages || [],
+      tags: requestTags,
     });
 
     return await this.requestRepository.save(request);
@@ -116,6 +138,23 @@ export class RequestManagerService {
       fileEntities.push(entity);
     }
 
+    // Process tags
+    const requestTags: ProjectTagEntity[] = [];
+    if (dto.tags && dto.tags.length > 0) {
+      for (const tag of dto.tags) {
+        let tagEntity = await this.projectTagRepository.findOne({
+          where: { name: tag },
+        });
+
+        if (!tagEntity) {
+          const newTag = this.projectTagRepository.create({ name: tag });
+          tagEntity = await this.projectTagRepository.save(newTag);
+        }
+
+        requestTags.push(tagEntity);
+      }
+    }
+
     const request = this.requestRepository.create({
       requester: { id: uid } as any,
       project: dto.projectId ? ({ id: BigInt(dto.projectId) } as any) : undefined,
@@ -130,6 +169,8 @@ export class RequestManagerService {
       isPublic,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
       files: fileEntities,
+      targetLanguages: dto.targetLanguages || [],
+      tags: requestTags,
     });
 
     const requesterUser = await this.userRepository.findOneOrFail({
@@ -196,6 +237,7 @@ export class RequestManagerService {
         'requests.status',
         'requests.isPublic',
         'requests.createdAt',
+        'requests.targetLanguages',
         'requester.id',
         'requester.username',
         'project.id',
@@ -224,6 +266,7 @@ export class RequestManagerService {
         'requests.deadline',
         'requests.status',
         'requests.createdAt',
+        'requests.targetLanguages',
         'requester.id',
         'requester.username',
         'requester.fullName',
@@ -245,14 +288,20 @@ export class RequestManagerService {
       throw new NotFoundException('No requests found');
     }
 
-    return result.map((r: RequestEntity) => ({
-      ...r,
-      isRegistered: r.registrants
+    return result.map((r: RequestEntity) => {
+      const isRegistered = r.registrants
         ? r.registrants.some(
           (u: UserEntity) => u.id.toString() === userId.toString()
         )
-        : false,
-    }));
+        : false;
+
+      this.logger.debug(`Request ${r.id}: userId=${userId}, registrants=${r.registrants?.map((u: UserEntity) => u.id)}, isRegistered=${isRegistered}`);
+
+      return {
+        ...r,
+        isRegistered,
+      };
+    });
   }
 
   async fetchPrivateRequests(uid: bigint) {
@@ -267,6 +316,7 @@ export class RequestManagerService {
         'requests.status',
         'requests.isPublic',
         'requests.createdAt',
+        'requests.targetLanguages',
         'requester.id',
         'requester.fullName',
         'requester.email',
@@ -297,6 +347,7 @@ export class RequestManagerService {
         'requests.status',
         'requests.createdAt',
         'requests.isPublic',
+        'requests.targetLanguages',
 
         'requester.id',
         'requester.username',
@@ -567,29 +618,53 @@ export class RequestManagerService {
     requestId: number,
     selectedUserId: number
   ): Promise<{ approvalUrl: string }> {
-    const request = await this.requestRepository.findOneOrFail({
-      where: { id: BigInt(requestId) },
-      relations: ['requester', 'assignee', 'registrants', 'category'],
-    });
+    try {
+      console.log(`Approving registrant: requestId=${requestId}, userId=${selectedUserId}`);
 
-    if (request.assignee) {
-      throw new BadRequestException('Request has already been assigned.');
+      const request = await this.requestRepository.findOneOrFail({
+        where: { id: BigInt(requestId) },
+        relations: ['requester', 'assignee', 'registrants', 'category'],
+      });
+
+      console.log('Found request:', {
+        id: request.id,
+        title: request.title,
+        status: request.status,
+        isPublic: request.isPublic,
+        hasAssignee: !!request.assignee,
+        registrantsCount: request.registrants?.length || 0
+      });
+
+      if (request.assignee) {
+        throw new BadRequestException('Request has already been assigned.');
+      }
+
+      const selectedUser = await this.userRepository.findOneOrFail({
+        where: { id: BigInt(selectedUserId) },
+      });
+
+      console.log('Found selected user:', {
+        id: selectedUser.id,
+        username: selectedUser.username,
+        email: selectedUser.email
+      });
+
+      const approvalUrl = await this.paymentService.createDeposit(
+        request.dealAmount,
+        selectedUser,
+        request
+      );
+
+      if (!approvalUrl) {
+        throw new Error('Failed to generate PayPal approval URL.');
+      }
+
+      console.log('Generated approval URL successfully');
+      return { approvalUrl };
+    } catch (error) {
+      console.error('Error in approveRegistrant:', error);
+      throw error;
     }
-
-    const selectedUser = await this.userRepository.findOneOrFail({
-      where: { id: BigInt(selectedUserId) },
-    });
-
-    const approvalUrl = await this.paymentService.createDeposit(
-      request.dealAmount,
-      selectedUser,
-      request
-    );
-
-    if (!approvalUrl) {
-      throw new Error('Failed to generate PayPal approval URL.');
-    }
-    return { approvalUrl };
   }
 
   async declinePrivateRequest(requestId: bigint): Promise<boolean> {

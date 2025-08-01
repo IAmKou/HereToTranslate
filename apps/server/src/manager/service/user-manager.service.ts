@@ -10,7 +10,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { In, Repository } from 'typeorm';
+import { DeepPartial, In, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { validateEmail } from '#LocalProject/Utils/validation';
@@ -60,7 +60,7 @@ export class UserManagerService {
       ...data,
       passwordHash,
       role: { id: BigInt(UserRole.Member) },
-    });
+    } as DeepPartial<UserEntity>);
 
     await this.userRepository.save(user);
     return { message: 'Registration successful' };
@@ -171,7 +171,6 @@ export class UserManagerService {
     });
   }
 
-
   async updateUserRole(
     userId: bigint,
     roleId: number,
@@ -197,10 +196,7 @@ export class UserManagerService {
       throw new BadRequestException('Only super admins can assign admin roles');
     }
 
-    if (
-      user.role.id === BigInt(UserRole.Admin) &&
-      currentUser.user.role !== UserRole.SuperAdmin
-    ) {
+    if (user.role.id === '2' && currentUser.user.role !== UserRole.SuperAdmin) {
       throw new BadRequestException('Only super admins can modify admin roles');
     }
 
@@ -208,7 +204,9 @@ export class UserManagerService {
       throw new BadRequestException('Super admin role cannot be assigned');
     }
 
-    const newRole = await this.roleRepository.findOneBy({ id: BigInt(roleId) });
+    const newRole = await this.roleRepository.findOneBy({
+      id: roleId.toString(),
+    });
     if (!newRole) {
       throw new NotFoundException('Role not found');
     }
@@ -221,17 +219,14 @@ export class UserManagerService {
       relations: ['role'],
     });
   }
-  async searchByEmailOrUsername(identifier: string): Promise<UserEntity | null> {
+  async searchByEmailOrUsername(
+    identifier: string
+  ): Promise<UserEntity | null> {
     return this.userRepository.findOne({
-      where: [
-        { email: identifier },
-        { username: identifier },
-      ],
+      where: [{ email: identifier }, { username: identifier }],
       select: ['id', 'username', 'email'],
     });
   }
-
-
 
   async toggleUserStatus(userId: bigint) {
     const user = await this.userRepository.findOne({
@@ -245,7 +240,9 @@ export class UserManagerService {
     user.isActive = !user.isActive;
     return this.userRepository.save(user);
   }
-  async findUserById(userId: number): Promise<{ id: number; username: string } | null> {
+  async findUserById(
+    userId: number
+  ): Promise<{ id: number; username: string } | null> {
     const user = await this.userRepository.findOne({
       where: { id: BigInt(userId) },
       select: ['id', 'username'],
@@ -258,7 +255,6 @@ export class UserManagerService {
       username: user.username,
     };
   }
-
 
   async searchUsers(search?: string): Promise<any[]> {
     const queryBuilder = this.userRepository

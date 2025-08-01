@@ -1,6 +1,6 @@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import {BadRequestException, ForbiddenException, Injectable} from '@nestjs/common';
+import { Injectable} from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import {
   TranslationString,

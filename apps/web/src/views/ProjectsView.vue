@@ -498,7 +498,7 @@ export default defineComponent({
 
 /* Enhanced Header Styles */
 .projects-header {
-  padding: 1.75rem 2rem;
+  padding: 1.5rem 1.75rem;
   border-bottom: 1px solid rgba(226, 232, 240, 0.7);
   opacity: 0;
   transform: translateY(30px);
@@ -528,27 +528,27 @@ export default defineComponent({
   position: relative;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 6px 24px rgba(102, 126, 234, 0.3);
   animation: pulse 2s infinite;
 }
 
 .icon-inner {
   background: white;
   border-radius: 50%;
-  width: 60px;
-  height: 60px;
+  width: 45px;
+  height: 45px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .header-icon {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   color: #667eea;
   z-index: 1;
 }
@@ -558,20 +558,20 @@ export default defineComponent({
 }
 
 .projects-title {
-  font-size: 2.5rem;
+  font-size: 1.6rem;
   font-weight: 800;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   line-height: 1.2;
 }
 
 .projects-desc {
   color: #64748b;
-  font-size: 1.2rem;
-  margin-bottom: 24px;
+  font-size: 1rem;
+  margin-bottom: 20px;
   line-height: 1.6;
 }
 
@@ -584,17 +584,17 @@ export default defineComponent({
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: rgba(102, 126, 234, 0.1);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 0.9rem;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
   color: #667eea;
   font-weight: 500;
 }
 
 .stat-icon {
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: #10b981;
 }
 
@@ -606,15 +606,16 @@ export default defineComponent({
 .create-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 12px 24px;
-  border-radius: 12px;
+  padding: 10px 20px;
+  border-radius: 10px;
   font-weight: 600;
   text-decoration: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   transition: all 0.3s ease;
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+  font-size: 0.9rem;
 }
 
 .create-btn:hover {
@@ -624,7 +625,7 @@ export default defineComponent({
 
 /* Filters Container */
 .filters-container {
-  padding: 1.25rem 2rem;
+  padding: 1rem 1.75rem;
   opacity: 0;
   transform: translateY(20px);
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -655,10 +656,10 @@ export default defineComponent({
 
 .search-input {
   width: 100%;
-  padding: 12px 16px 12px 48px;
+  padding: 10px 14px 10px 40px;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 1rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
   background: white;
   transition: all 0.3s ease;
 }
@@ -671,9 +672,9 @@ export default defineComponent({
 
 .search-icon {
   position: absolute;
-  left: 16px;
+  left: 14px;
   color: #a0aec0;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .filter-options {
@@ -682,10 +683,10 @@ export default defineComponent({
 }
 
 .filter-select {
-  padding: 12px 16px;
+  padding: 10px 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 1rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
   background: white;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -754,16 +755,16 @@ export default defineComponent({
 
 .projects-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 15px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
 }
 
 .project-card {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   transition: all 0.3s ease;
   cursor: pointer;
@@ -787,7 +788,7 @@ export default defineComponent({
 .project-header h3 {
   margin: 0;
   color: #1e293b;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 700;
   flex: 1;
   line-height: 1.3;
@@ -799,13 +800,13 @@ export default defineComponent({
 }
 
 .badge {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 0.75rem;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .badge-public {
@@ -840,11 +841,11 @@ export default defineComponent({
 }
 
 .tag {
-  padding: 4px 12px;
+  padding: 3px 10px;
   background: rgba(102, 126, 234, 0.1);
   color: #667eea;
-  border-radius: 16px;
-  font-size: 0.8rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
@@ -862,14 +863,14 @@ export default defineComponent({
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 0.9rem;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
 }
 
 .meta-icon {
   color: #94a3b8;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .meta-value {
@@ -884,17 +885,17 @@ export default defineComponent({
 }
 
 .btn {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   text-decoration: none;
   transition: all 0.3s ease;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .btn-outline {
@@ -1181,27 +1182,27 @@ export default defineComponent({
 }
 
 .project-title-strong {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   font-weight: 800;
   color: #3b3663;
   line-height: 1.2;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
   word-break: break-word;
 }
 
 .clear-filter-btn {
-  margin-left: 8px;
-  padding: 8px 20px;
+  margin-left: 6px;
+  padding: 6px 16px;
   border: 1.5px solid #e53e3e;
   color: #e53e3e;
   background: #fff0f1;
-  border-radius: 12px;
-  font-size: 1rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(229, 62, 62, 0.08);
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(229, 62, 62, 0.08);
   transition: all 0.2s;
 }
 

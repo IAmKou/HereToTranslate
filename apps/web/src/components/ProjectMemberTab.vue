@@ -438,7 +438,7 @@ const sendInvitationsFromModal = async () => {
       toast.add({
         severity: 'warn',
         summary: 'Warning',
-        detail: 'Please enter at least one valid email or username',
+        detail: 'Please enter at least one valid email ',
         life: 3000
       });
       return;
@@ -1862,7 +1862,7 @@ watch(() => props.members, (val) => {
           <div class="invite-modal-body">
             <div class="form-group">
               <label for="emails" class="invite-form-label">
-                Emails or usernames
+                Email
               </label>
               <textarea
                 id="emails"

@@ -268,6 +268,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       description: request.description,
       isPrivate: true,
       tags,
+      targetLanguages: request.targetLanguages || [],
     };
     if (request.category?.id) {
       createProjectDto.categoryId = request.category.id.toString();

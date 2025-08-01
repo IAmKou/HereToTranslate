@@ -1,74 +1,76 @@
 <template>
-  <div class="cancel-dialog-modal">
-    <div class="modal-overlay" @click="$emit('close')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Cancel Request</h3>
-        <button class="close-btn" @click="$emit('close')">
-          <i class="pi pi-times"></i>
-        </button>
-      </div>
+  <Teleport to="body">
+    <div class="cancel-dialog-modal">
+      <div class="modal-overlay" @click="$emit('close')"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Cancel Request</h3>
+          <button class="close-btn" @click="$emit('close')">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
 
-      <div class="modal-body">
-        <div class="warning-message">
-          <div class="warning-icon">
-            <i class="pi pi-exclamation-triangle"></i>
+        <div class="modal-body">
+          <div class="warning-message">
+            <div class="warning-icon">
+              <i class="pi pi-exclamation-triangle"></i>
+            </div>
+            <h4>Are you sure you want to cancel this request?</h4>
+            <p>This action cannot be undone. The request will be marked as cancelled.</p>
           </div>
-          <h4>Are you sure you want to cancel this request?</h4>
-          <p>This action cannot be undone. The request will be marked as cancelled.</p>
-        </div>
 
-        <div class="request-info">
-          <h5>Request Details:</h5>
-          <div class="request-details">
-            <div class="detail-item">
-              <span class="label">Title:</span>
-              <span class="value">{{ request.title }}</span>
+          <div class="request-info">
+            <h5>Request Details:</h5>
+            <div class="request-details">
+              <div class="detail-item">
+                <span class="label">Title:</span>
+                <span class="value">{{ request.title }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Deal Amount:</span>
+                <span class="value">${{ request.dealAmount }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Deadline:</span>
+                <span class="value">{{ formatDate(request.deadline) }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Current Status:</span>
+                <span :class="['status-badge', `status-${request.status.toLowerCase()}`]">
+                  {{ request.status }}
+                </span>
+              </div>
             </div>
-            <div class="detail-item">
-              <span class="label">Deal Amount:</span>
-              <span class="value">${{ request.dealAmount }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">Deadline:</span>
-              <span class="value">{{ formatDate(request.deadline) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">Current Status:</span>
-              <span :class="['status-badge', `status-${request.status.toLowerCase()}`]">
-                {{ request.status }}
-              </span>
-            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="reason">Reason for cancellation (Optional)</label>
+            <textarea
+              id="reason"
+              v-model="reason"
+              class="form-control"
+              rows="3"
+              placeholder="Please provide a reason for cancelling this request..."
+            ></textarea>
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="reason">Reason for cancellation (Optional)</label>
-          <textarea
-            id="reason"
-            v-model="reason"
-            class="form-control"
-            rows="3"
-            placeholder="Please provide a reason for cancelling this request..."
-          ></textarea>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="$emit('close')">
+            Keep Request
+          </button>
+          <button
+            class="btn btn-danger"
+            @click="handleCancel"
+            :disabled="loading || request.status !== 'PENDING'"
+          >
+            <span v-if="loading" class="loading-spinner"></span>
+            {{ loading ? 'Cancelling...' : 'Cancel Request' }}
+          </button>
         </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-secondary" @click="$emit('close')">
-          Keep Request
-        </button>
-        <button
-          class="btn btn-danger"
-          @click="handleCancel"
-          :disabled="loading || request.status !== 'PENDING'"
-        >
-          <span v-if="loading" class="loading-spinner"></span>
-          {{ loading ? 'Cancelling...' : 'Cancel Request' }}
-        </button>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -122,7 +124,7 @@ async function handleCancel() {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;

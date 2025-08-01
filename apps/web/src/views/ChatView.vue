@@ -315,10 +315,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, toRaw } from 'vue';
+import { useRoute } from 'vue-router';
 import axios from 'axios';
 import ChatRoom from '../components/ChatRoom.vue';
 import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue';
+const route = useRoute();
 const isCollapsed = ref(false);
 interface ChatRoomInfo {
   _id: string;
@@ -574,6 +576,30 @@ const handleDeleteRoom = async () => {
 onMounted(async () => {
   await fetchCurrentUser();
   await loadChatRooms();
+
+  // Check if there's a chatId in query params to auto-open conversation
+  const chatId = route.query.chatId as string;
+  if (chatId) {
+    console.log('Auto-opening chat with ID:', chatId);
+    // Find the chat room with this ID
+    const targetRoom = chatRooms.value.find(room => room._id === chatId);
+    if (targetRoom) {
+      console.log('Found target room, selecting it:', targetRoom);
+      selectedRoom.value = targetRoom;
+    } else {
+      console.log('Target room not found in loaded rooms, waiting for rooms to load...');
+      // If rooms haven't loaded yet, wait a bit and try again
+      setTimeout(() => {
+        const targetRoom = chatRooms.value.find(room => room._id === chatId);
+        if (targetRoom) {
+          console.log('Found target room after delay, selecting it:', targetRoom);
+          selectedRoom.value = targetRoom;
+        } else {
+          console.log('Target room still not found after delay');
+        }
+      }, 1000);
+    }
+  }
 });
 </script>
 

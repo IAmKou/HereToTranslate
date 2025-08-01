@@ -426,6 +426,54 @@
               </div>
             </div>
 
+            <!-- Target Languages -->
+            <div class="form-group">
+              <label for="targetLanguages" class="form-label">
+                Target Languages <span class="required-mark">*</span>
+              </label>
+              <Multiselect
+                v-model="selectedTargetLanguages"
+                :options="SUPPORTED_LANGUAGES"
+                :multiple="true"
+                :close-on-select="false"
+                :clear-on-select="false"
+                :preserve-search="true"
+                placeholder="Select target languages..."
+                :taggable="false"
+                class="multiselect-custom"
+                label="name"
+                track-by="code"
+                @select="validateTargetLanguages"
+                @remove="validateTargetLanguages"
+              >
+                <template #option="props">
+                  <div class="language-option">
+                    <span class="language-name">{{ props.option.name }}</span>
+                    <span class="language-native">({{ props.option.nativeName }})</span>
+                  </div>
+                </template>
+                <template #tag="props">
+                  <span class="multiselect__tag">
+                    <span>{{ props.option.name }}</span>
+                    <i
+                      aria-hidden="true"
+                      tabindex="1"
+                      class="multiselect__tag-icon"
+                      @click="props.remove(props.option)"
+                    ></i>
+                  </span>
+                </template>
+              </Multiselect>
+              <div class="input-info">
+                <span
+                  v-if="targetLanguagesTouched && targetLanguagesError"
+                  class="error-message"
+                >{{ targetLanguagesError }}</span>
+                <span v-else class="help-text"
+                >Select one or more languages you want your content to be translated to</span>
+              </div>
+            </div>
+
             <!-- Tags -->
             <div class="form-group full-width">
               <label for="tags" class="form-label">Tags (Optional)</label>
@@ -677,6 +725,7 @@ import axiosInstance from '../api';
 import { useToast } from 'primevue/usetoast';
 import Multiselect from 'vue-multiselect';
 import 'vue-multiselect/dist/vue-multiselect.min.css';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 const emit = defineEmits(['success', 'cancel']);
 
@@ -713,6 +762,10 @@ const tagInput = ref('');
 
 const allTags = ref([]);
 const tagError = ref('');
+
+// Target Languages handling
+const selectedTargetLanguages = ref([]);
+const targetLanguagesTouched = ref(false);
 
 // File upload variables
 const uploadedFiles = ref([]);
@@ -778,6 +831,23 @@ const assigneeError = computed(() => {
   return '';
 });
 
+const targetLanguagesError = computed(() => {
+  if (!targetLanguagesTouched.value) return '';
+  if (!selectedTargetLanguages.value || selectedTargetLanguages.value.length === 0) {
+    return 'Please select at least one target language';
+  }
+  if (selectedTargetLanguages.value.length > 5) {
+    return 'You can select up to 5 target languages';
+  }
+  const invalidLanguages = selectedTargetLanguages.value.filter(lang =>
+    !SUPPORTED_LANGUAGES.some(supportedLang => supportedLang.code === lang.code)
+  );
+  if (invalidLanguages.length > 0) {
+    return 'Please select valid languages only';
+  }
+  return '';
+});
+
 const isFormValid = computed(() => {
   if (requestType.value === 'private') {
     return (
@@ -787,6 +857,7 @@ const isFormValid = computed(() => {
       !deadlineError.value &&
       !categoryError.value &&
       !assigneeError.value &&
+      !targetLanguagesError.value &&
       uploadedFiles.value.length > 0 // Bắt buộc phải có file
     );
   } else {
@@ -796,6 +867,7 @@ const isFormValid = computed(() => {
       !dealAmountError.value &&
       !deadlineError.value &&
       !categoryError.value &&
+      !targetLanguagesError.value &&
       uploadedFiles.value.length > 0 // Bắt buộc phải có file
     );
   }
@@ -843,6 +915,7 @@ async function handleSubmit() {
   deadlineTouched.value = true;
   assigneeTouched.value = true;
   categoryTouched.value = true;
+  targetLanguagesTouched.value = true;
 
   if (uploadedFiles.value.length === 0) {
     fileError.value = 'Please upload at least one file.';
@@ -929,6 +1002,7 @@ async function handleSubmit() {
       isPublic,
       categoryId: categoryId.value,
       tags: selectedTags.value.map((tag) => tag.name),
+      targetLanguages: selectedTargetLanguages.value.map((lang) => lang.code),
     };
 
     if (assigneeId !== undefined) {
@@ -952,6 +1026,17 @@ async function handleSubmit() {
       formData.append('tags[]', tag.name);
     });
 
+    selectedTargetLanguages.value.forEach(lang => {
+      formData.append('targetLanguages[]', lang.code);
+    });
+
+    // Debug: Log form data
+    console.log('Selected target languages:', selectedTargetLanguages.value);
+    console.log('Target languages codes:', selectedTargetLanguages.value.map(lang => lang.code));
+    for (let [key, value] of formData.entries()) {
+      console.log(`${key}: ${value}`);
+    }
+
     if (assigneeId !== undefined) {
       formData.append('assigneeId', assigneeId.toString());
     }
@@ -970,13 +1055,6 @@ async function handleSubmit() {
     }
 
     console.log('Backend response:', response.data);
-
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Request created successfully!',
-      life: 3000,
-    });
 
     emit('success');
   } catch (e) {
@@ -1025,6 +1103,11 @@ function handleTagCreate(newTagName) {
     allTags.value.push(newTag);
     selectedTags.value.push(newTag);
   }
+}
+
+function validateTargetLanguages() {
+  targetLanguagesTouched.value = true;
+  return !targetLanguagesError.value;
 }
 
 // File upload functions
@@ -1923,5 +2006,97 @@ textarea.form-control {
   .file-size {
     font-size: 0.7rem;
   }
+}
+
+/* Language Options Styles */
+.language-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.language-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.language-native {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Multiselect Custom Styles */
+.multiselect-custom {
+  width: 100%;
+}
+
+.multiselect-custom .multiselect__tags {
+  min-height: 48px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background-color: #f9fafb;
+  padding: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.multiselect-custom .multiselect__tags:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background-color: white;
+  transform: translateY(-1px);
+}
+
+.multiselect-custom .multiselect__tag {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  padding: 0.25rem 0.75rem;
+  margin: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.multiselect-custom .multiselect__tag-icon {
+  color: white;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  padding-left: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.multiselect-custom .multiselect__tag-icon:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.multiselect-custom .multiselect__option {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.multiselect-custom .multiselect__option--highlight {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.multiselect-custom .multiselect__option--selected {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.multiselect-custom .multiselect__input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1rem;
+  color: #374151;
+  font-weight: 500;
+  padding: 0.5rem;
+}
+
+.multiselect-custom .multiselect__input::placeholder {
+  color: #9ca3af;
+  font-weight: 400;
 }
 </style>

@@ -1,89 +1,91 @@
 <template>
-  <div class="review-dialog-modal">
-    <div class="modal-overlay" @click="$emit('close')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Review Request</h3>
-        <button class="close-btn" @click="$emit('close')">
-          <i class="pi pi-times"></i>
-        </button>
-      </div>
+  <Teleport to="body">
+    <div class="review-dialog-modal">
+      <div class="modal-overlay" @click="$emit('close')"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Review Request</h3>
+          <button class="close-btn" @click="$emit('close')">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
 
-      <div class="modal-body">
-        <div class="request-info">
-          <h4>{{ request.title }}</h4>
-          <p>{{ request.description }}</p>
-          <div class="request-details">
-            <div class="detail-item">
-              <span class="label">Deal Amount:</span>
-              <span class="value">${{ request.dealAmount }}</span>
+        <div class="modal-body">
+          <div class="request-info">
+            <h4>{{ request.title }}</h4>
+            <p>{{ request.description }}</p>
+            <div class="request-details">
+              <div class="detail-item">
+                <span class="label">Deal Amount:</span>
+                <span class="value">${{ request.dealAmount }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Deadline:</span>
+                <span class="value">{{ formatDate(request.deadline) }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Status:</span>
+                <span :class="['status-badge', `status-${request.status.toLowerCase()}`]">
+                  {{ request.status }}
+                </span>
+              </div>
             </div>
-            <div class="detail-item">
-              <span class="label">Deadline:</span>
-              <span class="value">{{ formatDate(request.deadline) }}</span>
+          </div>
+
+          <div class="review-form">
+            <div class="form-group">
+              <label>Review Decision</label>
+              <div class="radio-group">
+                <label class="radio-item">
+                  <input
+                    type="radio"
+                    v-model="decision"
+                    value="APPROVED"
+                    :disabled="request.status !== 'PENDING'"
+                  >
+                  <span class="radio-label">Approve</span>
+                </label>
+                <label class="radio-item">
+                  <input
+                    type="radio"
+                    v-model="decision"
+                    value="REJECTED"
+                    :disabled="request.status !== 'PENDING'"
+                  >
+                  <span class="radio-label">Reject</span>
+                </label>
+              </div>
             </div>
-            <div class="detail-item">
-              <span class="label">Status:</span>
-              <span :class="['status-badge', `status-${request.status.toLowerCase()}`]">
-                {{ request.status }}
-              </span>
+
+            <div class="form-group">
+              <label for="comment">Comment (Optional)</label>
+              <textarea
+                id="comment"
+                v-model="comment"
+                class="form-control"
+                rows="3"
+                placeholder="Add a comment about your decision..."
+              ></textarea>
             </div>
           </div>
         </div>
 
-        <div class="review-form">
-          <div class="form-group">
-            <label>Review Decision</label>
-            <div class="radio-group">
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  v-model="decision"
-                  value="APPROVED"
-                  :disabled="request.status !== 'PENDING'"
-                >
-                <span class="radio-label">Approve</span>
-              </label>
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  v-model="decision"
-                  value="REJECTED"
-                  :disabled="request.status !== 'PENDING'"
-                >
-                <span class="radio-label">Reject</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="comment">Comment (Optional)</label>
-            <textarea
-              id="comment"
-              v-model="comment"
-              class="form-control"
-              rows="3"
-              placeholder="Add a comment about your decision..."
-            ></textarea>
-          </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="$emit('close')">
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary"
+            @click="handleReview"
+            :disabled="!decision || loading || request.status !== 'PENDING'"
+          >
+            <span v-if="loading" class="loading-spinner"></span>
+            {{ loading ? 'Reviewing...' : 'Submit Review' }}
+          </button>
         </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-secondary" @click="$emit('close')">
-          Cancel
-        </button>
-        <button
-          class="btn btn-primary"
-          @click="handleReview"
-          :disabled="!decision || loading || request.status !== 'PENDING'"
-        >
-          <span v-if="loading" class="loading-spinner"></span>
-          {{ loading ? 'Reviewing...' : 'Submit Review' }}
-        </button>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -141,7 +143,7 @@ async function handleReview() {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;

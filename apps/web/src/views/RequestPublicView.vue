@@ -116,8 +116,8 @@
                     <i :class="statusIconClass(req.status) + ' status-icon'" />
                     {{ (req.status || 'Pending').toUpperCase() }}
                   </Badge>
-                  <div v-if="req.isRegistered" class="registered-badge">
-                    <i class="pi pi-check-circle"></i> Registered
+                  <div v-if="isUserRegistered(req)" class="registered-indicator" title="You are registered for this request">
+                    <i class="pi pi-check-circle"></i>
                   </div>
                 </div>
                 <div :title="req.title" class="card-title improved-title">
@@ -130,24 +130,29 @@
                   <i class="pi pi-wallet"></i> {{ formatDeal(req.dealAmount) }}
                 </div>
                 <div class="meta-row">
-                  <span
-                  ><i class="pi pi-user-edit"></i>
-                    {{ req.requester?.username }}</span
-                  >
-                  <span
-                  ><i class="pi pi-calendar-plus"></i> <b>Created:</b>
-                    {{ formatDate(req.createdAt) }}</span
-                  >
+                  <span class="meta-item">
+                    <i class="pi pi-user"></i>
+                    {{ req.requester?.username }}
+                  </span>
+                  <span class="meta-item">
+                    <i class="pi pi-folder"></i>
+                    {{ req.category?.name }}
+                  </span>
                 </div>
                 <div class="meta-row">
-                  <span
-                  ><i class="pi pi-hourglass"></i> <b>Deadline:</b>
-                    {{ formatDate(req.deadline) }}</span
-                  >
-                  <span
-                  ><i class="pi pi-bookmark"></i>
-                    {{ req.category?.name }}</span
-                  >
+                  <span class="meta-item">
+                    <i class="pi pi-calendar"></i>
+                    {{ formatDate(req.deadline) }}
+                  </span>
+                  <span v-if="req.targetLanguages && req.targetLanguages.length" class="meta-item languages-compact">
+                    <i class="pi pi-globe"></i>
+                    <span v-for="(lang, index) in req.targetLanguages.slice(0, 2)" :key="lang" class="language-tag-compact">
+                      {{ getLanguageName(lang) }}
+                    </span>
+                    <span v-if="req.targetLanguages.length > 2" class="more-languages">
+                      +{{ req.targetLanguages.length - 2 }}
+                    </span>
+                  </span>
                 </div>
               </div>
             </div>
@@ -173,12 +178,13 @@ import Dropdown from 'primevue/dropdown';
 import Button from 'primevue/button';
 import Badge from 'primevue/badge';
 import Paginator from 'primevue/paginator';
-import axios from 'axios';
+import axiosInstance from '../api';
 import AppFooter from '../components/AppFooter.vue';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
 
 const requests = ref([]);
 const loading = ref(true);
@@ -216,21 +222,33 @@ async function loadRequests() {
   loading.value = true;
   error.value = null;
   try {
+    console.log('🔍 loadRequests - currentUser:', currentUser.value);
+    console.log('🔍 loadRequests - axiosInstance.defaults:', axiosInstance.defaults);
+
     const [reqRes, catRes] = await Promise.all([
-      axios.get((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/requests/all'),
-      axios.get((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/categories/all'),
+      axiosInstance.get('/requests/all'),
+      axiosInstance.get('/categories/all'),
     ]);
+
+    console.log('🔍 loadRequests - response headers:', reqRes.headers);
+    console.log('🔍 loadRequests - response status:', reqRes.status);
+
     categories.value = catRes.data;
     requests.value = reqRes.data.map((req) => {
       const cat = categories.value.find(
         (cat) => cat.name === req.category?.name
       );
+      console.log('Request data:', req); // Debug log
+      console.log('Current user ID:', currentUser.value?.id, 'Type:', typeof currentUser.value?.id); // Debug current user ID
+      console.log('Request registrants:', req.registrants); // Debug registrants
+      console.log('Is registered check:', req.registrants?.some(r => String(r.id) === String(currentUser.value?.id))); // Debug comparison with string conversion
       return {
         ...req,
         category: cat || req.category,
       };
     });
   } catch (e) {
+    console.error('Error loading requests:', e); // Debug log
     requests.value = [];
     categories.value = [];
     error.value = 'Failed to load public requests.';
@@ -260,7 +278,15 @@ const filteredRequests = computed(() => {
   }
   list = list.filter((r) => r.status !== 'APPROVED');
   list = list.filter((r) => r.status !== 'CANCELLED');
-  return list;
+
+  // Add isRegistered calculation if not provided by backend
+  return list.map(req => ({
+    ...req,
+    isRegistered: req.isRegistered !== undefined ? req.isRegistered :
+      (req.registrants && currentUser.value ?
+        req.registrants.some(r => String(r.id) === String(currentUser.value.id)) :
+        false)
+  }));
 });
 
 const paginatedRequests = computed(() => {
@@ -331,6 +357,16 @@ function statusIconClass(status) {
 function goToDetail(id) {
   router.push(`/requests/${id}`);
 }
+
+function isUserRegistered(req) {
+  if (!currentUser.value || !req.registrants) return false;
+  return req.registrants.some(r => String(r.id) === String(currentUser.value.id));
+}
+
+function getLanguageName(code) {
+  const language = SUPPORTED_LANGUAGES.find(lang => lang.code === code);
+  return language ? language.name : code;
+}
 </script>
 
 <style scoped>
@@ -359,7 +395,7 @@ function goToDetail(id) {
 }
 .content {
   flex: 1;
-  padding: 2rem;
+  padding: 1.75rem;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   min-height: calc(100vh - 80px);
 }
@@ -372,14 +408,14 @@ function goToDetail(id) {
 .header-filters-wrapper {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border-radius: 24px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   overflow: hidden;
 }
 .requests-header {
-  padding: 1.5rem 2rem;
+  padding: 1.25rem 1.75rem;
   opacity: 0;
   transform: translateY(30px);
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
@@ -403,8 +439,8 @@ function goToDetail(id) {
   position: relative;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -413,22 +449,22 @@ function goToDetail(id) {
 .icon-inner {
   background: white;
   border-radius: 50%;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .header-icon {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: #667eea;
 }
 .header-text {
   flex: 1;
 }
 .requests-title {
-  font-size: 2rem;
-  font-weight: 800;
+  font-size: 1.6rem;
+  font-weight: 700;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -451,10 +487,10 @@ function goToDetail(id) {
 }
 .search-input {
   width: 100%;
-  padding: 10px 16px 10px 40px;
+  padding: 8px 14px 8px 36px;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 0.95rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
   background: white;
   transition: all 0.3s ease;
 }
@@ -465,23 +501,23 @@ function goToDetail(id) {
 }
 .search-icon {
   position: absolute;
-  left: 12px;
+  left: 10px;
   color: #a0aec0;
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 .filter-options {
   display: flex;
   gap: 12px;
 }
 .filter-select {
-  padding: 10px 16px;
+  padding: 8px 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 0.95rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
   background: white;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-width: 150px;
+  min-width: 140px;
 }
 .filter-select:focus {
   outline: none;
@@ -504,11 +540,11 @@ function goToDetail(id) {
 .empty-container {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 30px 25px;
+  border-radius: 18px;
+  padding: 25px 20px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  margin-bottom: 15px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+  margin-bottom: 12px;
 }
 .loading-content,
 .error-content,
@@ -519,16 +555,16 @@ function goToDetail(id) {
   gap: 20px;
 }
 .loading-spinner {
-  width: 60px;
-  height: 60px;
-  border: 4px solid #e2e8f0;
+  width: 50px;
+  height: 50px;
+  border: 3px solid #e2e8f0;
   border-radius: 50%;
   border-top-color: #667eea;
   animation: spin 1s linear infinite;
 }
 .error-icon,
 .empty-icon {
-  font-size: 4rem;
+  font-size: 3.5rem;
   color: #667eea;
 }
 .error-icon {
@@ -539,7 +575,7 @@ function goToDetail(id) {
   transform: translateY(20px);
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transition-delay: 0.2s;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 .grid-animated {
   opacity: 1;
@@ -547,19 +583,19 @@ function goToDetail(id) {
 }
 .requests-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 18px;
 }
 .improved-request-card {
   background: #fff;
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 28px 28px 24px 28px;
+  border-radius: 16px;
+  box-shadow: 0 6px 24px rgba(37, 99, 235, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 20px 20px 16px 20px;
   transition: all 0.3s ease;
   border: 1px solid #e5e7eb;
   position: relative;
-  min-height: 280px;
-  padding-top: 80px;
+  min-height: 220px;
+  padding-top: 72px;
   overflow: visible;
 }
 .improved-request-card:hover {
@@ -575,98 +611,128 @@ function goToDetail(id) {
   position: absolute;
   top: 0;
   left: 0;
-  padding: 0 20px;
+  padding: 12px 20px 0 20px;
   box-sizing: border-box;
   z-index: 2;
   margin-bottom: 0;
 }
 .status-badge {
-  font-size: 12px;
-  font-weight: 700;
-  padding: 8px 16px;
-  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
   color: #fff;
   border: 2px solid #fff;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
-  gap: 6px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  gap: 4px;
   transition: all 0.2s ease;
 }
 .status-badge:hover {
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
   transform: scale(1.05);
 }
 .status-icon {
   background: #fff;
-  color: #2563eb;
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9em;
-  margin-right: 4px;
+  font-size: 0.8em;
+  margin-right: 3px;
 }
+
+/* PENDING - Màu cam để thể hiện tính cấp bách */
 .p-badge-info.status-badge {
-  background: #2563eb !important;
+  background: linear-gradient(90deg, #ff8c00 0%, #ffa500 100%) !important;
 }
+.p-badge-info.status-badge .status-icon {
+  color: #ff8c00;
+}
+
+/* APPROVED - Màu xanh lá */
 .p-badge-success.status-badge {
-  background: #22c55e !important;
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%) !important;
 }
+.p-badge-success.status-badge .status-icon {
+  color: #22c55e;
+}
+
+/* CANCELLED/REJECTED - Màu đỏ */
 .p-badge-danger.status-badge {
-  background: #ef4444 !important;
+  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%) !important;
 }
+.p-badge-danger.status-badge .status-icon {
+  color: #ef4444;
+}
+
+/* COMPLETED - Màu xanh dương */
 .p-badge-warning.status-badge {
-  background: #f59e42 !important;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%) !important;
 }
-.registered-badge {
+.p-badge-warning.status-badge .status-icon {
+  color: #3b82f6;
+}
+
+.registered-indicator {
   background: #22c55e;
   color: #fff;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 11px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 4px;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.2);
+  transition: all 0.2s ease;
+  cursor: help;
 }
-.registered-badge i {
+.registered-indicator:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+.registered-indicator i {
   color: #fff;
-  font-size: 1em;
+  font-size: 0.9em;
 }
 .card-title.improved-title {
-  font-size: 1.4rem;
-  font-weight: 800;
+  font-size: 1.1rem;
+  font-weight: 600;
   color: #1e293b;
-  margin-bottom: 12px;
+  margin-bottom: 3px;
   letter-spacing: 0.01em;
-  line-height: 1.3;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .card-description {
-  color: #64748b;
-  font-size: 0.95rem;
+  color: #4b5563;
+  font-size: 0.875rem;
   line-height: 1.5;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   font-weight: 400;
-
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .improved-deal {
   color: #2563eb;
-  font-size: 1.25rem;
-  font-weight: 800;
-  margin-bottom: 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -675,15 +741,54 @@ function goToDetail(id) {
 .meta-row {
   display: flex;
   justify-content: space-between;
-  color: #64748b;
-  font-size: 0.9rem;
-  margin-bottom: 6px;
-  gap: 16px;
+  color: #4b5563;
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+  gap: 12px;
+  align-items: center;
 }
-.meta-row i {
-  margin-right: 0.3em;
-  font-size: 0.9em;
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.meta-item i {
+  font-size: 0.875em;
   color: #6366f1;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+
+.languages-compact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.language-tag-compact {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+
+.more-languages {
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #e5e7eb;
 }
 @keyframes spin {
   to {
@@ -696,42 +801,42 @@ function goToDetail(id) {
   justify-content: center;
 }
 .request-card .p-badge {
-  font-size: 0.9rem;
-  padding: 0.4em 1em;
-  border-radius: 12px;
-  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.35em 0.9em;
+  border-radius: 10px;
+  font-weight: 600;
   letter-spacing: 0.5px;
   align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1.2;
-  height: 2em;
+  height: 1.8em;
 }
 @media (max-width: 1024px) {
   .content {
-    padding: 1.5rem;
+    padding: 1.25rem;
   }
   .requests-header {
-    padding: 20px;
-    margin-bottom: 12px;
+    padding: 18px;
+    margin-bottom: 10px;
   }
   .loading-container,
   .error-container,
   .empty-container {
-    padding: 25px 20px;
-    margin-bottom: 12px;
+    padding: 20px 18px;
+    margin-bottom: 10px;
   }
   .requests-grid-container {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
   .requests-grid {
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 15px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
   }
   .header-content {
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
   }
   .header-controls {
     width: 100%;
@@ -739,10 +844,10 @@ function goToDetail(id) {
   }
   .search-container {
     width: 100%;
-    max-width: 400px;
+    max-width: 350px;
   }
   .requests-title {
-    font-size: 1.8rem;
+    font-size: 1.5rem;
   }
 }
 @media (max-width: 768px) {
@@ -751,21 +856,21 @@ function goToDetail(id) {
     margin-left: 0;
   }
   .requests-header {
-    padding: 18px 15px;
-    margin-bottom: 10px;
+    padding: 16px 14px;
+    margin-bottom: 8px;
   }
   .loading-container,
   .error-container,
   .empty-container {
-    padding: 20px 15px;
-    margin-bottom: 10px;
+    padding: 18px 14px;
+    margin-bottom: 8px;
   }
   .requests-grid-container {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .requests-grid {
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 12px;
   }
   .header-controls {
     flex-direction: column;
@@ -778,53 +883,53 @@ function goToDetail(id) {
     flex-direction: column;
   }
   .requests-title {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
   }
   .icon-circle {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
   .icon-inner {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
   }
   .header-icon {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
   }
 }
 @media (max-width: 480px) {
   .content {
-    padding: 1rem;
+    padding: 0.875rem;
   }
   .requests-header {
-    padding: 15px 12px;
-    margin-bottom: 8px;
+    padding: 14px 12px;
+    margin-bottom: 6px;
   }
   .loading-container,
   .error-container,
   .empty-container {
-    padding: 15px 12px;
-    margin-bottom: 8px;
+    padding: 16px 12px;
+    margin-bottom: 6px;
   }
   .requests-grid-container {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
   .requests-grid {
-    gap: 12px;
+    gap: 10px;
   }
   .requests-title {
-    font-size: 1.4rem;
+    font-size: 1.3rem;
   }
   .icon-circle {
-    width: 35px;
-    height: 35px;
+    width: 32px;
+    height: 32px;
   }
   .icon-inner {
-    width: 25px;
-    height: 25px;
+    width: 24px;
+    height: 24px;
   }
   .header-icon {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
 }
 </style>

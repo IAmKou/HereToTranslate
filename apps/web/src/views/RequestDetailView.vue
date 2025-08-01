@@ -112,6 +112,30 @@
                 </div>
                 <div class="overview-row">
                   <span class="overview-label">
+                    <i class="pi pi-globe"></i>
+                    Target Languages
+                  </span>
+                  <span class="overview-value">
+                    <template v-if="request?.targetLanguages && request.targetLanguages.length">
+                      <span v-for="lang in request.targetLanguages" :key="lang" class="language-badge">
+                        {{ getLanguageName(lang) }}
+                      </span>
+                    </template>
+                    <template v-else-if="request?.targetLanguage && request.targetLanguage.length">
+                      <span v-for="lang in request.targetLanguage" :key="lang" class="language-badge">
+                        {{ getLanguageName(lang) }}
+                      </span>
+                    </template>
+                    <template v-else>
+                      <span class="no-languages">
+                        <i class="pi pi-globe" style="margin-right: 4px; color: #999;"></i>
+                        No target languages
+                      </span>
+                    </template>
+                  </span>
+                </div>
+                <div class="overview-row">
+                  <span class="overview-label">
                     <i class="pi pi-tags"></i>
                     Tags
                   </span>
@@ -164,7 +188,6 @@
                     </div>
                     <div class="file-details">
                       <span class="file-name">{{ file.fileName }}</span>
-                      <span class="file-size">{{ formatFileSize(file.fileSize) }}</span>
                     </div>
                   </div>
                   <Button
@@ -412,19 +435,15 @@
                   v-if="request && request.isPublic && !request.assignee && userId !== null && request.requester && request.requester.id !== userId && request.status === 'PENDING'"
                   class="action-btn primary"
                   @click="registerForRequest"
-                  :disabled="request?.isRegistered"
+                  :disabled="request?.isRegistered || registerLoading"
                 >
-                  <i class="pi pi-user-plus"></i>
+                  <i v-if="registerLoading" class="pi pi-spin pi-spinner"></i>
+                  <i v-else class="pi pi-user-plus"></i>
                   <span v-if="request?.isRegistered">Registered</span>
+                  <span v-else-if="registerLoading">Registering...</span>
                   <span v-else>Register for this request</span>
                 </button>
-                <button
-                  v-if="request?.files && request.files.length > 0"
-                  class="action-btn secondary"
-                  @click="viewFiles"
-                >
-                  <i class="pi pi-folder-open"></i> View Files
-                </button>
+
               </div>
             </div>
           </div>
@@ -434,6 +453,12 @@
     <Footer />
     <!-- Edit Request Modal -->
     <RequestEditView v-if="showEdit" :request="request" @close="showEdit = false" @updated="onRequestUpdated" />
+    <CancelRequestDialog
+      v-if="showCancelDialog"
+      :request="request"
+      @close="showCancelDialog = false"
+      @cancelled="onRequestCancelled"
+    />
   </div>
 </template>
 
@@ -449,9 +474,12 @@ import 'primeicons/primeicons.css';
 import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
 import RequestEditView from './RequestEditView.vue'
+import CancelRequestDialog from '../components/CancelRequestDialog.vue'
 import { nextTick } from 'vue';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
+import { getEnvironmentConfig } from '../utils/environment';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
 // import { useUserStore } from '../store/user'; // Nếu có store user
 
 interface UserInfo {
@@ -520,6 +548,8 @@ interface RequestDetail {
   project?: any;
   statusHistory?: StatusHistory[];
   approvedAt?: string;
+  targetLanguages?: string[];
+  targetLanguage?: string[];
 }
 
 const route = useRoute();
@@ -528,6 +558,8 @@ const request = ref<RequestDetail | null>(null);
 const loading = ref<boolean>(true);
 const userId = ref<number | null>(null);
 const showEdit = ref(false)
+const showCancelDialog = ref(false);
+const registerLoading = ref<boolean>(false);
 const toast = useToast();
 
 const timeRemaining = computed(() => {
@@ -595,8 +627,8 @@ function formatAmount(amount: number) {
   return Number(amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-function formatFileSize(bytes: number) {
-  if (bytes === 0) return '0 Bytes';
+function formatFileSize(bytes: number | undefined | null) {
+  if (!bytes || bytes === 0) return '0 Bytes';
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -626,23 +658,121 @@ function statusClass(status: string) {
 function getInitial(name: string | undefined) {
   return name ? name.charAt(0).toUpperCase() : '?';
 }
-function downloadFile(file: AttachmentInfo) {
-  // Logic tải file
-  if (!file?.url) return;
-  window.open(file.url, '_blank');
+
+function getLanguageName(code: string): string {
+  const language = SUPPORTED_LANGUAGES.find(lang => lang.code === code);
+  return language ? language.name : code;
 }
-function contactRequester() {
-  if (request.value?.requester?.email) {
-    window.open(`mailto:${request.value.requester.email}`);
-  } else {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Requester email not available', life: 3000 });
+async function downloadFile(file: FileInfo) {
+  // Logic tải file
+  console.log('Downloading file:', file);
+  if (!file?.id) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'File ID not available', life: 3000 });
+    return;
+  }
+  try {
+    // Use axios to download the file with proper authentication
+    const config = getEnvironmentConfig();
+    const response = await axiosInstance.get(`/files/${file.id}/download`, {
+      responseType: 'blob'
+    });
+
+    // Create a blob URL and trigger download
+    const blob = new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to download file', life: 3000 });
   }
 }
-function contactTranslator() {
-  if (request.value?.assignee?.email) {
-    window.open(`mailto:${request.value.assignee.email}`);
-  } else {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator email not available', life: 3000 });
+async function contactRequester() {
+  console.log('Contact Requester - Requester data:', request.value?.requester);
+  console.log('Contact Requester - Requester username:', request.value?.requester?.username);
+
+  if (!request.value?.requester?.username) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Requester information not available', life: 3000 });
+    return;
+  }
+
+  try {
+    console.log('Making API call to /chat/open-dm with targetIdentifier:', request.value.requester.username);
+    // Create a direct chat with the requester
+    const response = await axiosInstance.post('/chat/open-dm', {
+      targetIdentifier: request.value.requester.username
+    });
+
+    console.log('API response:', response);
+    console.log('Response data:', response.data);
+
+    if (response.data && response.data._id) {
+      console.log('Chat created successfully, navigating to chat view with chat ID:', response.data._id);
+      // Navigate to the chat view with the chat ID
+      router.push({ name: 'chat', query: { chatId: response.data._id } });
+    } else {
+      console.log('Failed to create chat room - no _id in response');
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create chat room', life: 3000 });
+    }
+  } catch (error: any) {
+    console.error('Error creating chat:', error);
+    console.error('Error response:', error?.response);
+    console.error('Error message:', error?.message);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error?.response?.data?.message || 'Failed to create chat with requester',
+      life: 3000
+    });
+  }
+}
+async function contactTranslator() {
+  console.log('Contact Translator - Assignee data:', request.value?.assignee);
+  console.log('Contact Translator - Assignee username:', request.value?.assignee?.username);
+
+  if (!request.value?.assignee) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator information not available', life: 3000 });
+    return;
+  }
+
+  if (!request.value.assignee.username) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator username not available', life: 3000 });
+    return;
+  }
+
+  try {
+    console.log('Making API call to /chat/open-dm with targetIdentifier:', request.value.assignee.username);
+    // Create a direct chat with the translator
+    const response = await axiosInstance.post('/chat/open-dm', {
+      targetIdentifier: request.value.assignee.username
+    });
+
+    console.log('API response:', response);
+    console.log('Response data:', response.data);
+
+    if (response.data && response.data._id) {
+      console.log('Chat created successfully, navigating to chat view with chat ID:', response.data._id);
+      // Navigate to the chat view with the chat ID
+      router.push({ name: 'chat', query: { chatId: response.data._id } });
+    } else {
+      console.log('Failed to create chat room - no _id in response');
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create chat room', life: 3000 });
+    }
+  } catch (error: any) {
+    console.error('Error creating chat:', error);
+    console.error('Error response:', error?.response);
+    console.error('Error message:', error?.message);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error?.response?.data?.message || 'Failed to create chat with translator',
+      life: 3000
+    });
   }
 }
 function viewProfile(userId: number | undefined) {
@@ -681,8 +811,15 @@ async function fetchRequestDetail() {
   try {
     const requestId = route.params.requestId;
     const res = await axiosInstance.get(`/requests/${requestId}/detail`);
+    console.log('Request detail response:', res.data);
+    console.log('All fields:', Object.keys(res.data));
+    console.log('Target languages:', res.data.targetLanguages);
+    console.log('Target language (singular):', res.data.targetLanguage);
+    console.log('Assignee data:', res.data.assignee);
+    console.log('Assignee username:', res.data.assignee?.username);
     request.value = res.data;
   } catch (e) {
+    console.error('Error fetching request detail:', e);
     request.value = null;
   } finally {
     loading.value = false;
@@ -691,16 +828,14 @@ async function fetchRequestDetail() {
 
 async function cancelRequest() {
   if (!request.value?.id) return;
-  try {
-    await axiosInstance.post(`/requests/${request.value.id}/cancel`);
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Request cancelled successfully!', life: 3000 });
-    await nextTick();
-    setTimeout(() => {
-      router.push({ name: 'my-requests' });
-    }, 1500);
-  } catch (e) {
-    toast.add({ severity: 'error', summary: 'Failed', detail: 'Failed to cancel request.', life: 3000 });
-  }
+  showCancelDialog.value = true;
+}
+
+function onRequestCancelled() {
+  toast.add({ severity: 'success', summary: 'Success', detail: 'Request cancelled successfully!', life: 3000 });
+  setTimeout(() => {
+    router.push({ name: 'my-requests' });
+  }, 1500);
 }
 
 function approveRequest() {
@@ -712,12 +847,15 @@ function rejectRequest() {
 
 async function registerForRequest() {
   if (!request.value?.id) return;
+  registerLoading.value = true;
   try {
     await axiosInstance.post(`/requests/${request.value.id}/register`);
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Successfully registered for this request! Please check your chat or email.', life: 3000 });
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Successfully registered for this request!', life: 3000 });
     await fetchRequestDetail();
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Failed', detail: e?.response?.data?.message || 'Registration failed.', life: 3000 });
+  } finally {
+    registerLoading.value = false;
   }
 }
 
@@ -781,7 +919,7 @@ body, .request-detail-wrapper {
 }
 
 .page-title h1 {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 800;
   color: #111827;
   margin: 0 0 8px 0;
@@ -789,7 +927,7 @@ body, .request-detail-wrapper {
 }
 
 .request-title {
-  font-size: 18px;
+  font-size: 16px;
   color: #6b7280;
   margin: 0;
   font-weight: 500;
@@ -818,7 +956,7 @@ body, .request-detail-wrapper {
   background: #fff;
   border-radius: var(--main-radius);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 32px 32px 32px 32px;
+  padding: 24px 24px 24px 24px;
   margin-bottom: 0;
   transition: box-shadow 0.2s, transform 0.2s;
   border: 1px solid #f1f5f9;
@@ -834,73 +972,73 @@ body, .request-detail-wrapper {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 .info-card-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   color: #1e293b;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   letter-spacing: -0.025em;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   line-height: 1.4;
 }
 .info-card-title i {
   color: #3b82f6;
-  font-size: 20px;
+  font-size: 16px;
 }
 .overview-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px 32px;
+  gap: 14px 24px;
 }
 .overview-row {
   display: flex;
   flex-direction: column;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.5;
 }
 .overview-label {
   color: #6b7280;
   font-weight: 500;
-  font-size: 12.5px;
-  margin-bottom: 4px;
+  font-size: 11px;
+  margin-bottom: 3px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   line-height: 1.5;
 }
 .overview-label i {
   color: #3b82f6;
-  font-size: 14px;
+  font-size: 12px;
 }
 .overview-value {
   color: #111827;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.5;
 }
 .amount {
   color: #1e40af;
   font-weight: 800;
-  font-size: 18px;
+  font-size: 16px;
   display: flex;
   align-items: baseline;
   gap: 4px;
 }
 .amount .currency {
-  font-size: 13px;
+  font-size: 11px;
   color: #64748b;
   margin-left: 2px;
   font-weight: 500;
 }
 .deadline {
   color: #1e293b;
-  font-size: 15px;
+  font-size: 13px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .deadline-info {
   display: flex;
@@ -910,8 +1048,8 @@ body, .request-detail-wrapper {
 }
 .time-remaining {
   color: #f59e42;
-  font-size: 13px;
-  margin-left: 6px;
+  font-size: 11px;
+  margin-left: 4px;
 }
 .deadline-progress {
   width: 100%;
@@ -933,14 +1071,14 @@ body, .request-detail-wrapper {
   background: linear-gradient(90deg, #fef3c7 60%, #fde68a 100%);
   color: #b45309;
   border-radius: 9999px;
-  padding: 6px 16px;
-  font-size: 14px;
+  padding: 4px 12px;
+  font-size: 12px;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(251,191,36,0.08);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .status-badge.approved {
   background: linear-gradient(90deg, #d1fae5 60%, #6ee7b7 100%);
@@ -970,31 +1108,31 @@ body, .request-detail-wrapper {
   background: #FDEAEA;
   color: #D93025;
   border-radius: 999px;
-  padding: 5px 18px;
-  font-size: 15px;
+  padding: 4px 14px;
+  font-size: 12px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   border: none;
 }
 .visibility-badge.public {
   background: linear-gradient(90deg, #dbeafe 60%, #a5b4fc 100%);
   color: #1e40af;
   border-radius: 9999px;
-  padding: 5px 18px;
-  font-size: 15px;
+  padding: 4px 14px;
+  font-size: 12px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 .category-badge {
   background: linear-gradient(90deg, #f3f6fd 60%, #e8effc 100%);
   color: #3b5998;
   border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 13px;
+  padding: 3px 10px;
+  font-size: 11px;
   font-weight: 400;
   display: inline-block;
   border: none;
@@ -1007,8 +1145,8 @@ body, .request-detail-wrapper {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 20px;
-  font-size: 16px;
+  padding: 16px;
+  font-size: 14px;
   color: #1e293b;
   line-height: 1.6;
   font-weight: 500;
@@ -1141,12 +1279,12 @@ body, .request-detail-wrapper {
 }
 .username {
   font-weight: 800;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.2;
 }
 .user-email, .user-phone {
   color: #64748b;
-  font-size: 15px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1165,18 +1303,18 @@ body, .request-detail-wrapper {
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 8px;
+  gap: 10px;
+  margin-top: 6px;
 }
 .action-btn {
   width: 100%;
-  border-radius: 12px;
-  font-size: 16px;
+  border-radius: 10px;
+  font-size: 14px;
   font-weight: 700;
-  padding: 12px 0;
+  padding: 10px 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
   border: none;
   cursor: pointer;
@@ -1275,6 +1413,19 @@ body, .request-detail-wrapper {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.action-btn .pi-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 .tag-badge {
   display: inline-block;
   background: linear-gradient(90deg, #f3f6fd 60%, #e8effc 100%);
@@ -1285,6 +1436,27 @@ body, .request-detail-wrapper {
   font-size: 13px;
   font-weight: 400;
   border: 1px solid #e0e7ef;
+}
+
+.language-badge {
+  display: inline-block;
+  background: linear-gradient(90deg, #dbeafe 60%, #a5b4fc 100%);
+  color: #1e40af;
+  border-radius: 10px;
+  padding: 3px 12px;
+  margin-right: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #c7d2fe;
+}
+
+.no-languages {
+  color: #999;
+  font-style: italic;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Status History Styles */

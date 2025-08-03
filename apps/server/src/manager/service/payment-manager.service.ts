@@ -23,6 +23,7 @@ import { WithdrawDto } from '../../dto/withdraw.dto';
 import { logger } from 'nx/src/utils/logger';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
+import { NotificationManagerService } from './notification-manager.service';
 
 @Injectable()
 export class PaypalService {
@@ -47,7 +48,8 @@ export class PaypalService {
     private readonly mailService: MailService,
     private readonly walletManagerService: WalletManagerService,
     private readonly manifestService: ManifestService,
-    private readonly feeService: FeeService
+    private readonly feeService: FeeService,
+    private readonly notificationService: NotificationManagerService
   ) {}
 
   private async getAccessToken(): Promise<string> {
@@ -821,6 +823,14 @@ export class PaypalService {
     // Debug: log transaction sau khi lưu
     console.log('Saved transaction:', transaction);
 
+    // Create notification for admin about new withdrawal request
+    await this.notificationService.createNotification({
+      userId: this.ADMIN_USER_ID,
+      type: 'WITHDRAWAL_REQUESTED',
+      message: `New withdrawal request from ${userEntity.username || userEntity.email} for $${amount}`,
+      createdBy: userId,
+    });
+
     return transaction;
   }
 
@@ -912,6 +922,14 @@ export class PaypalService {
       logger.log(
         `PayPal payout approved for transaction ID ${transactionId}, amount: ${amount}`
       );
+
+      // Create notification for user about approved withdrawal
+      await this.notificationService.createNotification({
+        userId: transaction.user.id,
+        type: 'WITHDRAWAL_APPROVED',
+        message: `Your withdrawal request for $${amount} has been approved and processed via PayPal.`,
+        createdBy: this.ADMIN_USER_ID,
+      });
 
       return transaction;
     } catch (err) {

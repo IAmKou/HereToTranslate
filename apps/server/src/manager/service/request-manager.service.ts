@@ -19,12 +19,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { MailService } from '../../mailer/mailer.service';
 import { ChatService } from '../../chat/chat.service';
-import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
-import { WalletManagerService } from '#LocalProject/Managers/service/wallet-manager.service';
-import { FileService } from '#LocalProject/Managers/service/file-manager.service';
+import { PaypalService } from './payment-manager.service';
+import { WalletManagerService } from './wallet-manager.service';
+import { FileService } from './file-manager.service';
 import { logger } from 'nx/src/utils/logger';
-import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
-import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
+import { ProjectManagerService } from './project-manager.service';
+import { NotificationManagerService } from './notification-manager.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -93,7 +93,16 @@ export class RequestManagerService {
       files: fileEntities,
     });
 
-    return await this.requestRepository.save(request);
+    const savedRequest = await this.requestRepository.save(request);
+
+    // Create global notification for new public request
+    await this.notificationService.createGlobalNotification({
+      type: 'PUBLIC_REQUEST_CREATED',
+      message: `New public request available: "${title}" - $${dealAmount}`,
+      createdBy: uid,
+    });
+
+    return savedRequest;
   }
 
   async createPrivateRequest(

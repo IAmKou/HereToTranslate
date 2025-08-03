@@ -140,24 +140,21 @@ export class GroupManagerService extends CommonHttpServiceImpl {
         `Project group updated successfully with ID: ${updatedGroup.id}`
       );
 
-      // Send notification to all group members
-      try {
-        const groupWithMembers = await this.projectGroupRepository.findOne({
-          where: { id: BigInt(groupId) },
-          relations: ['members', 'project'],
-        });
+      // Get group members to notify them about the update
+      const groupWithMembers = await this.projectGroupRepository.findOne({
+        where: { id: BigInt(groupId) },
+        relations: ['members', 'project'],
+      });
 
-        if (groupWithMembers && groupWithMembers.members) {
-          for (const member of groupWithMembers.members) {
-            await this.notificationService.createNotification({
-              type: 'GROUP_UPDATED',
-              message: `Group ${groupWithMembers.name} has been updated in project ${groupWithMembers.project.name}`,
-              userId: member.id,
-            });
-          }
+      if (groupWithMembers && groupWithMembers.members) {
+        for (const member of groupWithMembers.members) {
+          await this.notificationService.createNotification({
+            userId: member.id,
+            type: 'GROUP_UPDATED',
+            message: `Group "${groupWithMembers.name}" in project "${groupWithMembers.project.name}" has been updated.`,
+            createdBy: uid,
+          });
         }
-      } catch (error) {
-        this.logger.error('Failed to send group update notification:', error);
       }
 
       return updatedGroup;
@@ -189,7 +186,7 @@ export class GroupManagerService extends CommonHttpServiceImpl {
     }
 
     try {
-      // Get group members before deleting
+      // Get group members before deletion to notify them
       const groupWithMembers = await this.projectGroupRepository.findOne({
         where: { id: BigInt(groupId) },
         relations: ['members', 'project'],
@@ -200,19 +197,16 @@ export class GroupManagerService extends CommonHttpServiceImpl {
         `Project group deleted successfully with ID: ${group.id}`
       );
 
-      // Send notification to all former group members
-      try {
-        if (groupWithMembers && groupWithMembers.members) {
-          for (const member of groupWithMembers.members) {
-            await this.notificationService.createNotification({
-              type: 'GROUP_DELETED',
-              message: `Group ${groupWithMembers.name} has been deleted from project ${groupWithMembers.project.name}`,
-              userId: member.id,
-            });
-          }
+      // Notify group members about the deletion
+      if (groupWithMembers && groupWithMembers.members) {
+        for (const member of groupWithMembers.members) {
+          await this.notificationService.createNotification({
+            userId: member.id,
+            type: 'GROUP_DELETED',
+            message: `Group "${groupWithMembers.name}" in project "${groupWithMembers.project.name}" has been deleted.`,
+            createdBy: uid,
+          });
         }
-      } catch (error) {
-        this.logger.error('Failed to send group deletion notification:', error);
       }
 
       return { message: `Project group deleted successfully` };
@@ -325,24 +319,20 @@ export class GroupManagerService extends CommonHttpServiceImpl {
       const updatedGroup = await this.projectGroupRepository.save(group);
       this.logger.debug(`Users added to group successfully`, { updatedGroup });
 
-      // Send notification to added users
-      try {
-        const groupWithProject = await this.projectGroupRepository.findOne({
-          where: { id: BigInt(groupId) },
-          relations: ['project'],
-        });
+      // Get group and project info for notifications
+      const groupWithProject = await this.projectGroupRepository.findOne({
+        where: { id: BigInt(groupId) },
+        relations: ['project'],
+      });
 
-        if (groupWithProject) {
-          for (const user of usersToAdd) {
-            await this.notificationService.createNotification({
-              type: 'USER_ADDED_TO_GROUP',
-              message: `You have been added to group ${groupWithProject.name} in project ${groupWithProject.project.name}`,
-              userId: user.id,
-            });
-          }
-        }
-      } catch (error) {
-        this.logger.error('Failed to send user added to group notification:', error);
+      // Notify users that they were added to the group
+      for (const user of usersToAdd) {
+        await this.notificationService.createNotification({
+          userId: user.id,
+          type: 'ADDED_TO_GROUP',
+          message: `You have been added to group "${groupWithProject?.name}" in project "${groupWithProject?.project.name}".`,
+          createdBy: uid,
+        });
       }
 
       return updatedGroup;
@@ -387,28 +377,25 @@ export class GroupManagerService extends CommonHttpServiceImpl {
         updatedGroup,
       });
 
-      // Send notification to removed users
-      try {
-        const groupWithProject = await this.projectGroupRepository.findOne({
-          where: { id: BigInt(groupId) },
-          relations: ['project'],
+      // Get group and project info for notifications
+      const groupWithProject = await this.projectGroupRepository.findOne({
+        where: { id: BigInt(groupId) },
+        relations: ['project'],
+      });
+
+      // Get the users that were removed to notify them
+      const removedUsers = await this.userRepository.findBy({
+        id: In(Array.from(toRemoveSet)),
+      });
+
+      // Notify users that they were removed from the group
+      for (const user of removedUsers) {
+        await this.notificationService.createNotification({
+          userId: user.id,
+          type: 'REMOVED_FROM_GROUP',
+          message: `You have been removed from group "${groupWithProject?.name}" in project "${groupWithProject?.project.name}".`,
+          createdBy: uid,
         });
-
-        if (groupWithProject) {
-          const removedUsers = await this.userRepository.findBy({
-            id: In(userIds.map(id => BigInt(id))),
-          });
-
-          for (const user of removedUsers) {
-            await this.notificationService.createNotification({
-              type: 'USER_REMOVED_FROM_GROUP',
-              message: `You have been removed from group ${groupWithProject.name} in project ${groupWithProject.project.name}`,
-              userId: user.id,
-            });
-          }
-        }
-      } catch (error) {
-        this.logger.error('Failed to send user removed from group notification:', error);
       }
 
       return updatedGroup;

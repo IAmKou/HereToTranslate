@@ -106,10 +106,9 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
-import axios from 'axios'
+import axiosInstance from '../utils/axios'
 import { useToast } from 'primevue/usetoast';
 
-const baseUrl = ''
 const email = ref('')
 const code = ref('')
 const newPassword = ref('')
@@ -147,6 +146,7 @@ watch(step, async (val) => {
 })
 
 let timer = null
+
 function startCountdown() {
   countdown.value = 60
   if (timer) clearInterval(timer)
@@ -164,14 +164,24 @@ async function sendCode() {
   if (!isEmailValid.value) return
   loading.value = true
   try {
-    await axios.post(`${baseUrl}/auth/forgot-password`, { email: email.value })
+    await axiosInstance.post('/auth/forgot-password', { email: email.value })
     step.value = 2
     code.value = ''
     codeTouched.value = false
     startCountdown()
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Verification code has been sent to your email', life: 3000 })
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Verification code has been sent to your email',
+      life: 3000
+    })
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || 'Failed to send verification code', life: 3000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: e.response?.data?.message || 'Failed to send verification code',
+      life: 3000
+    })
   } finally {
     loading.value = false
   }
@@ -186,7 +196,7 @@ async function verifyCode() {
   if (!isCodeValid.value) return
   loading.value = true
   try {
-    await axios.post(`${baseUrl}/auth/verify-code`, {
+    await axiosInstance.post('/auth/verify-code', {
       email: email.value,
       code: code.value,
     })
@@ -195,9 +205,19 @@ async function verifyCode() {
     confirmPassword.value = ''
     passwordTouched.value = false
     confirmTouched.value = false
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Verification successful! Please set a new password.', life: 3000 })
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Verification successful! Please set a new password.',
+      life: 3000
+    })
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || 'Invalid or expired verification code', life: 3000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: e.response?.data?.message || 'Invalid or expired verification code',
+      life: 3000
+    })
   } finally {
     loading.value = false
   }
@@ -212,7 +232,7 @@ async function resetPassword() {
   }
   loading.value = true
   try {
-    await axios.post(`${baseUrl}/auth/reset-password`, {
+    await axiosInstance.post('/auth/reset-password', {
       email: email.value,
       code: code.value,
       newPassword: newPassword.value,
@@ -222,7 +242,12 @@ async function resetPassword() {
       window.location.href = '/login'
     }, 3000)
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || 'Failed to reset password', life: 3000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: e.response?.data?.message || 'Failed to reset password',
+      life: 3000
+    })
   } finally {
     loading.value = false
   }
@@ -253,11 +278,13 @@ function goBack(targetStep) {
   background: linear-gradient(135deg, #e3f0ff 0%, #f5f7fa 100%);
   position: relative;
 }
+
 .logo-container {
   margin-bottom: 1.5rem;
   display: flex;
   justify-content: center;
 }
+
 .logo {
   width: 250px;
   height: 250px;
@@ -266,6 +293,7 @@ function goBack(targetStep) {
   background: #fff;
   padding: 0.5rem;
 }
+
 .forgot-password-card {
   width: 100%;
   max-width: 440px;
@@ -276,6 +304,7 @@ function goBack(targetStep) {
   transition: box-shadow 0.2s;
   border: 1.5px solid #e3eafc;
 }
+
 .forgot-password-card:hover {
   box-shadow: 0 16px 48px rgba(25, 118, 210, 0.18);
 }
@@ -291,6 +320,7 @@ function goBack(targetStep) {
 .step-indicator {
   margin-bottom: 1.7rem;
 }
+
 .step-progress {
   width: 100%;
   height: 4px;
@@ -300,18 +330,21 @@ function goBack(targetStep) {
   position: relative;
   overflow: hidden;
 }
+
 .progress-bar {
   height: 100%;
   background: linear-gradient(90deg, #1976d2 60%, #42a5f5 100%);
   border-radius: 2px;
-  transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .step-items {
   display: flex;
   align-items: flex-end;
   justify-content: center;
   gap: 0.5rem;
 }
+
 .step-item {
   display: flex;
   flex-direction: column;
@@ -319,6 +352,7 @@ function goBack(targetStep) {
   gap: 0.2rem;
   min-width: 60px;
 }
+
 .step-icon {
   width: 32px;
   height: 32px;
@@ -332,12 +366,14 @@ function goBack(targetStep) {
   box-shadow: 0 2px 8px #1976d23a;
   transition: background 0.2s, color 0.2s, transform 0.2s;
 }
+
 .step-item.active .step-icon {
   background: linear-gradient(135deg, #1976d2 60%, #42a5f5 100%);
   color: #fff;
   transform: scale(1.1);
   box-shadow: 0 4px 16px #1976d23a;
 }
+
 .step-label {
   font-size: 0.9rem;
   color: #b0b8c1;
@@ -345,9 +381,11 @@ function goBack(targetStep) {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
+
 .step-item.active .step-label {
   color: #1976d2;
 }
+
 .step-connector {
   width: 32px;
   height: 2px;
@@ -372,10 +410,12 @@ function goBack(targetStep) {
   flex-direction: column;
   position: relative;
 }
+
 .floating-label-group {
   position: relative;
   margin-bottom: 1.7rem;
 }
+
 .floating-label-group label {
   position: absolute;
   left: 2.5rem;
@@ -383,11 +423,12 @@ function goBack(targetStep) {
   color: #b0b8c1;
   font-size: 1.05rem;
   pointer-events: none;
-  transition: 0.2s cubic-bezier(0.4,0,0.2,1);
+  transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
   padding: 0 0.2rem;
   z-index: 3;
 }
+
 .floating-label-group label.floated,
 .floating-label-group input:focus + label {
   top: -0.7rem;
@@ -399,6 +440,7 @@ function goBack(targetStep) {
   border-radius: 4px;
   box-shadow: 0 1px 4px #1976d21a;
 }
+
 .input-icon {
   position: absolute;
   left: 16px;
@@ -408,6 +450,7 @@ function goBack(targetStep) {
   font-size: 1.15rem;
   z-index: 2;
 }
+
 .input {
   margin-top: 0.5rem;
   font-size: 1.08rem;
@@ -418,11 +461,13 @@ function goBack(targetStep) {
   background: #f7fafd;
   box-shadow: 0 1px 4px #1976d21a;
 }
+
 .input:focus {
   border: 1.5px solid #1976d2;
   background: #fff;
   box-shadow: 0 2px 8px #1976d23a;
 }
+
 .input-error {
   border: 1.5px solid #e53935 !important;
   background: #fff0f0;
@@ -431,6 +476,7 @@ function goBack(targetStep) {
 .password-group {
   position: relative;
 }
+
 .toggle-password {
   position: absolute;
   right: 16px;
@@ -442,6 +488,7 @@ function goBack(targetStep) {
   z-index: 2;
   transition: color 0.2s;
 }
+
 .toggle-password:hover {
   color: #1976d2;
 }
@@ -463,16 +510,19 @@ function goBack(targetStep) {
   min-height: 48px;
   box-shadow: 0 1px 4px #1976d21a;
 }
+
 .primary-btn {
   background: linear-gradient(135deg, #1976d2 60%, #42a5f5 100%);
   border: none;
   color: #fff;
   box-shadow: 0 2px 8px #1976d23a;
 }
+
 .primary-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #1256a3 60%, #1976d2 100%);
   box-shadow: 0 4px 16px #1976d23a;
 }
+
 .link-btn {
   background: none;
   color: #1976d2;
@@ -481,9 +531,11 @@ function goBack(targetStep) {
   text-decoration: underline;
   font-size: 1rem;
 }
+
 .link-btn:disabled {
   color: #b0b8c1;
 }
+
 .back-btn {
   background: none;
   color: #1976d2;
@@ -492,6 +544,7 @@ function goBack(targetStep) {
   font-size: 1rem;
   transition: border 0.2s, color 0.2s;
 }
+
 .back-btn:hover:not(:disabled) {
   color: #1256a3;
   border: 1.5px solid #1976d2;
@@ -518,14 +571,22 @@ function goBack(targetStep) {
   box-shadow: 0 1px 4px #e5393522;
   animation: fadeIn 0.3s;
 }
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .fade-step-enter-active, .fade-step-leave-active {
   transition: opacity 0.3s, transform 0.3s;
 }
+
 .fade-step-enter-from, .fade-step-leave-to {
   opacity: 0;
   transform: translateY(20px);

@@ -30,6 +30,7 @@ import {
 import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
+import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 
 @Injectable()
 export class ProjectManagerService extends CommonHttpServiceImpl {
@@ -49,7 +50,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
     private readonly dataSource: DataSource,
-    private readonly githubService: GitHubService
+    private readonly githubService: GitHubService,
+    private readonly notificationService: NotificationManagerService
   ) {
     super();
   }
@@ -470,6 +472,29 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.logger.debug(
         `Project updated successfully with ID: ${updatedProject.id}`
       );
+
+      // Get project members to notify them about the update
+      const projectMembers = await this.projectRoleRepository
+        .createQueryBuilder('role')
+        .innerJoin('role.users', 'user')
+        .where('role.project = :projectId', { projectId })
+        .select(['user.id'])
+        .getMany();
+
+      const memberIds = projectMembers.flatMap(role =>
+        role.users?.map(user => user.id).filter(id => id !== uid) || []
+      );
+
+      // Notify all project members about the update
+      for (const memberId of memberIds) {
+        await this.notificationService.createNotification({
+          userId: memberId,
+          type: 'PROJECT_UPDATED',
+          message: `Project "${updatedProject.name}" has been updated by a team member.`,
+          createdBy: uid,
+        });
+      }
+
       return updatedProject;
     } catch (error) {
       this.logger.debug('Rolling back transaction');

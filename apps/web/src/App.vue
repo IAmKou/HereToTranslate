@@ -3,6 +3,9 @@
     <Toast position="top-right" />
     <router-view />
 
+    <!-- AI Chat Bubble - Only show when user is logged in -->
+    <AiChatBubble v-if="isLoggedIn" />
+
     <!-- Project Invitation Popup - Disabled to avoid duplicate notifications -->
     <!-- <ProjectInvitationPopup
       v-if="showInvitationPopup"
@@ -16,16 +19,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from './services/auth.service';
 import { projectInvitationService, type ProjectInvitation } from './services/project-invitation.service';
 import ProjectInvitationPopup from './components/ProjectInvitationPopup.vue';
+import AiChatBubble from './components/AiChatBubble.vue';
 
 const router = useRouter();
 const showInvitationPopup = ref(false);
 const currentInvitation = ref<ProjectInvitation | null>(null);
 let invitationCheckInterval: NodeJS.Timeout | null = null;
+
+// Check if user is logged in - using reactive auth state
+const authState = authService.getAuthState();
+const isLoggedIn = computed(() => {
+  return !!(authState.value && authState.value.id);
+});
 
 const checkForNewInvitations = async () => {
   try {
@@ -61,9 +71,9 @@ const handleInvitationResponse = (invitation: ProjectInvitation) => {
   setTimeout(checkForNewInvitations, 1000);
 };
 
-onMounted(() => {
-  // Temporarily disable getCurrentUser to debug login issue
-  // authService.getCurrentUser();
+onMounted(async () => {
+  // Initialize auth state on app load
+  await authService.getCurrentUser();
 
   // Check for invitations every 30 seconds - Disabled to avoid duplicate notifications
   // invitationCheckInterval = setInterval(checkForNewInvitations, 30000);

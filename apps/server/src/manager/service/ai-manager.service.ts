@@ -13,17 +13,21 @@ export class AiChatService {
 
   constructor() {
     const { OPENAI_API_KEY, PINECONE_API_KEY, PINECONE_INDEX, PINECONE_INDEX_HOST } = process.env;
-    if (!OPENAI_API_KEY || !PINECONE_API_KEY || !PINECONE_INDEX || !PINECONE_INDEX_HOST) {
-      throw new Error('❌ Missing environment variables for OpenAI or Pinecone');
+
+    // Check if environment variables are set
+    if (OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_INDEX && PINECONE_INDEX_HOST) {
+      this.openai = new OpenAI({
+        apiKey: OPENAI_API_KEY,
+      });
+
+      this.pinecone = new Pinecone({
+        apiKey: PINECONE_API_KEY,
+      });
+
+      this.logger.log('✅ AI service initialized with OpenAI and Pinecone');
+    } else {
+      this.logger.warn('⚠️ Missing environment variables for OpenAI or Pinecone. Running in simple mode.');
     }
-
-    this.openai = new OpenAI({
-      apiKey: OPENAI_API_KEY,
-    });
-
-    this.pinecone = new Pinecone({
-      apiKey: PINECONE_API_KEY,
-    });
   }
 
   /**
@@ -96,49 +100,73 @@ export class AiChatService {
    * 🔹 Ask GPT with context retrieved from Pinecone
    */
   async ask(question: string): Promise<string> {
-    const indexName = process.env.PINECONE_INDEX!;
-    const indexHost = process.env.PINECONE_INDEX_HOST!;
-    const openaiKey = process.env.OPENAI_API_KEY!;
+    // Check if AI services are available
+    if (!this.openai || !this.pinecone) {
+      return this.getSimpleResponse(question);
+    }
 
-    const index = this.pinecone.Index(indexName, indexHost);
+    try {
+      const indexName = process.env.PINECONE_INDEX!;
+      const indexHost = process.env.PINECONE_INDEX_HOST!;
+      const openaiKey = process.env.OPENAI_API_KEY!;
 
-    const embeddings = new OpenAIEmbeddings({
-      apiKey: openaiKey,
-      modelName: 'text-embedding-ada-002',
-    });
-    const queryEmbedding = await embeddings.embedQuery(question);
+      const index = this.pinecone.Index(indexName, indexHost);
 
-    const queryResponse = await index.query({
-      vector: queryEmbedding,
-      topK: 5,
-      includeMetadata: true,
-    });
+      const embeddings = new OpenAIEmbeddings({
+        apiKey: openaiKey,
+        modelName: 'text-embedding-ada-002',
+      });
+      const queryEmbedding = await embeddings.embedQuery(question);
 
-    const context = queryResponse.matches
-      .map((match: any) => match.metadata?.content)
-      .filter((c: string | undefined) => !!c)
-      .join('\n\n');
+      const queryResponse = await index.query({
+        vector: queryEmbedding,
+        topK: 5,
+        includeMetadata: true,
+      });
 
-    this.logger.log(`🔍 Retrieved ${queryResponse.matches.length} context chunks`);
+      const context = queryResponse.matches
+        .map((match: any) => match.metadata?.content)
+        .filter((c: string | undefined) => !!c)
+        .join('\n\n');
 
-    const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant. Use the context to answer.',
-        },
-        {
-          role: 'assistant',
-          content: `Context:\n${context}`,
-        },
-        {
-          role: 'user',
-          content: question,
-        },
-      ],
-    });
+      this.logger.log(`🔍 Retrieved ${queryResponse.matches.length} context chunks`);
 
-    return completion.choices[0].message.content ?? '';
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant. Use the context to answer.',
+          },
+          {
+            role: 'assistant',
+            content: `Context:\n${context}`,
+          },
+          {
+            role: 'user',
+            content: question,
+          },
+        ],
+      });
+
+      return completion.choices[0].message.content ?? '';
+    } catch (error) {
+      this.logger.error('Error in AI service:', error);
+      return this.getSimpleResponse(question);
+    }
+  }
+
+  /**
+   * 🔹 Simple response when AI services are not available
+   */
+  private getSimpleResponse(question: string): string {
+    const responses = [
+      `I received your message: "${question}". I'm currently running in simple mode. To enable full AI capabilities, please set up your OpenAI and Pinecone environment variables.`,
+      `Thanks for your message: "${question}". I'm here to help, but I'm currently in basic mode. For enhanced AI responses, configure your API keys.`,
+      `Hello! I got your message: "${question}". I'm working in simple mode right now. Set up your AI environment variables for better responses.`,
+      `I understand you said: "${question}". Currently running in basic mode. Configure OpenAI and Pinecone for advanced AI features.`
+    ];
+
+    return responses[Math.floor(Math.random() * responses.length)];
   }
 }

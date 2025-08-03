@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ref } from 'vue';
 import { getEnvironmentConfig } from '../utils/environment';
 
 // Dynamic BASE_URL that updates based on current environment
@@ -38,6 +39,7 @@ export interface User {
 
 class AuthService {
   private user: User | null = null;
+  private authState = ref<User | null>(null);
 
   constructor() {
     // Configure axios to send cookies with requests
@@ -51,6 +53,7 @@ class AuthService {
       // Only set user if login was successful
       if (response.data && response.data.user) {
         this.user = response.data.user as User;
+        this.authState.value = response.data.user as User;
         console.log('✅ AuthService - User set after successful login:', this.user);
       } else {
         console.error('❌ AuthService - No user data in response');
@@ -65,6 +68,7 @@ class AuthService {
 
       // Clear user data on login failure to ensure clean state
       this.user = null;
+      this.authState.value = null;
       console.log('❌ AuthService - Login failed, user data cleared');
 
       // Re-throw the error so LoginView can handle it
@@ -95,6 +99,7 @@ class AuthService {
       }
 
       this.user = response.data.user as User;
+      this.authState.value = response.data.user as User;
       console.log('🔍 AuthService - User stored in service:', this.user);
       console.log('🔍 AuthService - User role:', this.user?.role);
 
@@ -112,6 +117,7 @@ class AuthService {
     try {
       const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/refresh`);
       this.user = response.data.user as User;
+      this.authState.value = response.data.user as User;
       return response.data;
     } catch (error) {
       this.clearAuthData();
@@ -141,9 +147,11 @@ class AuthService {
       }
 
       this.user = user;
+      this.authState.value = user;
       return this.user;
     } catch (error) {
       this.user = null;
+      this.authState.value = null;
       return null;
     }
   }
@@ -165,8 +173,13 @@ class AuthService {
     return this.user;
   }
 
+  getAuthState() {
+    return this.authState;
+  }
+
   clearAuthData(): void {
     this.user = null;
+    this.authState.value = null;
     console.log('🔍 AuthService - User data cleared');
   }
 }

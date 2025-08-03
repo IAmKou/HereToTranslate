@@ -182,22 +182,41 @@ export class NotificationManagerService {
       throw new NotFoundException('Notification not found');
     }
 
-    // TODO: Send realtime deletion
-    // if (notification.isGlobal) {
-    //   this.notificationGateway.server.emit('notification_deleted', { id: id.toString() });
-    // } else if (notification.userId) {
-    //   this.notificationGateway.server.to(`user_${notification.userId}`).emit('notification_deleted', { id: id.toString() });
-    // }
+    // Send realtime deletion notification
+    try {
+      if (notification.isGlobal) {
+        this.notificationGateway.emitDeletionToAll(id.toString());
+      } else if (notification.userId) {
+        this.notificationGateway.emitDeletionToUser(notification.userId, id.toString());
+      }
+    } catch (error) {
+      console.error('Failed to send realtime deletion notification:', error);
+      // Don't fail the deletion if realtime fails
+    }
   }
 
   async deleteAllUserNotifications(userId: bigint): Promise<void> {
     await this.notificationRepository.delete({ userId });
+
+    // Send realtime deletion notification
+    try {
+      this.notificationGateway.emitDeletionToUser(userId, 'all_user');
+    } catch (error) {
+      console.error('Failed to send realtime deletion notification:', error);
+      // Don't fail the deletion if realtime fails
+    }
   }
 
   async deleteAllGlobalNotifications(): Promise<void> {
     await this.notificationRepository.delete({ isGlobal: true });
-    // TODO: Send realtime deletion
-    // this.notificationGateway.server.emit('all_global_notifications_deleted');
+
+    // Send realtime deletion notification
+    try {
+      this.notificationGateway.emitDeletionToAll('all_global');
+    } catch (error) {
+      console.error('Failed to send realtime deletion notification:', error);
+      // Don't fail the deletion if realtime fails
+    }
   }
 
   async getNotificationCount(userId: bigint): Promise<number> {

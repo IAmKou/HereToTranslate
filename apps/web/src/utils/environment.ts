@@ -24,17 +24,17 @@ export function getEnvironmentConfig(): EnvironmentConfig {
   let serverUrl: string;
 
   if (isRadVPN) {
-    // RadVPN access: use same IP for API
-    apiUrl = `${protocol}//${hostname}:3000/api`;
-    serverUrl = `${protocol}//${hostname}:3000`;
+    // RadVPN access: use production URL
+    apiUrl = 'https://htt-ekpa.onrender.com/api';
+    serverUrl = 'https://htt-ekpa.onrender.com';
   } else if (isLocalhost) {
     // Localhost access: use localhost API
     apiUrl = 'http://localhost:3000/api';
     serverUrl = 'http://localhost:3000';
   } else {
-    // Other IP: assume server on same IP
-    apiUrl = `${protocol}//${hostname}:3000/api`;
-    serverUrl = `${protocol}//${hostname}:3000`;
+    // Production or other environments: use production URL
+    apiUrl = 'https://htt-ekpa.onrender.com/api';
+    serverUrl = 'https://htt-ekpa.onrender.com';
   }
 
   // Manual override support (optional for advanced users)

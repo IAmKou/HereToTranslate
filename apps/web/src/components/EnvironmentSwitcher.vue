@@ -78,8 +78,8 @@ function switchTo(env: 'localhost' | 'radVPN' | 'auto') {
       localStorage.setItem('FORCE_SERVER_URL', 'http://localhost:3000')
       break
     case 'radVPN':
-      localStorage.setItem('FORCE_API_URL', 'http://26.82.216.71:3000/api')
-      localStorage.setItem('FORCE_SERVER_URL', 'http://26.82.216.71:3000')
+      localStorage.setItem('FORCE_API_URL', 'https://htt-ekpa.onrender.com/api')
+      localStorage.setItem('FORCE_SERVER_URL', 'https://htt-ekpa.onrender.com')
       break
     case 'auto':
       localStorage.removeItem('FORCE_API_URL')

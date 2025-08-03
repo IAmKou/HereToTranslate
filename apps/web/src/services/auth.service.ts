@@ -48,9 +48,14 @@ class AuthService {
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials);
+      const response = await axios.post<AuthResponse>(
+        `${getBaseUrl()}/auth/login`,
+        credentials,
+        {
+          withCredentials: true, // ✅ Required for cookie-based login
+        }
+      );
 
-      // Only set user if login was successful
       if (response.data && response.data.user) {
         this.user = response.data.user as User;
         this.authState.value = response.data.user as User;
@@ -66,15 +71,14 @@ class AuthService {
       console.error('❌ AuthService - Error response:', error.response?.data);
       console.error('❌ AuthService - Error status:', error.response?.status);
 
-      // Clear user data on login failure to ensure clean state
       this.user = null;
       this.authState.value = null;
       console.log('❌ AuthService - Login failed, user data cleared');
 
-      // Re-throw the error so LoginView can handle it
       throw error;
     }
   }
+
 
   async register(data: RegisterData): Promise<any> {
     const response = await axios.post(`${getBaseUrl()}/auth/register`, data);

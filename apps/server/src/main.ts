@@ -34,10 +34,10 @@ async function bootstrap() {
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
   app.enableCors({
     origin: [
-      'http://localhost:4200',
-      'http://26.82.216.71:4200',
+      process.env.CLIENT_URL || 'http://localhost:4200',
+      process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com',
       /^http:\/\/26\.82\.216\.\d+:4200$/ ,
-      'https://heretotranslate-lrdi.onrender.com'// Allow any IP in RadVPN range
+      'https://heretotranslate-lrdi.onrender.com'
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,

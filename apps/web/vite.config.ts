@@ -6,8 +6,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, '../../.env'), '');
 
   // Flexible environment configuration
-  const LOCALHOST_SERVER = 'http://localhost:3000';
-  const RADV_PN_SERVER = 'http://26.82.216.71:3000';
+  const LOCALHOST_SERVER = process.env.API_URL || 'http://localhost:3000';
+  const RADV_PN_SERVER = process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com';
 
   // Smart detection: Use localhost by default, RadVPN when specified
   const API_SERVER_URL = env.VITE_API_URL?.replace('/api', '') || LOCALHOST_SERVER;

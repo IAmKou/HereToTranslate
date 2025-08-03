@@ -134,8 +134,8 @@ export class PaypalService {
             },
           ],
           application_context: {
-            return_url: `http://localhost:4200/paypal-success`,
-            cancel_url: `http://localhost:4200/paypal/cancel`,
+            return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
+            cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
             shipping_preference: 'SET_PROVIDED_ADDRESS',
             brand_name: 'HereToTranslate',
             user_action: 'PAY_NOW',
@@ -255,8 +255,8 @@ export class PaypalService {
             },
           ],
           application_context: {
-            return_url: `http://localhost:4200/paypal-success`,
-            cancel_url: `http://localhost:4200/paypal/cancel`,
+            return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
+            cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
           },
         },
         {

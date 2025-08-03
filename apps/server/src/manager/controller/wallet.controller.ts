@@ -65,7 +65,7 @@ export class WalletController {
     try {
       const clientId = process.env.PAYPAL_CLIENT_ID;
       const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-      const redirectUri = process.env.PAYPAL_REDIRECT_URI || 'http://localhost:3000/api/wallet/paypal/callback';
+      const redirectUri = process.env.PAYPAL_REDIRECT_URI || `${process.env.API_URL || 'http://localhost:3000'}/api/wallet/paypal/callback`;
       const tokenRes = await axios.post(
         'https://api.sandbox.paypal.com/v1/oauth2/token',
         new URLSearchParams({

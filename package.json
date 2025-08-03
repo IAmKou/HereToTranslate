@@ -2,7 +2,11 @@
   "name": "@here-to-translate/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "build:frontend": "npx nx build @here-to-translate/web",
+    "build:common": "npx nx build @here-to-translate/common",
+    "build:static": "npm run build:common && npm run build:frontend"
+  },
   "private": true,
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",

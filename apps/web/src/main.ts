@@ -8,7 +8,6 @@ import { createPinia } from 'pinia';
 // PrimeVue
 import PrimeVue from 'primevue/config';
 import 'primevue/resources/primevue.min.css';
-import 'primevue/resources/themes/lara-light-indigo/theme.css';
 import 'primeicons/primeicons.css';
 
 import Button from 'primevue/button';

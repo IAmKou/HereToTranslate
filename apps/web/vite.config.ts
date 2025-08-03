@@ -20,18 +20,23 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_API_URL': JSON.stringify(API_SERVER_URL + '/api'),
       'import.meta.env.VITE_SERVER_URL': JSON.stringify(CHAT_SERVER_URL),
     },
+    resolve: {
+      alias: {
+        '@here-to-translate/common': path.resolve(__dirname, '../../libs/common/src/index.ts'),
+      },
+    },
     server: {
       port: 4200,
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: API_SERVER_URL,// ✅ localhost for API calls
+          target: API_SERVER_URL,
           changeOrigin: true,
           secure: false,
           ws: true,
         },
         '/socket.io': {
-          target: CHAT_SERVER_URL,// ✅ remote server for chat
+          target: CHAT_SERVER_URL,
           ws: true,
           changeOrigin: true,
         },
@@ -48,6 +53,23 @@ export default defineConfig(({ mode }) => {
       reportCompressedSize: true,
       commonjsOptions: {
         transformMixedEsModules: true,
+      },
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['vue', 'vue-router', 'pinia'],
+            utils: ['axios', 'date-fns'],
+            emoji: ['emoji-mart-vue-fast', '@emoji-mart/data'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 1000,
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: mode === 'production',
+          drop_debugger: mode === 'production',
+        },
       },
     },
   };

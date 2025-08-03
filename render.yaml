@@ -1,45 +1,14 @@
 services:
   - type: web
-    name: here-to-translate-server
-    env: docker
+    name: here-to-translate-frontend
+    env: static
     region: singapore
     branch: main
     autoDeploy: true
-    dockerfilePath: ./Dockerfile
+    buildCommand: npm ci && npx nx build @here-to-translate/web
+    staticPublishPath: ./apps/web/dist
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: MYSQL_HOST
-        value: htt.mysql.database.azure.com
-      - key: MYSQL_PORT
-        value: "3306"
-      - key: MYSQL_USER
-        value: shared@httmysqlserver
-      - key: MYSQL_PASSWORD
-        fromSecret: MYSQL_PASSWORD
-      - key: MYSQL_DATABASE
-        value: htt
-      - key: MONGODB_URI
-        fromSecret: MONGODB_URI
-      - key: JWT_SECRET
-        fromSecret: JWT_SECRET
-      - key: GOOGLE_OAUTH2_CLIENT
-        value: 580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com
-      - key: PAYPAL_CLIENT_ID
-        fromSecret: PAYPAL_CLIENT_ID
-      - key: PAYPAL_CLIENT_SECRET
-        fromSecret: PAYPAL_CLIENT_SECRET
-      - key: PAYPAL_API
-        value: https://api-m.sandbox.paypal.com
-      - key: GITHUB_PAT
-        fromSecret: GITHUB_PAT
-      - key: GITHUB_USERNAME
-        value: IAmKou
-      - key: OPENAI_API_KEY
-        fromSecret: OPENAI_API_KEY
-      - key: PINECONE_API_KEY
-        fromSecret: PINECONE_API_KEY
-      - key: PINECONE_INDEX_HOST
-        value: https://support-docs-oj9hn0l.svc.aped-4627-b74a.pinecone.io
-      - key: PINECONE_INDEX
-        value: support-docs
+      - key: VITE_API_URL
+        value: https://your-backend-api-url.com/api
+      - key: VITE_SERVER_URL
+        value: https://your-backend-api-url.com

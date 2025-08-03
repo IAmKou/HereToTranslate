@@ -236,15 +236,73 @@ router.beforeEach((to, from, next) => {
   console.log('🔍 Router Guard - Is admin:', isAdmin);
   console.log('🔍 Router Guard - Current user:', currentUser);
 
+  // If user is already on login page and authenticated, redirect to appropriate home
+  if (to.path === '/login' && isAuthenticated) {
+    if (isAdmin) {
+      console.log('🔍 Router Guard - Authenticated admin on login page, redirecting to adminhome');
+      next('/adminhome');
+    } else {
+      console.log('🔍 Router Guard - Authenticated user on login page, redirecting to userhome');
+      next('/userhome');
+    }
+    return;
+  }
+
+  // Allow access to login page even if not authenticated
+  if (to.path === '/login') {
+    console.log('🔍 Router Guard - Allowing access to login page');
+    next();
+    return;
+  }
+
+  // Allow access to home page even if not authenticated (public page)
+  if (to.path === '/') {
+    console.log('🔍 Router Guard - Allowing access to home page');
+    next();
+    return;
+  }
+
+  // Allow access to register page even if not authenticated
+  if (to.path === '/register') {
+    console.log('🔍 Router Guard - Allowing access to register page');
+    next();
+    return;
+  }
+
+  // Allow access to forgot password page even if not authenticated
+  if (to.path === '/forgot-password') {
+    console.log('🔍 Router Guard - Allowing access to forgot password page');
+    next();
+    return;
+  }
+
+  // Allow access to oauth callback page even if not authenticated
+  if (to.path === '/oauth-callback') {
+    console.log('🔍 Router Guard - Allowing access to oauth callback page');
+    next();
+    return;
+  }
+
+  // Allow access to public pages even if not authenticated
+  if (to.path === '/all-requests') {
+    console.log('🔍 Router Guard - Allowing access to public requests page');
+    next();
+    return;
+  }
+
+  // Allow access to paypal success page even if not authenticated
+  if (to.path === '/paypal-success') {
+    console.log('🔍 Router Guard - Allowing access to paypal success page');
+    next();
+    return;
+  }
+
   if (requiresAuth && !isAuthenticated) {
     console.log('🔍 Router Guard - Redirecting to / (not authenticated)');
     next('/');
   } else if (requiresAdmin && !isAdmin) {
     console.log('🔍 Router Guard - Redirecting to /userhome (not admin)');
     next('/userhome');
-  } else if (to.path === '/login' && isAuthenticated) {
-    console.log('🔍 Router Guard - Redirecting authenticated user from login');
-    next(isAdmin ? '/adminhome' : '/userhome');
   } else {
     console.log('🔍 Router Guard - Allowing navigation to:', to.path);
     next();

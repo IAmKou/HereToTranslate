@@ -538,7 +538,21 @@ const getTypeLabel = (type: string): string => {
     announcement: 'Announcement',
     update: 'Update',
     maintenance: 'Maintenance',
-    alert: 'Alert'
+    alert: 'Alert',
+    PRIVATE_REQUEST_CREATED: 'Private Request',
+    PUBLIC_REQUEST_REGISTERED: 'Request Registration',
+    REGISTRANT_APPROVED: 'Registration Approved',
+    PRIVATE_REQUEST_ACCEPTED: 'Request Accepted',
+    PRIVATE_REQUEST_DECLINED: 'Request Declined',
+    WITHDRAW_REQUEST: 'Withdrawal Request',
+    WITHDRAW_APPROVED: 'Withdrawal Approved',
+    GROUP_UPDATED: 'Group Updated',
+    GROUP_DELETED: 'Group Deleted',
+    USER_ADDED_TO_GROUP: 'User Added to Group',
+    USER_REMOVED_FROM_GROUP: 'User Removed from Group',
+    PROJECT_UPDATED: 'Project Updated',
+    USER_ADDED_TO_PROJECT: 'User Added to Project',
+    USER_REMOVED_FROM_PROJECT: 'User Removed from Project'
   }
   return labels[type] || 'Notification'
 }

@@ -14,6 +14,7 @@ import {
 import { ProjectGroupEntity, UserEntity, ProjectEntity } from '#LocalProject/Entities';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
+import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 
 @Injectable()
 export class GroupManagerService extends CommonHttpServiceImpl {
@@ -26,7 +27,8 @@ export class GroupManagerService extends CommonHttpServiceImpl {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
-    private readonly projectManager: ProjectManagerService
+    private readonly projectManager: ProjectManagerService,
+    private readonly notificationService: NotificationManagerService
   ) {
     super();
   }
@@ -137,6 +139,27 @@ export class GroupManagerService extends CommonHttpServiceImpl {
       this.logger.debug(
         `Project group updated successfully with ID: ${updatedGroup.id}`
       );
+
+      // Send notification to all group members
+      try {
+        const groupWithMembers = await this.projectGroupRepository.findOne({
+          where: { id: BigInt(groupId) },
+          relations: ['members', 'project'],
+        });
+
+        if (groupWithMembers && groupWithMembers.members) {
+          for (const member of groupWithMembers.members) {
+            await this.notificationService.createNotification({
+              type: 'GROUP_UPDATED',
+              message: `Group ${groupWithMembers.name} has been updated in project ${groupWithMembers.project.name}`,
+              userId: member.id,
+            });
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to send group update notification:', error);
+      }
+
       return updatedGroup;
     } catch (error) {
       this.unknownErrorHanlder(
@@ -166,10 +189,32 @@ export class GroupManagerService extends CommonHttpServiceImpl {
     }
 
     try {
+      // Get group members before deleting
+      const groupWithMembers = await this.projectGroupRepository.findOne({
+        where: { id: BigInt(groupId) },
+        relations: ['members', 'project'],
+      });
+
       await this.projectGroupRepository.remove(group);
       this.logger.debug(
         `Project group deleted successfully with ID: ${group.id}`
       );
+
+      // Send notification to all former group members
+      try {
+        if (groupWithMembers && groupWithMembers.members) {
+          for (const member of groupWithMembers.members) {
+            await this.notificationService.createNotification({
+              type: 'GROUP_DELETED',
+              message: `Group ${groupWithMembers.name} has been deleted from project ${groupWithMembers.project.name}`,
+              userId: member.id,
+            });
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to send group deletion notification:', error);
+      }
+
       return { message: `Project group deleted successfully` };
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to delete project group');
@@ -279,6 +324,27 @@ export class GroupManagerService extends CommonHttpServiceImpl {
     try {
       const updatedGroup = await this.projectGroupRepository.save(group);
       this.logger.debug(`Users added to group successfully`, { updatedGroup });
+
+      // Send notification to added users
+      try {
+        const groupWithProject = await this.projectGroupRepository.findOne({
+          where: { id: BigInt(groupId) },
+          relations: ['project'],
+        });
+
+        if (groupWithProject) {
+          for (const user of usersToAdd) {
+            await this.notificationService.createNotification({
+              type: 'USER_ADDED_TO_GROUP',
+              message: `You have been added to group ${groupWithProject.name} in project ${groupWithProject.project.name}`,
+              userId: user.id,
+            });
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to send user added to group notification:', error);
+      }
+
       return updatedGroup;
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to add users to group');
@@ -320,6 +386,31 @@ export class GroupManagerService extends CommonHttpServiceImpl {
       this.logger.debug(`Users removed from group successfully`, {
         updatedGroup,
       });
+
+      // Send notification to removed users
+      try {
+        const groupWithProject = await this.projectGroupRepository.findOne({
+          where: { id: BigInt(groupId) },
+          relations: ['project'],
+        });
+
+        if (groupWithProject) {
+          const removedUsers = await this.userRepository.findBy({
+            id: In(userIds.map(id => BigInt(id))),
+          });
+
+          for (const user of removedUsers) {
+            await this.notificationService.createNotification({
+              type: 'USER_REMOVED_FROM_GROUP',
+              message: `You have been removed from group ${groupWithProject.name} in project ${groupWithProject.project.name}`,
+              userId: user.id,
+            });
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to send user removed from group notification:', error);
+      }
+
       return updatedGroup;
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to remove users from group');

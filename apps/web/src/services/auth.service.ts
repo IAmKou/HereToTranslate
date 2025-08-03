@@ -45,9 +45,31 @@ class AuthService {
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials);
-    this.user = response.data.user as User;
-    return response.data;
+    try {
+      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials);
+
+      // Only set user if login was successful
+      if (response.data && response.data.user) {
+        this.user = response.data.user as User;
+        console.log('✅ AuthService - User set after successful login:', this.user);
+      } else {
+        console.error('❌ AuthService - No user data in response');
+        throw new Error('Invalid response from server - no user data');
+      }
+
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ AuthService - login failed:', error);
+      console.error('❌ AuthService - Error response:', error.response?.data);
+      console.error('❌ AuthService - Error status:', error.response?.status);
+
+      // Clear user data on login failure to ensure clean state
+      this.user = null;
+      console.log('❌ AuthService - Login failed, user data cleared');
+
+      // Re-throw the error so LoginView can handle it
+      throw error;
+    }
   }
 
   async register(data: RegisterData): Promise<any> {
@@ -128,7 +150,8 @@ class AuthService {
 
 
   isAuthenticated(): boolean {
-    return !!this.user;
+    // Only return true if user exists and has an id
+    return !!(this.user && this.user.id);
   }
 
   isAdmin(): boolean {
@@ -142,8 +165,9 @@ class AuthService {
     return this.user;
   }
 
-  private clearAuthData(): void {
+  clearAuthData(): void {
     this.user = null;
+    console.log('🔍 AuthService - User data cleared');
   }
 }
 

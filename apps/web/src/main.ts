@@ -54,7 +54,8 @@ async function bootstrap() {
   axios.interceptors.response.use(
     response => response,
     error => {
-      if (error.response && error.response.status === 401) {
+      if (error.response && error.response.status === 401 && router.currentRoute.value.path !== '/login') {
+        console.log('🔍 Axios Interceptor - 401 error, redirecting to /');
         router.push('/');
       }
       return Promise.reject(error);

@@ -5,7 +5,8 @@
   "scripts": {
     "build:frontend": "npx nx build @here-to-translate/web",
     "build:common": "npx nx build @here-to-translate/common",
-    "build:static": "npm run build:common && npm run build:frontend"
+    "build:static": "npm run build:common && npm run build:frontend",
+    "build:render": "npm ci && npx nx@21.1.3 build @here-to-translate/common && npx nx@21.1.3 build @here-to-translate/web"
   },
   "private": true,
   "dependencies": {

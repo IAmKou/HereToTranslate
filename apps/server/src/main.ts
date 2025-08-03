@@ -32,7 +32,7 @@ async function bootstrap() {
         'http://localhost:4200',
         'http://26.82.216.71:4200',
         /^http:\/\/26\.82\.216\.\d+:4200$/,
-        'https://heretotranslate-lrdi.onrender.com',
+        'https://heretotranslate.onrender.com',
       ],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,

@@ -5,7 +5,11 @@ echo "🚀 Building frontend for production..."
 
 # Install dependencies
 echo "📦 Installing dependencies..."
-npm ci --only=production --ignore-scripts
+npm ci
+
+# Ensure Nx is available
+echo "🔧 Ensuring Nx is available..."
+npx nx --version
 
 # Build the static site
 echo "🌐 Building static site..."

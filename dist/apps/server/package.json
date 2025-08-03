@@ -1,0 +1,131 @@
+{
+  "name": "@here-to-translate/server",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "@nx/webpack:webpack",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "dist/apps/server",
+          "main": "apps/server/src/main.ts",
+          "tsConfig": "apps/server/tsconfig.app.json",
+          "webpackConfig": "apps/server/webpack.config.cjs"
+        },
+        "configurations": {
+          "production": {
+            "optimization": true,
+            "sourceMap": false,
+            "extractLicenses": true
+          },
+          "development": {
+            "sourceMap": true,
+            "optimization": false
+          }
+        }
+      },
+      "serve": {
+        "executor": "@nx/js:node",
+        "defaultConfiguration": "development",
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "buildTarget": "@here-to-translate/server:build",
+          "runBuildTargetDependencies": false
+        },
+        "configurations": {
+          "development": {
+            "args": [
+              "node-options=--experimental-require-module"
+            ],
+            "buildTarget": "@here-to-translate/server:build:development"
+          },
+          "production": {
+            "args": [
+              "node-options=--experimental-require-module"
+            ],
+            "buildTarget": "@here-to-translate/server:build:production"
+          }
+        }
+      },
+      "test": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/server/jest.config.js",
+          "passWithNoTests": true
+        }
+      }
+    },
+    "dependencies": {
+      "@here-to-translate/common": "^0.0.1",
+      "date-fns": "^4.1.0",
+      "docx": "^9.5.1",
+      "docx-parser": "^0.2.1",
+      "openai": "^5.10.2",
+      "pdf-lib": "^1.17.1",
+      "pdf-parse": "^1.1.1",
+      "socket.io": "^4.8.1",
+      "socket.io-client": "^4.8.1"
+    }
+  },
+  "dependencies": {
+    "@langchain/community": "0.3.49",
+    "@langchain/core": "0.3.66",
+    "@langchain/openai": "0.6.3",
+    "@nestjs-modules/mailer": "1.11.2",
+    "@nestjs/bull": "11.0.3",
+    "@nestjs/config": "4.0.2",
+    "@nestjs/core": "11.1.5",
+    "@nestjs/jwt": "11.0.0",
+    "@nestjs/passport": "11.0.5",
+    "@nestjs/platform-express": "11.1.5",
+    "@nestjs/platform-socket.io": "11.1.5",
+    "@nestjs/schedule": "6.0.0",
+    "@nestjs/swagger": "11.2.0",
+    "@nestjs/typeorm": "11.0.0",
+    "@nestjs/websockets": "11.1.5",
+    "@octokit/rest": "22.0.0",
+    "@pinecone-database/pinecone": "6.1.2",
+    "bcryptjs": "3.0.2",
+    "bull": "4.16.5",
+    "cheerio": "1.1.2",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.14.2",
+    "cookie-parser": "1.4.7",
+    "date-fns": "2.30.0",
+    "docx": "^9.5.1",
+    "docx4js": "3.3.0",
+    "dotenv": "16.6.1",
+    "express": "5.1.0",
+    "form-data": "4.0.4",
+    "google-auth-library": "9.15.1",
+    "ioredis": "5.7.0",
+    "mammoth": "1.9.1",
+    "mongodb": "6.18.0",
+    "mongoose": "8.17.0",
+    "multer": "2.0.2",
+    "mysql2": "3.14.3",
+    "nodemailer": "7.0.5",
+    "openai": "4.104.0",
+    "passport": "0.7.0",
+    "passport-jwt": "4.0.1",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "1.1.1",
+    "pdfjs-dist": "3.11.174",
+    "reflect-metadata": "0.1.14",
+    "rxjs": "7.8.2",
+    "socket.io": "4.8.1",
+    "typeorm": "0.3.25",
+    "uuid": "11.1.0",
+    "ws": "8.18.3",
+    "zod": "3.25.76"
+  },
+  "main": "main.js"
+}

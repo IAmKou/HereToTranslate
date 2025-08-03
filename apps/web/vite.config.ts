@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [vue()],
     build: {
-      outDir: './dist',
+      outDir: '../../dist/apps/web',
       emptyOutDir: true,
       reportCompressedSize: true,
       commonjsOptions: {

@@ -92,6 +92,7 @@ export class PaymentController {
     if (!orderId) {
       throw new HttpException('Missing orderId', 400);
     }
+    // Gọi capturePayment, có thể tuỳ chỉnh nếu cần phân biệt loại giao dịch
     try {
       const result = await this.paymentService.capturePayment(orderId);
       return result || { success: true };

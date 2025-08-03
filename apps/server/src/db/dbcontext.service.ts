@@ -13,11 +13,6 @@ export class DbContextService implements OnModuleInit, OnModuleDestroy {
 
   // Automatically called when the NestJS module is initialized
   async onModuleInit() {
-    // this.logger.log('DbContextService initializing...');
-    // await Promise.all([
-    //   this.mongoDb.init(),    // Init MongoDB connection
-    //   this.mySqlDb.init(),    // Init MySQL connection
-    // ]);
     this.logger.log('DbContextService initialized successfully.');
   }
 
@@ -38,7 +33,7 @@ export class DbContextService implements OnModuleInit, OnModuleDestroy {
 
   // Getter for MySQL
   get mysql() {
-    return this.mySqlDb.getDataSource();
+    return this.mySqlDb.dataSource;
   }
 
   // Manual reconnect function for all databases

@@ -6,16 +6,16 @@
         <span class="material-icons search-icon">search</span>
       </div>
       <div class="header-actions">
-        <button class="icon-btn"><span class="material-icons">notifications_none</span></button>
+        <RealtimeNotifications />
         <button class="icon-btn"><span class="material-icons">chat_bubble_outline</span></button>
-        <img src="../assets/avatar.png" class="avatar" alt="avatar" />
+        <img src="../assets/logo.png" class="avatar" alt="avatar" />
       </div>
     </div>
   </header>
 </template>
 
 <script setup>
-// Không cần script nếu chỉ là layout
+import RealtimeNotifications from './RealtimeNotifications.vue'
 </script>
 
 <style scoped>

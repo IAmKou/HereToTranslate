@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import Navbar from '../components/Navbar.vue';
+import HomeNavbar from '../components/HomeNavbar.vue';
 import AppFooter from '../components/AppFooter.vue';
 
 const router = useRouter();
-
-const navigateToRequest = () => {
-  router.push('/create-project');
-};
 
 const navigateToJoin = () => {
   router.push('/register');
@@ -49,7 +45,7 @@ const supportedLanguages = ref([
 
 <template>
   <div class="app-layout">
-    <Navbar />
+    <HomeNavbar />
     <div class="main-content">
       <main class="landing-page">
         <!-- Hero Section -->
@@ -72,20 +68,14 @@ const supportedLanguages = ref([
                 <span class="gradient-text">Simplified.</span>
               </h1>
               <p class="hero-subtitle">
-                Connect with verified translators or submit translation requests in just a few clicks.
-                Experience seamless communication across languages.
+                Join our community of verified translators and start earning by helping people communicate across languages.
+                Experience professional translation opportunities.
               </p>
               <div class="hero-buttons">
                 <Button
-                  label="Request Translation"
-                  icon="pi pi-plus"
-                  class="p-button-primary p-button-lg hero-btn-primary"
-                  @click="navigateToRequest"
-                />
-                <Button
                   label="Join as Translator"
                   icon="pi pi-user-plus"
-                  class="p-button-outlined p-button-lg hero-btn-secondary"
+                  class="p-button-primary p-button-lg hero-btn-primary"
                   @click="navigateToJoin"
                 />
               </div>
@@ -95,12 +85,12 @@ const supportedLanguages = ref([
                   <div class="stat-label">Languages</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-number">1000+</div>
-                  <div class="stat-label">Translators</div>
+                  <div class="stat-number">24/7</div>
+                  <div class="stat-label">Support</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-number">24h</div>
-                  <div class="stat-label">Delivery</div>
+                  <div class="stat-number">Secure</div>
+                  <div class="stat-label">Platform</div>
                 </div>
               </div>
             </div>
@@ -217,20 +207,14 @@ const supportedLanguages = ref([
               <template #content>
                 <div class="cta-content">
                   <div class="cta-text">
-                    <h2>Ready to Get Started?</h2>
-                    <p>Join thousands of users who trust us for their translation needs</p>
+                    <h2>Ready to Start Translating?</h2>
+                    <p>Join thousands of professional translators in our community</p>
                   </div>
                   <div class="cta-buttons">
                     <Button
-                      label="Start Your First Project"
-                      icon="pi pi-rocket"
-                      class="p-button-primary p-button-lg"
-                      @click="navigateToRequest"
-                    />
-                    <Button
                       label="Become a Translator"
                       icon="pi pi-user-plus"
-                      class="p-button-outlined p-button-lg"
+                      class="p-button-primary p-button-lg"
                       @click="navigateToJoin"
                     />
                   </div>
@@ -250,13 +234,15 @@ const supportedLanguages = ref([
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  font-family: 'Inter', sans-serif;
 }
 
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 56px);
+  min-height: 100vh;
+  padding-top: 70px; /* Account for fixed navbar */
 }
 
 .landing-page {
@@ -271,7 +257,7 @@ const supportedLanguages = ref([
 
 /* Hero Section */
 .hero-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #7B61FF 0%, #8F6EFF 100%);
   color: white;
   padding: 120px 0 100px;
   min-height: 90vh;
@@ -373,6 +359,7 @@ const supportedLanguages = ref([
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  font-family: 'Inter', sans-serif;
 }
 
 .hero-subtitle {
@@ -388,6 +375,7 @@ const supportedLanguages = ref([
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 60px;
+  justify-content: flex-start;
 }
 
 .hero-btn-primary {
@@ -398,6 +386,7 @@ const supportedLanguages = ref([
   padding: 16px 32px !important;
   border-radius: 12px !important;
   transition: all 0.3s ease !important;
+  font-family: 'Inter', sans-serif !important;
 }
 
 .hero-btn-primary:hover {
@@ -798,6 +787,10 @@ const supportedLanguages = ref([
   }
 
   .cta-buttons {
+    justify-content: center;
+  }
+
+  .hero-buttons {
     justify-content: center;
   }
 

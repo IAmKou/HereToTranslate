@@ -15,8 +15,18 @@
           <h2>Create Account</h2>
           <p class="subtitle">Join our community today</p>
         </div>
-        <div v-if="message" :class="['message', messageType]" style="margin-bottom: 1.5rem;">
-          <i :class="messageType === 'success' ? 'pi pi-check-circle' : 'pi pi-times-circle'"></i>
+        <div
+          v-if="message"
+          :class="['message', messageType]"
+          style="margin-bottom: 1.5rem"
+        >
+          <i
+            :class="
+              messageType === 'success'
+                ? 'pi pi-check-circle'
+                : 'pi pi-times-circle'
+            "
+          ></i>
           {{ message }}
         </div>
         <form @submit.prevent="submitForm" class="form-content">
@@ -31,7 +41,7 @@
               @input="validateField('username')"
               @blur="validateField('username')"
               placeholder="Enter your username"
-              :class="{'input-error': errors.username}"
+              :class="{ 'input-error': errors.username }"
             />
             <div v-if="errors.username" class="error-message">
               <i class="pi pi-exclamation-circle"></i>
@@ -51,7 +61,7 @@
               @blur="validateField('email')"
               type="email"
               placeholder="Enter your email"
-              :class="{'input-error': errors.email}"
+              :class="{ 'input-error': errors.email }"
             />
             <div v-if="errors.email" class="error-message">
               <i class="pi pi-exclamation-circle"></i>
@@ -72,7 +82,7 @@
                 @blur="validateField('password')"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="Enter your password"
-                :class="{'input-error': errors.password}"
+                :class="{ 'input-error': errors.password }"
               />
               <button
                 type="button"
@@ -101,14 +111,16 @@
                 @blur="validateField('confirmPassword')"
                 :type="showConfirmPassword ? 'text' : 'password'"
                 placeholder="Confirm your password"
-                :class="{'input-error': errors.confirmPassword}"
+                :class="{ 'input-error': errors.confirmPassword }"
               />
               <button
                 type="button"
                 class="toggle-password"
                 @click="showConfirmPassword = !showConfirmPassword"
               >
-                <i :class="showConfirmPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+                <i
+                  :class="showConfirmPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"
+                ></i>
               </button>
             </div>
             <div v-if="errors.confirmPassword" class="error-message">
@@ -128,7 +140,7 @@
               @input="validateField('phone')"
               @blur="validateField('phone')"
               placeholder="Enter your phone number (e.g. +84123456789)"
-              :class="{'input-error': errors.phone}"
+              :class="{ 'input-error': errors.phone }"
             />
             <div v-if="errors.phone" class="error-message">
               <i class="pi pi-exclamation-circle"></i>
@@ -147,7 +159,7 @@
               @input="validateField('fullName')"
               @blur="validateField('fullName')"
               placeholder="Enter your full name"
-              :class="{'input-error': errors.fullName}"
+              :class="{ 'input-error': errors.fullName }"
             />
             <div v-if="errors.fullName" class="error-message">
               <i class="pi pi-exclamation-circle"></i>
@@ -179,7 +191,7 @@ const form = reactive({
   confirmPassword: '',
   phone: '',
   fullName: '',
-  roleId: 2,
+  roleId: 3,
 });
 
 const message = ref('');
@@ -192,7 +204,7 @@ const router = useRouter();
 
 const validateForm = () => {
   // Clear all previous errors
-  Object.keys(errors).forEach(key => (errors[key] = ''));
+  Object.keys(errors).forEach((key) => (errors[key] = ''));
   let valid = true;
 
   // Username validation
@@ -218,9 +230,11 @@ const validateForm = () => {
     errors.password = 'Password is required';
     valid = false;
   } else {
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    const passwordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(form.password)) {
-      errors.password = 'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character';
+      errors.password =
+        'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character';
       valid = false;
     }
   }
@@ -241,7 +255,8 @@ const validateForm = () => {
   } else {
     const phoneRegex = /^\+[1-9]\d{1,14}$/;
     if (!phoneRegex.test(form.phone)) {
-      errors.phone = 'Phone number must be a valid international format, e.g. +84123456789';
+      errors.phone =
+        'Phone number must be a valid international format, e.g. +84123456789';
       valid = false;
     }
   }
@@ -280,9 +295,11 @@ const validateField = (field) => {
       if (!form.password) {
         errors.password = 'Password is required';
       } else {
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        const passwordRegex =
+          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!passwordRegex.test(form.password)) {
-          errors.password = 'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character';
+          errors.password =
+            'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character';
         } else {
           errors.password = '';
         }
@@ -303,7 +320,8 @@ const validateField = (field) => {
       } else {
         const phoneRegex = /^\+[1-9]\d{1,14}$/;
         if (!phoneRegex.test(form.phone)) {
-          errors.phone = 'Phone number must be a valid international format, e.g. +84123456789';
+          errors.phone =
+            'Phone number must be a valid international format, e.g. +84123456789';
         } else {
           errors.phone = '';
         }
@@ -331,7 +349,7 @@ const submitForm = async () => {
     roleId: form.roleId,
   };
   try {
-    await axios.post('http://localhost:3000/api/auth/register', payload);
+    await axios.post((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/users/register', payload);
     message.value = 'Register sucess! You will be redirected to login page.';
     messageType.value = 'success';
     Object.assign(form, {
@@ -346,7 +364,8 @@ const submitForm = async () => {
       router.push('/login');
     }, 3000);
   } catch (err) {
-    message.value = err.response?.data?.message || 'Register failed. Please try again.';
+    message.value =
+      err.response?.data?.message || 'Register failed. Please try again.';
     messageType.value = 'error';
   } finally {
     isSubmitting.value = false;
@@ -363,7 +382,7 @@ const submitForm = async () => {
 
 .logo-section {
   width: 50%;
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -380,10 +399,10 @@ const submitForm = async () => {
   height: 220px;
   object-fit: contain;
   margin-bottom: 2rem;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   padding: 2rem;
-  box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
 .logo-content h1 {
@@ -439,7 +458,7 @@ label {
 }
 
 label i {
-  color: #4CAF50;
+  color: #4caf50;
 }
 
 input {
@@ -454,7 +473,7 @@ input {
 
 input:focus {
   outline: none;
-  border-color: #4CAF50;
+  border-color: #4caf50;
   box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
   background-color: white;
 }
@@ -488,13 +507,13 @@ input:focus {
 
 .toggle-password:hover {
   background-color: #f0f0f0;
-  color: #4CAF50;
+  color: #4caf50;
 }
 
 .submit-button {
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -593,7 +612,8 @@ input:focus {
   .register-container {
     flex-direction: column;
   }
-  .logo-section, .form-section {
+  .logo-section,
+  .form-section {
     width: 100%;
   }
   .logo-img {

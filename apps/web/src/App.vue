@@ -1,11 +1,92 @@
 <template>
   <div class="app-layout">
+    <Toast position="top-right" />
     <router-view />
+
+    <!-- AI Chat Bubble - Only show when user is logged in -->
+    <AiChatBubble v-if="isLoggedIn" />
+
+    <!-- Project Invitation Popup - Disabled to avoid duplicate notifications -->
+    <!-- <ProjectInvitationPopup
+      v-if="showInvitationPopup"
+      :invitation="currentInvitation"
+      :show="showInvitationPopup"
+      @dismiss="dismissInvitationPopup"
+      @see-all="navigateToInvitations"
+      @invitation-responded="handleInvitationResponse"
+    /> -->
   </div>
 </template>
 
 <script setup lang="ts">
-// No imports needed
+import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { authService } from './services/auth.service';
+import { projectInvitationService, type ProjectInvitation } from './services/project-invitation.service';
+import ProjectInvitationPopup from './components/ProjectInvitationPopup.vue';
+import AiChatBubble from './components/AiChatBubble.vue';
+
+const router = useRouter();
+const showInvitationPopup = ref(false);
+const currentInvitation = ref<ProjectInvitation | null>(null);
+let invitationCheckInterval: NodeJS.Timeout | null = null;
+
+// Check if user is logged in - using reactive auth state
+const authState = authService.getAuthState();
+const isLoggedIn = computed(() => {
+  return !!(authState.value && authState.value.id);
+});
+
+const checkForNewInvitations = async () => {
+  try {
+    const response = await projectInvitationService.getMyInvitations('pending');
+    if (response.invitations.length > 0 && !showInvitationPopup.value) {
+      // Show the first pending invitation
+      currentInvitation.value = response.invitations[0];
+      showInvitationPopup.value = true;
+
+      // Auto hide after 10 seconds
+      setTimeout(() => {
+        dismissInvitationPopup();
+      }, 10000);
+    }
+  } catch (error) {
+    console.error('Error checking for invitations:', error);
+  }
+};
+
+const dismissInvitationPopup = () => {
+  showInvitationPopup.value = false;
+  currentInvitation.value = null;
+};
+
+const navigateToInvitations = () => {
+  router.push('/project-invitations');
+  dismissInvitationPopup();
+};
+
+const handleInvitationResponse = (invitation: ProjectInvitation) => {
+  dismissInvitationPopup();
+  // Check for more invitations
+  setTimeout(checkForNewInvitations, 1000);
+};
+
+onMounted(async () => {
+  // Initialize auth state on app load
+  await authService.getCurrentUser();
+
+  // Check for invitations every 30 seconds - Disabled to avoid duplicate notifications
+  // invitationCheckInterval = setInterval(checkForNewInvitations, 30000);
+
+  // Initial check after 5 seconds - Disabled to avoid duplicate notifications
+  // setTimeout(checkForNewInvitations, 5000);
+});
+
+onUnmounted(() => {
+  if (invitationCheckInterval) {
+    clearInterval(invitationCheckInterval);
+  }
+});
 </script>
 
 <style>
@@ -135,5 +216,10 @@ body {
   .p-4 {
     padding: 0.75rem;
   }
+}
+
+body.modal-open .header,
+body.modal-open .sidebar {
+  z-index: 10 !important;
 }
 </style>

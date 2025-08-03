@@ -26,6 +26,7 @@ import { WalletManagerService } from '#LocalProject/Managers/service/wallet-mana
 import { FileService } from '#LocalProject/Managers/service/file-manager.service';
 import { logger } from 'nx/src/utils/logger';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
+import { NotificationManagerService } from './notification-manager.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -57,6 +58,7 @@ export class RequestManagerService {
     private readonly paymentService: PaypalService,
     private readonly fileService: FileService,
     private readonly projectService: ProjectManagerService,
+    private readonly notificationService: NotificationManagerService,
   ) {}
 
   async createRequest(
@@ -116,7 +118,16 @@ export class RequestManagerService {
       tags: requestTags,
     });
 
-    return await this.requestRepository.save(request);
+    const savedRequest = await this.requestRepository.save(request);
+
+    // Create global notification for new public request
+    await this.notificationService.createGlobalNotification({
+      type: 'PUBLIC_REQUEST_CREATED',
+      message: `New public request available: "${title}" - $${dealAmount}`,
+      createdBy: uid,
+    });
+
+    return savedRequest;
   }
 
   async createPrivateRequest(
@@ -186,6 +197,14 @@ export class RequestManagerService {
 
     const assigneeUser = await this.userRepository.findOneOrFail({
       where: { id: BigInt(dto.assigneeId) },
+    });
+
+    // Create notification for assignee about new private request
+    await this.notificationService.createNotification({
+      userId: BigInt(dto.assigneeId),
+      type: 'PRIVATE_REQUEST_CREATED',
+      message: `You have received a new private request: "${title}" from ${requesterUser.fullName || requesterUser.username}`,
+      createdBy: uid,
     });
 
     if (assigneeUser?.email) {
@@ -635,10 +654,19 @@ export class RequestManagerService {
 
     // Also update the old registrants array for backward compatibility
     if (!request.registrants) request.registrants = [];
+
     if (!request.registrants.some((u) => u.id === register.id)) {
       request.registrants.push(register);
       await this.requestRepository.save(request);
     }
+
+    // Create notification for requester about new registration
+    await this.notificationService.createNotification({
+      userId: request.requester.id,
+      type: 'PUBLIC_REQUEST_REGISTERED',
+      message: `${register.fullName || register.username} has registered for your public request: "${request.title}"`,
+      createdBy: BigInt(uid),
+    });
 
     const requesterEmail = request.requester.email;
 
@@ -770,6 +798,14 @@ export class RequestManagerService {
     await this.walletRepository.save(wallet);
     await this.requestRepository.save(request);
 
+    // Create notification for requester about declined private request
+    await this.notificationService.createNotification({
+      userId: request.requester.id,
+      type: 'PRIVATE_REQUEST_DECLINED',
+      message: `Your private request "${request.title}" has been declined by the assigned translator.`,
+      createdBy: request.assignee?.id || BigInt(0),
+    });
+
     return true;
   }
 
@@ -809,6 +845,14 @@ export class RequestManagerService {
 
       await queryRunner.manager.save(request);
       await queryRunner.commitTransaction();
+
+      // Create notification for requester about accepted private request
+      await this.notificationService.createNotification({
+        userId: request.requester.id,
+        type: 'PRIVATE_REQUEST_ACCEPTED',
+        message: `Your private request "${request.title}" has been accepted and a project has been created!`,
+        createdBy: assigneeId,
+      });
 
       return {
         success: true,

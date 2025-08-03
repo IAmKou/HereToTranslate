@@ -1,17 +1,18 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { ProjectGroupEntity } from './projectGroup.entity';
+import { ProjectGroupEntity } from './project-group.entity';
 
 export enum TaskStatus {
-  Pending = 'PENDING',
-  InProgress = 'IN_PROGRESS',
-  Completed = 'COMPLETED',
+  Pending = 'pending',
+  InProgress = 'in_progress',
+  Completed = 'completed',
+  Closed = 'closed',
 }
 
 @Entity('task')
 export class TaskEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: bigint;
 
   @Column()
   title: string;
@@ -22,18 +23,40 @@ export class TaskEntity {
   @Column({ type: 'enum', enum: TaskStatus, default: TaskStatus.Pending })
   status: TaskStatus;
 
+  @Column({ type: 'varchar', nullable: true })
+  projectId?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  branchId?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  fileId?: string;
+
+  @Column({ type: 'int', nullable: true })
+  filePart?: number;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  language?: string;
+
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
-  assignedTo: UserEntity;
+  assignedTo?: UserEntity;
 
   @ManyToOne(() => ProjectGroupEntity, { nullable: true, onDelete: 'SET NULL' })
-  group: ProjectGroupEntity;
+  group?: ProjectGroupEntity;
 
   @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
   createdBy: UserEntity;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'datetime', nullable: true })
   dueDate: Date;
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  startedAt?: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  completedAt?: Date;
 }
+

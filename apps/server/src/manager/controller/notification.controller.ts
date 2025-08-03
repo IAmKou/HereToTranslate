@@ -11,12 +11,13 @@ import {
   Query,
   ParseIntPipe,
   Patch,
+  Put,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
-import { NotificationManagerService, CreateNotificationDto } from '../service/notification-manager.service';
+import { NotificationManagerService, CreateNotificationDto, UpdateNotificationDto } from '../service/notification-manager.service';
 
 @Controller('notifications')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -147,8 +148,34 @@ export class NotificationController {
       throw new Error('Unauthorized access to notification');
     }
 
-    // await this.notificationService.deleteNotification(id);
+    await this.notificationService.deleteNotification(id);
     return { message: 'Notification deleted successfully' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put(':id')
+  async updateNotification(
+    @Param('id', BigIntTransformPipe) id: bigint,
+    @Body() data: UpdateNotificationDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    // First check if notification belongs to user
+    const notification = await this.notificationService.getNotificationById(id);
+    if (!notification.isGlobal && notification.userId !== req.user.id) {
+      throw new Error('Unauthorized access to notification');
+    }
+
+    const updatedNotification = await this.notificationService.updateNotification(id, data);
+    return {
+      id: updatedNotification.id.toString(),
+      type: updatedNotification.type,
+      message: updatedNotification.message,
+      isRead: updatedNotification.isRead,
+      readAt: updatedNotification.readAt,
+      createdAt: updatedNotification.createdAt,
+      updatedAt: updatedNotification.updatedAt,
+      isGlobal: updatedNotification.isGlobal,
+    };
   }
 
   @UseGuards(JwtAuthGuard)

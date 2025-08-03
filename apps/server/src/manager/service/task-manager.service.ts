@@ -427,6 +427,12 @@ export class TaskManagerService {
   }
 
   async getTaskHistory(taskId: string) {
+    // For now, return only the creation history since we don't have a real history table yet
+    // In a real implementation, you would:
+    // 1. Create a TaskHistory entity/table
+    // 2. Log all task changes to that table
+    // 3. Query the history from the database
+
     try {
       // Get the actual task to show creation history
       const task = await this.taskRepository.findOne({

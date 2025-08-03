@@ -223,7 +223,6 @@ export class UserManagerService {
       relations: ['role'],
     });
   }
-
   async searchByEmailOrUsername(
     identifier: string
   ): Promise<UserEntity | null> {

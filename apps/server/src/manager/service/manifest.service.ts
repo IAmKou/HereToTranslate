@@ -96,8 +96,9 @@ function groupTextByLine(items: any, yThreshold = 5) {
     if (lineItems.length > 0) {
       lineText = lineItems[0].text;
       for (let i = 1; i < lineItems.length; i++) {
-        const prev = lineItems[i - 1];
+        const prev = lineItems[i-1];
         const curr = lineItems[i];
+
 
         const spaceThreshold = (prev.height || 10) * 0.25;
         const gap = curr.x - (prev.x + (prev.width || 0));
@@ -115,6 +116,30 @@ function groupTextByLine(items: any, yThreshold = 5) {
       items: lineItems, // Giữ lại các item gốc của dòng
     };
   });
+}
+
+// Hàm mới để chia part theo trang
+function assignFilePartsByPage(manifestEntries: any[]): void {
+  // Nhóm các entries theo trang
+  const entriesByPage = new Map<number, any[]>();
+
+  for (const entry of manifestEntries) {
+    const page = entry.position?.page || 1; // Mặc định page 1 nếu không có thông tin trang
+    if (!entriesByPage.has(page)) {
+      entriesByPage.set(page, []);
+    }
+    entriesByPage.get(page)!.push(entry);
+  }
+
+  // Gán filePart theo số trang
+  const sortedPages = Array.from(entriesByPage.keys()).sort((a, b) => a - b);
+  for (let i = 0; i < sortedPages.length; i++) {
+    const page = sortedPages[i];
+    const entries = entriesByPage.get(page)!;
+    for (const entry of entries) {
+      entry.filePart = i; // Bắt đầu từ 0
+    }
+  }
 }
 
 @Injectable()
@@ -190,6 +215,7 @@ export class ManifestService {
               originalText: lineObj.text,
               language: 'en',
               font: lineObj.items[0]?.font || 'default',
+              fontSize: lineObj.items[0]?.fontSize,
               style: {
                 bold: lineObj.items.some((i) => i.bold),
                 italic: lineObj.items.some((i) => i.italic),
@@ -374,6 +400,10 @@ export class ManifestService {
       }
     }
 
+    // Chia part theo trang thay vì theo số lượng string cố định
+    assignFilePartsByPage(manifestEntries);
+    console.log(`[MANIFEST] Assigned file parts by page. Total entries: ${manifestEntries.length}`);
+
     // Trước khi insertMany, set obsolete: false cho từng manifestEntries
     for (const entry of manifestEntries) {
       entry.obsolete = false;
@@ -386,11 +416,13 @@ export class ManifestService {
         language: entry.language,
       });
       if (existing) {
-        // Nếu đã có, chỉ update obsolete: false
-        await this.translationModel.updateOne(
-          { _id: existing._id },
-          { $set: { obsolete: false } }
-        );
+        // Nếu đã có, chỉ update obsolete: false và filePart mới
+        await this.translationModel.updateOne({ _id: existing._id }, {
+          $set: {
+            obsolete: false,
+            filePart: entry.filePart
+          }
+        });
       } else {
         // Nếu chưa có, insert mới
         await this.translationModel.create(entry);
@@ -416,6 +448,7 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
     page: number;
   }[];
 }> {
+  // Thiết lập worker cho pdfjs-dist
   pdfjs.GlobalWorkerOptions.workerSrc = path.resolve(
     __dirname,
     '../../../../../../node_modules/pdfjs-dist/build/pdf.worker.js'

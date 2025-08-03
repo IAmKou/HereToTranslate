@@ -8,6 +8,9 @@ export class CreateProjectInvitationDto {
   @IsOptional()
   @IsString()
   message?: string;
+
+  @IsOptional()
+  expiresIn?: string; // Number of days until expiration (as string from form)
 }
 
 export class UpdateInvitationStatusDto {

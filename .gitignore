@@ -8,8 +8,7 @@
 vite.config.*.timestamp*
 vitest.config.*.timestamp*
 test-output
-.nx/cache
-.nx/workspace-data
+.nx/
 apps/*/dist
 apps/*/node_modules
 apps/*/out-tsc
@@ -51,11 +50,11 @@ Thumbs.db
 !.vscode/extensions.json
 
 # dotenv environment variable files
-.env
+.env.sayuri
 .env.development.local
 .env.test.local
 .env.production.local
-.env.local
+.env
 
 # temp directory
 .temp

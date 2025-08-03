@@ -24,9 +24,16 @@
             <input
               id="username"
               v-model="username"
+              @blur="validateUsername"
+              @input="clearUsernameError"
               placeholder="Enter your username"
+              :class="{ 'error-input': usernameError }"
               required
             />
+            <div v-if="usernameError" class="field-error">
+              <i class="pi pi-exclamation-circle"></i>
+              {{ usernameError }}
+            </div>
           </div>
 
           <div class="form-group">
@@ -38,8 +45,11 @@
               <input
                 id="password"
                 v-model="password"
+                @blur="validatePassword"
+                @input="clearPasswordError"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="Enter your password"
+                :class="{ 'error-input': passwordError }"
                 required
               />
               <button
@@ -50,17 +60,29 @@
                 <i :class="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
               </button>
             </div>
-            <div style="text-align: right; margin-top: 0.25rem;">
-              <router-link to="/forgot-password" style="font-size: 0.95em; color: #4CAF50; text-decoration: underline;">Forgot Password?</router-link>
+            <div v-if="passwordError" class="field-error">
+              <i class="pi pi-exclamation-circle"></i>
+              {{ passwordError }}
+            </div>
+            <div style="text-align: right; margin-top: 0.25rem">
+              <router-link
+                to="/forgot-password"
+                style="
+                  font-size: 0.95em;
+                  color: #4caf50;
+                  text-decoration: underline;
+                "
+              >Forgot Password?</router-link
+              >
             </div>
           </div>
 
-          <div v-if="error" class="error-message">
+          <div v-if="error" class="error-message" style="display: block !important; margin-bottom: 1rem; opacity: 1 !important;">
             <i class="pi pi-exclamation-circle"></i>
-            {{ error }}
+            <strong>{{ error }}</strong>
           </div>
 
-          <button type="submit" class="submit-button" :disabled="isSubmitting">
+          <button type="submit" class="submit-button" :disabled="isSubmitting || hasValidationErrors">
             <span v-if="isSubmitting" class="loading-spinner"></span>
             <i v-else class="pi pi-sign-in"></i>
             {{ isSubmitting ? 'Signing in...' : 'Log In' }}
@@ -69,12 +91,6 @@
           <div class="divider">
             <span>or</span>
           </div>
-
-          <div class="google-signin">
-            <div id="g_id_onload"></div>
-            <div id="g_id_signin"></div>
-          </div>
-
           <div class="register-section">
             <p>Don't have an account?</p>
             <button type="button" class="register-button" @click="goToRegister">
@@ -83,13 +99,19 @@
             </button>
           </div>
         </form>
+        <div class="google-signin">
+          <button @click="signInWithGoogleRedirect" class="submit-button">
+            <i class="pi pi-google"></i>
+            Sign in with Google
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import logo from '../assets/logo.png';
@@ -99,27 +121,123 @@ const password = ref('');
 const error = ref('');
 const isSubmitting = ref(false);
 const showPassword = ref(false);
+const usernameError = ref('');
+const passwordError = ref('');
 const router = useRouter();
 
+// Computed property to check if there are any validation errors
+const hasValidationErrors = computed(() => {
+  return !!(usernameError.value || passwordError.value);
+});
+
+// Validation functions
+const validateUsername = () => {
+  if (!username.value.trim()) {
+    usernameError.value = 'Username is required';
+    return false;
+  }
+  // Remove minimum length requirement for username
+  usernameError.value = '';
+  return true;
+};
+
+const validatePassword = () => {
+  if (!password.value) {
+    passwordError.value = 'Password is required';
+    return false;
+  }
+  // Remove minimum length requirement for password
+  passwordError.value = '';
+  return true;
+};
+
+// Clear error functions
+const clearUsernameError = () => {
+  if (usernameError.value) {
+    usernameError.value = '';
+  }
+  // Also clear general error when user starts typing
+  if (error.value) {
+    error.value = '';
+  }
+};
+
+const clearPasswordError = () => {
+  if (passwordError.value) {
+    passwordError.value = '';
+  }
+  // Also clear general error when user starts typing
+  if (error.value) {
+    error.value = '';
+  }
+};
+
 const login = async () => {
+  // Clear previous errors but keep them visible for a moment
+  error.value = '';
+  console.log('Starting login process...');
+
+  // Force Vue to update the DOM
+  await nextTick();
+
+  // Validate all fields
+  const isUsernameValid = validateUsername();
+  const isPasswordValid = validatePassword();
+
+  if (!isUsernameValid || !isPasswordValid) {
+    console.log('Validation failed, not proceeding with login');
+    return; // Don't proceed if validation fails
+  }
+
   try {
     isSubmitting.value = true;
-    error.value = '';
-    await authService.login({
-      username: username.value,
+
+    const response = await authService.login({
+      username: username.value.trim(),
       password: password.value,
     });
 
     const user = authService.getUser();
-    if (user?.role === 'superadmin') {
-      await router.push('/adminhome');
-    } else if (user?.role === 'admin') {
-      await router.push('/adminhome');
+    console.log('Login successful, user role:', user?.role);
+
+    // Only redirect if login was successful and we have a user
+    if (user && user.id) {
+      if (user?.role?.id === 1) {
+        await router.push('/adminhome');
+      } else if (user?.role?.id === 2) {
+        await router.push('/adminhome');
+      } else {
+        await router.push('/userhome');
+      }
     } else {
-      await router.push('/userhome');
+      // If no user after login, something went wrong
+      error.value = 'Login failed. Please try again.';
     }
+
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Login failed.';
+    console.error('Login error:', err);
+
+    // Ensure user is cleared on login failure (auth service already does this)
+    authService.clearAuthData();
+
+    // Handle different types of errors
+    if (err.response) {
+      // Server responded with error status
+      const errorMessage = err.response.data?.message || err.response.data?.error || 'Invalid username or password';
+      error.value = errorMessage;
+      console.log('Setting error message:', errorMessage);
+    } else if (err.request) {
+      // Network error
+      error.value = 'Network error. Please check your connection and try again.';
+      console.log('Setting network error message');
+    } else {
+      // Other errors
+      error.value = err.message || 'Login failed. Please check your credentials and try again.';
+      console.log('Setting generic error message:', error.value);
+    }
+
+    // Ensure we stay on the login page by preventing any navigation
+    console.log('Login failed, staying on login page to show error');
   } finally {
     isSubmitting.value = false;
   }
@@ -129,52 +247,21 @@ const goToRegister = () => {
   router.push('/register');
 };
 
-onMounted(() => {
-  // Load Google Sign-In script
-  const script = document.createElement('script');
-  script.src = 'https://accounts.google.com/gsi/client';
-  script.async = true;
-  script.defer = true;
-  script.onload = () => {
-    // Initialize Google Sign-In after script loads
-    window.google.accounts.id.initialize({
-      client_id: '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com',
-      callback: handleGoogleSignIn
-    });
-    window.google.accounts.id.renderButton(
-      document.getElementById('g_id_signin'),
-      {
-        type: 'standard',
-        size: 'large',
-        theme: 'outline',
-        text: 'signin_with',
-        shape: 'rectangular',
-        logo_alignment: 'left'
-      }
-    );
-  };
-  document.head.appendChild(script);
-});
+const signInWithGoogleRedirect = () => {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com';
 
-const handleGoogleSignIn = async (response) => {
-  try {
-    isSubmitting.value = true;
-    error.value = '';
-    await authService.loginWithGoogle(response.credential);
+  // Use current window origin to support both localhost and network IP
+  const redirectUri = `${window.location.origin}/oauth-callback`;
 
-    const user = authService.getUser();
-    if (user?.role === 'superadmin') {
-      await router.push('/superadmin');
-    } else if (user?.role === 'admin') {
-      await router.push('/adminhome');
-    } else {
-      await router.push('/userhome');
-    }
-  } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Google sign-in failed.';
-  } finally {
-    isSubmitting.value = false;
-  }
+  console.log('🔍 Google OAuth - Client ID:', clientId);
+  console.log('🔍 Google OAuth - Redirect URI:', redirectUri);
+  console.log('🔍 Google OAuth - Window origin:', window.location.origin);
+
+  const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token id_token&scope=openid%20email%20profile&nonce=secure_nonce`;
+
+  console.log('🔍 Google OAuth - Full URL:', googleOAuthUrl);
+
+  window.location.href = googleOAuthUrl;
 };
 </script>
 
@@ -187,7 +274,7 @@ const handleGoogleSignIn = async (response) => {
 
 .logo-section {
   width: 50%;
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,10 +291,10 @@ const handleGoogleSignIn = async (response) => {
   height: 220px;
   object-fit: contain;
   margin-bottom: 2rem;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   padding: 2rem;
-  box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
 .logo-content h1 {
@@ -263,7 +350,7 @@ label {
 }
 
 label i {
-  color: #4CAF50;
+  color: #4caf50;
 }
 
 input {
@@ -278,9 +365,14 @@ input {
 
 input:focus {
   outline: none;
-  border-color: #4CAF50;
+  border-color: #4caf50;
   box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
   background-color: white;
+}
+
+input.error-input {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.2);
 }
 
 .password-input {
@@ -303,13 +395,13 @@ input:focus {
 
 .toggle-password:hover {
   background-color: #f0f0f0;
-  color: #4CAF50;
+  color: #4caf50;
 }
 
 .submit-button {
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -324,7 +416,7 @@ input:focus {
   margin-top: 1rem;
 }
 
-.submit-button:hover {
+.submit-button:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
 }
@@ -355,14 +447,33 @@ input:focus {
   color: #dc3545;
   font-size: 0.875rem;
   margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   animation: fadeIn 0.3s ease-in-out;
+  padding: 0.75rem;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
 }
 
 .error-message i {
   font-size: 1rem;
+}
+
+.field-error {
+  color: #dc3545;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.field-error i {
+  font-size: 0.9rem;
 }
 
 .divider {
@@ -416,8 +527,8 @@ input:focus {
 
 .register-button {
   background: white;
-  color: #4CAF50;
-  border: 2px solid #4CAF50;
+  color: #4caf50;
+  border: 2px solid #4caf50;
   padding: 0.75rem 1.5rem;
   border-radius: 12px;
   font-size: 1rem;
@@ -432,7 +543,7 @@ input:focus {
 }
 
 .register-button:hover {
-  background: #4CAF50;
+  background: #4caf50;
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(76, 175, 80, 0.2);
@@ -446,7 +557,8 @@ input:focus {
   .login-container {
     flex-direction: column;
   }
-  .logo-section, .form-section {
+  .logo-section,
+  .form-section {
     width: 100%;
   }
   .logo-img {

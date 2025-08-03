@@ -1,0 +1,430 @@
+[
+  {
+    "id": "doc-1",
+    "title": "Upload a file in project",
+    "content": "To upload a file to your translation project, start by navigating to your dashboard or clicking the 'Project' section in the left sidebar. From the list of projects, select the one you want to work on. Once inside the project view, switch to the 'Files' tab. Click the 'Add File' button to open the file upload dialog. You can then browse and select the document you want to upload from your device. Currently, the supported file types include .docx, .pdf, .txt, and .json. After selecting your file, confirm the upload and the file will be processed and prepared for translation. If you do not have an existing project, you’ll need to create or join one before uploading."
+  },
+  {
+    "id": "doc-2",
+    "title": "Reset password",
+    "content": "If you’ve forgotten your password, you can easily reset it by going to the login screen and clicking on the 'Forgot Password' link. Enter the email address associated with your account, and the system will send a password reset code to that email. Check your inbox (and spam folder if necessary) for the reset code. Once you receive it, return to the site, enter the code in the appropriate field, and follow the instructions to set a new password. Make sure your new password is strong and secure."
+  },
+  {
+    "id": "doc-3",
+    "title": "Update profile",
+    "content": "To update your profile information, click on your avatar located in the top right corner of the screen to open the user menu. Select the 'Profile' option to view and edit your user details. From here, you can update your full name, phone number, email address, profile photo, or any other personal information you’ve previously provided. Don’t forget to click 'Save Changes' once you've finished editing to ensure your updates are applied successfully."
+  },
+  {
+    "id": "doc-4",
+    "title": "Change password",
+    "content": "To change your current password, click on your avatar in the upper right corner of the screen and navigate to the 'Change Password' tab. You will need to enter your current password for security verification. Then, enter your new password and confirm it by typing it again. The new password should meet the system's strength requirements (e.g., a combination of uppercase, lowercase, numbers, and symbols). Once completed, click the 'Update Password' button to apply the change. You will be notified if the update is successful or if any issues occur."
+  },
+  {
+    "id": "doc-5",
+    "title": "Create project",
+    "content": "To create a new translation project, click on the 'Project' section in the left sidebar of your dashboard. Then, click on the 'Create New Project' button. You’ll be prompted to fill in the required details, such as project name, description, source language, target languages, and whether the project should be public or private. You can also set categories and tags to help organize the project. After entering all necessary information, press 'Create Project' to finalize and launch your new project."
+  },
+  {
+    "id": "doc-6",
+    "title": "Create public request",
+    "content": "To create a public translation request, go to the sidebar and click on 'My Requests'. Then click the 'Create New Request' button. In the form that appears, select 'Public Request' as the type. You’ll need to provide a request title, description, and upload the file you want translated (currently supported formats are .json, .txt, .docx, and .pdf). You can also select relevant categories and target languages. Once all required fields are completed, click 'Create Request'. Your request will then be visible to qualified translators for bidding or assignment."
+  },
+  {
+    "id": "doc-7",
+    "title": "Create private request",
+    "content": "To submit a private translation request, go to the 'My Requests' section in the sidebar and click on 'Create New Request'. Choose 'Private Request' as the request type. You will be asked to select a specific translator to assign the task to. After that, fill in the remaining information such as request title, description, file to translate (supported formats: .json, .txt, .docx, .pdf), and any special instructions. Once complete, click 'Create Request'. You’ll be redirected to the payment page where you must deposit a partial fee before the translator reviews your request. If they accept, the project begins; if declined, your deposit will be refunded."
+  },
+  {
+    "id": "doc-8",
+    "title": "Update project",
+    "content": "To make changes to an existing project, go to your dashboard or open the 'Project' tab from the sidebar. Choose the project you want to update. Inside the project view, click the 'Edit Project' button. You’ll then be able to modify information such as the project title, description, target languages, privacy setting, or associated tags. After making the necessary changes, click 'Update Project' to save your changes. These updates will be reflected immediately across the platform."
+  },
+  {
+    "id": "doc-9",
+    "title": "Delete project",
+    "content": "To delete a project from your account, open the 'Project' tab via the sidebar or your home screen. Navigate to the project you want to remove and click on the 'Delete Project' button. A confirmation dialog will appear to ensure you really want to proceed. Keep in mind that deleting a project will permanently remove all associated files, discussions, and translation history. If you’re sure, click 'Confirm Delete'. The system will then remove the project and notify you once the operation is successful."
+  },
+  {
+    "id": "doc-10",
+    "title": "Add user to project",
+    "content": "If you’re the owner of a project or have the necessary permissions (such as 'Manage Members'), you can add users to collaborate on your project. Start by opening the desired project via your dashboard or the 'Project' tab in the sidebar. Navigate to the 'Members' tab. Click on the 'Add User' button. A search bar will appear where you can enter the email or username of the person you wish to invite. Once found, click 'Add to Project'. The selected user will then be added as a member, and they’ll receive a notification to join the project workspace."
+  },
+
+
+
+    {
+      "id": "doc-11",
+      "title": "Remove member from project",
+      "content": "To remove a member from your project, you must either be the project owner or hold a role with the 'Manage Member' permission. Once verified, navigate to your project via the homepage or sidebar by clicking 'Project'. Inside the project, switch to the 'Member' tab where all current members are listed. Use the search bar to find the member you want to remove. Once located, click on the 'Remove Member' button next to their name. A confirmation prompt will appear to prevent accidental deletions. After confirming, the selected user will be removed from the project immediately and lose access to any project resources and permissions."
+    },
+    {
+      "id": "doc-12",
+      "title": "Create project role",
+      "content": "Creating a project role allows you to assign specific permissions to different team members. To do this, you must be the project owner or have a role with either 'Manage Roles' or 'Manage Member' permissions. Navigate to your project using the sidebar or homepage and click on the 'Roles' tab. Inside, you will find a list of existing roles and a 'Create Role' button. Click it to open the role creation form. Enter a role name and select the permissions you want this role to have (e.g., Edit Files, Manage Members, Approve Requests). Once complete, click 'Create'. This role will now be available to assign to members."
+    },
+    {
+      "id": "doc-13",
+      "title": "Edit project role",
+      "content": "To modify an existing project role, you must have permission to manage roles or be the project owner. First, go to the project via the sidebar or homepage, then open the 'Roles' tab. Here, you will see a list of roles that currently exist. Find the role you wish to change and click the 'Edit' button next to it. A modal or form will appear allowing you to rename the role or change its assigned permissions. After making your changes, click the 'Save' or 'Confirm' button. The role will be updated, and members assigned to that role will immediately reflect the new permissions."
+    },
+    {
+      "id": "doc-14",
+      "title": "Delete project role",
+      "content": "If a role is no longer needed, you can delete it by visiting the 'Roles' tab in your project. Only the project owner or users with 'Manage Roles' permissions can perform this action. After navigating to the 'Roles' tab, locate the role you want to remove in the list and click the 'Delete' button. You will be prompted with a confirmation dialog to prevent accidental deletions. Once confirmed, the role will be permanently deleted and any users assigned to it will lose its permissions. Make sure to reassign roles if necessary before deleting."
+    },
+    {
+      "id": "doc-15",
+      "title": "Assign role to member",
+      "content": "To assign a role to a member in your project, you must have the appropriate permissions to manage roles. Begin by entering your project from the sidebar, then navigate to the 'Roles' tab. You will see a list of members in your project. For each member, there will be an option labeled 'Assign Role'. Click on it and a dropdown or modal will appear listing all available roles. Choose the role you want to assign to the selected user and confirm the action. The user will instantly receive all the permissions associated with that role."
+    },
+    {
+      "id": "doc-16",
+      "title": "Remove role from member",
+      "content": "Removing a role from a member requires you to go to the 'Roles' tab in the target project. You must be the owner or have permission to manage roles. Within the 'Roles' section, locate the member from whom you want to remove a role. Click the 'Assign Role' or 'Manage Roles' button. A modal will appear showing all roles assigned to that member. Click the 'X' button next to the role you wish to remove, and confirm your action. The selected role will be removed immediately, revoking any permissions it provided."
+    },
+    {
+      "id": "doc-17",
+      "title": "Edit request",
+      "content": "To edit a translation request, go to 'My Request' from the sidebar. Locate the request you want to modify from the list. Click on the request and then select the 'Edit' button. You can update the request name, description, language details, and even replace the translation file. Make sure to save the changes by clicking the 'Update Request' button. Note: Requests that are already being worked on or completed may not be editable depending on your project’s policy."
+    },
+    {
+      "id": "doc-18",
+      "title": "Approve translator for request",
+      "content": "If you’re the request owner or project admin, you can approve translators who have registered for your public request. Go to the request from the 'My Request' tab. Inside the request, open the 'Registrants' or 'Candidates' section. Review the list of users who applied to translate. You can click on each user’s profile to view their details, contributions, and ratings. Once satisfied, click the 'Approve' button next to their name. The translator will be officially assigned to the request and can begin their work."
+    },
+    {
+      "id": "doc-19",
+      "title": "Register for public request",
+      "content": "To become a translator for a public request, navigate to the 'Public Requests' section from the sidebar. You’ll see a list of active translation requests submitted by other users. Browse the list and click on a request to view its details including the required language pair, file type, and description. If the request matches your skills, click the 'Register for this Request' button. Your request to join will be sent to the owner for approval. Once approved, you will gain access to the translation file and tools."
+    },
+    {
+      "id": "doc-20",
+      "title": "Cancel request",
+      "content": "To cancel a request you’ve created, go to 'My Request' in the sidebar and open the request you wish to cancel. Look for the 'Cancel Request' button, usually found at the bottom of the request detail page. After clicking it, you will be asked to confirm the cancellation. Once confirmed, the request will be closed and removed from active listings. Note that any ongoing translations or pending registrations will be terminated. Depending on platform policy, partial refunds may be processed for any unused deposit."
+    },
+
+
+    {
+      "id": "doc-21",
+      "title": "Withdraw",
+      "content": "To make a withdrawal, go to the 'Wallet' section in your sidebar. Inside your wallet dashboard, you will see a 'Withdraw' button. Click it to open the withdrawal form. You need to enter the exact amount you wish to withdraw and your PayPal email address where you want the money to be sent. Please double-check your email to avoid errors in payment delivery. Once submitted, the request will be processed by the admin team. Withdrawals typically take up to 24 hours to be reviewed and confirmed. You will be notified via email once the withdrawal is approved and completed."
+    },
+    {
+      "id": "doc-22",
+      "title": "View transaction history",
+      "content": "To view your full transaction history including deposits, withdrawals, and request payments, click 'Transaction History' in the sidebar. You will be taken to a page that displays all your past transactions in chronological order. Each entry includes the transaction type (deposit, withdrawal, request deposit, etc.), the amount, the receiver/sender, and the date and time. Use the filter or search bar to quickly find specific transactions. This helps you track your financial activity on the platform."
+    },
+    {
+      "id": "doc-23",
+      "title": "Add translation",
+      "content": "To contribute a translation, go to the project where you are assigned. Navigate to the 'Translation' tab within that project. You will see a list of files that require translation. Click on the specific file you want to work on. The system will display the source strings and provide input fields next to them. Enter your translation for each string and press the 'Save' button to save your progress. Your saved translations will be stored and can be reviewed or edited later. Make sure to translate accurately and completely before marking the file as done."
+    },
+    {
+      "id": "doc-24",
+      "title": "Preview translation",
+      "content": "To preview your translation before submission, go to your project and open the 'Translation' tab. Select the file you’ve been working on. Once you open it, click the 'Preview' button (usually found at the top or bottom of the translation editor). This feature will generate a simulated display of your translation in its original layout or context. It helps you ensure that the translations fit within the format, structure, and design of the original content, especially for documents like DOCX and PDFs. Carefully review the preview for any spacing issues or broken formatting before finalizing."
+    },
+    {
+      "id": "doc-25",
+      "title": "Delete file",
+      "content": "To delete a file from a project, navigate to the project and switch to the 'Files' tab. Locate the file you want to delete from the list. Click the three-dot menu (⋯) or options button next to that file. Choose 'Delete' from the dropdown menu. A confirmation modal will appear to prevent accidental deletion. Click 'Confirm' to complete the deletion. Please note that deleting a file is permanent and will remove all associated translation progress unless it has been backed up or exported beforehand."
+    },
+    {
+      "id": "doc-26",
+      "title": "Send comment",
+      "content": "To participate in a discussion and send a comment, go to the 'Discussions' tab inside your project. Open the discussion thread you want to join by clicking on its title. Scroll down to the comment section. Type your comment in the input box and press the 'Post Comment' button. Your comment will be instantly added to the thread and visible to other project members. Use this feature to ask questions, provide feedback, or discuss translations with collaborators."
+    },
+    {
+      "id": "doc-27",
+      "title": "Update comment",
+      "content": "To edit a comment you’ve posted in a discussion, go to your project and open the 'Discussions' tab. Select the discussion containing your comment. Find your comment in the thread. If you have permission to edit, you will see an 'Edit' icon (usually a pencil) next to your comment. Click it to enable edit mode. Make your changes, then click 'Save' or 'Update' to apply them. The comment will be updated and timestamped accordingly. Note that excessive editing may reduce transparency in public discussions."
+    },
+    {
+      "id": "doc-28",
+      "title": "Delete comment",
+      "content": "To remove a comment from a discussion thread, go to the relevant project and open the 'Discussions' tab. Click on the discussion that contains the comment. Locate your comment and click the 'Delete' icon (usually a trash can symbol). A confirmation dialog will appear. Confirm the action to permanently delete the comment. Deleted comments cannot be recovered. Only the comment author or users with admin/moderator rights can delete comments."
+    },
+    {
+      "id": "doc-29",
+      "title": "Create discussion",
+      "content": "To start a new discussion in a project, you must be the project owner or have the 'Manage Discussions' permission. Go to your project and open the 'Discussions' tab. You’ll see a list of all active discussion threads and a button labeled 'Create New Discussion'. Click it to open the creation form. Enter a meaningful title and a detailed description explaining the topic or issue you want to discuss. You can optionally tag the discussion or attach files depending on your project settings. Click 'Create Discussion' to post it. The new thread will be visible to all project members for interaction."
+    },
+    {
+      "id": "doc-30",
+      "title": "Update discussion",
+      "content": "To update a discussion thread, go to the 'Discussions' tab in your project and locate the discussion you created or have permission to edit. Click the three-dot action menu next to the discussion title and select 'Edit'. A modal or form will appear with the current title and description. Update the information as needed, then click 'Save Changes' to apply your edits. This is useful for clarifying discussion purposes or adding new context. Edited discussions will retain their comment history unless deleted."
+    },
+
+  {
+    "id": "doc-31",
+    "title": "Review Translation",
+    "content": "To review translation, go to your project, go to commit tab, there will be a list of translation need to be review, click review and see the content, then approve or reject it."
+  },
+  {
+    "id": "doc-32",
+    "title": "Create group",
+    "content": "To create a group, go to your project, go to group tab, there will be list of group have been created, click in create new group button, enter group name and add member then confirm."
+  },
+  {
+    "id": "doc-33",
+    "title": "Edit group",
+    "content": "To edit a group, go to your project, go to group tab, there will be list of group have been created, click in edit button in the group you want to edit, modify group name and member then confirm."
+  },
+  {
+    "id": "doc-34",
+    "title": "Delete group",
+    "content": "To delete a group, go to your project, go to group tab, there will be list of group have been created, click in delete button in the group you want to delete, then confirm."
+  },
+  {
+    "id": "doc-35",
+    "title": "Add member to group",
+    "content": "To add member to a group, go to your project, go to group tab, if you don't have any group create one, in there you can add member to your group, id you already have one click edit in the group you want to add, then add more member to that group."
+  },
+  {
+    "id": "doc-36",
+    "title": "Create task",
+    "content": "To create task, go to your project, go to task tab, enter title, description, choose the file and the part for the task, choose the language, assign to a member or a group, and choose the due date, then confirm."
+  },
+  {
+    "id": "doc-37",
+    "title": "Edit task",
+    "content": "To edit a task, go to your project, open the 'Task' tab, find the task you want to change, click the edit icon, and modify title, description, assigned user/group, part of file, or due date. Press 'Update Task' to confirm changes."
+  },
+  {
+    "id": "doc-38",
+    "title": "Delete task",
+    "content": "To delete a task, go to your project, open the 'Task' tab, find the task you want to delete, click the options button, and select 'Delete Task'. Confirm the action. Note: You can only delete tasks if you have the right permission in the project."
+  },
+  {
+    "id": "doc-39",
+    "title": "View assigned tasks",
+    "content": "To view tasks assigned to you, go to the project you are part of and click on the 'Task' tab. This will display all tasks created in that project. At the top of the task list, locate the filter dropdown labeled 'Assigned to'. Select the option 'Assigned to me' from this dropdown. This will filter the list to show only tasks where you are the assignee. Each task in the list includes details such as task title, assigned file, target language, deadline, and status. You can click on any task to view additional details, communicate with teammates via comments, or update its progress."
+  },
+
+    {
+      "id": "doc-41",
+      "title": "Add comment to task",
+      "content": "To communicate updates, questions, or feedback on a specific task, you can add comments directly to the task's detail view. Begin by navigating to your project from the sidebar and click the 'Task' tab. This will display a list of all tasks. Locate the task you want to comment on, either by scrolling or using the filter/search function. Click on the task to open its detail view. Scroll to the 'Comments' section where you'll see all previous comments from you and your team. To add a new comment, type your message in the provided text area and click the 'Post Comment' button. Your comment will appear below, timestamped and attributed to your username. All collaborators assigned to or viewing the task will be able to read your comment, making it an effective way to collaborate and share updates in real time."
+    },
+    {
+      "id": "doc-42",
+      "title": "Upload translation file",
+      "content": "Once you have completed the translation work assigned to you, you need to upload the finalized file so that it can be reviewed and stored in the system. Start by entering the related project and navigate to the 'Translation' tab. You will see a list of files requiring translation or updates. Locate the file you were working on and click the 'Upload Translation' button next to it. A modal dialog will appear prompting you to choose the completed translation file from your device. Currently, supported file formats include DOCX, TXT, PDF, and JSON. After selecting the file, click the 'Confirm' button to upload. The file will be versioned and saved into the system, and if the project requires reviews, it will automatically enter the quality assurance workflow. This ensures traceability and review consistency throughout the project lifecycle."
+    },
+    {
+      "id": "doc-43",
+      "title": "Compare translation versions",
+      "content": "To ensure translation quality or track changes made over time, you can compare different versions of a translated file. Go to your project and open the 'Translation' tab. Locate the file you want to inspect and click on it to view its detail screen. Scroll down to the 'Version History' section, where all past submissions of that file are listed, along with timestamps and contributor names. Use the provided comparison buttons or checkboxes to select two versions you’d like to compare. Click the 'Compare' button to view a side-by-side diff screen, where changes will be color-coded: additions in green, deletions in red, and modifications in yellow. This visual comparison tool helps you quickly understand what has changed between versions, making it easier to spot errors, review updates, or resolve disagreements."
+    },
+    {
+      "id": "doc-44",
+      "title": "Revert translation commit",
+      "content": "If a translation commit contains mistakes or undesired changes, you can revert it to restore the previous state. Navigate to your project and open the 'Commit' tab. This tab lists all previous translation commits along with the contributor, date, and commit message. Find the commit you want to revert and click the three-dot action menu next to it. Select 'Revert Commit'. A confirmation modal will appear; read the message and confirm the action. The system will automatically generate a new commit that reverses the changes introduced by the selected commit, without affecting any unrelated data. This is useful for undoing incorrect translations, restoring older versions, or maintaining clean version control history without manual file editing."
+    },
+    {
+      "id": "doc-45",
+      "title": "Search project discussions",
+      "content": "To find a specific conversation or topic within your project’s discussions, use the search functionality provided in the 'Discussion' tab. Open your project, go to the 'Discussion' tab, and locate the search bar at the top of the screen. Enter relevant keywords such as discussion titles, content snippets, or even usernames. As you type, matching results will be filtered and displayed in real time. You can quickly browse the results and click on a relevant thread to view or participate in it. This feature helps streamline communication, especially in projects with many active or archived discussions, and reduces the time spent looking for important information or revisiting old threads."
+    },
+    {
+      "id": "doc-46",
+      "title": "Pin important discussion",
+      "content": "To ensure certain discussions remain visible and accessible at all times, you can pin them to the top of the discussion list. Open your project and go to the 'Discussion' tab. Find the discussion you want to prioritize, then click the three-dot menu on its right and choose 'Pin Discussion'. Once pinned, the discussion will appear in the pinned section at the top, visible to all project members. This is ideal for keeping guidelines, important updates, or ongoing discussions in focus. Pinned discussions can be unpinned anytime by repeating the process. This feature is only available to users with the appropriate permissions, such as project admins or members with the 'Manage Discussions' role."
+    },
+    {
+      "id": "doc-47",
+      "title": "Reorder pinned discussions",
+      "content": "If multiple discussions are pinned in your project, you can arrange their order to reflect priority or urgency. Go to the 'Discussion' tab, where all pinned discussions are shown at the top of the list. If you are a project admin or have the correct permissions, you will see drag handles next to each pinned item. Click and drag a discussion up or down to rearrange them. The new order is saved automatically and will be visible to all users. This capability is especially useful for keeping rules, templates, or critical updates consistently organized for better team access and attention."
+    },
+
+    {
+      "id": "doc-53",
+      "title": "Send image in chat",
+      "content": "To send an image in a chat, first enter the chat room where you want to share the image. At the bottom of the screen, click the 📎 (attachment) icon. This will open your device’s file picker—select the image file (JPG, PNG, or GIF) you wish to upload. You can also drag and drop the image directly into the message box. Once selected, a thumbnail preview will appear above the input field. You can optionally add a caption. Click the send button to share the image. It will be visible in the conversation feed and can be clicked to view in full size by other users in the chat room."
+    },
+
+    {
+      "id": "doc-55",
+      "title": "Edit chat message",
+      "content": "To edit a message you’ve sent in a chat room, hover your mouse over the message. A three-dot options icon will appear—click it and choose 'Edit'. Your message will become editable in place. Modify the text as needed and press Enter or click 'Save'. The system will mark the message as 'edited' to inform others that changes were made. Editing helps correct typos, clarify meaning, or update shared information. Note: you can only edit your own messages, and the feature may be limited in time depending on room settings."
+    },
+    {
+      "id": "doc-56",
+      "title": "Delete chat message",
+      "content": "To delete a message from a chat conversation, hover over the message you sent and click the three-dot options icon. Select 'Delete', and a confirmation prompt will appear. Confirm to permanently remove the message from the chat history. The message will disappear for all participants. Deleted messages cannot be recovered, so use this with care. Only the original sender or users with moderator permissions can delete messages. This feature is useful for correcting accidental posts or removing inappropriate content."
+    },
+    {
+      "id": "doc-57",
+      "title": "Rename chat room",
+      "content": "To rename a group chat, open the room and click the gear icon or 'Room Settings' button in the chat header. A modal will appear allowing you to edit the room name. Enter the new name and click 'Save'. The updated name will be instantly reflected in the chat list for all members. Only the room creator or users with admin permissions can rename chat rooms. Giving rooms clear, descriptive names improves team organization, e.g., 'Translation Review – Spanish' or 'UI Feedback – App A'."
+    },
+    {
+      "id": "doc-58",
+      "title": "Leave chat room",
+      "content": "To exit a group chat you no longer want to participate in, open the chat and click the three-dot options menu or settings icon. Choose 'Leave Room'. A confirmation popup will appear—click 'Confirm' to leave. After leaving, you will not receive any new messages or notifications from that room. Your previous messages will remain visible to others for context. You can rejoin the room only if another member invites you back. This helps reduce distractions and keeps your chat list relevant."
+    },
+
+
+  {
+    "id": "doc-60",
+    "title": "View Chat Members",
+    "content": "To see who is currently in a group chat, open the desired chat room from your chat list. Once inside, look at the top right corner of the chat window and click the 'Members' icon. A panel will open showing all users participating in this chat, including their username, display name, and role as admin or member. This feature is especially useful for confirming who can see messages, checking for newly added members, or determining who you want to message privately or mention directly using @."
+
+  },
+  {
+    "id": "doc-61",
+    "title": "Invite members to a chat room",
+    "content": "To add new people to a chat group, open the chat group you want to invite members to. In the chat header, click the settings or participants icon to access the member list. Then, click the 'Add members' button. A search bar will appear, where you can enter the name, email, or username of the person you want to add. Once found, click 'Invite'. If the conversation is private, the invited user must accept the invitation to join. Once added, the new member will have access to the entire message history and can start contributing immediately. Use this feature to easily expand group discussions or onboard new contributors."
+
+  },
+  {
+    "id": "doc-62",
+    "title": "Using Emojis in Chat",
+    "content": "To make your messages more expressive or add a friendly tone, you can insert an emoji into any chat message. In the message input area, click the emoji (usually a smiley face) to open the emoji picker. You can browse through categories or use the search bar to find a specific emoji. Click the emoji you want and it will be added to your message. Many platforms also support keyboard shortcuts like ':)' or ':thumbsup:' that automatically convert to emoji. Emojis are useful for conveying emotion, softening tone, or reacting quickly in a conversation without having to reply in full."
+
+  },
+  {
+    "id": "doc-63",
+    "title": "Send files in chat",
+    "content": "To share documents or resources during a chat, use the file sharing feature in chat. Open the corresponding chat room and click the paperclip icon next to the message input box. A dialog box will open where you can select the file you want to send. Supported file types typically include images (JPG, PNG, GIF), documents (PDF, DOCX), and text files (TXT, JSON). You can also add an optional message or annotation before sending. Once sent, the file will appear in the chat with a download link or preview. Other participants can view or download it directly. This feature is ideal for sharing drafts, references, screenshots, or additional materials during the translation process."
+
+  },
+    {
+      "id": "doc-66",
+      "title": "View archived discussions",
+      "content": "To access archived discussions, go to your project’s Discussion tab and click the 'Archived' filter or button (usually found near the top or side). This will display a list of all previously archived discussion threads. You can scroll through the list or use the search bar to find specific topics. Clicking on a discussion opens it in read-only mode. While you cannot comment or edit archived discussions, you can review decisions and refer back to them when needed. This feature is helpful for tracking project history or reusing past strategies."
+    },
+    {
+      "id": "doc-67",
+      "title": "Post multiple discussions",
+      "content": "There is no limit to how many discussions you can create in a project. To start a new one, go to the Discussion tab and click 'Create New Discussion'. Enter a title and a detailed description, then press 'Create'. Each discussion is treated as an individual thread and is great for separating conversations by topic—such as tasks, bugs, language-specific issues, or contributor feedback. Having multiple discussions helps keep the conversation organized and easier to follow for everyone involved."
+    },
+    {
+      "id": "doc-68",
+      "title": "Receive system announcements",
+      "content": "When the platform admins send important announcements (such as maintenance schedules, new feature releases, or security alerts), they appear as banners at the top of your screen or as modals when you log in. These announcements are also saved under the Notification Center for you to revisit later. You cannot reply directly to announcements, but you can contact support if needed. Make sure to read announcements carefully as they may contain actions you need to take, such as updating payment info or preparing for downtime."
+    },
+    {
+      "id": "doc-69",
+      "title": "Search help via AI assistant",
+      "content": "To get help quickly, you can use the built-in AI Assistant located in the Help Center or sidebar. Simply type a question like 'How do I upload a file?' or 'Where can I see my wallet balance?' and the AI will search across all available documentation, including the full list of help topics. It will then respond with a clear answer based on the internal knowledge base. This feature is available 24/7 and helps you find instructions faster than manually browsing pages. If the AI can't find the answer, it may suggest contacting support."
+    },
+    {
+      "id": "doc-70",
+      "title": "Change notification preferences",
+      "content": "To customize which notifications you receive, click on your profile avatar in the top-right corner and choose 'Settings'. Then navigate to the 'Notifications' tab. Here you can toggle on or off specific types of notifications—such as mentions, new comments, task updates, or project invitations. You can also choose to receive updates via email or in-app only. Changing these settings helps reduce noise and ensures you are only alerted about things you care about, especially in busy projects with many updates."
+    },
+    {
+      "id": "doc-71",
+      "title": "Accept private request",
+      "content": "When someone sends you a private request, you will receive a notification and the request will appear under the 'Private Requests' tab or in your dashboard. Click on the request to view its full details, including description, deadline, target language, and the attached file. At the bottom of the request detail, you’ll find two buttons: 'Accept' and 'Decline'. If you agree to take on the translation task, click 'Accept'. This action will officially assign the request to you. The request status will change to 'In Progress', and the requester will be notified. You can now access the file, submit translations, and receive payment upon completion. Accepting a private request means you are committing to complete the task as agreed."
+    },
+    {
+      "id": "doc-72",
+      "title": "Decline private request",
+      "content": "If you receive a private request but are unable or unwilling to take the job, you can choose to decline it. Navigate to the 'Private Requests' section, find the request in question, and click to open it. Review the details to ensure it's the one you want to decline. Click the 'Decline' button located at the bottom of the request view. A confirmation popup will appear asking you to confirm your decision. Once confirmed, the requester will be notified and the system will automatically refund any deposit they made. Declining a request ensures clarity between both parties and frees the requester to choose another translator."
+    },
+    {
+      "id": "doc-73",
+      "title": "Resubmit translation",
+      "content": "If your previous translation was rejected or requested for revision, you have the opportunity to resubmit an updated version. Go to your project, open the 'Translation' tab, and find the file that was returned. It will be marked with a status like 'Needs Revision' or 'Rejected'. Click on the file to view reviewer comments or feedback. Make the necessary corrections based on their input. When ready, click the 'Resubmit Translation' button, upload your revised file, and click 'Submit'. Your new version will be sent through the review process again. Resubmissions ensure quality control and improve your translator rating."
+    },
+    {
+      "id": "doc-74",
+      "title": "Track translation progress",
+      "content": "To monitor progress on your translations or team contributions, go to the project's main page. At the top or in the 'Overview' tab, you will see progress bars showing overall translation status. These typically include percentages for: 'Not Started', 'In Progress', 'Submitted', 'Reviewed', and 'Completed'. You can also drill down per file in the 'Translation' tab. Each file shows a color-coded status bar and details like total string count, translated strings, and approved content. This helps you stay on track with deadlines and gives project managers a real-time view of project health."
+    },
+    {
+      "id": "doc-75",
+      "title": "Rate translator performance",
+      "content": "After a translation request is completed and approved, the requester has the option to rate the translator's performance. Go to the completed request from the 'My Request' tab, and you will see a 'Rate Translator' button. Click it to open the rating modal. You can assign a star rating (1 to 5) and optionally leave a comment about quality, communication, and professionalism. Ratings help maintain quality across the platform and assist others in choosing reliable collaborators. Your feedback is stored privately and also contributes to the translator’s reputation score."
+    },
+    {
+      "id": "doc-76",
+      "title": "Edit submitted translation",
+      "content": "If you've already submitted a translation but realize you need to make changes, go to the 'Translation' tab and find the submitted file. As long as the file is not yet marked as 'Reviewed' or 'Locked', you will see an option to 'Edit Submission'. Click this to open the submission editor or re-upload a corrected file. This function is time-sensitive and available only during the review window. Once the translation is locked or reviewed, further edits require admin approval. Always double-check your submission before sending to reduce rework."
+    },
+    {
+      "id": "doc-77",
+      "title": "Set deadline for task",
+      "content": "When creating or editing a task, you can define a due date to ensure timely delivery. In the task creation modal (found in the Task tab), locate the 'Deadline' field. Click it to open a date picker and choose the appropriate deadline. You can also include a specific time if needed. After setting the deadline, complete the rest of the task details and click 'Create Task'. This due date will appear on the task list and in reminder notifications for the assigned user. Deadlines help manage workload and set clear expectations."
+    },
+    {
+      "id": "doc-78",
+      "title": "Add reference files to project",
+      "content": "To provide translators with helpful context, you can upload reference files such as screenshots, glossaries, or design documents. Go to your project, then open the 'Files' tab. Click the 'Add File' button and select your reference material. In the upload dialog, tag the file as 'Reference' so it’s not included in the translation queue. These files will be visible in the Translation tab or attached directly to tasks. Reference materials ensure translators understand the content and tone, improving overall quality and consistency."
+    },
+    {
+      "id": "doc-79",
+      "title": "Report inappropriate content",
+      "content": "If you encounter inappropriate language, offensive behavior, or spam within comments, discussions, or chat, you can report it. Hover over the message or content, click the three-dot menu, and select 'Report'. A form will appear asking for your reason. Submit the form, and the report will be sent to platform moderators for review. Depending on severity, the content may be removed and the user warned or banned. Reporting helps keep the community safe and professional for everyone involved."
+    },
+    {
+      "id": "doc-80",
+      "title": "Switch project language view",
+      "content": "To view translations or tasks in a specific target language, go to your project and open the 'Translation' or 'Task' tab. At the top of the screen, you’ll find a language selector dropdown. Choose the language you want to filter by. This updates the interface to show only files, strings, or tasks associated with that language. It's useful in multilingual projects where different teams are working on different targets. You can switch between languages at any time to track progress or verify translations."
+    },
+
+    {
+      "id": "doc-81",
+      "title": "Change project visibility",
+      "content": "To change your project from public to private or vice versa, go to the 'Project Settings' page by clicking the gear icon in the project header. In the settings panel, look for the 'Visibility' option. You can toggle between 'Public' and 'Private'. Public projects can be seen and joined by any user on the platform, while private projects require an invitation to view or access. After selecting your desired visibility, click 'Save Changes'. Be aware that changing visibility will affect who can view your files, requests, and discussions. Use this option carefully for sensitive or confidential projects."
+    },
+    {
+      "id": "doc-82",
+      "title": "Assign task to group",
+      "content": "When creating a task, you can assign it not only to an individual but also to a group of users. In the 'Create Task' modal, go to the 'Assign to' section and switch from 'User' to 'Group'. A dropdown list will appear showing all groups in the project. Select the desired group, fill out the rest of the task fields like title, file part, language, and deadline, then click 'Create'. All members of the selected group will be able to see and work on the task. This is ideal for collaborative work or shared responsibility models."
+    },
+    {
+      "id": "doc-83",
+      "title": "Create glossary for project",
+      "content": "To ensure consistency in terminology across translations, you can create a glossary for your project. Go to the 'Glossary' tab (if enabled), and click 'Create Glossary'. Enter the source term, target term, and optional notes or usage examples. You can also tag the glossary by subject or language pair. Once saved, the glossary will be referenced by translators in the Translation tab and shown as hints or warnings if inconsistent terms are used. Maintaining a glossary boosts quality and aligns translations with client expectations or brand tone."
+    },
+    {
+      "id": "doc-84",
+      "title": "Enable review workflow",
+      "content": "To improve translation quality, you can activate a review step for each submission. In your project's settings, look for the 'Enable Review Workflow' toggle. When enabled, translations submitted by users will enter a 'Pending Review' status instead of being accepted immediately. Reviewers (users with the proper role) can then access the file, review changes, leave comments, and either approve or request revisions. This workflow ensures that all translations meet your standards before being finalized and helps maintain quality assurance on large or critical projects."
+    },
+    {
+      "id": "doc-85",
+      "title": "Approve translation submission",
+      "content": "If you're a reviewer or project admin, you can approve translation submissions once they meet your quality standards. Open your project, go to the 'Translation' tab, and locate the file marked as 'Pending Review'. Click to open it, read through the submitted translation, and compare it to the source text if needed. You can also check for glossary compliance, style consistency, and grammar. If everything looks good, click the 'Approve' button at the bottom of the screen. The translation will be marked as completed and locked for further changes unless reverted later."
+    },
+    {
+      "id": "doc-86",
+      "title": "Request translation revision",
+      "content": "If a translation submission doesn’t meet quality expectations, you can request a revision instead of approving it. In the 'Translation' tab, open the file under review. Highlight any problematic sections and use the built-in comment system to give feedback. Then click the 'Request Revision' button. The translator will be notified and the file status will be updated to 'Needs Revision'. They can review your comments, improve their work, and resubmit. This ensures quality control and gives translators a fair chance to improve their work."
+    },
+    {
+      "id": "doc-87",
+      "title": "View reviewer comments",
+      "content": "As a translator, when your submission is reviewed and sent back for revision, you can view the reviewer's comments by opening the file in the 'Translation' tab. Click on the file marked 'Needs Revision'. Inside, you will see highlighted segments and comments attached to them explaining what needs to be fixed. Review all the comments before editing to avoid repeated issues. After making the necessary updates, use the 'Resubmit Translation' button to send the revised version back into the review process."
+    },
+    {
+      "id": "doc-88",
+      "title": "Filter tasks by status",
+      "content": "To stay organized and manage your workload, use the status filter in the Task tab. Open your project and go to the 'Task' section. At the top, you'll see filters labeled 'To Do', 'In Progress', 'Completed', and 'Blocked'. Click on any of these to see only tasks in that category. You can also combine filters with assignees or deadlines to drill down further. Filtering tasks helps you prioritize your work, understand team bottlenecks, and track progress over time."
+    },
+    {
+      "id": "doc-89",
+      "title": "Export translation file",
+      "content": "Once translations are completed and approved, you may want to download them. To do so, go to the 'Translation' tab and locate the file. If the translation is marked 'Completed', a download icon or 'Export File' button will be available. Click it to download the translated file in its original format (e.g., DOCX, PDF, TXT, or JSON). This is useful for sharing with clients, archiving work, or using in downstream systems. Exported files reflect the latest approved content."
+    },
+    {
+      "id": "doc-90",
+      "title": "Assign role to user",
+      "content": "To manage permissions inside a project, you can assign roles to members. Go to the 'Members' tab in your project and find the user you want to assign a role to. Click the options icon next to their name and select 'Assign Role'. A dialog will appear showing all available roles defined for the project (e.g., Translator, Reviewer, Admin). Choose a role and click 'Confirm'. The user’s access rights will update immediately. Roles determine what each user can do—like uploading files, approving translations, or managing tasks."
+    }
+
+
+
+
+
+
+
+
+]
+
+
+
+

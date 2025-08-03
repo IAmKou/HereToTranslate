@@ -1,7 +1,4 @@
 import axios from 'axios';
-import { authService } from './auth.service';
-
-const BASE_URL = 'http://localhost:3000/api';
 
 export interface UserProfile {
   id: bigint;
@@ -13,6 +10,7 @@ export interface UserProfile {
     name: string;
   } | null;
   createdAt: Date;
+  avatarUrl?: string;
 }
 
 export interface UpdateProfileData {
@@ -32,7 +30,7 @@ export interface User {
   phone: string;
   fullName: string;
   isActive: boolean;
-  createdAt: string;
+  createdAt: Date;
   role: {
     id: number;
     name: string;
@@ -43,19 +41,35 @@ export interface UpdateUserRoleDto {
   role: number;
 }
 
-class UserService {
-  async getUserProfile(): Promise<UserProfile> {
-    const token = authService.getAccessToken();
-    if (!token) {
-      throw new Error('No access token available');
-    }
+export class UserService {
+  api;
 
-    const response = await axios.get<UserProfile>(`${BASE_URL}/users/profile`, {
+  constructor() {
+    this.api = axios.create({
+      baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
       },
+      withCredentials: true,
     });
+  }
 
+  private normalizeDate(dateValue: any): Date {
+    if (dateValue instanceof Date) {
+      return dateValue;
+    }
+    if (typeof dateValue === 'number') {
+      return new Date(dateValue);
+    }
+    if (typeof dateValue === 'string') {
+      return new Date(dateValue);
+    }
+    return new Date();
+  }
+
+  async getUserProfile(): Promise<UserProfile> {
+    const response = await this.api.get<UserProfile>('/users/profile');
+    console.log('[FE] getUserProfile response', response.data);
     return {
       ...response.data,
       id: BigInt(response.data.id),
@@ -64,88 +78,56 @@ class UserService {
   }
 
   async updateProfile(data: UpdateProfileData): Promise<UserProfile> {
-    const token = authService.getAccessToken();
-    if (!token) {
-      throw new Error('No access token available');
-    }
-
-    const response = await axios.put<UserProfile>(
-      `${BASE_URL}/users/profile`,
-      data,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const response = await this.api.put(`/users/update`, data);
 
     return {
       ...response.data,
-      id: BigInt(response.data.id),
       createdAt: new Date(response.data.createdAt),
     };
   }
 
   async changePassword(data: ChangePasswordData): Promise<void> {
-    const token = authService.getAccessToken();
-    if (!token) {
-      throw new Error('No access token available');
-    }
-
-    await axios.put(`${BASE_URL}/users/change-password`, data, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    await this.api.patch(`/users/change-password`, data);
   }
 
   async getAllUsers(): Promise<User[]> {
-    const token = authService.getAccessToken();
-    if (!token) {
-      throw new Error('No access token available');
-    }
-
-    const response = await axios.get(`${BASE_URL}/users/admin/all`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    return response.data;
+    const response = await this.api.get('/users/admin/all');
+    return response.data.map((user: any) => ({
+      ...user,
+      createdAt: this.normalizeDate(user.createdAt)
+    }));
   }
 
   async updateUserRole(userId: string, role: number): Promise<User> {
-    const token = authService.getAccessToken();
-    if (!token) {
-      throw new Error('No access token available');
-    }
-    const response = await axios.put(
-      `${BASE_URL}/users/admin/${userId}/role`,
-      { role },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const response = await this.api.put(`/users/admin/${userId}/role/${role}`);
+    console.log('Updated user role response:', response.data);
+    return response.data;
+  }
+
+  async updateUserStatus(userId: string, isActive: boolean): Promise<User> {
+    const response = await this.api.put(`/users/admin/${userId}/toggle-status`);
     return response.data;
   }
 
   async toggleUserStatus(userId: string): Promise<User> {
-    const token = authService.getAccessToken();
-    if (!token) {
-      throw new Error('No access token available');
-    }
+    const response = await this.api.put(`/users/admin/${userId}/toggle-status`);
+    return response.data;
+  }
 
-    const response = await axios.put(
-      `${BASE_URL}/users/admin/${userId}/toggle-status`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+  async getUsers(): Promise<User[]> {
+    const response = await this.api.get('/users');
     return response.data;
   }
 }
 
 export const userService = new UserService();
+
+export async function uploadAvatar(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('avatar', file);
+  const res = await userService.api.post('/users/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  console.log('[FE] uploadAvatar response', res.data);
+  return res.data.avatarUrl;
+}

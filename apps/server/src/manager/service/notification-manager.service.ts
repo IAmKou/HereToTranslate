@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotificationEntity, UserEntity } from '#LocalProject/Entities';
+import { NotificationGateway } from '../../util/gateway/notification.gateway';
 
 export interface CreateNotificationDto {
   userId?: bigint;
@@ -29,6 +30,7 @@ export class NotificationManagerService {
     private readonly notificationRepository: Repository<NotificationEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async createNotification(data: CreateNotificationDto): Promise<NotificationEntity> {
@@ -42,24 +44,29 @@ export class NotificationManagerService {
 
     const savedNotification = await this.notificationRepository.save(notification);
 
-    // TODO: Send realtime notification
-    // if (data.isGlobal) {
-    //   this.notificationGateway.emitToAll({
-    //     id: savedNotification.id.toString(),
-    //     type: savedNotification.type,
-    //     message: savedNotification.message,
-    //     createdAt: savedNotification.createdAt,
-    //     isGlobal: true,
-    //   });
-    // } else if (data.userId) {
-    //   this.notificationGateway.emitToUser(data.userId, {
-    //     id: savedNotification.id.toString(),
-    //     type: savedNotification.type,
-    //     message: savedNotification.message,
-    //     createdAt: savedNotification.createdAt,
-    //     isGlobal: false,
-    //   });
-    // }
+    // Send realtime notification
+    try {
+      if (data.isGlobal) {
+        this.notificationGateway.emitToAll({
+          id: savedNotification.id.toString(),
+          type: savedNotification.type,
+          message: savedNotification.message,
+          createdAt: savedNotification.createdAt,
+          isGlobal: true,
+        });
+      } else if (data.userId) {
+        this.notificationGateway.emitToUser(data.userId, {
+          id: savedNotification.id.toString(),
+          type: savedNotification.type,
+          message: savedNotification.message,
+          createdAt: savedNotification.createdAt,
+          isGlobal: false,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send realtime notification:', error);
+      // Don't fail the notification creation if realtime fails
+    }
 
     return savedNotification;
   }
@@ -167,30 +174,49 @@ export class NotificationManagerService {
     return updatedNotification;
   }
 
-  // async deleteNotification(id: bigint): Promise<void> {
-  //   const notification = await this.getNotificationById(id);
-  //   const result = await this.notificationRepository.delete(id);
-  //
-  //   if (result.affected === 0) {
-  //     throw new NotFoundException('Notification not found');
-  //   }
-  //
-  //   // TODO: Send realtime deletion
-  //   if (notification.isGlobal) {
-  //     this.notificationGateway.server.emit('notification_deleted', { id: id.toString() });
-  //   } else if (notification.userId) {
-  //     this.notificationGateway.server.to(`user_${notification.userId}`).emit('notification_deleted', { id: id.toString() });
-  //   }
-  // }
+  async deleteNotification(id: bigint): Promise<void> {
+    const notification = await this.getNotificationById(id);
+    const result = await this.notificationRepository.delete(id);
+
+    if (result.affected === 0) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    // Send realtime deletion notification
+    try {
+      if (notification.isGlobal) {
+        this.notificationGateway.emitDeletionToAll(id.toString());
+      } else if (notification.userId) {
+        this.notificationGateway.emitDeletionToUser(notification.userId, id.toString());
+      }
+    } catch (error) {
+      console.error('Failed to send realtime deletion notification:', error);
+      // Don't fail the deletion if realtime fails
+    }
+  }
 
   async deleteAllUserNotifications(userId: bigint): Promise<void> {
     await this.notificationRepository.delete({ userId });
+
+    // Send realtime deletion notification
+    try {
+      this.notificationGateway.emitDeletionToUser(userId, 'all_user');
+    } catch (error) {
+      console.error('Failed to send realtime deletion notification:', error);
+      // Don't fail the deletion if realtime fails
+    }
   }
 
   async deleteAllGlobalNotifications(): Promise<void> {
     await this.notificationRepository.delete({ isGlobal: true });
-    // TODO: Send realtime deletion
-    // this.notificationGateway.server.emit('all_global_notifications_deleted');
+
+    // Send realtime deletion notification
+    try {
+      this.notificationGateway.emitDeletionToAll('all_global');
+    } catch (error) {
+      console.error('Failed to send realtime deletion notification:', error);
+      // Don't fail the deletion if realtime fails
+    }
   }
 
   async getNotificationCount(userId: bigint): Promise<number> {

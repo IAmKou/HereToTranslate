@@ -3,45 +3,48 @@
   "version": "0.0.1",
   "private": true,
   "type": "commonjs",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/libs/common/index.js",
+  "module": "./dist/libs/common/index.js",
+  "types": "./dist/libs/common/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "development": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/libs/common/index.d.ts",
+      "import": "./dist/libs/common/index.js",
+      "default": "./dist/libs/common/index.js"
     },
     "./interfaces": {
       "development": "./src/lib/interfaces/index.ts",
-      "types": "./dist/lib/interfaces/index.d.ts",
-      "import": "./dist/lib/interfaces/index.js",
-      "default": "./dist/lib/interfaces/index.js"
+      "types": "./dist/libs/common/lib/interfaces/index.d.ts",
+      "import": "./dist/libs/common/lib/interfaces/index.js",
+      "default": "./dist/libs/common/lib/interfaces/index.js"
     },
     "./types": {
       "development": "./src/lib/types/index.ts",
-      "types": "./dist/lib/types/index.d.ts",
-      "import": "./dist/lib/types/index.js",
-      "default": "./dist/lib/types/index.js"
+      "types": "./dist/libs/common/lib/types/index.d.ts",
+      "import": "./dist/libs/common/lib/types/index.js",
+      "default": "./dist/libs/common/lib/types/index.js"
+    },
+    "./bigint-utils": {
+      "development": "./src/lib/bigint-utils.ts",
+      "types": "./dist/libs/common/lib/bigint-utils.d.ts",
+      "import": "./dist/libs/common/lib/bigint-utils.js",
+      "default": "./dist/libs/common/lib/bigint-utils.js"
     }
   },
   "nx": {
     "sourceRoot": "libs/common/src",
     "targets": {
       "build": {
-        "executor": "@nx/js:swc",
+        "executor": "@nx/js:tsc",
         "outputs": [
           "{options.outputPath}"
         ],
         "options": {
-          "outputPath": "libs/common/dist",
+          "outputPath": "dist/libs/common",
           "main": "libs/common/src/index.ts",
-          "tsConfig": "libs/common/tsconfig.lib.json",
-          "skipTypeCheck": true,
-          "stripLeadingPaths": true,
-          "swcrc": "libs/common/.swcrc"
+          "tsConfig": "libs/common/tsconfig.lib.json"
         }
       }
     },

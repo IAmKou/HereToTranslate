@@ -4,10 +4,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DbContextService } from './dbcontext.service';
 import { MySqlConnection } from './mysql/mysql.connection';
 import { MongoDbConnection } from './mongo/mongo.connection';
+import { SqliteConnection } from './sqlite/sqlite.connection';
 import { MongooseModule } from '@nestjs/mongoose';
-import { MongoTest, MongoTestSchema } from './mongo/schema/mongo-test.schema';
-import { MongoService } from '#LocalProject/Services/mongo.service';
-import { Connection as MongooseConnection } from 'mongoose';
+import { ConnectionStates } from 'mongoose';
 
 @Module({
   imports: [
@@ -18,8 +17,18 @@ import { Connection as MongooseConnection } from 'mongoose';
       useFactory: async (configService: ConfigService) => {
         const mysqlConnection = new MySqlConnection(configService);
         await mysqlConnection.init();
-        return mysqlConnection.getDataSource().options;
-      },
+        return mysqlConnection.dataSource.options;
+      }
+    }),
+    TypeOrmModule.forRootAsync({
+      name: 'sqlite',
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => {
+        const sqliteConnection = new SqliteConnection();
+        await sqliteConnection.init();
+        return sqliteConnection.dataSource.options;
+      }
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -27,9 +36,12 @@ import { Connection as MongooseConnection } from 'mongoose';
       useFactory: (configService: ConfigService) => {
         const logger = new Logger('MongooseModule');
         return ({
-          onConnectionCreate(connection: MongooseConnection) {
+          useBigInt64: true,
+          ssl: true,
+          onConnectionCreate(connection) {
+            const { readyState } = connection;
             connection.on('connected', c => logger.log(c));
-            logger.log(`MongoDB connection created: ${connection.user}:${connection.host} on ${connection.db?.databaseName}`);
+            logger.log(`Connection created: [${ConnectionStates[readyState]}`);
             return connection;
           },
           connectionErrorFactory(error) {
@@ -37,12 +49,13 @@ import { Connection as MongooseConnection } from 'mongoose';
             return error;
           },
           uri: configService.get<string>('MONGODB_URI'),
+          dbName: configService.get<string>('MONGODB_DB'),
         });
-      },
-    }),
-    MongooseModule.forFeature([{ name: MongoTest.name, schema: MongoTestSchema }]),
+      }
+    })
   ],
-  providers: [DbContextService, MySqlConnection, MongoDbConnection, MongoService],
-  exports: [DbContextService, TypeOrmModule, MongooseModule, MongoService],
+  providers: [DbContextService, MySqlConnection, MongoDbConnection, SqliteConnection],
+  exports: [DbContextService, TypeOrmModule, MongooseModule]
 })
-export class DbContextModule {}
+export class DbContextModule {
+}

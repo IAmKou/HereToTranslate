@@ -2,50 +2,79 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import {
-  RoleEntity,
+  UserTypeEntity,
   UserEntity,
   BranchEntity,
-  PostEntity,
   ProjectEntity,
   CategoryEntity,
-  CommentEntity,
   FileEntity,
-  GroupMemberEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
-  RateEntity,
+  ProjectInvitationEntity,
+  ProjectDiscussionCommentEntity,
+  ProjectDiscussionThreadEntity,
+  DiscussionAccessPolicyEntity,
   ReportEntity,
   RequestEntity,
   TaskEntity,
   TransactionEntity,
   CommitEntity,
-  SubCategoryEntity, PermissionRoleEntity, ProjectUserRoleEntity
+  ProjectTagEntity,
+  TranslationApprovalEntity,
+  WalletEntity,
+  NotificationEntity,
+  SettingsEntity,
 } from '#LocalProject/Entities';
-
 
 @Injectable()
 export class MySqlConnection {
-  private static instance: MySqlConnection;
-
   // TypeORM DataSource instance
-  private readonly dataSource: DataSource;
+  static instance: MySqlConnection;
+
+  private readonly _dataSource: DataSource;
 
   private readonly logger = new Logger(MySqlConnection.name);
 
   constructor(private readonly config: ConfigService) {
-    if (MySqlConnection.instance) return MySqlConnection.instance;
-    this.dataSource = new DataSource({
+    MySqlConnection.instance = this;
+    this._dataSource = new DataSource({
       type: 'mysql',
       host: this.config.get<string>('MYSQL_HOST'),
       port: this.config.get<number>('MYSQL_PORT'),
       username: this.config.get<string>('MYSQL_USER'),
       password: this.config.get<string>('MYSQL_PASSWORD'),
       database: this.config.get<string>('MYSQL_DATABASE'),
-      synchronize: true, // Auto create tables (turn off in production)
+      ssl: {
+        rejectUnauthorized: false,
+      },
+      synchronize: false,
       logging: true,
-      entities: [RoleEntity, UserEntity, BranchEntity, PostEntity, ProjectEntity, CategoryEntity, CommentEntity, FileEntity,
-        GroupMemberEntity, ProjectGroupEntity, ProjectRoleEntity, RateEntity, ReportEntity, RequestEntity, TaskEntity,
-        TransactionEntity, CommitEntity, SubCategoryEntity, PermissionRoleEntity, ProjectUserRoleEntity], // Add entities here
+      supportBigNumbers: true,
+      charset: 'utf8mb4_unicode_ci',
+      entities: [
+        UserEntity,
+        BranchEntity,
+        ProjectEntity,
+        CategoryEntity,
+        FileEntity,
+        ProjectGroupEntity,
+        ProjectRoleEntity,
+        ProjectInvitationEntity,
+        ReportEntity,
+        RequestEntity,
+        TaskEntity,
+        TransactionEntity,
+        CommitEntity,
+        ProjectTagEntity,
+        ProjectDiscussionCommentEntity,
+        ProjectDiscussionThreadEntity,
+        DiscussionAccessPolicyEntity,
+        UserTypeEntity,
+        TranslationApprovalEntity,
+        WalletEntity,
+        NotificationEntity,
+        SettingsEntity,
+      ],
     });
     MySqlConnection.instance = this;
   }
@@ -61,8 +90,8 @@ export class MySqlConnection {
   }
 
   // Get the MySQL DataSource instance
-  getDataSource(): DataSource {
-    return this.dataSource;
+  get dataSource(): DataSource {
+    return this._dataSource;
   }
 
   // Close the MySQL connection

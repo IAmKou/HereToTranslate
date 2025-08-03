@@ -1,0 +1,54 @@
+# Don't include node_modules (workspace & nested)
+node_modules
+**/node_modules
+
+# Don't include any build output except server app
+dist
+!dist/apps/server
+
+# Don't include unnecessary apps (frontend, tests, etc.)
+apps/web
+apps/web-e2e
+apps/server-e2e
+
+# Ignore version control and IDE configs
+.git
+.vscode
+.idea
+
+# Ignore dotenv and log/config/cache/test/temp files
+*.log
+*.cache
+*.sqlite
+*.test.ts
+*.tgz
+*.tar.gz
+coverage
+.nyc_output
+.DS_Store
+
+# Common framework build caches
+.cache
+.parcel-cache
+.next
+.nuxt
+.vuepress/dist
+.serverless
+.fusebox/
+.dynamodb/
+.tern-port
+.vscode-test
+
+# Yarn-specific
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Uploads or other temp
+uploads
+eslint.config.mjs
+apps/server/eslint.config.mjs
+apps/server/**/*.eslint.*
+**/*.eslint.config.*

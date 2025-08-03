@@ -17,13 +17,17 @@ import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
-import { NotificationManagerService, CreateNotificationDto, UpdateNotificationDto } from '../service/notification-manager.service';
+import type {
+  NotificationManagerService,
+  CreateNotificationDto,
+  UpdateNotificationDto,
+} from '../service/notification-manager.service';
 
 @Controller('notifications')
 @UseInterceptors(JsonSerializerInterceptor)
 export class NotificationController {
   constructor(
-    private readonly notificationService: NotificationManagerService,
+    private readonly notificationService: NotificationManagerService
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -31,16 +35,17 @@ export class NotificationController {
   async getUserNotifications(
     @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
-    @Query('unreadOnly') unreadOnly?: string,
+    @Query('unreadOnly') unreadOnly?: string
   ) {
-    const notifications = await this.notificationService.getNotificationsByUserId(
-      req.user.id,
-      limit || 50,
-      unreadOnly === 'true',
-    );
+    const notifications =
+      await this.notificationService.getNotificationsByUserId(
+        req.user.id,
+        limit || 50,
+        unreadOnly === 'true'
+      );
 
     return {
-      notifications: notifications.map(notification => ({
+      notifications: notifications.map((notification) => ({
         id: notification.id.toString(),
         type: notification.type,
         message: notification.message,
@@ -49,11 +54,13 @@ export class NotificationController {
         createdAt: notification.createdAt,
         updatedAt: notification.updatedAt,
         isGlobal: notification.isGlobal,
-        createdBy: notification.creator ? {
-          id: notification.creator.id.toString(),
-          username: notification.creator.username,
-          fullName: notification.creator.fullName,
-        } : null,
+        createdBy: notification.creator
+          ? {
+              id: notification.creator.id.toString(),
+              username: notification.creator.username,
+              fullName: notification.creator.fullName,
+            }
+          : null,
       })),
     };
   }
@@ -61,12 +68,15 @@ export class NotificationController {
   @UseGuards(JwtAuthGuard)
   @Get('count')
   async getUserNotificationCount(@Req() req: AuthenticatedRequest) {
-    const totalCount = await this.notificationService.getNotificationCount(req.user.id);
-    const unreadCount = await this.notificationService.getUnreadNotificationCount(req.user.id);
+    const totalCount = await this.notificationService.getNotificationCount(
+      req.user.id
+    );
+    const unreadCount =
+      await this.notificationService.getUnreadNotificationCount(req.user.id);
 
     return {
       total: totalCount,
-      unread: unreadCount
+      unread: unreadCount,
     };
   }
 
@@ -74,7 +84,7 @@ export class NotificationController {
   @Get(':id')
   async getNotification(
     @Param('id', BigIntTransformPipe) id: bigint,
-    @Req() req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest
   ) {
     const notification = await this.notificationService.getNotificationById(id);
 
@@ -92,11 +102,13 @@ export class NotificationController {
       createdAt: notification.createdAt,
       updatedAt: notification.updatedAt,
       isGlobal: notification.isGlobal,
-      createdBy: notification.creator ? {
-        id: notification.creator.id.toString(),
-        username: notification.creator.username,
-        fullName: notification.creator.fullName,
-      } : null,
+      createdBy: notification.creator
+        ? {
+            id: notification.creator.id.toString(),
+            username: notification.creator.username,
+            fullName: notification.creator.fullName,
+          }
+        : null,
     };
   }
 
@@ -104,7 +116,7 @@ export class NotificationController {
   @Patch(':id/read')
   async markNotificationAsRead(
     @Param('id', BigIntTransformPipe) id: bigint,
-    @Req() req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest
   ) {
     await this.notificationService.markAsRead(id, req.user.id);
     return { message: 'Notification marked as read' };
@@ -121,7 +133,7 @@ export class NotificationController {
   @Post()
   async createNotification(
     @Body() data: Omit<CreateNotificationDto, 'userId'>,
-    @Req() req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest
   ) {
     const notification = await this.notificationService.createNotification({
       ...data,
@@ -140,7 +152,7 @@ export class NotificationController {
   @Delete(':id')
   async deleteNotification(
     @Param('id', BigIntTransformPipe) id: bigint,
-    @Req() req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest
   ) {
     // First check if notification belongs to user
     const notification = await this.notificationService.getNotificationById(id);
@@ -157,7 +169,7 @@ export class NotificationController {
   async updateNotification(
     @Param('id', BigIntTransformPipe) id: bigint,
     @Body() data: UpdateNotificationDto,
-    @Req() req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest
   ) {
     // First check if notification belongs to user
     const notification = await this.notificationService.getNotificationById(id);
@@ -165,7 +177,8 @@ export class NotificationController {
       throw new Error('Unauthorized access to notification');
     }
 
-    const updatedNotification = await this.notificationService.updateNotification(id, data);
+    const updatedNotification =
+      await this.notificationService.updateNotification(id, data);
     return {
       id: updatedNotification.id.toString(),
       type: updatedNotification.type,

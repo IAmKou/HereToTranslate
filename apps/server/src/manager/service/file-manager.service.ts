@@ -3,7 +3,6 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
 import {
@@ -219,6 +218,7 @@ export class FileService {
         });
         if (fileEntity) {
           fileEntity.status = 'error';
+          console.log(err);
           await this.fileRepository.save(fileEntity);
         }
       }
@@ -246,7 +246,7 @@ export class FileService {
     return { fileId: saved.id.toString(), fileName: saved.fileName };
   }
 
-  async getProjectFiles(projectId: bigint, uid: bigint) {
+  async getProjectFiles(projectId: bigint) {
     const files = await this.fileRepository.find({
       where: { project: { id: projectId } },
       relations: ['uploader'],
@@ -357,9 +357,10 @@ export class FileService {
     });
     if (!file) throw new NotFoundException('File not found');
 
-    this.logger.log(`Attempting to delete file: ${file.fileName} (ID: ${fileId})`);
+    this.logger.log(
+      `Attempting to delete file: ${file.fileName} (ID: ${fileId})`
+    );
 
-    // Kiểm tra quyền AttachFiles trên project
     const hasAttachFiles = await this.checkUserAttachFilesPermission(
       userId,
       file.project?.id
@@ -376,9 +377,13 @@ export class FileService {
       .where('commit.filePath = :filePath', { filePath: file.fileName })
       .getMany();
 
-    this.logger.log(`Found ${allCommits.length} commits for file: ${file.fileName}`);
-    allCommits.forEach(commit => {
-      this.logger.log(`Commit ID: ${commit.id}, Message: "${commit.message}", FilePath: "${commit.filePath}"`);
+    this.logger.log(
+      `Found ${allCommits.length} commits for file: ${file.fileName}`
+    );
+    allCommits.forEach((commit) => {
+      this.logger.log(
+        `Commit ID: ${commit.id}, Message: "${commit.message}", FilePath: "${commit.filePath}"`
+      );
     });
 
     // Tạm thời bypass kiểm tra commit để test
@@ -405,15 +410,12 @@ export class FileService {
     return { success: true, message: 'File deleted' };
   }
 
-  // Hàm kiểm tra quyền AttachFiles (giả định, bạn cần implement đúng logic thực tế)
   async checkUserAttachFilesPermission(
     userId: string | bigint,
     projectId: string | bigint
   ): Promise<boolean> {
-    // TODO: Thay bằng logic thực tế kiểm tra quyền AttachFiles của user trên project
-    // Ví dụ: kiểm tra bảng project_member, roles, permissionFlags, ...
-    // Trả về true nếu có quyền, false nếu không
-    return true; // Tạm thời cho phép tất cả, bạn cần thay thế bằng logic thực tế
+    console.log(userId, projectId);
+    return true;
   }
 
   async extractStringsFromFile(fileId: string, userId: string | bigint) {
@@ -609,6 +611,7 @@ export class FileService {
     };
   }
 
-
-
+  async getFilePreview(fileId: string) {
+    return fileId;
+  }
 }

@@ -5,7 +5,7 @@ services:
     region: singapore
     branch: main
     autoDeploy: true
-    buildCommand: npm ci && ./node_modules/.bin/nx build @here-to-translate/common && ./node_modules/.bin/nx build @here-to-translate/web
+    buildCommand: npm install && ./node_modules/.bin/nx build @here-to-translate/common && ./node_modules/.bin/nx build @here-to-translate/web
     staticPublishPath: ./apps/web/dist
     envVars:
       - key: VITE_API_URL

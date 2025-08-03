@@ -30,10 +30,12 @@ export class NotificationManagerService {
     private readonly notificationRepository: Repository<NotificationEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    private readonly notificationGateway: NotificationGateway,
+    private readonly notificationGateway: NotificationGateway
   ) {}
 
-  async createNotification(data: CreateNotificationDto): Promise<NotificationEntity> {
+  async createNotification(
+    data: CreateNotificationDto
+  ): Promise<NotificationEntity> {
     const notification = this.notificationRepository.create({
       userId: data.userId,
       type: data.type,
@@ -42,7 +44,9 @@ export class NotificationManagerService {
       createdBy: data.createdBy,
     });
 
-    const savedNotification = await this.notificationRepository.save(notification);
+    const savedNotification = await this.notificationRepository.save(
+      notification
+    );
 
     // Send realtime notification
     try {
@@ -71,7 +75,9 @@ export class NotificationManagerService {
     return savedNotification;
   }
 
-  async createGlobalNotification(data: CreateGlobalNotificationDto): Promise<NotificationEntity> {
+  async createGlobalNotification(
+    data: CreateGlobalNotificationDto
+  ): Promise<NotificationEntity> {
     return this.createNotification({
       type: data.type,
       message: data.message,
@@ -80,7 +86,9 @@ export class NotificationManagerService {
     });
   }
 
-  async createNotificationForAllUsers(data: CreateGlobalNotificationDto): Promise<NotificationEntity[]> {
+  async createNotificationForAllUsers(
+    data: CreateGlobalNotificationDto
+  ): Promise<NotificationEntity[]> {
     // Get all active users
     const users = await this.userRepository.find({
       where: { isActive: true },
@@ -104,10 +112,14 @@ export class NotificationManagerService {
     return notifications;
   }
 
-  async getNotificationsByUserId(userId: bigint, limit = 50, unreadOnly = false): Promise<NotificationEntity[]> {
+  async getNotificationsByUserId(
+    userId: bigint,
+    limit = 50,
+    unreadOnly = false
+  ): Promise<NotificationEntity[]> {
     const whereConditions = [
       { userId, ...(unreadOnly ? { isRead: false } : {}) },
-      { isGlobal: true, ...(unreadOnly ? { isRead: false } : {}) }
+      { isGlobal: true, ...(unreadOnly ? { isRead: false } : {}) },
     ];
 
     return await this.notificationRepository.find({
@@ -140,7 +152,10 @@ export class NotificationManagerService {
     return notification;
   }
 
-  async updateNotification(id: bigint, data: UpdateNotificationDto): Promise<NotificationEntity> {
+  async updateNotification(
+    id: bigint,
+    data: UpdateNotificationDto
+  ): Promise<NotificationEntity> {
     const notification = await this.getNotificationById(id);
 
     if (data.type !== undefined) {
@@ -150,7 +165,9 @@ export class NotificationManagerService {
       notification.message = data.message;
     }
 
-    const updatedNotification = await this.notificationRepository.save(notification);
+    const updatedNotification = await this.notificationRepository.save(
+      notification
+    );
 
     // TODO: Send realtime update
     // if (notification.isGlobal) {
@@ -175,8 +192,9 @@ export class NotificationManagerService {
   }
 
   async deleteNotification(id: bigint): Promise<void> {
+    const idStr = id.toString();
     const notification = await this.getNotificationById(id);
-    const result = await this.notificationRepository.delete(id);
+    const result = await this.notificationRepository.delete(idStr);
 
     if (result.affected === 0) {
       throw new NotFoundException('Notification not found');
@@ -187,7 +205,10 @@ export class NotificationManagerService {
       if (notification.isGlobal) {
         this.notificationGateway.emitDeletionToAll(id.toString());
       } else if (notification.userId) {
-        this.notificationGateway.emitDeletionToUser(notification.userId, id.toString());
+        this.notificationGateway.emitDeletionToUser(
+          notification.userId,
+          id.toString()
+        );
       }
     } catch (error) {
       console.error('Failed to send realtime deletion notification:', error);
@@ -221,10 +242,7 @@ export class NotificationManagerService {
 
   async getNotificationCount(userId: bigint): Promise<number> {
     return await this.notificationRepository.count({
-      where: [
-        { userId },
-        { isGlobal: true }
-      ],
+      where: [{ userId }, { isGlobal: true }],
     });
   }
 
@@ -232,7 +250,7 @@ export class NotificationManagerService {
     return await this.notificationRepository.count({
       where: [
         { userId, isRead: false },
-        { isGlobal: true, isRead: false }
+        { isGlobal: true, isRead: false },
       ],
     });
   }
@@ -257,11 +275,11 @@ export class NotificationManagerService {
     await this.notificationRepository.update(
       [
         { userId, isRead: false },
-        { isGlobal: true, isRead: false }
+        { isGlobal: true, isRead: false },
       ],
       {
         isRead: true,
-        readAt: new Date()
+        readAt: new Date(),
       }
     );
   }
@@ -273,7 +291,11 @@ export class NotificationManagerService {
   }
 
   // Helper methods for common notification types
-  async notifyUserRequestStatus(userId: bigint, requestTitle: string, status: string): Promise<NotificationEntity> {
+  async notifyUserRequestStatus(
+    userId: bigint,
+    requestTitle: string,
+    status: string
+  ): Promise<NotificationEntity> {
     return this.createNotification({
       userId,
       type: 'request_status',
@@ -281,7 +303,10 @@ export class NotificationManagerService {
     });
   }
 
-  async notifyUserProjectInvite(userId: bigint, projectName: string): Promise<NotificationEntity> {
+  async notifyUserProjectInvite(
+    userId: bigint,
+    projectName: string
+  ): Promise<NotificationEntity> {
     return this.createNotification({
       userId,
       type: 'project_invite',
@@ -289,7 +314,10 @@ export class NotificationManagerService {
     });
   }
 
-  async notifyUserNewMessage(userId: bigint, fromUser: string): Promise<NotificationEntity> {
+  async notifyUserNewMessage(
+    userId: bigint,
+    fromUser: string
+  ): Promise<NotificationEntity> {
     return this.createNotification({
       userId,
       type: 'new_message',

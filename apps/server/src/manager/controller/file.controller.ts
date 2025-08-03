@@ -18,7 +18,6 @@ import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import type { Response } from 'express';
-import { NotFoundException } from '@nestjs/common';
 
 @Controller('files')
 export class FileController {
@@ -27,10 +26,9 @@ export class FileController {
   @UseGuards(JwtAuthGuard)
   @Get('project/:projectId')
   async getProjectFiles(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Req() req: AuthenticatedRequest
+    @Param('projectId', BigIntTransformPipe) projectId: bigint
   ) {
-    return this.fileService.getProjectFiles(projectId, req.user.id);
+    return this.fileService.getProjectFiles(projectId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -66,23 +64,6 @@ export class FileController {
   ) {
     return this.fileService.saveTempFile(file, req.user.id);
   }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':fileId/download')
-  async downloadFile(@Param('fileId') fileId: string, @Res() res: Response) {
-    const file = await this.fileService.getFileById(fileId);
-    if (!file) {
-      throw new NotFoundException('File not found');
-    }
-    res.set({
-      'Content-Type': file.fileType,
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(
-        file.fileName
-      )}"`,
-    });
-    res.send(file.fileContent);
-  }
-
 
   @UseGuards(JwtAuthGuard)
   @Post(':requestId/upload')
@@ -147,10 +128,9 @@ export class FileController {
       'Content-Disposition': `attachment; filename="${file.fileName}"`,
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Content-Type'
+      'Access-Control-Allow-Headers': 'Content-Type',
     });
 
     res.send(file.fileContent);
   }
-
 }

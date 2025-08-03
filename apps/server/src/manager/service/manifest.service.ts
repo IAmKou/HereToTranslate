@@ -201,6 +201,7 @@ export class ManifestService {
                 (ocrError?.message || ocrError)
             );
           }
+          console.log(err);
         }
 
         if (items && items.length > 0) {
@@ -215,7 +216,7 @@ export class ManifestService {
               originalText: lineObj.text,
               language: 'en',
               font: lineObj.items[0]?.font || 'default',
-              fontSize: lineObj.items[0]?.fontSize,
+              // fontSize: lineObj.items[0]?.fontSize,
               style: {
                 bold: lineObj.items.some((i) => i.bold),
                 italic: lineObj.items.some((i) => i.italic),
@@ -286,7 +287,7 @@ export class ManifestService {
           ) {
             $(el)
               .find('img')
-              .each((j: any, img: any) => {
+              .each((_j: any, _img: any) => {
                 manifestEntries.push({
                   projectId: String(file.project.id),
                   branchId: String(file.branch.id),
@@ -357,6 +358,7 @@ export class ManifestService {
         try {
           jsonContent = JSON.parse(file.fileContent.toString());
         } catch (e: any) {
+          console.log(e);
           break;
         }
         const strings = extractStrings(jsonContent);

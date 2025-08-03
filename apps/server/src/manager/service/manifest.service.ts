@@ -99,6 +99,30 @@ function groupTextByLine(items, yThreshold = 5) {
   });
 }
 
+// Hàm mới để chia part theo trang
+function assignFilePartsByPage(manifestEntries: any[]): void {
+  // Nhóm các entries theo trang
+  const entriesByPage = new Map<number, any[]>();
+
+  for (const entry of manifestEntries) {
+    const page = entry.position?.page || 1; // Mặc định page 1 nếu không có thông tin trang
+    if (!entriesByPage.has(page)) {
+      entriesByPage.set(page, []);
+    }
+    entriesByPage.get(page)!.push(entry);
+  }
+
+  // Gán filePart theo số trang
+  const sortedPages = Array.from(entriesByPage.keys()).sort((a, b) => a - b);
+  for (let i = 0; i < sortedPages.length; i++) {
+    const page = sortedPages[i];
+    const entries = entriesByPage.get(page)!;
+    for (const entry of entries) {
+      entry.filePart = i; // Bắt đầu từ 0
+    }
+  }
+}
+
 @Injectable()
 export class ManifestService {
   constructor(
@@ -183,7 +207,7 @@ export class ManifestService {
               language: 'en',
               font: 'default',
               style: {},
-              position: { x: 0, y: 0 },
+              position: { x: 0, y: 0, page: 1 }, // OCR không có thông tin trang, mặc định page 1
             });
           }
           console.log('[PDF][OCR.space] manifestEntries from OCR:', manifestEntries.length);
@@ -219,7 +243,7 @@ export class ManifestService {
                 language: 'en',
                 font: 'default',
                 style: {},
-                position: { x: 0, y: 0 },
+                position: { x: 0, y: 0, page: 1 }, // Word không có thông tin trang cụ thể, mặc định page 1
               });
               pictureCount++;
             });
@@ -234,7 +258,7 @@ export class ManifestService {
               language: 'en',
               font: 'default',
               style: {},
-              position: { x: 0, y: 0 },
+              position: { x: 0, y: 0, page: 1 }, // Word không có thông tin trang cụ thể, mặc định page 1
             });
           }
         });
@@ -257,7 +281,7 @@ export class ManifestService {
             language: 'en',
             font: 'default',
             style: {},
-            position: { x: 0, y: 0 },
+            position: { x: 0, y: 0, page: 1 }, // Plain text không có thông tin trang, mặc định page 1
           });
         }
         break;
@@ -293,7 +317,7 @@ export class ManifestService {
               language: 'en',
               font: 'default',
               style: {},
-              position: { x: 0, y: 0 },
+              position: { x: 0, y: 0, page: 1 }, // JSON không có thông tin trang, mặc định page 1
             });
           }
         }
@@ -316,11 +340,15 @@ export class ManifestService {
             language: 'en',
             font: 'default',
             style: {},
-            position: { x: 0, y: 0 },
+            position: { x: 0, y: 0, page: 1 }, // Fallback không có thông tin trang, mặc định page 1
           });
         }
       }
     }
+
+    // Chia part theo trang thay vì theo số lượng string cố định
+    assignFilePartsByPage(manifestEntries);
+    console.log(`[MANIFEST] Assigned file parts by page. Total entries: ${manifestEntries.length}`);
 
     // Trước khi insertMany, set obsolete: false cho từng manifestEntries
     for (const entry of manifestEntries) {
@@ -334,8 +362,13 @@ export class ManifestService {
         language: entry.language
       });
       if (existing) {
-        // Nếu đã có, chỉ update obsolete: false
-        await this.translationModel.updateOne({ _id: existing._id }, { $set: { obsolete: false } });
+        // Nếu đã có, chỉ update obsolete: false và filePart mới
+        await this.translationModel.updateOne({ _id: existing._id }, {
+          $set: {
+            obsolete: false,
+            filePart: entry.filePart
+          }
+        });
       } else {
         // Nếu chưa có, insert mới
         await this.translationModel.create(entry);

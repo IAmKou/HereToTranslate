@@ -69,6 +69,8 @@ export interface FilePart {
   part: number;
   stringCount: number;
   totalParts: number;
+  pageNumber?: number; // Số trang (hiển thị từ 1)
+  hasTranslatedStrings?: boolean; // Có strings đã dịch chưa
 }
 
 export interface TaskProgress {
@@ -140,41 +142,73 @@ export const taskService = {
   },
 
   async getFileParts(projectId: string, branchId: string, fileId: string): Promise<FilePart[]> {
-    const { data } = await axiosInstance.get('/translation/strings', {
-      params: {
-        projectId,
-        branchId,
-        fileId,
-        language: 'en', // Thêm tham số language mặc định
-      },
-    });
-
-    // Sử dụng cùng logic chia parts như trong ProjectTranslationTab
-    const PART_SIZE = 250;
-    const strings = data || [];
-
-    // Lọc strings cho file cụ thể
-    const fileStrings = strings.filter((str: any) => str.fileId === fileId);
-
-    if (fileStrings.length === 0) {
-      return [];
-    }
-
-    const totalParts = Math.ceil(fileStrings.length / PART_SIZE);
-    const parts: FilePart[] = [];
-
-    for (let part = 0; part < totalParts; part++) {
-      const start = part * PART_SIZE;
-      const stringCount = Math.min(PART_SIZE, fileStrings.length - start);
-
-      parts.push({
-        part,
-        stringCount,
-        totalParts,
+    try {
+      // Sử dụng API mới để lấy thông tin trang
+      const { data } = await axiosInstance.get(`/translation/file-pages/${fileId}`, {
+        params: {
+          projectId,
+          branchId,
+        },
       });
-    }
 
-    return parts;
+      if (!data || !data.pages) {
+        return [];
+      }
+
+      // Chuyển đổi thông tin trang thành FilePart
+      const parts: FilePart[] = data.pages.map((page: any) => ({
+        part: page.filePart,
+        stringCount: page.stringCount,
+        totalParts: data.totalPages,
+        pageNumber: page.pageNumber,
+        hasTranslatedStrings: page.hasTranslatedStrings,
+      }));
+
+      return parts;
+    } catch (error) {
+      console.error('Error getting file pages:', error);
+      // Fallback về logic cũ nếu API mới không hoạt động
+      const { data } = await axiosInstance.get('/translation/strings', {
+        params: {
+          projectId,
+          branchId,
+          fileId,
+          language: 'en',
+        },
+      });
+
+      const fileStrings = data || [];
+      const filteredStrings = fileStrings.filter((str: any) => str.fileId === fileId);
+
+      if (filteredStrings.length === 0) {
+        return [];
+      }
+
+      const stringsByPart = new Map<number, any[]>();
+
+      for (const str of filteredStrings) {
+        const part = str.filePart || 0;
+        if (!stringsByPart.has(part)) {
+          stringsByPart.set(part, []);
+        }
+        stringsByPart.get(part)!.push(str);
+      }
+
+      const sortedParts = Array.from(stringsByPart.keys()).sort((a, b) => a - b);
+      const parts: FilePart[] = [];
+
+      for (const part of sortedParts) {
+        const strings = stringsByPart.get(part)!;
+        parts.push({
+          part,
+          stringCount: strings.length,
+          totalParts: sortedParts.length,
+          pageNumber: part + 1, // Giả định mỗi part là một trang
+        });
+      }
+
+      return parts;
+    }
   },
 
   async getTaskProgress(taskId: string): Promise<TaskProgress> {

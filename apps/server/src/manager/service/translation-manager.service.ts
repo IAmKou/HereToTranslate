@@ -357,6 +357,39 @@ export class TranslationService {
       fileName: fileNamesMap[str.fileId] || '',
     }));
   }
+
+  async getFilePages(fileId: string, projectId: string, branchId: string) {
+    // Lấy tất cả strings của file để phân tích số trang
+    const strings = await this.translationModel
+      .find({ fileId, projectId, branchId })
+      .sort({ filePart: 1, _id: 1 })
+      .lean();
+
+    // Nhóm strings theo filePart (trang)
+    const pages = new Map<number, any[]>();
+    for (const str of strings) {
+      const page = str.filePart || 0;
+      if (!pages.has(page)) {
+        pages.set(page, []);
+      }
+      pages.get(page)!.push(str);
+    }
+
+    // Tạo danh sách trang với thông tin chi tiết
+    const sortedPages = Array.from(pages.keys()).sort((a, b) => a - b);
+    const pageInfo = sortedPages.map(page => ({
+      pageNumber: page + 1, // Hiển thị từ 1 thay vì 0
+      filePart: page,
+      stringCount: pages.get(page)!.length,
+      hasTranslatedStrings: pages.get(page)!.some(str => str.translatedText && str.translatedText.trim().length > 0)
+    }));
+
+    return {
+      fileId,
+      totalPages: sortedPages.length,
+      pages: pageInfo
+    };
+  }
 }
 
 async function rebuildFileWithManifest(

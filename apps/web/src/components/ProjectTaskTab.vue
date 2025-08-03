@@ -652,7 +652,7 @@ const dragOverColumnName = computed(() => {
 const filePartsData = ref<Map<string, any[]>>(new Map());
 const currentPartInfo = ref<{partNumber: number, stringCount: number} | null>(null);
 
-// Function để load file parts data
+// Function để load file pages data
 async function loadFilePartsData(fileId: string) {
   if (filePartsData.value.has(fileId)) {
     return filePartsData.value.get(fileId);
@@ -663,7 +663,7 @@ async function loadFilePartsData(fileId: string) {
     filePartsData.value.set(fileId, parts);
     return parts;
   } catch (err) {
-    console.error('Failed to load file parts:', err);
+    console.error('Failed to load file pages:', err);
     return [];
   }
 }
@@ -1108,7 +1108,7 @@ async function updatePartInfo() {
   }
 
   currentPartInfo.value = {
-    partNumber: selectedTask.value.filePart + 1,
+    partNumber: part.pageNumber || (selectedTask.value.filePart + 1),
     stringCount: part.stringCount
   };
 }
@@ -1683,7 +1683,7 @@ const closeEditTaskInline = () => {
                 File: <b>{{ selectedTaskTruncatedFileName }}</b>
               </div>
               <div v-if="selectedTask.filePart !== undefined">
-                Part: <b>{{ currentPartInfo?.partNumber }}</b> ({{ currentPartInfo?.stringCount }})
+                Page: <b>{{ currentPartInfo?.partNumber }}</b> ({{ currentPartInfo?.stringCount }} strings)
               </div>
               <div v-else>
                 Parts: <b>All parts</b>

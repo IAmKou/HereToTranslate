@@ -9,6 +9,6 @@ services:
     staticPublishPath: ./apps/web/dist
     envVars:
       - key: VITE_API_URL
-        value: https://your-backend-api-url.com/api
+        value: https://htt-ekpa.onrender.com/api
       - key: VITE_SERVER_URL
-        value: https://your-backend-api-url.com
+        value: https://htt-ekpa.onrender.com.com

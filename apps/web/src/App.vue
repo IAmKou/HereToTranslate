@@ -62,7 +62,8 @@ const handleInvitationResponse = (invitation: ProjectInvitation) => {
 };
 
 onMounted(() => {
-  authService.getCurrentUser();
+  // Temporarily disable getCurrentUser to debug login issue
+  // authService.getCurrentUser();
 
   // Check for invitations every 30 seconds - Disabled to avoid duplicate notifications
   // invitationCheckInterval = setInterval(checkForNewInvitations, 30000);

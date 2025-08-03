@@ -89,9 +89,9 @@
             No files found. Please check if files have been uploaded to this project.
           </div>
           <div v-if="selectedFileId && fileParts.length > 0" class="file-parts-section">
-            <label class="file-parts-label">File Parts:</label>
+            <label class="file-parts-label">File Pages:</label>
             <div class="file-parts-info" style="margin-bottom: 0.5rem; font-size: 0.875rem; color: #666;">
-              Select specific parts to create tasks for. If you select multiple parts, a single task will be created for the entire file.
+              Select specific pages to create tasks for. If you select multiple pages, a single task will be created for the entire file.
             </div>
             <div class="file-parts-grid">
               <label
@@ -106,7 +106,7 @@
                   @change="onFilePartChange"
                 />
                 <span class="file-part-label">
-                  Part {{ part.part + 1 }} ({{ part.stringCount }} strings)
+                  Page {{ part.pageNumber || (part.part + 1) }} ({{ part.stringCount }} strings)
                 </span>
               </label>
             </div>
@@ -116,29 +116,29 @@
                 class="select-all-btn"
                 @click="selectAllParts"
               >
-                Select All
+                Select All Pages
               </button>
               <button
                 type="button"
                 class="clear-all-btn"
                 @click="clearAllParts"
               >
-                Clear All
+                Clear All Pages
               </button>
             </div>
             <div v-if="selectedFileParts.length > 0" class="file-parts-summary" style="margin-top: 0.5rem; padding: 0.5rem; background: #f0f9ff; border-radius: 4px; font-size: 0.875rem; color: #1e40af;">
-              <strong>Selected:</strong> {{ selectedFileParts.length }} part(s)
+              <strong>Selected:</strong> {{ selectedFileParts.length }} page(s)
               <span v-if="selectedFileParts.length === 1">
-                (Part {{ selectedFileParts[0] + 1 }})
+                (Page {{ getSelectedPageNumber(selectedFileParts[0]) }})
               </span>
               <span v-else>
-                (Multiple parts - task will cover entire file)
+                (Multiple pages - task will cover entire file)
               </span>
             </div>
           </div>
           <div v-else-if="selectedFileId && fileParts.length === 0" class="file-parts-section">
             <div style="color: #666; font-style: italic; text-align: center; padding: 1rem;">
-              No file parts found for this file. The file may not have been processed yet or may not contain translatable content.
+              No file pages found for this file. The file may not have been processed yet or may not contain translatable content.
             </div>
           </div>
         </div>
@@ -829,20 +829,20 @@ async function onFileChange() {
   }
 }
 
-// Handle file part selection change
+// Handle file page selection change
 function onFilePartChange() {
   // Update formData with selected file
   formData.value.fileId = selectedFileId.value;
 
-  // Nếu chỉ chọn 1 part, set filePart
+  // Nếu chỉ chọn 1 page, set filePart
   if (selectedFileParts.value.length === 1) {
     formData.value.filePart = selectedFileParts.value[0];
   } else {
-    // Nếu chọn nhiều parts, không set filePart (sẽ tạo task cho toàn bộ file)
+    // Nếu chọn nhiều pages, không set filePart (sẽ tạo task cho toàn bộ file)
     formData.value.filePart = undefined;
   }
 
-  console.log('Selected file parts:', selectedFileParts.value);
+  console.log('Selected file pages:', selectedFileParts.value);
   console.log('Updated formData:', formData.value);
 }
 
@@ -856,6 +856,12 @@ function selectAllParts() {
 function clearAllParts() {
   selectedFileParts.value = [];
   onFilePartChange();
+}
+
+// Get page number for selected part
+function getSelectedPageNumber(partIndex: number): number {
+  const part = fileParts.value.find(p => p.part === partIndex);
+  return part?.pageNumber || (partIndex + 1);
 }
 
 // Select first available file

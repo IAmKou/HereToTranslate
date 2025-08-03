@@ -71,7 +71,6 @@ const focusUntranslated = ref(false);
 
 
 
-const PART_SIZE = 250;
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
 
 // Hàm kiểm tra file đang processing
@@ -83,8 +82,6 @@ function isFileProcessing(file: any): boolean {
 function reloadFiles() {
   loadFiles();
 }
-
-
 
 // Function để deduplicate strings
 function deduplicateStrings(strings: any[]): any[] {
@@ -108,18 +105,24 @@ defineExpose({
 
 function getTotalParts(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
-  return Math.ceil(arr.length / PART_SIZE);
+  // Nhóm strings theo filePart (đã được chia theo trang từ backend)
+  const parts = new Set<number>();
+  for (const str of arr) {
+    parts.add(str.filePart || 0);
+  }
+  return parts.size;
 }
+
 function getStringsOfPart(fileId: string | number, part: number) {
   const arr = stringsByFile.value[fileId] || [];
-  const start = part * PART_SIZE;
-  return arr.slice(start, start + PART_SIZE);
+  // Lọc strings theo filePart
+  return arr.filter(str => (str.filePart || 0) === part);
 }
 
 function getStringsCountOfPart(fileId: string | number, part: number) {
   const arr = stringsByFile.value[fileId] || [];
-  const start = part * PART_SIZE;
-  return Math.min(PART_SIZE, arr.length - start);
+  // Đếm strings theo filePart
+  return arr.filter(str => (str.filePart || 0) === part).length;
 }
 
 async function loadFiles() {
@@ -266,8 +269,8 @@ function getFilteredStrings(fileId: string | number) {
 
 function getFilteredStringsOfPart(fileId: string | number, part: number) {
   const filtered = getFilteredStrings(fileId);
-  const start = part * PART_SIZE;
-  return filtered.slice(start, start + PART_SIZE);
+  // Lọc strings theo filePart
+  return filtered.filter(str => (str.filePart || 0) === part);
 }
 
 // Thêm hàm chọn icon theo loại file

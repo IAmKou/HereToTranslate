@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "docx": "^9.5.1",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "mammoth": "^1.6.0"
   }
 }

@@ -18,6 +18,16 @@ export class TranslationController {
     return this.translationService.getAllString(projectId, branchId, language, fileId, filePart);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('file-pages/:fileId')
+  async getFilePages(
+    @Param('fileId') fileId: string,
+    @Query('projectId') projectId: string,
+    @Query('branchId') branchId: string
+  ) {
+    return this.translationService.getFilePages(fileId, projectId, branchId);
+  }
+
   @Post('translate/:id')
   async translateString(
     @Param('id') id: string,
@@ -55,6 +65,5 @@ export class TranslationController {
   ) {
     return this.translationService.exportTranslation(fileId, language);
   }
-
 
 }

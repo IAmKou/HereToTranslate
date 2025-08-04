@@ -3,8 +3,8 @@ import {
   Controller,
   Get,
   Post,
-  Req,
   Res,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -15,31 +15,26 @@ import { RolesGuard } from './guards/role.guard';
 import { LoginDto } from '#LocalProject/Dtos';
 import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from './types';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { logger } from 'nx/src/utils/logger';
 
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @IsPublicEndpoint()
   @Post('login')
   async login(@Body() body: LoginDto) {
-    const result = await this.authService.login(
-      body.username,
-      body.password
-    );
+    const result = await this.authService.login(body.username, body.password);
 
     console.log('Login successful');
     console.log('NODE_ENV:', process.env.NODE_ENV);
     console.log('Access token length:', result.accessToken.length);
 
-    const response = { 
+    const response = {
       user: result.user,
-      token: result.accessToken, 
-      message: 'Login successful'
+      token: result.accessToken,
+      message: 'Login successful',
     };
     console.log('Response being sent:', JSON.stringify(response, null, 2));
     return response;
@@ -48,8 +43,9 @@ export class AuthController {
   @IsPublicEndpoint()
   @Post('google')
   async loginWithGoogle(@Body('idToken') idToken: string) {
-    const { accessToken, refreshToken, user } =
-      await this.authService.loginWithGoogle(idToken);
+    const { accessToken, user } = await this.authService.loginWithGoogle(
+      idToken
+    );
     logger.log(idToken);
     logger.log(user);
     return { user, token: accessToken };
@@ -64,11 +60,7 @@ export class AuthController {
     }
 
     const token = authHeader.substring(7);
-    const {
-      accessToken,
-      refreshToken: newRefreshToken,
-      user,
-    } = await this.authService.refreshTokens(token);
+    const { accessToken, user } = await this.authService.refreshTokens(token);
 
     return { user, token: accessToken };
   }
@@ -128,16 +120,13 @@ export class AuthController {
   async getCurrentUser(@Req() req: Request) {
     try {
       console.log('Headers in /me endpoint:', req.headers);
-      
-      // The JWT guard should have already validated the token
-      // and attached the user to the request
       const user = (req as any).user;
       console.log('User from request:', user);
-      
+
       if (!user) {
         throw new UnauthorizedException('User not found in request');
       }
-      
+
       return user;
     } catch (error) {
       console.error('Error in /me endpoint:', error);
@@ -153,7 +142,7 @@ export class AuthController {
     return {
       hasAuthHeader: !!authHeader,
       authHeaderValue: authHeader ? authHeader.substring(0, 20) + '...' : null,
-      userAgent: req.headers['user-agent']
+      userAgent: req.headers['user-agent'],
     };
   }
 
@@ -167,13 +156,13 @@ export class AuthController {
       return {
         status: 'OK',
         authTokensCount: tokenCount,
-        message: 'Database connection successful'
+        message: 'Database connection successful',
       };
     } catch (error) {
       return {
         status: 'ERROR',
         error: error instanceof Error ? error.message : String(error),
-        message: 'Database connection failed'
+        message: 'Database connection failed',
       };
     }
   }
@@ -188,7 +177,7 @@ export class AuthController {
       authHeaderValue: authHeader ? authHeader.substring(0, 20) + '...' : null,
       userAgent: req.headers['user-agent'],
       host: req.headers.host,
-      origin: req.headers.origin
+      origin: req.headers.origin,
     };
   }
 
@@ -199,8 +188,8 @@ export class AuthController {
       message: 'JWT authentication successful',
       user: (req as any).user,
       headers: {
-        authorization: req.headers.authorization ? 'present' : 'missing'
-      }
+        authorization: req.headers.authorization ? 'present' : 'missing',
+      },
     };
   }
 
@@ -211,20 +200,35 @@ export class AuthController {
     if (!token) {
       return { error: 'No token provided' };
     }
-    
+
     try {
       const user = await this.authService.validateToken(token);
-      return { 
-        success: true, 
+      return {
+        success: true,
         user,
-        message: 'Token is valid'
+        message: 'Token is valid',
       };
     } catch (error) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: error instanceof Error ? error.message : String(error),
-        message: 'Token validation failed'
+        message: 'Token validation failed',
       };
     }
+  }
+
+  @Get('ping')
+  @IsPublicEndpoint()
+  ping(@Req() req: Request, @Res() res: Response) {
+    res.setHeader('X-Debug', 'pong');
+    return res.json({
+      message: 'pong',
+      method: req.method,
+      origin: req.headers.origin || null,
+      referer: req.headers.referer || null,
+      cookies: req.headers.cookie || null,
+      receivedHeaders: req.headers,
+      responseHeaders: res.getHeaders ? res.getHeaders() : 'not available',
+    });
   }
 }

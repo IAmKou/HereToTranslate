@@ -262,16 +262,7 @@ const signInWithGoogleRedirect = () => {
   window.location.href = googleOAuthUrl;
 };
 
-// Add a test function for debugging
-const testCurrentToken = async () => {
-  const token = authService.getToken();
-  console.log('🔍 Current token:', token ? token.substring(0, 50) + '...' : 'None');
 
-  if (token) {
-    const isValid = await authService.testToken();
-    console.log('🧪 Token validity:', isValid);
-  }
-};
 </script>
 
 <style scoped>

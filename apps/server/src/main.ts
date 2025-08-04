@@ -1,8 +1,5 @@
-/**
- * This is not a production server yet!
- * This is only a minimal backend to get started.
- */
-
+// main.ts
+import type { Request, Response, NextFunction } from 'express';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MainModule } from './main.module';
@@ -17,6 +14,16 @@ async function bootstrap() {
     shared();
     const app = await NestFactory.create<NestExpressApplication>(MainModule);
 
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      console.log('---- Incoming Request ----');
+      console.log('Method:', req.method, '| URL:', req.originalUrl);
+      console.log('Origin:', req.headers.origin);
+      console.log('Referer:', req.headers.referer);
+      console.log('Cookies:', req.headers.cookie);
+      next();
+    });
+
+    // Serve static uploads if you use this
     app.use(
       '/uploads',
       express.static(join(__dirname, '..', '..', '..', 'uploads'))
@@ -25,6 +32,7 @@ async function bootstrap() {
     app.useGlobalPipes(new ValidationPipe({ enableDebugMessages: true }));
     app.useGlobalInterceptors(new BigIntSerializerInterceptor());
 
+    // ---- MAIN CORS CONFIG ----
     app.enableCors({
       origin: [
         'http://localhost:4200',
@@ -32,6 +40,7 @@ async function bootstrap() {
         process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com',
         'https://heretotranslate.onrender.com',
       ],
+      credentials: true, // This is CRITICAL for cookies!
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     });
 

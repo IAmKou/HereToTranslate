@@ -11,7 +11,6 @@ export interface CrudItem {
 // Dynamic baseURL that updates based on current environment
 const axiosInstance = axios.create({
   baseURL: getEnvironmentConfig().apiUrl,
-  withCredentials: true,
 });
 
 axiosInstance.interceptors.response.use(

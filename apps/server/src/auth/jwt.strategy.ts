@@ -4,11 +4,6 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
 
-const cookieExtractor = (req: Request) => {
-  // Try both cookie names for compatibility
-  return req?.cookies?.access_token || req?.cookies?.accessToken || null;
-};
-
 const headerExtractor = (req: Request) => {
   if (req?.headers?.authorization) {
     const authHeader = req.headers.authorization;
@@ -26,11 +21,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly authService: AuthService) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
-        // Try Authorization header first (most reliable for cross-domain)
+        // Use Authorization header (most reliable for SPA)
         headerExtractor,
-        // Then try cookies as fallback
-        cookieExtractor,
-        // Also try the standard bearer token extractor
+        // Also try the standard bearer token extractor as fallback
         ExtractJwt.fromAuthHeaderAsBearerToken(),
       ]),
       secretOrKey: process.env.JWT_SECRET ?? 'secret',
@@ -52,28 +45,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       `JWT Strategy payload username: ${payload?.username || 'undefined'}`
     );
 
-    // Try to extract token from multiple sources
-    const tokenFromHeader = headerExtractor(req);
-    const tokenFromCookie = cookieExtractor(req);
-    const token = tokenFromHeader || tokenFromCookie;
+    // Extract token from Authorization header
+    const token = headerExtractor(req);
 
     this.logger.log(
       `Token from header: ${
-        tokenFromHeader ? tokenFromHeader.substring(0, 20) + '...' : 'null'
+        token ? token.substring(0, 20) + '...' : 'null'
       }`
-    );
-    this.logger.log(
-      `Token from cookie: ${
-        tokenFromCookie ? tokenFromCookie.substring(0, 20) + '...' : 'null'
-      }`
-    );
-    this.logger.log(
-      `Final token: ${token ? token.substring(0, 20) + '...' : 'null'}`
     );
     this.logger.log(
       `Authorization header: ${req?.headers?.authorization || 'none'}`
     );
-    this.logger.log(`Cookies: ${JSON.stringify(req?.cookies || {})}`);
 
     if (!token) {
       this.logger.warn('No token provided in request');

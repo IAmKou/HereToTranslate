@@ -8,7 +8,6 @@ import { NestFactory } from '@nestjs/core';
 import { MainModule } from './main.module';
 import { shared } from '@here-to-translate/common';
 import { BigIntSerializerInterceptor } from './util/bigint-serializer.interceptor';
-import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import * as express from 'express';
@@ -17,7 +16,6 @@ async function bootstrap() {
   try {
     shared();
     const app = await NestFactory.create<NestExpressApplication>(MainModule);
-    app.use(cookieParser());
 
     app.use(
       '/uploads',
@@ -35,7 +33,6 @@ async function bootstrap() {
         'https://heretotranslate.onrender.com',
       ],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      credentials: true,
     });
 
     const globalPrefix = 'api';

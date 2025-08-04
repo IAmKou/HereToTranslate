@@ -44,9 +44,6 @@ class AuthService {
   private token: string | null = null;
 
   constructor() {
-    // Configure axios defaults
-    axios.defaults.withCredentials = true;
-
     // Load token from localStorage on initialization
     this.token = localStorage.getItem('access_token');
     if (this.token) {
@@ -98,14 +95,12 @@ class AuthService {
       console.log('🌐 API URL:', getBaseUrl());
 
       const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials, {
-        withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
         }
       });
 
       console.log('📥 Login response:', response.data);
-      console.log('🍪 Response cookies:', document.cookie);
 
       if (response.data && response.data.user) {
         this.user = response.data.user as User;
@@ -117,11 +112,7 @@ class AuthService {
           localStorage.setItem('access_token', this.token);
           this.setAuthHeader(this.token);
 
-          // Also try to set as cookie for backend compatibility
-          document.cookie = `access_token=${this.token}; path=/; secure; samesite=none`;
-          document.cookie = `accessToken=${this.token}; path=/; secure; samesite=none`;
-
-          console.log('✅ Token stored in localStorage and cookies');
+          console.log('✅ Token stored in localStorage');
           console.log('🔑 Token preview:', this.token.substring(0, 50) + '...');
         }
 
@@ -152,7 +143,6 @@ class AuthService {
 
     try {
       const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/google`, { idToken }, {
-        withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
         }
@@ -172,10 +162,6 @@ class AuthService {
         this.token = response.data.token;
         localStorage.setItem('access_token', this.token);
         this.setAuthHeader(this.token);
-
-        // Set cookies for backend compatibility
-        document.cookie = `access_token=${this.token}; path=/; secure; samesite=none`;
-        document.cookie = `accessToken=${this.token}; path=/; secure; samesite=none`;
       }
 
       return response.data;
@@ -187,9 +173,7 @@ class AuthService {
 
   async refreshTokens(): Promise<AuthResponse> {
     try {
-      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/refresh`, {}, {
-        withCredentials: true,
-      });
+      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/refresh`, {});
 
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
@@ -198,10 +182,6 @@ class AuthService {
         this.token = response.data.token;
         localStorage.setItem('access_token', this.token);
         this.setAuthHeader(this.token);
-
-        // Update cookies
-        document.cookie = `access_token=${this.token}; path=/; secure; samesite=none`;
-        document.cookie = `accessToken=${this.token}; path=/; secure; samesite=none`;
       }
 
       return response.data;
@@ -213,9 +193,7 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      await axios.post(`${getBaseUrl()}/auth/logout`, {}, {
-        withCredentials: true,
-      });
+      await axios.post(`${getBaseUrl()}/auth/logout`, {});
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
@@ -231,9 +209,7 @@ class AuthService {
         return null;
       }
 
-      const response = await axios.get<User>(`${getBaseUrl()}/auth/me`, {
-        withCredentials: true,
-      });
+      const response = await axios.get<User>(`${getBaseUrl()}/auth/me`);
 
       const user = response.data;
       if (typeof user.role === 'number') {
@@ -253,9 +229,7 @@ class AuthService {
   // Test token validity
   async testToken(): Promise<boolean> {
     try {
-      const response = await axios.get(`${getBaseUrl()}/auth/test-token`, {
-        withCredentials: true,
-      });
+      const response = await axios.get(`${getBaseUrl()}/auth/test-token`);
       console.log('✅ Token test successful:', response.data);
       return true;
     } catch (error) {
@@ -291,10 +265,6 @@ class AuthService {
     this.token = null;
     this.clearAuthHeader();
     localStorage.removeItem('access_token');
-
-    // Clear cookies
-    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
     console.log('🔍 AuthService - All auth data cleared');
   }

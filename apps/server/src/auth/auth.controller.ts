@@ -15,122 +15,62 @@ import { RolesGuard } from './guards/role.guard';
 import { LoginDto } from '#LocalProject/Dtos';
 import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from './types';
-import type { Request, Response } from 'express';
-import { ConfigService } from '@nestjs/config';
+import type { Request } from 'express';
 import { logger } from 'nx/src/utils/logger';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly configService: ConfigService
   ) {}
 
   @IsPublicEndpoint()
   @Post('login')
-  async login(@Body() body: LoginDto, @Res() res: Response) {
+  async login(@Body() body: LoginDto) {
     const result = await this.authService.login(
       body.username,
       body.password
     );
 
-    console.log('Login successful, setting cookies...');
+    console.log('Login successful');
     console.log('NODE_ENV:', process.env.NODE_ENV);
     console.log('Access token length:', result.accessToken.length);
 
-    res.cookie('access_token', result.accessToken, {
-      httpOnly: true,
-      secure: false, 
-      sameSite: 'lax',
-      path: '/',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
-      ),
-    });
-
-    res.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: false, 
-      sameSite: 'lax',
-      path: '/',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
-      ),
-    });
-
-    console.log('Cookies set successfully');
     const response = { 
       user: result.user,
       token: result.accessToken, 
-      message: 'Login successful - check cookies'
+      message: 'Login successful'
     };
     console.log('Response being sent:', JSON.stringify(response, null, 2));
-    return res.json(response);
+    return response;
   }
 
   @IsPublicEndpoint()
   @Post('google')
-  async loginWithGoogle(
-    @Body('idToken') idToken: string,
-    @Res({ passthrough: true }) res: Response
-  ) {
+  async loginWithGoogle(@Body('idToken') idToken: string) {
     const { accessToken, refreshToken, user } =
       await this.authService.loginWithGoogle(idToken);
     logger.log(idToken);
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 1000 * 60 * 15, // 15 mins
-    });
-
-    res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 24 * 7,
-    });
     logger.log(user);
-    return { user };
+    return { user, token: accessToken };
   }
 
   @IsPublicEndpoint()
   @Post('refresh')
-  async refreshTokens(@Req() req: Request, @Res() res: Response) {
-    const refreshToken = req.cookies?.refresh_token;
-    if (!refreshToken) {
-      return res.status(401).json({ message: 'Refresh token not found' });
+  async refreshTokens(@Req() req: Request) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException('No valid token provided');
     }
 
+    const token = authHeader.substring(7);
     const {
       accessToken,
       refreshToken: newRefreshToken,
       user,
-    } = await this.authService.refreshTokens(refreshToken);
+    } = await this.authService.refreshTokens(token);
 
-    // Set new access token cookie
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
-      ),
-    });
-
-    // Set new refresh token cookie
-    res.cookie('refresh_token', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
-      ),
-    });
-
-    return res.json({ user });
+    return { user, token: accessToken };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -149,25 +89,14 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logout(@Req() req: Request, @Res() res: Response) {
-    const accessToken = req.cookies?.access_token;
-    // const refreshToken = req.cookies?.refresh_token;
-
-    if (accessToken) {
-      await this.authService.logout(accessToken);
+  async logout(@Req() req: Request) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      await this.authService.logout(token);
     }
-    //multi session logout
-    // if (refreshToken) {
-    //   await this.authRepository.delete({ refreshToken });
-    // }
 
-    // Clear both old and new cookie names for backward compatibility
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
-
-    return res.json({ message: 'Logged out successfully' });
+    return { message: 'Logged out successfully' };
   }
 
   @Post('forgot-password')
@@ -198,7 +127,6 @@ export class AuthController {
   @Get('me')
   async getCurrentUser(@Req() req: Request) {
     try {
-      console.log('Cookies in /me endpoint:', req.cookies);
       console.log('Headers in /me endpoint:', req.headers);
       
       // The JWT guard should have already validated the token
@@ -220,15 +148,11 @@ export class AuthController {
   @Get('debug')
   @IsPublicEndpoint()
   async debugAuth(@Req() req: Request) {
-    const token = req.cookies?.access_token;
     const authHeader = req.headers.authorization;
 
     return {
-      hasCookie: !!token,
       hasAuthHeader: !!authHeader,
-      cookieValue: token ? token.substring(0, 20) + '...' : null,
       authHeaderValue: authHeader ? authHeader.substring(0, 20) + '...' : null,
-      allCookies: req.cookies,
       userAgent: req.headers['user-agent']
     };
   }
@@ -257,62 +181,14 @@ export class AuthController {
   @Get('test-auth')
   @IsPublicEndpoint()
   async testAuth(@Req() req: Request) {
-    const token = req.cookies?.access_token;
     const authHeader = req.headers.authorization;
 
     return {
-      hasCookie: !!token,
       hasAuthHeader: !!authHeader,
-      cookieValue: token ? token.substring(0, 20) + '...' : null,
       authHeaderValue: authHeader ? authHeader.substring(0, 20) + '...' : null,
-      allCookies: req.cookies,
       userAgent: req.headers['user-agent'],
       host: req.headers.host,
       origin: req.headers.origin
-    };
-  }
-
-  @Get('test-cookies')
-  @IsPublicEndpoint()
-  async testCookies(@Req() req: Request, @Res() res: Response) {
-    // Set a test cookie
-    res.cookie('test_cookie', 'test_value', {
-      httpOnly: false, // Make it accessible to JavaScript for testing
-      secure: false,
-      sameSite: 'lax',
-      path: '/',
-    });
-
-    return {
-      message: 'Test cookie set',
-      existingCookies: req.cookies,
-      headers: {
-        cookie: req.headers.cookie || 'none'
-      }
-    };
-  }
-
-  @Get('test-session')
-  @IsPublicEndpoint()
-  async testSession(@Req() req: Request, @Res() res: Response) {
-    console.log('=== SESSION TEST ===');
-    console.log('All headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Cookies:', req.cookies);
-    console.log('Cookie header:', req.headers.cookie);
-    
-    // Set a session cookie
-    res.cookie('session_test', 'session_value', {
-      httpOnly: false,
-      secure: false,
-      sameSite: 'lax',
-      path: '/',
-    });
-
-    return {
-      message: 'Session test',
-      cookies: req.cookies,
-      cookieHeader: req.headers.cookie || 'none',
-      allHeaders: Object.keys(req.headers)
     };
   }
 
@@ -322,10 +198,8 @@ export class AuthController {
     return {
       message: 'JWT authentication successful',
       user: (req as any).user,
-      cookies: req.cookies,
       headers: {
-        authorization: req.headers.authorization ? 'present' : 'missing',
-        cookie: req.headers.cookie ? 'present' : 'missing'
+        authorization: req.headers.authorization ? 'present' : 'missing'
       }
     };
   }

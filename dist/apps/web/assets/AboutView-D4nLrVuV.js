@@ -1,1 +1,0 @@
-import{_ as s}from"./index-CXJevnyr.js";import{c as o,b as t,g as r}from"./vendor-Bd60ieBb.js";import"./utils-C-1G2k3o.js";import"./emoji-CXUWDbkB.js";const a={class:"about"};const i=s({},[["render",function(s,i){return r(),o("div",a,i[0]||(i[0]=[t("h1",null,"This is an about page",-1)]))}]]);export{i as default};

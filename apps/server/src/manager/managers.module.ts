@@ -5,15 +5,12 @@ import {
   ProjectDiscussionThreadEntity,
   ProjectEntity,
   ProjectGroupEntity,
-  ProjectRoleEntity,
-  ProjectTagEntity,
+  ProjectRoleEntity, RequestRegistrationEntity,
+  ProjectTagEntity,ProjectInvitationEntity,
   RequestEntity, TransactionEntity,
   UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
   BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
-import { RequestRegistrationEntity } from '#LocalProject/Entities';
-
-import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '#LocalProject/Auth/auth.module';
@@ -163,7 +160,6 @@ import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
     TaskController,
     NotificationController,
     AiChatController,
-    NotificationController,
     AdminNotificationController,
     ProjectInvitationController
   ]

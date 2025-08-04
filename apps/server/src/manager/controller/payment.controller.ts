@@ -45,7 +45,8 @@ export class PaymentController {
     const result = await this.paymentService.capturePaymentAndCreateProject(orderId);
 
     if (result.success) {
-      return res.redirect(`http://localhost:4200/my-requests`);
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:4200';
+      return res.redirect(`${clientUrl}/my-requests`);
     } else {
       return res.redirect('/payment-failed');
     }
@@ -56,7 +57,8 @@ export class PaymentController {
     const result = await this.paymentService.capturePayment(orderId);
 
     if (result.success) {
-      return res.redirect(`http://localhost:4200/my-requests`);
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:4200';
+      return res.redirect(`${clientUrl}/my-requests`);
     } else {
       return res.redirect('/payment-failed');
     }

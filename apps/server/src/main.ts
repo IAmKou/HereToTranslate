@@ -21,7 +21,7 @@ async function bootstrap() {
 
     app.use(
       '/uploads',
-      express.static(join(__dirname, '..', '..', '..', 'uploads')),
+      express.static(join(__dirname, '..', '..', '..', 'uploads'))
     );
 
     app.useGlobalPipes(new ValidationPipe({ enableDebugMessages: true }));
@@ -30,8 +30,8 @@ async function bootstrap() {
     app.enableCors({
       origin: [
         'http://localhost:4200',
-        'http://26.82.216.71:4200',
-        /^http:\/\/26\.82\.216\.\d+:4200$/,
+        process.env.CLIENT_URL || 'https://heretotranslate.onrender.com',
+        process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com',
         'https://heretotranslate.onrender.com',
       ],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -49,6 +49,7 @@ async function bootstrap() {
     process.exit(1);
   }
 }
+
 
 bootstrap();
 

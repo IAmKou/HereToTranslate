@@ -51,7 +51,7 @@ const headers = {
 
 const submitComment = async () => {
   if (!commentText.value.trim()) return;
-  await axios.post('http://localhost:3000/api/post/comment', {
+  await axios.post((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/post/comment', {
     postId: props.postId,
     content: commentText.value,
   }, { headers });
@@ -60,21 +60,21 @@ const submitComment = async () => {
 };
 
 const updateComment = async (comment) => {
-  await axios.patch(`http://localhost:3000/api/post/comment/${comment.id}`, {
+  await axios.patch((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + `/post/comment/${comment.id}`, {
     content: comment.editContent,
   }, { headers });
   await loadComments();
 };
 
 const deleteComment = async (id) => {
-  await axios.delete(`http://localhost:3000/api/post/comment/${id}`, { headers });
+  await axios.delete((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + `/post/comment/${id}`, { headers });
   await loadComments();
 };
 
 const reportComment = async (id) => {
   const reason = prompt('Why are you reporting this comment?');
   if (reason) {
-    await axios.post('http://localhost:3000/api/post/comment/report', {
+    await axios.post((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/post/comment/report', {
       commentId: id,
       reason,
     }, { headers });
@@ -83,7 +83,7 @@ const reportComment = async (id) => {
 };
 
 const loadComments = async () => {
-  const res = await axios.get(`http://localhost:3000/api/post/${props.postId}/comments`);
+  const res = await axios.get((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + `/post/${props.postId}/comments`);
   comments.value = res.data.map(c => ({ ...c, editContent: c.content }));
 };
 

@@ -1226,7 +1226,6 @@ function goToRequestDetail(requestId) {
 }
 
 
-
 async function debugConnection() {
   console.log('=== DEBUG CONNECTION ===')
   console.log('Base URL:', axiosInstance.defaults.baseURL)
@@ -1235,7 +1234,7 @@ async function debugConnection() {
   try {
     // Test basic connectivity
     console.log('Testing basic connectivity...')
-    const response = await fetch('http://localhost:3000/api/auth/me', {
+    const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/auth/me', {
       credentials: 'include'
     })
     console.log('Fetch response status:', response.status)
@@ -1286,28 +1285,33 @@ onMounted(fetchRequests)
   flex-direction: column;
   min-height: 100vh;
 }
+
 .main-content {
   display: flex;
   flex: 1;
   margin-left: 240px;
-  transition: margin-left 0.2s cubic-bezier(.4,0,.2,1);
+  transition: margin-left 0.2s cubic-bezier(.4, 0, .2, 1);
 }
 
 .layout-wrapper.sidebar-collapsed .main-content {
   margin-left: 72px;
 }
+
 .content {
   flex: 1;
   padding: 32px 20px;
   background: #f6f8fa;
 }
+
 .my-requests-container {
   max-width: 1200px;
   margin: 0 auto;
 }
+
 .requests-header {
   margin-bottom: 32px;
 }
+
 .requests-title {
   font-size: 1.8rem;
   font-weight: 700;
@@ -1317,9 +1321,11 @@ onMounted(fetchRequests)
   align-items: center;
   gap: 0.75rem;
 }
+
 .emoji {
   font-size: 1.8rem;
 }
+
 .requests-desc {
   font-size: 0.95rem;
   color: #64748b;
@@ -1874,7 +1880,7 @@ onMounted(fetchRequests)
   background: #f8fafc;
   padding: 1rem 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   flex-wrap: wrap;
 }
 
@@ -2005,9 +2011,11 @@ onMounted(fetchRequests)
   position: relative;
   text-decoration: none;
 }
+
 .btn-candidate .pi-users {
   font-size: 14px;
 }
+
 .btn-candidate .badge {
   background: #f59e42;
   color: #fff;
@@ -2017,6 +2025,7 @@ onMounted(fetchRequests)
   margin-left: 4px;
   font-weight: 600;
 }
+
 .btn-candidate.disabled,
 .btn-candidate[disabled] {
   background: #cbd5e1;
@@ -2024,22 +2033,27 @@ onMounted(fetchRequests)
   pointer-events: none;
   opacity: 0.7;
 }
+
 .btn-candidate:hover:not(.disabled) {
   background: #1d4ed8;
 }
+
 .sort-icon {
   margin-left: 4px;
   font-size: 0.75rem;
   color: #9ca3af;
 }
+
 th:hover .sort-icon {
   color: #1f2937;
 }
+
 .deadline-icon {
   margin-right: 3px;
   font-size: 1em;
   vertical-align: middle;
 }
+
 .custom-badge {
   display: inline-flex;
   align-items: center;
@@ -2049,10 +2063,12 @@ th:hover .sort-icon {
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
 }
+
 .approved-badge {
   background: #d1fae5;
   color: #15803d;
 }
+
 .pending-badge {
   background: #fef9c3;
   color: #b45309;
@@ -2070,26 +2086,32 @@ th:hover .sort-icon {
   background: #fee2e2;
   color: #991b1b;
 }
+
 .public-badge {
   background: #eff6ff;
   color: #1d4ed8;
 }
+
 .private-badge {
   background: #fef3c7;
   color: #92400e;
 }
+
 .table-row-hover:hover {
   background: #f9fafb;
 }
+
 .deal-amount {
   color: #16a34a !important;
   font-weight: bold;
 }
+
 .deal-icon {
   margin-right: 2px;
   font-size: 1em;
   vertical-align: middle;
 }
+
 .th-flex {
   display: flex;
   align-items: center;

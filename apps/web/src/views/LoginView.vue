@@ -111,7 +111,8 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue';
+// Login component script setup
+import { ref, computed, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import logo from '../assets/logo.png';
@@ -125,18 +126,28 @@ const usernameError = ref('');
 const passwordError = ref('');
 const router = useRouter();
 
-// Computed property to check if there are any validation errors
+// Check if already authenticated on component mount
+onMounted(async () => {
+  if (authService.isAuthenticated()) {
+    console.log('👤 User already authenticated, redirecting...');
+    const user = authService.getUser();
+    if (user?.role?.id === 1 || user?.role?.id === 2) {
+      await router.push('/adminhome');
+    } else {
+      await router.push('/userhome');
+    }
+  }
+});
+
 const hasValidationErrors = computed(() => {
   return !!(usernameError.value || passwordError.value);
 });
 
-// Validation functions
 const validateUsername = () => {
   if (!username.value.trim()) {
     usernameError.value = 'Username is required';
     return false;
   }
-  // Remove minimum length requirement for username
   usernameError.value = '';
   return true;
 };
@@ -146,17 +157,14 @@ const validatePassword = () => {
     passwordError.value = 'Password is required';
     return false;
   }
-  // Remove minimum length requirement for password
   passwordError.value = '';
   return true;
 };
 
-// Clear error functions
 const clearUsernameError = () => {
   if (usernameError.value) {
     usernameError.value = '';
   }
-  // Also clear general error when user starts typing
   if (error.value) {
     error.value = '';
   }
@@ -166,78 +174,73 @@ const clearPasswordError = () => {
   if (passwordError.value) {
     passwordError.value = '';
   }
-  // Also clear general error when user starts typing
   if (error.value) {
     error.value = '';
   }
 };
 
 const login = async () => {
-  // Clear previous errors but keep them visible for a moment
+  console.log('🔐 Starting login process...');
   error.value = '';
-  console.log('Starting login process...');
 
-  // Force Vue to update the DOM
   await nextTick();
 
-  // Validate all fields
   const isUsernameValid = validateUsername();
   const isPasswordValid = validatePassword();
 
   if (!isUsernameValid || !isPasswordValid) {
-    console.log('Validation failed, not proceeding with login');
-    return; // Don't proceed if validation fails
+    console.log('❌ Validation failed, not proceeding with login');
+    return;
   }
 
   try {
     isSubmitting.value = true;
+    console.log('📤 Sending login request...');
 
     const response = await authService.login({
       username: username.value.trim(),
       password: password.value,
     });
 
-    const user = authService.getUser();
-    console.log('Login successful, user role:', user?.role);
+    console.log('📥 Login response received:', response);
 
-    // Only redirect if login was successful and we have a user
+    // Test the token immediately after login
+    const tokenValid = await authService.testToken();
+    console.log('🧪 Token test result:', tokenValid);
+
+    const user = authService.getUser();
+    console.log('👤 Current user after login:', user);
+
     if (user && user.id) {
-      if (user?.role?.id === 1) {
-        await router.push('/adminhome');
-      } else if (user?.role?.id === 2) {
+      console.log('✅ Login successful, redirecting...');
+
+      if (user?.role?.id === 1 || user?.role?.id === 2) {
+        console.log('🔑 Admin user, redirecting to admin home');
         await router.push('/adminhome');
       } else {
+        console.log('👤 Regular user, redirecting to user home');
         await router.push('/userhome');
       }
     } else {
-      // If no user after login, something went wrong
+      console.error('❌ No user data after successful login');
       error.value = 'Login failed. Please try again.';
     }
 
   } catch (err) {
-    console.error('Login error:', err);
-
-    // Ensure user is cleared on login failure (auth service already does this)
+    console.error('❌ Login error:', err);
     authService.clearAuthData();
 
-    // Handle different types of errors
     if (err.response) {
-      // Server responded with error status
       const errorMessage = err.response.data?.message || err.response.data?.error || 'Invalid username or password';
       error.value = errorMessage;
-      console.log('Setting error message:', errorMessage);
+      console.log('📝 Error message set:', errorMessage);
     } else if (err.request) {
-      // Network error
       error.value = 'Network error. Please check your connection and try again.';
-      console.log('Setting network error message');
+      console.log('🌐 Network error detected');
     } else {
-      // Other errors
       error.value = err.message || 'Login failed. Please check your credentials and try again.';
-      console.log('Setting generic error message:', error.value);
+      console.log('❓ Generic error:', error.value);
     }
-
-    // Ensure we stay on the login page by preventing any navigation
-    console.log('Login failed, staying on login page to show error');
   } finally {
     isSubmitting.value = false;
   }
@@ -249,19 +252,25 @@ const goToRegister = () => {
 
 const signInWithGoogleRedirect = () => {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '580928535531-od62udfr22bcl2r6d49ev4esoeh880mf.apps.googleusercontent.com';
-
-  // Use current window origin to support both localhost and network IP
   const redirectUri = `${window.location.origin}/oauth-callback`;
 
   console.log('🔍 Google OAuth - Client ID:', clientId);
   console.log('🔍 Google OAuth - Redirect URI:', redirectUri);
-  console.log('🔍 Google OAuth - Window origin:', window.location.origin);
 
   const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token id_token&scope=openid%20email%20profile&nonce=secure_nonce`;
 
-  console.log('🔍 Google OAuth - Full URL:', googleOAuthUrl);
-
   window.location.href = googleOAuthUrl;
+};
+
+// Add a test function for debugging
+const testCurrentToken = async () => {
+  const token = authService.getToken();
+  console.log('🔍 Current token:', token ? token.substring(0, 50) + '...' : 'None');
+
+  if (token) {
+    const isValid = await authService.testToken();
+    console.log('🧪 Token validity:', isValid);
+  }
 };
 </script>
 

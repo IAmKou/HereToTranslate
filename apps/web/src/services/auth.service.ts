@@ -20,7 +20,7 @@ export interface RegisterData {
 
 export interface AuthResponse {
   user: User;
-  token?: string; // Add token to the response interface
+  token?: string;
 }
 
 export interface User {
@@ -41,67 +41,102 @@ export interface User {
 class AuthService {
   private user: User | null = null;
   private authState = ref<User | null>(null);
-  private token: string | null = null; // Add token storage
+  private token: string | null = null;
 
   constructor() {
-    // Configure axios to send cookies with requests
+    // Configure axios defaults
     axios.defaults.withCredentials = true;
-    
+
     // Load token from localStorage on initialization
     this.token = localStorage.getItem('access_token');
     if (this.token) {
       this.setAuthHeader(this.token);
     }
+
+    // Add request interceptor to ensure token is always included
+    axios.interceptors.request.use(
+      (config) => {
+        const token = this.token || localStorage.getItem('access_token');
+        if (token && config.headers) {
+          config.headers['Authorization'] = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error) => {
+        return Promise.reject(error);
+      }
+    );
+
+    // Add response interceptor to handle token expiration
+    axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          console.log('🚨 Token expired or invalid, clearing auth data');
+          this.clearAuthData();
+          // Optionally redirect to login
+          // window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
-  // Add method to set Authorization header
   private setAuthHeader(token: string) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    console.log('✅ Auth header set with token:', token.substring(0, 20) + '...');
   }
 
-  // Add method to clear Authorization header
   private clearAuthHeader() {
     delete axios.defaults.headers.common['Authorization'];
+    console.log('🗑️ Auth header cleared');
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials);
+      console.log('🔐 Attempting login with username:', credentials.username);
+      console.log('🌐 API URL:', getBaseUrl());
 
-      // Only set user if login was successful
+      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      console.log('📥 Login response:', response.data);
+      console.log('🍪 Response cookies:', document.cookie);
+
       if (response.data && response.data.user) {
         this.user = response.data.user as User;
         this.authState.value = response.data.user as User;
-        
+
         // Store token if provided in response
         if (response.data.token) {
           this.token = response.data.token;
           localStorage.setItem('access_token', this.token);
           this.setAuthHeader(this.token);
-          console.log('✅ AuthService - Token stored and header set');
+
+          // Also try to set as cookie for backend compatibility
+          document.cookie = `access_token=${this.token}; path=/; secure; samesite=none`;
+          document.cookie = `accessToken=${this.token}; path=/; secure; samesite=none`;
+
+          console.log('✅ Token stored in localStorage and cookies');
+          console.log('🔑 Token preview:', this.token.substring(0, 50) + '...');
         }
-        
-        console.log('✅ AuthService - User set after successful login:', this.user);
+
+        console.log('✅ User authenticated:', this.user.username, 'Role:', this.user.role);
+        return response.data;
       } else {
-        console.error('❌ AuthService - No user data in response');
         throw new Error('Invalid response from server - no user data');
       }
 
-      return response.data;
     } catch (error: any) {
-      console.error('❌ AuthService - login failed:', error);
-      console.error('❌ AuthService - Error response:', error.response?.data);
-      console.error('❌ AuthService - Error status:', error.response?.status);
+      console.error('❌ Login failed:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
 
-      // Clear user data on login failure to ensure clean state
-      this.user = null;
-      this.authState.value = null;
-      this.token = null;
-      this.clearAuthHeader();
-      localStorage.removeItem('access_token');
-      console.log('❌ AuthService - Login failed, user data cleared');
-
-      // Re-throw the error so LoginView can handle it
+      this.clearAuthData();
       throw error;
     }
   }
@@ -112,17 +147,18 @@ class AuthService {
   }
 
   async loginWithGoogle(idToken: string): Promise<AuthResponse> {
-    console.log('🔍 AuthService - loginWithGoogle called with token:', idToken ? `${idToken.substring(0, 50)}...` : 'No token');
+    console.log('🔍 AuthService - loginWithGoogle called');
     console.log('🔍 AuthService - Current API URL:', getBaseUrl());
 
     try {
       const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/google`, { idToken }, {
         withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        }
       });
 
-      console.log('🔍 AuthService - Backend response status:', response.status);
-      console.log('🔍 AuthService - Backend response data:', response.data);
-      console.log('🔍 AuthService - Response headers:', response.headers);
+      console.log('🔍 AuthService - Backend response:', response.data);
 
       if (!response.data || !response.data.user) {
         throw new Error('Invalid response from server - no user data');
@@ -130,39 +166,44 @@ class AuthService {
 
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
-      
+
       // Store token if provided in response
       if (response.data.token) {
         this.token = response.data.token;
         localStorage.setItem('access_token', this.token);
         this.setAuthHeader(this.token);
+
+        // Set cookies for backend compatibility
+        document.cookie = `access_token=${this.token}; path=/; secure; samesite=none`;
+        document.cookie = `accessToken=${this.token}; path=/; secure; samesite=none`;
       }
-      
-      console.log('🔍 AuthService - User stored in service:', this.user);
-      console.log('🔍 AuthService - User role:', this.user?.role);
 
       return response.data;
     } catch (error: any) {
       console.error('❌ AuthService - loginWithGoogle failed:', error);
-      console.error('❌ AuthService - Error response:', error.response?.data);
-      console.error('❌ AuthService - Error status:', error.response?.status);
       throw error;
     }
   }
 
   async refreshTokens(): Promise<AuthResponse> {
     try {
-      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/refresh`);
+      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/refresh`, {}, {
+        withCredentials: true,
+      });
+
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
-      
-      // Update token if provided
+
       if (response.data.token) {
         this.token = response.data.token;
         localStorage.setItem('access_token', this.token);
         this.setAuthHeader(this.token);
+
+        // Update cookies
+        document.cookie = `access_token=${this.token}; path=/; secure; samesite=none`;
+        document.cookie = `accessToken=${this.token}; path=/; secure; samesite=none`;
       }
-      
+
       return response.data;
     } catch (error) {
       this.clearAuthData();
@@ -172,7 +213,9 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      await axios.post(`${getBaseUrl()}/auth/logout`);
+      await axios.post(`${getBaseUrl()}/auth/logout`, {}, {
+        withCredentials: true,
+      });
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
@@ -182,7 +225,15 @@ class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const response = await axios.get<User>(`${getBaseUrl()}/auth/me`);
+      // Ensure we have a token before making the request
+      if (!this.token && !localStorage.getItem('access_token')) {
+        console.log('🚫 No token available for getCurrentUser');
+        return null;
+      }
+
+      const response = await axios.get<User>(`${getBaseUrl()}/auth/me`, {
+        withCredentials: true,
+      });
 
       const user = response.data;
       if (typeof user.role === 'number') {
@@ -193,15 +244,28 @@ class AuthService {
       this.authState.value = user;
       return this.user;
     } catch (error) {
-      this.user = null;
-      this.authState.value = null;
+      console.error('❌ getCurrentUser failed:', error);
+      this.clearAuthData();
       return null;
     }
   }
 
+  // Test token validity
+  async testToken(): Promise<boolean> {
+    try {
+      const response = await axios.get(`${getBaseUrl()}/auth/test-token`, {
+        withCredentials: true,
+      });
+      console.log('✅ Token test successful:', response.data);
+      return true;
+    } catch (error) {
+      console.error('❌ Token test failed:', error);
+      return false;
+    }
+  }
+
   isAuthenticated(): boolean {
-    // Only return true if user exists and has an id
-    return !!(this.user && this.user.id);
+    return !!(this.user && this.user.id && this.token);
   }
 
   isAdmin(): boolean {
@@ -217,13 +281,22 @@ class AuthService {
     return this.authState;
   }
 
+  getToken(): string | null {
+    return this.token || localStorage.getItem('access_token');
+  }
+
   clearAuthData(): void {
     this.user = null;
     this.authState.value = null;
     this.token = null;
     this.clearAuthHeader();
     localStorage.removeItem('access_token');
-    console.log('🔍 AuthService - User data cleared');
+
+    // Clear cookies
+    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+    console.log('🔍 AuthService - All auth data cleared');
   }
 }
 

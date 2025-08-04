@@ -12,7 +12,7 @@ export class SqliteConnection {
   ) {
     this._dataSource = new DataSource({
       type: 'sqlite',
-      database: ':memory:',
+      database: '/tmp/dev.sqlite',
       synchronize: true,
       logging: true,
       entities: [AuthEntity],

@@ -4,7 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DbContextService } from './dbcontext.service';
 import { MySqlConnection } from './mysql/mysql.connection';
 import { MongoDbConnection } from './mongo/mongo.connection';
-import { SqliteConnection } from './sqlite/sqlite.connection';
+
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConnectionStates } from 'mongoose';
 
@@ -20,16 +20,7 @@ import { ConnectionStates } from 'mongoose';
         return mysqlConnection.dataSource.options;
       }
     }),
-    TypeOrmModule.forRootAsync({
-      name: 'sqlite',
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => {
-        const sqliteConnection = new SqliteConnection();
-        await sqliteConnection.init();
-        return sqliteConnection.dataSource.options;
-      }
-    }),
+
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -54,7 +45,7 @@ import { ConnectionStates } from 'mongoose';
       }
     })
   ],
-  providers: [DbContextService, MySqlConnection, MongoDbConnection, SqliteConnection],
+  providers: [DbContextService, MySqlConnection, MongoDbConnection],
   exports: [DbContextService, TypeOrmModule, MongooseModule]
 })
 export class DbContextModule {

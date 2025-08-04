@@ -12,9 +12,9 @@ import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
 import { UserEntity, UserRole } from '#LocalProject/Entities';
-import { Nullable } from '@here-to-translate/common/types';
+
 import { IUserAuthMeta } from '@here-to-translate/common/interfaces';
-import { AuthEntity } from '#LocalProject/SqliteEntities';
+import { AuthTokenEntity } from '#LocalProject/Entities';
 import { v4 } from 'uuid';
 import { MailerService } from '@nestjs-modules/mailer';
 import * as crypto from 'crypto';
@@ -38,12 +38,12 @@ export class AuthService {
 
   constructor(
     private mailerService: MailerService,
-    private readonly jwt: JwtService,
+    public readonly jwt: JwtService,
     private readonly configService: ConfigService,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    @InjectRepository(AuthEntity, 'sqlite')
-    private readonly authRepository: Repository<AuthEntity>,
+    @InjectRepository(AuthTokenEntity)
+    public readonly authRepository: Repository<AuthTokenEntity>,
     @InjectRepository(UserTypeEntity)
     private readonly roleRepository: Repository<UserTypeEntity>
   ) {
@@ -59,7 +59,7 @@ export class AuthService {
     this.refreshExpiry =
       this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ?? '7d';
     this.accessExpiry =
-      this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '15m';
+      this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '1h';
     setInterval(() => this.cleanupExpiredSessions(), 60 * 1000);
     this.logger.log('AuthService initialized');
   }
@@ -76,7 +76,10 @@ export class AuthService {
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token is missing');
     }
-    const meta = await this.authRepository.findOne({ where: { refreshToken } });
+    const meta = await this.authRepository.findOne({ 
+      where: { refreshToken },
+      relations: ['user', 'user.role']
+    });
     if (!meta) {
       throw new UnauthorizedException('Refresh token expired or invalid');
     }
@@ -93,11 +96,8 @@ export class AuthService {
     // Update last activity
     meta.lastActivityAt = now;
     await this.authRepository.save(meta);
-    // Fetch user info
-    const user: Nullable<UserEntity> = await this.userRepository.findOne({
-      where: { id: meta.userId },
-      relations: ['role'],
-    });
+    // Get user from relation
+    const user = meta.user;
     if (!user) {
       this.logger.warn(
         `User with ID ${meta.userId} not found during token refresh`
@@ -116,41 +116,66 @@ export class AuthService {
     if (!token) {
       throw new UnauthorizedException('Token is missing');
     }
-    const meta = await this.authRepository.findOne({
-      where: { accessToken: token },
-    });
-    if (!meta) {
-      throw new UnauthorizedException('Token expired or invalid');
+
+    this.logger.log(`Validating token: ${token.substring(0, 20)}...`);
+
+    try {
+      const meta = await this.authRepository.findOne({
+        where: { accessToken: token },
+        relations: ['user', 'user.role']
+      });
+
+      this.logger.log(`Found meta: ${!!meta}`);
+
+      if (!meta) {
+        this.logger.warn('Token not found in database');
+        throw new UnauthorizedException('Token expired or invalid');
+      }
+
+      const now = new Date();
+      this.logger.log(`Token expires at: ${meta.accessTokenExpiresAt}, now: ${now}`);
+
+      if (meta.accessTokenExpiresAt < now) {
+        await this.authRepository.delete({ accessToken: token });
+        this.logger.warn('Token expired');
+        throw new UnauthorizedException('Token expired');
+      }
+
+      // Inactivity check (30 min)
+      const inactivityThreshold = new Date(now.getTime() - 30 * 60 * 1000);
+      this.logger.log(`Last activity: ${meta.lastActivityAt}, threshold: ${inactivityThreshold}`);
+
+      if (meta.lastActivityAt < inactivityThreshold) {
+        await this.authRepository.delete({ accessToken: token });
+        this.logger.warn('Session expired due to inactivity');
+        throw new UnauthorizedException('Session expired due to inactivity');
+      }
+
+      // Update last activity
+      meta.lastActivityAt = now;
+      await this.authRepository.save(meta);
+
+      const user = meta.user;
+      if (!user) {
+        await this.authRepository.delete({ accessToken: token });
+        this.logger.warn('User not found for token');
+        throw new UnauthorizedException('User not found');
+      }
+
+      this.logger.log(`Token validation successful for user: ${user.username}`);
+
+      return {
+        id: user.id,
+        username: user.username,
+        role: Number(user.role.id),
+        avatarUrl: user.avatarUrl,
+        fullName: user.fullName,
+        email: user.email,
+      };
+    } catch (error) {
+      this.logger.error(`Token validation failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
-    const now = new Date();
-    if (meta.accessTokenExpiresAt < now) {
-      await this.authRepository.delete({ accessToken: token });
-      throw new UnauthorizedException('Token expired');
-    }
-    // Inactivity check (30 min)
-    if (meta.lastActivityAt < new Date(now.getTime() - 30 * 60 * 1000)) {
-      await this.authRepository.delete({ accessToken: token });
-      throw new UnauthorizedException('Session expired due to inactivity');
-    }
-    // Update last activity
-    meta.lastActivityAt = now;
-    await this.authRepository.save(meta);
-    const user = await this.userRepository.findOne({
-      where: { id: meta.userId },
-      relations: ['role'],
-    });
-    if (!user) {
-      await this.authRepository.delete({ accessToken: token });
-      throw new UnauthorizedException('User not found');
-    }
-    return {
-      id: user.id,
-      username: user.username,
-      role: Number(user.role.id),
-      avatarUrl: user.avatarUrl,
-      fullName: user.fullName,
-      email: user.email,
-    };
   }
 
   async login(username: string, password: string) {
@@ -232,6 +257,7 @@ export class AuthService {
   async logout(token: string, allSessions = false) {
     const meta = await this.authRepository.findOne({
       where: [{ accessToken: token }, { refreshToken: token }],
+      relations: ['user']
     });
 
     if (!meta) {

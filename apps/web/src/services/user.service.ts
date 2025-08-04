@@ -50,8 +50,13 @@ export class UserService {
       headers: {
         'Content-Type': 'application/json',
       },
-      withCredentials: true,
     });
+    
+    // Set Authorization header if token exists
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
   }
 
   private normalizeDate(dateValue: any): Date {
@@ -125,9 +130,15 @@ export const userService = new UserService();
 export async function uploadAvatar(file: File): Promise<string> {
   const formData = new FormData();
   formData.append('avatar', file);
-  const res = await userService.api.post('/users/avatar', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  });
+  
+  // Get token for this request
+  const token = localStorage.getItem('access_token');
+  const headers: any = { 'Content-Type': 'multipart/form-data' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await userService.api.post('/users/avatar', formData, { headers });
   console.log('[FE] uploadAvatar response', res.data);
   return res.data.avatarUrl;
 }

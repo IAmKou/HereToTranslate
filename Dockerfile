@@ -19,16 +19,19 @@ COPY libs ./libs
 # Install dependencies
 RUN npm ci
 
+# Set NX environment variables for better build performance
+ENV NX_VERBOSE_LOGGING=true
+ENV NX_CACHE_PROJECT_GRAPH=false
+ENV NX_SKIP_NX_CACHE=true
+
 # Build the common library first
-RUN npx nx build @here-to-translate/common --verbose
+RUN npx nx build @here-to-translate/common --verbose --skip-nx-cache
 
 # Ensure TypeScript declarations are generated
 RUN npx tsc --project libs/common/tsconfig.lib.json
 
 # Build the server with production webpack config
-RUN npx nx build @here-to-translate/server --configuration=production --with-deps
-
-# Don't prune deps as some are needed at runtime
+RUN npx nx build @here-to-translate/server --configuration=production --with-deps --skip-nx-cache --verbose
 
 # ---- Stage 2: Runtime image ----
 FROM node:20-slim AS runner

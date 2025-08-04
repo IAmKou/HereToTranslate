@@ -33,9 +33,15 @@ export class EnvConfigs {
   @IsNotEmpty()
   readonly JWT_SECRET: string;
   @IsString()
-  readonly JWT_EXPIRATION = "5m";
+  readonly JWT_EXPIRATION = "1h";
 
   @IsString()
   @IsNotEmpty()
   readonly GOOGLE_OAUTH2_CLIENT: string;
+
+  @IsString()
+  readonly ACCESS_TOKEN_EXPIRY = "1h";
+
+  @IsString()
+  readonly REFRESH_TOKEN_EXPIRY = "7d";
 }

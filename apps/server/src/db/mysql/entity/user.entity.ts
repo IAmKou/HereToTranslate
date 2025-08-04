@@ -6,7 +6,7 @@ import {
   ManyToMany,
   ManyToOne,
   OneToMany,
-  PrimaryGeneratedColumn
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { ProjectEntity } from './project.entity';
 import { ProjectRoleEntity } from './project-role.entity';
@@ -17,11 +17,12 @@ import { ProjectGroupEntity } from './project-group.entity';
 import { UserTypeEntity } from './user-type.entity';
 import { RequestEntity } from './request.entity';
 import { ProjectDiscussionCommentEntity } from './project-discussion.entity';
+import { AuthTokenEntity } from './auth-token.entity';
 
 export enum UserRole {
   SuperAdmin = 1,
   Admin = 2,
-  Member = 3
+  Member = 3,
 }
 
 @Entity('user')
@@ -47,7 +48,7 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   avatarUrl?: string;
 
-  @ManyToOne(() => UserTypeEntity, role => role.users)
+  @ManyToOne(() => UserTypeEntity, (role) => role.users)
   @JoinColumn({ name: 'roleId' })
   role: UserTypeEntity;
 
@@ -57,34 +58,48 @@ export class UserEntity {
   @CreateDateColumn()
   createdAt: Date;
 
-  @OneToMany(() => ProjectEntity, project => project.createdBy)
+  @OneToMany(() => ProjectEntity, (project) => project.createdBy)
   createdProjects: ProjectEntity[];
 
-  @ManyToMany(() => ProjectRoleEntity, projectRole => projectRole.users)
+  @ManyToMany(() => ProjectRoleEntity, (projectRole) => projectRole.users)
   projectRoles: ProjectRoleEntity[];
 
-  @ManyToMany(() => ProjectEntity, project => project.members, { cascade: true })
+  @ManyToMany(() => ProjectEntity, (project) => project.members, {
+    cascade: true,
+  })
   projects: ProjectEntity[];
 
-  @ManyToMany(() => ProjectGroupEntity, group => group.members, { cascade: true })
+  @ManyToMany(() => ProjectGroupEntity, (group) => group.members, {
+    cascade: true,
+  })
   groups: ProjectGroupEntity[];
 
-  @OneToMany(() => BranchEntity, branch => branch.user)
+  @OneToMany(() => BranchEntity, (branch) => branch.user)
   branch: BranchEntity[];
 
-  @OneToMany(() => CommitEntity, commit => commit.author)
+  @OneToMany(() => CommitEntity, (commit) => commit.author)
   commit: CommitEntity[];
 
-  @OneToMany(() => FileEntity, file => file.uploader)
+  @OneToMany(() => FileEntity, (file) => file.uploader)
   file: FileEntity[];
 
-  @ManyToMany(() => RequestEntity, request => request.registrants)
+  @ManyToMany(() => RequestEntity, (request) => request.registrants)
   registeredRequests: RequestEntity[];
 
-  @ManyToMany(() => ProjectDiscussionCommentEntity, upvote => upvote.upvotes, { cascade: true })
+  @ManyToMany(
+    () => ProjectDiscussionCommentEntity,
+    (upvote) => upvote.upvotes,
+    { cascade: true }
+  )
   upvote: ProjectDiscussionCommentEntity[];
 
-  @ManyToMany(() => ProjectDiscussionCommentEntity, downvote => downvote.downvotes, { cascade: true })
+  @ManyToMany(
+    () => ProjectDiscussionCommentEntity,
+    (downvote) => downvote.downvotes,
+    { cascade: true }
+  )
   downvote: ProjectDiscussionCommentEntity[];
 
+  @OneToMany(() => AuthTokenEntity, (authToken) => authToken.user)
+  authTokens: AuthTokenEntity[];
 }

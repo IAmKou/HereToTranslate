@@ -41,18 +41,31 @@ export class MailService {
       invitedByUsername: string;
       message?: string;
       projectId: string;
+      expiresIn?: number;
     }
   ) {
-    await this.mailerService.sendMail({
+    console.log('📧 MailService.sendProjectInvitation called with:', {
       to,
-      subject: `You're invited to join project: ${invitationData.projectName}`,
-      template: './project-invitation',
-      context: {
-        projectName: invitationData.projectName,
-        invitedByUsername: invitationData.invitedByUsername,
-        message: invitationData.message || `You're invited to join the project ${invitationData.projectName}.`,
-        projectId: invitationData.projectId,
-      },
+      invitationData
     });
+
+    try {
+      await this.mailerService.sendMail({
+        to,
+        subject: `You're invited to join project: ${invitationData.projectName}`,
+        template: './project-invitation',
+        context: {
+          projectName: invitationData.projectName,
+          invitedByUsername: invitationData.invitedByUsername,
+          message: invitationData.message || `You're invited to join the project ${invitationData.projectName}.`,
+          projectId: invitationData.projectId,
+          expiresIn: invitationData.expiresIn,
+        },
+      });
+      console.log('📧 MailService.sendProjectInvitation completed successfully');
+    } catch (error) {
+      console.error('📧 MailService.sendProjectInvitation error:', error);
+      throw error;
+    }
   }
 }

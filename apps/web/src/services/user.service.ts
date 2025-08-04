@@ -109,7 +109,7 @@ export class UserService {
     return response.data;
   }
 
-  async updateUserStatus(userId: string, isActive: boolean): Promise<User> {
+  async updateUserStatus(userId: string, _isActive: boolean): Promise<User> {
     const response = await this.api.put(`/users/admin/${userId}/toggle-status`);
     return response.data;
   }

@@ -3,6 +3,13 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import HomeNavbar from '../components/HomeNavbar.vue';
 import AppFooter from '../components/AppFooter.vue';
+fetch('https://htt-ekpa.onrender.com/api/auth/ping', {
+  method: 'GET',
+  credentials: 'include'
+})
+  .then(r => r.json())
+  .then(console.log)
+  .catch(console.error);
 
 const router = useRouter();
 

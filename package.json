@@ -8,9 +8,6 @@
     "build:static": "npm run build:common && npm run build:frontend",
     "build:render": "npm ci && npx nx@21.1.3 build @here-to-translate/common && npx nx@21.1.3 build @here-to-translate/web"
   },
-  "routes": {
-    "/**": "index.html"
-  },
   "private": true,
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",

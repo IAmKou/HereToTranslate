@@ -1,5 +1,5 @@
 import {
-  CategoryEntity, AuthTokenEntity,
+  CategoryEntity,
   DiscussionAccessPolicyEntity,
   ProjectDiscussionCommentEntity,
   ProjectDiscussionThreadEntity,
@@ -90,7 +90,6 @@ import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
       ProjectInvitationEntity,
       RequestRegistrationEntity,
       SettingsEntity,
-      AuthTokenEntity,
     ]),
     BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
   ],

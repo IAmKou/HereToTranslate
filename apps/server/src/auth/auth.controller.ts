@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Post,
-  Res,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -15,7 +14,7 @@ import { RolesGuard } from './guards/role.guard';
 import { LoginDto } from '#LocalProject/Dtos';
 import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from './types';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import { logger } from 'nx/src/utils/logger';
 
 @Controller('auth')
@@ -35,16 +34,15 @@ export class AuthController {
     };
   }
 
-
   @IsPublicEndpoint()
   @Post('google')
   async loginWithGoogle(@Body('idToken') idToken: string) {
-    const { accessToken, user } = await this.authService.loginWithGoogle(
+    const { accessToken, refreshToken, user } = await this.authService.loginWithGoogle(
       idToken
     );
     logger.log(idToken);
     logger.log(user);
-    return { user, token: accessToken };
+    return { user, token: accessToken, refreshToken };
   }
 
   @IsPublicEndpoint()
@@ -60,7 +58,6 @@ export class AuthController {
 
     return { user, token: accessToken, refreshToken };
   }
-
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ForRoles(UserRole.Admin)
@@ -143,27 +140,6 @@ export class AuthController {
     };
   }
 
-  @Get('db-status')
-  @IsPublicEndpoint()
-  async checkDatabaseStatus() {
-    try {
-      // Check if auth_tokens table exists and has data
-      const tokenCount = await this.authService.authRepository.count();
-
-      return {
-        status: 'OK',
-        authTokensCount: tokenCount,
-        message: 'Database connection successful',
-      };
-    } catch (error) {
-      return {
-        status: 'ERROR',
-        error: error instanceof Error ? error.message : String(error),
-        message: 'Database connection failed',
-      };
-    }
-  }
-
   @Get('test-auth')
   @IsPublicEndpoint()
   async testAuth(@Req() req: Request) {
@@ -216,16 +192,13 @@ export class AuthController {
 
   @Get('ping')
   @IsPublicEndpoint()
-  ping(@Req() req: Request, @Res() res: Response) {
-    res.setHeader('X-Debug', 'pong');
-    return res.json({
+  ping(@Req() req: Request) {
+    return {
       message: 'pong',
       method: req.method,
       origin: req.headers.origin || null,
       referer: req.headers.referer || null,
-      cookies: req.headers.cookie || null,
       receivedHeaders: req.headers,
-      responseHeaders: res.getHeaders ? res.getHeaders() : 'not available',
-    });
+    };
   }
 }

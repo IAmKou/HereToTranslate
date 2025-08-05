@@ -19,7 +19,6 @@ async function bootstrap() {
       console.log('Method:', req.method, '| URL:', req.originalUrl);
       console.log('Origin:', req.headers.origin);
       console.log('Referer:', req.headers.referer);
-      console.log('Cookies:', req.headers.cookie);
       next();
     });
 
@@ -40,7 +39,6 @@ async function bootstrap() {
         process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com',
         'https://heretotranslate.onrender.com',
       ],
-      credentials: true, // This is CRITICAL for cookies!
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     });
 

@@ -10,11 +10,7 @@ export class JwtFallthroughGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    let token = ExtractJwt.fromAuthHeaderAsBearerToken()(request);
-
-    if (!token && request.cookies) {
-      token = request.cookies['access_token'];
-    }
+    const token = ExtractJwt.fromAuthHeaderAsBearerToken()(request);
 
     if (!token) {
       return true;

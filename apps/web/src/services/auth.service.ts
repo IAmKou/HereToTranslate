@@ -68,12 +68,26 @@ class AuthService {
     // Add response interceptor to handle token expiration
     axios.interceptors.response.use(
       (response) => response,
-      (error) => {
+      async (error) => {
         if (error.response?.status === 401) {
-          console.log('🚨 Token expired or invalid, clearing auth data');
-          this.clearAuthData();
-          // Optionally redirect to login
-          // window.location.href = '/login';
+          console.log('🚨 Token expired or invalid, attempting refresh');
+          
+          // Try to refresh the token
+          try {
+            await this.refreshTokens();
+            // Retry the original request
+            const originalRequest = error.config;
+            const token = this.token || localStorage.getItem('access_token');
+            if (token && originalRequest.headers) {
+              originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            }
+            return axios(originalRequest);
+          } catch {
+            console.log('🚨 Token refresh failed, clearing auth data');
+            this.clearAuthData();
+            // Optionally redirect to login
+            // window.location.href = '/login';
+          }
         }
         return Promise.reject(error);
       }
@@ -109,22 +123,22 @@ class AuthService {
       );
 
       console.log('📥 Login response:', response.data);
-      if (response.data.refreshToken) {
-        localStorage.setItem('refresh_token', response.data.refreshToken);
-      }
-
+      
       if (response.data && response.data.user) {
         this.user = response.data.user as User;
         this.authState.value = response.data.user as User;
 
-        // Store token if provided in response
+        // Store tokens in localStorage
         if (response.data.token) {
           this.token = response.data.token;
           localStorage.setItem('access_token', this.token);
           this.setAuthHeader(this.token);
+          console.log('✅ Access token stored in localStorage');
+        }
 
-          console.log('✅ Token stored in localStorage');
-          console.log('🔑 Token preview:', this.token.substring(0, 50) + '...');
+        if (response.data.refreshToken) {
+          localStorage.setItem('refresh_token', response.data.refreshToken);
+          console.log('✅ Refresh token stored in localStorage');
         }
 
         console.log(
@@ -176,11 +190,17 @@ class AuthService {
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
 
-      // Store token if provided in response
+      // Store tokens in localStorage
       if (response.data.token) {
         this.token = response.data.token;
         localStorage.setItem('access_token', this.token);
         this.setAuthHeader(this.token);
+        console.log('✅ Access token stored in localStorage');
+      }
+
+      if (response.data.refreshToken) {
+        localStorage.setItem('refresh_token', response.data.refreshToken);
+        console.log('✅ Refresh token stored in localStorage');
       }
 
       return response.data;
@@ -196,6 +216,7 @@ class AuthService {
       this.clearAuthData();
       throw new Error('No refresh token available');
     }
+    
     try {
       const response = await axios.post(
         `${getBaseUrl()}/auth/refresh`,
@@ -207,26 +228,27 @@ class AuthService {
           },
         }
       );
+      
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
 
       if (response.data.token) {
         this.token = response.data.token;
-
-        if (typeof this.token === "string") {
-          localStorage.setItem('access_token', this.token);
-        }
         if (this.token) {
+          localStorage.setItem('access_token', this.token);
           this.setAuthHeader(this.token);
+          console.log('✅ Access token refreshed and stored in localStorage');
         }
       }
 
       if (response.data.refreshToken) {
         localStorage.setItem('refresh_token', response.data.refreshToken);
+        console.log('✅ Refresh token updated in localStorage');
       }
 
       return response.data;
     } catch (error) {
+      console.error('❌ Token refresh failed:', error);
       this.clearAuthData();
       throw error;
     }
@@ -306,8 +328,9 @@ class AuthService {
     this.token = null;
     this.clearAuthHeader();
     localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
 
-    console.log('🔍 AuthService - All auth data cleared');
+    console.log('🔍 AuthService - All auth data cleared from localStorage');
   }
 }
 

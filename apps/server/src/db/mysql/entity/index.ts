@@ -19,5 +19,4 @@ export * from './user.entity';
 export * from './translation-approval.entity';
 export * from './wallet.entity';
 export * from './setting.entity';
-export * from './auth-token.entity';
 

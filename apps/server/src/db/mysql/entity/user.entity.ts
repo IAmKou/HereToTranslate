@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  JoinTable,
   ManyToMany,
   ManyToOne,
   OneToMany,
@@ -17,7 +18,6 @@ import { ProjectGroupEntity } from './project-group.entity';
 import { UserTypeEntity } from './user-type.entity';
 import { RequestEntity } from './request.entity';
 import { ProjectDiscussionCommentEntity } from './project-discussion.entity';
-import { AuthTokenEntity } from './auth-token.entity';
 
 export enum UserRole {
   SuperAdmin = 1,
@@ -99,7 +99,4 @@ export class UserEntity {
     { cascade: true }
   )
   downvote: ProjectDiscussionCommentEntity[];
-
-  @OneToMany(() => AuthTokenEntity, (authToken) => authToken.user)
-  authTokens: AuthTokenEntity[];
 }

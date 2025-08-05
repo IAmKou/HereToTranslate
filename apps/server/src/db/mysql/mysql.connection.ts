@@ -24,7 +24,6 @@ import {
   WalletEntity,
   NotificationEntity,
   SettingsEntity,
-  AuthTokenEntity,
 } from '#LocalProject/Entities';
 
 @Injectable()
@@ -75,7 +74,6 @@ export class MySqlConnection {
         WalletEntity,
         NotificationEntity,
         SettingsEntity,
-        AuthTokenEntity,
       ],
     });
     MySqlConnection.instance = this;

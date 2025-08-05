@@ -11,9 +11,7 @@ import {
   UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
   BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
-import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
 import { RequestRegistrationEntity } from '#LocalProject/Entities';
-import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
 
 import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
@@ -65,8 +63,6 @@ import { AdminNotificationController } from '#LocalProject/Managers/controller/a
 import { ProjectInvitationController } from './controller/project-invitation.controller';
 import { ProjectInvitationService } from './service/project-invitation.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
-import { ActivityManagerService } from './service/activity-manager.service';
-import { ActivityController } from './controller/activity.controller';
 
 @Global()
 @Module({
@@ -93,12 +89,10 @@ import { ActivityController } from './controller/activity.controller';
       CommitEntity,
       FileEntity,
       TaskEntity,
-      TaskHistoryEntity,
       NotificationEntity,
       ProjectInvitationEntity,
       RequestRegistrationEntity,
       SettingsEntity,
-      ProjectActivity,
     ]),
     BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
   ],
@@ -126,7 +120,6 @@ import { ActivityController } from './controller/activity.controller';
     NotificationGateway,
     ProjectInvitationService,
     FeeService,
-    ActivityManagerService,
   ],
   exports: [
     CategoryManagerService,
@@ -149,8 +142,7 @@ import { ActivityController } from './controller/activity.controller';
     NotificationManagerService,
     AiChatService,
     ProjectInvitationService,
-    FeeService,
-    ActivityManagerService
+    FeeService
   ],
   controllers: [
     CategoryController,
@@ -173,8 +165,7 @@ import { ActivityController } from './controller/activity.controller';
     AiChatController,
     NotificationController,
     AdminNotificationController,
-    ProjectInvitationController,
-    ActivityController
+    ProjectInvitationController
   ]
 })
 export class ManagersModule {

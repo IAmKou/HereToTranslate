@@ -1,8 +1,7 @@
-import { IsNotEmpty, IsNumber, IsString, Max, Min } from "class-validator";
+import { IsIP, IsNotEmpty, IsNumber, IsString, Max, Min } from "class-validator";
 
 export class EnvConfigs {
-  @IsString()
-  @IsNotEmpty()
+  @IsIP()
   readonly MYSQL_HOST: string;
   @IsNumber()
   @Min(1)

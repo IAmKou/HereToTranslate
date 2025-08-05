@@ -30,12 +30,7 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsNumber()
-  page?: number;
-
-  @IsOptional()
-  @IsArray()
-  @IsNumber({}, { each: true })
-  pages?: number[];
+  filePart?: number;
 
   @IsOptional()
   @IsString()

@@ -1,6 +1,6 @@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Injectable, forwardRef, Inject } from '@nestjs/common';
+import { Injectable} from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import {
   TranslationString,
@@ -13,7 +13,6 @@ import { Repository, In } from 'typeorm';
 import { replaceDocxText } from '../../util/extensions/docx-utils.extension';
 import { buildTranslatedPdf } from '../../util/extensions/pdf-utils.extension';
 import { Buffer } from 'buffer';
-import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class TranslationService {
@@ -22,9 +21,7 @@ export class TranslationService {
     private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
-    private readonly githubService: GitHubService,
-    @Inject(forwardRef(() => ActivityManagerService))
-    private readonly activityManagerService: ActivityManagerService,
+    private readonly githubService: GitHubService
   ) {}
 
   async addTranslation(id: string, translatedText: string, language: string) {
@@ -41,7 +38,6 @@ export class TranslationService {
     });
 
     let entry;
-    let isNewTranslation = false;
 
     if (existingTranslation) {
       // Update bản dịch hiện có
@@ -64,39 +60,15 @@ export class TranslationService {
         position: originalEntry.position,
         obsolete: false,
       });
-      isNewTranslation = true;
     }
 
     const fileId = entry.fileId;
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['project', 'uploader'],
+      relations: ['project'],
     });
     if (!fileEntity || !fileEntity.project) {
       throw new Error('File or project not found');
-    }
-
-    // Log activity
-    try {
-      if (isNewTranslation) {
-        await this.activityManagerService.logTranslationAdd(
-          Number(fileEntity.project.id),
-          Number(fileEntity.uploader?.id || 0),
-          translatedText,
-          language,
-          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
-        );
-      } else {
-        await this.activityManagerService.logTranslationEdit(
-          Number(fileEntity.project.id),
-          Number(fileEntity.uploader?.id || 0),
-          translatedText,
-          language,
-          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
-        );
-      }
-    } catch (error) {
-      logger.error('Failed to log translation activity:', error);
     }
 
     let updatedBuffer: Buffer;
@@ -327,13 +299,12 @@ export class TranslationService {
     branchId: string,
     language: string,
     fileId?: string,
-    page?: number,
-    fileType?: string
+    filePart?: number
   ) {
     // Lấy tất cả strings gốc (không phân biệt language) làm base
     const baseQuery: any = { projectId, branchId };
     if (fileId) baseQuery.fileId = fileId;
-    if (page !== undefined) baseQuery.filePart = page; // filePart trong DB vẫn là page number
+    if (filePart !== undefined) baseQuery.filePart = filePart;
 
     const baseStrings = await this.translationModel
       .find(baseQuery)
@@ -343,7 +314,7 @@ export class TranslationService {
     // Lấy bản dịch của ngôn ngữ được chọn
     const translationQuery: any = { projectId, branchId, language };
     if (fileId) translationQuery.fileId = fileId;
-    if (page !== undefined) translationQuery.filePart = page; // filePart trong DB vẫn là page number
+    if (filePart !== undefined) translationQuery.filePart = filePart;
 
     const translatedStrings = await this.translationModel
       .find(translationQuery)
@@ -365,25 +336,15 @@ export class TranslationService {
       };
     });
 
-    // Lấy tên file và thông tin file type
+    // Lấy tên file
     const fileIds = Array.from(new Set(mergedStrings.map((str) => str.fileId)));
     const fileNamesMap: Record<string, string> = {};
-    const fileTypesMap: Record<string, string> = {};
-
     if (fileIds.length > 0) {
       const files = await this.fileRepository.find({
         where: { id: In(fileIds.map((id) => BigInt(id))) },
       });
       files.forEach((f) => {
         fileNamesMap[String(f.id)] = f.fileName;
-        fileTypesMap[String(f.id)] = f.fileType;
-      });
-    }
-
-    // Nếu có fileType được cung cấp, sử dụng nó thay vì lấy từ database
-    if (fileType && fileIds.length > 0) {
-      fileIds.forEach(fileId => {
-        fileTypesMap[fileId] = fileType;
       });
     }
 
@@ -394,7 +355,6 @@ export class TranslationService {
       fileId: str.fileId,
       filePart: str.filePart ?? 0,
       fileName: fileNamesMap[str.fileId] || '',
-      fileType: fileTypesMap[str.fileId] || '',
     }));
   }
 

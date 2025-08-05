@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, watch, onBeforeUnmount, type Ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { taskService, Task, ProjectFile, TaskHistory } from '../services/task.service';
 import CreateTaskDialog from './CreateTaskDialog.vue';
 import EditTaskDialog from './EditTaskDialog.vue';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
 import { getLanguageName } from '../utils/languages';
-
-
 
 const props = defineProps({
   projectId: {
@@ -44,8 +43,10 @@ const props = defineProps({
 const tasks = ref<Task[]>([]);
 const loading = ref(false);
 const error = ref('');
+const showCreateDialog = ref(false);
 const search = ref('');
 const activeTab = ref<'board' | 'all'>('board');
+const filters = ref<number>(2); // demo số filter
 const showFilters = ref(false); // Thêm state để ẩn/hiện filters
 const selectedFilters = ref({
   assignee: 'All users',
@@ -114,6 +115,7 @@ function formatMonth(date: Date): string {
 
 const activeSubDropdown = ref<string | null>(null);
 const activeCustomSelect = ref<string | null>(null);
+const showFilterOptions = ref(false);
 const selectedTask = ref<Task|null>(null);
 const projectFiles = ref<ProjectFile[]>([]);
 const showCreateForm = ref(false);
@@ -132,7 +134,7 @@ const taskToReopen = ref<Task|null>(null);
 const isReopeningTask = ref(false);
 const reopenReason = ref('');
 
-
+const router = useRouter();
 const toast = useToast();
 
 // Task action menu state
@@ -173,19 +175,18 @@ async function loadTasks() {
 
     // Debug: Check if tasks have language field
     console.log('🔍 Language Debug - Tasks with languages:');
-    tasks.value.forEach((task: Task) => {
+    tasks.value.forEach(task => {
       console.log(`Task ${task.id}: "${task.title}" -> language: "${task.language}"`);
     });
 
     const languagesFound = new Set();
-    tasks.value.forEach((task: Task) => {
+    tasks.value.forEach(task => {
       if (task.language) languagesFound.add(task.language);
     });
     console.log('🌐 Unique languages found:', Array.from(languagesFound));
 
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Failed to load tasks';
-    error.value = errorMessage;
+  } catch (err: any) {
+    error.value = err.message || 'Failed to load tasks';
     console.error('Error loading tasks:', err);
   } finally {
     loading.value = false;
@@ -212,7 +213,7 @@ async function checkTaskExists(taskId: string): Promise<boolean> {
     const taskExists = tasks.value.some((task: Task) => task.id === taskId);
     console.log(`Task ${taskId} exists in local tasks:`, taskExists);
     return taskExists;
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error checking task existence:', error);
     return false;
   }
@@ -227,7 +228,7 @@ async function loadTaskHistory(taskId: string) {
     const history = await taskService.getTaskHistory(taskId);
     taskHistory.value = history;
     console.log('Task history loaded:', history);
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error loading task history:', error);
     taskHistory.value = [];
   } finally {
@@ -441,7 +442,11 @@ const doneTasks = computed(() => {
   return filtered;
 });
 
-
+const closedTasks = computed(() => {
+  const filtered = filteredTasks.value.filter((t: Task) => t.status && t.status.toLowerCase() === 'closed');
+  console.log('Closed tasks:', filtered.length, 'tasks:', filtered.map((t: Task) => ({ id: t.id, title: t.title, status: t.status })));
+  return filtered;
+});
 
 // Computed để lấy danh sách unique languages từ all tasks
 const availableLanguages = computed(() => {
@@ -453,7 +458,7 @@ const availableLanguages = computed(() => {
   });
   const result = Array.from(languages).sort();
   console.log('Available languages:', result);
-  console.log('Tasks with languages:', filteredTasks.value.map((t: Task) => ({ id: t.id, title: t.title, language: t.language })));
+  console.log('Tasks with languages:', filteredTasks.value.map(t => ({ id: t.id, title: t.title, language: t.language })));
   return result;
 });
 
@@ -482,7 +487,7 @@ const todoTasksByLanguage = computed(() => {
   const grouped = new Map<string, Task[]>();
 
   // Initialize all available languages with empty arrays
-  availableLanguages.value.forEach((language: string) => {
+  availableLanguages.value.forEach(language => {
     grouped.set(language, []);
   });
 
@@ -627,17 +632,6 @@ const selectedTaskTruncatedFileName = computed(() => {
   return truncateFileName(getFileName(selectedTask.value.fileId));
 });
 
-// Computed property để lấy string count an toàn
-const selectedTaskStringCount = computed(() => {
-  if (!selectedTask.value?.fileId || !filePagesData.value) return '-';
-
-  const pages = filePagesData.value.get(selectedTask.value.fileId);
-  if (!pages || !Array.isArray(pages)) return '-';
-
-  const totalCount = pages.reduce((sum: number, p: { stringCount: number }) => sum + (p.stringCount || 0), 0);
-  return totalCount > 0 ? totalCount.toString() : '-';
-});
-
 // Computed property để lấy tên cột khi drag over
 const dragOverColumnName = computed(() => {
   if (!dragOverColumn.value) return '';
@@ -654,20 +648,20 @@ const dragOverColumnName = computed(() => {
   }
 });
 
-// Thêm ref để lưu file pages data
-const filePagesData = ref<Map<string, any[]>>(new Map());
-const currentPageInfo = ref<{pageNumber: number, stringCount: number} | null>(null);
+// Thêm ref để lưu file parts data
+const filePartsData = ref<Map<string, any[]>>(new Map());
+const currentPartInfo = ref<{partNumber: number, stringCount: number} | null>(null);
 
 // Function để load file pages data
-async function loadFilePagesData(fileId: string) {
-  if (filePagesData.value.has(fileId)) {
-    return filePagesData.value.get(fileId);
+async function loadFilePartsData(fileId: string) {
+  if (filePartsData.value.has(fileId)) {
+    return filePartsData.value.get(fileId);
   }
 
   try {
-    const pages = await taskService.getFileParts(props.projectId, props.branchId || '', fileId);
-    filePagesData.value.set(fileId, pages);
-    return pages;
+    const parts = await taskService.getFileParts(props.projectId, props.branchId || '', fileId);
+    filePartsData.value.set(fileId, parts);
+    return parts;
   } catch (err) {
     console.error('Failed to load file pages:', err);
     return [];
@@ -690,84 +684,30 @@ function calculateTaskProgress(task: Task): number {
   }
 }
 
-// Function để load translation strings cho task (giống như trong editor)
-async function loadTranslationStringsForTask(task: Task) {
-  if (!task.fileId || !task.projectId || !task.branchId) {
-    return { total: 0, translated: 0, percentage: 0 };
-  }
-
+// Function để lấy progress thực tế từ Crowdin API
+async function getCrowdinProgress(task: Task): Promise<number> {
   try {
-    // Sử dụng ngôn ngữ của task, fallback về 'en' nếu không có
-    const taskLanguage = task.language || 'en';
-
-    // Lấy translation strings cho file của task
-    const { data } = await axiosInstance.get('/translation/strings', {
-      params: {
-        projectId: task.projectId,
-        branchId: task.branchId,
-        fileId: task.fileId,
-        language: taskLanguage,
-      },
-    });
-
-    const strings = Array.isArray(data) ? data : [];
-
-    // Lọc strings theo page nếu có
-    let filteredStrings = strings;
-
-    // Check for multiple pages first
-    if (task.pages && Array.isArray(task.pages) && task.pages.length > 0) {
-      filteredStrings = strings.filter((str: any) =>
-        task.pages!.includes(str.filePart)
-      );
-    }
-    // Check for single page
-    else if (task.page !== undefined) {
-      filteredStrings = strings.filter((str: any) => str.filePart === task.page);
-    }
-
-    // Sử dụng deduplication giống như trong editor
-    const seen = new Set<string>();
-    const uniqueStrings: any[] = [];
-
-    for (const str of filteredStrings) {
-      const key = `${str.fileId}_${str.originalText}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniqueStrings.push(str);
-      }
-    }
-    const translatedStrings = uniqueStrings.filter((str: any) =>
-      str.translatedText && str.translatedText.trim().length > 0
-    );
-
-    const total = uniqueStrings.length;
-    const translated = translatedStrings.length;
-    const percentage = total > 0 ? Math.round((translated / total) * 100) : 0;
-
-    return { total, translated, percentage };
+    const progress = await taskService.getTaskProgress(task.id);
+    console.log('Crowdin progress for task:', task.id, progress);
+    return progress.percentage;
   } catch (error) {
-    console.error('Error loading translation strings for task:', error);
-    return { total: 0, translated: 0, percentage: 0 };
+    console.error('Error getting Crowdin progress:', error);
+    // Fallback to status-based calculation
+    return calculateTaskProgress(task);
   }
 }
 
 // Reactive state để lưu progress thực tế
 const taskProgressData = ref<Map<string, { total: number; translated: number; percentage: number }>>(new Map());
 
-// Function để load progress cho task (sử dụng logic mới)
+// Function để load progress cho task
 async function loadTaskProgress(taskId: string) {
   if (taskProgressData.value.has(taskId)) {
     return taskProgressData.value.get(taskId);
   }
 
   try {
-    const task = tasks.value.find((t: Task) => t.id === taskId);
-    if (!task) {
-      return { total: 0, translated: 0, percentage: 0 };
-    }
-
-    const progress = await loadTranslationStringsForTask(task);
+    const progress = await taskService.getTaskProgress(taskId);
     taskProgressData.value.set(taskId, progress);
     return progress;
   } catch (error) {
@@ -781,12 +721,8 @@ const selectedTaskProgress = ref(0);
 const selectedTaskProgressText = ref('0%');
 const selectedTaskProgressLoading = ref(false);
 
-// Interval ID for progress refresh
-let progressIntervalId: number | undefined;
-
 // Function để select task và clear cache
 function selectTask(task: Task | null) {
-  console.log('selectTask called with:', task);
   if (task) {
     // Clear cache cho task này để đảm bảo lấy dữ liệu mới nhất
     taskProgressData.value.delete(task.id);
@@ -805,9 +741,6 @@ async function updateSelectedTaskProgress() {
 
   selectedTaskProgressLoading.value = true;
   try {
-    // Clear cache để đảm bảo lấy dữ liệu mới nhất
-    taskProgressData.value.delete(selectedTask.value.id);
-
     const progress = await loadTaskProgress(selectedTask.value.id);
     selectedTaskProgress.value = progress.percentage;
 
@@ -825,17 +758,6 @@ async function updateSelectedTaskProgress() {
     selectedTaskProgressText.value = '0%';
   } finally {
     selectedTaskProgressLoading.value = false;
-  }
-}
-
-// Function để refresh progress cho tất cả tasks (có thể gọi từ bên ngoài)
-async function refreshAllTaskProgress() {
-  console.log('Refreshing all task progress...');
-  taskProgressData.value.clear();
-
-  // Refresh progress cho selected task nếu có
-  if (selectedTask.value) {
-    await updateSelectedTaskProgress();
   }
 }
 
@@ -952,35 +874,15 @@ async function moveTaskToColumn(task: Task, targetColumn: 'todo' | 'inProgress' 
   // Update task status in database
   try {
     console.log('Sending API request:', { taskId: task.id, newStatus });
-    const updatedTask = await taskService.updateTask(task.id, { status: newStatus });
+    await taskService.updateTask(task.id, { status: newStatus });
 
-    // Force refresh task data from server to ensure we have the latest timestamps
-    const freshTaskData = await taskService.getTask(task.id);
-    console.log('🔄 Fresh task data from server:', {
-      id: freshTaskData.id,
-      status: freshTaskData.status,
-      startedAt: freshTaskData.startedAt,
-      completedAt: freshTaskData.completedAt
-    });
-
-    // Update the task in the local array with fresh data from server
+    // Update the task status in the local array immediately for smooth UX
     const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
     if (taskIndex !== -1) {
-      // Replace with fresh data from server
-      tasks.value[taskIndex] = freshTaskData;
-      console.log('Task updated in local array with fresh server data');
-    }
-
-    // Refresh selectedTask if it's the same task with fresh data
-    if (selectedTask.value?.id === task.id) {
-      console.log('🔄 Refreshing selectedTask with fresh data from server');
-      selectedTask.value = freshTaskData;
-      console.log('🔄 Selected task after refresh:', {
-        id: selectedTask.value.id,
-        status: selectedTask.value.status,
-        startedAt: selectedTask.value.startedAt,
-        completedAt: selectedTask.value.completedAt
-      });
+      // Create a new task object to trigger reactivity
+      const updatedTask = { ...tasks.value[taskIndex], status: newStatus };
+      tasks.value[taskIndex] = updatedTask;
+      console.log('Task status updated in local array:', updatedTask);
     }
 
     // Clear cached progress data for this task to force refresh
@@ -996,9 +898,7 @@ async function moveTaskToColumn(task: Task, targetColumn: 'todo' | 'inProgress' 
       taskTitle: task.title,
       targetColumn: targetColumn,
       newStatus: newStatus,
-      dropIndex: dropIndex,
-      startedAt: freshTaskData.startedAt,
-      completedAt: freshTaskData.completedAt
+      dropIndex: dropIndex
     });
   } catch (error) {
     console.error('Failed to update task status:', error);
@@ -1192,105 +1092,25 @@ async function deleteSelectedTask() {
   }
 }
 
-// Function để update page info khi selectedTask thay đổi
-async function updatePageInfo() {
-  console.log('updatePageInfo called with selectedTask:', selectedTask.value);
-
-  if (!selectedTask.value?.fileId) {
-    console.log('No fileId, setting currentPageInfo to null');
-    currentPageInfo.value = null;
+// Function để update part info khi selectedTask thay đổi
+async function updatePartInfo() {
+  if (!selectedTask.value?.fileId || selectedTask.value?.filePart === undefined) {
+    currentPartInfo.value = null;
     return;
   }
 
-  console.log('Loading file pages for fileId:', selectedTask.value.fileId);
-  const pages = await loadFilePagesData(selectedTask.value.fileId);
-  console.log('Loaded pages:', pages);
+  const parts = await loadFilePartsData(selectedTask.value.fileId);
+  const part = parts.find((p: any) => p.part === selectedTask.value?.filePart);
 
-  let totalStringCount = 0;
-  let pageNumbers: number[] = [];
-
-  // Check if we have multiple pages selected
-  if (selectedTask.value?.pages && Array.isArray(selectedTask.value.pages) && selectedTask.value.pages.length > 0) {
-    console.log('Multiple pages selected:', selectedTask.value.pages);
-
-    // Calculate total string count for all selected pages
-    for (const pageNum of selectedTask.value.pages) {
-      const page = pages.find((p: any) => {
-        const pageNumber = Number(p.part);
-        const taskPageNumber = Number(pageNum);
-        return pageNumber === taskPageNumber;
-      });
-
-      if (page) {
-        totalStringCount += page.stringCount || 0;
-        pageNumbers.push(page.pageNumber || (Number(pageNum) + 1));
-      }
-    }
-
-    if (pageNumbers.length > 0) {
-      currentPageInfo.value = {
-        pageNumber: pageNumbers[0], // Show first page number
-        stringCount: totalStringCount
-      };
-      console.log('Set currentPageInfo for multiple pages to:', currentPageInfo.value);
-      return;
-    }
-  }
-
-  // Check for single page
-  if (selectedTask.value?.page !== undefined && selectedTask.value?.page !== null) {
-    console.log('Single page selected:', selectedTask.value.page);
-
-    // Try to find the page with multiple fallback strategies
-    let page = pages.find((p: any) => {
-      console.log('Checking page:', p, 'against page:', selectedTask.value?.page);
-      // Convert both to numbers for comparison
-      const pageNumber = Number(p.part);
-      const taskPageNumber = Number(selectedTask.value?.page);
-      console.log('Comparing pageNumber:', pageNumber, 'with taskPageNumber:', taskPageNumber);
-      return pageNumber === taskPageNumber;
-    });
-
-    // If not found, try to find by pageNumber
-    if (!page && selectedTask.value.page !== undefined) {
-      const taskPageNumber = Number(selectedTask.value.page);
-      page = pages.find((p: any) => p.pageNumber === (taskPageNumber + 1));
-      console.log('Trying to find by pageNumber, found:', page);
-    }
-
-    // If still not found, try to find the first page
-    if (!page && pages.length > 0) {
-      page = pages[0];
-      console.log('Using first page as fallback:', page);
-    }
-
-    console.log('Final found page:', page);
-
-    if (page) {
-      const taskPageNumber = Number(selectedTask.value.page);
-      currentPageInfo.value = {
-        pageNumber: page.pageNumber || (taskPageNumber + 1),
-        stringCount: page.stringCount
-      };
-      console.log('Set currentPageInfo for single page to:', currentPageInfo.value);
-      return;
-    }
-  }
-
-  // If no specific pages found, calculate total for all pages
-  if (pages.length > 0) {
-    console.log('No specific pages found, calculating total for all pages');
-    totalStringCount = pages.reduce((sum: number, p: any) => sum + (p.stringCount || 0), 0);
-    currentPageInfo.value = {
-      pageNumber: pages[0].pageNumber || 1,
-      stringCount: totalStringCount
-    };
-    console.log('Set currentPageInfo for all pages to:', currentPageInfo.value);
+  if (!part) {
+    currentPartInfo.value = null;
     return;
   }
 
-  console.log('No matching pages found, setting currentPageInfo to null');
-  currentPageInfo.value = null;
+  currentPartInfo.value = {
+    partNumber: part.pageNumber || (selectedTask.value.filePart + 1),
+    stringCount: part.stringCount
+  };
 }
 
 function formatDate(date: string) {
@@ -1509,24 +1329,12 @@ onMounted(() => {
 
   // Add keyboard event listener for close task modal
   document.addEventListener('keydown', handleKeydown);
-
-  // Auto-refresh progress every 30 seconds when a task is selected
-  progressIntervalId = setInterval(() => {
-    if (selectedTask.value && !selectedTaskProgressLoading.value) {
-      updateSelectedTaskProgress();
-    }
-  }, 30000);
 });
 
 onBeforeUnmount(() => {
   // Không clear data để giữ lại khi re-mount
   // Remove keyboard event listener
   document.removeEventListener('keydown', handleKeydown);
-
-  // Clear progress refresh interval
-  if (progressIntervalId) {
-    clearInterval(progressIntervalId);
-  }
 });
 
 // Watch cho projectId và branchId thay đổi - giống như ProjectTranslationTab
@@ -1540,8 +1348,8 @@ watch(() => selectedTask.value, async (task: Task | null) => {
   if (task && task.createdBy) {
     console.log('createdBy:', task.createdBy);
   }
-  // Update page info khi task thay đổi
-  updatePageInfo();
+  // Update part info khi task thay đổi
+  updatePartInfo();
   // Update progress khi task thay đổi
   await updateSelectedTaskProgress();
   // Load task history khi task thay đổi
@@ -1555,8 +1363,7 @@ watch(() => selectedTask.value, async (task: Task | null) => {
 // Expose methods for parent component
 defineExpose({
   reloadTasks,
-  loadProjectFiles,
-  refreshAllTaskProgress
+  loadProjectFiles
 });
 
 // Debug: Log component lifecycle
@@ -1653,24 +1460,13 @@ async function confirmReopenTask() {
   try {
     console.log('Reopening task:', taskToReopen.value.id, taskToReopen.value.title);
 
-    // Call API to reopen task with reason
-    await taskService.reopenTask(taskToReopen.value.id, reopenReason.value);
+    // Call API to reopen task
+    await taskService.reopenTask(taskToReopen.value.id);
 
     // Update task status in local array
     const taskIndex = tasks.value.findIndex((t: Task) => t.id === taskToReopen.value!.id);
     if (taskIndex !== -1) {
       tasks.value[taskIndex] = { ...tasks.value[taskIndex], status: 'pending' };
-    }
-
-    // Reload task detail nếu đang xem task detail
-    if (selectedTask.value && selectedTask.value.id === taskToReopen.value.id) {
-      try {
-        const updatedTask = await taskService.getTask(taskToReopen.value.id);
-        selectedTask.value = updatedTask;
-        // Watch function sẽ tự động reload history
-      } catch (error) {
-        console.error('Failed to reload task detail:', error);
-      }
     }
 
     // Show success message
@@ -1809,66 +1605,23 @@ const closeEditTaskInline = () => {
   editTaskInlineData.value = null;
 };
 
-// Function to format selected pages for display
-function formatSelectedPages(pages: number[]): string {
-  if (!pages || pages.length === 0) return '';
-
-  if (pages.length === 1) {
-    return `Page ${pages[0] + 1}`;
-  }
-
-  // Sort pages and find consecutive ranges
-  const sortedPages = [...pages].sort((a, b) => a - b);
-  const ranges: string[] = [];
-  let start = sortedPages[0];
-  let end = sortedPages[0];
-
-  for (let i = 1; i < sortedPages.length; i++) {
-    if (sortedPages[i] === end + 1) {
-      end = sortedPages[i];
-    } else {
-      if (start === end) {
-        ranges.push(`Page ${start + 1}`);
-      } else {
-        ranges.push(`Pages ${start + 1}-${end + 1}`);
-      }
-      start = end = sortedPages[i];
-    }
-  }
-
-  // Add the last range
-  if (start === end) {
-    ranges.push(`Page ${start + 1}`);
-  } else {
-    ranges.push(`Pages ${start + 1}-${end + 1}`);
-  }
-
-  return ranges.join(', ');
-}
-
 </script>
 <template>
   <div class="kanban-tab-wrapper">
     <!-- Task Detail View -->
-    <div
-      v-if="selectedTask"
-      class="task-detail-view"
-    >
+    <div v-if="selectedTask" class="task-detail-view">
       <div class="task-detail-header-row">
-        <button
-          class="back-btn"
-          @click="selectedTask = null"
-        >
-          <i class="pi pi-arrow-left" />
+        <button class="back-btn" @click="selectedTask = null">
+          <i class="pi pi-arrow-left"></i>
           Board
         </button>
         <div class="task-action-menu-wrapper">
           <button
             class="task-action-menu-btn"
-            title="Task actions"
             @click="openTaskActionMenu($event, selectedTask)"
+            title="Task actions"
           >
-            <i class="pi pi-ellipsis-v" />
+            <i class="pi pi-ellipsis-v"></i>
           </button>
         </div>
       </div>
@@ -1894,113 +1647,64 @@ function formatSelectedPages(pages: number[]): string {
       </div>
 
       <!-- Details Tab Content -->
-      <div
-        v-if="activeTaskDetailTab === 'details'"
-        class="task-detail-content"
-      >
+      <div v-if="activeTaskDetailTab === 'details'" class="task-detail-content">
         <div class="task-detail-meta-box">
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              DETAILS
-            </div>
+            <div class="meta-label">DETAILS</div>
             <div>Language: <b>{{ selectedTask.language ? getLanguageName(selectedTask.language) : 'Not specified' }}</b></div>
             <div class="progress-bar-bg">
-              <div
-                v-if="selectedTaskProgressLoading"
-                class="progress-loading"
-              >
-                <i class="pi pi-spin pi-spinner" /> Loading...
+              <div v-if="selectedTaskProgressLoading" class="progress-loading">
+                <i class="pi pi-spin pi-spinner"></i> Loading...
               </div>
-              <div
-                v-else
-                class="progress-bar"
-                :style="{width: selectedTaskProgress + '%'}"
-              />
+              <div v-else class="progress-bar" :style="{width: selectedTaskProgress + '%'}"></div>
             </div>
-            <div class="progress-text">
-              {{ selectedTaskProgressText }}
-            </div>
+            <div class="progress-text">{{ selectedTaskProgressText }}</div>
           </div>
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              DATES
-            </div>
+            <div class="meta-label">DATES</div>
             <div>Created: {{ formatDate(selectedTask.createdAt) }}</div>
             <div>Modified: {{ formatDate(selectedTask.createdAt) }}</div>
-            <div v-if="selectedTask.startedAt">
-              Started: {{ formatDateTime(selectedTask.startedAt) }}
-            </div>
-            <div v-if="selectedTask.completedAt">
-              Resolved at: {{ formatDateTime(selectedTask.completedAt) }}
-            </div>
-            <div v-else>
-              Not resolved yet
-            </div>
+            <div v-if="selectedTask.startedAt">Started: {{ formatDateTime(selectedTask.startedAt) }}</div>
+            <div v-if="selectedTask.completedAt">Resolved at: {{ formatDateTime(selectedTask.completedAt) }}</div>
+            <div v-else>Not resolved yet</div>
             <div v-if="selectedTask.dueDate">
               <span>Due date:</span>
               <span :class="{ 'overdue': isOverdue(selectedTask.dueDate) }">
-                <span v-if="isOverdue(selectedTask.dueDate)">⚠️</span>
-                {{ formatDateTime(selectedTask.dueDate) }}
-              </span>
+              <span v-if="isOverdue(selectedTask.dueDate)">⚠️</span>
+              {{ formatDateTime(selectedTask.dueDate) }}
+            </span>
             </div>
-            <div v-else>
-              No due date
-            </div>
+            <div v-else>No due date</div>
           </div>
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              RESOURCES
-            </div>
+            <div class="meta-label">RESOURCES</div>
             <div v-if="selectedTask.fileId">
-              <div
-                class="file-name-container"
-                :title="selectedTaskFileName"
-              >
+              <div class="file-name-container" :title="selectedTaskFileName">
                 File: <b>{{ selectedTaskTruncatedFileName }}</b>
               </div>
-              <div v-if="selectedTask.page !== undefined && selectedTask.page !== null">
-                Page: <b>{{ currentPageInfo?.pageNumber || 'Loading...' }}</b> ({{ currentPageInfo?.stringCount || '0' }} strings)
-                <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.page = {{ selectedTask.page }} -->
-                <!-- Temporary debug info -->
-                <div style="font-size: 10px; color: #666; margin-top: 5px;">
-                  Debug: page={{ selectedTask.page }}, fileId={{ selectedTask.fileId }}, currentPageInfo={{ JSON.stringify(currentPageInfo) }}
-                </div>
-              </div>
-              <div v-else-if="selectedTask.pages && selectedTask.pages.length > 0">
-                Pages: <b>{{ formatSelectedPages(selectedTask.pages) }}</b>
-                <!-- Debug: pages={{ JSON.stringify(selectedTask.pages) }} -->
-              </div>
-              <div v-else-if="selectedTask.page !== undefined && selectedTask.page !== null">
-                Pages: <b>Page {{ selectedTask.page + 1 }}</b>
-                <!-- Debug: page={{ selectedTask.page }} -->
+              <div v-if="selectedTask.filePart !== undefined">
+                Page: <b>{{ currentPartInfo?.partNumber }}</b> ({{ currentPartInfo?.stringCount }} strings)
               </div>
               <div v-else>
-                Pages: <b>No file</b>
+                Parts: <b>All parts</b>
               </div>
             </div>
             <div v-else>
               <div>Files: <b>0</b></div>
             </div>
+            <div>Words: 0</div>
           </div>
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              AUTHOR
-            </div>
+            <div class="meta-label">AUTHOR</div>
             <div class="author-avatar">
-              <img
-                v-if="selectedTask.createdBy.avatarUrl"
-                :src="getAvatarUrl(selectedTask.createdBy.avatarUrl)"
-                alt="avatar"
-              >
+              <img v-if="selectedTask.createdBy.avatarUrl" :src="getAvatarUrl(selectedTask.createdBy.avatarUrl)" alt="avatar" />
               <span v-else>{{ selectedTask.createdBy.fullName ? selectedTask.createdBy.fullName[0] : selectedTask.createdBy.username[0] }}</span>
             </div>
             <div><b>{{ selectedTask.createdBy.fullName }}</b> {{ selectedTask.createdBy.username }}</div>
           </div>
         </div>
         <div class="task-detail-members">
-          <div class="members-title">
-            Members
-          </div>
+          <div class="members-title">Members</div>
           <table class="members-table">
             <thead>
             <tr>
@@ -2012,30 +1716,17 @@ function formatSelectedPages(pages: number[]): string {
             <tr v-if="selectedTask.assignedTo">
               <td>
                 <div class="assignee-info">
-                  <img
-                    v-if="selectedTask.assignedTo.avatarUrl"
-                    :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
-                    :alt="selectedTask.assignedTo.fullName"
-                    class="assignee-avatar"
-                  >
-                  <span
-                    v-else
-                    class="assignee-avatar-placeholder"
-                  >{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
+                  <img v-if="selectedTask.assignedTo.avatarUrl" :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)" :alt="selectedTask.assignedTo.fullName" class="assignee-avatar" />
+                  <span v-else class="assignee-avatar-placeholder">{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
                   <span class="assignee-name">{{ selectedTask.assignedTo.fullName || selectedTask.assignedTo.username }}</span>
                 </div>
               </td>
               <td>
-                {{ currentPageInfo?.stringCount !== undefined ? currentPageInfo.stringCount : selectedTaskStringCount }}
+                {{ currentPartInfo?.stringCount !== undefined ? currentPartInfo.stringCount : (selectedTask.fileId ? (filePartsData.value.get(selectedTask.fileId)?.reduce((sum: number, p: { stringCount: number }) => sum + (p.stringCount || 0), 0) ?? '-') : '-') }}
               </td>
             </tr>
             <tr v-else>
-              <td
-                colspan="2"
-                class="empty-row"
-              >
-                Nothing to display
-              </td>
+              <td colspan="2" class="empty-row">Nothing to display</td>
             </tr>
             </tbody>
           </table>
@@ -2043,38 +1734,22 @@ function formatSelectedPages(pages: number[]): string {
       </div>
 
       <!-- History Tab Content -->
-      <div
-        v-if="activeTaskDetailTab === 'history'"
-        class="task-detail-content"
-      >
+      <div v-if="activeTaskDetailTab === 'history'" class="task-detail-content">
         <div class="task-history-container">
           <div class="history-header">
             <h3>Task History</h3>
-            <div
-              v-if="taskHistoryLoading"
-              class="history-loading"
-            >
-              <i class="pi pi-spin pi-spinner" /> Loading history...
+            <div v-if="taskHistoryLoading" class="history-loading">
+              <i class="pi pi-spin pi-spinner"></i> Loading history...
             </div>
           </div>
 
-          <div
-            v-if="!taskHistoryLoading && taskHistory.length === 0"
-            class="no-history"
-          >
+          <div v-if="!taskHistoryLoading && taskHistory.length === 0" class="no-history">
             <p>No history available for this task.</p>
           </div>
 
-          <div
-            v-else-if="!taskHistoryLoading"
-            class="history-timeline"
-          >
-            <div
-              v-for="item in taskHistory"
-              :key="item.id"
-              class="timeline-item"
-            >
-              <div class="timeline-dot" />
+          <div v-else-if="!taskHistoryLoading" class="history-timeline">
+            <div v-for="(item, index) in taskHistory" :key="item.id" class="timeline-item">
+              <div class="timeline-dot"></div>
               <div class="timeline-content">
                 <div class="timeline-header">
                   <div class="timeline-action">
@@ -2095,36 +1770,12 @@ function formatSelectedPages(pages: number[]): string {
                   </div>
                 </div>
 
-                <div class="timeline-description">
-                  {{ item.description }}
-                </div>
+                <div class="timeline-description">{{ item.description }}</div>
 
-                <!-- Hiển thị reason cho reopen action -->
-                <div
-                  v-if="item.action === 'reopened' && item.reason"
-                  class="timeline-reason"
-                >
-                  <div class="reason-label">
-                    📝 Reason:
-                  </div>
-                  <div class="reason-text">
-                    {{ item.reason }}
-                  </div>
-                </div>
-
-                <div
-                  v-if="item.metadata && item.metadata.fromStatus && item.metadata.toStatus"
-                  class="timeline-status-change"
-                >
+                <div v-if="item.metadata && item.metadata.fromStatus && item.metadata.toStatus" class="timeline-status-change">
                   <div class="status-badges">
                     <span class="status-badge old-status">
-                      <span class="status-indicator">
-                        <span v-if="item.metadata.fromStatus === 'pending'">🔴</span>
-                        <span v-else-if="item.metadata.fromStatus === 'in_progress'">🟡</span>
-                        <span v-else-if="item.metadata.fromStatus === 'completed'">🟢</span>
-                        <span v-else-if="item.metadata.fromStatus === 'closed'">✅</span>
-                        <span v-else>⚪</span>
-                      </span>
+                      <span class="status-indicator">🔴</span>
                       {{ getStatusDisplayName(item.metadata.fromStatus) }}
                     </span>
                     <span class="status-arrow">→</span>
@@ -2148,16 +1799,10 @@ function formatSelectedPages(pages: number[]): string {
     </div>
 
     <!-- Create Task View -->
-    <div
-      v-else-if="showCreateForm"
-      class="create-task-view"
-    >
+    <div v-else-if="showCreateForm" class="create-task-view">
       <div class="create-task-header">
-        <button
-          class="back-btn"
-          @click="cancelCreateTask"
-        >
-          <i class="pi pi-arrow-left" />
+        <button class="back-btn" @click="cancelCreateTask">
+          <i class="pi pi-arrow-left"></i>
           Back to Board
         </button>
       </div>
@@ -2176,16 +1821,10 @@ function formatSelectedPages(pages: number[]): string {
     </div>
 
     <!-- Edit Task View -->
-    <div
-      v-else-if="showEditTaskInline"
-      class="edit-task-view"
-    >
+    <div v-else-if="showEditTaskInline" class="edit-task-view">
       <div class="edit-task-header">
-        <button
-          class="back-btn"
-          @click="closeEditTaskInline"
-        >
-          <i class="pi pi-arrow-left" />
+        <button class="back-btn" @click="closeEditTaskInline">
+          <i class="pi pi-arrow-left"></i>
           Back to Task Detail
         </button>
       </div>
@@ -2212,10 +1851,7 @@ function formatSelectedPages(pages: number[]): string {
 
 
     <!-- Kanban Board View -->
-    <div
-      v-else
-      class="kanban-board-view"
-    >
+    <div v-else class="kanban-board-view">
       <!-- Tabs for Board and All Tasks -->
       <div class="task-tabs">
         <div class="tabs-left">
@@ -2233,12 +1869,8 @@ function formatSelectedPages(pages: number[]): string {
           </button>
         </div>
         <div class="tabs-right">
-          <button
-            v-if="canCreateTask"
-            class="create-task-btn-header"
-            @click="showCreateTaskForm"
-          >
-            <i class="pi pi-plus" />
+          <button v-if="canCreateTask" @click="showCreateTaskForm" class="create-task-btn-header">
+            <i class="pi pi-plus"></i>
             Create Task
           </button>
         </div>
@@ -2251,44 +1883,34 @@ function formatSelectedPages(pages: number[]): string {
           <!-- Search Section -->
           <div class="search-section">
             <div class="search-input-wrapper">
-              <i class="pi pi-search search-icon" />
+              <i class="pi pi-search search-icon"></i>
               <input
                 v-model="search"
                 type="text"
                 placeholder="Search tasks..."
                 class="search-input"
-              >
+              />
             </div>
             <!-- Filter Button -->
-            <button
-              class="filter-btn"
-              :class="{ active: showFilters }"
-              @click="toggleFilters"
-            >
-              <i class="pi pi-filter" />
+            <button @click="toggleFilters" class="filter-btn" :class="{ active: showFilters }">
+              <i class="pi pi-filter"></i>
               Filters
             </button>
           </div>
 
           <!-- Filter Section -->
-          <div
-            v-if="showFilters"
-            class="filter-section"
-          >
+          <div v-if="showFilters" class="filter-section">
             <!-- Custom Assignee Select -->
             <div class="custom-select-wrapper">
               <div
                 class="custom-select-display filter-select"
-                :class="{ active: activeCustomSelect === 'assignee' }"
                 @click="toggleCustomSelect('assignee')"
+                :class="{ active: activeCustomSelect === 'assignee' }"
               >
                 Assignee: {{ selectedFilters.assignee }}
-                <i class="pi pi-chevron-down custom-select-arrow" />
+                <i class="pi pi-chevron-down custom-select-arrow"></i>
               </div>
-              <div
-                v-if="activeCustomSelect === 'assignee'"
-                class="custom-select-dropdown"
-              >
+              <div v-if="activeCustomSelect === 'assignee'" class="custom-select-dropdown">
                 <div
                   v-for="option in assigneeOptions"
                   :key="option"
@@ -2305,16 +1927,13 @@ function formatSelectedPages(pages: number[]): string {
             <div class="custom-select-wrapper">
               <div
                 class="custom-select-display filter-select"
-                :class="{ active: activeCustomSelect === 'createdBy' }"
                 @click="toggleCustomSelect('createdBy')"
+                :class="{ active: activeCustomSelect === 'createdBy' }"
               >
                 Created by: {{ selectedFilters.createdBy }}
-                <i class="pi pi-chevron-down custom-select-arrow" />
+                <i class="pi pi-chevron-down custom-select-arrow"></i>
               </div>
-              <div
-                v-if="activeCustomSelect === 'createdBy'"
-                class="custom-select-dropdown"
-              >
+              <div v-if="activeCustomSelect === 'createdBy'" class="custom-select-dropdown">
                 <div
                   v-for="option in createdByOptions"
                   :key="option"
@@ -2331,16 +1950,13 @@ function formatSelectedPages(pages: number[]): string {
             <div class="custom-select-wrapper">
               <div
                 class="custom-select-display filter-select"
-                :class="{ active: activeCustomSelect === 'file' }"
                 @click="toggleCustomSelect('file')"
+                :class="{ active: activeCustomSelect === 'file' }"
               >
                 File: {{ selectedFilters.file }}
-                <i class="pi pi-chevron-down custom-select-arrow" />
+                <i class="pi pi-chevron-down custom-select-arrow"></i>
               </div>
-              <div
-                v-if="activeCustomSelect === 'file'"
-                class="custom-select-dropdown"
-              >
+              <div v-if="activeCustomSelect === 'file'" class="custom-select-dropdown">
                 <div
                   v-for="option in fileOptions"
                   :key="option"
@@ -2354,17 +1970,14 @@ function formatSelectedPages(pages: number[]): string {
             </div>
             <div class="filter-dropdown-wrapper">
               <button
+                @click="toggleFilterSelect('dueDate')"
                 class="filter-dropdown-btn"
                 :class="{ active: activeSubDropdown === 'dueDate' }"
-                @click="toggleFilterSelect('dueDate')"
               >
                 Due date: {{ selectedFilters.dueDate }}
-                <i class="pi pi-chevron-down filter-arrow" />
+                <i class="pi pi-chevron-down filter-arrow"></i>
               </button>
-              <div
-                v-if="activeSubDropdown === 'dueDate'"
-                class="filter-dropdown-menu"
-              >
+              <div v-if="activeSubDropdown === 'dueDate'" class="filter-dropdown-menu">
                 <div
                   v-for="option in dueDateOptions"
                   :key="option.value"
@@ -2380,44 +1993,29 @@ function formatSelectedPages(pages: number[]): string {
                   class="filter-dropdown-option clear-option"
                   @click="clearDateRange"
                 >
-                  <i class="pi pi-times" />
+                  <i class="pi pi-times"></i>
                   Clear Selection
                 </div>
                 <!-- Date Picker for Custom Range -->
-                <div
-                  v-if="selectedFilters.dueDate === 'Custom Range'"
-                  class="date-picker-container"
-                >
+                <div v-if="selectedFilters.dueDate === 'Custom Range'" class="date-picker-container">
                   <div class="date-picker-calendar">
                     <div class="calendar-header">
-                      <button
-                        class="calendar-nav-btn"
-                        @click="navigateMonth('prev')"
-                      >
-                        <i class="pi pi-chevron-left" />
+                      <button @click="navigateMonth('prev')" class="calendar-nav-btn">
+                        <i class="pi pi-chevron-left"></i>
                       </button>
                       <div class="calendar-months-title">
                         <span class="month-title">{{ formatMonth(currentMonth) }}</span>
                         <span class="month-title">{{ formatMonth(nextMonth) }}</span>
                       </div>
-                      <button
-                        class="calendar-nav-btn"
-                        @click="navigateMonth('next')"
-                      >
-                        <i class="pi pi-chevron-right" />
+                      <button @click="navigateMonth('next')" class="calendar-nav-btn">
+                        <i class="pi pi-chevron-right"></i>
                       </button>
                     </div>
                     <div class="calendar-grid-container">
                       <!-- First Month -->
                       <div class="calendar-month">
                         <div class="calendar-weekdays">
-                          <div
-                            v-for="day in weekDays"
-                            :key="day"
-                            class="weekday"
-                          >
-                            {{ day }}
-                          </div>
+                          <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
                         </div>
                         <div class="calendar-days">
                           <div
@@ -2440,13 +2038,7 @@ function formatSelectedPages(pages: number[]): string {
                       <!-- Second Month -->
                       <div class="calendar-month">
                         <div class="calendar-weekdays">
-                          <div
-                            v-for="day in weekDays"
-                            :key="day"
-                            class="weekday"
-                          >
-                            {{ day }}
-                          </div>
+                          <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
                         </div>
                         <div class="calendar-days">
                           <div
@@ -2467,52 +2059,30 @@ function formatSelectedPages(pages: number[]): string {
                         </div>
                       </div>
                     </div>
+
                   </div>
                 </div>
               </div>
             </div>
-            <button
-              class="clear-filter-btn"
-              @click="clearFilters"
-            >
-              <i class="pi pi-times" />
+            <button @click="clearFilters" class="clear-filter-btn">
+              <i class="pi pi-times"></i>
               Clear
             </button>
           </div>
         </div>
 
         <!-- Global Empty State -->
-        <div
-          v-if="loading"
-          class="global-loading-state"
-        >
-          <div class="loading-icon">
-            ⏳
-          </div>
-          <div class="loading-text">
-            Loading tasks...
-          </div>
+        <div v-if="loading" class="global-loading-state">
+          <div class="loading-icon">⏳</div>
+          <div class="loading-text">Loading tasks...</div>
         </div>
 
-        <div
-          v-else-if="filteredTasks.length === 0"
-          class="global-empty-state"
-        >
-          <div class="global-empty-icon">
-            ⏱️
-          </div>
-          <div class="global-empty-text">
-            No tasks yet
-          </div>
-          <div class="global-empty-subtext">
-            Create your first task to get started with this project
-          </div>
-          <button
-            v-if="canCreateTask"
-            class="global-empty-btn"
-            @click="showCreateTaskForm"
-          >
-            <i class="pi pi-plus" />
+        <div v-else-if="filteredTasks.length === 0" class="global-empty-state">
+          <div class="global-empty-icon">⏱️</div>
+          <div class="global-empty-text">No tasks yet</div>
+          <div class="global-empty-subtext">Create your first task to get started with this project</div>
+          <button v-if="canCreateTask" @click="showCreateTaskForm" class="global-empty-btn">
+            <i class="pi pi-plus"></i>
             Create Task
           </button>
         </div>
@@ -2522,79 +2092,39 @@ function formatSelectedPages(pages: number[]): string {
           <!-- Always show status headers at the top like Crowdin -->
           <div class="kanban-status-header-row">
             <div class="kanban-status-card todo">
-              <div class="status-bar todo" />
+              <div class="status-bar todo"></div>
               <span class="status-title">To Do</span>
-              <span
-                v-if="todoTasks.length"
-                class="status-count"
-              >{{ todoTasks.length }}</span>
+              <span class="status-count" v-if="todoTasks.length">{{ todoTasks.length }}</span>
             </div>
             <div class="kanban-status-card inprogress">
-              <div class="status-bar inprogress" />
+              <div class="status-bar inprogress"></div>
               <span class="status-title">In Progress</span>
-              <span
-                v-if="inProgressTasks.length"
-                class="status-count"
-              >{{ inProgressTasks.length }}</span>
+              <span class="status-count" v-if="inProgressTasks.length">{{ inProgressTasks.length }}</span>
             </div>
             <div class="kanban-status-card done">
-              <div class="status-bar done" />
+              <div class="status-bar done"></div>
               <span class="status-title">Done</span>
-              <span
-                v-if="doneTasks.length"
-                class="status-count"
-              >{{ doneTasks.length }}</span>
-              <span class="status-info"><i class="pi pi-info-circle" /></span>
+              <span class="status-count" v-if="doneTasks.length">{{ doneTasks.length }}</span>
+              <span class="status-info"><i class="pi pi-info-circle"></i></span>
             </div>
           </div>
 
           <!-- Single Language: Original Column Structure -->
-          <div
-            v-if="!shouldShowLanguageGrouping"
-            class="kanban-board"
-          >
+          <div v-if="!shouldShowLanguageGrouping" class="kanban-board">
             <!-- TO DO COLUMN -->
-            <div
-              class="kanban-column"
-              @dragover="handleDragOver($event, 'todo')"
-              @dragleave="handleDragLeave($event)"
-              @drop="handleDrop($event, 'todo')"
-            >
-              <div
-                v-if="isDragging && dragOverColumn === 'todo'"
-                class="drag-over-title"
-              >
+            <div class="kanban-column" @dragover="handleDragOver($event, 'todo')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'todo')">
+              <div v-if="isDragging && dragOverColumn === 'todo'" class="drag-over-title">
                 <div class="drag-over-title-content">
                   <span class="drag-over-icon">📋</span>
                   <span class="drag-over-text">Move to To Do</span>
                 </div>
               </div>
-              <div
-                v-if="loading"
-                class="kanban-loading"
-              >
-                Loading...
-              </div>
+              <div v-if="loading" class="kanban-loading">Loading...</div>
               <div v-else>
-                <div
-                  v-for="(task, idx) in todoTasks"
-                  :key="task.id"
-                  class="task-card-link"
-                  @click="(event) => { console.log('Task card clicked:', task.id); selectTask(task); }"
-                >
-                  <div
-                    :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                    tabindex="0"
-                    draggable="true"
-                    @dragstart="handleDragStart($event, task, idx)"
-                    @dragend="handleDragEnd($event)"
-                    @keydown.enter="selectTask(task)"
-                  >
+                <div v-for="(task, idx) in todoTasks" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                     <!-- Task card content -->
-                    <div
-                      class="task-status-badge"
-                      :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]"
-                    >
+                    <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                       <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
                       <span v-else-if="task.status === 'pending'">To do</span>
                       <span v-else-if="task.status === 'in_progress'">In progress</span>
@@ -2604,10 +2134,7 @@ function formatSelectedPages(pages: number[]): string {
                     <div class="crowdin-row-1">
                       <div class="crowdin-col-left">
                         <span class="task-id">#{{ idx + 1 }}</span>
-                        <span
-                          class="task-label crowdin-title"
-                          :class="{ clickable: true }"
-                        >{{ getCleanTaskTitle(task.title) }}</span>
+                        <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                       </div>
                     </div>
                     <div class="crowdin-row-2">
@@ -2615,26 +2142,14 @@ function formatSelectedPages(pages: number[]): string {
                         <span class="date-text">{{ formatDate(task.createdAt) }}</span>
                       </div>
                     </div>
-                    <div
-                      v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
-                      class="crowdin-row-3"
-                    >
+                    <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
                       <div class="crowdin-col-left">
                         <span class="arrow">→</span>
                         <span class="due-date-label">
-                          <span
-                            v-if="isOverdue(task.dueDate)"
-                            class="due-icon"
-                          >⚠️</span>
-                          <span
-                            v-else
-                            class="due-icon"
-                          >⏰</span>
+                          <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                          <span class="due-icon" v-else>⏰</span>
                           Due date:
-                          <span
-                            class="due-date-value"
-                            :class="{ 'overdue': isOverdue(task.dueDate) }"
-                          >
+                          <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
                             {{ formatDateTime(task.dueDate) }}
                           </span>
                         </span>
@@ -2644,45 +2159,20 @@ function formatSelectedPages(pages: number[]): string {
                       <div class="crowdin-col-left">
                         <div class="task-meta">
                           <!-- Avatar assignee -->
-                          <div
-                            v-if="task.assignedTo"
-                            class="assignee-info"
-                          >
-                            <img
-                              v-if="task.assignedTo.avatarUrl"
-                              :src="getAvatarUrl(task.assignedTo.avatarUrl)"
-                              :alt="task.assignedTo.fullName"
-                              class="assignee-avatar"
-                              :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                            >
-                            <span
-                              v-else
-                              class="assignee-avatar-placeholder"
-                              :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                            >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                          <div class="assignee-info" v-if="task.assignedTo">
+                            <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                            <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
                             <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
                           </div>
                           <!-- File info với icon động và tooltip -->
-                          <div
-                            v-if="task.fileId"
-                            class="file-info"
-                          >
-                            <span
-                              class="file-icon"
-                              :title="getFileName(task.fileId)"
-                            >{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                            <span
-                              class="file-name"
-                              :title="getFileName(task.fileId)"
-                            >{{ getFileName(task.fileId) }}</span>
+                          <div class="file-info" v-if="task.fileId">
+                            <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                            <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div
-                      v-if="task.type"
-                      class="crowdin-row-5"
-                    >
+                    <div class="crowdin-row-5" v-if="task.type">
                       <div class="crowdin-col-left">
                         <div class="task-type-tag crowdin-tag">
                           {{ task.type }}
@@ -2690,16 +2180,13 @@ function formatSelectedPages(pages: number[]): string {
                       </div>
                     </div>
                     <!-- Close button -->
-                    <div
-                      v-if="task.status === 'completed'"
-                      class="crowdin-row-6"
-                    >
+                    <div class="crowdin-row-6" v-if="task.status === 'completed'">
                       <div class="crowdin-col-right">
                         <button
                           class="close-task-btn"
+                          @click.stop="closeTask(task)"
                           :disabled="task.status === 'closed'"
                           :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                          @click.stop="closeTask(task)"
                         >
                           Close
                         </button>
@@ -2711,47 +2198,19 @@ function formatSelectedPages(pages: number[]): string {
             </div>
 
             <!-- IN PROGRESS COLUMN -->
-            <div
-              class="kanban-column"
-              @dragover="handleDragOver($event, 'inProgress')"
-              @dragleave="handleDragLeave($event)"
-              @drop="handleDrop($event, 'inProgress')"
-            >
-              <div
-                v-if="isDragging && dragOverColumn === 'inProgress'"
-                class="drag-over-title"
-              >
+            <div class="kanban-column" @dragover="handleDragOver($event, 'inProgress')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'inProgress')">
+              <div v-if="isDragging && dragOverColumn === 'inProgress'" class="drag-over-title">
                 <div class="drag-over-title-content">
                   <span class="drag-over-icon">📋</span>
                   <span class="drag-over-text">Move to In Progress</span>
                 </div>
               </div>
-              <div
-                v-if="loading"
-                class="kanban-loading"
-              >
-                Loading...
-              </div>
+              <div v-if="loading" class="kanban-loading">Loading...</div>
               <div v-else>
-                <div
-                  v-for="(task, idx) in inProgressTasks"
-                  :key="task.id"
-                  class="task-card-link"
-                  @click="(event) => { console.log('InProgress task card clicked:', task.id); selectTask(task); }"
-                >
-                  <div
-                    :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                    tabindex="0"
-                    draggable="true"
-                    @dragstart="handleDragStart($event, task, idx)"
-                    @dragend="handleDragEnd($event)"
-                    @keydown.enter="selectTask(task)"
-                  >
+                <div v-for="(task, idx) in inProgressTasks" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                     <!-- Same task card content as above -->
-                    <div
-                      class="task-status-badge"
-                      :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]"
-                    >
+                    <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                       <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
                       <span v-else-if="task.status === 'pending'">To do</span>
                       <span v-else-if="task.status === 'in_progress'">In progress</span>
@@ -2761,10 +2220,7 @@ function formatSelectedPages(pages: number[]): string {
                     <div class="crowdin-row-1">
                       <div class="crowdin-col-left">
                         <span class="task-id">#{{ idx + 1 }}</span>
-                        <span
-                          class="task-label crowdin-title"
-                          :class="{ clickable: true }"
-                        >{{ getCleanTaskTitle(task.title) }}</span>
+                        <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                       </div>
                     </div>
                     <div class="crowdin-row-2">
@@ -2772,26 +2228,14 @@ function formatSelectedPages(pages: number[]): string {
                         <span class="date-text">{{ formatDate(task.createdAt) }}</span>
                       </div>
                     </div>
-                    <div
-                      v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
-                      class="crowdin-row-3"
-                    >
+                    <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
                       <div class="crowdin-col-left">
                         <span class="arrow">→</span>
                         <span class="due-date-label">
-                          <span
-                            v-if="isOverdue(task.dueDate)"
-                            class="due-icon"
-                          >⚠️</span>
-                          <span
-                            v-else
-                            class="due-icon"
-                          >⏰</span>
+                          <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                          <span class="due-icon" v-else>⏰</span>
                           Due date:
-                          <span
-                            class="due-date-value"
-                            :class="{ 'overdue': isOverdue(task.dueDate) }"
-                          >
+                          <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
                             {{ formatDateTime(task.dueDate) }}
                           </span>
                         </span>
@@ -2801,45 +2245,20 @@ function formatSelectedPages(pages: number[]): string {
                       <div class="crowdin-col-left">
                         <div class="task-meta">
                           <!-- Avatar assignee -->
-                          <div
-                            v-if="task.assignedTo"
-                            class="assignee-info"
-                          >
-                            <img
-                              v-if="task.assignedTo.avatarUrl"
-                              :src="getAvatarUrl(task.assignedTo.avatarUrl)"
-                              :alt="task.assignedTo.fullName"
-                              class="assignee-avatar"
-                              :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                            >
-                            <span
-                              v-else
-                              class="assignee-avatar-placeholder"
-                              :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                            >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                          <div class="assignee-info" v-if="task.assignedTo">
+                            <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                            <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
                             <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
                           </div>
                           <!-- File info với icon động và tooltip -->
-                          <div
-                            v-if="task.fileId"
-                            class="file-info"
-                          >
-                            <span
-                              class="file-icon"
-                              :title="getFileName(task.fileId)"
-                            >{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                            <span
-                              class="file-name"
-                              :title="getFileName(task.fileId)"
-                            >{{ getFileName(task.fileId) }}</span>
+                          <div class="file-info" v-if="task.fileId">
+                            <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                            <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div
-                      v-if="task.type"
-                      class="crowdin-row-5"
-                    >
+                    <div class="crowdin-row-5" v-if="task.type">
                       <div class="crowdin-col-left">
                         <div class="task-type-tag crowdin-tag">
                           {{ task.type }}
@@ -2847,16 +2266,13 @@ function formatSelectedPages(pages: number[]): string {
                       </div>
                     </div>
                     <!-- Close button -->
-                    <div
-                      v-if="task.status === 'completed'"
-                      class="crowdin-row-6"
-                    >
+                    <div class="crowdin-row-6" v-if="task.status === 'completed'">
                       <div class="crowdin-col-right">
                         <button
                           class="close-task-btn"
+                          @click.stop="closeTask(task)"
                           :disabled="task.status === 'closed'"
                           :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                          @click.stop="closeTask(task)"
                         >
                           Close
                         </button>
@@ -2868,47 +2284,19 @@ function formatSelectedPages(pages: number[]): string {
             </div>
 
             <!-- DONE COLUMN -->
-            <div
-              class="kanban-column"
-              @dragover="handleDragOver($event, 'done')"
-              @dragleave="handleDragLeave($event)"
-              @drop="handleDrop($event, 'done')"
-            >
-              <div
-                v-if="isDragging && dragOverColumn === 'done'"
-                class="drag-over-title"
-              >
+            <div class="kanban-column" @dragover="handleDragOver($event, 'done')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'done')">
+              <div v-if="isDragging && dragOverColumn === 'done'" class="drag-over-title">
                 <div class="drag-over-title-content">
                   <span class="drag-over-icon">📋</span>
                   <span class="drag-over-text">Move to Done</span>
                 </div>
               </div>
-              <div
-                v-if="loading"
-                class="kanban-loading"
-              >
-                Loading...
-              </div>
+              <div v-if="loading" class="kanban-loading">Loading...</div>
               <div v-else>
-                <div
-                  v-for="(task, idx) in doneTasks"
-                  :key="task.id"
-                  class="task-card-link"
-                  @click="(event) => { console.log('Done task card clicked:', task.id); selectTask(task); }"
-                >
-                  <div
-                    :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                    tabindex="0"
-                    draggable="true"
-                    @dragstart="handleDragStart($event, task, idx)"
-                    @dragend="handleDragEnd($event)"
-                    @keydown.enter="selectTask(task)"
-                  >
+                <div v-for="(task, idx) in doneTasks" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                  <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                     <!-- Same task card content as above -->
-                    <div
-                      class="task-status-badge"
-                      :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]"
-                    >
+                    <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                       <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
                       <span v-else-if="task.status === 'pending'">To do</span>
                       <span v-else-if="task.status === 'in_progress'">In progress</span>
@@ -2918,10 +2306,7 @@ function formatSelectedPages(pages: number[]): string {
                     <div class="crowdin-row-1">
                       <div class="crowdin-col-left">
                         <span class="task-id">#{{ idx + 1 }}</span>
-                        <span
-                          class="task-label crowdin-title"
-                          :class="{ clickable: true }"
-                        >{{ getCleanTaskTitle(task.title) }}</span>
+                        <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                       </div>
                     </div>
                     <div class="crowdin-row-2">
@@ -2929,26 +2314,14 @@ function formatSelectedPages(pages: number[]): string {
                         <span class="date-text">{{ formatDate(task.createdAt) }}</span>
                       </div>
                     </div>
-                    <div
-                      v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
-                      class="crowdin-row-3"
-                    >
+                    <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
                       <div class="crowdin-col-left">
                         <span class="arrow">→</span>
                         <span class="due-date-label">
-                          <span
-                            v-if="isOverdue(task.dueDate)"
-                            class="due-icon"
-                          >⚠️</span>
-                          <span
-                            v-else
-                            class="due-icon"
-                          >⏰</span>
+                          <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                          <span class="due-icon" v-else>⏰</span>
                           Due date:
-                          <span
-                            class="due-date-value"
-                            :class="{ 'overdue': isOverdue(task.dueDate) }"
-                          >
+                          <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
                             {{ formatDateTime(task.dueDate) }}
                           </span>
                         </span>
@@ -2958,45 +2331,20 @@ function formatSelectedPages(pages: number[]): string {
                       <div class="crowdin-col-left">
                         <div class="task-meta">
                           <!-- Avatar assignee -->
-                          <div
-                            v-if="task.assignedTo"
-                            class="assignee-info"
-                          >
-                            <img
-                              v-if="task.assignedTo.avatarUrl"
-                              :src="getAvatarUrl(task.assignedTo.avatarUrl)"
-                              :alt="task.assignedTo.fullName"
-                              class="assignee-avatar"
-                              :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                            >
-                            <span
-                              v-else
-                              class="assignee-avatar-placeholder"
-                              :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                            >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                          <div class="assignee-info" v-if="task.assignedTo">
+                            <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                            <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
                             <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
                           </div>
                           <!-- File info với icon động và tooltip -->
-                          <div
-                            v-if="task.fileId"
-                            class="file-info"
-                          >
-                            <span
-                              class="file-icon"
-                              :title="getFileName(task.fileId)"
-                            >{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                            <span
-                              class="file-name"
-                              :title="getFileName(task.fileId)"
-                            >{{ getFileName(task.fileId) }}</span>
+                          <div class="file-info" v-if="task.fileId">
+                            <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                            <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div
-                      v-if="task.type"
-                      class="crowdin-row-5"
-                    >
+                    <div class="crowdin-row-5" v-if="task.type">
                       <div class="crowdin-col-left">
                         <div class="task-type-tag crowdin-tag">
                           {{ task.type }}
@@ -3004,16 +2352,13 @@ function formatSelectedPages(pages: number[]): string {
                       </div>
                     </div>
                     <!-- Close button -->
-                    <div
-                      v-if="task.status === 'completed'"
-                      class="crowdin-row-6"
-                    >
+                    <div class="crowdin-row-6" v-if="task.status === 'completed'">
                       <div class="crowdin-col-right">
                         <button
                           class="close-task-btn"
+                          @click.stop="closeTask(task)"
                           :disabled="task.status === 'closed'"
                           :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                          @click.stop="closeTask(task)"
                         >
                           Close
                         </button>
@@ -3026,61 +2371,23 @@ function formatSelectedPages(pages: number[]): string {
           </div>
 
           <!-- Multiple Languages: Swimlanes Structure -->
-          <div
-            v-else
-            class="kanban-swimlanes"
-          >
-            <div
-              v-for="language in availableLanguages"
-              :key="language"
-              class="language-swimlane"
-            >
+          <div v-else class="kanban-swimlanes">
+            <div v-for="language in availableLanguages" :key="language" class="language-swimlane">
               <!-- Language Header -->
-              <div
-                class="language-swimlane-header"
-                @click="toggleLanguageCollapse(language)"
-              >
-                <i
-                  class="language-toggle-icon pi"
-                  :class="isLanguageCollapsed(language) ? 'pi-chevron-right collapsed' : 'pi-chevron-up'"
-                />
-                <div class="language-flag">
-                  {{ language.substring(0, 2).toUpperCase() }}
-                </div>
+              <div class="language-swimlane-header" @click="toggleLanguageCollapse(language)">
+                <i class="language-toggle-icon pi" :class="isLanguageCollapsed(language) ? 'pi-chevron-right collapsed' : 'pi-chevron-up'"></i>
+                <div class="language-flag">{{ language.substring(0, 2).toUpperCase() }}</div>
                 <span class="language-name">{{ getLanguageName(language) }}</span>
                 <span class="language-count">({{ tasksByLanguageAndStatus[language].todo.length + tasksByLanguageAndStatus[language].inProgress.length + tasksByLanguageAndStatus[language].done.length }})</span>
               </div>
 
               <!-- Language Tasks Row -->
-              <div
-                v-if="!isLanguageCollapsed(language)"
-                class="language-swimlane-content"
-              >
-                <div
-                  class="kanban-column todo-column"
-                  @dragover="handleDragOver($event, 'todo')"
-                  @dragleave="handleDragLeave($event)"
-                  @drop="handleDrop($event, 'todo')"
-                >
-                  <div
-                    v-for="(task, idx) in tasksByLanguageAndStatus[language].todo"
-                    :key="task.id"
-                    class="task-card-link"
-                    @click="selectTask(task)"
-                  >
-                    <div
-                      :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                      tabindex="0"
-                      draggable="true"
-                      @dragstart="handleDragStart($event, task, idx)"
-                      @dragend="handleDragEnd($event)"
-                      @keydown.enter="selectTask(task)"
-                    >
+              <div v-if="!isLanguageCollapsed(language)" class="language-swimlane-content">
+                <div class="kanban-column todo-column" @dragover="handleDragOver($event, 'todo')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'todo')">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].todo" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                       <!-- Task card content -->
-                      <div
-                        class="task-status-badge"
-                        :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]"
-                      >
+                      <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                         <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
                         <span v-else-if="task.status === 'pending'">To do</span>
                         <span v-else-if="task.status === 'in_progress'">In progress</span>
@@ -3090,10 +2397,7 @@ function formatSelectedPages(pages: number[]): string {
                       <div class="crowdin-row-1">
                         <div class="crowdin-col-left">
                           <span class="task-id">#{{ idx + 1 }}</span>
-                          <span
-                            class="task-label crowdin-title"
-                            :class="{ clickable: true }"
-                          >{{ getCleanTaskTitle(task.title) }}</span>
+                          <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                         </div>
                       </div>
                       <div class="crowdin-row-2">
@@ -3101,26 +2405,14 @@ function formatSelectedPages(pages: number[]): string {
                           <span class="date-text">{{ formatDate(task.createdAt) }}</span>
                         </div>
                       </div>
-                      <div
-                        v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
-                        class="crowdin-row-3"
-                      >
+                      <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
                         <div class="crowdin-col-left">
                           <span class="arrow">→</span>
                           <span class="due-date-label">
-                            <span
-                              v-if="isOverdue(task.dueDate)"
-                              class="due-icon"
-                            >⚠️</span>
-                            <span
-                              v-else
-                              class="due-icon"
-                            >⏰</span>
+                            <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                            <span class="due-icon" v-else>⏰</span>
                             Due date:
-                            <span
-                              class="due-date-value"
-                              :class="{ 'overdue': isOverdue(task.dueDate) }"
-                            >
+                            <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
                               {{ formatDateTime(task.dueDate) }}
                             </span>
                           </span>
@@ -3130,45 +2422,20 @@ function formatSelectedPages(pages: number[]): string {
                         <div class="crowdin-col-left">
                           <div class="task-meta">
                             <!-- Avatar assignee -->
-                            <div
-                              v-if="task.assignedTo"
-                              class="assignee-info"
-                            >
-                              <img
-                                v-if="task.assignedTo.avatarUrl"
-                                :src="getAvatarUrl(task.assignedTo.avatarUrl)"
-                                :alt="task.assignedTo.fullName"
-                                class="assignee-avatar"
-                                :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                              >
-                              <span
-                                v-else
-                                class="assignee-avatar-placeholder"
-                                :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                              >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                            <div class="assignee-info" v-if="task.assignedTo">
+                              <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                              <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
                               <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
                             </div>
                             <!-- File info với icon động và tooltip -->
-                            <div
-                              v-if="task.fileId"
-                              class="file-info"
-                            >
-                              <span
-                                class="file-icon"
-                                :title="getFileName(task.fileId)"
-                              >{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                              <span
-                                class="file-name"
-                                :title="getFileName(task.fileId)"
-                              >{{ getFileName(task.fileId) }}</span>
+                            <div class="file-info" v-if="task.fileId">
+                              <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                              <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div
-                        v-if="task.type"
-                        class="crowdin-row-5"
-                      >
+                      <div class="crowdin-row-5" v-if="task.type">
                         <div class="crowdin-col-left">
                           <div class="task-type-tag crowdin-tag">
                             {{ task.type }}
@@ -3176,16 +2443,13 @@ function formatSelectedPages(pages: number[]): string {
                         </div>
                       </div>
                       <!-- Close button -->
-                      <div
-                        v-if="task.status === 'completed'"
-                        class="crowdin-row-6"
-                      >
+                      <div class="crowdin-row-6" v-if="task.status === 'completed'">
                         <div class="crowdin-col-right">
                           <button
                             class="close-task-btn"
+                            @click.stop="closeTask(task)"
                             :disabled="task.status === 'closed'"
                             :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                            @click.stop="closeTask(task)"
                           >
                             Close
                           </button>
@@ -3195,31 +2459,11 @@ function formatSelectedPages(pages: number[]): string {
                   </div>
                 </div>
 
-                <div
-                  class="kanban-column inprogress-column"
-                  @dragover="handleDragOver($event, 'inProgress')"
-                  @dragleave="handleDragLeave($event)"
-                  @drop="handleDrop($event, 'inProgress')"
-                >
-                  <div
-                    v-for="(task, idx) in tasksByLanguageAndStatus[language].inProgress"
-                    :key="task.id"
-                    class="task-card-link"
-                    @click="selectTask(task)"
-                  >
-                    <div
-                      :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                      tabindex="0"
-                      draggable="true"
-                      @dragstart="handleDragStart($event, task, idx)"
-                      @dragend="handleDragEnd($event)"
-                      @keydown.enter="selectTask(task)"
-                    >
+                <div class="kanban-column inprogress-column" @dragover="handleDragOver($event, 'inProgress')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'inProgress')">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].inProgress" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                       <!-- Same task card content as above -->
-                      <div
-                        class="task-status-badge"
-                        :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]"
-                      >
+                      <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                         <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
                         <span v-else-if="task.status === 'pending'">To do</span>
                         <span v-else-if="task.status === 'in_progress'">In progress</span>
@@ -3229,10 +2473,7 @@ function formatSelectedPages(pages: number[]): string {
                       <div class="crowdin-row-1">
                         <div class="crowdin-col-left">
                           <span class="task-id">#{{ idx + 1 }}</span>
-                          <span
-                            class="task-label crowdin-title"
-                            :class="{ clickable: true }"
-                          >{{ getCleanTaskTitle(task.title) }}</span>
+                          <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                         </div>
                       </div>
                       <div class="crowdin-row-2">
@@ -3240,26 +2481,14 @@ function formatSelectedPages(pages: number[]): string {
                           <span class="date-text">{{ formatDate(task.createdAt) }}</span>
                         </div>
                       </div>
-                      <div
-                        v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
-                        class="crowdin-row-3"
-                      >
+                      <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
                         <div class="crowdin-col-left">
                           <span class="arrow">→</span>
                           <span class="due-date-label">
-                            <span
-                              v-if="isOverdue(task.dueDate)"
-                              class="due-icon"
-                            >⚠️</span>
-                            <span
-                              v-else
-                              class="due-icon"
-                            >⏰</span>
+                            <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                            <span class="due-icon" v-else>⏰</span>
                             Due date:
-                            <span
-                              class="due-date-value"
-                              :class="{ 'overdue': isOverdue(task.dueDate) }"
-                            >
+                            <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
                               {{ formatDateTime(task.dueDate) }}
                             </span>
                           </span>
@@ -3269,45 +2498,20 @@ function formatSelectedPages(pages: number[]): string {
                         <div class="crowdin-col-left">
                           <div class="task-meta">
                             <!-- Avatar assignee -->
-                            <div
-                              v-if="task.assignedTo"
-                              class="assignee-info"
-                            >
-                              <img
-                                v-if="task.assignedTo.avatarUrl"
-                                :src="getAvatarUrl(task.assignedTo.avatarUrl)"
-                                :alt="task.assignedTo.fullName"
-                                class="assignee-avatar"
-                                :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                              >
-                              <span
-                                v-else
-                                class="assignee-avatar-placeholder"
-                                :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                              >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                            <div class="assignee-info" v-if="task.assignedTo">
+                              <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                              <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
                               <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
                             </div>
                             <!-- File info với icon động và tooltip -->
-                            <div
-                              v-if="task.fileId"
-                              class="file-info"
-                            >
-                              <span
-                                class="file-icon"
-                                :title="getFileName(task.fileId)"
-                              >{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                              <span
-                                class="file-name"
-                                :title="getFileName(task.fileId)"
-                              >{{ getFileName(task.fileId) }}</span>
+                            <div class="file-info" v-if="task.fileId">
+                              <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                              <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div
-                        v-if="task.type"
-                        class="crowdin-row-5"
-                      >
+                      <div class="crowdin-row-5" v-if="task.type">
                         <div class="crowdin-col-left">
                           <div class="task-type-tag crowdin-tag">
                             {{ task.type }}
@@ -3315,16 +2519,13 @@ function formatSelectedPages(pages: number[]): string {
                         </div>
                       </div>
                       <!-- Close button -->
-                      <div
-                        v-if="task.status === 'completed'"
-                        class="crowdin-row-6"
-                      >
+                      <div class="crowdin-row-6" v-if="task.status === 'completed'">
                         <div class="crowdin-col-right">
                           <button
                             class="close-task-btn"
+                            @click.stop="closeTask(task)"
                             :disabled="task.status === 'closed'"
                             :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                            @click.stop="closeTask(task)"
                           >
                             Close
                           </button>
@@ -3334,31 +2535,11 @@ function formatSelectedPages(pages: number[]): string {
                   </div>
                 </div>
 
-                <div
-                  class="kanban-column done-column"
-                  @dragover="handleDragOver($event, 'done')"
-                  @dragleave="handleDragLeave($event)"
-                  @drop="handleDrop($event, 'done')"
-                >
-                  <div
-                    v-for="(task, idx) in tasksByLanguageAndStatus[language].done"
-                    :key="task.id"
-                    class="task-card-link"
-                    @click="selectTask(task)"
-                  >
-                    <div
-                      :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
-                      tabindex="0"
-                      draggable="true"
-                      @dragstart="handleDragStart($event, task, idx)"
-                      @dragend="handleDragEnd($event)"
-                      @keydown.enter="selectTask(task)"
-                    >
+                <div class="kanban-column done-column" @dragover="handleDragOver($event, 'done')" @dragleave="handleDragLeave($event)" @drop="handleDrop($event, 'done')">
+                  <div v-for="(task, idx) in tasksByLanguageAndStatus[language].done" :key="task.id" class="task-card-link" @click="selectTask(task)">
+                    <div :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]" tabindex="0" draggable="true" @dragstart="handleDragStart($event, task, idx)" @dragend="handleDragEnd($event)" @keydown.enter="selectTask(task)" @click="selectTask(task)">
                       <!-- Same task card content as above -->
-                      <div
-                        class="task-status-badge"
-                        :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]"
-                      >
+                      <div class="task-status-badge" :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]">
                         <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
                         <span v-else-if="task.status === 'pending'">To do</span>
                         <span v-else-if="task.status === 'in_progress'">In progress</span>
@@ -3368,10 +2549,7 @@ function formatSelectedPages(pages: number[]): string {
                       <div class="crowdin-row-1">
                         <div class="crowdin-col-left">
                           <span class="task-id">#{{ idx + 1 }}</span>
-                          <span
-                            class="task-label crowdin-title"
-                            :class="{ clickable: true }"
-                          >{{ getCleanTaskTitle(task.title) }}</span>
+                          <span class="task-label crowdin-title" :class="{ clickable: true }">{{ getCleanTaskTitle(task.title) }}</span>
                         </div>
                       </div>
                       <div class="crowdin-row-2">
@@ -3379,26 +2557,14 @@ function formatSelectedPages(pages: number[]): string {
                           <span class="date-text">{{ formatDate(task.createdAt) }}</span>
                         </div>
                       </div>
-                      <div
-                        v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
-                        class="crowdin-row-3"
-                      >
+                      <div class="crowdin-row-3" v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))">
                         <div class="crowdin-col-left">
                           <span class="arrow">→</span>
                           <span class="due-date-label">
-                            <span
-                              v-if="isOverdue(task.dueDate)"
-                              class="due-icon"
-                            >⚠️</span>
-                            <span
-                              v-else
-                              class="due-icon"
-                            >⏰</span>
+                            <span class="due-icon" v-if="isOverdue(task.dueDate)">⚠️</span>
+                            <span class="due-icon" v-else>⏰</span>
                             Due date:
-                            <span
-                              class="due-date-value"
-                              :class="{ 'overdue': isOverdue(task.dueDate) }"
-                            >
+                            <span class="due-date-value" :class="{ 'overdue': isOverdue(task.dueDate) }">
                               {{ formatDateTime(task.dueDate) }}
                             </span>
                           </span>
@@ -3408,45 +2574,20 @@ function formatSelectedPages(pages: number[]): string {
                         <div class="crowdin-col-left">
                           <div class="task-meta">
                             <!-- Avatar assignee -->
-                            <div
-                              v-if="task.assignedTo"
-                              class="assignee-info"
-                            >
-                              <img
-                                v-if="task.assignedTo.avatarUrl"
-                                :src="getAvatarUrl(task.assignedTo.avatarUrl)"
-                                :alt="task.assignedTo.fullName"
-                                class="assignee-avatar"
-                                :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                              >
-                              <span
-                                v-else
-                                class="assignee-avatar-placeholder"
-                                :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                              >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
+                            <div class="assignee-info" v-if="task.assignedTo">
+                              <img v-if="task.assignedTo.avatarUrl" :src="getAvatarUrl(task.assignedTo.avatarUrl)" :alt="task.assignedTo.fullName" class="assignee-avatar" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)" />
+                              <span v-else class="assignee-avatar-placeholder" :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)">{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
                               <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
                             </div>
                             <!-- File info với icon động và tooltip -->
-                            <div
-                              v-if="task.fileId"
-                              class="file-info"
-                            >
-                              <span
-                                class="file-icon"
-                                :title="getFileName(task.fileId)"
-                              >{{ getFileIcon(getFileName(task.fileId)) }}</span>
-                              <span
-                                class="file-name"
-                                :title="getFileName(task.fileId)"
-                              >{{ getFileName(task.fileId) }}</span>
+                            <div class="file-info" v-if="task.fileId">
+                              <span class="file-icon" :title="getFileName(task.fileId)">{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                              <span class="file-name" :title="getFileName(task.fileId)">{{ getFileName(task.fileId) }}</span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div
-                        v-if="task.type"
-                        class="crowdin-row-5"
-                      >
+                      <div class="crowdin-row-5" v-if="task.type">
                         <div class="crowdin-col-left">
                           <div class="task-type-tag crowdin-tag">
                             {{ task.type }}
@@ -3454,16 +2595,13 @@ function formatSelectedPages(pages: number[]): string {
                         </div>
                       </div>
                       <!-- Close button -->
-                      <div
-                        v-if="task.status === 'completed'"
-                        class="crowdin-row-6"
-                      >
+                      <div class="crowdin-row-6" v-if="task.status === 'completed'">
                         <div class="crowdin-col-right">
                           <button
                             class="close-task-btn"
+                            @click.stop="closeTask(task)"
                             :disabled="task.status === 'closed'"
                             :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
-                            @click.stop="closeTask(task)"
                           >
                             Close
                           </button>
@@ -3479,53 +2617,40 @@ function formatSelectedPages(pages: number[]): string {
       </div>
 
       <!-- All Tasks View -->
-      <div
-        v-else-if="activeTab === 'all'"
-        class="all-tasks-view"
-      >
+      <div v-else-if="activeTab === 'all'" class="all-tasks-view">
         <!-- Search and Filter Bar for All Tasks -->
         <div class="search-filter-container">
           <!-- Search Section -->
           <div class="search-section">
             <div class="search-input-wrapper">
-              <i class="pi pi-search search-icon" />
+              <i class="pi pi-search search-icon"></i>
               <input
                 v-model="search"
                 type="text"
                 placeholder="Search tasks..."
                 class="search-input"
-              >
+              />
             </div>
             <!-- Filter Button -->
-            <button
-              class="filter-btn"
-              :class="{ active: showFilters }"
-              @click="toggleFilters"
-            >
-              <i class="pi pi-filter" />
+            <button @click="toggleFilters" class="filter-btn" :class="{ active: showFilters }">
+              <i class="pi pi-filter"></i>
               Filters
             </button>
           </div>
 
           <!-- Filter Section -->
-          <div
-            v-if="showFilters"
-            class="filter-section"
-          >
+          <div v-if="showFilters" class="filter-section">
             <!-- Custom Assignee Select -->
             <div class="custom-select-wrapper">
               <div
                 class="custom-select-display filter-select"
-                :class="{ active: activeCustomSelect === 'assignee' }"
                 @click="toggleCustomSelect('assignee')"
+                :class="{ active: activeCustomSelect === 'assignee' }"
               >
                 Assignee: {{ selectedFilters.assignee }}
-                <i class="pi pi-chevron-down custom-select-arrow" />
+                <i class="pi pi-chevron-down custom-select-arrow"></i>
               </div>
-              <div
-                v-if="activeCustomSelect === 'assignee'"
-                class="custom-select-dropdown"
-              >
+              <div v-if="activeCustomSelect === 'assignee'" class="custom-select-dropdown">
                 <div
                   v-for="option in assigneeOptions"
                   :key="option"
@@ -3542,16 +2667,13 @@ function formatSelectedPages(pages: number[]): string {
             <div class="custom-select-wrapper">
               <div
                 class="custom-select-display filter-select"
-                :class="{ active: activeCustomSelect === 'createdBy' }"
                 @click="toggleCustomSelect('createdBy')"
+                :class="{ active: activeCustomSelect === 'createdBy' }"
               >
                 Created by: {{ selectedFilters.createdBy }}
-                <i class="pi pi-chevron-down custom-select-arrow" />
+                <i class="pi pi-chevron-down custom-select-arrow"></i>
               </div>
-              <div
-                v-if="activeCustomSelect === 'createdBy'"
-                class="custom-select-dropdown"
-              >
+              <div v-if="activeCustomSelect === 'createdBy'" class="custom-select-dropdown">
                 <div
                   v-for="option in createdByOptions"
                   :key="option"
@@ -3568,16 +2690,13 @@ function formatSelectedPages(pages: number[]): string {
             <div class="custom-select-wrapper">
               <div
                 class="custom-select-display filter-select"
-                :class="{ active: activeCustomSelect === 'file' }"
                 @click="toggleCustomSelect('file')"
+                :class="{ active: activeCustomSelect === 'file' }"
               >
                 File: {{ selectedFilters.file }}
-                <i class="pi pi-chevron-down custom-select-arrow" />
+                <i class="pi pi-chevron-down custom-select-arrow"></i>
               </div>
-              <div
-                v-if="activeCustomSelect === 'file'"
-                class="custom-select-dropdown"
-              >
+              <div v-if="activeCustomSelect === 'file'" class="custom-select-dropdown">
                 <div
                   v-for="option in fileOptions"
                   :key="option"
@@ -3591,17 +2710,14 @@ function formatSelectedPages(pages: number[]): string {
             </div>
             <div class="filter-dropdown-wrapper">
               <button
+                @click="toggleFilterSelect('dueDate')"
                 class="filter-dropdown-btn"
                 :class="{ active: activeSubDropdown === 'dueDate' }"
-                @click="toggleFilterSelect('dueDate')"
               >
                 Due date: {{ selectedFilters.dueDate }}
-                <i class="pi pi-chevron-down filter-arrow" />
+                <i class="pi pi-chevron-down filter-arrow"></i>
               </button>
-              <div
-                v-if="activeSubDropdown === 'dueDate'"
-                class="filter-dropdown-menu"
-              >
+              <div v-if="activeSubDropdown === 'dueDate'" class="filter-dropdown-menu">
                 <div
                   v-for="option in dueDateOptions"
                   :key="option.value"
@@ -3617,44 +2733,29 @@ function formatSelectedPages(pages: number[]): string {
                   class="filter-dropdown-option clear-option"
                   @click="clearDateRange"
                 >
-                  <i class="pi pi-times" />
+                  <i class="pi pi-times"></i>
                   Clear Selection
                 </div>
                 <!-- Date Picker for Custom Range -->
-                <div
-                  v-if="selectedFilters.dueDate === 'Custom Range'"
-                  class="date-picker-container"
-                >
+                <div v-if="selectedFilters.dueDate === 'Custom Range'" class="date-picker-container">
                   <div class="date-picker-calendar">
                     <div class="calendar-header">
-                      <button
-                        class="calendar-nav-btn"
-                        @click="navigateMonth('prev')"
-                      >
-                        <i class="pi pi-chevron-left" />
+                      <button @click="navigateMonth('prev')" class="calendar-nav-btn">
+                        <i class="pi pi-chevron-left"></i>
                       </button>
                       <div class="calendar-months-title">
                         <span class="month-title">{{ formatMonth(currentMonth) }}</span>
                         <span class="month-title">{{ formatMonth(nextMonth) }}</span>
                       </div>
-                      <button
-                        class="calendar-nav-btn"
-                        @click="navigateMonth('next')"
-                      >
-                        <i class="pi pi-chevron-right" />
+                      <button @click="navigateMonth('next')" class="calendar-nav-btn">
+                        <i class="pi pi-chevron-right"></i>
                       </button>
                     </div>
                     <div class="calendar-grid-container">
                       <!-- First Month -->
                       <div class="calendar-month">
                         <div class="calendar-weekdays">
-                          <div
-                            v-for="day in weekDays"
-                            :key="day"
-                            class="weekday"
-                          >
-                            {{ day }}
-                          </div>
+                          <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
                         </div>
                         <div class="calendar-days">
                           <div
@@ -3677,13 +2778,7 @@ function formatSelectedPages(pages: number[]): string {
                       <!-- Second Month -->
                       <div class="calendar-month">
                         <div class="calendar-weekdays">
-                          <div
-                            v-for="day in weekDays"
-                            :key="day"
-                            class="weekday"
-                          >
-                            {{ day }}
-                          </div>
+                          <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
                         </div>
                         <div class="calendar-days">
                           <div
@@ -3704,33 +2799,21 @@ function formatSelectedPages(pages: number[]): string {
                         </div>
                       </div>
                     </div>
+
                   </div>
                 </div>
               </div>
             </div>
-            <button
-              class="clear-filter-btn"
-              @click="clearFilters"
-            >
-              <i class="pi pi-times" />
+            <button @click="clearFilters" class="clear-filter-btn">
+              <i class="pi pi-times"></i>
               Clear
             </button>
           </div>
         </div>
 
         <div class="all-tasks-list">
-          <div
-            v-if="loading"
-            class="loading-message"
-          >
-            Loading tasks...
-          </div>
-          <div
-            v-else-if="filteredTasks.length === 0"
-            class="empty-message"
-          >
-            No tasks found
-          </div>
+          <div v-if="loading" class="loading-message">Loading tasks...</div>
+          <div v-else-if="filteredTasks.length === 0" class="empty-message">No tasks found</div>
           <div v-else>
             <div
               v-for="task in filteredTasks"
@@ -3744,41 +2827,25 @@ function formatSelectedPages(pages: number[]): string {
                     <div class="task-item-title">
                       <span class="task-id">#{{ task.id }}</span>
                       <span class="task-title">{{ getCleanTaskTitle(task.title) }}</span>
-                      <span
-                        v-if="task.status === 'closed'"
-                        class="task-status-inline"
-                        :class="task.status"
-                      >
-                        <i class="pi pi-lock status-icon" />
+                      <span v-if="task.status === 'closed'" class="task-status-inline" :class="task.status">
+                        <i class="pi pi-lock status-icon"></i>
                         {{ getStatusText(task.status) }}
                       </span>
                     </div>
                   </div>
                   <div class="task-item-details">
                     <div class="task-detail-row">
-                      <i class="pi pi-calendar detail-icon" />
+                      <i class="pi pi-calendar detail-icon"></i>
                       <span class="task-date">{{ formatDate(task.createdAt) }}</span>
                     </div>
-                    <div
-                      v-if="task.dueDate"
-                      class="task-detail-row"
-                    >
-                      <i
-                        class="pi pi-clock detail-icon"
-                        :class="{ 'overdue-icon': isOverdue(task.dueDate) }"
-                      />
-                      <span
-                        class="task-due-date"
-                        :class="{ overdue: isOverdue(task.dueDate) }"
-                      >
+                    <div v-if="task.dueDate" class="task-detail-row">
+                      <i class="pi pi-clock detail-icon" :class="{ 'overdue-icon': isOverdue(task.dueDate) }"></i>
+                      <span class="task-due-date" :class="{ overdue: isOverdue(task.dueDate) }">
                         Due: {{ formatDateTime(task.dueDate) }}
                       </span>
                     </div>
-                    <div
-                      v-if="task.assignedTo"
-                      class="task-detail-row"
-                    >
-                      <i class="pi pi-user detail-icon" />
+                    <div v-if="task.assignedTo" class="task-detail-row">
+                      <i class="pi pi-user detail-icon"></i>
                       <span class="task-assignee">
                         Assigned to: {{ task.assignedTo.fullName || task.assignedTo.username }}
                       </span>
@@ -3789,10 +2856,10 @@ function formatSelectedPages(pages: number[]): string {
                   <button
                     v-if="task.status === 'closed'"
                     class="reopen-btn"
-                    title="Reopen task"
                     @click.stop="reopenTask(task)"
+                    title="Reopen task"
                   >
-                    <i class="pi pi-refresh" />
+                    <i class="pi pi-refresh"></i>
                     Reopen
                   </button>
                 </div>
@@ -3808,11 +2875,7 @@ function formatSelectedPages(pages: number[]): string {
 
   <!-- Task Action Menu -->
   <Teleport to="body">
-    <div
-      v-if="showTaskActionMenu"
-      class="task-action-menu-overlay"
-      @click="closeTaskActionMenu"
-    >
+    <div v-if="showTaskActionMenu" class="task-action-menu-overlay" @click="closeTaskActionMenu">
       <div
         class="task-action-menu"
         :style="{
@@ -3821,25 +2884,16 @@ function formatSelectedPages(pages: number[]): string {
         }"
         @click.stop
       >
-        <button
-          class="task-action-item"
-          @click="editTask"
-        >
-          <i class="pi pi-pencil" />
+        <button class="task-action-item" @click="editTask">
+          <i class="pi pi-pencil"></i>
           Edit
         </button>
-        <button
-          class="task-action-item"
-          @click="closeTaskFromMenu"
-        >
-          <i class="pi pi-times" />
+        <button class="task-action-item" @click="closeTaskFromMenu">
+          <i class="pi pi-times"></i>
           Close
         </button>
-        <button
-          class="task-action-item delete"
-          @click="openDeleteModal"
-        >
-          <i class="pi pi-trash" />
+        <button class="task-action-item delete" @click="openDeleteModal">
+          <i class="pi pi-trash"></i>
           Delete
         </button>
       </div>
@@ -3848,31 +2902,15 @@ function formatSelectedPages(pages: number[]): string {
 
   <!-- Delete Task Modal -->
   <Teleport to="body">
-    <div
-      v-if="showDeleteModal"
-      class="modal-overlay"
-      @click="closeDeleteModal"
-    >
-      <div
-        class="modal-content"
-        @click.stop
-      >
+    <div v-if="showDeleteModal" class="modal-overlay" @click="closeDeleteModal">
+      <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3 class="modal-title">
-            Delete Task
-          </h3>
-          <button
-            class="modal-close"
-            @click="closeDeleteModal"
-          >
-            ×
-          </button>
+          <h3 class="modal-title">Delete Task</h3>
+          <button class="modal-close" @click="closeDeleteModal">×</button>
         </div>
         <div class="modal-body">
           <div class="delete-warning">
-            <div class="warning-icon">
-              ⚠️
-            </div>
+            <div class="warning-icon">⚠️</div>
             <p class="warning-text">
               Are you sure you want to delete task <strong>"{{ taskToDelete?.title }}"</strong>?
             </p>
@@ -3884,20 +2922,17 @@ function formatSelectedPages(pages: number[]): string {
         <div class="modal-footer">
           <button
             class="btn-cancel"
-            :disabled="isDeleting"
             @click="closeDeleteModal"
+            :disabled="isDeleting"
           >
             Cancel
           </button>
           <button
             class="btn-delete"
-            :disabled="isDeleting"
             @click="deleteSelectedTask"
+            :disabled="isDeleting"
           >
-            <span
-              v-if="isDeleting"
-              class="loading-spinner"
-            />
+            <span v-if="isDeleting" class="loading-spinner"></span>
             {{ isDeleting ? 'Deleting...' : 'Delete Task' }}
           </button>
         </div>
@@ -3907,46 +2942,22 @@ function formatSelectedPages(pages: number[]): string {
 
   <!-- Close Task Confirmation Modal -->
   <Teleport to="body">
-    <div
-      v-if="showCloseTaskModal"
-      class="modal-overlay"
-      @click="cancelCloseTask"
-    >
-      <div
-        class="modal-content"
-        @click.stop
-      >
+    <div v-if="showCloseTaskModal" class="modal-overlay" @click="cancelCloseTask">
+      <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>Confirm Close Task</h3>
-          <button
-            class="modal-close-btn"
-            @click="cancelCloseTask"
-          >
-            &times;
-          </button>
+          <button class="modal-close-btn" @click="cancelCloseTask">&times;</button>
         </div>
         <div class="modal-body">
           <p>Are you sure you want to close task <strong>"{{ taskToClose?.title }}"</strong>?</p>
-          <p class="modal-warning">
-            You can reopen this task later from the "All tasks" tab.
-          </p>
+          <p class="modal-warning">You can reopen this task later from the "All tasks" tab.</p>
         </div>
         <div class="modal-footer">
-          <button
-            class="modal-btn modal-btn-cancel"
-            @click="cancelCloseTask"
-          >
+          <button class="modal-btn modal-btn-cancel" @click="cancelCloseTask">
             Cancel
           </button>
-          <button
-            class="modal-btn modal-btn-confirm"
-            :disabled="isClosingTask"
-            @click="confirmCloseTask"
-          >
-            <span
-              v-if="isClosingTask"
-              class="loading-spinner"
-            />
+          <button class="modal-btn modal-btn-confirm" @click="confirmCloseTask" :disabled="isClosingTask">
+            <span v-if="isClosingTask" class="loading-spinner"></span>
             {{ isClosingTask ? 'Closing...' : 'Close Task' }}
           </button>
         </div>
@@ -3956,65 +2967,39 @@ function formatSelectedPages(pages: number[]): string {
 
   <!-- Reopen Task Confirmation Modal -->
   <Teleport to="body">
-    <div
-      v-if="showReopenTaskModal"
-      class="modal-overlay"
-      @click="cancelReopenTask"
-    >
-      <div
-        class="modal-content reopen-modal"
-        @click.stop
-      >
+    <div v-if="showReopenTaskModal" class="modal-overlay" @click="cancelReopenTask">
+      <div class="modal-content reopen-modal" @click.stop>
         <div class="modal-header">
           <h3>Confirm Reopen Task</h3>
-          <button
-            class="modal-close-btn"
-            @click="cancelReopenTask"
-          >
-            &times;
-          </button>
+          <button class="modal-close-btn" @click="cancelReopenTask">&times;</button>
         </div>
         <div class="modal-body">
           <p>Are you sure you want to reopen task <strong>"{{ taskToReopen?.title }}"</strong>?</p>
           <div class="reopen-reason-section">
-            <label
-              for="reopen-reason"
-              class="reopen-reason-label"
-            >Reason for reopening (optional):</label>
+            <label for="reopen-reason" class="reopen-reason-label">Reason for reopening (optional):</label>
             <textarea
               id="reopen-reason"
               v-model="reopenReason"
               class="reopen-reason-input"
               placeholder="Enter the reason for reopening this task..."
               rows="5"
-            />
+            ></textarea>
           </div>
-          <p class="modal-warning">
-            This will change the task status back to "To do".
-          </p>
+          <p class="modal-warning">This will change the task status back to "To do".</p>
         </div>
         <div class="modal-footer">
-          <button
-            class="modal-btn modal-btn-cancel"
-            @click="cancelReopenTask"
-          >
+          <button class="modal-btn modal-btn-cancel" @click="cancelReopenTask">
             Cancel
           </button>
-          <button
-            class="modal-btn modal-btn-confirm"
-            :disabled="isReopeningTask"
-            @click="confirmReopenTask"
-          >
-            <span
-              v-if="isReopeningTask"
-              class="loading-spinner"
-            />
+          <button class="modal-btn modal-btn-confirm" @click="confirmReopenTask" :disabled="isReopeningTask">
+            <span v-if="isReopeningTask" class="loading-spinner"></span>
             {{ isReopeningTask ? 'Reopening...' : 'Reopen Task' }}
           </button>
         </div>
       </div>
     </div>
   </Teleport>
+
 </template>
 <style scoped>
 .kanban-tab-wrapper {
@@ -5136,7 +4121,7 @@ function formatSelectedPages(pages: number[]): string {
   gap: 0.5em;
   border: 1.5px solid #22c55e33;
   transition: box-shadow 0.2s, border 0.2s, background 0.2s, opacity 0.2s;
-  cursor: pointer;
+  cursor: grab;
 }
 
 .task-card:active {
@@ -5268,8 +4253,6 @@ function formatSelectedPages(pages: number[]): string {
 }
 .task-card-link {
   display: block;
-  cursor: pointer;
-  position: relative;
 }
 .task-detail-view {
   padding: 0 0 1.2em 0;
@@ -6947,21 +5930,21 @@ body.modal-open main {
 
 /* Task History Styles */
 .task-history-container {
-  padding: 0.75rem 0;
+  padding: 1rem 0;
 }
 
 .history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .history-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #374151;
 }
@@ -6971,12 +5954,12 @@ body.modal-open main {
   align-items: center;
   gap: 0.5rem;
   color: #6b7280;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .no-history {
   text-align: center;
-  padding: 1.5rem;
+  padding: 2rem;
   color: #6b7280;
   background: #f9fafb;
   border-radius: 8px;
@@ -6986,10 +5969,10 @@ body.modal-open main {
 /* Timeline Design */
 .history-timeline {
   position: relative;
-  padding-left: 1.5rem;
-  padding: 1rem;
+  padding-left: 2rem;
+  padding: 1.5rem;
   background: #f9fafb;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid #e5e7eb;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: timelineFadeIn 0.5s ease-out;
@@ -7006,15 +5989,22 @@ body.modal-open main {
   }
 }
 
-/* Ẩn trục timeline */
 .history-timeline::before {
-  display: none;
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, #6366f1 0%, #8b5cf6 50%, #6366f1 100%);
+  border-radius: 0 2px 2px 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .timeline-item {
   position: relative;
-  margin-bottom: 1rem;
-  padding-left: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-left: 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -7028,14 +6018,14 @@ body.modal-open main {
 
 .timeline-dot {
   position: absolute;
-  left: -0.375rem;
-  top: 0.375rem;
-  width: 12px;
-  height: 12px;
+  left: -0.5rem;
+  top: 0.5rem;
+  width: 14px;
+  height: 14px;
   background: #6366f1;
-  border: 2px solid white;
+  border: 3px solid white;
   border-radius: 50%;
-  box-shadow: 0 0 0 1px #e5e7eb;
+  box-shadow: 0 0 0 2px #e5e7eb;
   z-index: 1;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -7060,18 +6050,18 @@ body.modal-open main {
 .timeline-content {
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 0.75rem;
+  border-radius: 8px;
+  padding: 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   cursor: pointer;
 }
 
 .timeline-content:hover {
   background: #f9fafb;
   border-color: #d1d5db;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
 }
 
 .timeline-header {
@@ -7085,12 +6075,12 @@ body.modal-open main {
 .timeline-action {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.5rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .action-icon {
-  font-size: 1rem;
+  font-size: 1.2rem;
   line-height: 1;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -7098,7 +6088,7 @@ body.modal-open main {
 .action-text {
   font-weight: 600;
   color: #374151;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -7107,51 +6097,27 @@ body.modal-open main {
   align-items: center;
   gap: 0.25rem;
   color: #6b7280;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 500;
   text-align: right;
-  min-width: 120px;
+  min-width: 140px;
   justify-content: flex-end;
   background: #f3f4f6;
-  padding: 0.25rem 0.375rem;
-  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
   border: 1px solid #e5e7eb;
 }
 
 .time-icon {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   opacity: 0.8;
 }
 
 .timeline-description {
   color: #4b5563;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  margin-bottom: 0.5rem;
-}
-
-/* Reason styles */
-.timeline-reason {
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
-  border-radius: 4px;
-  border-left: 3px solid #f59e0b;
-}
-
-.reason-label {
-  font-weight: 600;
-  color: #92400e;
-  font-size: 0.8rem;
-  margin-bottom: 0.25rem;
-}
-
-.reason-text {
-  color: #78350f;
   font-size: 0.85rem;
   line-height: 1.4;
-  font-style: italic;
+  margin-bottom: 0.75rem;
 }
 
 .timeline-status-change {

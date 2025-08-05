@@ -2,8 +2,6 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  forwardRef,
-  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -11,49 +9,25 @@ import {
   TaskEntity,
   UserEntity,
 } from '#LocalProject/Entities';
-import { TaskHistoryEntity } from '../../db/mysql/entity/task-history.entity';
 import { DeepPartial, Repository } from 'typeorm';
 import { ProjectManagerService } from './project-manager.service';
 import { PermissionFlags } from '@here-to-translate/common';
 import { TranslationService } from './translation-manager.service';
 import { TaskGateway } from '../../util/gateway/task.gateway';
 import { UpdateTaskDto } from '../../dto/task.dto';
-import { ActivityManagerService } from './activity-manager.service';
-
-// Interface for translation string
-interface TranslationString {
-  originalText: string;
-  translatedText?: string;
-  fileId: string;
-  filePart: number;
-}
-
-// Interface for task history metadata
-interface TaskHistoryMetadata {
-  fromStatus?: string;
-  toStatus?: string;
-  fromAssignee?: string;
-  toAssignee?: string;
-  fromDueDate?: string;
-  toDueDate?: string;
-}
 
 @Injectable()
 export class TaskManagerService {
   constructor(
     @InjectRepository(TaskEntity)
     private readonly taskRepository: Repository<TaskEntity>,
-    @InjectRepository(TaskHistoryEntity)
-    private readonly taskHistoryRepository: Repository<TaskHistoryEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(ProjectGroupEntity)
     private readonly projectGroupRepository: Repository<ProjectGroupEntity>,
     private readonly projectService: ProjectManagerService,
     private readonly translationService: TranslationService,
-    private readonly taskGateway: TaskGateway,
-    @Inject(forwardRef(() => ActivityManagerService))
-    private readonly activityManagerService: ActivityManagerService
+    private readonly taskGateway: TaskGateway
   ) {}
 
   async createTask(params: {
@@ -67,8 +41,7 @@ export class TaskManagerService {
     projectId?: string;
     branchId?: string;
     fileId?: string;
-    page?: number;
-    pages?: number[];
+    filePart?: number;
     language?: string;
   }) {
     const {
@@ -81,8 +54,7 @@ export class TaskManagerService {
       projectId,
       branchId,
       fileId,
-      page,
-      pages,
+      filePart,
       language,
     } = params;
     if (!createdById) {
@@ -103,13 +75,13 @@ export class TaskManagerService {
     });
     const assignedTo = assignedToId
       ? await this.userRepository.findOne({
-        where: { id: BigInt(assignedToId) },
-      })
+          where: { id: BigInt(assignedToId) },
+        })
       : undefined;
     const group = groupId
       ? await this.projectGroupRepository.findOne({
-        where: { id: BigInt(groupId) },
-      })
+          where: { id: BigInt(groupId) },
+        })
       : undefined;
 
     const task = this.taskRepository.create({
@@ -122,45 +94,12 @@ export class TaskManagerService {
       projectId,
       branchId,
       fileId,
-      page,
-      pages,
+      filePart,
       language,
     } as DeepPartial<TaskEntity>);
 
-    console.log('Creating task with data:', {
-      title,
-      projectId,
-      fileId,
-      page,
-      pages,
-      language
-    });
-
     await this.taskRepository.save(task);
-
-    // Create history entry for task creation
-    await this.createTaskHistory({
-      taskId: task.id,
-      action: 'created',
-      description: 'Task was created',
-      performedBy: BigInt(createdById),
-      metadata: {}
-    });
-
     this.taskGateway.emitTaskUpdate(task);
-
-    // Log activity
-    try {
-      await this.activityManagerService.logTaskCreate(
-        Number(projectId),
-        Number(createdById),
-        title,
-        branchId ? Number(branchId) : undefined
-      );
-    } catch (error) {
-      console.error('Failed to log task creation activity:', error);
-    }
-
     return task;
   }
 
@@ -177,8 +116,7 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        page: true,
-        pages: true,
+        filePart: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -214,8 +152,7 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        page: true,
-        pages: true,
+        filePart: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -249,79 +186,40 @@ export class TaskManagerService {
     if (!task) {
       throw new NotFoundException('Task not found');
     }
-    let statusChanged = false;
-    let oldStatus = task.status;
-    let newStatus = task.status;
+
     // Update fields if provided
     if (dto.title !== undefined) task.title = dto.title;
     if (dto.description !== undefined) task.description = dto.description;
     if (dto.status !== undefined) {
-      oldStatus = task.status;
-      newStatus = dto.status;
-      statusChanged = oldStatus !== newStatus;
-      // Handle timestamp updates based on status changes
-      if (newStatus === 'pending') {
-        // Moving back to todo - clear timestamps
-        task.startedAt = null;
-        task.completedAt = null;
-      } else if (newStatus === 'in_progress') {
-        // Moving to in progress
-        if (!task.startedAt) {
-          task.startedAt = new Date();
-        }
-        // Clear completedAt if moving from completed back to in progress
-        if (oldStatus === 'completed') {
-          task.completedAt = null;
-        }
-      } else if (newStatus === 'completed') {
-        // Moving to completed
-        if (!task.startedAt) {
-          task.startedAt = new Date();
-        }
-        if (!task.completedAt) {
-          task.completedAt = new Date();
-        }
+      // Nếu chuyển sang in_progress và chưa có startedAt thì set startedAt
+      if (dto.status === 'in_progress' && !task.startedAt) {
+        task.startedAt = new Date();
       }
-
-      task.status = newStatus;
+      // Nếu chuyển sang completed thì set completedAt
+      if (dto.status === 'completed' && !task.completedAt) {
+        task.completedAt = new Date();
+      }
+      task.status = dto.status;
     }
     if (dto.dueDate !== undefined) task.dueDate = new Date(dto.dueDate);
 
     if (dto.assignedToId !== undefined) {
       task.assignedTo = dto.assignedToId
         ? await this.userRepository.findOne({
-          where: { id: BigInt(dto.assignedToId) },
-        })
+            where: { id: BigInt(dto.assignedToId) },
+          })
         : null;
     }
 
     if (dto.groupId !== undefined) {
       task.group = dto.groupId
         ? await this.projectGroupRepository.findOne({
-          where: { id: BigInt(dto.groupId) },
-        })
+            where: { id: BigInt(dto.groupId) },
+          })
         : null;
     }
 
-    // Update page and pages fields
-    if (dto.page !== undefined) task.page = dto.page;
-    if (dto.pages !== undefined) task.pages = dto.pages;
-    if (dto.language !== undefined) task.language = dto.language;
-
     await this.taskRepository.save(task);
-    // Ghi history nếu đổi trạng thái
-    if (statusChanged) {
-      await this.createTaskHistory({
-        taskId: task.id,
-        action: 'status_change',
-        description: `Task status was changed from ${oldStatus} to ${newStatus}`,
-        performedBy: BigInt(1), // Default user ID
-        metadata: {
-          fromStatus: oldStatus,
-          toStatus: newStatus,
-        },
-      });
-    }
     this.taskGateway.emitTaskUpdate(task);
 
     return this.getTask(id);
@@ -374,22 +272,12 @@ export class TaskManagerService {
     }
 
     await this.taskRepository.save(task);
-
-    // Create history entry for task closure
-    await this.createTaskHistory({
-      taskId: task.id,
-      action: 'closed',
-      description: 'Task was closed',
-      performedBy: BigInt(userId),
-      metadata: {}
-    });
-
     this.taskGateway.emitTaskUpdate(task);
 
     return this.getTask(id);
   }
 
-  async reopenTask(id: string, userId: string, reason?: string) {
+  async reopenTask(id: string, userId: string) {
     const task = await this.taskRepository.findOne({
       where: { id: BigInt(id) },
       relations: ['createdBy', 'assignedTo', 'group'],
@@ -432,20 +320,6 @@ export class TaskManagerService {
     task.completedAt = null;
 
     await this.taskRepository.save(task);
-
-    // Create history entry for task reopening
-    await this.createTaskHistory({
-      taskId: task.id,
-      action: 'reopened',
-      description: 'Task was reopened',
-      performedBy: BigInt(userId),
-      reason: reason,
-      metadata: {
-        fromStatus: 'closed',
-        toStatus: 'pending'
-      }
-    });
-
     this.taskGateway.emitTaskUpdate(task);
 
     return this.getTask(id);
@@ -467,8 +341,7 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        page: true,
-        pages: true,
+        filePart: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -494,7 +367,7 @@ export class TaskManagerService {
     projectId: string;
     branchId: string;
     fileId: string;
-    page: number;
+    filePart: number;
     createdById: string;
     assignedToId?: string;
     groupId?: string;
@@ -505,17 +378,17 @@ export class TaskManagerService {
       params.branchId,
       'en',
       params.fileId,
-      params.page
+      params.filePart
     );
     if (strings.length === 0)
-      throw new NotFoundException('No strings in that page');
+      throw new NotFoundException('No strings in that part');
 
     const example = strings
       .slice(0, 3)
-      .map((s: TranslationString) => `- ${s.originalText}`)
+      .map((s: any) => `- ${s.originalText}`)
       .join('\n');
     const description = `Contains ${strings.length} strings:\n${example}`;
-    const title = `Translate page ${params.page}`;
+    const title = `Translate part ${params.filePart}`;
 
     return this.createTask({
       ...params,
@@ -530,41 +403,22 @@ export class TaskManagerService {
     });
     if (
       !task.projectId ||
-      (!task.page && (!task.pages || task.pages.length === 0)) ||
+      task.filePart === null ||
       !task.branchId ||
       !task.fileId
     ) {
       return null;
     }
 
-    let allStrings: TranslationString[] = [];
-
-    // Check for multiple pages first
-    if (task.pages && Array.isArray(task.pages) && task.pages.length > 0) {
-      // Get strings for all selected pages
-      for (const page of task.pages) {
-        const pageStrings = await this.translationService.getAllString(
-          task.projectId,
-          task.branchId,
-          task.fileId,
-          page
-        );
-        allStrings = allStrings.concat(pageStrings);
-      }
-    }
-    // Check for single page
-    else if (task.page !== null && task.page !== undefined) {
-      allStrings = await this.translationService.getAllString(
-        task.projectId,
-        task.branchId,
-        task.fileId,
-        task.page
-      );
-    }
-
-    const total = allStrings.length;
-    const translated = allStrings.filter(
-      (s: TranslationString) => s.translatedText && s.translatedText.trim() !== ''
+    const strings = await this.translationService.getAllString(
+      task.projectId,
+      task.branchId,
+      task.fileId,
+      task.filePart ?? undefined
+    );
+    const total = strings.length;
+    const translated = strings.filter(
+      (s: any) => s.translatedText && s.translatedText.trim() !== ''
     ).length;
     const percent = total === 0 ? 0 : Math.round((translated / total) * 100);
 
@@ -572,29 +426,77 @@ export class TaskManagerService {
   }
 
   async getTaskHistory(taskId: string) {
+    // For now, return only the creation history since we don't have a real history table yet
+    // In a real implementation, you would:
+    // 1. Create a TaskHistory entity/table
+    // 2. Log all task changes to that table
+    // 3. Query the history from the database
+
     try {
-      // Get real history from TaskHistoryEntity
-      const history = await this.taskHistoryRepository.find({
-        where: { taskId: BigInt(taskId) },
-        relations: ['performer'],
-        order: { performedAt: 'ASC' },
+      // Get the actual task to show creation history
+      const task = await this.taskRepository.findOne({
+        where: { id: BigInt(taskId) },
+        relations: ['createdBy'],
       });
 
-      // Transform to match frontend interface
-      return history.map(item => ({
-        id: item.id.toString(),
+      if (!task) {
+        return [];
+      }
+
+      const history = [];
+
+      // Always show creation history
+      history.push({
+        id: '1',
         taskId: taskId,
-        action: item.action,
-        description: item.description,
-        performedAt: item.performedAt.toISOString(),
-        reason: item.reason,
-        metadata: item.metadata || {},
-        performer: item.performer ? {
-          id: item.performer.id.toString(),
-          username: item.performer.username,
-          fullName: item.performer.fullName,
-        } : null,
-      }));
+        action: 'created' as const,
+        description: 'Task was created',
+        performedAt: task.createdAt.toISOString(),
+        metadata: {},
+      });
+
+      // Show status changes based on current task state
+      if (task.startedAt && task.status !== 'pending') {
+        history.push({
+          id: '2',
+          taskId: taskId,
+          action: 'status_change' as const,
+          description: 'Task status was changed from To do to In progress',
+          performedAt: task.startedAt.toISOString(),
+          metadata: {
+            fromStatus: 'pending',
+            toStatus: 'in_progress',
+          },
+        });
+      }
+
+      if (task.completedAt && task.status === 'completed') {
+        history.push({
+          id: '3',
+          taskId: taskId,
+          action: 'status_change' as const,
+          description: 'Task status was changed from In progress to Done',
+          performedAt: task.completedAt.toISOString(),
+          metadata: {
+            fromStatus: 'in_progress',
+            toStatus: 'completed',
+          },
+        });
+      }
+
+      if (task.status === 'closed') {
+        history.push({
+          id: '4',
+          taskId: taskId,
+          action: 'closed' as const,
+          description: 'Task was closed',
+          performedAt:
+            task.completedAt?.toISOString() || new Date().toISOString(),
+          metadata: {},
+        });
+      }
+
+      return history;
     } catch (error) {
       console.error('Error getting task history:', error);
       return [];
@@ -616,26 +518,5 @@ export class TaskManagerService {
       pageSize,
       totalPages: Math.ceil(count / pageSize),
     };
-  }
-
-  // Helper method to create task history entries
-  private async createTaskHistory(params: {
-    taskId: bigint;
-    action: 'created' | 'status_change' | 'assignment_change' | 'due_date_change' | 'closed' | 'reopened';
-    description: string;
-    performedBy: bigint;
-    reason?: string;
-    metadata?: TaskHistoryMetadata;
-  }) {
-    const history = this.taskHistoryRepository.create({
-      taskId: params.taskId,
-      action: params.action,
-      description: params.description,
-      performedBy: params.performedBy,
-      reason: params.reason,
-      metadata: params.metadata,
-    });
-
-    await this.taskHistoryRepository.save(history);
   }
 }

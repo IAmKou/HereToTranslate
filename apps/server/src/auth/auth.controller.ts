@@ -38,7 +38,7 @@ export class AuthController {
     res.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
       expires: this.authService.getExpiryDate(
         this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
       ),
@@ -48,7 +48,7 @@ export class AuthController {
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
       expires: this.authService.getExpiryDate(
         this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
       ),
@@ -69,14 +69,14 @@ export class AuthController {
     res.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
       maxAge: 1000 * 60 * 15, // 15 mins
     });
 
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
       maxAge: 1000 * 60 * 60 * 24 * 7,
     });
     logger.log(user);
@@ -101,7 +101,7 @@ export class AuthController {
     res.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
       expires: this.authService.getExpiryDate(
         this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
       ),
@@ -111,7 +111,7 @@ export class AuthController {
     res.cookie('refresh_token', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
       expires: this.authService.getExpiryDate(
         this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
       ),
@@ -149,10 +149,22 @@ export class AuthController {
     // }
 
     // Clear both old and new cookie names for backward compatibility
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    res.clearCookie('access_token', {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'none'
+    });
+    res.clearCookie('refresh_token', {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'none'
+    });
+    res.clearCookie('accessToken', {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'none'
+    });
+    res.clearCookie('refreshToken', {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'none'
+    });
 
     return res.json({ message: 'Logged out successfully' });
   }
@@ -190,5 +202,17 @@ export class AuthController {
     }
 
     return await this.authService.validateToken(token);
+  }
+
+  @IsPublicEndpoint()
+  @Post('clear-cookies')
+  async clearAllCookies(@Res() res: Response) {
+    // Clear all possible cookie variations
+    res.clearCookie('access_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+    res.clearCookie('refresh_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+    res.clearCookie('accessToken', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+    res.clearCookie('refreshToken', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+
+    return res.json({ message: 'All cookies cleared' });
   }
 }

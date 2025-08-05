@@ -4,6 +4,19 @@ import { getEnvironmentConfig } from '../utils/environment';
 
 // Dynamic BASE_URL that updates based on current environment
 const getBaseUrl = () => getEnvironmentConfig().apiUrl;
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+function processQueue(error: any, token: string | null = null) {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+}
 
 export interface LoginCredentials {
   username: string;
@@ -50,6 +63,51 @@ class AuthService {
     if (this.token) {
       this.setAuthHeader(this.token);
     }
+
+    axios.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+
+          if (isRefreshing) {
+            return new Promise(function(resolve, reject) {
+              failedQueue.push({ resolve, reject });
+            })
+              .then((token) => {
+                if (token && originalRequest.headers) {
+                  originalRequest.headers['Authorization'] = 'Bearer ' + token;
+                }
+                return axios(originalRequest);
+              })
+              .catch((err) => {
+                return Promise.reject(err);
+              });
+          }
+
+          isRefreshing = true;
+          try {
+            const refreshResponse = await authService.refreshTokens();
+            isRefreshing = false;
+            processQueue(null, refreshResponse.token);
+            if (refreshResponse.token && originalRequest.headers) {
+              originalRequest.headers['Authorization'] = 'Bearer ' + refreshResponse.token;
+            }
+            return axios(originalRequest);
+          } catch (err) {
+            isRefreshing = false;
+            processQueue(err, null);
+            authService.clearAuthData();
+            window.location.href = '/login';
+            return Promise.reject(err);
+          }
+        }
+
+        return Promise.reject(error);
+      }
+    );
 
     // Add request interceptor to ensure token is always included
     axios.interceptors.request.use(
@@ -214,44 +272,45 @@ class AuthService {
     const refreshToken = localStorage.getItem('refresh_token');
     if (!refreshToken) {
       this.clearAuthData();
-      throw new Error('No refresh token found');
+      throw new Error('No refresh token available');
     }
+
     try {
       const response = await axios.post(
         `${getBaseUrl()}/auth/refresh`,
         {},
         {
           headers: {
-            'Authorization': `Bearer ${refreshToken}`,
+            Authorization: `Bearer ${refreshToken}`,
             'Content-Type': 'application/json',
           },
         }
       );
+
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
+
       if (response.data.token) {
         this.token = response.data.token;
-        localStorage.setItem('access_token', this.token);
-        this.setAuthHeader(this.token);
+        if (this.token) {
+          localStorage.setItem('access_token', this.token);
+          this.setAuthHeader(this.token);
+          console.log('✅ Access token refreshed and stored in localStorage');
+        }
       }
+
+      if (response.data.refreshToken) {
+        localStorage.setItem('refresh_token', response.data.refreshToken);
+        console.log('✅ Refresh token updated in localStorage');
+      }
+
       return response.data;
-    } catch (error: any) {
+    } catch (error) {
+      console.error('❌ Token refresh failed:', error);
       this.clearAuthData();
-      localStorage.removeItem('refresh_token');
       throw error;
     }
   }
-
-  clearAuthData(): void {
-    this.user = null;
-    this.authState.value = null;
-    this.token = null;
-    this.clearAuthHeader();
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token'); 
-    console.log('🔍 AuthService - All auth data cleared');
-  }
-
 
   async logout(): Promise<void> {
     try {

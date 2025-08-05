@@ -65,7 +65,7 @@ export class AuthService {
     try {
       // Verify the refresh token
       const payload = this.jwt.verify(refreshToken);
-      
+
       // Get user from database
       const user = await this.userRepository.findOne({
         where: { id: BigInt(payload.userId) },
@@ -101,7 +101,7 @@ export class AuthService {
     try {
       // Verify the JWT token
       const payload = this.jwt.verify(token);
-      
+
       // Get user from database
       const user = await this.userRepository.findOne({
         where: { id: BigInt(payload.userId) },
@@ -210,8 +210,6 @@ export class AuthService {
   }
 
   async logout(token: string, allSessions = false) {
-    // Since we're not storing tokens in database, just return success
-    // The frontend will handle clearing localStorage
     this.logger.log('User logged out');
     return { message: 'Logged out successfully' };
   }
@@ -297,7 +295,7 @@ export class AuthService {
     const refreshToken = this.jwt.sign(jwtPayload, {
       expiresIn: this.refreshExpiry,
     });
-    
+
     return {
       accessToken,
       refreshToken,

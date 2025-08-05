@@ -8,7 +8,8 @@ export interface Task {
   projectId?: string;
   branchId?: string;
   fileId?: string;
-  filePart?: number;
+  page?: number;
+  pages?: number[]; // Array of selected pages for multiple page selection
   language?: string;
   assignedTo?: {
     id: string;
@@ -40,7 +41,8 @@ export interface CreateTaskDto {
   dueDateTime?: string;
   branchId?: string;
   fileId?: string;
-  filePart?: number;
+  page?: number;
+  pages?: number[]; // Array of selected pages for multiple page selection
   language?: string;
 }
 
@@ -85,6 +87,7 @@ export interface TaskHistory {
   action: 'status_change' | 'assignment_change' | 'due_date_change' | 'created' | 'closed' | 'reopened';
   description: string;
   performedAt: string;
+  reason?: string; // Thêm field reason cho reopen action
   metadata?: {
     fromStatus?: string;
     toStatus?: string;
@@ -131,8 +134,10 @@ export const taskService = {
     return data;
   },
 
-  async reopenTask(id: string): Promise<Task> {
-    const { data } = await axiosInstance.patch(`/tasks/${id}/reopen`);
+  async reopenTask(id: string, reason?: string): Promise<Task> {
+    const { data } = await axiosInstance.patch(`/tasks/${id}/reopen`, {
+      reason
+    });
     return data;
   },
 
@@ -157,10 +162,10 @@ export const taskService = {
 
       // Chuyển đổi thông tin trang thành FilePart
       const parts: FilePart[] = data.pages.map((page: any) => ({
-        part: page.filePart,
+        part: page.pageNumber || page.filePart, // Sử dụng pageNumber nếu có, fallback về filePart
         stringCount: page.stringCount,
         totalParts: data.totalPages,
-        pageNumber: page.pageNumber,
+        pageNumber: page.pageNumber || page.filePart,
         hasTranslatedStrings: page.hasTranslatedStrings,
       }));
 
@@ -233,10 +238,18 @@ export const taskService = {
 
       const strings = Array.isArray(data) ? data : [];
 
-      // Lọc strings theo filePart nếu có
+      // Lọc strings theo page nếu có
       let filteredStrings = strings;
-      if (task.filePart !== undefined) {
-        filteredStrings = strings.filter((str: any) => str.filePart === task.filePart);
+
+      // Check for multiple pages first
+      if (task.pages && Array.isArray(task.pages) && task.pages.length > 0) {
+        filteredStrings = strings.filter((str: any) =>
+          task.pages!.includes(str.filePart)
+        );
+      }
+      // Check for single page
+      else if (task.page !== undefined) {
+        filteredStrings = strings.filter((str: any) => str.filePart === task.page);
       }
 
       const total = filteredStrings.length;
@@ -258,3 +271,4 @@ export const taskService = {
     return data;
   },
 };
+

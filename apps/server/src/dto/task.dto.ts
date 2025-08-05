@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsDateString, IsEnum, IsNumber } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsDateString, IsEnum, IsNumber, IsArray } from 'class-validator';
 import { TaskStatus } from '../db/mysql/entity/task.entity';
 
 export class CreateTaskDto {
@@ -31,7 +31,12 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsNumber()
-  filePart?: number;
+  page?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  pages?: number[];
 
   @IsOptional()
   @IsString()
@@ -60,4 +65,17 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  page?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  pages?: number[];
+
+  @IsOptional()
+  @IsString()
+  language?: string;
 }

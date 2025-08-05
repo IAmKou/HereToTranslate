@@ -1472,17 +1472,17 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.4rem;
   color: #2d3748;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   margin: 0;
 }
 
 .title-icon {
-  font-size: 1.4rem;
-  width: 2rem;
-  height: 2rem;
+  font-size: 1.2rem;
+  width: 1.6rem;
+  height: 1.6rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
   display: flex;
@@ -1541,10 +1541,10 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 
 .form-control {
   width: 100%;
-  padding: 0.7rem 1rem;
+  padding: 0.5rem 0.8rem;
   border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
   background: white;
   color: #2d3748;
   transition: all 0.2s;
@@ -1581,8 +1581,10 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .btn-primary {
   background: linear-gradient(135deg, #38b2ac 0%, #4299e1 100%) !important;
   color: #fff !important;
-  box-shadow: 0 1px 4px #4299e133 !important;
+  box-shadow: 0 1px 3px #4299e133 !important;
   border: 1px solid #4299e1 !important;
+  font-size: 0.85rem !important;
+  padding: 0.4rem 0.8rem !important;
 }
 
 .btn-primary:hover {
@@ -1611,8 +1613,8 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 }
 
 .btn-sm {
-  font-size: 0.7rem !important;
-  padding: 0.25rem 0.5rem !important;
+  font-size: 0.65rem !important;
+  padding: 0.2rem 0.4rem !important;
   border-radius: 3px !important;
 }
 

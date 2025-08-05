@@ -13,9 +13,10 @@ export class TranslationController {
     @Query('branchId') branchId: string,
     @Query('language') language: string ,
     @Query('fileId') fileId?: string,
-    @Query('filePart') filePart?: number
+    @Query('page') page?: number,
+    @Query('fileType') fileType?: string
   ) {
-    return this.translationService.getAllString(projectId, branchId, language, fileId, filePart);
+    return this.translationService.getAllString(projectId, branchId, language, fileId, page, fileType);
   }
 
   @UseGuards(JwtAuthGuard)

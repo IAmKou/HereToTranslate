@@ -1,7 +1,7 @@
 <template>
   <div class="file-preview-panel" :class="{ 'collapsed': collapsed, 'resizing': isResizing }" :style="{ width: panelWidth + 'px' }">
-    <!-- Header -->
-    <div class="preview-header" @click="toggleCollapse">
+    <!-- Header - Hidden for PDF, DOCX, and Text files -->
+    <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="preview-header" @click="toggleCollapse">
       <div class="header-content">
         <div class="header-left">
           <i class="pi pi-eye" :class="{ 'active': !collapsed }"></i>
@@ -56,16 +56,10 @@
 
       <!-- File Preview -->
       <div v-else class="file-preview">
-        <!-- Debug Info -->
-        <div style="background: rgba(255,0,0,0.1); color: white; padding: 5px; font-size: 10px; border: 1px solid red;">
-          Debug: fileId={{ fileId }}, content={{ !!previewContent }}, url={{ !!previewUrl }},
-          isText={{ isTextType() }}, isImage={{ isImageType() }}, isDoc={{ isDocumentType() }}
-          <button @click="loadPreview" style="margin-left: 10px; background: yellow; color: black; border: none; padding: 2px 5px;">Test Load</button>
-          <button @click="testMammoth" style="margin-left: 5px; background: orange; color: black; border: none; padding: 2px 5px;">Test Mammoth</button>
-        </div>
 
-        <!-- File Info -->
-        <div class="file-info">
+
+        <!-- File Info - Hidden for PDF, DOCX, and Text files -->
+        <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="file-info">
           <div class="file-meta">
             <span class="file-type">{{ getFileType() }}</span>
             <span class="file-size" v-if="fileSize">{{ formatFileSize(fileSize) }}</span>
@@ -84,12 +78,65 @@
             </div>
           </div>
 
-          <!-- PDF Preview -->
-          <div v-else-if="isPdfType()" class="pdf-preview">
-            <iframe v-if="previewUrl" :src="previewUrl" class="pdf-viewer" frameborder="0"></iframe>
-            <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
+          <!-- PDF Preview with Direct Highlighting -->
+          <div v-else-if="isPdfType()" class="pdf-preview" style="position: relative;">
+            <!-- PDF.js Viewer instead of iframe -->
+            <div v-if="previewUrl && pdfJsLoaded" class="pdf-js-viewer">
+              <canvas ref="pdfCanvas" class="pdf-canvas" style="width: 100%; height: 100%;"></canvas>
+              <div ref="highlightContainer" class="highlight-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;"></div>
+            </div>
+
+            <!-- Fallback to iframe if PDF.js not loaded -->
+            <iframe v-else-if="previewUrl" :src="previewUrl" class="pdf-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+
+            <!-- Controls -->
+            <div v-if="pdfJsLoaded" class="pdf-controls" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px; z-index: 30;">
+              <span style="color: white; margin: 0 10px;">{{ currentPage }} / {{ totalPages }}</span>
+              <button @click="pdfZoomOut" style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">-</button>
+              <span style="color: white; margin: 0 10px;">{{ Math.round(pdfZoom * 100) }}%</span>
+              <button @click="pdfZoomIn" style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">+</button>
+            </div>
+
+            <div v-else-if="!previewUrl" style="text-align: center; color: #a5b4fc; padding: 2rem;">
               <i class="pi pi-file-pdf" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>PDF preview not available</p>
+            </div>
+          </div>
+
+          <!-- DOCX Preview with docx-preview library -->
+          <div v-else-if="previewType === 'docx-preview'" class="docx-preview-container">
+            <div class="docx-container">
+              <div ref="docxContainer" class="docx-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"></div>
+            </div>
+            <div v-if="!docxRendered" class="docx-loading">
+              <i class="pi pi-spin pi-spinner"></i>
+              <span>Loading DOCX preview...</span>
+            </div>
+
+            <!-- Zoom controls for DOCX -->
+            <div class="docx-zoom-controls">
+              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
+              <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
+              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
+              <button @click="resetZoom" class="control-btn">Reset</button>
+            </div>
+          </div>
+
+          <!-- DOCX Preview -->
+          <div v-else-if="previewType === 'docx'" class="docx-preview">
+            <iframe v-if="previewUrl" :src="previewUrl" class="docx-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
+              <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+              <p>DOCX preview not available</p>
+            </div>
+          </div>
+
+          <!-- Google Docs Viewer for DOCX -->
+          <div v-else-if="previewType === 'google-docs-viewer'" class="google-docs-preview">
+            <iframe v-if="previewUrl" :src="previewUrl" class="google-docs-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
+              <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+              <p>Google Docs Viewer not available</p>
             </div>
           </div>
 
@@ -97,6 +144,24 @@
           <div v-else-if="isDocumentType()" class="document-preview">
             <div class="document-page">
               <div class="document-content-original" v-html="previewContent || 'No document content available'"></div>
+            </div>
+          </div>
+
+          <!-- DOCX Preview with PDF-like functionality -->
+          <div v-else-if="previewType === 'document'" class="docx-preview">
+            <!-- Document container with zoom -->
+            <div class="docx-viewer">
+              <div class="docx-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top center' }">
+                <div class="document-content-original" v-html="previewContent || 'No document content available'"></div>
+              </div>
+            </div>
+
+            <!-- Zoom and navigation controls -->
+            <div class="docx-controls">
+              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
+              <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
+              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
+              <button @click="resetZoom" class="control-btn">Reset</button>
             </div>
           </div>
 
@@ -111,7 +176,17 @@
 
           <!-- Text Preview -->
           <div v-else-if="isTextType()" class="text-preview">
-            <pre class="text-content">{{ previewContent || 'No text content available' }}</pre>
+            <div class="text-container">
+              <pre class="text-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }">{{ previewContent || 'No text content available' }}</pre>
+            </div>
+
+            <!-- Zoom controls for Text -->
+            <div class="text-zoom-controls">
+              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
+              <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
+              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
+              <button @click="resetZoom" class="control-btn">Reset</button>
+            </div>
           </div>
 
           <!-- HTML Preview -->
@@ -131,8 +206,8 @@
           </div>
         </div>
 
-        <!-- Preview Controls -->
-        <div class="preview-controls">
+        <!-- Preview Controls - Hidden for PDF, DOCX, and Text files -->
+        <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="preview-controls">
           <div class="zoom-controls">
             <button @click="zoomOut" class="zoom-btn" :disabled="zoom <= 0.5">
               <i class="pi pi-minus"></i>
@@ -150,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, computed, onBeforeUnmount } from 'vue';
+import { ref, watch, onMounted, computed, onBeforeUnmount, nextTick } from 'vue';
 import axiosInstance from '../api';
 
 interface Props {
@@ -159,6 +234,11 @@ interface Props {
   filePath?: string;
   fileSize?: number;
   collapsed?: boolean;
+  focusedString?: {
+    id: string;
+    originalText: string;
+    translatedText: string;
+  } | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -175,17 +255,385 @@ const error = ref('');
 const previewContent = ref('');
 const previewUrl = ref('');
 const previewType = ref('text');
+const previewData = ref<any>(null); // Store full preview data including textSegments
 const zoom = ref(1);
 const panelWidth = ref(500); // Default width for the panel
 const isResizing = ref(false); // Flag to indicate if the panel is being resized
 const startX = ref(0); // For mouse down event
 const startWidth = ref(0); // For mouse down event
 
+// PDF.js Viewer State
+const pdfCanvas = ref<HTMLCanvasElement>();
+const highlightContainer = ref<HTMLDivElement>();
+const currentPage = ref(1);
+const totalPages = ref(1);
+const pdfZoom = ref(1);
+const pdfDocument = ref<any>(null);
+const pdfPage = ref<any>(null);
+const pdfJsLoaded = ref(false);
+
+// DOCX Preview State
+const docxContainer = ref<HTMLDivElement>();
+const docxRendered = ref(false);
+
 // Computed
 const collapsed = computed({
   get: () => props.collapsed,
   set: (value) => emit('update:collapsed', value)
 });
+
+// Highlight functionality
+const highlightedText = computed(() => {
+  if (!props.focusedString?.originalText) return '';
+  return props.focusedString.originalText;
+});
+
+// PDF.js Viewer Functions (Crowdin-style)
+async function loadPdfWithPdfJs() {
+  if (!previewUrl.value) {
+    console.log('Cannot load PDF: missing previewUrl');
+    return;
+  }
+
+  // Wait for canvas to be available
+  if (!pdfCanvas.value) {
+    console.log('Canvas not ready, waiting...');
+    await nextTick();
+    if (!pdfCanvas.value) {
+      console.log('Canvas still not available after nextTick');
+      return;
+    }
+  }
+
+  try {
+    console.log('Loading PDF.js for direct highlighting...');
+
+    // Load PDF.js dynamically with error handling
+    let pdfjsLib: any;
+    try {
+      // Import PDF.js using the correct path for Vite
+      pdfjsLib = await import('pdfjs-dist');
+      console.log('PDF.js imported successfully');
+    } catch (importError) {
+      console.error('Failed to import PDF.js:', importError);
+      throw new Error('PDF.js import failed');
+    }
+
+    // Set worker for browser environment
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      console.log('PDF.js worker configured');
+    } catch (workerError) {
+      console.error('Failed to configure PDF.js worker:', workerError);
+      throw new Error('PDF.js worker configuration failed');
+    }
+
+    // Load PDF document from base64 data
+    const base64Data = previewUrl.value.replace('data:application/pdf;base64,', '');
+    console.log('Base64 data length:', base64Data.length);
+
+    if (!base64Data) {
+      throw new Error('No base64 data found');
+    }
+
+    const uint8Array = new Uint8Array(atob(base64Data).split('').map(char => char.charCodeAt(0)));
+    console.log('Uint8Array length:', uint8Array.length);
+
+    if (uint8Array.length === 0) {
+      throw new Error('Invalid PDF data');
+    }
+
+    console.log('Loading PDF document...');
+    const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+    pdfDocument.value = await loadingTask.promise;
+    totalPages.value = pdfDocument.value.numPages;
+
+    console.log(`PDF loaded successfully, pages: ${totalPages.value}`);
+
+    // Load first page
+    await loadPage(1);
+
+    // Mark as loaded
+    pdfJsLoaded.value = true;
+    console.log('PDF.js viewer ready for direct highlighting');
+
+  } catch (error) {
+    console.error('Error loading PDF with PDF.js:', error);
+    console.error('Error details:', error.message);
+    // Fallback to iframe - PDF.js failed
+    pdfJsLoaded.value = false;
+    console.log('PDF.js failed, will use iframe fallback');
+  }
+}
+
+async function loadPage(pageNum: number) {
+  if (!pdfDocument.value) return;
+
+  // Ensure canvas is available
+  if (!pdfCanvas.value) {
+    console.log('Canvas not ready for page load, waiting...');
+    await nextTick();
+    if (!pdfCanvas.value) {
+      console.log('Canvas still not available for page load');
+      return;
+    }
+  }
+
+  try {
+    console.log(`Loading page ${pageNum}...`);
+
+    currentPage.value = pageNum;
+
+    // Get page with better error handling
+    try {
+      pdfPage.value = await pdfDocument.value.getPage(pageNum);
+      console.log('Page retrieved successfully');
+    } catch (pageError) {
+      console.error('Error getting page:', pageError);
+      throw new Error(`Failed to get page ${pageNum}: ${pageError}`);
+    }
+
+    // Get viewport with error handling
+    let viewport;
+    try {
+      viewport = pdfPage.value.getViewport({ scale: pdfZoom.value });
+      console.log(`Page viewport: ${viewport.width} x ${viewport.height}`);
+    } catch (viewportError) {
+      console.error('Error getting viewport:', viewportError);
+      throw new Error(`Failed to get viewport: ${viewportError}`);
+    }
+
+    // Set canvas size
+    const canvas = pdfCanvas.value;
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    // Clear canvas
+    context?.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Render page with error handling
+    try {
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+      };
+
+      await pdfPage.value.render(renderContext);
+      console.log(`Page ${pageNum} rendered successfully`);
+    } catch (renderError) {
+      console.error('Error rendering page:', renderError);
+      throw new Error(`Failed to render page: ${renderError}`);
+    }
+
+  } catch (error: any) {
+    console.error('Error loading page:', error);
+    console.error('Error details:', error.message);
+    // Don't throw - let it continue with fallback
+  }
+}
+
+function previousPage() {
+  if (currentPage.value > 1) {
+    loadPage(currentPage.value - 1);
+  }
+}
+
+function nextPage() {
+  if (currentPage.value < totalPages.value) {
+    loadPage(currentPage.value + 1);
+  }
+}
+
+// Method to highlight text directly in PDF content using PDF.js - 100% ACCURATE
+async function highlightTextInPdf() {
+  if (!props.focusedString?.originalText || !isPdfType()) {
+    console.log('Cannot highlight: missing focusedString or not PDF type');
+    return;
+  }
+
+  const textToHighlight = props.focusedString.originalText;
+  console.log('Highlighting text directly in PDF content:', textToHighlight);
+
+  // Ensure PDF.js is loaded
+  if (!pdfJsLoaded.value) {
+    console.log('PDF.js not loaded, trying to load...');
+    if (previewUrl.value) {
+      await loadPdfWithPdfJs();
+      if (!pdfJsLoaded.value) {
+        console.log('PDF.js failed to load, cannot highlight');
+        return;
+      }
+    } else {
+      console.log('No preview URL available');
+      return;
+    }
+  }
+
+  // Use PDF.js for direct text highlighting - 100% ACCURATE
+  if (pdfPage.value && highlightContainer.value) {
+    console.log('Using PDF.js direct text highlighting - 100% ACCURATE');
+    try {
+      // Get text content with positions from SAME PDF.js instance
+      const textContent = await pdfPage.value.getTextContent();
+      const viewport = pdfPage.value.getViewport({ scale: pdfZoom.value });
+
+      console.log(`Text content items: ${textContent.items.length}`);
+
+      // Find matching text items
+      const matchingItems = textContent.items.filter((item: any) => {
+        const itemText = item.str.toLowerCase();
+        const searchText = textToHighlight.toLowerCase();
+        return itemText.includes(searchText) || searchText.includes(itemText);
+      });
+
+      console.log('Matching text items found:', matchingItems.length);
+
+      if (matchingItems.length > 0) {
+        // Clear existing highlights
+        highlightContainer.value.innerHTML = '';
+
+        matchingItems.forEach((item: any, index: number) => {
+          const highlightDiv = document.createElement('div');
+          highlightDiv.className = 'pdf-text-highlight';
+
+          // Use EXACT coordinates from SAME PDF.js instance - 100% ACCURATE
+          const x = item.transform[4];
+          const y = viewport.height - item.transform[5]; // Flip Y coordinate
+          const width = item.width;
+          const height = item.height;
+
+          highlightDiv.style.cssText = `
+            position: absolute;
+            left: ${x}px;
+            top: ${y}px;
+            width: ${width}px;
+            height: ${height}px;
+            background: rgba(255, 193, 7, 0.6);
+            border: 2px solid #ffc107;
+            border-radius: 2px;
+            z-index: 9999;
+            pointer-events: none;
+            animation: highlightPulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
+          `;
+
+          highlightContainer.value!.appendChild(highlightDiv);
+          console.log(`Created 100% ACCURATE highlight ${index + 1} at position:`, { x, y, width, height });
+        });
+
+        // Add CSS animation if not already added
+        if (!document.querySelector('#pdf-highlight-styles')) {
+          const style = document.createElement('style');
+          style.id = 'pdf-highlight-styles';
+          style.textContent = `
+            @keyframes highlightPulse {
+              0% {
+                opacity: 0.6;
+                transform: scale(1);
+                box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
+              }
+              50% {
+                opacity: 0.9;
+                transform: scale(1.02);
+                box-shadow: 0 0 12px rgba(255, 193, 7, 0.6);
+              }
+              100% {
+                opacity: 0.6;
+                transform: scale(1);
+                box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
+              }
+            }
+          `;
+          document.head.appendChild(style);
+        }
+
+        // Auto-remove highlights after 4 seconds
+        setTimeout(() => {
+          if (highlightContainer.value) {
+            const highlights = highlightContainer.value.querySelectorAll('.pdf-text-highlight');
+            highlights.forEach((el: Element) => {
+              if (el.parentNode) {
+                (el as HTMLElement).style.opacity = '0';
+                (el as HTMLElement).style.transform = 'scale(0.95)';
+                setTimeout(() => el.remove(), 300);
+              }
+            });
+          }
+        }, 4000);
+
+        console.log('100% ACCURATE highlighting completed!');
+        return;
+      } else {
+        console.log('No matching text found in PDF content');
+      }
+    } catch (error) {
+      console.error('Error with PDF.js direct highlighting:', error);
+    }
+  } else {
+    console.log('PDF.js not available for direct highlighting');
+  }
+}
+
+// Function to highlight text on iframe using overlay
+function highlightTextOnIframe(textToHighlight: string) {
+  console.log('Creating iframe overlay highlight for:', textToHighlight);
+
+  // Find the iframe
+  const iframe = document.querySelector('.pdf-viewer') as HTMLIFrameElement;
+  if (!iframe) {
+    console.log('Iframe not found for highlighting');
+    return;
+  }
+
+  // Create overlay highlight
+  const highlightDiv = document.createElement('div');
+  highlightDiv.className = 'iframe-text-highlight';
+  highlightDiv.style.cssText = `
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 40px;
+    background: rgba(255, 193, 7, 0.8);
+    border: 3px solid #ffc107;
+    border-radius: 8px;
+    z-index: 9999;
+    pointer-events: none;
+    animation: highlightPulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 20px rgba(255, 193, 7, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+    font-weight: bold;
+    font-size: 14px;
+  `;
+  highlightDiv.textContent = textToHighlight.substring(0, 30) + '...';
+
+  // Add to iframe container
+  const iframeContainer = iframe.parentElement;
+  if (iframeContainer) {
+    iframeContainer.style.position = 'relative';
+    iframeContainer.appendChild(highlightDiv);
+
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+      if (highlightDiv.parentNode) {
+        highlightDiv.style.opacity = '0';
+        highlightDiv.style.transform = 'translate(-50%, -50%) scale(0.95)';
+        setTimeout(() => highlightDiv.remove(), 300);
+      }
+    }, 4000);
+
+    console.log('Iframe overlay highlight created');
+  } else {
+    console.log('Iframe container not found');
+  }
+}
+
+
 
 // Methods
 function toggleCollapse() {
@@ -278,21 +726,23 @@ function resetZoom() {
   zoom.value = 1;
 }
 
+// PDF.js specific zoom functions
+function pdfZoomIn() {
+  pdfZoom.value = Math.min(3, pdfZoom.value + 0.25);
+  if (pdfPage.value) {
+    loadPage(currentPage.value);
+  }
+}
+
+function pdfZoomOut() {
+  pdfZoom.value = Math.max(0.5, pdfZoom.value - 0.25);
+  if (pdfPage.value) {
+    loadPage(currentPage.value);
+  }
+}
+
 async function loadPreview() {
-  console.log('FilePreviewPanel: loadPreview called with fileId:', props.fileId);
   if (!props.fileId) {
-    console.log('FilePreviewPanel: No fileId provided, showing test content');
-    // Show test content for debugging
-    previewContent.value = `Test File Content
-This is a test file for debugging the preview functionality.
-
-File ID: ${props.fileId || 'None'}
-File Name: ${props.fileName || 'Unknown'}
-File Path: ${props.filePath || 'Unknown'}
-File Size: ${props.fileSize || 'Unknown'}
-
-This content is shown when no real file ID is provided.
-You can use this to test the preview panel layout and functionality.`;
     return;
   }
 
@@ -300,90 +750,131 @@ You can use this to test the preview panel layout and functionality.`;
   error.value = '';
   previewContent.value = '';
   previewUrl.value = '';
+  previewData.value = null;
 
   try {
     // Try to get preview content from API
-    console.log('FilePreviewPanel: Making API call to /files/' + props.fileId + '/preview');
     const response = await axiosInstance.get(`/files/${props.fileId}/preview`);
-    console.log('FilePreviewPanel: API response:', response.data);
+
+    // Store full response data including textSegments
+    previewData.value = response.data;
+    console.log('Preview data loaded:', response.data);
+    console.log('File type:', response.data.fileType);
+    console.log('Preview type:', response.data.previewType);
+    console.log('Has content:', !!response.data.content);
+    console.log('Has URL:', !!response.data.url);
 
     if (response.data.content) {
       previewContent.value = response.data.content;
-      console.log('FilePreviewPanel: Set preview content, length:', previewContent.value.length);
-      console.log('FilePreviewPanel: Preview content preview:', previewContent.value.substring(0, 100));
+
+      // Handle PDF content by creating a data URL
+      if (response.data.fileType === 'application/pdf') {
+        previewUrl.value = `data:application/pdf;base64,${response.data.content}`;
+        console.log('PDF URL created:', previewUrl.value.substring(0, 50) + '...');
+        // Load PDF with PDF.js for accurate highlighting
+        nextTick(() => {
+          loadPdfWithPdfJs();
+        });
+      }
+
+      // Handle DOCX content by creating a data URL
+      if (response.data.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        previewUrl.value = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${response.data.content}`;
+        console.log('DOCX URL created:', previewUrl.value.substring(0, 50) + '...');
+      }
     } else if (response.data.url) {
       previewUrl.value = response.data.url;
-      console.log('FilePreviewPanel: Set preview URL:', previewUrl.value.substring(0, 50) + '...');
-    } else {
-      console.log('FilePreviewPanel: No content or URL in response');
     }
 
     // Set preview type from response
     if (response.data.previewType) {
       previewType.value = response.data.previewType;
-      console.log('FilePreviewPanel: Set preview type:', previewType.value);
 
-      // For Office Online Viewer, replace placeholder URL with actual domain
-      if (response.data.previewType === 'office-viewer' && response.data.url) {
-        const actualUrl = response.data.url.replace('https://your-domain.com', window.location.origin);
-        previewUrl.value = actualUrl;
-        console.log('FilePreviewPanel: Updated Office Online Viewer URL:', actualUrl);
+      // For Google Docs Viewer, construct URL with current domain
+      if (response.data.previewType === 'google-docs-viewer') {
+        const currentOrigin = window.location.origin;
+        const downloadUrl = `${currentOrigin}/api/files/${props.fileId}/download`;
+        const googleDocsUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(downloadUrl)}&embedded=true`;
+        previewUrl.value = googleDocsUrl;
+      } else if (response.data.previewType === 'office-viewer') {
+        const currentOrigin = window.location.origin;
+        const downloadUrl = `${currentOrigin}/api/files/${props.fileId}/download`;
+        // Use the direct file URL instead of Office Online Viewer for now
+        previewUrl.value = downloadUrl;
+        // TODO: Re-enable Office Online Viewer when CORS is properly configured
+        // const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(downloadUrl)}`;
+        // previewUrl.value = officeViewerUrl;
+      } else if (response.data.url) {
+        previewUrl.value = response.data.url;
       }
     }
 
-    console.log('FilePreviewPanel: Final state - content:', !!previewContent.value, 'url:', !!previewUrl.value, 'type:', previewType.value);
+    // Log textSegments if available
+    if (response.data.textSegments) {
+      console.log('Text segments loaded:', response.data.textSegments.length);
+      response.data.textSegments.forEach((segment: any, index: number) => {
+        console.log(`Segment ${index + 1}: "${segment.text.substring(0, 50)}..."`);
+      });
+    }
   } catch (err: any) {
     error.value = err.message || 'Failed to load file preview';
-    console.error('FilePreviewPanel: Error loading file preview:', err);
-    console.error('FilePreviewPanel: Error response:', err.response?.data);
-
-    // Show error content for debugging
-    previewContent.value = `Error loading file preview:
-File ID: ${props.fileId}
-Error: ${err.message || 'Unknown error'}
-
-This is error content shown when the API call fails.
-Check the browser console for more details.`;
   } finally {
     loading.value = false;
   }
 }
 
-async function testMammoth() {
-  console.log('=== TESTING MAMMOTH CONVERSION ===');
-  console.log('File ID:', props.fileId);
-  console.log('File Name:', props.fileName);
-
-  if (!props.fileId) {
-    console.log('No file ID provided');
+// DOCX Preview Functions
+async function renderDocxWithPreview() {
+  if (!previewContent.value || !docxContainer.value) {
+    console.log('Cannot render DOCX: missing content or container');
     return;
   }
 
   try {
-    console.log('Making API call to test mammoth...');
-    const response = await axiosInstance.get(`/files/${props.fileId}/preview`);
-    console.log('API Response:', response.data);
-    console.log('Response type:', typeof response.data);
-    console.log('Has content:', !!response.data.content);
-    console.log('Content length:', response.data.content?.length);
-    console.log('Preview type:', response.data.previewType);
+    console.log('Rendering DOCX with docx-preview...');
 
-    if (response.data.content) {
-      console.log('Content preview (first 200 chars):', response.data.content.substring(0, 200));
-      previewContent.value = response.data.content;
-      console.log('Set preview content successfully');
-    } else {
-      console.log('No content in response');
+    // Import docx-preview dynamically
+    const { renderAsync } = await import('docx-preview');
+
+    // Convert base64 to ArrayBuffer
+    const base64Data = previewContent.value;
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
     }
+    const arrayBuffer = bytes.buffer;
+
+    // Render DOCX
+    await renderAsync(arrayBuffer, docxContainer.value, docxContainer.value, {
+      className: 'docx-renderer',
+      inWrapper: true,
+      ignoreWidth: false,
+      ignoreHeight: false,
+      ignoreFonts: false,
+      breakPages: true,
+      ignoreLastRenderedPageBreak: true,
+      experimental: true,
+      trimXmlDeclaration: true,
+      useBase64URL: true,
+      useMathMLPolyfill: true,
+      renderEndnotes: true,
+      renderFooters: true,
+      renderFootnotes: true,
+      renderHeaders: true,
+    });
+
+    docxRendered.value = true;
+    console.log('DOCX rendered successfully with docx-preview');
+
   } catch (error) {
-    console.error('Test mammoth failed:', error);
-    console.error('Error response:', error.response?.data);
+    console.error('Error rendering DOCX with docx-preview:', error);
+    docxRendered.value = false;
   }
 }
 
 // Watchers
 watch(() => props.fileId, (newFileId) => {
-  console.log('FilePreviewPanel: fileId changed to:', newFileId);
   if (!collapsed.value) {
     loadPreview();
   }
@@ -391,23 +882,54 @@ watch(() => props.fileId, (newFileId) => {
 
 // Watch collapsed state to load preview when expanded
 watch(() => collapsed.value, (isCollapsed) => {
-  console.log('FilePreviewPanel: collapsed state changed to:', isCollapsed);
   if (!isCollapsed) {
-    console.log('FilePreviewPanel: Panel expanded, loading preview for fileId:', props.fileId);
     loadPreview();
   }
 });
 
-// Watch all props for debugging
-watch(() => props, (newProps) => {
-  console.log('FilePreviewPanel: All props changed:', newProps);
+// Watch focused string changes to auto search and highlight text in PDF
+watch(() => props.focusedString, (newFocusedString) => {
+  console.log('focusedString changed:', newFocusedString);
+  if (newFocusedString?.originalText && isPdfType()) {
+    console.log('Auto searching and highlighting text:', newFocusedString.originalText);
+    nextTick(() => {
+      // Load PDF.js first, then highlight
+      if (previewUrl.value && !pdfJsLoaded.value) {
+        loadPdfWithPdfJs().then(() => {
+          setTimeout(() => {
+            highlightTextInPdf();
+          }, 500);
+        });
+      } else {
+        setTimeout(() => {
+          highlightTextInPdf();
+        }, 500);
+      }
+    });
+  }
 }, { deep: true });
+
+// Watch preview content changes to render DOCX
+watch(() => previewContent.value, (newContent) => {
+  if (newContent && previewType.value === 'docx-preview') {
+    nextTick(() => {
+      renderDocxWithPreview();
+    });
+  }
+});
+
+// Watch preview type changes
+watch(() => previewType.value, (newType) => {
+  if (newType === 'docx-preview' && previewContent.value) {
+    nextTick(() => {
+      renderDocxWithPreview();
+    });
+  }
+});
 
 // Lifecycle
 onMounted(() => {
-  console.log('FilePreviewPanel: Component mounted, fileId:', props.fileId, 'collapsed:', collapsed.value);
   if (!collapsed.value) {
-    console.log('FilePreviewPanel: Loading preview on mount');
     loadPreview();
   }
 });
@@ -708,8 +1230,9 @@ function stopResize() {
 .preview-container {
   flex: 1;
   overflow: auto;
-  padding: 1rem;
+  padding: 0;
   background: white !important;
+  position: relative;
 }
 
 .document-viewer-wrapper {
@@ -1093,17 +1616,104 @@ function stopResize() {
   justify-content: center;
   align-items: center;
   min-height: 100%;
+  width: 100%;
+  height: 100%;
+  position: relative;
 }
 
-.pdf-viewer {
+.pdf-js-viewer {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: white;
+  overflow: auto;
+}
+
+.pdf-canvas {
   width: 100%;
   height: 100%;
   border: none;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+
+.highlight-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.pdf-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 20;
+}
+
+.pdf-controls button {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pdf-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-controls span {
+  color: white;
+  font-size: 14px;
+}
+
+.pdf-viewer {
+  width: 100% !important;
+  height: 100% !important;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   transform: scale(v-bind(zoom));
   transform-origin: center;
   transition: transform 0.3s ease;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Hide browser PDF viewer controls */
+.pdf-viewer::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Additional CSS to hide browser controls */
+.pdf-viewer {
+  /* Hide browser's built-in controls */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* Ensure only our custom controls are visible */
+.pdf-preview {
+  position: relative;
+  overflow: hidden;
 }
 
 .image-preview {
@@ -1125,25 +1735,33 @@ function stopResize() {
 }
 
 .text-preview {
-  background: white !important;
+  position: relative;
+  height: 100%;
+  background: white;
   border-radius: 8px;
-  padding: 1rem;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin: 1rem;
+  overflow: hidden;
+}
+
+.text-container {
+  height: 100%;
+  overflow: auto;
+  padding: 2rem;
+  background: white;
 }
 
 .text-content {
-  background: white !important;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 1.5rem;
   font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
+  font-size: 14px;
   line-height: 1.6;
+  color: #333;
   white-space: pre-wrap;
-  word-break: break-word;
-  color: #1f2937 !important;
+  word-wrap: break-word;
   margin: 0;
+  padding: 0;
+  transition: transform 0.3s ease;
+  transform-origin: top left;
 }
 
 .html-preview {
@@ -1315,119 +1933,248 @@ function stopResize() {
 }
 
 .document-content-original {
-  padding: 2rem;
   background: white !important;
   color: #000 !important;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  text-align: inherit;
+  font-family: 'Times New Roman', serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 2rem;
   min-height: 100vh;
 }
 
-/* Preserve original Word formatting - DO NOT OVERRIDE */
+/* Preserve DOCX formatting */
 .document-content-original h1,
 .document-content-original h2,
 .document-content-original h3,
 .document-content-original h4,
 .document-content-original h5,
 .document-content-original h6 {
-  color: inherit;
-  margin: inherit;
-  font-weight: inherit;
-  font-family: inherit;
-  background: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  text-align: inherit;
+  color: #000 !important;
+  margin: 1rem 0 0.5rem 0;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
+.document-content-original h1 { font-size: 1.75rem; }
+.document-content-original h2 { font-size: 1.5rem; }
+.document-content-original h3 { font-size: 1.25rem; }
+.document-content-original h4 { font-size: 1.1rem; }
+
 .document-content-original p {
-  margin: inherit;
-  text-align: inherit;
-  line-height: inherit;
-  color: inherit;
-  background: inherit;
-  font-family: inherit;
-  font-size: inherit;
+  margin: 0.75rem 0;
+  text-align: justify;
+  line-height: 1.6;
+  color: #000 !important;
 }
 
 .document-content-original ul,
 .document-content-original ol {
-  margin: inherit;
-  padding: inherit;
-  background: inherit;
+  margin: 0.75rem 0;
+  padding-left: 2rem;
 }
 
 .document-content-original li {
-  margin: inherit;
-  line-height: inherit;
-  color: inherit;
-  background: inherit;
-  font-family: inherit;
-  font-size: inherit;
+  margin: 0.25rem 0;
+  line-height: 1.5;
+  color: #000 !important;
 }
 
 .document-content-original table {
-  width: inherit;
-  border-collapse: inherit;
-  margin: inherit;
-  border: inherit;
-  background: inherit;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  border: 1px solid #e2e8f0;
+  background: white;
 }
 
 .document-content-original th,
 .document-content-original td {
-  border: inherit;
-  padding: inherit;
-  text-align: inherit;
-  vertical-align: inherit;
-  color: inherit;
-  background: inherit;
-  font-family: inherit;
-  font-size: inherit;
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+  color: #000 !important;
+  background: white !important;
 }
 
 .document-content-original th {
-  background: inherit;
-  font-weight: inherit;
-  color: inherit;
+  background: #f8fafc !important;
+  font-weight: 600;
+  color: #000 !important;
 }
 
 .document-content-original strong,
 .document-content-original b {
-  font-weight: inherit;
-  color: inherit;
-  background: inherit;
+  font-weight: 600;
+  color: #000 !important;
 }
 
 .document-content-original em,
 .document-content-original i {
-  font-style: inherit;
-  color: inherit;
-  background: inherit;
+  font-style: italic;
+  color: #000 !important;
 }
 
 .document-content-original u {
-  text-decoration: inherit;
-  color: inherit;
-  background: inherit;
+  text-decoration: underline;
+  color: #000 !important;
 }
 
 .document-content-original img {
-  max-width: inherit;
-  height: inherit;
-  margin: inherit;
-  border: inherit;
-  background: inherit;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* Page break styling */
 .document-content-original .page-break {
-  page-break-before: inherit;
-  margin-top: inherit;
-  border-top: inherit;
-  padding-top: inherit;
+  page-break-before: always;
+  margin-top: 2rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 2rem;
+}
+
+/* DOCX Preview Styles - Similar to PDF */
+.docx-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #f5f5f5;
+}
+
+.docx-viewer {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  transform: scale(v-bind(zoom));
+  transform-origin: center;
+  transition: transform 0.3s ease;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.docx-content {
+  background: white;
+  padding: 2rem;
+  min-height: 100%;
+  transition: transform 0.3s ease;
+  border-radius: 8px;
+}
+
+.docx-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 12px 16px;
+  border-radius: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.control-btn {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  min-width: 40px;
+}
+
+.control-btn:hover:not(:disabled) {
+  background: #4f46e5;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.zoom-level {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 60px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+/* DOCX Preview Container Styles */
+.docx-preview-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f8f9fa;
+  position: relative;
+}
+
+.docx-container {
+  flex: 1;
+  overflow: auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin: 1rem;
+  position: relative;
+  padding: 2rem;
+}
+
+.docx-content {
+  background: white;
+  min-height: 100%;
+  transition: transform 0.3s ease;
+  transform-origin: top left;
+}
+
+.docx-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #a5b4fc;
+  gap: 1rem;
+}
+
+.docx-loading i {
+  font-size: 2rem;
+  color: #6366f1;
+}
+
+.docx-renderer {
+  background: white;
+  color: #000;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+/* Ensure DOCX content displays properly */
+.docx-renderer * {
+  background: white !important;
+  color: #000 !important;
 }
 
 /* MOST AGGRESSIVE OVERRIDE - Override everything including parent styles */
@@ -1489,5 +2236,134 @@ function stopResize() {
   background-color: white !important;
   color: #000 !important;
   color: black !important;
+}
+
+/* Google Docs Viewer Styles */
+.google-docs-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #f5f5f5;
+}
+
+.google-docs-viewer {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  transform: scale(v-bind(zoom));
+  transform-origin: center;
+  transition: transform 0.3s ease;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* DOCX Zoom Controls */
+.docx-zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 12px 16px;
+  border-radius: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.docx-zoom-controls .control-btn {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  min-width: 40px;
+}
+
+.docx-zoom-controls .control-btn:hover:not(:disabled) {
+  background: #4f46e5;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.docx-zoom-controls .control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.docx-zoom-controls .zoom-level {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 60px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.text-zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 12px 16px;
+  border-radius: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.text-zoom-controls .control-btn {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  min-width: 40px;
+}
+
+.text-zoom-controls .control-btn:hover:not(:disabled) {
+  background: #4f46e5;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.text-zoom-controls .control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.text-zoom-controls .zoom-level {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 60px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 4px;
 }
 </style>

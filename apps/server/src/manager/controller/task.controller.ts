@@ -61,9 +61,13 @@ export class TaskController {
   }
 
   @Patch(':id/reopen')
-  async reopenTask(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+  async reopenTask(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req: AuthenticatedRequest
+  ) {
     const userId = req.user.id;
-    return await this.taskService.reopenTask(id, userId.toString());
+    return await this.taskService.reopenTask(id, userId.toString(), body.reason);
   }
 
   @Get('/user/:userId')

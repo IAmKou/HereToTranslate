@@ -74,8 +74,14 @@ const currentEditorPage = ref<Record<string, number>>({}); // fileId -> current 
 const totalEditorPages = ref<Record<string, number>>({}); // fileId -> total pages
 const editorPageContents = ref<Record<string, string[]>>({}); // fileId -> array of page contents
 
-const PART_SIZE = 250;
+// Thay đổi từ PART_SIZE cố định thành chia theo page
+const DOCX_STRINGS_PER_PAGE = 100; // DOCX: 100 strings/page
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
+
+// State cho page modal
+const pageModalVisible = ref(false);
+const currentModalFileId = ref<string>('');
+const pageSearchQuery = ref('');
 
 // Hàm kiểm tra file đang processing
 function isFileProcessing(file: any): boolean {
@@ -111,21 +117,121 @@ function getTotalParts(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
   // Sử dụng deduplication để đảm bảo tính nhất quán
   const uniqueStrings = deduplicateStrings(arr);
-  return Math.ceil(uniqueStrings.length / PART_SIZE);
+
+  // Lấy thông tin file để xác định loại file
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+  if (!file) return Math.ceil(uniqueStrings.length / DOCX_STRINGS_PER_PAGE);
+
+  // Nếu là PDF, chia theo page gốc
+  if (file.fileType === 'application/pdf') {
+    // Đếm số page khác nhau trong strings dựa trên filePart
+    const pages = new Set<number>();
+    uniqueStrings.forEach((str: any) => {
+      const page = str.filePart !== undefined ? str.filePart + 1 : (str.position?.page || 1);
+      pages.add(page);
+    });
+    return pages.size;
+  }
+
+  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  return Math.ceil(uniqueStrings.length / DOCX_STRINGS_PER_PAGE);
 }
+
 function getStringsOfPart(fileId: string | number, part: number) {
   const arr = stringsByFile.value[fileId] || [];
-  const start = part * PART_SIZE;
-  return arr.slice(start, start + PART_SIZE);
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+
+  if (!file) {
+    // Fallback: chia theo 100 strings/page
+    const start = part * DOCX_STRINGS_PER_PAGE;
+    return arr.slice(start, start + DOCX_STRINGS_PER_PAGE);
+  }
+
+  // Nếu là PDF, lấy strings theo page
+  if (file.fileType === 'application/pdf') {
+    return arr.filter((str: any) => str.filePart === part);
+  }
+
+  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  const start = part * DOCX_STRINGS_PER_PAGE;
+  return arr.slice(start, start + DOCX_STRINGS_PER_PAGE);
 }
 
 function getStringsCountOfPart(fileId: string | number, part: number) {
   const arr = stringsByFile.value[fileId] || [];
-  // Sử dụng deduplication để đảm bảo tính nhất quán
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+
+  if (!file) {
+    // Fallback: chia theo 100 strings/page
+    const uniqueStrings = deduplicateStrings(arr);
+    const start = part * DOCX_STRINGS_PER_PAGE;
+    return Math.min(DOCX_STRINGS_PER_PAGE, uniqueStrings.length - start);
+  }
+
+  // Nếu là PDF, đếm strings theo page
+  if (file.fileType === 'application/pdf') {
+    const uniqueStrings = deduplicateStrings(arr);
+    return uniqueStrings.filter((str: any) => str.filePart === part).length;
+  }
+
+  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
   const uniqueStrings = deduplicateStrings(arr);
-  const start = part * PART_SIZE;
-  return Math.min(PART_SIZE, uniqueStrings.length - start);
+  const start = part * DOCX_STRINGS_PER_PAGE;
+  return Math.min(DOCX_STRINGS_PER_PAGE, uniqueStrings.length - start);
 }
+
+// Methods cho page modal
+function openPageModal(fileId: string | number) {
+  const id = String(fileId);
+  currentModalFileId.value = id;
+  pageSearchQuery.value = '';
+  pageModalVisible.value = true;
+}
+
+function selectPageFromModal(part: number) {
+  const id = currentModalFileId.value;
+  selectedPartMap.value[id] = part;
+  pageModalVisible.value = false;
+}
+
+function goToPreviousPage(fileId: string | number) {
+  const id = String(fileId);
+  const currentPart = selectedPartMap.value[id] ?? 0;
+  if (currentPart > 0) {
+    selectedPartMap.value[id] = currentPart - 1;
+  }
+}
+
+function goToNextPage(fileId: string | number) {
+  const id = String(fileId);
+  const currentPart = selectedPartMap.value[id] ?? 0;
+  const totalParts = getTotalParts(fileId);
+  if (currentPart < totalParts - 1) {
+    selectedPartMap.value[id] = currentPart + 1;
+  }
+}
+
+// Computed cho filtered pages
+const filteredPages = computed(() => {
+  if (!pageSearchQuery.value.trim()) {
+    return Array.from({ length: getTotalParts(currentModalFileId.value) }, (_, i) => i + 1);
+  }
+
+  const query = pageSearchQuery.value.toLowerCase();
+  const pages = [];
+
+  for (let i = 1; i <= getTotalParts(currentModalFileId.value); i++) {
+    const pageNumber = i.toString();
+    const stringCount = getStringsCountOfPart(currentModalFileId.value, i - 1);
+
+    // Search by page number or string count
+    if (pageNumber.includes(query) || stringCount.toString().includes(query)) {
+      pages.push(i);
+    }
+  }
+
+  return pages;
+});
 
 async function loadFiles() {
   if (!projectId.value || !branchId.value) return;
@@ -333,8 +439,22 @@ function getFilteredStrings(fileId: string | number) {
 
 function getFilteredStringsOfPart(fileId: string | number, part: number) {
   const filtered = getFilteredStrings(fileId);
-  const start = part * PART_SIZE;
-  return filtered.slice(start, start + PART_SIZE);
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+
+  if (!file) {
+    // Fallback: chia theo 100 strings/page
+    const start = part * DOCX_STRINGS_PER_PAGE;
+    return filtered.slice(start, start + DOCX_STRINGS_PER_PAGE);
+  }
+
+  // Nếu là PDF, lấy strings theo page
+  if (file.fileType === 'application/pdf') {
+    return filtered.filter((str: any) => str.filePart === part);
+  }
+
+  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  const start = part * DOCX_STRINGS_PER_PAGE;
+  return filtered.slice(start, start + DOCX_STRINGS_PER_PAGE);
 }
 
 // Thêm hàm chọn icon theo loại file
@@ -1196,6 +1316,25 @@ function parseEditorPages(content: string): string[] {
 
   return pages;
 }
+
+// Computed để lấy thông tin string đang được focus
+const focusedString = computed(() => {
+  if (!focusedInputId.value) return null;
+
+  // Tìm string trong tất cả files
+  for (const fileId in stringsByFile.value) {
+    const strings = stringsByFile.value[fileId];
+    const foundString = strings.find((str: any) => str.id === focusedInputId.value);
+    if (foundString) {
+      return {
+        id: foundString.id,
+        originalText: foundString.originalText,
+        translatedText: foundString.translatedText
+      };
+    }
+  }
+  return null;
+});
 </script>
 
 <template>
@@ -1271,19 +1410,46 @@ function parseEditorPages(content: string): string[] {
                     <div style="color:#6b7280;font-size:0.95em;margin-top:6px;">Please wait for the extraction to complete</div>
                   </div>
                 </div>
-                <!-- Part selector -->
-                <div v-if="getTotalParts(file.fileId || file.id) > 1" class="part-selector" style="margin-bottom: 1em; display: flex; gap: 0.5em; align-items: center;">
-                  <span style="font-weight:600; color:#6366f1;">Part:</span>
+                <!-- Page selector with modal -->
+                <div v-if="getTotalParts(file.fileId || file.id) > 1" class="page-selector" style="margin-bottom: 1em; display: flex; gap: 0.5em; align-items: center;">
+                  <span style="font-weight:600; color:#6366f1;">Page:</span>
+
+                  <!-- Page selector button -->
                   <button
-                    v-for="part in getTotalParts(file.fileId || file.id)"
-                    :key="part"
-                    :class="['part-btn', { active: (selectedPartMap[file.fileId || file.id] ?? 0) === (part-1) }]"
-                    @click="selectedPartMap[file.fileId || file.id] = part-1"
-                    style="padding: 0.3em 1em; border-radius: 8px; border: none; background: #e0e7ff; color: #374151; font-weight:600; cursor:pointer;"
+                    @click="openPageModal(file.fileId || file.id)"
+                    class="page-selector-btn"
+                    style="padding: 0.5em 1em; border-radius: 8px; border: 1px solid #6366f1; background: #334155; color: #e2e8f0; font-weight:600; cursor:pointer; display: flex; align-items: center; gap: 0.5em; min-width: 120px; justify-content: space-between;"
                     :disabled="isFileProcessing(file)"
                   >
-                    {{ part }} ({{ getStringsCountOfPart(file.fileId || file.id, part-1) }})
+                    <span>{{ (selectedPartMap[file.fileId || file.id] ?? 0) + 1 }} ({{ getStringsCountOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0) }} strings)</span>
+                    <i class="pi pi-chevron-down"></i>
                   </button>
+
+                  <!-- Navigation buttons -->
+                  <button
+                    @click="goToPreviousPage(file.fileId || file.id)"
+                    :disabled="(selectedPartMap[file.fileId || file.id] ?? 0) === 0"
+                    class="page-nav-btn"
+                    title="Previous page"
+                    style="padding: 0.3em 0.6em; border-radius: 6px; border: 1px solid #6366f1; background: #334155; color: #e2e8f0; cursor: pointer;"
+                  >
+                    <i class="pi pi-chevron-left"></i>
+                  </button>
+
+                  <button
+                    @click="goToNextPage(file.fileId || file.id)"
+                    :disabled="(selectedPartMap[file.fileId || file.id] ?? 0) === getTotalParts(file.fileId || file.id) - 1"
+                    class="page-nav-btn"
+                    title="Next page"
+                    style="padding: 0.3em 0.6em; border-radius: 6px; border: 1px solid #6366f1; background: #334155; color: #e2e8f0; cursor: pointer;"
+                  >
+                    <i class="pi pi-chevron-right"></i>
+                  </button>
+
+                  <!-- Total pages info -->
+                  <span style="color: #a5b4fc; font-size: 0.9em;">
+                    Total: {{ getTotalParts(file.fileId || file.id) }} pages
+                  </span>
                 </div>
 
                 <!-- Editor Page Navigation -->
@@ -1522,6 +1688,7 @@ function parseEditorPages(content: string): string[] {
         :file-name="selectedFileForPreview?.fileName"
         :file-path="selectedFileForPreview?.filePath"
         :file-size="selectedFileForPreview?.fileSize"
+        :focused-string="focusedString"
         v-model:collapsed="previewPanelCollapsed"
       />
       <!-- Debug info -->
@@ -1547,6 +1714,118 @@ function parseEditorPages(content: string): string[] {
     @skip="handleValidationSkip"
     @auto-fix="handleValidationAutoFix"
   />
+
+  <!-- Page Selection Modal -->
+  <Dialog
+    v-model:visible="pageModalVisible"
+    :modal="true"
+    :closable="true"
+    :dismissableMask="true"
+    :style="{ width: '700px', maxWidth: '95vw' }"
+    :breakpoints="{ '960px': '85vw', '641px': '95vw' }"
+    class="page-selection-modal"
+  >
+    <div class="modal-content" style="padding: 0 1.5rem;">
+      <!-- Header with file info -->
+      <div class="modal-header" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e5e7eb;">
+        <div style="display: flex; align-items: center; gap: 0.8rem;">
+          <div class="file-icon" style="width: 36px; height: 36px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);">
+            <i class="pi pi-file"></i>
+          </div>
+          <div>
+            <div style="font-weight: 600; color: #1f2937; font-size: 1.1rem;">Select Page</div>
+            <div style="color: #6b7280; font-size: 0.85rem; margin-top: 0.1rem;">Choose a page to view and edit</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-section" style="margin-bottom: 1.8rem;">
+        <div class="search-input-wrapper" style="position: relative;">
+          <i class="pi pi-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.9rem;"></i>
+          <InputText
+            v-model="pageSearchQuery"
+            placeholder="Search by page number (e.g., 45) or string count..."
+            class="page-search-input"
+            style="padding: 0.8rem 0.8rem 0.8rem 2.5rem; width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; background: white; color: #1f2937; font-size: 0.9rem; transition: all 0.3s ease; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"
+          />
+        </div>
+      </div>
+
+      <!-- Pages Grid -->
+      <div class="pages-grid" style="max-height: 380px; overflow-y: auto; padding-right: 0.8rem; margin: 0 -0.5rem;">
+        <div
+          v-for="part in filteredPages"
+          :key="part"
+          @click="selectPageFromModal(part-1)"
+          class="page-item"
+          :class="{ 'active': (selectedPartMap[currentModalFileId] ?? 0) === (part-1) }"
+          style="padding: 0.9rem; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.6rem; cursor: pointer; transition: all 0.3s ease; background: white; position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"
+        >
+          <!-- Active indicator -->
+          <div v-if="(selectedPartMap[currentModalFileId] ?? 0) === (part-1)" class="active-indicator" style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #3b82f6, #8b5cf6);"></div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <div class="page-number" style="width: 28px; height: 28px; background: #f3f4f6; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #374151; font-size: 0.85rem; border: 1px solid #e5e7eb;">
+                  {{ part }}
+                </div>
+                <div>
+                  <div style="font-weight: 600; color: #1f2937; font-size: 0.95rem;">Page {{ part }}</div>
+                  <div style="color: #6b7280; font-size: 0.8rem; margin-top: 0.1rem;">
+                    {{ getStringsCountOfPart(currentModalFileId, part-1) }} strings
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Selection indicator -->
+            <div v-if="(selectedPartMap[currentModalFileId] ?? 0) === (part-1)" class="selection-indicator" style="color: #059669; display: flex; align-items: center; gap: 0.3rem; background: #ecfdf5; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #a7f3d0;">
+              <i class="pi pi-check-circle" style="font-size: 0.9rem;"></i>
+              <span style="font-size: 0.8rem; font-weight: 500;">Selected</span>
+            </div>
+            <div v-else class="selection-hint" style="color: #9ca3af; font-size: 0.8rem; background: #f9fafb; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #e5e7eb;">
+              Click to select
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- No results message -->
+      <div v-if="filteredPages.length === 0" class="no-results" style="text-align: center; padding: 2.5rem 1rem; color: #6b7280;">
+        <div class="no-results-icon" style="width: 60px; height: 60px; background: #f9fafb; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.2rem; border: 1px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);">
+          <i class="pi pi-search" style="font-size: 1.5rem; color: #9ca3af;"></i>
+        </div>
+        <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; color: #374151;">No pages found</div>
+        <div style="font-size: 0.85rem; color: #6b7280;">Try searching with different keywords</div>
+      </div>
+    </div>
+
+    <template #footer>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0;">
+        <div style="display: flex; align-items: center; gap: 0.8rem;">
+          <div class="page-info" style="display: flex; align-items: center; gap: 0.4rem; color: #6b7280; font-size: 0.85rem; background: #f9fafb; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #e5e7eb;">
+            <i class="pi pi-file-text" style="color: #3b82f6; font-size: 0.8rem;"></i>
+            <span>{{ filteredPages.length }} of {{ getTotalParts(currentModalFileId) }} pages</span>
+          </div>
+          <div v-if="pageSearchQuery" class="search-info" style="display: flex; align-items: center; gap: 0.4rem; color: #059669; font-size: 0.85rem; background: #ecfdf5; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #a7f3d0;">
+            <i class="pi pi-search" style="font-size: 0.7rem;"></i>
+            <span>Filtered results</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.6rem;">
+          <button
+            @click="pageModalVisible = false"
+            class="modal-btn secondary"
+            style="padding: 0.6rem 1.2rem; border-radius: 6px; border: 1px solid #e5e7eb; background: white; color: #374151; cursor: pointer; font-weight: 500; font-size: 0.9rem; transition: all 0.3s ease; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </template>
+  </Dialog>
 </template>
 
 <style scoped>
@@ -3334,5 +3613,164 @@ function parseEditorPages(content: string): string[] {
   border-color: rgba(99, 102, 241, 0.8) !important;
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
   font-weight: 700;
+}
+
+/* Page Modal Styles - Light Theme */
+.page-selection-modal .p-dialog-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-bottom: 1px solid #e5e7eb;
+  color: #1f2937;
+  padding: 1.5rem 2rem;
+  border-radius: 12px 12px 0 0;
+}
+
+.page-selection-modal .p-dialog-content {
+  background: #ffffff;
+  color: #1f2937;
+  padding: 0;
+}
+
+.page-selection-modal .p-dialog-footer {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-top: 1px solid #e5e7eb;
+  padding: 1.5rem 2rem;
+  border-radius: 0 0 12px 12px;
+}
+
+.page-selection-modal .p-dialog {
+  border-radius: 16px;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+/* Page Item Styles */
+.page-item {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.page-item:hover {
+  background: #f8fafc !important;
+  border-color: #3b82f6 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+}
+
+.page-item.active {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.25);
+}
+
+.page-item.active .page-number {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
+  color: white !important;
+  border-color: #3b82f6 !important;
+}
+
+.page-item.active .selection-indicator {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+/* Search Input Styles */
+.page-search-input {
+  transition: all 0.3s ease;
+}
+
+.page-search-input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+  background: white !important;
+}
+
+.page-search-input:hover {
+  border-color: #d1d5db !important;
+}
+
+/* Scrollbar Styles */
+.pages-grid::-webkit-scrollbar {
+  width: 10px;
+}
+
+.pages-grid::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 8px;
+  margin: 4px;
+}
+
+.pages-grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #d1d5db, #9ca3af);
+  border-radius: 8px;
+  border: 2px solid #f3f4f6;
+}
+
+.pages-grid::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #9ca3af, #6b7280);
+}
+
+/* Button Hover Effects */
+.modal-btn.secondary:hover {
+  background: #f3f4f6 !important;
+  border-color: #d1d5db !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* File Icon Animation */
+.file-icon {
+  animation: bounceIn 0.6s ease-out;
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* No Results Animation */
+.no-results-icon {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Selection States */
+.selection-indicator {
+  transition: all 0.3s ease;
+}
+
+.selection-hint {
+  transition: all 0.3s ease;
+}
+
+.page-item:hover .selection-hint {
+  background: #f3f4f6 !important;
+  border-color: #d1d5db !important;
 }
 </style>

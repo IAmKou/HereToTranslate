@@ -176,42 +176,22 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="assignedTo">Assign To</label>
-            <select
-              id="assignedTo"
-              v-model="formData.assignedToId"
-              class="form-control"
+        <div class="form-group">
+          <label for="assignedTo">Assign To</label>
+          <select
+            id="assignedTo"
+            v-model="formData.assignedToId"
+            class="form-control"
+          >
+            <option value="">Unassigned</option>
+            <option
+              v-for="member in projectMembers"
+              :key="member.id"
+              :value="member.id"
             >
-              <option value="">Unassigned</option>
-              <option
-                v-for="member in projectMembers"
-                :key="member.id"
-                :value="member.id"
-              >
-                {{ member.fullName || member.username }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="group">Group</label>
-            <select
-              id="group"
-              v-model="formData.groupId"
-              class="form-control"
-            >
-              <option value="">No Group</option>
-              <option
-                v-for="group in projectGroups"
-                :key="group.id"
-                :value="group.id"
-              >
-                {{ group.name }}
-              </option>
-            </select>
-          </div>
+              {{ member.fullName || member.username }}
+            </option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -331,56 +311,114 @@
           {{ fieldErrors.fileSelection }}
         </div>
         <div v-if="selectedFileId && fileParts.length > 0" class="file-parts-section">
-          <label class="file-parts-label">File Parts:</label>
+          <label class="file-parts-label">File Pages:</label>
           <div class="file-parts-info" style="margin-bottom: 0.5rem; font-size: 0.875rem; color: #666;">
-            Select specific parts to create tasks for. If you select multiple parts, a single task will be created for the entire file.
+            Select specific pages to create tasks for. Choose a single page or a range of pages.
           </div>
-          <div class="file-parts-grid">
-            <label
-              v-for="part in fileParts"
-              :key="part.part"
-              class="file-part-option"
-            >
+
+          <!-- Page Selection Mode -->
+          <div class="page-selection-mode" style="margin-bottom: 1rem;">
+            <label class="radio-option">
               <input
-                type="checkbox"
-                :value="part.part"
-                v-model="selectedFileParts"
-                @change="onFilePartChange"
+                type="radio"
+                value="single"
+                v-model="pageRangeMode"
+                @change="onPageRangeModeChange"
               />
-              <span class="file-part-label">
-                Part {{ part.part + 1 }} ({{ part.stringCount }} strings)
-              </span>
+              <span>Single Page</span>
+            </label>
+            <label class="radio-option">
+              <input
+                type="radio"
+                value="range"
+                v-model="pageRangeMode"
+                @change="onPageRangeModeChange"
+              />
+              <span>Page Range</span>
             </label>
           </div>
-          <div class="file-parts-actions">
-            <button
-              type="button"
-              class="select-all-btn"
-              @click="selectAllParts"
-            >
-              Select All
-            </button>
-            <button
-              type="button"
-              class="clear-all-btn"
-              @click="clearAllParts"
-            >
-              Clear All
-            </button>
+
+          <!-- Single Page Selection -->
+          <div v-if="pageRangeMode === 'single'" class="single-page-selection">
+            <div class="form-group">
+              <label for="singlePage">Select Page:</label>
+              <select
+                id="singlePage"
+                v-model="pageRangeFrom"
+                class="form-control"
+                @change="onSinglePageChange"
+              >
+                <option value="">Choose a page</option>
+                <option
+                  v-for="part in fileParts"
+                  :key="part.part"
+                  :value="part.part"
+                >
+                  Page {{ part.pageNumber || (part.part + 1) }} ({{ part.stringCount }} strings)
+                </option>
+              </select>
+            </div>
           </div>
+
+          <!-- Page Range Selection -->
+          <div v-if="pageRangeMode === 'range'" class="page-range-selection">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="pageFrom">From Page:</label>
+                <select
+                  id="pageFrom"
+                  v-model="pageRangeFrom"
+                  class="form-control"
+                  @change="onPageRangeChange"
+                >
+                  <option value="">Select start page</option>
+                  <option
+                    v-for="part in fileParts"
+                    :key="part.part"
+                    :value="part.part"
+                  >
+                    Page {{ part.pageNumber || (part.part + 1) }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="pageTo">To Page:</label>
+                <select
+                  id="pageTo"
+                  v-model="pageRangeTo"
+                  class="form-control"
+                  @change="onPageRangeChange"
+                >
+                  <option value="">Select end page</option>
+                  <option
+                    v-for="part in availableRangeEndPages"
+                    :key="part.part"
+                    :value="part.part"
+                  >
+                    Page {{ part.pageNumber || (part.part + 1) }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selection Summary -->
           <div v-if="selectedFileParts.length > 0" class="file-parts-summary" style="margin-top: 0.5rem; padding: 0.5rem; background: #f0f9ff; border-radius: 4px; font-size: 0.875rem; color: #1e40af;">
-            <strong>Selected:</strong> {{ selectedFileParts.length }} part(s)
+            <strong>Selected:</strong> {{ selectedFileParts.length }} page(s)
             <span v-if="selectedFileParts.length === 1">
-              (Part {{ selectedFileParts[0] + 1 }})
+              (Page {{ getSelectedPageNumber(selectedFileParts[0]) }})
+            </span>
+            <span v-else-if="selectedFileParts.length > 1">
+              (Pages {{ getSelectedPageNumber(Math.min(...selectedFileParts)) }} - {{ getSelectedPageNumber(Math.max(...selectedFileParts)) }})
             </span>
             <span v-else>
-              (Multiple parts - task will cover entire file)
+              (Multiple pages - task will cover entire file)
             </span>
           </div>
         </div>
         <div v-else-if="selectedFileId && fileParts.length === 0" class="file-parts-section">
           <div style="color: #666; font-style: italic; text-align: center; padding: 1rem;">
-            No file parts found for this file. The file may not have been processed yet or may not contain translatable content.
+            No file pages found for this file. The file may not have been processed yet or may not contain translatable content.
           </div>
         </div>
       </div>
@@ -437,42 +475,22 @@
         </div>
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label for="assignedTo">Assign To</label>
-          <select
-            id="assignedTo"
-            v-model="formData.assignedToId"
-            class="form-control"
+      <div class="form-group">
+        <label for="assignedTo">Assign To</label>
+        <select
+          id="assignedTo"
+          v-model="formData.assignedToId"
+          class="form-control"
+        >
+          <option value="">Unassigned</option>
+          <option
+            v-for="member in projectMembers"
+            :key="member.id"
+            :value="member.id"
           >
-            <option value="">Unassigned</option>
-            <option
-              v-for="member in projectMembers"
-              :key="member.id"
-              :value="member.id"
-            >
-              {{ member.fullName || member.username }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="group">Group</label>
-          <select
-            id="group"
-            v-model="formData.groupId"
-            class="form-control"
-          >
-            <option value="">No Group</option>
-            <option
-              v-for="group in projectGroups"
-              :key="group.id"
-              :value="group.id"
-            >
-              {{ group.name }}
-            </option>
-          </select>
-        </div>
+            {{ member.fullName || member.username }}
+          </option>
+        </select>
       </div>
 
       <div class="form-group">
@@ -537,10 +555,6 @@ interface Props {
     username: string;
     fullName?: string;
   }>;
-  projectGroups?: Array<{
-    id: string;
-    name: string;
-  }>;
   projectFiles?: Array<{
     fileId: string;
     fileName: string;
@@ -566,10 +580,7 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  projectGroups: {
-    type: Array,
-    default: () => []
-  },
+
   projectFiles: {
     type: Array,
     default: () => []
@@ -625,13 +636,13 @@ const formData = ref<CreateTaskDto>({
   description: '',
   projectId: props.projectId,
   assignedToId: '',
-  groupId: '',
   dueDate: '',
   dueTime: '',
   dueDateTime: '',
   branchId: props.branchId,
   fileId: props.fileId,
-  filePart: props.filePart,
+  page: props.page,
+  pages: props.pages,
   language: ''
 });
 
@@ -644,13 +655,13 @@ const initializeFormWithEditData = () => {
       description: props.editTask.description || '',
       projectId: props.projectId,
       assignedToId: props.editTask.assignedToId || '',
-      groupId: props.editTask.groupId || '',
       dueDate: props.editTask.dueDate ? new Date(props.editTask.dueDate).toISOString().split('T')[0] : '',
       dueTime: props.editTask.dueDate ? new Date(props.editTask.dueDate).toTimeString().slice(0, 5) : '',
       dueDateTime: props.editTask.dueDate || '',
       branchId: props.branchId,
       fileId: props.editTask.fileId || props.fileId,
-      filePart: props.editTask.filePart !== undefined ? props.editTask.filePart : props.filePart,
+      page: props.editTask.page !== undefined ? props.editTask.page : props.page,
+      pages: props.editTask.pages || props.pages,
       language: props.editTask.language || ''
     };
 
@@ -686,6 +697,11 @@ const selectedFileId = ref('');
 const fileParts = ref<FilePart[]>([]);
 const selectedFileParts = ref<number[]>([]);
 
+// New reactive variables for page range selection
+const pageRangeFrom = ref<number | null>(null);
+const pageRangeTo = ref<number | null>(null);
+const pageRangeMode = ref<'single' | 'range'>('single');
+
 // Language options computed from project target languages
 const availableLanguages = computed(() => {
   if (!props.projectTargetLanguages || props.projectTargetLanguages.length === 0) {
@@ -695,6 +711,20 @@ const availableLanguages = computed(() => {
   return SUPPORTED_LANGUAGES.filter(lang =>
     props.projectTargetLanguages.includes(lang.code)
   );
+});
+
+// Computed property for available range end pages
+const availableRangeEndPages = computed(() => {
+  if (!pageRangeFrom.value) {
+    return fileParts.value;
+  }
+
+  const fromIndex = fileParts.value.findIndex(part => part.part === pageRangeFrom.value);
+  if (fromIndex === -1) {
+    return fileParts.value;
+  }
+
+  return fileParts.value.slice(fromIndex);
 });
 
 // Character count for description
@@ -713,13 +743,13 @@ watch(() => props.visible, (newVal: boolean) => {
       description: '',
       projectId: props.projectId,
       assignedToId: '',
-      groupId: '',
       dueDate: '',
       dueTime: '',
       dueDateTime: '',
       branchId: props.branchId,
       fileId: props.fileId,
-      filePart: props.filePart,
+      page: props.page,
+      pages: props.pages,
       language: ''
     };
 
@@ -729,6 +759,9 @@ watch(() => props.visible, (newVal: boolean) => {
     selectedLanguages.value = [];
     fileParts.value = [];
     selectedFileParts.value = [];
+    pageRangeFrom.value = null;
+    pageRangeTo.value = null;
+    pageRangeMode.value = 'single';
     error.value = '';
     dueDateTimeWarning.value = '';
 
@@ -865,6 +898,9 @@ async function onFileChange() {
     console.log('Missing fileId or branchId, clearing parts');
     fileParts.value = [];
     selectedFileParts.value = [];
+    pageRangeFrom.value = null;
+    pageRangeTo.value = null;
+    pageRangeMode.value = 'single';
     return;
   }
 
@@ -883,6 +919,9 @@ async function onFileChange() {
 
     console.log('File parts loaded:', fileParts.value);
     selectedFileParts.value = [];
+    pageRangeFrom.value = null;
+    pageRangeTo.value = null;
+    pageRangeMode.value = 'single';
   } catch (err) {
     console.error('Failed to load file parts:', err);
     fileParts.value = [];
@@ -894,12 +933,18 @@ function onFilePartChange() {
   // Update formData with selected file
   formData.value.fileId = selectedFileId.value;
 
-  // Nếu chỉ chọn 1 page, set filePart
+  // Nếu chỉ chọn 1 page, set page
   if (selectedFileParts.value.length === 1) {
-    formData.value.filePart = selectedFileParts.value[0];
+    formData.value.page = selectedFileParts.value[0];
+    formData.value.pages = undefined;
+  } else if (selectedFileParts.value.length > 1) {
+    // Nếu chọn nhiều pages, set pages array
+    formData.value.page = undefined;
+    formData.value.pages = selectedFileParts.value;
   } else {
-    // Nếu chọn nhiều pages, không set filePart (sẽ tạo task cho toàn bộ file)
-    formData.value.filePart = undefined;
+    // Không chọn page nào
+    formData.value.page = undefined;
+    formData.value.pages = undefined;
   }
 
   console.log('Selected file pages:', selectedFileParts.value);
@@ -908,7 +953,10 @@ function onFilePartChange() {
 
 // Select all file parts
 function selectAllParts() {
-  selectedFileParts.value = fileParts.value.map((part: FilePart) => part.part);
+  selectedFileParts.value = fileParts.value.map((part: FilePart) => {
+    // Use pageNumber if available, otherwise use part + 1
+    return part.pageNumber || (part.part + 1);
+  });
   onFilePartChange();
 }
 
@@ -922,6 +970,52 @@ function clearAllParts() {
 function getSelectedPageNumber(partIndex: number): number {
   const part = fileParts.value.find(p => p.part === partIndex);
   return part?.pageNumber || (partIndex + 1);
+}
+
+// Handle page range mode change
+function onPageRangeModeChange() {
+  // Clear current selections when mode changes
+  pageRangeFrom.value = null;
+  pageRangeTo.value = null;
+  selectedFileParts.value = [];
+  onFilePartChange();
+}
+
+// Handle single page selection
+function onSinglePageChange() {
+  if (pageRangeFrom.value !== null) {
+    // Find the part and get its page number
+    const part = fileParts.value.find(p => p.part === pageRangeFrom.value);
+    const pageNumber = part?.pageNumber || (pageRangeFrom.value + 1);
+    selectedFileParts.value = [pageNumber];
+  } else {
+    selectedFileParts.value = [];
+  }
+  onFilePartChange();
+}
+
+// Handle page range selection
+function onPageRangeChange() {
+  if (pageRangeFrom.value !== null && pageRangeTo.value !== null) {
+    const fromIndex = fileParts.value.findIndex(part => part.part === pageRangeFrom.value);
+    const toIndex = fileParts.value.findIndex(part => part.part === pageRangeTo.value);
+
+    if (fromIndex !== -1 && toIndex !== -1 && toIndex >= fromIndex) {
+      // Generate array of page numbers from fromIndex to toIndex
+      const selectedPages = [];
+      for (let i = fromIndex; i <= toIndex; i++) {
+        // Use pageNumber if available, otherwise use part + 1
+        const pageNumber = fileParts.value[i].pageNumber || (fileParts.value[i].part + 1);
+        selectedPages.push(pageNumber);
+      }
+      selectedFileParts.value = selectedPages;
+    } else {
+      selectedFileParts.value = [];
+    }
+  } else {
+    selectedFileParts.value = [];
+  }
+  onFilePartChange();
 }
 
 // Select first available file
@@ -1061,10 +1155,10 @@ async function onSubmit() {
         title: formData.value.title.trim(),
         description: formData.value.description?.trim() || undefined,
         assignedToId: formData.value.assignedToId || undefined,
-        groupId: formData.value.groupId || undefined,
         dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
         fileId: formData.value.fileId || undefined,
-        filePart: formData.value.filePart,
+        page: formData.value.page,
+        pages: formData.value.pages,
         language: formData.value.language
       };
 
@@ -1082,11 +1176,11 @@ async function onSubmit() {
           projectId: props.projectId,
           description: formData.value.description?.trim() || undefined,
           assignedToId: formData.value.assignedToId || undefined,
-          groupId: formData.value.groupId || undefined,
           dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
           branchId: props.branchId || undefined,
           fileId: formData.value.fileId || undefined,
-          filePart: formData.value.filePart,
+          page: formData.value.page,
+          pages: formData.value.pages,
           language: language
         };
 
@@ -1722,6 +1816,49 @@ input[type="datetime-local"]::-webkit-datetime-edit {
 
   .language-native {
     font-size: 12px;
+  }
+}
+
+/* Page Selection Styles */
+.page-selection-mode {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.radio-option input[type="radio"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.single-page-selection,
+.page-range-selection {
+  margin-bottom: 1rem;
+}
+
+.page-range-selection .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .page-range-selection .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .page-selection-mode {
+    flex-direction: column;
+    gap: 0.5rem;
   }
 }
 </style>

@@ -86,6 +86,16 @@ function handleClickOutside(event: MouseEvent) {
 onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside);
   window.addEventListener('scroll', () => { dropdownOpenId.value = null; }, true);
+
+  // Thêm event listener cho inline editing
+  document.addEventListener('mousedown', (event) => {
+    if (editingFileId.value) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.inline-edit-container')) {
+        confirmRename();
+      }
+    }
+  });
 });
 const lastUploadedFileId = ref<string | number | null>(null);
 let pollingTimer: any = null;
@@ -119,6 +129,8 @@ function startPollingFileStatus(fileId: string | number) {
 const renamingFile = ref<any>(null);
 const renameInput = ref('');
 const showRenameDialog = ref(false);
+const editingFileId = ref<string | number | null>(null);
+const editingFileName = ref('');
 const showDeleteDialog = ref(false);
 const fileToDelete = ref<any>(null);
 const showRevisionDialog = ref(false);
@@ -330,9 +342,8 @@ function handleAction(action: string, fileId: string | number) {
   if (action === 'download') {
     props.downloadFile(file);
   } else if (action === 'rename') {
-    renamingFile.value = file;
-    renameInput.value = file.fileName;
-    showRenameDialog.value = true;
+    editingFileId.value = file.id || file.fileId;
+    editingFileName.value = file.fileName;
   } else if (action === 'delete') {
     fileToDelete.value = { ...file };
     showDeleteDialog.value = true;
@@ -344,11 +355,51 @@ function handleAction(action: string, fileId: string | number) {
   }
   dropdownOpenId.value = null; // Close dropdown after action
 }
-function confirmRename() {
-  // Mock: chỉ log, chưa gọi backend
-  alert('Renamed to: ' + renameInput.value);
-  showRenameDialog.value = false;
+async function confirmRename() {
+  if (!editingFileId.value || !editingFileName.value.trim()) {
+    editingFileId.value = null;
+    editingFileName.value = '';
+    return;
+  }
+
+  try {
+    // Gọi API để rename file
+    await axiosInstance.patch(`/files/${editingFileId.value}`, {
+      fileName: editingFileName.value.trim()
+    });
+
+    // Reload files để cập nhật UI
+    props.loadFiles();
+
+    // Hiện thông báo thành công
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'File renamed successfully!',
+      life: 3000
+    });
+  } catch (e: any) {
+    let msg = 'Rename failed';
+    if (e?.response?.data?.message) {
+      msg = e.response.data.message;
+    } else if (e?.response?.data?.error) {
+      msg = e.response.data.error;
+    } else if (e?.message) {
+      msg = e.message;
+    }
+    toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 3000 });
+  } finally {
+    editingFileId.value = null;
+    editingFileName.value = '';
+  }
 }
+
+function cancelRename() {
+  editingFileId.value = null;
+  editingFileName.value = '';
+}
+
+
 async function confirmDelete() {
   const fileId = fileToDelete.value?.id || fileToDelete.value?.fileId;
   console.log('confirmDelete called', fileToDelete.value, 'id dùng để xóa:', fileId);
@@ -488,8 +539,8 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
         <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" />
       </div>
     </div>
-    <div class="file-format-note" style="background:#fffbe6;border:1.5px solid #ffe58f;color:#ad8b00;padding:12px 18px;border-radius:10px;margin:14px 0 18px 0;font-size:1.08em;display:flex;align-items:center;gap:0.7em;">
-      <i class="pi pi-exclamation-triangle" style="color:#faad14;font-size:1.3em;"></i>
+    <div class="file-format-note" style="background:#fffbe6;border:1.2px solid #ffe58f;color:#ad8b00;padding:11px 16px;border-radius:9px;margin:13px 0 16px 0;font-size:0.98em;display:flex;align-items:center;gap:0.65em;">
+      <i class="pi pi-exclamation-triangle" style="color:#faad14;font-size:1.2em;"></i>
       <span>
         <b>Note:</b><br>
         - For <b>DOCX</b> files: The exported translation will retain about <b>80–90%</b> of the original formatting and layout. Some complex layouts or advanced styles may not be fully preserved.<br>
@@ -512,7 +563,17 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       <tr v-for="file in filteredFiles" :key="file.id || file.fileId">
         <td class="file-name-cell">
           <i :class="getFileIcon(file.fileName)" style="color:#6366f1" />
-          <span class="file-base-name">{{ file.fileName }}</span>
+          <div v-if="editingFileId === (file.id || file.fileId)" class="inline-edit-container">
+            <InputText
+              v-model="editingFileName"
+              @keyup.enter="confirmRename"
+              @keyup.esc="cancelRename"
+              style="padding: 0.5rem; font-size: 1rem; border-radius: 6px;"
+              ref="editInput"
+              placeholder="Press Enter to save, Esc to cancel"
+            />
+          </div>
+          <span v-else class="file-base-name">{{ file.fileName }}</span>
           <span v-if="file.status === 'processing'" class="file-status processing">
             <i class="pi pi-spin pi-spinner" style="font-size:1em;margin-left:8px;"></i> Processing...
           </span>
@@ -552,16 +613,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       </tr>
       </tbody>
     </table>
-    <!-- Rename/Delete Dialog giữ nguyên -->
-    <Dialog v-model:visible="showRenameDialog" header="Rename File" :modal="true" :closable="true">
-      <div>
-        <InputText v-model="renameInput" style="width:100%" />
-      </div>
-      <template #footer>
-        <Button label="Cancel" class="p-button-text" @click="showRenameDialog = false" />
-        <Button label="Rename" class="p-button-primary" @click="confirmRename" />
-      </template>
-    </Dialog>
+
     <!-- Modal xác nhận xóa file đẹp -->
     <teleport to="body">
       <div v-if="showDeleteDialog" class="delete-dialog-modal">
@@ -570,7 +622,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
           <div class="modal-header">
             <h3>Delete File</h3>
             <button class="close-btn" @click="closeDeleteDialog">
-              <i class="pi pi-times"></i>
+              <span style="font-size: 1.5rem; color: #6b7280; font-weight: bold;">×</span>
             </button>
           </div>
           <div class="modal-body">
@@ -599,10 +651,10 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 <style scoped>
 .project-section.files-section {
   background: #fff;
-  border-radius: 20px;
-  box-shadow: 0 10px 32px rgba(49,130,206,0.10), 0 2px 8px rgba(76,34,128,0.08);
-  padding: 2.2rem 2.2rem 1.5rem 2.2rem;
-  margin-bottom: 2.2rem;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(49,130,206,0.08), 0 2px 6px rgba(76,34,128,0.06);
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  margin-bottom: 1.5rem;
   position: relative;
 }
 .toolbar {
@@ -622,7 +674,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   gap: 1.2em;
 }
 .search-input {
-  min-width: 220px;
+  min-width: 180px;
 }
 .custom-treetable ::v-deep .p-treetable {
   border-radius: 12px;
@@ -664,8 +716,8 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   border-spacing: 0;
 }
 .file-table th, .file-table td {
-  padding: 0.7em 1em;
-  font-size: 1em;
+  padding: 0.5em 0.8em;
+  font-size: 0.9em;
   border-bottom: 1px solid #e5e7eb;
   text-align: left;
 }
@@ -673,7 +725,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   background: #f3f4f6;
   font-weight: 600;
   color: #374151;
-  font-size: 1.05em;
+  font-size: 0.95em;
 }
 .file-table tbody tr:hover {
   background: #f3f4f6;
@@ -681,14 +733,15 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 .file-name-cell {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .file-base-name {
   font-weight: 500;
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+  font-size: 0.9em;
+  word-wrap: break-word;
 }
 .version-select {
   margin-left: 10px;
@@ -758,13 +811,13 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   text-align: center;
 }
 .custom-search-input {
-  border-radius: 8px !important;
-  border: 1.5px solid #e5e7eb !important;
-  padding: 10px 16px !important;
-  font-size: 1.04em;
+  border-radius: 6px !important;
+  border: 1px solid #e5e7eb !important;
+  padding: 8px 12px !important;
+  font-size: 0.95em;
   transition: box-shadow 0.18s, border-color 0.18s;
   background: #fff;
-  min-width: 220px;
+  min-width: 180px;
 }
 .custom-search-input:focus {
   outline: none;
@@ -789,15 +842,15 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 }
 .add-file-btn {
   font-weight: 600;
-  font-size: 1.08em;
-  padding: 0.7em 1.6em;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px #22c55e22;
+  font-size: 0.95em;
+  padding: 0.6em 1.2em;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px #22c55e22;
   transition: background 0.15s, box-shadow 0.15s, color 0.15s;
 }
 ::v-deep .add-file-btn .p-button-icon {
-  margin-right: 1.1em !important;
-  font-size: 1.25em !important;
+  margin-right: 0.8em !important;
+  font-size: 1.1em !important;
 }
 .add-file-btn:hover:not(:disabled) {
   background: #22c55e !important;
@@ -938,15 +991,15 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 .custom-dropdown-menu {
   position: absolute;
   right: 0;
-  top: 36px;
-  min-width: 170px;
+  top: 32px;
+  min-width: 150px;
   background: rgba(255,255,255,0.98);
-  box-shadow: 0 12px 32px 0 rgba(49,130,206,0.16), 0 2px 8px rgba(76,34,128,0.10);
-  border-radius: 12px;
+  box-shadow: 0 8px 24px 0 rgba(49,130,206,0.12), 0 2px 6px rgba(76,34,128,0.08);
+  border-radius: 8px;
   padding: 0;
   z-index: 10;
   animation: fadeScaleIn 0.18s;
-  border: 1.5px solid #f1f5f9;
+  border: 1px solid #f1f5f9;
   overflow: hidden; /* Đảm bảo các item không bị tràn ra ngoài */
   display: flex;
   flex-direction: column;
@@ -954,12 +1007,12 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 1.3rem;
+  gap: 0.7rem;
+  padding: 0.7rem 1rem;
   border: none !important;      /* Xóa border mặc định */
   border-radius: 0 !important;  /* Không bo góc từng item */
   background: transparent !important; /* Không background riêng */
-  font-size: 1.09em;
+  font-size: 0.95em;
   font-weight: 500;
   color: #374151;
   cursor: pointer;
@@ -971,12 +1024,12 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   text-align: left;
 }
 .dropdown-item:first-child {
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 .dropdown-item:last-child {
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 .dropdown-item:focus {
   outline: none;
@@ -987,7 +1040,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   color: #3730a3;
 }
 .dropdown-item i {
-  font-size: 1.18em;
+  font-size: 1.05em;
   color: #64748b;
   transition: color 0.16s;
 }
@@ -1037,6 +1090,18 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+/* Inline edit styles */
+.inline-edit-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 0.25rem;
 }
 </style>
 

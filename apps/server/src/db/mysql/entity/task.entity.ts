@@ -33,7 +33,10 @@ export class TaskEntity {
   fileId?: string;
 
   @Column({ type: 'int', nullable: true })
-  filePart?: number;
+  page?: number;
+
+  @Column({ type: 'json', nullable: true })
+  pages?: number[];
 
   @Column({ type: 'varchar', length: 10, nullable: true })
   language?: string;

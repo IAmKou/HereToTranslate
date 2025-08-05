@@ -11,6 +11,7 @@ import {
   UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
   BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
+import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
 import { RequestRegistrationEntity } from '#LocalProject/Entities';
 
 import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
@@ -89,6 +90,7 @@ import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
       CommitEntity,
       FileEntity,
       TaskEntity,
+      TaskHistoryEntity,
       NotificationEntity,
       ProjectInvitationEntity,
       RequestRegistrationEntity,

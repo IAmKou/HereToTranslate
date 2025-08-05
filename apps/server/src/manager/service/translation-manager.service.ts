@@ -299,12 +299,13 @@ export class TranslationService {
     branchId: string,
     language: string,
     fileId?: string,
-    filePart?: number
+    page?: number,
+    fileType?: string
   ) {
     // Lấy tất cả strings gốc (không phân biệt language) làm base
     const baseQuery: any = { projectId, branchId };
     if (fileId) baseQuery.fileId = fileId;
-    if (filePart !== undefined) baseQuery.filePart = filePart;
+    if (page !== undefined) baseQuery.filePart = page; // filePart trong DB vẫn là page number
 
     const baseStrings = await this.translationModel
       .find(baseQuery)
@@ -314,7 +315,7 @@ export class TranslationService {
     // Lấy bản dịch của ngôn ngữ được chọn
     const translationQuery: any = { projectId, branchId, language };
     if (fileId) translationQuery.fileId = fileId;
-    if (filePart !== undefined) translationQuery.filePart = filePart;
+    if (page !== undefined) translationQuery.filePart = page; // filePart trong DB vẫn là page number
 
     const translatedStrings = await this.translationModel
       .find(translationQuery)
@@ -336,15 +337,25 @@ export class TranslationService {
       };
     });
 
-    // Lấy tên file
+    // Lấy tên file và thông tin file type
     const fileIds = Array.from(new Set(mergedStrings.map((str) => str.fileId)));
     const fileNamesMap: Record<string, string> = {};
+    const fileTypesMap: Record<string, string> = {};
+
     if (fileIds.length > 0) {
       const files = await this.fileRepository.find({
         where: { id: In(fileIds.map((id) => BigInt(id))) },
       });
       files.forEach((f) => {
         fileNamesMap[String(f.id)] = f.fileName;
+        fileTypesMap[String(f.id)] = f.fileType;
+      });
+    }
+
+    // Nếu có fileType được cung cấp, sử dụng nó thay vì lấy từ database
+    if (fileType && fileIds.length > 0) {
+      fileIds.forEach(fileId => {
+        fileTypesMap[fileId] = fileType;
       });
     }
 
@@ -355,6 +366,7 @@ export class TranslationService {
       fileId: str.fileId,
       filePart: str.filePart ?? 0,
       fileName: fileNamesMap[str.fileId] || '',
+      fileType: fileTypesMap[str.fileId] || '',
     }));
   }
 

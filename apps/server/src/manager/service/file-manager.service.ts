@@ -9,6 +9,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
 import { CommitEntity } from '../../db/mysql/entity/commit.entity';
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+import { renderAsync } from 'docx-preview';
 
 @Injectable()
 export class FileService {
@@ -509,6 +512,217 @@ export class FileService {
     };
   }
 
+  async renameFile(fileId: bigint, newFileName: string, userId: bigint) {
+    this.logger.log(`Renaming file ${fileId} to ${newFileName} by user ${userId}`);
 
+    const file = await this.fileRepository.findOne({
+      where: { id: fileId },
+      relations: ['project', 'branch'],
+    });
 
+    if (!file) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    // Check if user has permission to rename this file
+    const hasPermission = await this.checkUserAttachFilesPermission(userId, file.project?.id || 0);
+    if (!hasPermission) {
+      throw new Error('You do not have permission to rename this file');
+    }
+
+    // Update file name
+    file.fileName = newFileName;
+    file.updatedAt = new Date();
+
+    const updatedFile = await this.fileRepository.save(file);
+
+    this.logger.log(`File ${fileId} renamed to ${newFileName}`);
+
+    return {
+      fileId: updatedFile.id.toString(),
+      fileName: updatedFile.fileName,
+      fileType: updatedFile.fileType,
+      createdAt: updatedFile.createdAt,
+      updatedAt: updatedFile.updatedAt,
+      uploaderId: updatedFile.uploader?.id?.toString(),
+      projectId: updatedFile.project?.id?.toString(),
+      branchId: updatedFile.branch?.id?.toString(),
+      requestId: updatedFile.request?.id?.toString(),
+    };
+  }
+
+  async getFilePreview(fileId: string): Promise<{ fileType: string; content?: string; url?: string; previewType?: string; textSegments?: any[] }> {
+    this.logger.log(`Getting file preview for fileId: ${fileId}`);
+    const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
+    if (!fileEntity) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    // For PDF files, extract text segments with coordinates
+    if (fileEntity.fileType === 'application/pdf') {
+      try {
+        const textSegments = await this.extractPdfTextSegments(fileEntity.fileContent);
+        return {
+          fileType: fileEntity.fileType,
+          content: fileEntity.fileContent.toString('base64'),
+          previewType: 'pdf',
+          textSegments: textSegments
+        };
+      } catch (error) {
+        this.logger.error(`Error extracting PDF text segments: ${error.message}`);
+        return {
+          fileType: fileEntity.fileType,
+          content: fileEntity.fileContent.toString('base64'),
+          previewType: 'pdf'
+        };
+      }
+    }
+
+    switch (fileEntity.fileType) {
+      case 'text/plain': case 'application/json': case 'text/html': case 'text/css': case 'application/javascript': case 'text/xml': {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
+      }
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+        try {
+          // Use docx-preview to render DOCX with perfect formatting
+          return {
+            fileType: fileEntity.fileType,
+            content: fileEntity.fileContent.toString('base64'),
+            previewType: 'docx-preview'
+          };
+        } catch (error) {
+          this.logger.error(`Error processing DOCX with docx-preview: ${error.message}`);
+          return {
+            fileType: fileEntity.fileType,
+            content: fileEntity.fileContent.toString('base64'),
+            previewType: 'docx-preview'
+          };
+        }
+      }
+      case 'application/vnd.ms-excel':
+      case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+      case 'application/vnd.ms-powerpoint':
+      case 'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'office-viewer' };
+      }
+      case 'image/jpeg': case 'image/png': case 'image/gif': case 'image/webp': {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'image' };
+      }
+      default: {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
+      }
+    }
+  }
+
+  private async extractPdfTextSegments(pdfBuffer: Buffer): Promise<any[]> {
+    try {
+      this.logger.log('Starting PDF text extraction...');
+      this.logger.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
+
+      // Set up PDF.js worker for Node.js environment
+      pdfjsLib.GlobalWorkerOptions.workerSrc = false; // Disable worker for Node.js
+      this.logger.log('PDF.js worker disabled for Node.js environment');
+
+      // Load PDF document
+      this.logger.log('Loading PDF document...');
+      // Convert Buffer to Uint8Array for PDF.js
+      const uint8Array = new Uint8Array(pdfBuffer);
+      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+      const pdf = await loadingTask.promise;
+      this.logger.log(`PDF loaded successfully, pages: ${pdf.numPages}`);
+
+      const textSegments = [];
+      let segmentId = 1;
+
+      // Process each page
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        this.logger.log(`Processing page ${pageNum}...`);
+        const page = await pdf.getPage(pageNum);
+
+        // Use scale that matches iframe display (typically 1.0 for iframe)
+        const viewport = page.getViewport({ scale: 1.0 });
+        this.logger.log(`Page ${pageNum} viewport: ${viewport.width} x ${viewport.height}`);
+
+        // Extract text content with positions
+        const textContent = await page.getTextContent();
+        this.logger.log(`Page ${pageNum} has ${textContent.items.length} text items`);
+
+        // Process each text item individually for precise highlighting
+        textContent.items.forEach((item: any, index: number) => {
+          const text = item.str.trim();
+          if (text && text.length > 0) {
+            // Calculate coordinates for iframe display
+            const x = item.transform[4];
+            const y = viewport.height - item.transform[5]; // Flip Y for iframe
+            const width = item.width;
+            const height = item.height;
+
+            const segment = {
+              id: `segment_${segmentId}`,
+              text: text,
+              coordinates: [{
+                x: x,
+                y: y,
+                width: width,
+                height: height
+              }],
+              page: pageNum
+            };
+
+            textSegments.push(segment);
+            this.logger.log(`Created segment ${segmentId}: "${text.substring(0, 30)}..." at (${x}, ${y})`);
+            segmentId++;
+          }
+        });
+      }
+
+      this.logger.log(`Extracted ${textSegments.length} text segments from PDF`);
+      return textSegments;
+
+    } catch (error) {
+      this.logger.error(`Error extracting PDF text segments: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      throw error;
+    }
+  }
+
+  async highlightTextInPdf(fileId: string, searchText: string): Promise<{ highlights: any[] }> {
+    try {
+      this.logger.log(`Highlighting text in PDF: "${searchText}"`);
+
+      const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
+      if (!fileEntity) {
+        throw new NotFoundException(`File with ID ${fileId} not found`);
+      }
+
+      if (fileEntity.fileType !== 'application/pdf') {
+        throw new Error('File is not a PDF');
+      }
+
+      // Extract text segments
+      const textSegments = await this.extractPdfTextSegments(fileEntity.fileContent);
+
+      // Find matching segments
+      const matchingSegments = textSegments.filter(segment => {
+        const segmentText = segment.text.toLowerCase();
+        const searchTextLower = searchText.toLowerCase();
+        return segmentText.includes(searchTextLower) || searchTextLower.includes(segmentText);
+      });
+
+      this.logger.log(`Found ${matchingSegments.length} matching segments for "${searchText}"`);
+
+      return {
+        highlights: matchingSegments.map(segment => ({
+          id: segment.id,
+          text: segment.text,
+          coordinates: segment.coordinates,
+          page: segment.page
+        }))
+      };
+
+    } catch (error) {
+      this.logger.error(`Error highlighting text in PDF: ${error.message}`);
+      throw error;
+    }
+  }
 }

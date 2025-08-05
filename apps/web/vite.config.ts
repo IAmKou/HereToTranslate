@@ -5,13 +5,14 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, '../../.env'), '');
 
-  // Flexible environment configuration
-  const LOCALHOST_SERVER = process.env.API_URL || 'http://localhost:3000';
-  const RADV_PN_SERVER = process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com';
+  // Smart environment detection
+  const isProduction = mode === 'production';
 
-  // Smart detection: Use localhost by default, RadVPN when specified
-  const API_SERVER_URL = env.VITE_API_URL?.replace('/api', '') || LOCALHOST_SERVER;
-  const CHAT_SERVER_URL = env.VITE_SERVER_URL || RADV_PN_SERVER;
+  // Use environment variables if set, otherwise smart defaults
+  const API_SERVER_URL = env.VITE_API_URL?.replace('/api', '') ||
+    (isProduction ? 'https://htt-ekpa.onrender.com' : 'http://localhost:3000');
+  const CHAT_SERVER_URL = env.VITE_SERVER_URL ||
+    (isProduction ? 'https://htt-ekpa.onrender.com' : 'http://localhost:3000');
 
   return {
     root: __dirname,
@@ -25,13 +26,13 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: API_SERVER_URL,// ✅ localhost for API calls
+          target: API_SERVER_URL,
           changeOrigin: true,
           secure: false,
           ws: true,
         },
         '/socket.io': {
-          target: CHAT_SERVER_URL,// ✅ remote server for chat
+          target: CHAT_SERVER_URL,
           ws: true,
           changeOrigin: true,
         },

@@ -11,7 +11,6 @@ export interface EnvironmentConfig {
 
 export function getEnvironmentConfig(): EnvironmentConfig {
   const hostname = location.hostname;
-  const protocol = location.protocol;
 
   // Automatic detection based on current URL - NO manual config needed!
   const isRadVPN = hostname.startsWith('26.82.216.');

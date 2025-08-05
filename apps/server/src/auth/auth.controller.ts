@@ -39,6 +39,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       expires: this.authService.getExpiryDate(
         this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
       ),
@@ -49,6 +50,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       expires: this.authService.getExpiryDate(
         this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
       ),
@@ -70,6 +72,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       maxAge: 1000 * 60 * 15, // 15 mins
     });
 
@@ -77,6 +80,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       maxAge: 1000 * 60 * 60 * 24 * 7,
     });
     logger.log(user);
@@ -102,6 +106,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       expires: this.authService.getExpiryDate(
         this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
       ),
@@ -112,6 +117,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       expires: this.authService.getExpiryDate(
         this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
       ),
@@ -150,18 +156,22 @@ export class AuthController {
 
     // Clear both old and new cookie names for backward compatibility
     res.clearCookie('access_token', {
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
     res.clearCookie('refresh_token', {
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
     res.clearCookie('accessToken', {
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
     res.clearCookie('refreshToken', {
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
@@ -202,17 +212,5 @@ export class AuthController {
     }
 
     return await this.authService.validateToken(token);
-  }
-
-  @IsPublicEndpoint()
-  @Post('clear-cookies')
-  async clearAllCookies(@Res() res: Response) {
-    // Clear all possible cookie variations
-    res.clearCookie('access_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
-    res.clearCookie('refresh_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
-    res.clearCookie('accessToken', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
-    res.clearCookie('refreshToken', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
-
-    return res.json({ message: 'All cookies cleared' });
   }
 }

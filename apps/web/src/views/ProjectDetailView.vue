@@ -276,6 +276,12 @@
                 >
                   Tasks
                 </button>
+                <button
+                  :class="['tab', { active: activeTab === 'activity' }]"
+                  @click="activeTab = 'activity'"
+                >
+                  Activity
+                </button>
               </div>
               <!-- Bỏ transition, render trực tiếp tab con -->
               <ProjectMemberTab
@@ -357,6 +363,15 @@
                 :project="project"
                 custom-title="Tasks"
                 key="task"
+              />
+              <ProjectActivityTab
+                v-else-if="activeTab === 'activity'"
+                :project-id="Number(project.id)"
+                :branch-id="selectedBranchId ? Number(selectedBranchId) : undefined"
+                :project="project"
+                :members="members"
+                :current-user="currentUser"
+                key="activity"
               />
               <div v-else-if="activeTab === 'description'" key="description">
                 <!-- Project Description Section giữ nguyên như cũ -->
@@ -690,6 +705,7 @@ import ProjectCommitTab from '../components/ProjectCommitTab.vue';
 import ProjectTaskTab from '../components/ProjectTaskTab.vue';
 import ProjectFileTab from '../components/ProjectFileTab.vue';
 import ProjectRoleTab from '../components/ProjectRoleTab.vue';
+import ProjectActivityTab from '../components/ProjectActivityTab.vue';
 import type { Ref } from 'vue';
 import { useAuthStore } from '../store/auth';
 const authStore = useAuthStore();

@@ -31,6 +31,7 @@ import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
+import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class ProjectManagerService extends CommonHttpServiceImpl {
@@ -51,7 +52,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly commitRepository: Repository<CommitEntity>,
     private readonly dataSource: DataSource,
     private readonly githubService: GitHubService,
-    private readonly notificationService: NotificationManagerService
+    private readonly notificationService: NotificationManagerService,
+    private readonly activityManagerService: ActivityManagerService
   ) {
     super();
   }
@@ -472,6 +474,17 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       this.logger.debug(
         `Project updated successfully with ID: ${updatedProject.id}`
       );
+
+      // Log activity
+      try {
+        await this.activityManagerService.logProjectUpdate(
+          Number(projectId),
+          Number(uid),
+          updateData.name || updatedProject.name
+        );
+      } catch (error) {
+        this.logger.error('Failed to log project update activity:', error);
+      }
 
       // Get project members to notify them about the update
       const projectMembers = await this.projectRoleRepository
@@ -1076,7 +1089,20 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
 
     savedBranch.name = displayName;
-    return this.branchRepository.save(savedBranch);
+    const finalBranch = await this.branchRepository.save(savedBranch);
+
+    // Log activity
+    try {
+      await this.activityManagerService.logBranchCreate(
+        Number(projectId),
+        Number(userId),
+        displayName
+      );
+    } catch (error) {
+      this.logger.error('Failed to log branch create activity:', error);
+    }
+
+    return finalBranch;
   }
 
   async renameBranchName(
@@ -1144,7 +1170,21 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       status: CommitStatus.Pending,
     });
 
-    return this.commitRepository.save(commit);
+    const savedCommit = await this.commitRepository.save(commit);
+
+    // Log activity
+    try {
+      await this.activityManagerService.logCommitCreate(
+        Number(projectId),
+        Number(userId),
+        message,
+        Number(branchId)
+      );
+    } catch (error) {
+      this.logger.error('Failed to log commit create activity:', error);
+    }
+
+    return savedCommit;
   }
 
   async reviewCommit(

@@ -1,5 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
 import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
@@ -12,6 +12,7 @@ import { CommitEntity } from '../../db/mysql/entity/commit.entity';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 import { renderAsync } from 'docx-preview';
+import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class FileService {
@@ -26,6 +27,8 @@ export class FileService {
     private readonly manifestService : ManifestService,
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
+    @Inject(forwardRef(() => ActivityManagerService))
+    private readonly activityManagerService: ActivityManagerService,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
@@ -74,6 +77,28 @@ export class FileService {
     const safeFileName = fileName.replace(/[\\/:*?"<>|]/g, '_');
     const timestamped = `${Date.now()}_${safeFileName}`;
     const repoName = `project-${projectId}`;
+
+    // Log activity if this is a project file
+    if (projectId) {
+      try {
+        // Count strings if it's a text-based file
+        let stringCount = 0;
+        if (fileType.includes('text') || fileType.includes('document') || fileType.includes('pdf')) {
+          // This is a simplified count - in a real implementation you'd extract actual strings
+          stringCount = Math.floor(fileContent.length / 100); // Rough estimate
+        }
+
+        await this.activityManagerService.logFileUpload(
+          Number(projectId),
+          Number(uid),
+          fileName,
+          stringCount,
+          branchId ? Number(branchId) : undefined
+        );
+      } catch (error) {
+        this.logger.error('Failed to log file upload activity:', error);
+      }
+    }
 
     try {
       await this.githubService.pushInitialFile({
@@ -167,6 +192,28 @@ export class FileService {
         branchId: savedFile.branch?.id?.toString(),
         requestId: savedFile.request?.id?.toString(),
       };
+    }
+
+    // Log activity if this is a project file
+    if (projectId) {
+      try {
+        // Count strings if it's a text-based file
+        let stringCount = 0;
+        if (file.mimetype.includes('text') || file.mimetype.includes('document') || file.mimetype.includes('pdf')) {
+          // This is a simplified count - in a real implementation you'd extract actual strings
+          stringCount = Math.floor(file.buffer.length / 100); // Rough estimate
+        }
+
+        await this.activityManagerService.logFileUpload(
+          Number(projectId),
+          Number(uid),
+          fileName,
+          stringCount,
+          branchId ? Number(branchId) : undefined
+        );
+      } catch (error) {
+        this.logger.error('Failed to log file upload activity:', error);
+      }
     }
 
     // Chạy extract string ở background, trả về ngay cho client
@@ -343,6 +390,21 @@ export class FileService {
 
     await this.fileRepository.delete(String(file.id));
     this.logger.log(`File deleted successfully: ${file.fileName}`);
+
+    // Log activity if this is a project file
+    if (file.project?.id) {
+      try {
+        await this.activityManagerService.logFileDelete(
+          Number(file.project.id),
+          Number(userId),
+          file.fileName,
+          file.branch?.id ? Number(file.branch.id) : undefined
+        );
+      } catch (error) {
+        this.logger.error('Failed to log file delete activity:', error);
+      }
+    }
+
     return { success: true, message: 'File deleted' };
   }
 

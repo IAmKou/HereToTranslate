@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -16,6 +18,7 @@ import { PermissionFlags } from '@here-to-translate/common';
 import { TranslationService } from './translation-manager.service';
 import { TaskGateway } from '../../util/gateway/task.gateway';
 import { UpdateTaskDto } from '../../dto/task.dto';
+import { ActivityManagerService } from './activity-manager.service';
 
 // Interface for translation string
 interface TranslationString {
@@ -48,7 +51,9 @@ export class TaskManagerService {
     private readonly projectGroupRepository: Repository<ProjectGroupEntity>,
     private readonly projectService: ProjectManagerService,
     private readonly translationService: TranslationService,
-    private readonly taskGateway: TaskGateway
+    private readonly taskGateway: TaskGateway,
+    @Inject(forwardRef(() => ActivityManagerService))
+    private readonly activityManagerService: ActivityManagerService
   ) {}
 
   async createTask(params: {
@@ -143,6 +148,19 @@ export class TaskManagerService {
     });
 
     this.taskGateway.emitTaskUpdate(task);
+
+    // Log activity
+    try {
+      await this.activityManagerService.logTaskCreate(
+        Number(projectId),
+        Number(createdById),
+        title,
+        branchId ? Number(branchId) : undefined
+      );
+    } catch (error) {
+      console.error('Failed to log task creation activity:', error);
+    }
+
     return task;
   }
 

@@ -71,7 +71,7 @@ class AuthService {
       async (error) => {
         if (error.response?.status === 401) {
           console.log('🚨 Token expired or invalid, attempting refresh');
-          
+
           // Try to refresh the token
           try {
             await this.refreshTokens();
@@ -123,7 +123,7 @@ class AuthService {
       );
 
       console.log('📥 Login response:', response.data);
-      
+
       if (response.data && response.data.user) {
         this.user = response.data.user as User;
         this.authState.value = response.data.user as User;
@@ -214,45 +214,44 @@ class AuthService {
     const refreshToken = localStorage.getItem('refresh_token');
     if (!refreshToken) {
       this.clearAuthData();
-      throw new Error('No refresh token available');
+      throw new Error('No refresh token found');
     }
-    
     try {
       const response = await axios.post(
         `${getBaseUrl()}/auth/refresh`,
         {},
         {
           headers: {
-            Authorization: `Bearer ${refreshToken}`,
+            'Authorization': `Bearer ${refreshToken}`,
             'Content-Type': 'application/json',
           },
         }
       );
-      
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
-
       if (response.data.token) {
         this.token = response.data.token;
-        if (this.token) {
-          localStorage.setItem('access_token', this.token);
-          this.setAuthHeader(this.token);
-          console.log('✅ Access token refreshed and stored in localStorage');
-        }
+        localStorage.setItem('access_token', this.token);
+        this.setAuthHeader(this.token);
       }
-
-      if (response.data.refreshToken) {
-        localStorage.setItem('refresh_token', response.data.refreshToken);
-        console.log('✅ Refresh token updated in localStorage');
-      }
-
       return response.data;
-    } catch (error) {
-      console.error('❌ Token refresh failed:', error);
+    } catch (error: any) {
       this.clearAuthData();
+      localStorage.removeItem('refresh_token');
       throw error;
     }
   }
+
+  clearAuthData(): void {
+    this.user = null;
+    this.authState.value = null;
+    this.token = null;
+    this.clearAuthHeader();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token'); 
+    console.log('🔍 AuthService - All auth data cleared');
+  }
+
 
   async logout(): Promise<void> {
     try {

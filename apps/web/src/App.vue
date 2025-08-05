@@ -6,6 +6,9 @@
     <!-- AI Chat Bubble - Only show when user is logged in -->
     <AiChatBubble v-if="isLoggedIn" />
 
+    <!-- Environment Test Component -->
+    <EnvironmentTest />
+
     <!-- Project Invitation Popup - Disabled to avoid duplicate notifications -->
     <!-- <ProjectInvitationPopup
       v-if="showInvitationPopup"
@@ -25,6 +28,7 @@ import { authService } from './services/auth.service';
 import { projectInvitationService, type ProjectInvitation } from './services/project-invitation.service';
 import ProjectInvitationPopup from './components/ProjectInvitationPopup.vue';
 import AiChatBubble from './components/AiChatBubble.vue';
+import EnvironmentTest from './components/EnvironmentTest.vue';
 
 const router = useRouter();
 const showInvitationPopup = ref(false);

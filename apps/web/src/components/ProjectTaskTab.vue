@@ -1847,7 +1847,6 @@ function formatSelectedPages(pages: number[]): string {
 }
 
 </script>
-
 <template>
   <div class="kanban-tab-wrapper">
     <!-- Task Detail View -->
@@ -4017,7 +4016,6 @@ function formatSelectedPages(pages: number[]): string {
     </div>
   </Teleport>
 </template>
-
 <style scoped>
 .kanban-tab-wrapper {
   padding: 0 0 1.2em 0;

@@ -314,13 +314,22 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
+      // Optionally call the backend just for "audit"
       await axios.post(`${getBaseUrl()}/auth/logout`, {});
     } catch (error) {
-      console.error('Logout API call failed:', error);
+      console.log(error);
+      // Ignore errors (optional)
     } finally {
-      this.clearAuthData();
+      this.user = null;
+      this.authState.value = null;
+      this.token = null;
+      this.clearAuthHeader();
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      console.log('🔍 AuthService - All auth data cleared from localStorage');
     }
   }
+
 
   async getCurrentUser(): Promise<User | null> {
     try {

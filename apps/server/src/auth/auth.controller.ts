@@ -75,13 +75,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logout(@Req() req: Request) {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      await this.authService.logout(token);
-    }
-
+  async logout() {
     return { message: 'Logged out successfully' };
   }
 

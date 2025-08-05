@@ -209,7 +209,7 @@ export class AuthService {
     return this.generateTokenPair(user);
   }
 
-  async logout(token: string, allSessions = false) {
+  async logout() {
     this.logger.log('User logged out');
     return { message: 'Logged out successfully' };
   }

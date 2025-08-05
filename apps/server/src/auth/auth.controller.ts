@@ -39,7 +39,6 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       expires: this.authService.getExpiryDate(
         this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
       ),
@@ -50,7 +49,6 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       expires: this.authService.getExpiryDate(
         this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
       ),
@@ -72,7 +70,6 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       maxAge: 1000 * 60 * 15, // 15 mins
     });
 
@@ -80,7 +77,6 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
       maxAge: 1000 * 60 * 60 * 24 * 7,
     });
     logger.log(user);
@@ -92,38 +88,46 @@ export class AuthController {
   async refreshTokens(@Req() req: Request, @Res() res: Response) {
     const refreshToken = req.cookies?.refresh_token;
     if (!refreshToken) {
+      // Clear any invalid cookies and return 401
+      res.clearCookie('access_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+      res.clearCookie('refresh_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
       return res.status(401).json({ message: 'Refresh token not found' });
     }
 
-    const {
-      accessToken,
-      refreshToken: newRefreshToken,
-      user,
-    } = await this.authService.refreshTokens(refreshToken);
+    try {
+      const {
+        accessToken,
+        refreshToken: newRefreshToken,
+        user,
+      } = await this.authService.refreshTokens(refreshToken);
 
-    // Set new access token cookie
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
-      expires: this.authService.getExpiryDate(
-        this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
-      ),
-    });
+      // Set new access token cookie
+      res.cookie('access_token', accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+        expires: this.authService.getExpiryDate(
+          this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
+        ),
+      });
 
-    // Set new refresh token cookie
-    res.cookie('refresh_token', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing across onrender.com subdomains
-      expires: this.authService.getExpiryDate(
-        this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
-      ),
-    });
+      // Set new refresh token cookie
+      res.cookie('refresh_token', newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'none', // Allow cross-domain cookies for dual-domain setup
+        expires: this.authService.getExpiryDate(
+          this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
+        ),
+      });
 
-    return res.json({ user });
+      return res.json({ user });
+    } catch (error) {
+      // Clear invalid cookies on any error
+      res.clearCookie('access_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+      res.clearCookie('refresh_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+      return res.status(401).json({ message: 'Invalid refresh token' });
+    }
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -156,22 +160,18 @@ export class AuthController {
 
     // Clear both old and new cookie names for backward compatibility
     res.clearCookie('access_token', {
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
     res.clearCookie('refresh_token', {
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
     res.clearCookie('accessToken', {
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
     res.clearCookie('refreshToken', {
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'none'
     });
@@ -212,5 +212,17 @@ export class AuthController {
     }
 
     return await this.authService.validateToken(token);
+  }
+
+  @IsPublicEndpoint()
+  @Post('clear-cookies')
+  async clearAllCookies(@Res() res: Response) {
+    // Clear all possible cookie variations
+    res.clearCookie('access_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+    res.clearCookie('refresh_token', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+    res.clearCookie('accessToken', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+    res.clearCookie('refreshToken', { secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+
+    return res.json({ message: 'All cookies cleared' });
   }
 }

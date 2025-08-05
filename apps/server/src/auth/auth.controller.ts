@@ -27,18 +27,14 @@ export class AuthController {
   async login(@Body() body: LoginDto) {
     const result = await this.authService.login(body.username, body.password);
 
-    console.log('Login successful');
-    console.log('NODE_ENV:', process.env.NODE_ENV);
-    console.log('Access token length:', result.accessToken.length);
-
-    const response = {
+    return {
       user: result.user,
       token: result.accessToken,
+      refreshToken: result.refreshToken,
       message: 'Login successful',
     };
-    console.log('Response being sent:', JSON.stringify(response, null, 2));
-    return response;
   }
+
 
   @IsPublicEndpoint()
   @Post('google')
@@ -60,10 +56,11 @@ export class AuthController {
     }
 
     const token = authHeader.substring(7);
-    const { accessToken, user } = await this.authService.refreshTokens(token);
+    const { accessToken, refreshToken, user } = await this.authService.refreshTokens(token);
 
-    return { user, token: accessToken };
+    return { user, token: accessToken, refreshToken };
   }
+
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ForRoles(UserRole.Admin)

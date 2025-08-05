@@ -21,6 +21,7 @@ export interface RegisterData {
 export interface AuthResponse {
   user: User;
   token?: string;
+  refreshToken?: string;
 }
 
 export interface User {
@@ -81,7 +82,10 @@ class AuthService {
 
   private setAuthHeader(token: string) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    console.log('✅ Auth header set with token:', token.substring(0, 20) + '...');
+    console.log(
+      '✅ Auth header set with token:',
+      token.substring(0, 20) + '...'
+    );
   }
 
   private clearAuthHeader() {
@@ -94,13 +98,20 @@ class AuthService {
       console.log('🔐 Attempting login with username:', credentials.username);
       console.log('🌐 API URL:', getBaseUrl());
 
-      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/login`, credentials, {
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await axios.post<AuthResponse>(
+        `${getBaseUrl()}/auth/login`,
+        credentials,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
         }
-      });
+      );
 
       console.log('📥 Login response:', response.data);
+      if (response.data.refreshToken) {
+        localStorage.setItem('refresh_token', response.data.refreshToken);
+      }
 
       if (response.data && response.data.user) {
         this.user = response.data.user as User;
@@ -116,12 +127,16 @@ class AuthService {
           console.log('🔑 Token preview:', this.token.substring(0, 50) + '...');
         }
 
-        console.log('✅ User authenticated:', this.user.username, 'Role:', this.user.role);
+        console.log(
+          '✅ User authenticated:',
+          this.user.username,
+          'Role:',
+          this.user.role
+        );
         return response.data;
       } else {
         throw new Error('Invalid response from server - no user data');
       }
-
     } catch (error: any) {
       console.error('❌ Login failed:', error);
       console.error('❌ Error response:', error.response?.data);
@@ -142,11 +157,15 @@ class AuthService {
     console.log('🔍 AuthService - Current API URL:', getBaseUrl());
 
     try {
-      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/google`, { idToken }, {
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await axios.post<AuthResponse>(
+        `${getBaseUrl()}/auth/google`,
+        { idToken },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
         }
-      });
+      );
 
       console.log('🔍 AuthService - Backend response:', response.data);
 
@@ -172,16 +191,38 @@ class AuthService {
   }
 
   async refreshTokens(): Promise<AuthResponse> {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      this.clearAuthData();
+      throw new Error('No refresh token available');
+    }
     try {
-      const response = await axios.post<AuthResponse>(`${getBaseUrl()}/auth/refresh`, {});
-
+      const response = await axios.post(
+        `${getBaseUrl()}/auth/refresh`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${refreshToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       this.user = response.data.user as User;
       this.authState.value = response.data.user as User;
 
       if (response.data.token) {
         this.token = response.data.token;
-        localStorage.setItem('access_token', this.token);
-        this.setAuthHeader(this.token);
+
+        if (typeof this.token === "string") {
+          localStorage.setItem('access_token', this.token);
+        }
+        if (this.token) {
+          this.setAuthHeader(this.token);
+        }
+      }
+
+      if (response.data.refreshToken) {
+        localStorage.setItem('refresh_token', response.data.refreshToken);
       }
 
       return response.data;

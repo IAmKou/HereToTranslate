@@ -66,8 +66,6 @@ const currentValidationString = ref<any>(null);
 const currentValidationMode = ref<'auto-fixable' | 'non-auto-fixable'>('auto-fixable');
 const skippedWarnings = ref<Set<string>>(new Set()); // Track skipped warnings by their message
 
-// Preview and export state removed - now handled by dedicated page
-
 // Thêm state cho inline validation warnings
 const validationWarnings = ref<Record<string, any[]>>({});
 
@@ -78,6 +76,10 @@ const editorPageContents = ref<Record<string, string[]>>({}); // fileId -> array
 
 const PART_SIZE = 250;
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
+
+// Thêm state cho export functionality
+const isExporting = ref<Record<string, boolean>>({});
+const exportProgress = ref<Record<string, number>>({});
 
 // Hàm kiểm tra file đang processing
 function isFileProcessing(file: any): boolean {
@@ -1070,40 +1072,6 @@ function goBackToProject() {
   router.push(`/projects/${projectId.value}`);
 }
 
-// Preview và Export methods
-function openPreviewExport(file: any) {
-  // Navigate to preview page with file and language parameters
-  router.push({
-    name: 'translation-preview',
-    params: {
-      projectId: projectId.value,
-      branchId: branchId.value
-    },
-    query: {
-      fileId: file.fileId || file.id,
-      language: selectedLanguage.value
-    }
-  });
-}
-
-function exportFile(file: any) {
-  // Navigate to preview page with file and language parameters for export
-  router.push({
-    name: 'translation-preview',
-    params: {
-      projectId: projectId.value,
-      branchId: branchId.value
-    },
-    query: {
-      fileId: file.fileId || file.id,
-      language: selectedLanguage.value,
-      action: 'export'
-    }
-  });
-}
-
-// Preview and export methods removed - now handled by dedicated page
-
 // Custom dropdown state
 const isDropdownOpen = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
@@ -1232,6 +1200,58 @@ function parseEditorPages(content: string): string[] {
 
   return pages;
 }
+
+// Export functionality
+async function exportTranslation(fileId: string | number) {
+  if (isExporting.value[String(fileId)]) return;
+
+  isExporting.value[String(fileId)] = true;
+  exportProgress.value[String(fileId)] = 0;
+
+  try {
+    toast.add({
+      severity: 'info',
+      summary: 'Exporting',
+      detail: 'Preparing translation export...',
+      life: 2000
+    });
+
+    const response = await axiosInstance.post(`/translation/export/${fileId}`, {
+      language: selectedLanguage.value
+    });
+
+    if (response.data.githubUrl) {
+      // Create download link
+      const link = document.createElement('a');
+      link.href = response.data.githubUrl;
+      link.download = `translated_${selectedLanguage.value}_${Date.now()}`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.add({
+        severity: 'success',
+        summary: 'Export Successful',
+        detail: 'Translation exported and downloaded successfully',
+        life: 3000
+      });
+    } else {
+      throw new Error('No download URL received');
+    }
+  } catch (error: any) {
+    console.error('Export error:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Export Failed',
+      detail: error?.message || 'Failed to export translation',
+      life: 3000
+    });
+  } finally {
+    isExporting.value[String(fileId)] = false;
+    exportProgress.value[String(fileId)] = 0;
+  }
+}
 </script>
 
 <template>
@@ -1270,6 +1290,33 @@ function parseEditorPages(content: string): string[] {
             </div>
           </div>
         </div>
+
+        <!-- Preview Button -->
+        <div class="preview-section">
+          <button
+            class="preview-btn"
+            @click="previewPanelCollapsed = !previewPanelCollapsed"
+            :disabled="!selectedFileForPreview"
+            :title="!selectedFileForPreview ? 'Select a file to preview' : (previewPanelCollapsed ? 'Show preview' : 'Hide preview')"
+          >
+            <i class="pi pi-eye"></i>
+            <span>{{ previewPanelCollapsed ? 'Show Preview' : 'Hide Preview' }}</span>
+          </button>
+        </div>
+
+        <!-- Export Button -->
+        <div class="export-section">
+          <button
+            class="export-btn"
+            @click="exportTranslation(selectedFileId)"
+            :disabled="!selectedFileId || isExporting[selectedFileId]"
+            :title="!selectedFileId ? 'Select a file to export' : 'Export translated file'"
+          >
+            <i v-if="isExporting[selectedFileId]" class="pi pi-spin pi-spinner"></i>
+            <i v-else class="pi pi-download"></i>
+            <span>{{ isExporting[selectedFileId] ? 'Exporting...' : 'Export File' }}</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1299,15 +1346,18 @@ function parseEditorPages(content: string): string[] {
                 <i class="pi" :class="expandedFileIds.includes(file.fileId || file.id) ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
               </span>
               </div>
-              <div class="file-header-actions">
+
+              <!-- File Export Button -->
+              <div class="file-actions">
                 <button
-                  @click.stop="openPreviewExport(file)"
-                  class="action-btn preview-btn"
-                  :disabled="isFileProcessing(file)"
-                  :title="isFileProcessing(file) ? 'File is processing...' : 'Preview & Export'"
+                  class="file-export-btn"
+                  @click.stop="exportTranslation(file.fileId || file.id)"
+                  :disabled="isFileProcessing(file) || isExporting[file.fileId || file.id]"
+                  :title="isFileProcessing(file) ? 'File is processing' : 'Export translated file'"
                 >
-                  <i class="pi pi-eye"></i>
-                  <span>Preview</span>
+                  <i v-if="isExporting[file.fileId || file.id]" class="pi pi-spin pi-spinner"></i>
+                  <i v-else class="pi pi-download"></i>
+                  <span v-if="!isExporting[file.fileId || file.id]">Export</span>
                 </button>
               </div>
             </div>
@@ -1596,118 +1646,6 @@ function parseEditorPages(content: string): string[] {
     @skip="handleValidationSkip"
     @auto-fix="handleValidationAutoFix"
   />
-
-  <!-- Page Selection Modal -->
-  <Dialog
-    v-model:visible="pageModalVisible"
-    :modal="true"
-    :closable="true"
-    :dismissableMask="true"
-    :style="{ width: '700px', maxWidth: '95vw' }"
-    :breakpoints="{ '960px': '85vw', '641px': '95vw' }"
-    class="page-selection-modal"
-  >
-    <div class="modal-content" style="padding: 0 1.5rem;">
-      <!-- Header with file info -->
-      <div class="modal-header" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e5e7eb;">
-        <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="file-icon" style="width: 36px; height: 36px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);">
-            <i class="pi pi-file"></i>
-          </div>
-          <div>
-            <div style="font-weight: 600; color: #1f2937; font-size: 1.1rem;">Select Page</div>
-            <div style="color: #6b7280; font-size: 0.85rem; margin-top: 0.1rem;">Choose a page to view and edit</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Search Bar -->
-      <div class="search-section" style="margin-bottom: 1.8rem;">
-        <div class="search-input-wrapper" style="position: relative;">
-          <i class="pi pi-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.9rem;"></i>
-          <InputText
-            v-model="pageSearchQuery"
-            placeholder="Search by page number (e.g., 45) or string count..."
-            class="page-search-input"
-            style="padding: 0.8rem 0.8rem 0.8rem 2.5rem; width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; background: white; color: #1f2937; font-size: 0.9rem; transition: all 0.3s ease; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"
-          />
-        </div>
-      </div>
-
-      <!-- Pages Grid -->
-      <div class="pages-grid" style="max-height: 380px; overflow-y: auto; padding-right: 0.8rem; margin: 0 -0.5rem;">
-        <div
-          v-for="part in filteredPages"
-          :key="part"
-          @click="selectPageFromModal(part-1)"
-          class="page-item"
-          :class="{ 'active': (selectedPartMap[currentModalFileId] ?? 0) === (part-1) }"
-          style="padding: 0.9rem; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.6rem; cursor: pointer; transition: all 0.3s ease; background: white; position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"
-        >
-          <!-- Active indicator -->
-          <div v-if="(selectedPartMap[currentModalFileId] ?? 0) === (part-1)" class="active-indicator" style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #3b82f6, #8b5cf6);"></div>
-
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="flex: 1;">
-              <div style="display: flex; align-items: center; gap: 0.6rem;">
-                <div class="page-number" style="width: 28px; height: 28px; background: #f3f4f6; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #374151; font-size: 0.85rem; border: 1px solid #e5e7eb;">
-                  {{ part }}
-                </div>
-                <div>
-                  <div style="font-weight: 600; color: #1f2937; font-size: 0.95rem;">Page {{ part }}</div>
-                  <div style="color: #6b7280; font-size: 0.8rem; margin-top: 0.1rem;">
-                    {{ getStringsCountOfPart(currentModalFileId, part-1) }} strings
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Selection indicator -->
-            <div v-if="(selectedPartMap[currentModalFileId] ?? 0) === (part-1)" class="selection-indicator" style="color: #059669; display: flex; align-items: center; gap: 0.3rem; background: #ecfdf5; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #a7f3d0;">
-              <i class="pi pi-check-circle" style="font-size: 0.9rem;"></i>
-              <span style="font-size: 0.8rem; font-weight: 500;">Selected</span>
-            </div>
-            <div v-else class="selection-hint" style="color: #9ca3af; font-size: 0.8rem; background: #f9fafb; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #e5e7eb;">
-              Click to select
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- No results message -->
-      <div v-if="filteredPages.length === 0" class="no-results" style="text-align: center; padding: 2.5rem 1rem; color: #6b7280;">
-        <div class="no-results-icon" style="width: 60px; height: 60px; background: #f9fafb; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.2rem; border: 1px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);">
-          <i class="pi pi-search" style="font-size: 1.5rem; color: #9ca3af;"></i>
-        </div>
-        <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; color: #374151;">No pages found</div>
-        <div style="font-size: 0.85rem; color: #6b7280;">Try searching with different keywords</div>
-      </div>
-    </div>
-
-    <template #footer>
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0;">
-        <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="page-info" style="display: flex; align-items: center; gap: 0.4rem; color: #6b7280; font-size: 0.85rem; background: #f9fafb; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #e5e7eb;">
-            <i class="pi pi-file-text" style="color: #3b82f6; font-size: 0.8rem;"></i>
-            <span>{{ filteredPages.length }} of {{ getTotalParts(currentModalFileId) }} pages</span>
-          </div>
-          <div v-if="pageSearchQuery" class="search-info" style="display: flex; align-items: center; gap: 0.4rem; color: #059669; font-size: 0.85rem; background: #ecfdf5; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #a7f3d0;">
-            <i class="pi pi-search" style="font-size: 0.7rem;"></i>
-            <span>Filtered results</span>
-          </div>
-        </div>
-        <div style="display: flex; gap: 0.6rem;">
-          <button
-            @click="pageModalVisible = false"
-            class="modal-btn secondary"
-            style="padding: 0.6rem 1.2rem; border-radius: 6px; border: 1px solid #e5e7eb; background: white; color: #374151; cursor: pointer; font-weight: 500; font-size: 0.9rem; transition: all 0.3s ease; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </template>
-  </Dialog>
 </template>
 
 <style scoped>
@@ -1734,6 +1672,74 @@ function parseEditorPages(content: string): string[] {
   width: 100%;
   margin: 0;
   padding: 0 1rem;
+}
+
+.preview-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.preview-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.preview-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.preview-btn:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.export-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.export-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.export-btn:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .back-btn {
@@ -1817,7 +1823,6 @@ function parseEditorPages(content: string): string[] {
   padding: 0.9em 1.5em 0.9em 1.7em; /* Giảm padding */
   font-weight: 700;
   font-size: 0.9em; /* Giảm từ 1.05em xuống 0.9em */
-  cursor: pointer;
   background: linear-gradient(135deg, #334155 0%, #475569 100%);
   border-radius: 16px 16px 0 0; /* Giảm từ 20px xuống 16px */
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
@@ -1825,6 +1830,48 @@ function parseEditorPages(content: string): string[] {
   position: relative;
   min-height: 48px; /* Giảm từ 56px xuống 48px */
   border: none;
+}
+
+.file-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  flex: 1;
+}
+
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-export-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.3s ease;
+  font-size: 0.8rem;
+}
+
+.file-export-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.file-export-btn:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .file-header:hover {
@@ -1929,6 +1976,29 @@ function parseEditorPages(content: string): string[] {
   }
   .editor-content {
     padding: 0.8rem 0.3rem; /* Giảm padding cho mobile */
+  }
+
+  .file-export-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .file-export-btn span {
+    display: none; /* Hide text on mobile, show only icon */
+  }
+
+  .export-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+  }
+
+  .preview-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+  }
+
+  .preview-btn span {
+    display: none; /* Hide text on mobile, show only icon */
   }
 }
 /* Làm mềm mại translation cards - TỐI ƯU HÓA */
@@ -3495,164 +3565,5 @@ function parseEditorPages(content: string): string[] {
   border-color: rgba(99, 102, 241, 0.8) !important;
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
   font-weight: 700;
-}
-
-/* Page Modal Styles - Light Theme */
-.page-selection-modal .p-dialog-header {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-bottom: 1px solid #e5e7eb;
-  color: #1f2937;
-  padding: 1.5rem 2rem;
-  border-radius: 12px 12px 0 0;
-}
-
-.page-selection-modal .p-dialog-content {
-  background: #ffffff;
-  color: #1f2937;
-  padding: 0;
-}
-
-.page-selection-modal .p-dialog-footer {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-top: 1px solid #e5e7eb;
-  padding: 1.5rem 2rem;
-  border-radius: 0 0 12px 12px;
-}
-
-.page-selection-modal .p-dialog {
-  border-radius: 16px;
-  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-}
-
-/* Page Item Styles */
-.page-item {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-}
-
-.page-item:hover {
-  background: #f8fafc !important;
-  border-color: #3b82f6 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
-}
-
-.page-item.active {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
-  border-color: #3b82f6 !important;
-  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.25);
-}
-
-.page-item.active .page-number {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
-  color: white !important;
-  border-color: #3b82f6 !important;
-}
-
-.page-item.active .selection-indicator {
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
-}
-
-/* Search Input Styles */
-.page-search-input {
-  transition: all 0.3s ease;
-}
-
-.page-search-input:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-  background: white !important;
-}
-
-.page-search-input:hover {
-  border-color: #d1d5db !important;
-}
-
-/* Scrollbar Styles */
-.pages-grid::-webkit-scrollbar {
-  width: 10px;
-}
-
-.pages-grid::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 8px;
-  margin: 4px;
-}
-
-.pages-grid::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #d1d5db, #9ca3af);
-  border-radius: 8px;
-  border: 2px solid #f3f4f6;
-}
-
-.pages-grid::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #9ca3af, #6b7280);
-}
-
-/* Button Hover Effects */
-.modal-btn.secondary:hover {
-  background: #f3f4f6 !important;
-  border-color: #d1d5db !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* File Icon Animation */
-.file-icon {
-  animation: bounceIn 0.6s ease-out;
-}
-
-@keyframes bounceIn {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.05);
-  }
-  70% {
-    transform: scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* No Results Animation */
-.no-results-icon {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-@keyframes fadeInUp {
-  0% {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Selection States */
-.selection-indicator {
-  transition: all 0.3s ease;
-}
-
-.selection-hint {
-  transition: all 0.3s ease;
-}
-
-.page-item:hover .selection-hint {
-  background: #f3f4f6 !important;
-  border-color: #d1d5db !important;
 }
 </style>

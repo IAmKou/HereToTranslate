@@ -133,8 +133,23 @@ export class TranslationService {
       updatedBuffer = await this.applyTranslation(fileId, language);
     }
 
-    // Remove GitHub commit - only save translation to MongoDB
-    // GitHub commit will happen only during export
+    // --- Commit to GitHub ---
+    const repoName = `project-${fileEntity.project.id}`;
+    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
+    const path = `${language}/${safeFileName}`;
+
+    try {
+      await this.githubService.commitChange({
+        repo: repoName,
+        branch: 'main',
+        path,
+        content: updatedBuffer,
+        message: `Update translations for ${fileEntity.fileName} (${language})`,
+      });
+      logger.log(`✅ Translation committed to GitHub: ${repoName}/${path}`);
+    } catch (err) {
+      logger.error(`❌ Error committing translation to GitHub: ${err}`);
+    }
 
     return entry;
   }
@@ -186,37 +201,10 @@ export class TranslationService {
   ): Promise<{ fileType: string; preview: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['project'],
     });
-    if (!fileEntity || !fileEntity.project) {
-      throw new Error('File not found');
-    }
+    if (!fileEntity) throw new Error('File not found');
 
-    // Try to get the file from GitHub first (committed version)
-    const repoName = `project-${fileEntity.project.id}`;
-    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
-    const path = `${language}/${safeFileName}`;
-
-    try {
-      // Try to get the file from GitHub
-      const githubContent = await this.githubService.getFileContent({
-        repo: repoName,
-        branch: 'main',
-        path,
-      });
-
-      if (githubContent) {
-        // File exists on GitHub, return it
-        return {
-          fileType: fileEntity.fileType,
-          preview: githubContent.toString('base64'),
-        };
-      }
-    } catch (err) {
-      console.log(`File not found on GitHub: ${repoName}/${path}, using MongoDB version`);
-    }
-
-    // Fallback: Build translated file buffer from MongoDB
+    // Build translated file buffer
     const buffer = await this.applyTranslation(fileId, language);
 
     // Return preview based on type
@@ -277,7 +265,7 @@ export class TranslationService {
   async exportTranslation(
     fileId: string,
     language: string
-  ): Promise<{ fileContent: string; fileName: string; fileType: string; downloadUrl?: string }> {
+  ): Promise<{ fileContent: string; fileName: string; fileType: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -325,34 +313,10 @@ export class TranslationService {
     const baseName = fileNameParts.join('.');
     const translatedFileName = `${baseName}_${language}.${extension}`;
 
-    // --- Commit to GitHub when exporting ---
-    const repoName = `project-${fileEntity.project.id}`;
-    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
-    const path = `${language}/${safeFileName}`;
-
-    let downloadUrl: string | undefined;
-    try {
-      await this.githubService.commitChange({
-        repo: repoName,
-        branch: 'main',
-        path,
-        content: buffer,
-        message: `Export translations for ${fileEntity.fileName} (${language})`,
-      });
-      logger.log(`✅ Translation exported and committed to GitHub: ${repoName}/${path}`);
-
-      // Create download URL from GitHub
-      downloadUrl = `https://raw.githubusercontent.com/${repoName}/main/${language}/${encodeURIComponent(safeFileName)}`;
-    } catch (err) {
-      logger.error(`❌ Error committing translation to GitHub: ${err}`);
-      // Still return the file content even if GitHub commit fails
-    }
-
     return {
       fileContent: buffer.toString('base64'),
       fileName: translatedFileName,
-      fileType: fileEntity.fileType,
-      downloadUrl
+      fileType: fileEntity.fileType
     };
   }
 

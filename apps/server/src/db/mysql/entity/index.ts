@@ -23,4 +23,5 @@ export * from './task-status.entity';
 export * from './workflow.entity';
 export * from './workflow-transition.entity';
 export * from './task-status-history.entity';
+export * from './task-comment.entity';
 

@@ -1,5 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNotEmpty } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsOptional, IsArray, IsNotEmpty } from 'class-validator';
 
 export class CreateCommentDto {
   @IsString()

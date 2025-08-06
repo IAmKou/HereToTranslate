@@ -2,19 +2,25 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import {
   ProjectGroupEntity,
   TaskEntity,
   UserEntity,
+  TaskStatusEntity,
+  WorkflowEntity,
+  WorkflowTransitionEntity,
+  TaskStatusHistoryEntity,
 } from '#LocalProject/Entities';
-import { DeepPartial, Repository } from 'typeorm';
-import { ProjectManagerService } from './project-manager.service';
+import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { PermissionFlags } from '@here-to-translate/common';
-import { TranslationService } from './translation-manager.service';
-import { TaskGateway } from '../../util/gateway/task.gateway';
-import { UpdateTaskDto } from '../../dto/task.dto';
+import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
+import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
+import { UpdateTaskDto, TransitionTaskDto } from '#LocalProject/Dtos';
+import { TransitionConditionType, StatusType } from '#LocalProject/Entities';
 
 @Injectable()
 export class TaskManagerService {
@@ -25,6 +31,14 @@ export class TaskManagerService {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(ProjectGroupEntity)
     private readonly projectGroupRepository: Repository<ProjectGroupEntity>,
+    @InjectRepository(TaskStatusEntity)
+    private readonly statusRepository: Repository<TaskStatusEntity>,
+    @InjectRepository(WorkflowEntity)
+    private readonly workflowRepository: Repository<WorkflowEntity>,
+    @InjectRepository(WorkflowTransitionEntity)
+    private readonly transitionRepository: Repository<WorkflowTransitionEntity>,
+    @InjectRepository(TaskStatusHistoryEntity)
+    private readonly statusHistoryRepository: Repository<TaskStatusHistoryEntity>,
     private readonly projectService: ProjectManagerService,
     private readonly translationService: TranslationService,
     private readonly taskGateway: TaskGateway
@@ -37,12 +51,16 @@ export class TaskManagerService {
     assignedToId?: string;
     groupId?: string;
     dueDate?: Date;
-
     projectId?: string;
     branchId?: string;
     fileId?: string;
     filePart?: number;
     language?: string;
+    workflowId?: string;
+    statusId?: string;
+    priority?: string;
+    storyPoints?: number;
+    customFields?: Record<string, unknown>;
   }) {
     const {
       title,
@@ -56,7 +74,13 @@ export class TaskManagerService {
       fileId,
       filePart,
       language,
+      workflowId,
+      statusId,
+      priority = 'medium',
+      storyPoints,
+      customFields,
     } = params;
+
     if (!createdById) {
       throw new BadRequestException('createdById is required');
     }
@@ -73,16 +97,75 @@ export class TaskManagerService {
     const createdBy = await this.userRepository.findOneOrFail({
       where: { id: BigInt(createdById) },
     });
+
     const assignedTo = assignedToId
       ? await this.userRepository.findOne({
           where: { id: BigInt(assignedToId) },
         })
       : undefined;
+
     const group = groupId
       ? await this.projectGroupRepository.findOne({
           where: { id: BigInt(groupId) },
         })
       : undefined;
+
+    // Get workflow and default status
+    let workflow: WorkflowEntity | undefined;
+    let status: TaskStatusEntity;
+
+    if (workflowId) {
+      workflow = await this.workflowRepository.findOne({
+        where: { id: BigInt(workflowId) },
+        relations: ['project'],
+      }) || undefined;
+      if (!workflow) {
+        throw new NotFoundException('Workflow not found');
+      }
+    } else {
+      // Get default workflow for project
+      workflow = await this.workflowRepository.findOne({
+        where: {
+          project: { id: BigInt(projectId) },
+          isDefault: true,
+          isActive: true,
+        },
+      }) || undefined;
+    }
+
+    if (statusId) {
+      status = await this.statusRepository.findOneOrFail({
+        where: { id: BigInt(statusId) },
+      });
+    } else {
+      // Get default status for project
+      const defaultStatus = await this.statusRepository.findOne({
+        where: {
+          project: { id: BigInt(projectId) },
+          isDefault: true,
+          isActive: true,
+        },
+      });
+
+      if (!defaultStatus) {
+        // Fallback to first TODO status
+        const fallbackStatus = await this.statusRepository.findOne({
+          where: {
+            project: { id: BigInt(projectId) },
+            type: StatusType.TODO,
+            isActive: true,
+          },
+          order: { position: 'ASC' },
+        });
+
+        if (!fallbackStatus) {
+          throw new BadRequestException('No default status found for project');
+        }
+        status = fallbackStatus;
+      } else {
+        status = defaultStatus;
+      }
+    }
 
     const task = this.taskRepository.create({
       title,
@@ -96,23 +179,174 @@ export class TaskManagerService {
       fileId,
       filePart,
       language,
+      workflow,
+      status,
+      priority,
+      storyPoints,
+      customFields,
     } as DeepPartial<TaskEntity>);
 
     await this.taskRepository.save(task);
+
+    await this.createStatusHistory(task.id, undefined, status, createdBy);
+
     this.taskGateway.emitTaskUpdate(task);
     return task;
+  }
+
+  private async createStatusHistory(
+    taskId: bigint,
+    fromStatus: TaskStatusEntity | undefined,
+    toStatus: TaskStatusEntity,
+    changedBy: UserEntity,
+    comment?: string
+  ) {
+    const task = await this.taskRepository.findOneOrFail({
+      where: { id: taskId },
+    });
+
+    const history = this.statusHistoryRepository.create({
+      task,
+      fromStatus,
+      toStatus,
+      changedBy,
+      comment,
+    });
+
+    await this.statusHistoryRepository.save(history);
+  }
+
+  async transitionTask(id: string, dto: TransitionTaskDto, userId: string) {
+    const task = await this.taskRepository.findOne({
+      where: { id: BigInt(id) },
+      relations: ['status', 'workflow', 'createdBy', 'assignedTo'],
+    });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+
+    const user = await this.userRepository.findOneOrFail({
+      where: { id: BigInt(userId) },
+    });
+
+    const toStatus = await this.statusRepository.findOneOrFail({
+      where: { id: BigInt(dto.toStatusId) },
+    });
+
+    // Check if transition is allowed
+    await this.validateTransition(task, toStatus, user);
+
+    const fromStatus = task.status;
+
+    // Update task status
+    task.status = toStatus;
+
+    // Update timestamps based on status type
+    if (toStatus.type === StatusType.IN_PROGRESS && !task.startedAt) {
+      task.startedAt = new Date();
+    } else if (toStatus.type === StatusType.DONE && !task.completedAt) {
+      task.completedAt = new Date();
+    } else if (toStatus.type === StatusType.TODO && task.completedAt) {
+      task.completedAt = undefined;
+    }
+
+    await this.taskRepository.save(task);
+
+    // Create status history
+    await this.createStatusHistory(
+      task.id,
+      fromStatus,
+      toStatus,
+      user,
+      dto.comment
+    );
+
+    this.taskGateway.emitTaskUpdate(task);
+
+    return this.getTask(id);
+  }
+
+  private async validateTransition(
+    task: TaskEntity,
+    toStatus: TaskStatusEntity,
+    user: UserEntity
+  ) {
+    if (!task.workflow) {
+      // If no workflow, allow any transition (for backward compatibility)
+      return;
+    }
+
+    // Find valid transition
+    const transition = await this.transitionRepository.findOne({
+      where: {
+        workflow: { id: task.workflow.id },
+        fromStatus: { id: task.status.id },
+        toStatus: { id: toStatus.id },
+        isActive: true,
+      },
+      relations: ['workflow', 'fromStatus', 'toStatus'],
+    });
+
+    if (!transition) {
+      throw new BadRequestException(
+        `Invalid transition from ${task.status.name} to ${toStatus.name}`
+      );
+    }
+
+    // Check permissions
+    const hasPermission = await this.checkTransitionPermission(
+      transition,
+      task,
+      user
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException(
+        'You do not have permission to perform this transition'
+      );
+    }
+  }
+
+  private async checkTransitionPermission(
+    transition: WorkflowTransitionEntity,
+    task: TaskEntity,
+    user: UserEntity
+  ): Promise<boolean> {
+    switch (transition.conditionType) {
+      case TransitionConditionType.ANYONE:
+        return true;
+
+      case TransitionConditionType.CREATOR_ONLY:
+        return task.createdBy.id === user.id;
+
+      case TransitionConditionType.ASSIGNEE_ONLY:
+        return task.assignedTo?.id === user.id;
+
+      case TransitionConditionType.USER: {
+        const allowedUserIds = transition.conditionData?.userIds || [];
+        return allowedUserIds.includes(user.id.toString());
+      }
+
+      case TransitionConditionType.GROUP:
+        return true; // Placeholder
+
+      case TransitionConditionType.ROLE:
+        return true; // Placeholder
+
+      default:
+        return false;
+    }
   }
 
   async getTasksByProject(projectId: string) {
     const tasks = await this.taskRepository.find({
       where: { projectId },
-      relations: ['createdBy', 'assignedTo', 'group'],
+      relations: ['createdBy', 'assignedTo', 'group', 'status', 'workflow'],
       order: { createdAt: 'DESC' },
       select: {
         id: true,
         title: true,
         description: true,
-        status: true,
         projectId: true,
         branchId: true,
         fileId: true,
@@ -122,6 +356,8 @@ export class TaskManagerService {
         createdAt: true,
         startedAt: true,
         completedAt: true,
+        priority: true,
+        storyPoints: true,
         createdBy: {
           id: true,
           username: true,
@@ -135,6 +371,16 @@ export class TaskManagerService {
           avatarUrl: true,
         },
         group: true,
+        status: {
+          id: true,
+          name: true,
+          color: true,
+          type: true,
+        },
+        workflow: {
+          id: true,
+          name: true,
+        },
       },
     });
     return tasks;
@@ -143,12 +389,11 @@ export class TaskManagerService {
   async getTask(id: string) {
     const task = await this.taskRepository.findOne({
       where: { id: BigInt(id) },
-      relations: ['createdBy', 'assignedTo', 'group'],
+      relations: ['createdBy', 'assignedTo', 'group', 'status', 'workflow'],
       select: {
         id: true,
         title: true,
         description: true,
-        status: true,
         projectId: true,
         branchId: true,
         fileId: true,
@@ -156,8 +401,12 @@ export class TaskManagerService {
         language: true,
         dueDate: true,
         createdAt: true,
+        updatedAt: true,
         startedAt: true,
         completedAt: true,
+        priority: true,
+        storyPoints: true,
+        customFields: true,
         createdBy: {
           id: true,
           username: true,
@@ -171,58 +420,155 @@ export class TaskManagerService {
           avatarUrl: true,
         },
         group: true,
+        status: {
+          id: true,
+          name: true,
+          color: true,
+          type: true,
+        },
+        workflow: {
+          id: true,
+          name: true,
+        },
       },
     });
+
     if (!task) {
       throw new NotFoundException('Task not found');
     }
     return task;
   }
 
-  async updateTask(id: string, dto: UpdateTaskDto) {
+  async updateTask(id: string, dto: UpdateTaskDto, userId: bigint) {
     const task = await this.taskRepository.findOne({
       where: { id: BigInt(id) },
+      relations: ['status', 'workflow', 'createdBy', 'assignedTo'],
     });
+
     if (!task) {
       throw new NotFoundException('Task not found');
     }
 
-    // Update fields if provided
+    // Update basic fields
     if (dto.title !== undefined) task.title = dto.title;
     if (dto.description !== undefined) task.description = dto.description;
-    if (dto.status !== undefined) {
-      // Nếu chuyển sang in_progress và chưa có startedAt thì set startedAt
-      if (dto.status === 'in_progress' && !task.startedAt) {
-        task.startedAt = new Date();
-      }
-      // Nếu chuyển sang completed thì set completedAt
-      if (dto.status === 'completed' && !task.completedAt) {
-        task.completedAt = new Date();
-      }
-      task.status = dto.status;
-    }
     if (dto.dueDate !== undefined) task.dueDate = new Date(dto.dueDate);
+    if (dto.priority !== undefined) task.priority = dto.priority;
+    if (dto.storyPoints !== undefined) task.storyPoints = dto.storyPoints;
+    if (dto.customFields !== undefined) task.customFields = dto.customFields;
 
     if (dto.assignedToId !== undefined) {
       task.assignedTo = dto.assignedToId
         ? await this.userRepository.findOne({
             where: { id: BigInt(dto.assignedToId) },
-          })
-        : null;
+          }) || undefined
+        : undefined;
     }
 
     if (dto.groupId !== undefined) {
       task.group = dto.groupId
         ? await this.projectGroupRepository.findOne({
             where: { id: BigInt(dto.groupId) },
-          })
-        : null;
+          }) || undefined
+        : undefined;
+    }
+
+    if (dto.workflowId !== undefined) {
+      task.workflow = dto.workflowId
+        ? await this.workflowRepository.findOne({
+            where: { id: BigInt(dto.workflowId) },
+          }) || undefined
+        : undefined;
+    }
+
+    // Handle status transition separately using transitionTask
+    if (dto.statusId !== undefined) {
+      await this.transitionTask(id, { toStatusId: dto.statusId }, userId);
+      return this.getTask(id);
     }
 
     await this.taskRepository.save(task);
     this.taskGateway.emitTaskUpdate(task);
 
     return this.getTask(id);
+  }
+
+  async getTaskHistory(id: string) {
+    const history = await this.statusHistoryRepository.find({
+      where: { task: { id: BigInt(id) } },
+      relations: ['fromStatus', 'toStatus', 'changedBy'],
+      order: { createdAt: 'DESC' },
+      select: {
+        id: true,
+        comment: true,
+        createdAt: true,
+        fromStatus: {
+          id: true,
+          name: true,
+          color: true,
+        },
+        toStatus: {
+          id: true,
+          name: true,
+          color: true,
+        },
+        changedBy: {
+          id: true,
+          username: true,
+          fullName: true,
+          avatarUrl: true,
+        },
+      },
+    });
+
+    return history;
+  }
+
+  async getAvailableTransitions(taskId: string, userId: string) {
+    const task = await this.taskRepository.findOne({
+      where: { id: BigInt(taskId) },
+      relations: ['status', 'workflow', 'createdBy', 'assignedTo'],
+    });
+
+    if (!task || !task.workflow) {
+      return [];
+    }
+
+    const user = await this.userRepository.findOneOrFail({
+      where: { id: BigInt(userId) },
+    });
+
+    const transitions = await this.transitionRepository.find({
+      where: {
+        workflow: { id: task.workflow.id },
+        fromStatus: { id: task.status.id },
+        isActive: true,
+      },
+      relations: ['toStatus'],
+    });
+
+    const availableTransitions = [];
+    for (const transition of transitions) {
+      const hasPermission = await this.checkTransitionPermission(
+        transition,
+        task,
+        user
+      );
+      if (hasPermission) {
+        availableTransitions.push({
+          id: transition.id,
+          name: transition.name,
+          toStatus: {
+            id: transition.toStatus.id,
+            name: transition.toStatus.name,
+            color: transition.toStatus.color,
+            type: transition.toStatus.type,
+          },
+        });
+      }
+    }
+
+    return availableTransitions;
   }
 
   async deleteTask(id: string) {
@@ -264,7 +610,12 @@ export class TaskManagerService {
     }
 
     // Update task status to closed
-    task.status = 'closed';
+    const closedStatus = await this.statusRepository.findOne({
+      where: { name: 'closed' }
+    });
+    if (closedStatus) {
+      task.status = closedStatus;
+    }
 
     // Set closedAt timestamp if not already set
     if (!task.completedAt) {
@@ -309,15 +660,20 @@ export class TaskManagerService {
     }
 
     // Check if task is actually closed
-    if (task.status !== 'closed') {
+    if (task.status.name !== 'closed') {
       throw new BadRequestException('Task is not closed');
     }
 
     // Update task status back to pending (To do)
-    task.status = 'pending';
+    const pendingStatus = await this.statusRepository.findOne({
+      where: { name: 'pending' }
+    });
+    if (pendingStatus) {
+      task.status = pendingStatus;
+    }
 
     // Clear completedAt timestamp since task is reopened
-    task.completedAt = null;
+    task.completedAt = undefined;
 
     await this.taskRepository.save(task);
     this.taskGateway.emitTaskUpdate(task);
@@ -376,7 +732,6 @@ export class TaskManagerService {
     const strings = await this.translationService.getAllString(
       params.projectId,
       params.branchId,
-      'en',
       params.fileId,
       params.filePart
     );
@@ -385,7 +740,7 @@ export class TaskManagerService {
 
     const example = strings
       .slice(0, 3)
-      .map((s: any) => `- ${s.originalText}`)
+      .map((s: Record<string, unknown>) => `- ${s.originalText}`)
       .join('\n');
     const description = `Contains ${strings.length} strings:\n${example}`;
     const title = `Translate part ${params.filePart}`;
@@ -418,89 +773,14 @@ export class TaskManagerService {
     );
     const total = strings.length;
     const translated = strings.filter(
-      (s: any) => s.translatedText && s.translatedText.trim() !== ''
+      (s: Record<string, unknown>) => {
+        const translatedText = s.translatedText as string;
+        return translatedText && translatedText.trim() !== '';
+      }
     ).length;
     const percent = total === 0 ? 0 : Math.round((translated / total) * 100);
 
     return { total, translated, percent };
-  }
-
-  async getTaskHistory(taskId: string) {
-    // For now, return only the creation history since we don't have a real history table yet
-    // In a real implementation, you would:
-    // 1. Create a TaskHistory entity/table
-    // 2. Log all task changes to that table
-    // 3. Query the history from the database
-
-    try {
-      // Get the actual task to show creation history
-      const task = await this.taskRepository.findOne({
-        where: { id: BigInt(taskId) },
-        relations: ['createdBy'],
-      });
-
-      if (!task) {
-        return [];
-      }
-
-      const history = [];
-
-      // Always show creation history
-      history.push({
-        id: '1',
-        taskId: taskId,
-        action: 'created' as const,
-        description: 'Task was created',
-        performedAt: task.createdAt.toISOString(),
-        metadata: {},
-      });
-
-      // Show status changes based on current task state
-      if (task.startedAt && task.status !== 'pending') {
-        history.push({
-          id: '2',
-          taskId: taskId,
-          action: 'status_change' as const,
-          description: 'Task status was changed from To do to In progress',
-          performedAt: task.startedAt.toISOString(),
-          metadata: {
-            fromStatus: 'pending',
-            toStatus: 'in_progress',
-          },
-        });
-      }
-
-      if (task.completedAt && task.status === 'completed') {
-        history.push({
-          id: '3',
-          taskId: taskId,
-          action: 'status_change' as const,
-          description: 'Task status was changed from In progress to Done',
-          performedAt: task.completedAt.toISOString(),
-          metadata: {
-            fromStatus: 'in_progress',
-            toStatus: 'completed',
-          },
-        });
-      }
-
-      if (task.status === 'closed') {
-        history.push({
-          id: '4',
-          taskId: taskId,
-          action: 'closed' as const,
-          description: 'Task was closed',
-          performedAt:
-            task.completedAt?.toISOString() || new Date().toISOString(),
-          metadata: {},
-        });
-      }
-
-      return history;
-    } catch (error) {
-      console.error('Error getting task history:', error);
-      return [];
-    }
   }
 
   async listTasks(page = 1, pageSize = 20) {

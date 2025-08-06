@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsEnum, IsBoolean, IsNumber, IsHexColor } from 'class-validator';
-import { StatusType } from '../entities/task-status.entity';
+import { StatusType } from '../db/mysql/entity/task-status.entity';
 
 export class CreateStatusDto {
   @IsString()

@@ -1311,15 +1311,6 @@ function parseEditorPages(content: string): string[] {
                   <i class="pi pi-eye"></i>
                   <span>Preview</span>
                 </button>
-                <button
-                  @click.stop="exportFile(file)"
-                  class="action-btn export-btn"
-                  :disabled="isFileProcessing(file)"
-                  :title="isFileProcessing(file) ? 'File is processing...' : 'Export Translation'"
-                >
-                  <i class="pi pi-download"></i>
-                  <span>Export</span>
-                </button>
               </div>
             </div>
             <transition name="fade">

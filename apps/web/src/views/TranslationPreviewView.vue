@@ -353,36 +353,34 @@ const exportTranslation = async () => {
 
     console.log('Export response:', response.data);
 
-    // Backend now returns { fileContent, fileName, fileType }
-    const { fileContent, fileName, fileType } = response.data;
+    // Backend now returns { fileContent, fileName, fileType, downloadUrl }
+    const { fileContent, fileName, fileType, downloadUrl } = response.data;
 
     // Create download link from base64 content
     const blob = new Blob([Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))], {
       type: fileType
     });
-    const downloadUrl = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
 
-    // Create download link
+    // Trigger download
     const link = document.createElement('a');
-    link.href = downloadUrl;
+    link.href = url;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    // Clean up the URL object
-    URL.revokeObjectURL(downloadUrl);
+    URL.revokeObjectURL(url);
 
     exportResult.value = {
       success: true,
-      message: `Translation exported successfully as ${fileName}!`,
-      downloadUrl: null // No URL needed since we triggered download directly
+      message: `Translation exported successfully! File: ${fileName}`,
+      downloadUrl: downloadUrl || url // Use GitHub URL if available, otherwise local blob URL
     };
 
     toast.add({
       severity: 'success',
-      summary: 'Success',
-      detail: `Translation exported successfully as ${fileName}!`,
+      summary: 'Export Successful',
+      detail: `Translation exported successfully! File: ${fileName}`,
       life: 3000
     });
   } catch (err: any) {

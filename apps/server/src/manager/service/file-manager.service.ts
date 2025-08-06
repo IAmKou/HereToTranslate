@@ -1,14 +1,14 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
-import  { Express } from 'express';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
 import { CommitEntity } from '../../db/mysql/entity/commit.entity';
+import { Buffer } from 'buffer';
 
 @Injectable()
 export class FileService {
@@ -509,6 +509,141 @@ export class FileService {
     };
   }
 
+  async getFilePreview(fileId: string, language?: string): Promise<{ content: Buffer; fileName: string; fileType: string }> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['project'],
+    });
 
+    if (!fileEntity) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    // Nếu không có language, trả về file gốc
+    if (!language) {
+      return {
+        content: fileEntity.fileContent as Buffer,
+        fileName: fileEntity.fileName,
+        fileType: fileEntity.fileType,
+      };
+    }
+
+    // Sử dụng TranslationService đã inject
+
+    let translatedBuffer: Buffer;
+
+    if (fileEntity.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
+      const translations = new Map<string, string>();
+      for (const e of entries) {
+        if (e.translatedText && e.translatedText.trim().length > 0) {
+          translations.set(e.originalText, e.translatedText);
+        }
+      }
+      const { replaceDocxText } = await import('../../util/extensions/docx-utils.extension');
+      translatedBuffer = await replaceDocxText(fileEntity.fileContent as Buffer, translations);
+    } else if (fileEntity.fileType === 'application/pdf') {
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
+      const translatedEntries = entries.map((e) => ({
+        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
+      }));
+      const { buildTranslatedPdf } = await import('../../util/extensions/pdf-utils.extension');
+      translatedBuffer = await buildTranslatedPdf(fileEntity.fileContent as Buffer, translatedEntries);
+    } else {
+      translatedBuffer = await this.applyTranslation(fileId, language);
+    }
+
+    return {
+      content: translatedBuffer,
+      fileName: fileEntity.fileName,
+      fileType: fileEntity.fileType,
+    };
+  }
+
+  async applyTranslation(fileId: string, language: string): Promise<Buffer> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+    });
+    if (!fileEntity) throw new Error('File not found');
+
+    const entriesRaw = await this.translationModel
+      .find({ fileId, language })
+      .lean();
+    const entries = entriesRaw.map((e: any) => ({
+      text:
+        e.translatedText && e.translatedText.trim().length > 0
+          ? e.translatedText
+          : e.originalText,
+      style: e.style,
+      font: e.font,
+    }));
+
+    return this.rebuildFileWithManifest(fileEntity.fileType, entries);
+  }
+
+  private async rebuildFileWithManifest(
+    fileType: string,
+    entries: { text: string; style?: any; font?: string }[]
+  ): Promise<Buffer> {
+    switch (fileType) {
+      case 'text/plain': {
+        const combined = entries.map((e) => e.text).join('\n');
+        return Buffer.from(combined, 'utf8');
+      }
+
+      case 'application/json': {
+        const jsonArray = entries.map((e: any) => e.text);
+        return Buffer.from(JSON.stringify(jsonArray, null, 2), 'utf8');
+      }
+
+      case 'application/pdf': {
+        const { PDFDocument, StandardFonts } = await import('pdf-lib');
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        let y = page.getHeight() - 24;
+        for (const e of entries) {
+          page.drawText(e.text, { x: 50, y, font, size: 12 });
+          y -= 16;
+          if (y < 40) {
+            const newPage = pdfDoc.addPage();
+            y = newPage.getHeight() - 24;
+          }
+        }
+        const pdfBytes = await pdfDoc.save();
+        return Buffer.from(pdfBytes);
+      }
+
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+        const { Document, Packer, Paragraph, TextRun } = await import('docx');
+        const paragraphs = entries.map((e) => {
+          return new Paragraph({
+            children: [
+              new TextRun({
+                text: e.text,
+                bold: e.style?.bold || false,
+                italics: e.style?.italic || false,
+                color: e.style?.color,
+                size: e.style?.fontSize ? e.style.fontSize * 2 : undefined,
+                font: e.font !== 'default' ? e.font : undefined,
+              }),
+            ],
+          });
+        });
+        const doc = new Document({ sections: [{ children: paragraphs }] });
+        const buffer = await Packer.toBuffer(doc);
+        return buffer;
+      }
+
+      default: {
+        const defaultCombined = entries.map((e: any) => e.text).join('\n');
+        return Buffer.from(defaultCombined, 'utf8');
+      }
+    }
+  }
 
 }

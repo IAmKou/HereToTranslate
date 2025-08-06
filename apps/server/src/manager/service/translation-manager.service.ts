@@ -29,28 +29,6 @@ export class TranslationService {
     const originalEntry = await this.translationModel.findById(id);
     if (!originalEntry) throw new Error('Manifest entry not found');
 
-    // Handle missing manifestEntryId by generating one
-    let manifestEntryId = originalEntry.manifestEntryId;
-    if (!manifestEntryId) {
-      console.warn('Original entry missing manifestEntryId, generating one:', {
-        id: originalEntry._id,
-        projectId: originalEntry.projectId,
-        fileId: originalEntry.fileId,
-        originalText: originalEntry.originalText?.substring(0, 50)
-      });
-
-      // Generate a new manifestEntryId
-      manifestEntryId = `legacy_${originalEntry._id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // Update the original entry with the new manifestEntryId
-      await this.translationModel.updateOne(
-        { _id: originalEntry._id },
-        { $set: { manifestEntryId } }
-      );
-
-      console.log(`✅ Fixed original entry ${originalEntry._id} with manifestEntryId: ${manifestEntryId}`);
-    }
-
     const existingTranslation = await this.translationModel.findOne({
       projectId: originalEntry.projectId,
       branchId: originalEntry.branchId,
@@ -68,11 +46,11 @@ export class TranslationService {
       entry = existingTranslation;
     } else {
       // Tạo bản ghi mới cho ngôn ngữ này
-      const newEntryData = {
+      entry = await this.translationModel.create({
         projectId: originalEntry.projectId,
         branchId: originalEntry.branchId,
         fileId: originalEntry.fileId,
-        manifestEntryId: manifestEntryId, // Use the fixed manifestEntryId
+        manifestEntryId: originalEntry.manifestEntryId,
         originalText: originalEntry.originalText,
         translatedText: translatedText,
         language: language,
@@ -81,15 +59,7 @@ export class TranslationService {
         style: originalEntry.style,
         position: originalEntry.position,
         obsolete: false,
-      };
-
-      console.log('Creating new translation entry:', {
-        manifestEntryId: newEntryData.manifestEntryId,
-        language: newEntryData.language,
-        fileId: newEntryData.fileId
       });
-
-      entry = await this.translationModel.create(newEntryData);
     }
 
     const fileId = entry.fileId;
@@ -116,7 +86,13 @@ export class TranslationService {
         }
       }
       const originalBuffer = fileEntity.fileContent as Buffer;
-      updatedBuffer = await replaceDocxText(originalBuffer, translations);
+      try {
+        updatedBuffer = await replaceDocxText(originalBuffer, translations);
+      } catch (error) {
+        logger.warn(`DOCX processing failed for file ${fileId}: ${error.message}`);
+        logger.warn('Returning original file content');
+        updatedBuffer = originalBuffer;
+      }
     } else if (fileEntity.fileType === 'application/pdf') {
       const entries = await this.translationModel
         .find({ fileId, language })
@@ -265,7 +241,7 @@ export class TranslationService {
   async exportTranslation(
     fileId: string,
     language: string
-  ): Promise<{ fileContent: string; fileName: string; fileType: string }> {
+  ): Promise<{ githubUrl: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -288,10 +264,16 @@ export class TranslationService {
           translations.set(e.originalText, e.translatedText);
         }
       }
-      buffer = await replaceDocxText(
-        fileEntity.fileContent as Buffer,
-        translations
-      );
+      try {
+        buffer = await replaceDocxText(
+          fileEntity.fileContent as Buffer,
+          translations
+        );
+      } catch (error) {
+        logger.warn(`DOCX processing failed for export ${fileId}: ${error.message}`);
+        logger.warn('Using original file content for export');
+        buffer = fileEntity.fileContent as Buffer;
+      }
     } else if (fileEntity.fileType === 'application/pdf') {
       const entries = await this.translationModel
         .find({ fileId, language })
@@ -307,17 +289,21 @@ export class TranslationService {
       buffer = await this.applyTranslation(fileId, language);
     }
 
-    // Create translated filename
-    const fileNameParts = fileEntity.fileName.split('.');
-    const extension = fileNameParts.pop();
-    const baseName = fileNameParts.join('.');
-    const translatedFileName = `${baseName}_${language}.${extension}`;
+    const repoName = `project-${fileEntity.project.id}`;
+    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
 
-    return {
-      fileContent: buffer.toString('base64'),
-      fileName: translatedFileName,
-      fileType: fileEntity.fileType
-    };
+    await this.githubService.commitChange({
+      repo: repoName,
+      branch: 'main',
+      path: `${language}/${safeFileName}`,
+      content: buffer,
+      message: `Exported translation for ${fileEntity.fileName} (${language})`,
+    });
+
+    const githubUrl = `https://raw.githubusercontent.com/${this.githubService.getUsername()}/${repoName}/main/${language}/${encodeURIComponent(
+      safeFileName
+    )}`;
+    return { githubUrl };
   }
 
   async getAllString(
@@ -415,29 +401,6 @@ export class TranslationService {
       totalPages: sortedPages.length,
       pages: pageInfo
     };
-  }
-
-  async fixMissingManifestEntryIds() {
-    // Find all translation entries that are missing manifestEntryId
-    const entriesWithoutManifestId = await this.translationModel.find({
-      manifestEntryId: { $exists: false }
-    });
-
-    console.log(`Found ${entriesWithoutManifestId.length} entries without manifestEntryId`);
-
-    for (const entry of entriesWithoutManifestId) {
-      // Generate a new manifestEntryId for this entry
-      const newManifestEntryId = `legacy_${entry._id}_${Date.now()}`;
-
-      await this.translationModel.updateOne(
-        { _id: entry._id },
-        { $set: { manifestEntryId: newManifestEntryId } }
-      );
-
-      console.log(`Fixed entry ${entry._id} with manifestEntryId: ${newManifestEntryId}`);
-    }
-
-    return entriesWithoutManifestId.length;
   }
 }
 

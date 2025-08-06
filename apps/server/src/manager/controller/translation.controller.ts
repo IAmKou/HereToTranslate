@@ -67,9 +67,11 @@ export class TranslationController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('fix-manifest-ids')
-  async fixMissingManifestEntryIds() {
-    return this.translationService.fixMissingManifestEntryIds();
+  @Get('github-preview/:fileId')
+  async getGitHubPreview(
+    @Param('fileId') fileId: string,
+    @Query('language') language: string
+  ) {
+    return this.translationService.getGitHubPreview(fileId, language);
   }
-
 }

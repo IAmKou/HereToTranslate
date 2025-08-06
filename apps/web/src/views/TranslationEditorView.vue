@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, defineProps, watch, onMounted, computed, nextTick, onBeforeUnmount } from 'vue';
+import { ref, watch, onMounted, computed, onBeforeUnmount } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
@@ -1252,6 +1252,24 @@ async function exportTranslation(fileId: string | number) {
     exportProgress.value[String(fileId)] = 0;
   }
 }
+
+// Navigation to Translation Preview
+function goToTranslationPreview() {
+  if (!selectedFileForPreview.value) return;
+
+  const fileId = selectedFileForPreview.value.fileId || selectedFileForPreview.value.id;
+  router.push({
+    name: 'translation-preview',
+    params: {
+      projectId: route.params.projectId,
+      branchId: route.params.branchId
+    },
+    query: {
+      fileId: String(fileId),
+      language: selectedLanguage.value
+    }
+  });
+}
 </script>
 
 <template>
@@ -1295,12 +1313,12 @@ async function exportTranslation(fileId: string | number) {
         <div class="preview-section">
           <button
             class="preview-btn"
-            @click="previewPanelCollapsed = !previewPanelCollapsed"
+            @click="goToTranslationPreview"
             :disabled="!selectedFileForPreview"
-            :title="!selectedFileForPreview ? 'Select a file to preview' : (previewPanelCollapsed ? 'Show preview' : 'Hide preview')"
+            :title="!selectedFileForPreview ? 'Select a file to preview' : 'Go to Translation Preview'"
           >
             <i class="pi pi-eye"></i>
-            <span>{{ previewPanelCollapsed ? 'Show Preview' : 'Hide Preview' }}</span>
+            <span>Translation Preview</span>
           </button>
         </div>
 
@@ -1345,20 +1363,6 @@ async function exportTranslation(fileId: string | number) {
                 <span class="accordion-arrow" :class="{ open: expandedFileIds.includes(file.fileId || file.id) }">
                 <i class="pi" :class="expandedFileIds.includes(file.fileId || file.id) ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
               </span>
-              </div>
-
-              <!-- File Export Button -->
-              <div class="file-actions">
-                <button
-                  class="file-export-btn"
-                  @click.stop="exportTranslation(file.fileId || file.id)"
-                  :disabled="isFileProcessing(file) || isExporting[file.fileId || file.id]"
-                  :title="isFileProcessing(file) ? 'File is processing' : 'Export translated file'"
-                >
-                  <i v-if="isExporting[file.fileId || file.id]" class="pi pi-spin pi-spinner"></i>
-                  <i v-else class="pi pi-download"></i>
-                  <span v-if="!isExporting[file.fileId || file.id]">Export</span>
-                </button>
               </div>
             </div>
             <transition name="fade">
@@ -1621,6 +1625,7 @@ async function exportTranslation(fileId: string | number) {
         :file-name="selectedFileForPreview?.fileName"
         :file-path="selectedFileForPreview?.filePath"
         :file-size="selectedFileForPreview?.fileSize"
+        :language="selectedLanguage"
         v-model:collapsed="previewPanelCollapsed"
       />
       <!-- Debug info -->

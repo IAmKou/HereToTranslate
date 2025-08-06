@@ -3,23 +3,32 @@
     <!-- Header -->
     <div class="page-header">
       <div class="header-content">
-        <h1><i class="pi pi-eye"></i> Translation Preview & Export</h1>
+        <h1><i class="pi pi-eye" /> Translation Preview & Export</h1>
         <p>Preview and export the file you are editing</p>
       </div>
       <div class="header-actions">
-        <button @click="$router.go(-1)" class="back-btn">
-          <i class="pi pi-arrow-left"></i>
+        <button
+          class="back-btn"
+          @click="$router.go(-1)"
+        >
+          <i class="pi pi-arrow-left" />
           Back
         </button>
       </div>
     </div>
 
     <!-- Only show preview for the file being edited -->
-    <div v-if="selectedFile && showPreviewPanel" class="preview-panel">
+    <div
+      v-if="selectedFile && showPreviewPanel"
+      class="preview-panel"
+    >
       <div class="preview-header">
-        <h3><i class="pi pi-eye"></i> Translation Preview & Export</h3>
-        <button @click="closePreviewPanel" class="close-btn">
-          <i class="pi pi-times"></i>
+        <h3><i class="pi pi-eye" /> Translation Preview & Export</h3>
+        <button
+          class="close-btn"
+          @click="closePreviewPanel"
+        >
+          <i class="pi pi-times" />
         </button>
       </div>
 
@@ -31,8 +40,14 @@
           v-model="selectedLanguage"
           class="language-dropdown"
         >
-          <option value="">Choose a language</option>
-          <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
+          <option value="">
+            Choose a language
+          </option>
+          <option
+            v-for="lang in availableLanguages"
+            :key="lang.code"
+            :value="lang.code"
+          >
             {{ lang.name }}
           </option>
         </select>
@@ -40,66 +55,151 @@
 
       <!-- Preview Content -->
       <div class="preview-content">
-        <div v-if="loading" class="loading-state">
-          <i class="pi pi-spin pi-spinner"></i>
+        <div
+          v-if="loading"
+          class="loading-state"
+        >
+          <i class="pi pi-spin pi-spinner" />
           <span>Loading translation preview...</span>
         </div>
 
-        <div v-else-if="error" class="error-state">
-          <i class="pi pi-exclamation-triangle"></i>
+        <div
+          v-else-if="error"
+          class="error-state"
+        >
+          <i class="pi pi-exclamation-triangle" />
           <span>{{ error }}</span>
-          <button @click="loadPreview" class="retry-btn">Retry</button>
+          <button
+            class="retry-btn"
+            @click="loadPreview"
+          >
+            Retry
+          </button>
         </div>
 
-        <div v-else-if="!previewData" class="no-preview-state">
-          <i class="pi pi-file-text"></i>
+        <div
+          v-else-if="!previewData"
+          class="no-preview-state"
+        >
+          <i class="pi pi-file-text" />
           <span>Select a language to preview translation</span>
         </div>
 
-        <div v-else class="preview-data">
+        <div
+          v-else
+          class="preview-data"
+        >
           <!-- Text/JSON Preview -->
-          <div v-if="previewType === 'text'" class="text-preview">
+          <div
+            v-if="previewType === 'text'"
+            class="text-preview"
+          >
             <div class="text-container">
-              <pre class="text-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }">{{ previewData }}</pre>
+              <pre
+                class="text-content"
+                :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"
+              >{{ previewData }}</pre>
             </div>
             <!-- Zoom controls for Text -->
             <div class="text-zoom-controls">
-              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
+              <button
+                :disabled="zoom <= 0.5"
+                class="control-btn"
+                @click="zoomOut"
+              >
+                -
+              </button>
               <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
-              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
-              <button @click="resetZoom" class="control-btn">Reset</button>
+              <button
+                :disabled="zoom >= 2"
+                class="control-btn"
+                @click="zoomIn"
+              >
+                +
+              </button>
+              <button
+                class="control-btn"
+                @click="resetZoom"
+              >
+                Reset
+              </button>
             </div>
           </div>
 
           <!-- PDF Preview -->
-          <div v-else-if="previewType === 'pdf'" class="pdf-preview">
-            <iframe :src="previewUrl" class="pdf-viewer" frameborder="0"></iframe>
+          <div
+            v-else-if="previewType === 'pdf'"
+            class="pdf-preview"
+          >
+            <iframe
+              :src="previewUrl"
+              class="pdf-viewer"
+              frameborder="0"
+            />
           </div>
 
           <!-- Document Preview with docx-preview library -->
-          <div v-else-if="previewType === 'docx-preview'" class="document-preview">
+          <div
+            v-else-if="previewType === 'docx-preview'"
+            class="document-preview"
+          >
             <div class="docx-container">
-              <div ref="docxContainer" class="docx-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"></div>
+              <div
+                ref="docxContainer"
+                class="docx-content"
+                :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"
+              />
             </div>
-            <div v-if="!docxRendered" class="docx-loading">
-              <i class="pi pi-spin pi-spinner"></i>
+            <div
+              v-if="!docxRendered"
+              class="docx-loading"
+            >
+              <i class="pi pi-spin pi-spinner" />
               <span>Loading DOCX preview...</span>
             </div>
 
             <!-- Zoom controls for DOCX -->
             <div class="docx-zoom-controls">
-              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
+              <button
+                :disabled="zoom <= 0.5"
+                class="control-btn"
+                @click="zoomOut"
+              >
+                -
+              </button>
               <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
-              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
-              <button @click="resetZoom" class="control-btn">Reset</button>
+              <button
+                :disabled="zoom >= 2"
+                class="control-btn"
+                @click="zoomIn"
+              >
+                +
+              </button>
+              <button
+                class="control-btn"
+                @click="resetZoom"
+              >
+                Reset
+              </button>
             </div>
           </div>
 
           <!-- Default Preview -->
-          <div v-else class="default-preview">
-            <div v-if="typeof previewData === 'string' && (previewData.includes('<') || previewData.includes('&'))"
-                 class="preview-text" v-html="previewData"></div>
-            <div v-else class="preview-text">{{ previewData }}</div>
+          <div
+            v-else
+            class="default-preview"
+          >
+            <div
+              v-if="typeof previewData === 'string' && (previewData.includes('<') || previewData.includes('&'))"
+              class="preview-text"
+              v-html="previewData"
+            />
+            <div
+              v-else
+              class="preview-text"
+            >
+              {{ previewData }}
+            </div>
           </div>
         </div>
       </div>
@@ -107,37 +207,54 @@
       <!-- Export Section -->
       <div class="export-section">
         <div class="export-header">
-          <h4><i class="pi pi-download"></i> Export Translation</h4>
+          <h4><i class="pi pi-download" /> Export Translation</h4>
         </div>
 
-        <div v-if="exportResult" class="export-result">
-          <div v-if="exportResult.success" class="success-message">
-            <i class="pi pi-check-circle"></i>
+        <div
+          v-if="exportResult"
+          class="export-result"
+        >
+          <div
+            v-if="exportResult.success"
+            class="success-message"
+          >
+            <i class="pi pi-check-circle" />
             <span>{{ exportResult.message }}</span>
-            <a v-if="exportResult.downloadUrl" :href="exportResult.downloadUrl" target="_blank" class="download-link">
-              <i class="pi pi-external-link"></i> Download File
+            <a
+              v-if="exportResult.downloadUrl"
+              :href="exportResult.downloadUrl"
+              target="_blank"
+              class="download-link"
+            >
+              <i class="pi pi-external-link" /> Download File
             </a>
           </div>
-          <div v-else class="error-message">
-            <i class="pi pi-exclamation-circle"></i>
+          <div
+            v-else
+            class="error-message"
+          >
+            <i class="pi pi-exclamation-circle" />
             <span>{{ exportResult.message }}</span>
           </div>
         </div>
 
         <div class="export-actions">
           <button
-            @click="exportTranslation"
             :disabled="!selectedLanguage || exporting"
             class="export-btn"
+            @click="exportTranslation"
           >
-            <i class="pi pi-download"></i>
+            <i class="pi pi-download" />
             {{ exporting ? 'Exporting...' : 'Export Translation' }}
           </button>
         </div>
       </div>
     </div>
-    <div v-else class="no-files">
-      <i class="pi pi-folder-open"></i>
+    <div
+      v-else
+      class="no-files"
+    >
+      <i class="pi pi-folder-open" />
       <h3>No file selected for preview</h3>
       <p>Please return to the editor and select a file to preview.</p>
     </div>
@@ -263,24 +380,60 @@ const loadPreview = async () => {
 
     // Backend returns { fileType, preview }
     const { fileType, preview } = response.data;
+    console.log('Translation preview response:', { fileType, previewType: typeof preview, previewLength: preview?.length });
+
+    // Handle different preview formats from backend
+    let base64Content: string;
+
+    if (typeof preview === 'string') {
+      // Content is already a string (base64 or plain text)
+      base64Content = preview;
+    } else if (preview && preview.type === 'Buffer' && preview.data) {
+      // Convert Buffer data to base64
+      const uint8Array = new Uint8Array(preview.data);
+      base64Content = btoa(String.fromCharCode(...uint8Array));
+    } else if (preview && typeof preview === 'object' && !Array.isArray(preview)) {
+      // Handle case where Buffer is serialized as plain object with numeric keys
+      const bufferData = Object.values(preview) as number[];
+      if (bufferData.length > 0 && typeof bufferData[0] === 'number') {
+        // Convert numeric array to base64
+        const uint8Array = new Uint8Array(bufferData);
+        base64Content = btoa(String.fromCharCode(...uint8Array));
+      } else {
+        base64Content = preview as string;
+      }
+    } else {
+      console.error('Unexpected preview format:', preview);
+      throw new Error('Invalid preview format from backend');
+    }
 
     // Set preview type and content based on file type
     if (fileType === 'application/pdf') {
       previewType.value = 'pdf';
-      previewUrl.value = `data:application/pdf;base64,${preview}`;
+      previewUrl.value = `data:application/pdf;base64,${base64Content}`;
     } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       previewType.value = 'docx-preview';
-      previewData.value = preview;
+      previewData.value = base64Content;
       nextTick(() => {
         renderDocxWithPreview();
       });
     } else {
       previewType.value = 'text';
-      // Check if content is HTML and render it properly
-      if (typeof preview === 'string' && (preview.includes('<') || preview.includes('&'))) {
-        previewData.value = preview;
+      // For text files, check if content is already decoded or needs decoding
+      if (fileType === 'text/plain' || fileType === 'application/json') {
+        // Translation service returns UTF-8 string for text files, not base64
+        previewData.value = base64Content;
       } else {
-        previewData.value = preview;
+        // For other file types, try to decode base64
+        try {
+          // Clean the base64 string first
+          const cleanBase64 = base64Content.replace(/[^A-Za-z0-9+/=]/g, '');
+          const decodedContent = atob(cleanBase64);
+          previewData.value = decodedContent;
+        } catch (err) {
+          console.error('Error decoding base64 content:', err);
+          previewData.value = base64Content;
+        }
       }
     }
 
@@ -311,7 +464,18 @@ const renderDocxWithPreview = async () => {
   try {
     const { renderAsync } = await import('docx-preview');
     const base64Data = previewData.value;
-    const binaryString = atob(base64Data);
+    console.log('DOCX base64 data length:', base64Data?.length);
+    console.log('DOCX base64 data preview:', base64Data?.substring(0, 100));
+
+    // Clean the base64 string first
+    const cleanBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
+    console.log('DOCX cleaned base64 data length:', cleanBase64?.length);
+    console.log('DOCX cleaned base64 data preview:', cleanBase64?.substring(0, 100));
+
+    if (cleanBase64.length % 4 !== 0) {
+      throw new Error('Invalid base64 string length');
+    }
+    const binaryString = atob(cleanBase64);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
@@ -353,36 +517,42 @@ const exportTranslation = async () => {
 
     console.log('Export response:', response.data);
 
-    // Backend now returns { fileContent, fileName, fileType, downloadUrl }
-    const { fileContent, fileName, fileType, downloadUrl } = response.data;
+    // Backend returns { githubUrl: string }
+    if (response.data.githubUrl) {
+      // Create download link with proper handling
+      const link = document.createElement('a');
+      link.href = response.data.githubUrl;
+      link.download = `translated_${selectedLanguage.value}_${selectedFile.value.fileName || 'file'}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
 
-    // Create download link from base64 content
-    const blob = new Blob([Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))], {
-      type: fileType
-    });
-    const url = URL.createObjectURL(blob);
+      // Add click event to handle potential sandbox issues
+      link.onclick = (e) => {
+        // If direct download fails, open in new tab
+        setTimeout(() => {
+          window.open(response.data.githubUrl, '_blank', 'noopener,noreferrer');
+        }, 100);
+      };
 
-    // Trigger download
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-    exportResult.value = {
-      success: true,
-      message: `Translation exported successfully! File: ${fileName}`,
-      downloadUrl: downloadUrl || url // Use GitHub URL if available, otherwise local blob URL
-    };
+      exportResult.value = {
+        success: true,
+        message: 'Translation exported successfully! File available on GitHub.',
+        downloadUrl: response.data.githubUrl
+      };
 
-    toast.add({
-      severity: 'success',
-      summary: 'Export Successful',
-      detail: `Translation exported successfully! File: ${fileName}`,
-      life: 3000
-    });
+      toast.add({
+        severity: 'success',
+        summary: 'Export Successful',
+        detail: 'Translation exported and downloaded successfully',
+        life: 3000
+      });
+    } else {
+      throw new Error('No download URL received');
+    }
   } catch (err: any) {
     console.error('Export error:', err);
     const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to export translation';

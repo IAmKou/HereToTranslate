@@ -1,6 +1,6 @@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Injectable, forwardRef, Inject } from '@nestjs/common';
+import { Injectable} from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import {
   TranslationString,
@@ -13,7 +13,6 @@ import { Repository, In } from 'typeorm';
 import { replaceDocxText } from '../../util/extensions/docx-utils.extension';
 import { buildTranslatedPdf } from '../../util/extensions/pdf-utils.extension';
 import { Buffer } from 'buffer';
-import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class TranslationService {
@@ -22,15 +21,35 @@ export class TranslationService {
     private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
-    private readonly githubService: GitHubService,
-    @Inject(forwardRef(() => ActivityManagerService))
-    private readonly activityManagerService: ActivityManagerService,
+    private readonly githubService: GitHubService
   ) {}
 
   async addTranslation(id: string, translatedText: string, language: string) {
     // Tìm bản ghi gốc để lấy thông tin
     const originalEntry = await this.translationModel.findById(id);
     if (!originalEntry) throw new Error('Manifest entry not found');
+
+    // Handle missing manifestEntryId by generating one
+    let manifestEntryId = originalEntry.manifestEntryId;
+    if (!manifestEntryId) {
+      console.warn('Original entry missing manifestEntryId, generating one:', {
+        id: originalEntry._id,
+        projectId: originalEntry.projectId,
+        fileId: originalEntry.fileId,
+        originalText: originalEntry.originalText?.substring(0, 50)
+      });
+
+      // Generate a new manifestEntryId
+      manifestEntryId = `legacy_${originalEntry._id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Update the original entry with the new manifestEntryId
+      await this.translationModel.updateOne(
+        { _id: originalEntry._id },
+        { $set: { manifestEntryId } }
+      );
+
+      console.log(`✅ Fixed original entry ${originalEntry._id} with manifestEntryId: ${manifestEntryId}`);
+    }
 
     const existingTranslation = await this.translationModel.findOne({
       projectId: originalEntry.projectId,
@@ -41,7 +60,6 @@ export class TranslationService {
     });
 
     let entry;
-    let isNewTranslation = false;
 
     if (existingTranslation) {
       // Update bản dịch hiện có
@@ -50,11 +68,11 @@ export class TranslationService {
       entry = existingTranslation;
     } else {
       // Tạo bản ghi mới cho ngôn ngữ này
-      entry = await this.translationModel.create({
+      const newEntryData = {
         projectId: originalEntry.projectId,
         branchId: originalEntry.branchId,
         fileId: originalEntry.fileId,
-        manifestEntryId: originalEntry.manifestEntryId,
+        manifestEntryId: manifestEntryId, // Use the fixed manifestEntryId
         originalText: originalEntry.originalText,
         translatedText: translatedText,
         language: language,
@@ -63,40 +81,24 @@ export class TranslationService {
         style: originalEntry.style,
         position: originalEntry.position,
         obsolete: false,
+      };
+
+      console.log('Creating new translation entry:', {
+        manifestEntryId: newEntryData.manifestEntryId,
+        language: newEntryData.language,
+        fileId: newEntryData.fileId
       });
-      isNewTranslation = true;
+
+      entry = await this.translationModel.create(newEntryData);
     }
 
     const fileId = entry.fileId;
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['project', 'uploader'],
+      relations: ['project'],
     });
     if (!fileEntity || !fileEntity.project) {
       throw new Error('File or project not found');
-    }
-
-    // Log activity
-    try {
-      if (isNewTranslation) {
-        await this.activityManagerService.logTranslationAdd(
-          Number(fileEntity.project.id),
-          Number(fileEntity.uploader?.id || 0),
-          translatedText,
-          language,
-          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
-        );
-      } else {
-        await this.activityManagerService.logTranslationEdit(
-          Number(fileEntity.project.id),
-          Number(fileEntity.uploader?.id || 0),
-          translatedText,
-          language,
-          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
-        );
-      }
-    } catch (error) {
-      logger.error('Failed to log translation activity:', error);
     }
 
     let updatedBuffer: Buffer;
@@ -263,7 +265,7 @@ export class TranslationService {
   async exportTranslation(
     fileId: string,
     language: string
-  ): Promise<{ githubUrl: string }> {
+  ): Promise<{ fileContent: string; fileName: string; fileType: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -305,21 +307,17 @@ export class TranslationService {
       buffer = await this.applyTranslation(fileId, language);
     }
 
-    const repoName = `project-${fileEntity.project.id}`;
-    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
+    // Create translated filename
+    const fileNameParts = fileEntity.fileName.split('.');
+    const extension = fileNameParts.pop();
+    const baseName = fileNameParts.join('.');
+    const translatedFileName = `${baseName}_${language}.${extension}`;
 
-    await this.githubService.commitChange({
-      repo: repoName,
-      branch: 'main',
-      path: `${language}/${safeFileName}`,
-      content: buffer,
-      message: `Exported translation for ${fileEntity.fileName} (${language})`,
-    });
-
-    const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${language}/${encodeURIComponent(
-      safeFileName
-    )}`;
-    return { githubUrl };
+    return {
+      fileContent: buffer.toString('base64'),
+      fileName: translatedFileName,
+      fileType: fileEntity.fileType
+    };
   }
 
   async getAllString(
@@ -327,13 +325,12 @@ export class TranslationService {
     branchId: string,
     language: string,
     fileId?: string,
-    page?: number,
-    fileType?: string
+    filePart?: number
   ) {
     // Lấy tất cả strings gốc (không phân biệt language) làm base
     const baseQuery: any = { projectId, branchId };
     if (fileId) baseQuery.fileId = fileId;
-    if (page !== undefined) baseQuery.filePart = page; // filePart trong DB vẫn là page number
+    if (filePart !== undefined) baseQuery.filePart = filePart;
 
     const baseStrings = await this.translationModel
       .find(baseQuery)
@@ -343,7 +340,7 @@ export class TranslationService {
     // Lấy bản dịch của ngôn ngữ được chọn
     const translationQuery: any = { projectId, branchId, language };
     if (fileId) translationQuery.fileId = fileId;
-    if (page !== undefined) translationQuery.filePart = page; // filePart trong DB vẫn là page number
+    if (filePart !== undefined) translationQuery.filePart = filePart;
 
     const translatedStrings = await this.translationModel
       .find(translationQuery)
@@ -365,25 +362,15 @@ export class TranslationService {
       };
     });
 
-    // Lấy tên file và thông tin file type
+    // Lấy tên file
     const fileIds = Array.from(new Set(mergedStrings.map((str) => str.fileId)));
     const fileNamesMap: Record<string, string> = {};
-    const fileTypesMap: Record<string, string> = {};
-
     if (fileIds.length > 0) {
       const files = await this.fileRepository.find({
         where: { id: In(fileIds.map((id) => BigInt(id))) },
       });
       files.forEach((f) => {
         fileNamesMap[String(f.id)] = f.fileName;
-        fileTypesMap[String(f.id)] = f.fileType;
-      });
-    }
-
-    // Nếu có fileType được cung cấp, sử dụng nó thay vì lấy từ database
-    if (fileType && fileIds.length > 0) {
-      fileIds.forEach(fileId => {
-        fileTypesMap[fileId] = fileType;
       });
     }
 
@@ -394,7 +381,6 @@ export class TranslationService {
       fileId: str.fileId,
       filePart: str.filePart ?? 0,
       fileName: fileNamesMap[str.fileId] || '',
-      fileType: fileTypesMap[str.fileId] || '',
     }));
   }
 
@@ -429,6 +415,29 @@ export class TranslationService {
       totalPages: sortedPages.length,
       pages: pageInfo
     };
+  }
+
+  async fixMissingManifestEntryIds() {
+    // Find all translation entries that are missing manifestEntryId
+    const entriesWithoutManifestId = await this.translationModel.find({
+      manifestEntryId: { $exists: false }
+    });
+
+    console.log(`Found ${entriesWithoutManifestId.length} entries without manifestEntryId`);
+
+    for (const entry of entriesWithoutManifestId) {
+      // Generate a new manifestEntryId for this entry
+      const newManifestEntryId = `legacy_${entry._id}_${Date.now()}`;
+
+      await this.translationModel.updateOne(
+        { _id: entry._id },
+        { $set: { manifestEntryId: newManifestEntryId } }
+      );
+
+      console.log(`Fixed entry ${entry._id} with manifestEntryId: ${newManifestEntryId}`);
+    }
+
+    return entriesWithoutManifestId.length;
   }
 }
 

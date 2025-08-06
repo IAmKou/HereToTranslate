@@ -13,10 +13,9 @@ export class TranslationController {
     @Query('branchId') branchId: string,
     @Query('language') language: string ,
     @Query('fileId') fileId?: string,
-    @Query('page') page?: number,
-    @Query('fileType') fileType?: string
+    @Query('filePart') filePart?: number
   ) {
-    return this.translationService.getAllString(projectId, branchId, language, fileId, page, fileType);
+    return this.translationService.getAllString(projectId, branchId, language, fileId, filePart);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -65,6 +64,12 @@ export class TranslationController {
     @Body('language') language: string
   ) {
     return this.translationService.exportTranslation(fileId, language);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('fix-manifest-ids')
+  async fixMissingManifestEntryIds() {
+    return this.translationService.fixMissingManifestEntryIds();
   }
 
 }

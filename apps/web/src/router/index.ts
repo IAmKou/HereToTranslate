@@ -216,6 +216,12 @@ const router = createRouter({
       name: 'translation-editor',
       component: () => import('../views/TranslationEditorView.vue'),
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:projectId/branches/:branchId/preview',
+      name: 'translation-preview',
+      component: () => import('../views/TranslationPreviewView.vue'),
+      meta: { requiresAuth: true },
     }
 
   ],

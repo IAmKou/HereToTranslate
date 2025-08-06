@@ -1,4 +1,3 @@
-// task.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectGroupEntity } from './project-group.entity';

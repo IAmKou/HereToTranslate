@@ -502,7 +502,7 @@ function handleAutoFix() {
   max-width: 380px;
   width: auto;
   min-height: auto;
-  max-height: 80vh;
+  max-height: 70vh;
   overflow: hidden;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   margin-top: 0.5rem;
@@ -530,7 +530,6 @@ function handleAutoFix() {
   padding: 0.6rem 0.75rem;
   background: #1e293b;
   border-bottom: 1px solid #475569;
-  flex-shrink: 0;
 }
 
 .validation-header h3 {
@@ -558,10 +557,9 @@ function handleAutoFix() {
 
 .validation-content {
   padding: 0.75rem;
-  max-height: 50vh;
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
   flex: 1;
-  min-height: 0;
 }
 
 /* Responsive design for smaller screens */
@@ -570,11 +568,10 @@ function handleAutoFix() {
     max-width: 95%;
     margin-top: 0.5rem;
     min-height: auto;
-    max-height: 85vh;
   }
 
   .validation-content {
-    max-height: 40vh;
+    max-height: none;
     padding: 0.5rem;
   }
 
@@ -609,7 +606,7 @@ function handleAutoFix() {
 .warnings-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1rem;
 }
 
 .warning-item {
@@ -643,7 +640,6 @@ function handleAutoFix() {
 .warning-item span {
   line-height: 1.3;
   font-size: 0.8rem;
-  flex: 1;
 }
 
 .validation-actions {
@@ -734,7 +730,6 @@ function handleAutoFix() {
   font-size: 0.65rem;
   margin-left: 0.3rem;
   transition: all 0.2s;
-  flex-shrink: 0;
 }
 
 .auto-fix-btn:hover {
@@ -757,12 +752,5 @@ function handleAutoFix() {
 
 .validation-content::-webkit-scrollbar-thumb:hover {
   background: #64748b;
-}
-
-/* Ensure buttons are always visible */
-.validation-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
 }
 </style>

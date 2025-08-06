@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Socket, Server } from 'socket.io';
 import { Logger } from '@nestjs/common';
+import { NotificationEntity } from '#LocalProject/Entities';
 
 interface NotificationPayload {
   id: string;

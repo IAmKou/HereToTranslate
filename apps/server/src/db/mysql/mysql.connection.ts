@@ -20,10 +20,9 @@ import {
   TransactionEntity,
   CommitEntity,
   ProjectTagEntity, TranslationApprovalEntity, WalletEntity,
-  NotificationEntity, SettingsEntity
+  NotificationEntity, SettingsEntity, WorkflowTransitionEntity,
+  WorkflowEntity, TaskStatusEntity, TaskCommentEntity, TaskStatusHistoryEntity,
 } from '#LocalProject/Entities';
-import { TaskHistoryEntity } from './entity/task-history.entity';
-import { ProjectActivity } from './entity/project-activity.entity';
 
 
 @Injectable()
@@ -53,7 +52,9 @@ export class MySqlConnection {
       entities: [UserEntity, BranchEntity, ProjectEntity, CategoryEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, ProjectInvitationEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,
-        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity, NotificationEntity, SettingsEntity, TaskHistoryEntity, ProjectActivity],
+        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity,
+        WalletEntity, NotificationEntity, SettingsEntity, TaskStatusEntity, TaskStatusHistoryEntity, WorkflowEntity,
+        WorkflowTransitionEntity, TaskCommentEntity],
     });
     MySqlConnection.instance = this;
   }

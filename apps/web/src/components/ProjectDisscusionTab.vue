@@ -705,9 +705,9 @@ watchEffect(() => {
 <style scoped>
 .discussion-section {
   background: white;
-  border-radius: 8px;
-  padding: 1.2rem;
-  margin-bottom: 1.2rem;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
@@ -715,34 +715,33 @@ watchEffect(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.2rem;
+  margin-bottom: 2rem;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.75rem;
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: #2d3748;
 }
 
 .title-icon {
-  font-size: 1.1rem;
+  font-size: 1.5rem;
 }
 
 .btn-add {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.5rem 1rem;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
   background: #4299e1;
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -787,8 +786,8 @@ watchEffect(() => {
 .discussion-item {
   background: #f7fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 12px;
+  padding: 1.5rem;
   transition: all 0.3s ease;
 }
 
@@ -817,15 +816,15 @@ watchEffect(() => {
 .discussion-title {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  margin: 0 0 0.3rem 0;
-  font-size: 1rem;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
   font-weight: 600;
   color: #2d3748;
 }
 
 .pin-icon {
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 
 .discussion-description {
@@ -836,19 +835,19 @@ watchEffect(() => {
 
 .discussion-meta {
   display: flex;
-  gap: 0.6rem;
-  font-size: 0.75rem;
+  gap: 1rem;
+  font-size: 0.875rem;
   color: #718096;
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.25rem;
 }
 
 .meta-icon {
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 
 .archived-badge {
@@ -865,20 +864,20 @@ watchEffect(() => {
 /* Empty State */
 .empty-discussions {
   text-align: center;
-  padding: 2rem 1.2rem 1.5rem 1.2rem;
+  padding: 3.5rem 2rem 2.5rem 2rem;
   color: #718096;
   background: #f7fafc;
-  border-radius: 12px;
+  border-radius: 18px;
   box-shadow: 0 4px 24px rgba(66,153,225,0.07);
-  margin: 1.2rem auto 0 auto;
-  max-width: 450px;
+  margin: 2rem auto 0 auto;
+  max-width: 520px;
   position: relative;
 }
 
 .empty-illustration {
-  margin: 0 auto 1rem auto;
-  width: 80px;
-  height: 80px;
+  margin: 0 auto 1.5rem auto;
+  width: 120px;
+  height: 120px;
   transition: transform 0.22s;
   cursor: pointer;
 }
@@ -910,10 +909,10 @@ watchEffect(() => {
 }
 
 .btn-big-cta {
-  font-size: 0.9rem;
-  padding: 0.6rem 1.5rem;
-  border-radius: 8px;
-  margin-top: 0.8rem;
+  font-size: 1.15rem;
+  padding: 0.9rem 2.2rem;
+  border-radius: 12px;
+  margin-top: 1.2rem;
   box-shadow: 0 4px 16px #90cdf433;
   transition: background 0.18s, box-shadow 0.18s;
 }
@@ -941,8 +940,8 @@ watchEffect(() => {
 
 .modal-content {
   background: white;
-  border-radius: 8px;
-  max-width: 500px;
+  border-radius: 12px;
+  max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
@@ -957,16 +956,16 @@ watchEffect(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: 1.5rem;
   border-bottom: 1px solid #e2e8f0;
 }
 
 .modal-title {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.75rem;
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: #2d3748;
 }
@@ -974,10 +973,10 @@ watchEffect(() => {
 .btn-close {
   background: none;
   border: none;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
   cursor: pointer;
   color: #718096;
-  padding: 0.3rem;
+  padding: 0.5rem;
   border-radius: 4px;
   transition: color 0.3s ease;
 }
@@ -987,14 +986,14 @@ watchEffect(() => {
 }
 
 .modal-body {
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.6rem;
-  padding: 1rem;
+  gap: 1rem;
+  padding: 1.5rem;
   border-top: 1px solid #e2e8f0;
 }
 
@@ -1017,10 +1016,10 @@ watchEffect(() => {
 }
 
 .form-control {
-  padding: 0.5rem;
+  padding: 0.75rem;
   border: 2px solid #e2e8f0;
-  border-radius: 5px;
-  font-size: 0.85rem;
+  border-radius: 8px;
+  font-size: 1rem;
   transition: border-color 0.3s ease;
 }
 
@@ -1054,9 +1053,9 @@ watchEffect(() => {
 .comments-title {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.5rem;
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 1.125rem;
   font-weight: 600;
   color: #2d3748;
 }
@@ -1094,8 +1093,8 @@ watchEffect(() => {
 }
 
 .author-avatar {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 2rem;
+  height: 2rem;
   background: #4299e1;
   color: white;
   border-radius: 50%;
@@ -1103,7 +1102,7 @@ watchEffect(() => {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 
 .author-name {
@@ -1137,8 +1136,8 @@ watchEffect(() => {
 }
 
 .btn-sm {
-  padding: 0.3rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
 }
 
 .btn-outline {
@@ -1176,13 +1175,13 @@ watchEffect(() => {
 .dropdown-toggle {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.5rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
   background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 4px;
+  border-radius: 6px;
   color: #4a5568;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -1213,13 +1212,13 @@ watchEffect(() => {
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.5rem;
   width: 100%;
-  padding: 0.5rem 0.6rem;
+  padding: 0.75rem 1rem;
   background: none;
   border: none;
   color: #4a5568;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: background 0.2s ease;
   text-align: left;
@@ -1272,7 +1271,7 @@ watchEffect(() => {
 .form-label-enhanced {
   font-weight: 500;
   color: #a0aec0;
-  font-size: 0.85rem;
+  font-size: 1rem;
 }
 .input-error {
   border-color: #e53e3e !important;
@@ -1305,11 +1304,11 @@ watchEffect(() => {
   background: none;
   border: 1.5px solid #e2e8f0;
   color: #4a5568;
-  border-radius: 5px;
-  padding: 0.4rem 1rem;
-  font-size: 0.85rem;
+  border-radius: 8px;
+  padding: 0.65rem 1.4rem;
+  font-size: 1rem;
   font-weight: 500;
-  min-width: 80px;
+  min-width: 100px;
   transition: background 0.18s, border 0.18s, color 0.18s;
   box-shadow: none;
 }
@@ -1322,14 +1321,14 @@ watchEffect(() => {
   background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
   color: #fff;
   border: none;
-  border-radius: 5px;
-  padding: 0.5rem 1.2rem;
-  font-size: 0.85rem;
+  border-radius: 8px;
+  padding: 0.7rem 1.7rem;
+  font-size: 1rem;
   font-weight: 600;
-  min-width: 130px;
+  min-width: 160px;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.6rem;
   box-shadow: 0 2px 8px #3182ce22;
   transition: background 0.18s, box-shadow 0.18s, color 0.18s;
 }

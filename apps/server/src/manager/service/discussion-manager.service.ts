@@ -23,7 +23,6 @@ import { DataSource, DeepPartial, Repository } from 'typeorm';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { Permission, PermissionFlags } from '@here-to-translate/common';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
-import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class DiscussionManagerService extends CommonHttpServiceImpl {
@@ -41,8 +40,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     @InjectRepository(DiscussionAccessPolicyEntity)
     private readonly discussionAccessPolicyRepository: Repository<DiscussionAccessPolicyEntity>,
     private readonly dataSource: DataSource,
-    private readonly projectManager: ProjectManagerService,
-    private readonly activityManagerService: ActivityManagerService
+    private readonly projectManager: ProjectManagerService
   ) {
     super();
   }
@@ -217,17 +215,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     });
     await this.discussionThreadRepository.save(discussion);
 
-    // Log activity
-    try {
-      await this.activityManagerService.logDiscussionCreate(
-        Number(projectId),
-        Number(uid),
-        title
-      );
-    } catch (error) {
-      this.logger.error('Failed to log discussion create activity:', error);
-    }
-
     const everyoneRole = await this.projectRoleRepository.findOne({
       where: { name: 'Everyone', project: { id: projectId } },
     });
@@ -388,13 +375,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
         'Cannot post comments in an archived discussion'
       );
     }
-
-    // Get thread info for logging
-    const thread = await this.discussionThreadRepository.findOne({
-      where: { id: threadId },
-      relations: ['project'],
-    });
-
     const comment = this.discussionCommentRepository.create({
       thread: { id: threadId },
       content,
@@ -402,21 +382,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
     });
     try {
       const savedComment = await this.discussionCommentRepository.save(comment);
-
-      // Log activity
-      if (thread?.project) {
-        try {
-          await this.activityManagerService.logDiscussionReply(
-            Number(thread.project.id),
-            Number(uid),
-            thread.title,
-            content.substring(0, 100) // Truncate content for logging
-          );
-        } catch (error) {
-          this.logger.error('Failed to log discussion reply activity:', error);
-        }
-      }
-
       return await this.discussionCommentRepository.findOne({
         where: { id: savedComment.id },
         relations: ['author', 'upvotes', 'downvotes'], // ✅ Populate đầy đủ

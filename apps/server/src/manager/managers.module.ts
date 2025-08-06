@@ -6,16 +6,27 @@ import {
   ProjectEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
+  RequestRegistrationEntity,
   ProjectTagEntity,
-  RequestEntity, TransactionEntity,
-  UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
-  BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
+  ProjectInvitationEntity,
+  RequestEntity,
+  TransactionEntity,
+  UserEntity,
+  UserTypeEntity,
+  WalletEntity,
+  TranslationApprovalEntity,
+  BranchEntity,
+  CommitEntity,
+  FileEntity,
+  TaskEntity,
+  NotificationEntity,
+  SettingsEntity,
+  WorkflowTransitionEntity,
+  WorkflowEntity,
+  TaskStatusEntity,
+  TaskStatusHistoryEntity,
+  TaskCommentEntity,
 } from '#LocalProject/Entities';
-import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
-import { RequestRegistrationEntity } from '#LocalProject/Entities';
-import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
-
-import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '#LocalProject/Auth/auth.module';
@@ -65,8 +76,10 @@ import { AdminNotificationController } from '#LocalProject/Managers/controller/a
 import { ProjectInvitationController } from './controller/project-invitation.controller';
 import { ProjectInvitationService } from './service/project-invitation.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
-import { ActivityManagerService } from './service/activity-manager.service';
-import { ActivityController } from './controller/activity.controller';
+import { StatusManagerService } from '#LocalProject/Managers/service/status-manager.service';
+import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
+import { StatusController } from '#LocalProject/Managers/controller/status.controller';
+import { WorkflowController } from '#LocalProject/Managers/controller/workflow.controller';
 
 @Global()
 @Module({
@@ -93,14 +106,20 @@ import { ActivityController } from './controller/activity.controller';
       CommitEntity,
       FileEntity,
       TaskEntity,
-      TaskHistoryEntity,
       NotificationEntity,
       ProjectInvitationEntity,
       RequestRegistrationEntity,
       SettingsEntity,
-      ProjectActivity,
+      TaskStatusEntity,
+      TaskCommentEntity,
+      TaskStatusHistoryEntity,
+      WorkflowEntity,
+      WorkflowTransitionEntity,
     ]),
-    BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
+    BullModule.registerQueue({
+      name: 'extract',
+      redis: { host: 'localhost', port: 6379 },
+    }),
   ],
   providers: [
     CategoryManagerService,
@@ -126,7 +145,8 @@ import { ActivityController } from './controller/activity.controller';
     NotificationGateway,
     ProjectInvitationService,
     FeeService,
-    ActivityManagerService,
+    StatusManagerService,
+    WorkflowManagerService,
   ],
   exports: [
     CategoryManagerService,
@@ -150,7 +170,8 @@ import { ActivityController } from './controller/activity.controller';
     AiChatService,
     ProjectInvitationService,
     FeeService,
-    ActivityManagerService
+    StatusManagerService,
+    WorkflowManagerService,
   ],
   controllers: [
     CategoryController,
@@ -174,8 +195,8 @@ import { ActivityController } from './controller/activity.controller';
     NotificationController,
     AdminNotificationController,
     ProjectInvitationController,
-    ActivityController
-  ]
+    StatusController,
+    WorkflowController,
+  ],
 })
-export class ManagersModule {
-}
+export class ManagersModule {}

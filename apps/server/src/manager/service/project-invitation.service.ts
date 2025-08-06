@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { ProjectInvitationEntity, InvitationStatus } from '../../db/mysql/entity/project-invitation.entity';
@@ -9,7 +9,6 @@ import { ProjectManagerService } from './project-manager.service';
 import { NotificationGateway } from '../../util/gateway/notification.gateway';
 import { MailService } from '../../mailer/mailer.service';
 import { NotificationManagerService } from './notification-manager.service';
-import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class ProjectInvitationService {
@@ -24,9 +23,7 @@ export class ProjectInvitationService {
     private readonly projectManagerService: ProjectManagerService,
     private readonly notificationGateway: NotificationGateway,
     private readonly mailService: MailService,
-    private readonly notificationManagerService: NotificationManagerService,
-    @Inject(forwardRef(() => ActivityManagerService))
-    private readonly activityManagerService: ActivityManagerService
+    private readonly notificationManagerService: NotificationManagerService
   ) {}
 
   async createInvitation(
@@ -298,19 +295,6 @@ export class ProjectInvitationService {
           invitation.invitedUserId,
           invitation.invitedByUserId // Using the person who sent the invitation as the one performing the action
         );
-
-        // Log activity when user joins project
-        const invitedUser = await this.userRepository.findOne({
-          where: { id: invitation.invitedUserId }
-        });
-
-        if (invitedUser) {
-          await this.activityManagerService.logMemberJoin(
-            Number(invitation.projectId),
-            Number(invitation.invitedUserId),
-            invitedUser.fullName || invitedUser.username
-          );
-        }
       } catch (error) {
         // If adding to project fails, revert invitation status
         invitation.status = InvitationStatus.PENDING;

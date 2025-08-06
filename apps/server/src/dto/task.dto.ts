@@ -1,5 +1,4 @@
 import { IsNotEmpty, IsOptional, IsString, IsDateString, IsEnum, IsNumber, IsArray } from 'class-validator';
-import { TaskStatus } from '../db/mysql/entity/task.entity';
 
 export class CreateTaskDto {
   @IsNotEmpty()
@@ -31,12 +30,7 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsNumber()
-  page?: number;
-
-  @IsOptional()
-  @IsArray()
-  @IsNumber({}, { each: true })
-  pages?: number[];
+  filePart?: number;
 
   @IsOptional()
   @IsString()
@@ -53,29 +47,33 @@ export class UpdateTaskDto {
   description?: string;
 
   @IsOptional()
-  @IsEnum(TaskStatus)
-  status?: TaskStatus;
-
-  @IsOptional()
-  assignedToId?: string;
-
-  @IsOptional()
-  groupId?: string;
+  @IsString()
+  statusId?: string;
 
   @IsOptional()
   @IsDateString()
   dueDate?: string;
 
   @IsOptional()
-  @IsNumber()
-  page?: number;
-
-  @IsOptional()
-  @IsArray()
-  @IsNumber({}, { each: true })
-  pages?: number[];
+  @IsString()
+  assignedToId?: string;
 
   @IsOptional()
   @IsString()
-  language?: string;
+  groupId?: string;
+
+  @IsOptional()
+  @IsString()
+  workflowId?: string;
+
+  @IsOptional()
+  @IsEnum(['lowest', 'low', 'medium', 'high', 'highest'])
+  priority?: string;
+
+  @IsOptional()
+  @IsNumber()
+  storyPoints?: number;
+
+  @IsOptional()
+  customFields?: Record<string, any>;
 }

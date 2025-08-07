@@ -21,6 +21,7 @@ import { TranslationService } from '#LocalProject/Managers/service/translation-m
 import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { UpdateTaskDto, TransitionTaskDto } from '#LocalProject/Dtos';
 import { TransitionConditionType, StatusType } from '#LocalProject/Entities';
+import { StatusManagerService } from './status-manager.service';
 
 @Injectable()
 export class TaskManagerService {
@@ -41,7 +42,8 @@ export class TaskManagerService {
     private readonly statusHistoryRepository: Repository<TaskStatusHistoryEntity>,
     private readonly projectService: ProjectManagerService,
     private readonly translationService: TranslationService,
-    private readonly taskGateway: TaskGateway
+    private readonly taskGateway: TaskGateway,
+    private readonly statusManagerService: StatusManagerService
   ) {}
 
   async createTask(params: {
@@ -115,22 +117,24 @@ export class TaskManagerService {
     let status: TaskStatusEntity;
 
     if (workflowId) {
-      workflow = await this.workflowRepository.findOne({
-        where: { id: BigInt(workflowId) },
-        relations: ['project'],
-      }) || undefined;
+      workflow =
+        (await this.workflowRepository.findOne({
+          where: { id: BigInt(workflowId) },
+          relations: ['project'],
+        })) || undefined;
       if (!workflow) {
         throw new NotFoundException('Workflow not found');
       }
     } else {
       // Get default workflow for project
-      workflow = await this.workflowRepository.findOne({
-        where: {
-          project: { id: BigInt(projectId) },
-          isDefault: true,
-          isActive: true,
-        },
-      }) || undefined;
+      workflow =
+        (await this.workflowRepository.findOne({
+          where: {
+            project: { id: BigInt(projectId) },
+            isDefault: true,
+            isActive: true,
+          },
+        })) || undefined;
     }
 
     if (statusId) {
@@ -159,9 +163,20 @@ export class TaskManagerService {
         });
 
         if (!fallbackStatus) {
-          throw new BadRequestException('No default status found for project');
+          // Create default statuses for the project
+          await this.statusManagerService.createDefaultStatuses(projectId);
+          
+          // Get the newly created default status
+          status = await this.statusRepository.findOneOrFail({
+            where: {
+              project: { id: BigInt(projectId) },
+              isDefault: true,
+              isActive: true,
+            },
+          });
+        } else {
+          status = fallbackStatus;
         }
-        status = fallbackStatus;
       } else {
         status = defaultStatus;
       }
@@ -459,31 +474,35 @@ export class TaskManagerService {
 
     if (dto.assignedToId !== undefined) {
       task.assignedTo = dto.assignedToId
-        ? await this.userRepository.findOne({
+        ? (await this.userRepository.findOne({
             where: { id: BigInt(dto.assignedToId) },
-          }) || undefined
+          })) || undefined
         : undefined;
     }
 
     if (dto.groupId !== undefined) {
       task.group = dto.groupId
-        ? await this.projectGroupRepository.findOne({
+        ? (await this.projectGroupRepository.findOne({
             where: { id: BigInt(dto.groupId) },
-          }) || undefined
+          })) || undefined
         : undefined;
     }
 
     if (dto.workflowId !== undefined) {
       task.workflow = dto.workflowId
-        ? await this.workflowRepository.findOne({
+        ? (await this.workflowRepository.findOne({
             where: { id: BigInt(dto.workflowId) },
-          }) || undefined
+          })) || undefined
         : undefined;
     }
 
     // Handle status transition separately using transitionTask
     if (dto.statusId !== undefined) {
-      await this.transitionTask(id, { toStatusId: dto.statusId }, userId);
+      await this.transitionTask(
+        id,
+        { toStatusId: dto.statusId },
+        userId.toString()
+      );
       return this.getTask(id);
     }
 
@@ -611,7 +630,7 @@ export class TaskManagerService {
 
     // Update task status to closed
     const closedStatus = await this.statusRepository.findOne({
-      where: { name: 'closed' }
+      where: { name: 'closed' },
     });
     if (closedStatus) {
       task.status = closedStatus;
@@ -666,7 +685,7 @@ export class TaskManagerService {
 
     // Update task status back to pending (To do)
     const pendingStatus = await this.statusRepository.findOne({
-      where: { name: 'pending' }
+      where: { name: 'pending' },
     });
     if (pendingStatus) {
       task.status = pendingStatus;
@@ -728,10 +747,12 @@ export class TaskManagerService {
     assignedToId?: string;
     groupId?: string;
     dueDate?: Date;
+    language: string;
   }) {
     const strings = await this.translationService.getAllString(
       params.projectId,
       params.branchId,
+      params.language,
       params.fileId,
       params.filePart
     );
@@ -760,7 +781,8 @@ export class TaskManagerService {
       !task.projectId ||
       task.filePart === null ||
       !task.branchId ||
-      !task.fileId
+      !task.fileId ||
+      !task.language
     ) {
       return null;
     }
@@ -768,16 +790,15 @@ export class TaskManagerService {
     const strings = await this.translationService.getAllString(
       task.projectId,
       task.branchId,
+      task.language,
       task.fileId,
       task.filePart ?? undefined
     );
     const total = strings.length;
-    const translated = strings.filter(
-      (s: Record<string, unknown>) => {
-        const translatedText = s.translatedText as string;
-        return translatedText && translatedText.trim() !== '';
-      }
-    ).length;
+    const translated = strings.filter((s: Record<string, unknown>) => {
+      const translatedText = s.translatedText as string;
+      return translatedText && translatedText.trim() !== '';
+    }).length;
     const percent = total === 0 ? 0 : Math.round((translated / total) * 100);
 
     return { total, translated, percent };

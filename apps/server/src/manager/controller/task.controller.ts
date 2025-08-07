@@ -86,7 +86,7 @@ export class TaskController {
       return progress;
     } catch (error) {
       throw new HttpException(
-        console.log(error) || 'Failed to get task progress',
+        console.log('Failed : ' + error) || 'Failed to get task progress',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -99,7 +99,7 @@ export class TaskController {
       return history;
     } catch (error) {
       throw new HttpException(
-        console.log(error) || 'Failed to get task history',
+        console.log('Failed : ' + error) || 'Failed to get task history',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

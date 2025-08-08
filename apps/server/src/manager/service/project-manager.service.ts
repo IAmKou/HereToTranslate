@@ -20,6 +20,11 @@ import {
   CommitStatus,
   ProjectInvitationEntity,
   InvitationStatus,
+  StatusType,
+  TaskStatusEntity,
+  WorkflowEntity,
+  WorkflowTransitionEntity,
+  TransitionConditionType,
 } from '#LocalProject/Entities';
 import { CreateProjectDto, UpdateProjectMetadataDto } from '#LocalProject/Dtos';
 import {
@@ -31,6 +36,8 @@ import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
+import { StatusManagerService } from '#LocalProject/Managers/service/status-manager.service';
+import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
 
 @Injectable()
 export class ProjectManagerService extends CommonHttpServiceImpl {
@@ -51,7 +58,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly commitRepository: Repository<CommitEntity>,
     private readonly dataSource: DataSource,
     private readonly githubService: GitHubService,
-    private readonly notificationService: NotificationManagerService
+    private readonly notificationService: NotificationManagerService,
+    private readonly statusManagerService: StatusManagerService,
+    private readonly workflowManagerService: WorkflowManagerService
   ) {
     super();
   }
@@ -115,7 +124,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   }
 
   async createProject(uid: bigint, data: CreateProjectDto) {
-    const { name, description, isPrivate, tags = [], categoryId, targetLanguages } = data;
+    const {
+      name,
+      description,
+      isPrivate,
+      tags = [],
+      categoryId,
+      targetLanguages,
+    } = data;
 
     this.logger.debug('Received project data:', data);
 
@@ -225,6 +241,22 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       // Add owner to project members
       savedProject.members = [<UserEntity>{ id: uid }];
       await queryRunner.manager.save(savedProject);
+
+      // Create default statuses for the project
+      this.logger.debug('Creating default statuses for project');
+      const defaultStatuses = await this.createDefaultStatusesWithinTransaction(
+        queryRunner,
+        savedProject
+      );
+
+      // Create default workflow for the project
+      this.logger.debug('Creating default workflow for project');
+      const { workflow: defaultWorkflow } =
+        await this.createDefaultWorkflowWithinTransaction(
+          queryRunner,
+          savedProject,
+          defaultStatuses
+        );
 
       const githubRepoName = `project-${savedProject.id}`;
 
@@ -481,8 +513,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         .select(['user.id'])
         .getMany();
 
-      const memberIds = projectMembers.flatMap(role =>
-        role.users?.map(user => user.id).filter(id => id !== uid) || []
+      const memberIds = projectMembers.flatMap(
+        (role) =>
+          role.users?.map((user) => user.id).filter((id) => id !== uid) || []
       );
 
       // Notify all project members about the update
@@ -538,6 +571,20 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     try {
       await this.githubService.deleteRepository(repoName);
+
+      await queryRunner.manager.delete('task', {
+        projectId: projectId.toString(),
+      });
+      // Delete project-related statuses (now safe since no tasks reference them)
+      queryRunner.manager.delete('task_status', { project: { id: projectId } });
+
+      await queryRunner.manager.delete('workflow_transition', {
+        workflow: { project: { id: projectId } },
+      });
+
+      await queryRunner.manager.delete('workflow', {
+        project: { id: projectId },
+      });
 
       await queryRunner.manager.remove(project);
 
@@ -602,11 +649,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     userId: bigint,
     uid: bigint
   ): Promise<ProjectEntity> {
-    await this.testPermissions(
-      projectId,
-      uid,
-      PermissionFlags.ManageMembers
-    );
+    await this.testPermissions(projectId, uid, PermissionFlags.ManageMembers);
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
@@ -696,13 +739,16 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
   }
 
-  async isUserProjectMember(projectId: bigint, userId: bigint): Promise<boolean> {
+  async isUserProjectMember(
+    projectId: bigint,
+    userId: bigint
+  ): Promise<boolean> {
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
     });
     if (!project) return false;
-    return project.members.some(member => member.id === userId);
+    return project.members.some((member) => member.id === userId);
   }
 
   async removeUserFromProject(projectId: bigint, userId: bigint) {
@@ -808,20 +854,30 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       .getRepository(ProjectInvitationEntity)
       .createQueryBuilder('invitation')
       .where('invitation.projectId = :projectId', { projectId })
-      .andWhere('invitation.status = :status', { status: InvitationStatus.ACCEPTED })
+      .andWhere('invitation.status = :status', {
+        status: InvitationStatus.ACCEPTED,
+      })
       .select(['invitation.invitedUserId', 'invitation.updatedAt'])
       .getMany();
 
     // Create a map of user join times from invitations
     const userJoinTimes = new Map<string, Date>();
-    console.log('🔍 Accepted invitations for project', projectId, ':', acceptedInvitations);
+    console.log(
+      '🔍 Accepted invitations for project',
+      projectId,
+      ':',
+      acceptedInvitations
+    );
     for (const invitation of acceptedInvitations) {
       const userId = invitation.invitedUserId.toString();
       const joinTime = invitation.updatedAt;
       userJoinTimes.set(userId, joinTime);
       console.log('🔍 Setting join time for user', userId, ':', joinTime);
     }
-    console.log('🔍 Final userJoinTimes map:', Object.fromEntries(userJoinTimes));
+    console.log(
+      '🔍 Final userJoinTimes map:',
+      Object.fromEntries(userJoinTimes)
+    );
 
     // Get all roles except Everyone role first
     const roles = await this.projectRoleRepository.find({
@@ -900,7 +956,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         email: member.email,
         roles: [],
         // For project owner, use project creation date as joinedAt
-        joinedAt: project.createdBy && member.id === project.createdBy.id ? project.createdAt.toISOString() : undefined,
+        joinedAt:
+          project.createdBy && member.id === project.createdBy.id
+            ? project.createdAt.toISOString()
+            : undefined,
       };
     }
 
@@ -939,10 +998,24 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         console.log('🔍 Looking up join time for user', key, ':', joinTime);
         if (joinTime && !memberMap[key].joinedAt) {
           memberMap[key].joinedAt = joinTime.toISOString();
-          console.log('🔍 Set joinedAt for user', key, 'to:', joinTime.toISOString());
-        } else if (role.createdAt && (!memberMap[key].joinedAt || role.createdAt < new Date(memberMap[key].joinedAt!))) {
+          console.log(
+            '🔍 Set joinedAt for user',
+            key,
+            'to:',
+            joinTime.toISOString()
+          );
+        } else if (
+          role.createdAt &&
+          (!memberMap[key].joinedAt ||
+            role.createdAt < new Date(memberMap[key].joinedAt!))
+        ) {
           memberMap[key].joinedAt = role.createdAt.toISOString();
-          console.log('🔍 Set joinedAt for user', key, 'to role creation time:', role.createdAt.toISOString());
+          console.log(
+            '🔍 Set joinedAt for user',
+            key,
+            'to role creation time:',
+            role.createdAt.toISOString()
+          );
         }
       }
     }
@@ -1217,7 +1290,172 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   async listCommits(projectId: bigint, branchId: bigint) {
     return this.githubService.listCommits(projectId, branchId);
   }
+
+  private async createDefaultStatusesWithinTransaction(
+    queryRunner: any,
+    project: ProjectEntity
+  ) {
+    const defaultStatuses = [
+      {
+        name: 'To Do',
+        description: 'Task is ready to be worked on',
+        color: '#42526E',
+        type: StatusType.TODO,
+        position: 0,
+        isDefault: true,
+      },
+      {
+        name: 'In Progress',
+        description: 'Task is being worked on',
+        color: '#0052CC',
+        type: StatusType.IN_PROGRESS,
+        position: 1,
+        isDefault: false,
+      },
+      {
+        name: 'In Review',
+        description: 'Task is being reviewed',
+        color: '#FF8B00',
+        type: StatusType.IN_PROGRESS,
+        position: 2,
+        isDefault: false,
+      },
+      {
+        name: 'Done',
+        description: 'Task is completed',
+        color: '#00875A',
+        type: StatusType.DONE,
+        position: 3,
+        isDefault: false,
+      },
+    ];
+
+    const createdStatuses = [];
+    for (const statusData of defaultStatuses) {
+      const status = queryRunner.manager.create(TaskStatusEntity, {
+        ...statusData,
+        project,
+      });
+      createdStatuses.push(await queryRunner.manager.save(status));
+    }
+
+    return createdStatuses;
+  }
+
+  private async createDefaultWorkflowWithinTransaction(
+    queryRunner: any,
+    project: ProjectEntity,
+    statuses: any[]
+  ) {
+    // Create default workflow
+    const workflow = queryRunner.manager.create(WorkflowEntity, {
+      name: 'Default Workflow',
+      description: 'Auto-generated default workflow',
+      project,
+      isDefault: true,
+    });
+
+    const savedWorkflow = await queryRunner.manager.save(workflow);
+
+    // Create basic transitions (linear flow)
+    const transitions = [];
+    for (let i = 0; i < statuses.length - 1; i++) {
+      const fromStatus = statuses[i];
+      const toStatus = statuses[i + 1];
+
+      const transition = queryRunner.manager.create(WorkflowTransitionEntity, {
+        name: `${fromStatus.name} → ${toStatus.name}`,
+        workflow: savedWorkflow,
+        fromStatus,
+        toStatus,
+        conditionType: TransitionConditionType.ANYONE,
+      });
+
+      transitions.push(await queryRunner.manager.save(transition));
+    }
+
+    // Add backward transitions (for reopening tasks)
+    for (let i = statuses.length - 1; i > 0; i--) {
+      const fromStatus = statuses[i];
+      const toStatus = statuses[i - 1];
+
+      const transition = queryRunner.manager.create(WorkflowTransitionEntity, {
+        name: `${fromStatus.name} → ${toStatus.name}`,
+        workflow: savedWorkflow,
+        fromStatus,
+        toStatus,
+        conditionType: TransitionConditionType.ANYONE,
+      });
+
+      transitions.push(await queryRunner.manager.save(transition));
+    }
+
+    return { workflow: savedWorkflow, transitions };
+  }
+
+  async lockProjectEdits(projectId: bigint): Promise<void> {
+    this.logger.debug(`Locking project edits for project ID: ${projectId}`);
+
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project with ID ${projectId} not found`);
+    }
+
+    this.logger.log(`Project ${projectId} edits have been locked`);
+  }
+
+  async archive(project: ProjectEntity): Promise<void> {
+    this.logger.debug(`Archiving project ID: ${project.id}`);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.delete('task', {
+        projectId: project.id.toString(),
+      });
+
+      await queryRunner.manager.delete('task_status', {
+        project: { id: project.id },
+      });
+
+      await queryRunner.manager.delete('workflow_transition', {
+        workflow: { project: { id: project.id } },
+      });
+
+      await queryRunner.manager.delete('workflow', {
+        project: { id: project.id },
+      });
+
+      await queryRunner.manager.update(
+        'project',
+        { id: project.id },
+        { isArchived: true }
+      );
+
+      // Lock all branches for editing
+      await queryRunner.manager.update(
+        'branches',
+        { projectId: project.id },
+        { archived: true }
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Project ${project.id} has been archived successfully`);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to archive project ${project.id}:`, error);
+      throw new InternalServerErrorException('Failed to archive project');
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }
+
 function normalizePermission(input: IntoPermission): bigint {
   if (typeof input === 'bigint') return input;
   if (typeof input === 'number') return BigInt(input);
@@ -1225,5 +1463,5 @@ function normalizePermission(input: IntoPermission): bigint {
     return PermissionFlags[input as keyof typeof PermissionFlags] ?? 0n;
   }
   return input.value;
-  throw new Error('Invalid permission input type');
+  // throw new Error('Invalid permission input type');
 }

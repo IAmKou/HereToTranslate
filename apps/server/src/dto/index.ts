@@ -11,4 +11,7 @@ export * from './task.dto';
 export * from './transition.dto';
 export * from './workflow.dto';
 export * from './task-comment.dto';
-export * from './status.dto'
+export * from './status.dto';
+export * from './deadline-extension.dto';
+export * from './translation-preview.dto';
+export * from './project-cancellation.dto';

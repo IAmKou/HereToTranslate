@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsArray, IsNotEmpty } from 'class-validator';
 
-export class CreateCommentDto {
+export class CreateTCommentDto {
   @IsString()
   @IsNotEmpty()
   content: string;
@@ -28,7 +28,7 @@ export class CreateCommentDto {
   }>;
 }
 
-export class UpdateCommentDto {
+export class UpdateTCommentDto {
   @IsString()
   @IsNotEmpty()
   content: string;

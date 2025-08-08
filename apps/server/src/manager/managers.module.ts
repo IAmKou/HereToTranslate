@@ -25,7 +25,7 @@ import {
   WorkflowEntity,
   TaskStatusEntity,
   TaskStatusHistoryEntity,
-  TaskCommentEntity,
+  TaskCommentEntity, TranslationPreviewEntity, DeadlineExtensionEntity, ProjectCancellationEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -80,6 +80,10 @@ import { StatusManagerService } from '#LocalProject/Managers/service/status-mana
 import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
 import { StatusController } from '#LocalProject/Managers/controller/status.controller';
 import { WorkflowController } from '#LocalProject/Managers/controller/workflow.controller';
+import { ProjectCancellationService } from '#LocalProject/Managers/service/project-cancellation.service';
+import { ProjectCancellationController } from '#LocalProject/Managers/controller/project-cancellation.controller';
+import { DeadlineManagementController } from '#LocalProject/Managers/controller/deadline-management.controller';
+import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinechecker.service';
 
 @Global()
 @Module({
@@ -115,6 +119,9 @@ import { WorkflowController } from '#LocalProject/Managers/controller/workflow.c
       TaskStatusHistoryEntity,
       WorkflowEntity,
       WorkflowTransitionEntity,
+      TranslationPreviewEntity,
+      DeadlineExtensionEntity,
+      ProjectCancellationEntity,
     ]),
     BullModule.registerQueue({
       name: 'extract',
@@ -147,6 +154,8 @@ import { WorkflowController } from '#LocalProject/Managers/controller/workflow.c
     FeeService,
     StatusManagerService,
     WorkflowManagerService,
+    ProjectCancellationService,
+    DeadlineCheckerService,
   ],
   exports: [
     CategoryManagerService,
@@ -172,6 +181,8 @@ import { WorkflowController } from '#LocalProject/Managers/controller/workflow.c
     FeeService,
     StatusManagerService,
     WorkflowManagerService,
+    ProjectCancellationService,
+    DeadlineCheckerService,
   ],
   controllers: [
     CategoryController,
@@ -196,6 +207,8 @@ import { WorkflowController } from '#LocalProject/Managers/controller/workflow.c
     AdminNotificationController,
     ProjectInvitationController,
     StatusController,
+    ProjectCancellationController,
+    DeadlineManagementController,
     WorkflowController,
   ],
 })

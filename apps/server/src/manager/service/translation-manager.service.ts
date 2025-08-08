@@ -153,14 +153,24 @@ export class TranslationService {
   }
 
   async applyTranslation(fileId: string, language: string): Promise<Buffer> {
+    console.log(`[ApplyTranslation] Starting for fileId: ${fileId}, language: ${language}`);
+
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
     });
-    if (!fileEntity) throw new Error('File not found');
+    if (!fileEntity) {
+      console.error(`[ApplyTranslation] File not found: ${fileId}`);
+      throw new Error('File not found');
+    }
+
+    console.log(`[ApplyTranslation] File type: ${fileEntity.fileType}`);
 
     const entriesRaw = await this.translationModel
       .find({ fileId, language })
       .lean();
+
+    console.log(`[ApplyTranslation] Found ${entriesRaw.length} translation entries`);
+
     const entries = entriesRaw.map((e: any) => ({
       text:
         e.translatedText && e.translatedText.trim().length > 0
@@ -170,6 +180,7 @@ export class TranslationService {
       font: e.font,
     }));
 
+    console.log(`[ApplyTranslation] Calling rebuildFileWithManifest with ${entries.length} entries`);
     return rebuildFileWithManifest(fileEntity.fileType, entries);
   }
 
@@ -197,37 +208,70 @@ export class TranslationService {
     fileId: string,
     language: string
   ): Promise<{ fileType: string; preview: string }> {
+    console.log(`[Preview] Starting preview for fileId: ${fileId}, language: ${language}`);
+
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
     });
-    if (!fileEntity) throw new Error('File not found');
+    if (!fileEntity) {
+      console.error(`[Preview] File not found: ${fileId}`);
+      throw new Error('File not found');
+    }
 
-    // Build translated file buffer
-    const buffer = await this.applyTranslation(fileId, language);
+    console.log(`[Preview] File found: ${fileEntity.fileName}, type: ${fileEntity.fileType}`);
 
-    // Return preview based on type
-    switch (fileEntity.fileType) {
-      case 'text/plain':
-      case 'application/json': {
-        // For text-based files, return the UTF-8 string
-        return {
-          fileType: fileEntity.fileType,
-          preview: buffer.toString('utf8'),
-        };
+    try {
+      // Build translated file buffer
+      console.log(`[Preview] Building translated buffer...`);
+      const buffer = await this.applyTranslation(fileId, language);
+      console.log(`[Preview] Buffer created, size: ${buffer.length} bytes`);
+
+      // Return preview based on type
+      switch (fileEntity.fileType) {
+        case 'text/plain':
+        case 'application/json': {
+          console.log(`[Preview] Returning text content`);
+          // For text-based files, return the UTF-8 string
+          return {
+            fileType: fileEntity.fileType,
+            preview: buffer.toString('utf8'),
+          };
+        }
+        case 'application/pdf':
+        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+          console.log(`[Preview] Returning base64 content`);
+          // For binary files, return base64 for preview
+          return {
+            fileType: fileEntity.fileType,
+            preview: buffer.toString('base64'),
+          };
+        }
+        default: {
+          console.log(`[Preview] Returning default content`);
+          // Fallback to utf8
+          return {
+            fileType: fileEntity.fileType,
+            preview: buffer.toString('utf8'),
+          };
+        }
       }
-      case 'application/pdf':
-      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-        // For binary files, return base64 for preview
+    } catch (error: any) {
+      // If PDF rebuilding fails due to encoding issues, return original file
+      console.error('[Preview] Error rebuilding file for preview:', error?.message || error);
+
+      if (fileEntity.fileType === 'application/pdf') {
+        console.log('[Preview] Returning original PDF content');
+        // For PDF files, return original content if rebuilding fails
         return {
           fileType: fileEntity.fileType,
-          preview: buffer.toString('base64'),
+          preview: (fileEntity.fileContent as Buffer).toString('base64'),
         };
-      }
-      default: {
-        // Fallback to utf8
+      } else {
+        console.log('[Preview] Returning original content');
+        // For other files, try to return original content
         return {
           fileType: fileEntity.fileType,
-          preview: buffer.toString('utf8'),
+          preview: (fileEntity.fileContent as Buffer).toString('utf8'),
         };
       }
     }
@@ -273,48 +317,71 @@ export class TranslationService {
     }
 
     let buffer: Buffer;
-    if (
-      fileEntity.fileType ===
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ) {
-      const entries = await this.translationModel
-        .find({ fileId, language })
-        .lean();
-      const translations = new Map<string, string>();
-      for (const e of entries) {
-        if (e.translatedText && e.translatedText.trim().length > 0) {
-          translations.set(e.originalText, e.translatedText);
+    try {
+      if (
+        fileEntity.fileType ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ) {
+        const entries = await this.translationModel
+          .find({ fileId, language })
+          .lean();
+        const translations = new Map<string, string>();
+        for (const e of entries) {
+          if (e.translatedText && e.translatedText.trim().length > 0) {
+            translations.set(e.originalText, e.translatedText);
+          }
         }
+        try {
+          buffer = await replaceDocxText(
+            fileEntity.fileContent as Buffer,
+            translations
+          );
+        } catch (error) {
+          logger.warn(`DOCX processing failed for export ${fileId}: ${error.message}`);
+          logger.warn('Using original file content for export');
+          buffer = fileEntity.fileContent as Buffer;
+        }
+      } else if (fileEntity.fileType === 'application/pdf') {
+        const entries = await this.translationModel
+          .find({ fileId, language })
+          .lean();
+        const translatedEntries = entries.map((e) => ({
+          text: e.translatedText?.trim() ? e.translatedText : e.originalText,
+        }));
+        try {
+          buffer = await buildTranslatedPdf(
+            fileEntity.fileContent as Buffer,
+            translatedEntries
+          );
+        } catch (error) {
+          logger.warn(`PDF processing failed for export ${fileId}: ${error.message}`);
+          logger.warn('Using original file content for export');
+          buffer = fileEntity.fileContent as Buffer;
+        }
+      } else {
+        buffer = await this.applyTranslation(fileId, language);
       }
-      buffer = await replaceDocxText(
-        fileEntity.fileContent as Buffer,
-        translations
-      );
-    } else if (fileEntity.fileType === 'application/pdf') {
-      const entries = await this.translationModel
-        .find({ fileId, language })
-        .lean();
-      const translatedEntries = entries.map((e) => ({
-        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
-      }));
-      buffer = await buildTranslatedPdf(
-        fileEntity.fileContent as Buffer,
-        translatedEntries
-      );
-    } else {
-      buffer = await this.applyTranslation(fileId, language);
+    } catch (error) {
+      logger.error(`Error processing file for export: ${error.message}`);
+      // Use original file content as fallback
+      buffer = fileEntity.fileContent as Buffer;
     }
 
     const repoName = `project-${fileEntity.project.id}`;
     const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
 
-    await this.githubService.commitChange({
-      repo: repoName,
-      branch: 'main',
-      path: `${language}/${safeFileName}`,
-      content: buffer,
-      message: `Exported translation for ${fileEntity.fileName} (${language})`,
-    });
+    try {
+      await this.githubService.commitChange({
+        repo: repoName,
+        branch: 'main',
+        path: `${language}/${safeFileName}`,
+        content: buffer,
+        message: `Exported translation for ${fileEntity.fileName} (${language})`,
+      });
+    } catch (error) {
+      logger.error(`Error committing to GitHub: ${error.message}`);
+      throw new Error(`Failed to export translation: ${error.message}`);
+    }
 
     const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${language}/${encodeURIComponent(
       safeFileName
@@ -398,6 +465,30 @@ export class TranslationService {
     }));
   }
 
+  async getAvailableLanguages(fileId: string) {
+    console.log(`[GetAvailableLanguages] Getting languages for fileId: ${fileId}`);
+
+    try {
+      // Get all unique languages that have translations for this file
+      const languages = await this.translationModel.distinct('language', { fileId });
+
+      console.log(`[GetAvailableLanguages] Found languages:`, languages);
+
+      // Always include English as it's the base language
+      const allLanguages = new Set(['en', ...languages]);
+
+      return {
+        languages: Array.from(allLanguages).sort()
+      };
+    } catch (error: any) {
+      console.error(`[GetAvailableLanguages] Error:`, error?.message || error);
+      // Return English as fallback
+      return {
+        languages: ['en']
+      };
+    }
+  }
+
   async getFilePages(fileId: string, projectId: string, branchId: string) {
     // Lấy tất cả strings của file để phân tích số trang
     const strings = await this.translationModel
@@ -451,10 +542,35 @@ async function rebuildFileWithManifest(
       const { PDFDocument, StandardFonts } = await import('pdf-lib');
       const pdfDoc = await PDFDocument.create();
       const page = pdfDoc.addPage();
+
+      // Use Helvetica and handle Unicode characters by converting them to ASCII-safe equivalents
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
       let y = page.getHeight() - 24;
       for (const e of entries) {
-        page.drawText(e.text, { x: 50, y, font, size: 12 });
+        try {
+          // Convert Vietnamese characters to ASCII-safe equivalents
+          const safeText = e.text
+            .replace(/[àáạảãâầấậẩẫăằắặẳẵ]/g, 'a')
+            .replace(/[èéẹẻẽêềếệểễ]/g, 'e')
+            .replace(/[ìíịỉĩ]/g, 'i')
+            .replace(/[òóọỏõôồốộổỗơờớợởỡ]/g, 'o')
+            .replace(/[ùúụủũưừứựửữ]/g, 'u')
+            .replace(/[ỳýỵỷỹ]/g, 'y')
+            .replace(/[đ]/g, 'd')
+            .replace(/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]/g, 'A')
+            .replace(/[ÈÉẸẺẼÊỀẾỆỂỄ]/g, 'E')
+            .replace(/[ÌÍỊỈĨ]/g, 'I')
+            .replace(/[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]/g, 'O')
+            .replace(/[ÙÚỤỦŨƯỪỨỰỬỮ]/g, 'U')
+            .replace(/[ỲÝỴỶỸ]/g, 'Y')
+            .replace(/[Đ]/g, 'D');
+
+          page.drawText(safeText, { x: 50, y, font, size: 12 });
+        } catch (textError) {
+          // If text drawing still fails, use a placeholder
+          page.drawText('[Text with unsupported characters]', { x: 50, y, font, size: 12 });
+        }
         y -= 16;
         if (y < 40) {
           const newPage = pdfDoc.addPage();

@@ -2,24 +2,24 @@ import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual, Between } from 'typeorm';
-import { 
-  RequestEntity, 
-  RequestStatus, 
+import {
+  RequestEntity,
+  RequestStatus,
   DeadlineExtensionEntity,
   ExtensionStatus,
-  TranslationPreviewEntity 
+  // TranslationPreviewEntity
 } from '#LocalProject/Entities';
-import {
-  TranslationString,
-  TranslationStringDocument,
-} from '../../db/mongo/schema/translation.schema';
-import { Model } from 'mongoose';
+// import {
+//   TranslationString,
+//   TranslationStringDocument,
+// } from '../../db/mongo/schema/translation.schema';
+// import { Model } from 'mongoose';
 import { MailerService } from '@nestjs-modules/mailer';
 import { addDays, subDays } from 'date-fns';
 import { PaypalService } from '../service/payment-manager.service';
 import { ProjectManagerService } from '../service/project-manager.service';
 import { TranslationService } from '../service/translation-manager.service';
-import { InjectModel } from '@nestjs/mongoose';
+// import { InjectModel } from '@nestjs/mongoose';
 import { Logger } from '@nestjs/common';
 
 @Injectable()
@@ -33,16 +33,16 @@ export class DeadlineCheckerService {
     @InjectRepository(DeadlineExtensionEntity)
     private readonly extensionRepo: Repository<DeadlineExtensionEntity>,
 
-    @InjectRepository(TranslationPreviewEntity)
-    private readonly previewRepo: Repository<TranslationPreviewEntity>,
+    // @InjectRepository(TranslationPreviewEntity)
+    // private readonly previewRepo: Repository<TranslationPreviewEntity>,
 
     private readonly mailerService: MailerService,
     private readonly paymentService: PaypalService,
     private readonly projectService: ProjectManagerService,
     private readonly translationService: TranslationService,
 
-    @InjectModel(TranslationString.name)
-    private readonly translationModel: Model<TranslationStringDocument>
+    // @InjectModel(TranslationString.name)
+    // private readonly translationModel: Model<TranslationStringDocument>
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -51,19 +51,14 @@ export class DeadlineCheckerService {
     const today = new Date();
 
     try {
-      // 1. Handle deadline warnings (7 days before)
       await this.handleDeadlineWarnings(today);
 
-      // 2. Handle requests due today
       await this.handleDueTodayRequests(today);
 
-      // 3. Handle extension request timeouts (3 days after deadline)
       await this.handleExtensionTimeouts(today);
 
-      // 4. Handle approval timeouts (3 days after delivery)
       await this.handleApprovalTimeouts(today);
 
-      // 5. Clean up expired extension requests
       await this.cleanupExpiredExtensions(today);
 
       this.logger.log('Comprehensive deadline check completed successfully');
@@ -74,7 +69,7 @@ export class DeadlineCheckerService {
 
   private async handleDeadlineWarnings(today: Date) {
     this.logger.log('Checking for deadline warnings...');
-    
+
     const soonDueRequests = await this.requestRepo.find({
       where: {
         status: RequestStatus.Approved,
@@ -85,8 +80,7 @@ export class DeadlineCheckerService {
 
     for (const req of soonDueRequests) {
       const daysLeft = Math.ceil((+req.deadline - +today) / (1000 * 60 * 60 * 24));
-      
-      // Send warning to translator (assignee)
+
       if (req.assignee?.email) {
         await this.mailerService.sendMail({
           to: req.assignee.email,
@@ -116,7 +110,7 @@ export class DeadlineCheckerService {
 
   private async handleDueTodayRequests(today: Date) {
     this.logger.log('Checking for requests due today...');
-    
+
     const dueTodayRequests = await this.requestRepo.find({
       where: {
         status: RequestStatus.Approved,
@@ -220,7 +214,7 @@ export class DeadlineCheckerService {
 
   private async handleExtensionTimeouts(today: Date) {
     this.logger.log('Checking for extension request timeouts...');
-    
+
     const timeoutRequests = await this.requestRepo.find({
       where: {
         status: RequestStatus.ExtensionRequested,
@@ -267,7 +261,7 @@ export class DeadlineCheckerService {
 
   private async handleApprovalTimeouts(today: Date) {
     this.logger.log('Checking for approval timeouts...');
-    
+
     const approvalTimeouts = await this.requestRepo.find({
       where: {
         status: RequestStatus.WaitingApproval,
@@ -314,7 +308,7 @@ export class DeadlineCheckerService {
 
   private async cleanupExpiredExtensions(today: Date) {
     this.logger.log('Cleaning up expired extension requests...');
-    
+
     // Mark extension requests as expired if they're older than 7 days and still pending
     const expiredExtensions = await this.extensionRepo.find({
       where: {

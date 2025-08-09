@@ -367,7 +367,7 @@ export class FileService {
     let log = '';
     function appendLog(msg: string) {
       log += `[${new Date().toISOString()}] ${msg}\n`;
-      file.extractLog = log;
+      file!.extractLog = log;
     }
     try {
       appendLog('Start extracting strings...');

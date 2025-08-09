@@ -1,37 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
-import { taskService, Task, ProjectFile, TaskHistory, TaskProgress } from '../services/task.service';
+import { taskService, Task, ProjectFile, TaskHistory, TaskProgress, TaskStatus, Workflow, WorkflowTransition } from '../services/task.service';
+import { workflowService } from '../services/workflow.service';
 import CreateTaskDialog from './CreateTaskDialog.vue';
 import EditTaskDialog from './EditTaskDialog.vue';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
 import { getLanguageName } from '../utils/languages';
 
-// Types
-interface Status {
-  id: string;
-  name: string;
-  color: string;
-  type: 'todo' | 'in_progress' | 'done';
-  position: number;
-  isDefault: boolean;
-}
-
-interface Workflow {
-  id: string;
-  name: string;
-  description?: string;
-  isDefault: boolean;
-}
-
-interface Transition {
-  id: string;
-  name: string;
-  fromStatus: Status;
-  toStatus: Status;
-  conditionType: string;
-}
+// Remove duplicate type definitions since they're now imported from task.service
 
 interface EditTaskData {
   projectId: string;
@@ -79,10 +57,10 @@ const props = defineProps({
 const loading = ref(false);
 const error = ref('');
 const tasks = ref<Task[]>([]);
-const statuses = ref<Status[]>([]);
+const statuses = ref<TaskStatus[]>([]);
 const workflow = ref<Workflow | null>(null);
 const selectedTask = ref<Task | null>(null);
-const availableTransitions = ref<Transition[]>([]);
+const availableTransitions = ref<WorkflowTransition[]>([]);
 const taskHistory = ref<TaskHistory[]>([]);
 const projectFiles = ref<ProjectFile[]>([]);
 const taskProgressData = ref<Map<string, TaskProgress>>(new Map());
@@ -247,18 +225,22 @@ const filteredTasks = computed(() => {
 });
 
 const todoTasks = computed(() => {
-  return filteredTasks.value.filter((task: Task) => task.status === 'pending');
+  const todoStatuses = statuses.value.filter(s => s.type === 'todo').map(s => s.id);
+  return filteredTasks.value.filter((task: Task) => todoStatuses.includes(task.status));
 });
 
 const inProgressTasks = computed(() => {
-  return filteredTasks.value.filter((task: Task) => task.status === 'in_progress');
+  const inProgressStatuses = statuses.value.filter(s => s.type === 'in_progress').map(s => s.id);
+  return filteredTasks.value.filter((task: Task) => inProgressStatuses.includes(task.status));
 });
 
 const doneTasks = computed(() => {
-  return filteredTasks.value.filter((task: Task) => task.status === 'completed');
+  const doneStatuses = statuses.value.filter(s => s.type === 'done').map(s => s.id);
+  return filteredTasks.value.filter((task: Task) => doneStatuses.includes(task.status));
 });
 
 const closedTasks = computed(() => {
+  // For backward compatibility, keep closed tasks separate
   return filteredTasks.value.filter((task: Task) => task.status === 'closed');
 });
 
@@ -282,17 +264,42 @@ const tasksByLanguageAndStatus = computed(() => {
   availableLanguages.value.forEach((lang: string) => {
     result[lang] = { todo: [], inProgress: [], done: [] };
   });
+  
+  const todoStatusIds = statuses.value.filter(s => s.type === 'todo').map(s => s.id);
+  const inProgressStatusIds = statuses.value.filter(s => s.type === 'in_progress').map(s => s.id);
+  const doneStatusIds = statuses.value.filter(s => s.type === 'done').map(s => s.id);
+  
   filteredTasks.value.forEach((task: Task) => {
     const lang = task.language || 'Unknown';
     if (!result[lang]) {
       result[lang] = { todo: [], inProgress: [], done: [] };
     }
-    if (task.status === 'pending') result[lang].todo.push(task);
-    else if (task.status === 'in_progress') result[lang].inProgress.push(task);
-    else if (task.status === 'completed') result[lang].done.push(task);
+    
+    if (todoStatusIds.includes(task.status)) {
+      result[lang].todo.push(task);
+    } else if (inProgressStatusIds.includes(task.status)) {
+      result[lang].inProgress.push(task);
+    } else if (doneStatusIds.includes(task.status)) {
+      result[lang].done.push(task);
+    }
   });
   return result;
 });
+
+// Normalization helper to adapt server task shape to frontend Task type
+function normalizeTask(raw: any): Task {
+  const statusObj = (raw as any).statusDetails || (raw as any).status;
+  const statusId = typeof (raw as any).status === 'string'
+    ? (raw as any).status
+    : statusObj?.id ?? (raw as any).statusId ?? (raw as any).status;
+  return {
+    ...(raw as any),
+    status: statusId,
+    statusDetails: typeof (raw as any).status === 'object' ? (raw as any).status : statusObj,
+    workflowId: (raw as any).workflowId ?? (raw as any).workflow?.id ?? undefined,
+    workflow: (raw as any).workflow,
+  } as Task;
+}
 
 // Methods
 async function loadBoard() {
@@ -302,21 +309,20 @@ async function loadBoard() {
   error.value = '';
   
   try {
-    // Load statuses
-    const statusesResponse = await axiosInstance.get(`/projects/${props.projectId}/statuses`);
-    statuses.value = statusesResponse.data;
+    // Load statuses using workflow service
+    statuses.value = await workflowService.getProjectStatuses(props.projectId);
 
     // Load tasks
-    const tasksResponse = await axiosInstance.get(`/tasks/project/${props.projectId}`);
-    tasks.value = Array.isArray(tasksResponse.data) ? [...tasksResponse.data] : [];
+    const fetchedTasks = await taskService.getProjectTasks(props.projectId);
+    tasks.value = fetchedTasks.map(normalizeTask);
 
-    // Load workflow if available
+    // Load workflows
     try {
-      const workflowsResponse = await axiosInstance.get(`/projects/${props.projectId}/workflows`);
-      const workflows = workflowsResponse.data;
+      const workflows = await workflowService.getProjectWorkflows(props.projectId);
       workflow.value = workflows.find((w: Workflow) => w.isDefault) || workflows[0] || null;
     } catch (error) {
       console.warn('No workflow found for project:', props.projectId);
+      workflow.value = null;
     }
 
     console.log('Board loaded:', {
@@ -398,9 +404,8 @@ async function selectTask(task: Task) {
   taskProgressData.value.delete(task.id);
   
   try {
-    // Load available transitions
-    const transitionsResponse = await axiosInstance.get(`/tasks/${task.id}/available-transitions`);
-    availableTransitions.value = transitionsResponse.data;
+    // Load available transitions using task service
+    availableTransitions.value = await taskService.getAvailableTransitions(task.id);
 
     // Load task history
     await loadTaskHistory(task.id);
@@ -410,6 +415,7 @@ async function selectTask(task: Task) {
 
   } catch (error) {
     console.error('Failed to load task details:', error);
+    availableTransitions.value = [];
   }
 }
 
@@ -493,19 +499,20 @@ async function onDrop(event: DragEvent, toStatusId: string) {
   }
 
   try {
-    await axiosInstance.post(`/tasks/${draggedTask.value.id}/transition`, {
+    // Use the new transition system
+    const updatedTask = await taskService.transitionTask(draggedTask.value.id, {
       toStatusId: toStatusId
     });
 
     // Update task status locally
-    const task = tasks.value.find(t => t.id === draggedTask.value!.id);
-    if (task) {
-      task.status = toStatusId as any;
+    const taskIndex = tasks.value.findIndex(t => t.id === draggedTask.value!.id);
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = normalizeTask(updatedTask);
     }
 
     // Update selected task if it's the same
     if (selectedTask.value?.id === draggedTask.value.id) {
-      selectedTask.value.status = toStatusId as any;
+      selectedTask.value = normalizeTask(updatedTask);
       await selectTask(selectedTask.value);
     }
 
@@ -516,12 +523,12 @@ async function onDrop(event: DragEvent, toStatusId: string) {
       life: 3000
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to move task:', error);
     toast.add({
       severity: 'error',
       summary: 'Move Failed',
-      detail: 'Failed to move task',
+      detail: error.response?.data?.message || 'Failed to move task',
       life: 4000
     });
   } finally {
@@ -564,11 +571,11 @@ function editTask() {
 function handleTaskUpdated(updatedTask: Task) {
   const taskIndex = tasks.value.findIndex(t => t.id === updatedTask.id);
   if (taskIndex !== -1) {
-    tasks.value[taskIndex] = updatedTask;
+    tasks.value[taskIndex] = normalizeTask(updatedTask);
   }
 
   if (selectedTask.value && selectedTask.value.id === updatedTask.id) {
-    selectedTask.value = updatedTask;
+    selectedTask.value = normalizeTask(updatedTask);
   }
 
   showEditTask.value = false;
@@ -973,9 +980,28 @@ defineExpose({
 
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-// Missing methods referenced in template
+// Utility functions for working with statuses
 function getTasksByStatus(statusId: string): Task[] {
   return tasks.value.filter(task => task.status === statusId);
+}
+
+function getStatusById(statusId: string): TaskStatus | undefined {
+  return statuses.value.find(status => status.id === statusId);
+}
+
+function getStatusName(statusId: string): string {
+  const status = getStatusById(statusId);
+  return status ? status.name : 'Unknown Status';
+}
+
+function getStatusColor(statusId: string): string {
+  const status = getStatusById(statusId);
+  return status ? status.color : '#42526E';
+}
+
+function getStatusType(statusId: string): 'todo' | 'in_progress' | 'done' | 'unknown' {
+  const status = getStatusById(statusId);
+  return status ? status.type : 'unknown';
 }
 
 function getInitials(fullName?: string): string {
@@ -988,7 +1014,7 @@ function getInitials(fullName?: string): string {
     .slice(0, 2);
 }
 
-function showColumnMenu(status: Status) {
+function showColumnMenu(status: TaskStatus) {
   // Show context menu for column actions
   console.log('Show column menu for:', status);
 }
@@ -1000,7 +1026,7 @@ function createTaskInStatus(statusId: string) {
 
 function handleTaskCreated(task: Task) {
   console.log('Task created:', task);
-  tasks.value.unshift(task);
+  tasks.value.unshift(normalizeTask(task));
   showCreateTask.value = false;
   
   // Clear progress cache to ensure fresh data
@@ -1009,19 +1035,20 @@ function handleTaskCreated(task: Task) {
 
 async function transitionTask(taskId: string, toStatusId: string) {
   try {
-    await axiosInstance.post(`/tasks/${taskId}/transition`, {
+    // Use the new transition system
+    const updatedTask = await taskService.transitionTask(taskId, {
       toStatusId: toStatusId
     });
 
     // Update task status locally
-    const task = tasks.value.find(t => t.id === taskId);
-    if (task) {
-      task.status = toStatusId as any;
+    const taskIndex = tasks.value.findIndex(t => t.id === taskId);
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = normalizeTask(updatedTask);
     }
 
     // Update selected task if it's the same
     if (selectedTask.value?.id === taskId) {
-      selectedTask.value.status = toStatusId as any;
+      selectedTask.value = normalizeTask(updatedTask);
       await selectTask(selectedTask.value);
     }
 
@@ -1032,12 +1059,12 @@ async function transitionTask(taskId: string, toStatusId: string) {
       life: 3000
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to move task:', error);
     toast.add({
       severity: 'error',
       summary: 'Move Failed',
-      detail: 'Failed to move task',
+      detail: error.response?.data?.message || 'Failed to move task',
       life: 4000
     });
   }
@@ -1204,8 +1231,8 @@ async function transitionTask(taskId: string, toStatusId: string) {
           <div class="task-info">
             <div class="info-row">
               <label>Status:</label>
-              <div class="status-badge" :style="{ backgroundColor: selectedTask.status.color }">
-                {{ getStatusDisplayName(selectedTask.status) }}
+              <div class="status-badge" :style="{ backgroundColor: getStatusColor(selectedTask.status) }">
+                {{ getStatusName(selectedTask.status) }}
               </div>
             </div>
 
@@ -1278,7 +1305,7 @@ async function transitionTask(taskId: string, toStatusId: string) {
             <div v-if="taskHistoryLoading" class="history-loading">
               <i class="icon-spinner"></i> Loading history...
             </div>
-            <div v-else-if="taskHistory.length === 0" class="no-history">
+                          <div v-else-if="taskHistory.length === 0" class="no-history">
               <p>No history available for this task.</p>
             </div>
             <div v-else class="history-list">
@@ -1288,11 +1315,16 @@ async function transitionTask(taskId: string, toStatusId: string) {
                 </div>
                 <div class="history-content">
                   <p>
-                    <strong>{{ entry.changedBy?.fullName || 'Unknown' }}</strong>
-                    {{ formatHistoryAction(entry.action) }}
+                    <strong>{{ entry.changedBy?.fullName || entry.changedBy?.username || 'Unknown' }}</strong>
+                    moved from
+                    <span v-if="entry.fromStatus" :style="{ color: entry.fromStatus.color }">{{ entry.fromStatus.name }}</span>
+                    <span v-else>Unknown</span>
+                    to
+                    <span v-if="entry.toStatus" :style="{ color: entry.toStatus.color }">{{ entry.toStatus.name }}</span>
+                    <span v-else>Unknown</span>
                   </p>
-                  <small>{{ formatDateTime(entry.performedAt) }}</small>
-                  <p v-if="entry.description" class="history-comment">{{ entry.description }}</p>
+                  <small>{{ formatDateTime(entry.createdAt) }}</small>
+                  <p v-if="entry.comment" class="history-comment">{{ entry.comment }}</p>
                 </div>
               </div>
             </div>
@@ -1311,11 +1343,11 @@ async function transitionTask(taskId: string, toStatusId: string) {
         <i class="icon-delete"></i>
         Delete Task
       </button>
-      <button v-if="currentTaskForAction?.status === 'completed'" @click="showCloseTaskConfirmation(currentTaskForAction)" class="menu-item">
+      <button v-if="currentTaskForAction && getStatusType(currentTaskForAction.status) === 'done'" @click="showCloseTaskConfirmation(currentTaskForAction)" class="menu-item">
         <i class="icon-check"></i>
         Close Task
       </button>
-      <button v-if="currentTaskForAction?.status === 'closed'" @click="showReopenTaskConfirmation(currentTaskForAction)" class="menu-item">
+      <button v-if="currentTaskForAction && getStatusName(currentTaskForAction.status).toLowerCase() === 'closed'" @click="showReopenTaskConfirmation(currentTaskForAction)" class="menu-item">
         <i class="icon-refresh"></i>
         Reopen Task
       </button>

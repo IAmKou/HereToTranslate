@@ -1297,7 +1297,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   ) {
     const defaultStatuses = [
       {
-        name: 'To Do',
+        name: 'To do',
         description: 'Task is ready to be worked on',
         color: '#42526E',
         type: StatusType.TODO,
@@ -1305,7 +1305,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         isDefault: true,
       },
       {
-        name: 'In Progress',
+        name: 'In progress',
         description: 'Task is being worked on',
         color: '#0052CC',
         type: StatusType.IN_PROGRESS,
@@ -1313,19 +1313,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         isDefault: false,
       },
       {
-        name: 'In Review',
-        description: 'Task is being reviewed',
-        color: '#FF8B00',
-        type: StatusType.IN_PROGRESS,
-        position: 2,
-        isDefault: false,
-      },
-      {
         name: 'Done',
         description: 'Task is completed',
         color: '#00875A',
         type: StatusType.DONE,
-        position: 3,
+        position: 2,
         isDefault: false,
       },
     ];
@@ -1347,46 +1339,65 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     project: ProjectEntity,
     statuses: any[]
   ) {
-    // Create default workflow
     const workflow = queryRunner.manager.create(WorkflowEntity, {
-      name: 'Default Workflow',
-      description: 'Auto-generated default workflow',
+      name: 'Kanban Workflow',
+      description: 'Default Kanban-style workflow with To do, In progress, and Done statuses',
       project,
       isDefault: true,
     });
 
     const savedWorkflow = await queryRunner.manager.save(workflow);
 
-    // Create basic transitions (linear flow)
-    const transitions = [];
-    for (let i = 0; i < statuses.length - 1; i++) {
-      const fromStatus = statuses[i];
-      const toStatus = statuses[i + 1];
+    // Map statuses by type for easier reference
+    const todoStatus = statuses.find(s => s.type === StatusType.TODO);
+    const inProgressStatus = statuses.find(s => s.type === StatusType.IN_PROGRESS);
+    const doneStatus = statuses.find(s => s.type === StatusType.DONE);
 
+    // Create Kanban-style transitions
+    const transitions = [];
+
+    // Forward transitions: To do → In progress → Done
+    if (todoStatus && inProgressStatus) {
       const transition = queryRunner.manager.create(WorkflowTransitionEntity, {
-        name: `${fromStatus.name} → ${toStatus.name}`,
+        name: `${todoStatus.name} → ${inProgressStatus.name}`,
         workflow: savedWorkflow,
-        fromStatus,
-        toStatus,
+        fromStatus: todoStatus,
+        toStatus: inProgressStatus,
         conditionType: TransitionConditionType.ANYONE,
       });
-
       transitions.push(await queryRunner.manager.save(transition));
     }
 
-    // Add backward transitions (for reopening tasks)
-    for (let i = statuses.length - 1; i > 0; i--) {
-      const fromStatus = statuses[i];
-      const toStatus = statuses[i - 1];
-
+    if (inProgressStatus && doneStatus) {
       const transition = queryRunner.manager.create(WorkflowTransitionEntity, {
-        name: `${fromStatus.name} → ${toStatus.name}`,
+        name: `${inProgressStatus.name} → ${doneStatus.name}`,
         workflow: savedWorkflow,
-        fromStatus,
-        toStatus,
+        fromStatus: inProgressStatus,
+        toStatus: doneStatus,
         conditionType: TransitionConditionType.ANYONE,
       });
+      transitions.push(await queryRunner.manager.save(transition));
+    }
 
+    if (doneStatus && inProgressStatus) {
+      const transition = queryRunner.manager.create(WorkflowTransitionEntity, {
+        name: `${doneStatus.name} → ${inProgressStatus.name}`,
+        workflow: savedWorkflow,
+        fromStatus: doneStatus,
+        toStatus: inProgressStatus,
+        conditionType: TransitionConditionType.ANYONE,
+      });
+      transitions.push(await queryRunner.manager.save(transition));
+    }
+
+    if (inProgressStatus && todoStatus) {
+      const transition = queryRunner.manager.create(WorkflowTransitionEntity, {
+        name: `${inProgressStatus.name} → ${todoStatus.name}`,
+        workflow: savedWorkflow,
+        fromStatus: inProgressStatus,
+        toStatus: todoStatus,
+        conditionType: TransitionConditionType.ANYONE,
+      });
       transitions.push(await queryRunner.manager.save(transition));
     }
 

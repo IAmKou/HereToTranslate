@@ -76,7 +76,7 @@ export class ProjectCancellationController {
         },
       };
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 
@@ -100,7 +100,7 @@ export class ProjectCancellationController {
         message: `Cancellation request ${dto.approved ? 'approved' : 'rejected'} successfully`,
       };
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 
@@ -128,7 +128,7 @@ export class ProjectCancellationController {
         completedAt: cancellation.completedAt,
       }));
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 
@@ -174,7 +174,7 @@ export class ProjectCancellationController {
         completedAt: cancellation.completedAt,
       }));
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 
@@ -237,7 +237,7 @@ export class ProjectCancellationController {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 }

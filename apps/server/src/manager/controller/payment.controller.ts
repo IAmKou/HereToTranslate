@@ -99,7 +99,7 @@ export class PaymentController {
       const result = await this.paymentService.capturePayment(orderId);
       return result || { success: true };
     } catch (e) {
-      return { success: false, message: e?.message || 'Capture failed' };
+      return { success: false, message: (e as Error).message || 'Capture failed' };
     }
   }
 

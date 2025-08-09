@@ -22,6 +22,10 @@ import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { UpdateTaskDto, TransitionTaskDto } from '#LocalProject/Dtos';
 import { TransitionConditionType, StatusType } from '#LocalProject/Entities';
 import { StatusManagerService } from './status-manager.service';
+import { PageDifficultyService } from './page-difficulty.service';
+import { TaskAssignmentService } from './task-assignment.service';
+import { AssignTaskDto, PageDifficultyDto, ReassignTaskDto, DifficultyConfigDto } from '#LocalProject/Dtos';
+import { PageDifficultyEntity } from '#LocalProject/Entities';
 
 @Injectable()
 export class TaskManagerService {
@@ -43,7 +47,9 @@ export class TaskManagerService {
     private readonly projectService: ProjectManagerService,
     private readonly translationService: TranslationService,
     private readonly taskGateway: TaskGateway,
-    private readonly statusManagerService: StatusManagerService
+    private readonly statusManagerService: StatusManagerService,
+    private readonly pageDifficultyService: PageDifficultyService,
+    private readonly taskAssignmentService: TaskAssignmentService
   ) {}
 
   async createTask(params: {
@@ -165,7 +171,7 @@ export class TaskManagerService {
         if (!fallbackStatus) {
           // Create default statuses for the project
           await this.statusManagerService.createDefaultStatuses(projectId);
-          
+
           // Get the newly created default status
           status = await this.statusRepository.findOneOrFail({
             where: {
@@ -819,5 +825,173 @@ export class TaskManagerService {
       pageSize,
       totalPages: Math.ceil(count / pageSize),
     };
+  }
+
+  // New methods for pagination & scoring
+  async createTaskWithPagination(params: {
+    title: string;
+    description?: string;
+    createdById: string;
+    assignedToId?: string;
+    groupId?: string;
+    dueDate?: Date;
+    projectId?: string;
+    branchId?: string;
+    fileId?: string;
+    language?: string;
+    workflowId?: string;
+    statusId?: string;
+    priority?: string;
+    storyPoints?: number;
+    customFields?: Record<string, unknown>;
+    selectedPages?: number[];
+    pageDifficulties?: PageDifficultyDto[];
+    assignments?: AssignTaskDto[];
+  }) {
+    // Create the basic task first
+    const task = await this.createTask(params);
+
+    // Handle page difficulties if provided
+    if (params.pageDifficulties && params.fileId && params.projectId && params.branchId) {
+      for (const pageDifficulty of params.pageDifficulties) {
+        await this.pageDifficultyService.assignPageDifficulty(
+          params.projectId,
+          params.branchId,
+          params.fileId,
+          pageDifficulty,
+          params.createdById
+        );
+      }
+
+      // Calculate and update task score
+      const scoreData = await this.pageDifficultyService.calculateTaskScore(
+        params.fileId,
+        params.selectedPages
+      );
+
+      task.selectedPages = params.selectedPages;
+      task.totalScore = scoreData.totalScore;
+      task.totalAmount = scoreData.totalScore; // Can be adjusted with additional pricing logic
+      task.totalPages = scoreData.totalPages;
+
+      await this.taskRepository.save(task);
+    }
+
+    // Handle assignments if provided
+    if (params.assignments) {
+      for (const assignment of params.assignments) {
+        await this.taskAssignmentService.assignTask(
+          {
+            ...assignment,
+            taskId: task.id.toString(),
+          },
+          params.createdById
+        );
+      }
+    }
+
+    return this.getTaskWithDetails(task.id.toString());
+  }
+
+  async getTaskWithDetails(id: string) {
+    const task = await this.getTask(id);
+
+    // Get assignments
+    const assignments = await this.taskAssignmentService.getTaskAssignments(id);
+
+    // Get page difficulties if task has fileId
+    let pageDifficulties: PageDifficultyEntity[] = [];
+    if (task.fileId) {
+      pageDifficulties = await this.pageDifficultyService.getPageDifficulties(task.fileId);
+    }
+
+    return {
+      ...task,
+      assignments,
+      pageDifficulties,
+    };
+  }
+
+  async updateTaskPagination(
+    taskId: string,
+    selectedPages: number[]
+  ) {
+    const task = await this.taskRepository.findOneOrFail({
+      where: { id: BigInt(taskId) },
+    });
+
+    if (!task.fileId) {
+      throw new BadRequestException('Task must have a file to update pagination');
+    }
+
+    // Validate no duplicate pages
+    await this.pageDifficultyService.validateNoDuplicatePages(
+      task.fileId,
+      selectedPages
+    );
+
+    // Calculate new score
+    const scoreData = await this.pageDifficultyService.calculateTaskScore(
+      task.fileId,
+      selectedPages
+    );
+
+    task.selectedPages = selectedPages;
+    task.totalScore = scoreData.totalScore;
+    task.totalAmount = scoreData.totalScore;
+    task.totalPages = scoreData.totalPages;
+
+    await this.taskRepository.save(task);
+    this.taskGateway.emitTaskUpdate(task);
+
+    return this.getTaskWithDetails(taskId);
+  }
+
+  async getPagePreview(fileId: string, pageNumber: number, language: string) {
+    return await this.pageDifficultyService.getPagePreview({
+      fileId,
+      pageNumber,
+      language,
+    });
+  }
+
+  async assignTaskRole(dto: AssignTaskDto, assignedById: string) {
+    return await this.taskAssignmentService.assignTask(dto, assignedById);
+  }
+
+  async reassignTaskRole(dto: ReassignTaskDto, reassignedById: string) {
+    return await this.taskAssignmentService.reassignTask(dto, reassignedById);
+  }
+
+  async getTaskAssignments(taskId: string) {
+    return await this.taskAssignmentService.getTaskAssignments(taskId);
+  }
+
+  async getAssignmentHistory(taskId: string) {
+    return await this.taskAssignmentService.getAssignmentHistory(taskId);
+  }
+
+  async acceptAssignment(assignmentId: string, userId: string) {
+    return await this.taskAssignmentService.acceptAssignment(assignmentId, userId);
+  }
+
+  async declineAssignment(assignmentId: string, userId: string, reason?: string) {
+    return await this.taskAssignmentService.declineAssignment(assignmentId, userId, reason);
+  }
+
+  async completeAssignment(assignmentId: string, userId: string) {
+    return await this.taskAssignmentService.completeAssignment(assignmentId, userId);
+  }
+
+  async getDifficultyConfigs(projectId: string) {
+    return await this.pageDifficultyService.getDifficultyConfigs(projectId);
+  }
+
+  async updateDifficultyConfig(configId: string, dto: Partial<DifficultyConfigDto>, userId: string) {
+    return await this.pageDifficultyService.updateDifficultyConfig(configId, dto, userId);
+  }
+
+  async createDefaultDifficultyConfigs(projectId: string, userId: string) {
+    return await this.pageDifficultyService.createDefaultDifficultyConfigs(projectId, userId);
   }
 }

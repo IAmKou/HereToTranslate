@@ -25,7 +25,11 @@ import {
   WorkflowEntity,
   TaskStatusEntity,
   TaskStatusHistoryEntity,
-  TaskCommentEntity, TranslationPreviewEntity, DeadlineExtensionEntity, ProjectCancellationEntity
+  TaskCommentEntity, TranslationPreviewEntity, DeadlineExtensionEntity, ProjectCancellationEntity,
+  PageDifficultyEntity,
+  AssignmentHistoryEntity,
+  DifficultyConfigEntity,
+  TaskAssignmentEntity,
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -84,6 +88,8 @@ import { ProjectCancellationService } from '#LocalProject/Managers/service/proje
 import { ProjectCancellationController } from '#LocalProject/Managers/controller/project-cancellation.controller';
 import { DeadlineManagementController } from '#LocalProject/Managers/controller/deadline-management.controller';
 import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinechecker.service';
+import { PageDifficultyService } from './service/page-difficulty.service';
+import { TaskAssignmentService } from './service/task-assignment.service';
 
 @Global()
 @Module({
@@ -121,7 +127,11 @@ import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinec
       WorkflowTransitionEntity,
       TranslationPreviewEntity,
       DeadlineExtensionEntity,
+      AssignmentHistoryEntity,
+      DifficultyConfigEntity,
+      PageDifficultyEntity, 
       ProjectCancellationEntity,
+      TaskAssignmentEntity,
     ]),
     BullModule.registerQueue({
       name: 'extract',
@@ -156,6 +166,8 @@ import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinec
     WorkflowManagerService,
     ProjectCancellationService,
     DeadlineCheckerService,
+    TaskAssignmentService,
+    PageDifficultyService,
   ],
   exports: [
     CategoryManagerService,
@@ -183,6 +195,8 @@ import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinec
     WorkflowManagerService,
     ProjectCancellationService,
     DeadlineCheckerService,
+    TaskAssignmentService,
+    PageDifficultyService,
   ],
   controllers: [
     CategoryController,
@@ -210,6 +224,7 @@ import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinec
     ProjectCancellationController,
     DeadlineManagementController,
     WorkflowController,
+
   ],
 })
 export class ManagersModule {}

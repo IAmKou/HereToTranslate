@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException, ForbiddenEx
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
+  ProjectEntity,
   RequestEntity,
   RequestStatus,
   ProjectCancellationEntity,
@@ -13,6 +14,7 @@ import {
 } from '#LocalProject/Entities';
 import { PaypalService } from './payment-manager.service';
 import { ProjectManagerService } from './project-manager.service';
+import { MailerService } from '@nestjs-modules/mailer';
 import { NotificationManagerService } from './notification-manager.service';
 import { CancellationAction } from '#LocalProject/Dtos';
 
@@ -25,10 +27,13 @@ export class ProjectCancellationService {
     private readonly cancellationRepo: Repository<ProjectCancellationEntity>,
     @InjectRepository(RequestEntity)
     private readonly requestRepo: Repository<RequestEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectRepo: Repository<ProjectEntity>,
     @InjectRepository(TransactionEntity)
     private readonly transactionRepo: Repository<TransactionEntity>,
     private readonly paymentService: PaypalService,
     private readonly projectService: ProjectManagerService,
+    private readonly mailerService: MailerService,
     private readonly notificationService: NotificationManagerService,
   ) {}
 
@@ -138,7 +143,7 @@ export class ProjectCancellationService {
 
     // Validate responder
     const request = cancellation.request;
-    const isValidResponder =
+    const isValidResponder = 
       (cancellation.cancellationType === CancellationType.REQUESTER_INITIATED && request.assignee?.id === responderId) ||
       (cancellation.cancellationType === CancellationType.TRANSLATOR_INITIATED && request.requester.id === responderId);
 
@@ -189,14 +194,14 @@ export class ProjectCancellationService {
       if (cancellation.isArchiveOnly) {
         request.status = RequestStatus.Archived;
         await this.requestRepo.save(request);
-
+        
         // Archive the project
         await this.projectService.archive(project);
       } else {
         // Delete request (mark as cancelled)
         request.status = RequestStatus.Cancelled;
         await this.requestRepo.save(request);
-
+        
         // Delete the project
         await this.projectService.deleteProject(project.id, cancellation.initiator.id);
       }
@@ -238,7 +243,7 @@ export class ProjectCancellationService {
     recipientId: bigint
   ): Promise<void> {
     const isRequesterInitiated = cancellation.cancellationType === CancellationType.REQUESTER_INITIATED;
-
+    
     await this.notificationService.createNotification({
       userId: recipientId,
       type: 'CANCELLATION_REQUEST',
@@ -247,7 +252,6 @@ export class ProjectCancellationService {
     });
 
     // Send email notification
-    // Implementation would depend on your email template system
   }
 
   private async sendCancellationRejectedNotification(
@@ -266,7 +270,7 @@ export class ProjectCancellationService {
   ): Promise<void> {
     const request = cancellation.request;
     const action = cancellation.isArchiveOnly ? 'archived' : 'deleted';
-
+    
     // Notify initiator
     await this.notificationService.createNotification({
       userId: cancellation.initiator.id,
@@ -339,7 +343,7 @@ export class ProjectCancellationService {
       refundAmount,
       penaltyAmount,
       requiresConfirmation: true, // For delete action
-      message: isTranslator
+      message: isTranslator 
         ? 'If you cancel, the requester will receive a full refund.'
         : 'If you cancel, you will lose your deposit.',
     };

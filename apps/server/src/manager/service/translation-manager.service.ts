@@ -493,7 +493,35 @@ export class TranslationService {
     language: string,
     pages: number[] = []
   ): Promise<any[]> {
-    const query: any = { projectId, branchId, fileId, language };
+    // If projectId or branchId are empty, derive them from the file
+    let actualProjectId = projectId;
+    let actualBranchId = branchId;
+    
+    if (!projectId || !branchId) {
+      const fileEntity = await this.fileRepository.findOne({
+        where: { id: BigInt(fileId) },
+        relations: ['project', 'branch'],
+      });
+      
+      if (!fileEntity) {
+        throw new Error(`File with ID ${fileId} not found`);
+      }
+      
+      actualProjectId = fileEntity.project?.id?.toString() || projectId;
+      actualBranchId = fileEntity.branch?.id?.toString() || branchId;
+      
+      if (!actualProjectId || !actualBranchId) {
+        throw new Error(`File ${fileId} is not associated with a project or branch`);
+      }
+    }
+
+    const query: any = { 
+      projectId: actualProjectId, 
+      branchId: actualBranchId, 
+      fileId, 
+      language,
+      obsolete: { $ne: true } // Only get non-obsolete strings
+    };
     
     if (pages.length > 0) {
       query.filePart = { $in: pages };

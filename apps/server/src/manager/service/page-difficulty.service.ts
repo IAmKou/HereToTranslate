@@ -11,6 +11,7 @@ import {
   DifficultyConfigEntity,UserEntity
 } from '#LocalProject/Entities';
 import { TranslationService } from './translation-manager.service';
+import { FileService } from './file-manager.service';
 import {
   PageDifficultyDto,
   UpdatePageDifficultyDto,
@@ -27,7 +28,8 @@ export class PageDifficultyService {
     private readonly difficultyConfigRepository: Repository<DifficultyConfigEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    private readonly translationService: TranslationService
+    private readonly translationService: TranslationService,
+    private readonly fileService: FileService
   ) {}
 
   async createDefaultDifficultyConfigs(projectId: string, userId: string) {
@@ -115,32 +117,53 @@ export class PageDifficultyService {
   async getPagePreview(dto: PagePreviewDto) {
     const { fileId, pageNumber, language } = dto;
 
-    // Get translation strings for the specific page
-    const translations = await this.translationService.getTranslationPreview(
-      '', // projectId - will be derived from fileId
-      '', // branchId - will be derived from fileId
-      fileId,
-      language,
-      [pageNumber - 1] // Convert to 0-based filePart
-    );
+    try {
+      // Validate file has required project/branch relationships
+      await this.fileService.validateFileForPageDifficulty(fileId);
 
-    if (translations.length === 0) {
-      throw new NotFoundException(`No content found for page ${pageNumber}`);
+      // Get translation strings for the specific page
+      const translations = await this.translationService.getTranslationPreview(
+        '', // projectId - will be derived from fileId
+        '', // branchId - will be derived from fileId
+        fileId,
+        language,
+        [pageNumber - 1] // Convert to 0-based filePart
+      );
+
+      if (translations.length === 0) {
+        throw new NotFoundException(`No content found for page ${pageNumber} in file ${fileId}`);
+      }
+
+      // Analyze page complexity
+      const analysis = this.analyzePageComplexity(translations);
+
+      return {
+        pageNumber,
+        filePart: pageNumber - 1,
+        translations,
+        analysis,
+        suggestedDifficulty: this.suggestDifficultyLevel(analysis),
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get page preview for file ${fileId}, page ${pageNumber}: ${errorMessage}`);
     }
-
-    // Analyze page complexity
-    const analysis = this.analyzePageComplexity(translations);
-
-    return {
-      pageNumber,
-      filePart: pageNumber - 1,
-      translations,
-      analysis,
-      suggestedDifficulty: this.suggestDifficultyLevel(analysis),
-    };
   }
 
-  private analyzePageComplexity(translations: any[]) {
+  private analyzePageComplexity(translations: Array<{
+    originalText: string;
+    style?: {
+      bold?: boolean;
+      italic?: boolean;
+      color?: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  }>) {
     const totalText = translations.map(t => t.originalText).join(' ');
     const textLength = totalText.length;
     const wordCount = totalText.split(/\s+/).length;
@@ -173,7 +196,7 @@ export class PageDifficultyService {
     };
   }
 
-  private suggestDifficultyLevel(analysis: any): DifficultyLevel {
+  private suggestDifficultyLevel(analysis: { complexityScore: number }): DifficultyLevel {
     const { complexityScore } = analysis;
     
     if (complexityScore <= 1) return DifficultyLevel.SIMPLE;
@@ -394,5 +417,50 @@ export class PageDifficultyService {
     config.updatedBy = user;
 
     return await this.difficultyConfigRepository.save(config);
+  }
+
+  /**
+   * Get available pages for a file that can have difficulty assigned
+   */
+  async getAvailablePages(fileId: string) {
+    try {
+      // Validate file has required relationships
+      const { projectId, branchId } = await this.fileService.validateFileForPageDifficulty(fileId);
+      
+      // Get file pages from translation service
+      const filePages = await this.translationService.getFilePages(fileId, projectId, branchId);
+      
+      // Get already assigned pages
+      const assignedPages = await this.pageDifficultyRepository.find({
+        where: { fileId },
+        select: ['pageNumber', 'difficultyLevel', 'calculatedScore'],
+      });
+      
+      const assignedPageNumbers = new Set(assignedPages.map(p => p.pageNumber));
+      
+      // Mark pages as available or assigned
+      const pagesWithStatus = filePages.pages.map(page => ({
+        ...page,
+        isAssigned: assignedPageNumbers.has(page.pageNumber),
+        assignedDifficulty: assignedPages.find(ap => ap.pageNumber === page.pageNumber)?.difficultyLevel,
+        assignedScore: assignedPages.find(ap => ap.pageNumber === page.pageNumber)?.calculatedScore,
+      }));
+      
+      return {
+        fileId,
+        fileName: (await this.fileService.getFileMetadata(fileId)).fileName,
+        totalPages: filePages.totalPages,
+        assignedPages: assignedPages.length,
+        availablePages: filePages.totalPages - assignedPages.length,
+        pages: pagesWithStatus,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get available pages for file ${fileId}: ${errorMessage}`);
+    }
   }
 }

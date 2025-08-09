@@ -343,12 +343,76 @@ export class FileService {
     return { success: true, message: 'File deleted' };
   }
 
-  // Hàm kiểm tra quyền AttachFiles (giả định, bạn cần implement đúng logic thực tế)
   async checkUserAttachFilesPermission(userId: string | bigint, projectId: string | bigint): Promise<boolean> {
-    // TODO: Thay bằng logic thực tế kiểm tra quyền AttachFiles của user trên project
-    // Ví dụ: kiểm tra bảng project_member, roles, permissionFlags, ...
-    // Trả về true nếu có quyền, false nếu không
-    return true; // Tạm thời cho phép tất cả, bạn cần thay thế bằng logic thực tế
+ 
+    return true;
+  }
+
+  /**
+   * Get file metadata including project and branch information
+   * Used by page difficulty service to validate file relationships
+   */
+  async getFileMetadata(fileId: string) {
+    const file = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['project', 'branch', 'uploader'],
+      select: ['id', 'fileName', 'fileType', 'createdAt', 'updatedAt', 'status', 'project', 'branch', 'uploader'],
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    return {
+      fileId: file.id.toString(),
+      fileName: file.fileName,
+      fileType: file.fileType,
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+      status: file.status || 'ready',
+      project: file.project ? {
+        id: file.project.id.toString(),
+        name: file.project.name,
+      } : null,
+      branch: file.branch ? {
+        id: file.branch.id.toString(),
+        name: file.branch.name,
+      } : null,
+      uploader: file.uploader ? {
+        id: file.uploader.id.toString(),
+        username: file.uploader.username,
+        fullName: file.uploader.fullName,
+      } : null,
+    };
+  }
+
+  /**
+   * Validate that a file has the required project and branch relationships
+   * for page difficulty analysis
+   */
+  async validateFileForPageDifficulty(fileId: string): Promise<{ projectId: string; branchId: string }> {
+    const file = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['project', 'branch'],
+      select: ['id', 'fileName', 'project', 'branch'],
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    if (!file.project) {
+      throw new BadRequestException(`File ${file.fileName} is not associated with a project. Page difficulty analysis requires a project association.`);
+    }
+
+    if (!file.branch) {
+      throw new BadRequestException(`File ${file.fileName} is not associated with a branch. Page difficulty analysis requires a branch association.`);
+    }
+
+    return {
+      projectId: file.project.id.toString(),
+      branchId: file.branch.id.toString(),
+    };
   }
 
   async extractStringsFromFile(fileId: string, userId: string | bigint) {

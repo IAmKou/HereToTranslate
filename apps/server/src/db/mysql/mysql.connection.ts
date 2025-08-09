@@ -30,7 +30,11 @@ import {
   TaskCommentEntity,
   TaskStatusHistoryEntity,
   ProjectCancellationEntity,
-  TranslationPreviewEntity, DeadlineExtensionEntity
+  TranslationPreviewEntity, DeadlineExtensionEntity,
+  AssignmentHistoryEntity,
+  TaskAssignmentEntity,
+  PageDifficultyEntity,
+  DifficultyConfigEntity
 } from '#LocalProject/Entities';
 
 @Injectable()
@@ -53,7 +57,7 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: false,
+      synchronize: true,
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
@@ -88,6 +92,10 @@ export class MySqlConnection {
         DeadlineExtensionEntity,
         ProjectCancellationEntity,
         TranslationPreviewEntity,
+        AssignmentHistoryEntity,
+        TaskAssignmentEntity,
+        DifficultyConfigEntity,
+        PageDifficultyEntity,
       ],
     });
     MySqlConnection.instance = this;

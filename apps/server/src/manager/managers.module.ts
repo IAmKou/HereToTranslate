@@ -89,6 +89,7 @@ import { ProjectCancellationController } from '#LocalProject/Managers/controller
 import { DeadlineManagementController } from '#LocalProject/Managers/controller/deadline-management.controller';
 import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinechecker.service';
 import { PageDifficultyService } from './service/page-difficulty.service';
+import { PageDifficultyController } from './controller/page-difficulty.controller';
 import { TaskAssignmentService } from './service/task-assignment.service';
 
 @Global()
@@ -219,6 +220,7 @@ import { TaskAssignmentService } from './service/task-assignment.service';
     AiChatController,
     NotificationController,
     AdminNotificationController,
+    PageDifficultyController,
     ProjectInvitationController,
     StatusController,
     ProjectCancellationController,

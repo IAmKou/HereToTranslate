@@ -27,22 +27,37 @@ async function extractTextWithOcrSpace(fileBuffer: Buffer, apiKey: string): Prom
     });
 
     if (response.data && response.data.ParsedResults && response.data.ParsedResults.length > 0) {
-      return response.data.ParsedResults.map(result => result.ParsedText).join('\n');
+      return response.data.ParsedResults.map((result: { ParsedText: string }) => result.ParsedText).join('\n');
     }
     return '';
-  } catch (error: any) {
-    console.error('OCR.space API error:', error?.response ? error.response.data : error?.message || error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('OCR.space API error:', errorMessage);
     throw new Error('Failed to extract text using OCR service.');
   }
 }
 
-function groupTextByLine(items, yThreshold = 5) {
+interface TextItem {
+  text: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  font?: string;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+  page?: number;
+}
+
+function groupTextByLine(items: TextItem[], yThreshold = 5) {
   if (!items.length) {
     return [];
   }
 
   // Sắp xếp các item theo tọa độ y trước, sau đó là x.
-  items.sort((a, b) => a.y - b.y || a.x - b.x);
+  items.sort((a: TextItem, b: TextItem) => a.y - b.y || a.x - b.x);
 
   const lines = [];
   let currentLine = [items[0]];
@@ -72,14 +87,13 @@ function groupTextByLine(items, yThreshold = 5) {
   }
 
   // Bây giờ, xử lý từng dòng để ghép các mẩu text lại.
-  return lines.map(lineItems => {
+  return lines.map((lineItems: TextItem[]) => {
     let lineText = '';
     if (lineItems.length > 0) {
       lineText = lineItems[0].text;
       for (let i = 1; i < lineItems.length; i++) {
         const prev = lineItems[i-1];
         const curr = lineItems[i];
-
 
         const spaceThreshold = (prev.height || 10) * 0.25;
         const gap = curr.x - (prev.x + (prev.width || 0));
@@ -100,27 +114,32 @@ function groupTextByLine(items, yThreshold = 5) {
 }
 
 // Hàm mới để chia part theo trang
-function assignFilePartsByPage(manifestEntries: any[]): void {
+function assignFilePartsByPage(manifestEntries: Partial<TranslationString>[]): void {
   // Nhóm các entries theo trang
-  const entriesByPage = new Map<number, any[]>();
+  const entriesByPage = new Map<number, Partial<TranslationString>[]>();
 
   for (const entry of manifestEntries) {
     const page = entry.position?.page || 1; // Mặc định page 1 nếu không có thông tin trang
     if (!entriesByPage.has(page)) {
       entriesByPage.set(page, []);
     }
-    entriesByPage.get(page)!.push(entry);
-  }
-
-  // Gán filePart theo số trang
-  const sortedPages = Array.from(entriesByPage.keys()).sort((a, b) => a - b);
-  for (let i = 0; i < sortedPages.length; i++) {
-    const page = sortedPages[i];
-    const entries = entriesByPage.get(page)!;
-    for (const entry of entries) {
-      entry.filePart = i; // Bắt đầu từ 0
+    const pageEntries = entriesByPage.get(page);
+    if (pageEntries) {
+      pageEntries.push(entry);
     }
   }
+
+  // Gán filePart theo số trang (filePart = pageNumber - 1 để consistent với PageDifficultyService)
+  const sortedPages = Array.from(entriesByPage.keys()).sort((a, b) => a - b);
+  for (const page of sortedPages) {
+    const entries = entriesByPage.get(page);
+    if (!entries) continue;
+    for (const entry of entries) {
+      entry.filePart = page - 1; // filePart = pageNumber - 1 for consistency
+    }
+  }
+  
+  console.log(`[MANIFEST] Assigned fileParts for ${sortedPages.length} pages: ${sortedPages.map(p => `page ${p} -> filePart ${p-1}`).join(', ')}`);
 }
 
 @Injectable()
@@ -143,8 +162,8 @@ export class ManifestService {
     switch (file.fileType) {
       case 'application/pdf': {
         let text = '';
-        let items = [];
-        let usedOcr = false;
+        let items: TextItem[] = [];
+
         try {
           // 1. Thử dùng parser trước để giữ layout
           const result = await parsePdfWithFonts(file.fileContent);
@@ -154,15 +173,15 @@ export class ManifestService {
           } else {
             throw new Error("No text found with parser, falling back to OCR.");
           }
-        } catch (err: any) {
+        } catch {
           // 2. Nếu parser lỗi -> Fallback sang OCR.space
           try {
             text = await extractTextWithOcrSpace(file.fileContent, apiKey);
-            usedOcr = true;
             console.log('[PDF][OCR.space] Text extracted:', text ? text.slice(0, 200) : '[EMPTY]');
-          } catch (ocrError: any) {
-            console.error('[PDF][OCR.space] OCR failed:', ocrError?.message || ocrError);
-            throw new Error('Failed to extract text from PDF: ' + (ocrError?.message || ocrError));
+          } catch (ocrError: unknown) {
+            const errorMessage = ocrError instanceof Error ? ocrError.message : String(ocrError);
+            console.error('[PDF][OCR.space] OCR failed:', errorMessage);
+            throw new Error('Failed to extract text from PDF: ' + errorMessage);
           }
         }
 
@@ -178,7 +197,6 @@ export class ManifestService {
               originalText: lineObj.text,
               language: 'en',
               font: lineObj.items[0]?.font || 'default',
-              fontSize: lineObj.items[0]?.fontSize,
               style: {
                 bold: lineObj.items.some(i => i.bold),
                 italic: lineObj.items.some(i => i.italic),
@@ -187,8 +205,6 @@ export class ManifestService {
               position: {
                 x: Math.min(...lineObj.items.map(i => i.x)),
                 y: Math.min(...lineObj.items.map(i => i.y)),
-                width: lineObj.items.reduce((w, i) => w + (i.width || 0), 0),
-                height: Math.max(...lineObj.items.map(i => i.height || 0)),
                 page: lineObj.items[0]?.page,
               },
             });
@@ -227,13 +243,13 @@ export class ManifestService {
         let pictureCount = 1;
         // Tách từng đoạn, heading, cell, list item, caption, th, blockquote, pre, figcaption
         const selectors = 'p, h1, h2, h3, h4, h5, h6, li, td, caption, th, blockquote, pre, figcaption';
-        $(selectors).each((i, el) => {
+        $(selectors).each((_i: number, el: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any -- cheerio element type
           const html = $(el).html()?.trim(); // Lấy innerHTML để giữ tag con
           // Bỏ qua nếu chỉ là ảnh (không có text nào ngoài <img>)
           const textOnly = $(el).text().trim();
           // Nếu đoạn chỉ chứa <img> (không có text), tạo entry Picture N
           if ($(el).find('img').length > 0 && (!textOnly || textOnly.length === 0)) {
-            $(el).find('img').each((j, img) => {
+            $(el).find('img').each(() => {
               manifestEntries.push({
                 projectId: String(file.project.id),
                 branchId: String(file.branch.id),
@@ -289,20 +305,22 @@ export class ManifestService {
 
       case 'application/json': {
         // Parse JSON and extract all string values (recursively)
-        function extractStrings(obj: any, out: string[] = []): string[] {
+        function extractStrings(obj: unknown, out: string[] = []): string[] {
           if (typeof obj === 'string') {
             out.push(obj);
           } else if (Array.isArray(obj)) {
             for (const item of obj) extractStrings(item, out);
           } else if (typeof obj === 'object' && obj !== null) {
-            for (const key in obj) extractStrings(obj[key], out);
+            for (const key in obj as Record<string, unknown>) {
+              extractStrings((obj as Record<string, unknown>)[key], out);
+            }
           }
           return out;
         }
-        let jsonContent: any;
+        let jsonContent: unknown;
         try {
           jsonContent = JSON.parse(file.fileContent.toString());
-        } catch (e: any) {
+        } catch {
           break;
         }
         const strings = extractStrings(jsonContent);
@@ -380,19 +398,7 @@ export class ManifestService {
 
 async function parsePdfWithFonts(buffer: Buffer): Promise<{
   text: string;
-  items: {
-    text: string;
-    font: string;
-    fontSize: number;
-    bold: boolean;
-    italic: boolean;
-    color: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    page: number;
-  }[];
+  items: TextItem[];
 }> {
   // Thiết lập worker cho pdfjs-dist
   pdfjs.GlobalWorkerOptions.workerSrc = path.resolve(
@@ -410,33 +416,36 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
     const viewport = page.getViewport({ scale: 1.0 });
     const textContent = await page.getTextContent();
 
-    fullText += textContent.items.map(item => item.str).join(' ');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pdfjs TextItem type incomplete
+    fullText += textContent.items.map((item: any) => (item as any).str).join(' ');
 
     for (const item of textContent.items) {
-      if (!item.str.trim()) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pdfjs TextItem type incomplete
+      const textItem = item as any; // Type assertion for pdfjs items
+      if (!textItem.str?.trim()) continue;
 
-      const tx = item.transform;
+      const tx = textItem.transform;
       const x = tx[4];
       const y = viewport.height - tx[5]; // y trong pdfjs tính từ dưới lên
-      const height = item.height;
-      const width = item.width;
-      const fontName = item.fontName;
+      const height = textItem.height;
+      const width = textItem.width;
+      const fontName = textItem.fontName;
 
       // Heuristics đơn giản để xác định style từ font name
-      const isBold = fontName.toLowerCase().includes('bold');
-      const isItalic = fontName.toLowerCase().includes('italic');
+      const isBold = fontName?.toLowerCase().includes('bold') || false;
+      const isItalic = fontName?.toLowerCase().includes('italic') || false;
 
       allItems.push({
-        text: item.str,
-        font: fontName,
-        fontSize: height,
+        text: textItem.str,
+        font: fontName || 'default',
+        fontSize: height || 12,
         bold: isBold,
         italic: isItalic,
         color: '#000000', // pdfjs-dist không dễ lấy màu, tạm set default
         x,
         y,
-        width,
-        height,
+        width: width || 0,
+        height: height || 12,
         page: i,
       });
     }

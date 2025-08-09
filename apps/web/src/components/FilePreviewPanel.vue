@@ -10,6 +10,14 @@
         </div>
         <div class="header-actions">
           <button
+            v-if="!collapsed && canManagePageDifficulty"
+            class="action-btn page-difficulty-btn"
+            @click.stop="openPageDifficultyModal"
+            title="Set page difficulty and scoring"
+          >
+            <i class="pi pi-chart-bar"></i>
+          </button>
+          <button
             class="action-btn"
             @click.stop="toggleCollapse"
             :title="collapsed ? 'Expand preview' : 'Collapse preview'"
@@ -35,6 +43,25 @@
 
     <!-- Preview Content -->
     <div v-if="!collapsed" class="preview-content">
+      <!-- Page Difficulty Info Bar -->
+      <div v-if="canManagePageDifficulty && pageDifficultyInfo.length > 0" class="page-difficulty-info">
+        <div class="difficulty-summary">
+          <span class="info-label">Page Difficulties:</span>
+          <div class="difficulty-badges">
+            <span 
+              v-for="info in pageDifficultyInfo" 
+              :key="info.pageNumber"
+              class="difficulty-badge"
+              :class="getDifficultyBadgeClass(info.difficultyLevel)"
+              :title="`Page ${info.pageNumber}: ${formatDifficultyLevel(info.difficultyLevel)} - $${info.calculatedScore}`"
+            >
+              {{ info.pageNumber }}
+            </span>
+          </div>
+          <span class="total-score">Total: ${{ totalDifficultyScore }}</span>
+        </div>
+      </div>
+
       <!-- Loading State -->
       <div v-if="loading" class="loading-state">
         <i class="pi pi-spin pi-spinner"></i>
@@ -146,12 +173,26 @@
         </div>
       </div>
     </div>
+
+    <!-- Page Difficulty Modal -->
+    <PageDifficultyModal
+      :is-open="showPageDifficultyModal"
+      :file-id="props.fileId || ''"
+      :file-name="props.fileName || ''"
+      :total-pages="totalPages"
+      :initial-page="currentPageForDifficulty"
+      :project-id="props.projectId || ''"
+      :branch-id="props.branchId || ''"
+      @close="closePageDifficultyModal"
+      @difficulty-assigned="onDifficultyAssigned"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted, computed, onBeforeUnmount } from 'vue';
 import axiosInstance from '../api';
+import PageDifficultyModal from './PageDifficultyModal.vue';
 
 interface Props {
   fileId?: string;
@@ -159,6 +200,8 @@ interface Props {
   filePath?: string;
   fileSize?: number;
   collapsed?: boolean;
+  projectId?: string;
+  branchId?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -181,10 +224,29 @@ const isResizing = ref(false); // Flag to indicate if the panel is being resized
 const startX = ref(0); // For mouse down event
 const startWidth = ref(0); // For mouse down event
 
+// Page Difficulty State
+const showPageDifficultyModal = ref(false);
+const totalPages = ref(1);
+const currentPageForDifficulty = ref(1);
+const pageDifficultyInfo = ref<Array<{
+  pageNumber: number;
+  difficultyLevel: string;
+  calculatedScore: number;
+}>>([]);
+
 // Computed
 const collapsed = computed({
   get: () => props.collapsed,
   set: (value) => emit('update:collapsed', value)
+});
+
+const canManagePageDifficulty = computed(() => {
+  return props.fileId && props.projectId && props.branchId && 
+         (previewType.value === 'pdf' || previewType.value === 'document');
+});
+
+const totalDifficultyScore = computed(() => {
+  return pageDifficultyInfo.value.reduce((total, info) => total + info.calculatedScore, 0).toFixed(2);
 });
 
 // Methods
@@ -381,11 +443,93 @@ async function testMammoth() {
   }
 }
 
+// Page Difficulty Methods
+function openPageDifficultyModal() {
+  if (!props.fileId || !props.projectId || !props.branchId) {
+    console.error('Missing required props for page difficulty modal');
+    return;
+  }
+  
+  // Try to determine total pages from preview content
+  // This is a simple heuristic - in a real implementation you might want to
+  // call an API to get the actual page count
+  if (previewType.value === 'pdf') {
+    // For PDF, you might extract page count from the preview
+    totalPages.value = extractPageCountFromPdf();
+  } else {
+    // For other document types, default to 1 page or implement page detection
+    totalPages.value = 1;
+  }
+  
+  currentPageForDifficulty.value = 1;
+  showPageDifficultyModal.value = true;
+}
+
+function closePageDifficultyModal() {
+  showPageDifficultyModal.value = false;
+}
+
+function onDifficultyAssigned(pageNumber: number, difficulty: string, score: number) {
+  console.log(`Page ${pageNumber} assigned difficulty: ${difficulty} with score: ${score}`);
+  
+  // Update local page difficulty info
+  const existingIndex = pageDifficultyInfo.value.findIndex(info => info.pageNumber === pageNumber);
+  if (existingIndex >= 0) {
+    pageDifficultyInfo.value[existingIndex] = { pageNumber, difficultyLevel: difficulty, calculatedScore: score };
+  } else {
+    pageDifficultyInfo.value.push({ pageNumber, difficultyLevel: difficulty, calculatedScore: score });
+  }
+  
+  // Sort by page number
+  pageDifficultyInfo.value.sort((a, b) => a.pageNumber - b.pageNumber);
+}
+
+function extractPageCountFromPdf(): number {
+  // This is a placeholder - in a real implementation, you would
+  // either get this from the API response or parse it from the PDF content
+  // For now, return a default value
+  return 10; // Default to 10 pages
+}
+
+function formatDifficultyLevel(level: string): string {
+  return level.split('_').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+}
+
+function getDifficultyBadgeClass(level: string): string {
+  const baseClass = 'difficulty-';
+  switch (level) {
+    case 'simple': return baseClass + 'simple';
+    case 'medium': return baseClass + 'medium';
+    case 'complex': return baseClass + 'complex';
+    case 'very_complex': return baseClass + 'very-complex';
+    default: return baseClass + 'simple';
+  }
+}
+
+async function loadPageDifficultyInfo() {
+  if (!props.fileId) return;
+  
+  try {
+    const response = await axiosInstance.get(`/page-difficulty/file/${props.fileId}`);
+    pageDifficultyInfo.value = response.data.map((item: any) => ({
+      pageNumber: item.pageNumber,
+      difficultyLevel: item.difficultyLevel,
+      calculatedScore: parseFloat(item.calculatedScore)
+    }));
+  } catch (error) {
+    console.error('Error loading page difficulty info:', error);
+    // Don't show error to user as this is optional information
+  }
+}
+
 // Watchers
 watch(() => props.fileId, (newFileId) => {
   console.log('FilePreviewPanel: fileId changed to:', newFileId);
   if (!collapsed.value) {
     loadPreview();
+    loadPageDifficultyInfo();
   }
 });
 
@@ -395,6 +539,7 @@ watch(() => collapsed.value, (isCollapsed) => {
   if (!isCollapsed) {
     console.log('FilePreviewPanel: Panel expanded, loading preview for fileId:', props.fileId);
     loadPreview();
+    loadPageDifficultyInfo();
   }
 });
 
@@ -611,6 +756,74 @@ function stopResize() {
 .action-btn:hover {
   background: rgba(99, 102, 241, 0.2);
   color: #c7d2fe;
+}
+
+.page-difficulty-btn {
+  color: #a855f7 !important;
+}
+
+.page-difficulty-btn:hover {
+  background: rgba(168, 85, 247, 0.2) !important;
+  color: #c084fc !important;
+}
+
+.page-difficulty-info {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+}
+
+.difficulty-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.info-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.difficulty-badges {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.difficulty-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.difficulty-simple {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.difficulty-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.difficulty-complex {
+  background: #fed7aa;
+  color: #c2410c;
+}
+
+.difficulty-very-complex {
+  background: #fecaca;
+  color: #dc2626;
+}
+
+.total-score {
+  color: #059669;
+  font-weight: 600;
+  margin-left: auto;
 }
 
 .preview-content {

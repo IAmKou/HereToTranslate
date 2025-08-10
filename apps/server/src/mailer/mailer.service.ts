@@ -68,4 +68,46 @@ export class MailService {
       throw error;
     }
   }
+
+  async sendTaskAssignmentNotification(
+    to: string,
+    taskData: {
+      taskTitle: string;
+      role: string;
+      assignedBy: string;
+      dueDate?: Date;
+      notes?: string;
+      reason?: string;
+    }
+  ) {
+    console.log('📧 MailService.sendTaskAssignmentNotification called with:', {
+      to,
+      taskData
+    });
+
+    try {
+      const subject = taskData.reason 
+        ? `Task Reassigned: ${taskData.taskTitle}`
+        : `New Task Assignment: ${taskData.taskTitle}`;
+
+      await this.mailerService.sendMail({
+        to,
+        subject,
+        template: './task-assignment',
+        context: {
+          taskTitle: taskData.taskTitle,
+          role: taskData.role,
+          assignedBy: taskData.assignedBy,
+          dueDate: taskData.dueDate ? taskData.dueDate.toDateString() : 'Not specified',
+          notes: taskData.notes || 'No additional notes',
+          reason: taskData.reason || null,
+          isReassignment: !!taskData.reason,
+        },
+      });
+      console.log('📧 MailService.sendTaskAssignmentNotification completed successfully');
+    } catch (error) {
+      console.error('📧 MailService.sendTaskAssignmentNotification error:', error);
+      throw error;
+    }
+  }
 }

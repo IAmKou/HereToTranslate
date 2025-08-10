@@ -93,6 +93,13 @@ const showTaskActionMenu = ref(false);
 const taskActionMenuPosition = ref({ x: 0, y: 0 });
 const currentTaskForAction = ref<Task | null>(null);
 
+// Change assignee state
+const showChangeAssigneeDialog = ref(false);
+const taskToChangeAssignee = ref<Task | null>(null);
+const newAssigneeId = ref('');
+const changeAssigneeReason = ref('');
+const isChangingAssignee = ref(false);
+
 // Modal state
 const showDeleteModal = ref(false);
 const taskToDelete = ref<Task | null>(null);
@@ -566,6 +573,63 @@ function editTask() {
 
   showEditTask.value = true;
   closeTaskActionMenu();
+}
+
+function changeAssignee() {
+  if (!currentTaskForAction.value) return;
+  
+  taskToChangeAssignee.value = currentTaskForAction.value;
+  newAssigneeId.value = '';
+  changeAssigneeReason.value = '';
+  showChangeAssigneeDialog.value = true;
+  closeTaskActionMenu();
+}
+
+async function confirmChangeAssignee() {
+  if (!taskToChangeAssignee.value || !newAssigneeId.value) return;
+
+  isChangingAssignee.value = true;
+
+  try {
+    // Call the API to change assignee
+    await axiosInstance.post(`/api/task-assignments/reassign`, {
+      taskId: taskToChangeAssignee.value.id,
+      role: 'translator', // For now, hardcode as translator. In the future, this could be dynamic
+      newAssigneeId: newAssigneeId.value,
+      reason: changeAssigneeReason.value || undefined,
+      notes: changeAssigneeReason.value || undefined
+    });
+
+    // Refresh the board to show updated data
+    await refreshBoard();
+
+    toast.add({
+      severity: 'success',
+      summary: 'Assignee Changed',
+      detail: 'Task assignee has been changed successfully.',
+      life: 3000
+    });
+
+    closeChangeAssigneeDialog();
+
+  } catch (error: any) {
+    console.error('Failed to change assignee:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Change Failed',
+      detail: error.response?.data?.message || 'Failed to change assignee. Please try again.',
+      life: 4000
+    });
+  } finally {
+    isChangingAssignee.value = false;
+  }
+}
+
+function closeChangeAssigneeDialog() {
+  showChangeAssigneeDialog.value = false;
+  taskToChangeAssignee.value = null;
+  newAssigneeId.value = '';
+  changeAssigneeReason.value = '';
 }
 
 function handleTaskUpdated(updatedTask: Task) {
@@ -1339,6 +1403,10 @@ async function transitionTask(taskId: string, toStatusId: string) {
         <i class="icon-edit"></i>
         Edit Task
       </button>
+      <button @click="changeAssignee" class="menu-item">
+        <i class="icon-user-edit"></i>
+        Change Assignee
+      </button>
       <button @click="openDeleteModal" class="menu-item delete">
         <i class="icon-delete"></i>
         Delete Task
@@ -1415,6 +1483,60 @@ async function transitionTask(taskId: string, toStatusId: string) {
           <button @click="confirmReopenTask" class="btn btn-primary" :disabled="isReopeningTask">
             <i v-if="isReopeningTask" class="icon-spinner"></i>
             {{ isReopeningTask ? 'Reopening...' : 'Reopen' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change Assignee Dialog -->
+    <div v-if="showChangeAssigneeDialog" class="modal-overlay" @click="closeChangeAssigneeDialog">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Change Task Assignee</h3>
+          <button @click="closeChangeAssigneeDialog" class="close-btn">
+            <i class="icon-close"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="newAssignee">New Assignee:</label>
+            <select 
+              id="newAssignee" 
+              v-model="newAssigneeId" 
+              class="form-control"
+              required
+            >
+              <option value="">Select a new assignee</option>
+              <option 
+                v-for="member in props.projectMembers" 
+                :key="(member as any).id" 
+                :value="(member as any).id"
+              >
+                {{ (member as any).fullName || (member as any).username }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="changeReason">Reason for change (optional):</label>
+            <textarea 
+              id="changeReason" 
+              v-model="changeAssigneeReason" 
+              class="form-control"
+              rows="3"
+              placeholder="Explain why you're changing the assignee..."
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="closeChangeAssigneeDialog" class="btn btn-secondary">Cancel</button>
+          <button 
+            @click="confirmChangeAssignee" 
+            class="btn btn-primary" 
+            :disabled="isChangingAssignee || !newAssigneeId"
+          >
+            <i v-if="isChangingAssignee" class="icon-spinner"></i>
+            {{ isChangingAssignee ? 'Changing...' : 'Change Assignee' }}
           </button>
         </div>
       </div>
@@ -2026,4 +2148,44 @@ async function transitionTask(taskId: string, toStatusId: string) {
 .icon-delete::before { content: '🗑️'; }
 .icon-check::before { content: '✓'; }
 .icon-spinner::before { content: '⟳'; }
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.form-control:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+select.form-control {
+  cursor: pointer;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 80px;
+}
 </style>

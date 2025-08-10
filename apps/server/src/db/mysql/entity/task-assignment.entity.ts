@@ -10,9 +10,6 @@ export enum AssignmentRole {
 
 export enum AssignmentStatus {
   ASSIGNED = 'assigned',
-  ACCEPTED = 'accepted',
-  DECLINED = 'declined',
-  COMPLETED = 'completed',
   REASSIGNED = 'reassigned',
 }
 
@@ -39,12 +36,6 @@ export class TaskAssignmentEntity {
 
   @Column({ type: 'datetime', nullable: true })
   dueDate?: Date;
-
-  @Column({ type: 'datetime', nullable: true })
-  acceptedAt?: Date;
-
-  @Column({ type: 'datetime', nullable: true })
-  completedAt?: Date;
 
   @Column({ type: 'json', nullable: true })
   workData?: {

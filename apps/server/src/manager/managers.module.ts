@@ -91,6 +91,7 @@ import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinec
 import { PageDifficultyService } from './service/page-difficulty.service';
 import { PageDifficultyController } from './controller/page-difficulty.controller';
 import { TaskAssignmentService } from './service/task-assignment.service';
+import { TaskAssignmentController } from './controller/task-assignment.controller';
 
 @Global()
 @Module({
@@ -226,7 +227,7 @@ import { TaskAssignmentService } from './service/task-assignment.service';
     ProjectCancellationController,
     DeadlineManagementController,
     WorkflowController,
-
+    TaskAssignmentController,
   ],
 })
 export class ManagersModule {}

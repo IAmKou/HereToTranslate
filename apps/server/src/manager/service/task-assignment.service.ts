@@ -18,6 +18,8 @@ import {
 import { ProjectManagerService } from './project-manager.service';
 import { PermissionFlags } from '@here-to-translate/common';
 import { AssignTaskDto, ReassignTaskDto } from '#LocalProject/Dtos';
+import { NotificationManagerService } from './notification-manager.service';
+import { MailService } from '../../mailer/mailer.service';
 
 @Injectable()
 export class TaskAssignmentService {
@@ -32,7 +34,9 @@ export class TaskAssignmentService {
     private readonly userRepository: Repository<UserEntity>,
     // @InjectRepository(ProjectRoleEntity)
     // private readonly projectRoleRepository: Repository<ProjectRoleEntity>,
-    private readonly projectService: ProjectManagerService
+    private readonly projectService: ProjectManagerService,
+    private readonly notificationService: NotificationManagerService,
+    private readonly mailService: MailService
   ) {}
 
   async assignTask(dto: AssignTaskDto, assignedById: string) {
@@ -97,6 +101,33 @@ export class TaskAssignmentService {
       notes,
     });
 
+    // Send notification to assigned user
+    try {
+      await this.notificationService.createNotification({
+        userId: assignedTo.id,
+        type: 'task_assigned',
+        message: `You have been assigned to ${role} role for task: ${task.title}`,
+        createdBy: assignedBy.id,
+      });
+
+      // Send email notification
+      if (assignedTo.email) {
+        await this.mailService.sendTaskAssignmentNotification(
+          assignedTo.email,
+          {
+            taskTitle: task.title,
+            role: role,
+            assignedBy: assignedBy.fullName || assignedBy.username,
+            dueDate: dueDate ? new Date(dueDate) : undefined,
+            notes: notes,
+          }
+        );
+      }
+    } catch (error) {
+      console.error('Failed to send notification for task assignment:', error);
+      // Don't fail the assignment if notification fails
+    }
+
     return savedAssignment;
   }
 
@@ -140,7 +171,7 @@ export class TaskAssignmentService {
           role: assignment.role,
           status: AssignmentStatus.ASSIGNED,
           notes: notes || assignment.notes,
-          dueDate: assignment.dueDate,
+          dueDate: assignment.dueDate instanceof Date ? assignment.dueDate : undefined,
           workData: assignment.workData,
           assignedBy: reassignedBy,
         });
@@ -158,115 +189,133 @@ export class TaskAssignmentService {
           notes,
         });
 
+        // Send notification to new assignee
+        try {
+          await this.notificationService.createNotification({
+            userId: newAssignee.id,
+            type: 'task_reassigned',
+            message: `Task "${assignment.task.title}" has been reassigned to you as ${assignment.role}`,
+            createdBy: reassignedBy.id,
+          });
+
+          // Send email notification
+          if (newAssignee.email) {
+            await this.mailService.sendTaskAssignmentNotification(
+              newAssignee.email,
+              {
+                taskTitle: assignment.task.title,
+                role: assignment.role,
+                assignedBy: reassignedBy.fullName || reassignedBy.username,
+                dueDate: assignment.dueDate,
+                notes: notes || assignment.notes,
+                reason: reason,
+              }
+            );
+          }
+        } catch (error) {
+          console.error('Failed to send notification for task reassignment:', error);
+          // Don't fail the reassignment if notification fails
+        }
+
         return savedNewAssignment;
       }
     );
   }
 
-  async acceptAssignment(assignmentId: string, userId: string) {
-    const assignment = await this.assignmentRepository.findOneOrFail({
-      where: { id: BigInt(assignmentId) },
-      relations: ['task', 'assignedTo'],
-    });
+  async reassignTaskByTask(dto: { taskId: string; role: string; newAssigneeId: string; reason?: string; notes?: string }, reassignedById: string) {
+    const { taskId, role, newAssigneeId, reason, notes } = dto;
 
-    if (assignment.assignedTo.id !== BigInt(userId)) {
-      throw new ForbiddenException('You can only accept your own assignments');
-    }
+    return await this.assignmentRepository.manager.transaction(
+      async (manager) => {
+        // Find the current assignment for this task and role
+        const assignment = await manager.findOneOrFail(TaskAssignmentEntity, {
+          where: { 
+            task: { id: BigInt(taskId) },
+            role: role as AssignmentRole,
+            status: AssignmentStatus.ASSIGNED
+          },
+          relations: ['task', 'assignedTo', 'assignedBy'],
+        });
 
-    if (assignment.status !== AssignmentStatus.ASSIGNED) {
-      throw new BadRequestException('Assignment is not in assignable state');
-    }
+        const [reassignedBy, newAssignee] = await Promise.all([
+          manager.findOneOrFail(UserEntity, {
+            where: { id: BigInt(reassignedById) },
+          }),
+          manager.findOneOrFail(UserEntity, {
+            where: { id: BigInt(newAssigneeId) },
+          }),
+        ]);
 
-    assignment.status = AssignmentStatus.ACCEPTED;
-    assignment.acceptedAt = new Date();
+        await this.validateReassignmentPermissions(assignment, reassignedBy);
 
-    const updatedAssignment = await this.assignmentRepository.save(assignment);
+        const previousAssignee = assignment.assignedTo;
 
-    // Create history record
-    await this.createHistoryRecord({
-      task: assignment.task,
-      assignment: updatedAssignment,
-      role: assignment.role,
-      action: HistoryAction.ACCEPTED,
-      toUser: assignment.assignedTo,
-      actionBy: assignment.assignedTo,
-    });
+        // Mark old assignment as reassigned
+        Object.assign(assignment, {
+          assignedTo: newAssignee,
+          status: AssignmentStatus.REASSIGNED,
+          reassignedBy,
+          reassignedAt: new Date(),
+          reassignmentReason: reason,
+        });
+        await manager.save(assignment);
 
-    return updatedAssignment;
-  }
+        // Create the new assignment
+        const newAssignment = manager.create(TaskAssignmentEntity, {
+          task: assignment.task,
+          assignedTo: newAssignee,
+          role: assignment.role,
+          status: AssignmentStatus.ASSIGNED,
+          notes: notes || assignment.notes,
+          dueDate: assignment.dueDate instanceof Date ? assignment.dueDate : undefined,
+          workData: assignment.workData,
+          assignedBy: reassignedBy,
+        });
+        const savedNewAssignment = await manager.save(newAssignment);
 
-  async declineAssignment(
-    assignmentId: string,
-    userId: string,
-    reason?: string
-  ) {
-    const assignment = await this.assignmentRepository.findOneOrFail({
-      where: { id: BigInt(assignmentId) },
-      relations: ['task', 'assignedTo'],
-    });
+        await this.createHistoryRecord({
+          task: assignment.task,
+          assignment: savedNewAssignment,
+          role: assignment.role,
+          action: HistoryAction.REASSIGNED,
+          fromUser: previousAssignee,
+          toUser: newAssignee,
+          actionBy: reassignedBy,
+          reason,
+          notes,
+        });
 
-    // Verify user is the assignee
-    if (assignment.assignedTo.id !== BigInt(userId)) {
-      throw new ForbiddenException('You can only decline your own assignments');
-    }
+        // Send notification to new assignee
+        try {
+          await this.notificationService.createNotification({
+            userId: newAssignee.id,
+            type: 'task_reassigned',
+            message: `Task "${assignment.task.title}" has been reassigned to you as ${assignment.role}`,
+            createdBy: reassignedBy.id,
+          });
 
-    if (assignment.status !== AssignmentStatus.ASSIGNED) {
-      throw new BadRequestException('Assignment is not in assignable state');
-    }
+          // Send email notification
+          if (newAssignee.email) {
+            await this.mailService.sendTaskAssignmentNotification(
+              newAssignee.email,
+              {
+                taskTitle: assignment.task.title,
+                role: assignment.role,
+                assignedBy: reassignedBy.fullName || reassignedBy.username,
+                dueDate: assignment.dueDate,
+                notes: notes || assignment.notes,
+                reason: reason,
+              }
+            );
+          }
+        } catch (error) {
+          console.error('Failed to send notification for task reassignment:', error);
+          // Don't fail the reassignment if notification fails
+        }
 
-    assignment.status = AssignmentStatus.DECLINED;
-
-    const updatedAssignment = await this.assignmentRepository.save(assignment);
-
-    // Create history record
-    await this.createHistoryRecord({
-      task: assignment.task,
-      assignment: updatedAssignment,
-      role: assignment.role,
-      action: HistoryAction.DECLINED,
-      toUser: assignment.assignedTo,
-      actionBy: assignment.assignedTo,
-      reason,
-    });
-
-    return updatedAssignment;
-  }
-
-  async completeAssignment(assignmentId: string, userId: string) {
-    const assignment = await this.assignmentRepository.findOneOrFail({
-      where: { id: BigInt(assignmentId) },
-      relations: ['task', 'assignedTo'],
-    });
-
-    // Verify user is the assignee
-    if (assignment.assignedTo.id !== BigInt(userId)) {
-      throw new ForbiddenException(
-        'You can only complete your own assignments'
-      );
-    }
-
-    if (assignment.status !== AssignmentStatus.ACCEPTED) {
-      throw new BadRequestException(
-        'Assignment must be accepted before completion'
-      );
-    }
-
-    assignment.status = AssignmentStatus.COMPLETED;
-    assignment.completedAt = new Date();
-
-    const updatedAssignment = await this.assignmentRepository.save(assignment);
-
-    // Create history record
-    await this.createHistoryRecord({
-      task: assignment.task,
-      assignment: updatedAssignment,
-      role: assignment.role,
-      action: HistoryAction.COMPLETED,
-      toUser: assignment.assignedTo,
-      actionBy: assignment.assignedTo,
-    });
-
-    return updatedAssignment;
+        return savedNewAssignment;
+      }
+    );
   }
 
   async getTaskAssignments(taskId: string) {

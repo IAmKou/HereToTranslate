@@ -19,23 +19,12 @@ import {
   TaskEntity,
   TransactionEntity,
   CommitEntity,
-  ProjectTagEntity,
-  TranslationApprovalEntity,
-  WalletEntity,
-  NotificationEntity,
-  SettingsEntity,
-  WorkflowTransitionEntity,
-  WorkflowEntity,
-  TaskStatusEntity,
-  TaskCommentEntity,
-  TaskStatusHistoryEntity,
-  ProjectCancellationEntity,
-  TranslationPreviewEntity, DeadlineExtensionEntity,
-  AssignmentHistoryEntity,
-  TaskAssignmentEntity,
-  PageDifficultyEntity,
-  DifficultyConfigEntity
+  ProjectTagEntity, TranslationApprovalEntity, WalletEntity,
+  NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
+import { TaskHistoryEntity } from './entity/task-history.entity';
+import { ProjectActivity } from './entity/project-activity.entity';
+
 
 @Injectable()
 export class MySqlConnection {
@@ -54,49 +43,17 @@ export class MySqlConnection {
       username: this.config.get<string>('MYSQL_USER'),
       password: this.config.get<string>('MYSQL_PASSWORD'),
       database: this.config.get<string>('MYSQL_DATABASE'),
-      ssl: {
+      ssl : {
         rejectUnauthorized: false,
       },
       synchronize: true,
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
-      entities: [
-        UserEntity,
-        BranchEntity,
-        ProjectEntity,
-        CategoryEntity,
-        FileEntity,
-        ProjectGroupEntity,
-        ProjectRoleEntity,
-        ProjectInvitationEntity,
-        ReportEntity,
-        RequestEntity,
-        TaskEntity,
-        TransactionEntity,
-        CommitEntity,
-        ProjectTagEntity,
-        ProjectDiscussionCommentEntity,
-        ProjectDiscussionThreadEntity,
-        DiscussionAccessPolicyEntity,
-        UserTypeEntity,
-        TranslationApprovalEntity,
-        WalletEntity,
-        NotificationEntity,
-        SettingsEntity,
-        TaskStatusEntity,
-        TaskStatusHistoryEntity,
-        WorkflowEntity,
-        WorkflowTransitionEntity,
-        TaskCommentEntity,
-        DeadlineExtensionEntity,
-        ProjectCancellationEntity,
-        TranslationPreviewEntity,
-        AssignmentHistoryEntity,
-        TaskAssignmentEntity,
-        DifficultyConfigEntity,
-        PageDifficultyEntity,
-      ],
+      entities: [UserEntity, BranchEntity, ProjectEntity, CategoryEntity, FileEntity,
+        ProjectGroupEntity, ProjectRoleEntity, ProjectInvitationEntity, ReportEntity, RequestEntity, TaskEntity,
+        TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,
+        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity, NotificationEntity, SettingsEntity, TaskHistoryEntity, ProjectActivity],
     });
     MySqlConnection.instance = this;
   }

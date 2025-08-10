@@ -7,11 +7,11 @@ export default defineConfig(({ mode }) => {
 
   // Smart environment detection
   const isProduction = mode === 'production';
-  
+
   // Use environment variables if set, otherwise smart defaults
-  const API_SERVER_URL = env.VITE_API_URL?.replace('/api', '') || 
+  const API_SERVER_URL = env.VITE_API_URL?.replace('/api', '') ||
     (isProduction ? 'https://htt-ekpa.onrender.com' : 'http://localhost:3000');
-  const CHAT_SERVER_URL = env.VITE_SERVER_URL || 
+  const CHAT_SERVER_URL = env.VITE_SERVER_URL ||
     (isProduction ? 'https://htt-ekpa.onrender.com' : 'http://localhost:3000');
 
   return {
@@ -26,13 +26,13 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: API_SERVER_URL,// ✅ localhost for API calls
+          target: API_SERVER_URL,
           changeOrigin: true,
           secure: false,
           ws: true,
         },
         '/socket.io': {
-          target: CHAT_SERVER_URL,// ✅ remote server for chat
+          target: CHAT_SERVER_URL,
           ws: true,
           changeOrigin: true,
         },

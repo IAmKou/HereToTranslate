@@ -1,6 +1,6 @@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Injectable} from '@nestjs/common';
+import { Injectable, forwardRef, Inject } from '@nestjs/common';
 import { FileEntity } from '#LocalProject/Entities';
 import {
   TranslationString,
@@ -13,6 +13,7 @@ import { Repository, In } from 'typeorm';
 import { replaceDocxText } from '../../util/extensions/docx-utils.extension';
 import { buildTranslatedPdf } from '../../util/extensions/pdf-utils.extension';
 import { Buffer } from 'buffer';
+import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class TranslationService {
@@ -21,7 +22,9 @@ export class TranslationService {
     private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
-    private readonly githubService: GitHubService
+    private readonly githubService: GitHubService,
+    @Inject(forwardRef(() => ActivityManagerService))
+    private readonly activityManagerService: ActivityManagerService,
   ) {}
 
   async addTranslation(id: string, translatedText: string, language: string) {
@@ -38,6 +41,7 @@ export class TranslationService {
     });
 
     let entry;
+    let isNewTranslation = false;
 
     if (existingTranslation) {
       // Update bản dịch hiện có
@@ -60,15 +64,39 @@ export class TranslationService {
         position: originalEntry.position,
         obsolete: false,
       });
+      isNewTranslation = true;
     }
 
     const fileId = entry.fileId;
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['project'],
+      relations: ['project', 'uploader'],
     });
     if (!fileEntity || !fileEntity.project) {
       throw new Error('File or project not found');
+    }
+
+    // Log activity
+    try {
+      if (isNewTranslation) {
+        await this.activityManagerService.logTranslationAdd(
+          Number(fileEntity.project.id),
+          Number(fileEntity.uploader?.id || 0),
+          translatedText,
+          language,
+          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
+        );
+      } else {
+        await this.activityManagerService.logTranslationEdit(
+          Number(fileEntity.project.id),
+          Number(fileEntity.uploader?.id || 0),
+          translatedText,
+          language,
+          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
+        );
+      }
+    } catch (error) {
+      logger.error('Failed to log translation activity:', error);
     }
 
     let updatedBuffer: Buffer;
@@ -366,12 +394,13 @@ export class TranslationService {
     branchId: string,
     language: string,
     fileId?: string,
-    filePart?: number
+    page?: number,
+    fileType?: string
   ) {
     // Lấy tất cả strings gốc (không phân biệt language) làm base
     const baseQuery: any = { projectId, branchId };
     if (fileId) baseQuery.fileId = fileId;
-    if (filePart !== undefined) baseQuery.filePart = filePart;
+    if (page !== undefined) baseQuery.filePart = page; // filePart trong DB vẫn là page number
 
     const baseStrings = await this.translationModel
       .find(baseQuery)
@@ -381,7 +410,7 @@ export class TranslationService {
     // Lấy bản dịch của ngôn ngữ được chọn
     const translationQuery: any = { projectId, branchId, language };
     if (fileId) translationQuery.fileId = fileId;
-    if (filePart !== undefined) translationQuery.filePart = filePart;
+    if (page !== undefined) translationQuery.filePart = page; // filePart trong DB vẫn là page number
 
     const translatedStrings = await this.translationModel
       .find(translationQuery)
@@ -403,15 +432,25 @@ export class TranslationService {
       };
     });
 
-    // Lấy tên file
+    // Lấy tên file và thông tin file type
     const fileIds = Array.from(new Set(mergedStrings.map((str) => str.fileId)));
     const fileNamesMap: Record<string, string> = {};
+    const fileTypesMap: Record<string, string> = {};
+
     if (fileIds.length > 0) {
       const files = await this.fileRepository.find({
         where: { id: In(fileIds.map((id) => BigInt(id))) },
       });
       files.forEach((f) => {
         fileNamesMap[String(f.id)] = f.fileName;
+        fileTypesMap[String(f.id)] = f.fileType;
+      });
+    }
+
+    // Nếu có fileType được cung cấp, sử dụng nó thay vì lấy từ database
+    if (fileType && fileIds.length > 0) {
+      fileIds.forEach(fileId => {
+        fileTypesMap[fileId] = fileType;
       });
     }
 
@@ -422,6 +461,7 @@ export class TranslationService {
       fileId: str.fileId,
       filePart: str.filePart ?? 0,
       fileName: fileNamesMap[str.fileId] || '',
+      fileType: fileTypesMap[str.fileId] || '',
     }));
   }
 
@@ -480,159 +520,6 @@ export class TranslationService {
       totalPages: sortedPages.length,
       pages: pageInfo
     };
-  }
-
-  async exportTranslatedFile(
-    projectId: string,
-    branchId: string,
-    fileId: string,
-    language: string
-  ): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
-    logger.log(`Exporting translated file for project ${projectId}, file ${fileId}, language ${language}`);
-
-    // Get file entity
-    const fileEntity = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-    });
-
-    if (!fileEntity) {
-      throw new Error(`File with ID ${fileId} not found`);
-    }
-
-    // Get all translations for this file
-    const translations = await this.translationModel
-      .find({ projectId, branchId, fileId, language })
-      .lean();
-
-    if (translations.length === 0) {
-      throw new Error(`No translations found for file ${fileId} in language ${language}`);
-    }
-
-    let exportedBuffer: Buffer;
-    const originalFileName = fileEntity.fileName;
-    const fileExtension = originalFileName.split('.').pop();
-    const baseFileName = originalFileName.replace(`.${fileExtension}`, '');
-    const exportFileName = `${baseFileName}_${language}.${fileExtension}`;
-
-    if (
-      fileEntity.fileType ===
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ) {
-      // Handle DOCX files
-      const translationMap = new Map<string, string>();
-      for (const translation of translations) {
-        if (translation.translatedText && translation.translatedText.trim().length > 0) {
-          translationMap.set(translation.originalText, translation.translatedText);
-        }
-      }
-
-      const originalBuffer = fileEntity.fileContent as Buffer;
-      exportedBuffer = await replaceDocxText(originalBuffer, translationMap);
-    } else if (fileEntity.fileType === 'application/pdf') {
-      // Handle PDF files
-      const translatedEntries = translations.map((translation) => ({
-        text: translation.translatedText?.trim() ? translation.translatedText : translation.originalText,
-        style: translation.style,
-        font: translation.font,
-        position: translation.position,
-      }));
-
-      const originalBuffer = fileEntity.fileContent as Buffer;
-      exportedBuffer = await buildTranslatedPdf(originalBuffer, translatedEntries);
-    } else {
-      // For other file types, return original with translation metadata
-      // You can extend this for other file types as needed
-      throw new Error(`File type ${fileEntity.fileType} is not supported for export`);
-    }
-
-    return {
-      buffer: exportedBuffer,
-      fileName: exportFileName,
-      mimeType: fileEntity.fileType,
-    };
-  }
-
-  async getTranslationProgress(
-    projectId: string,
-    branchId: string,
-    language?: string
-  ): Promise<{ total: number; completed: number; percentage: number }> {
-    const query: any = { projectId, branchId };
-    if (language) {
-      query.language = language;
-    }
-
-    const total = await this.translationModel.countDocuments(query);
-    const completed = await this.translationModel.countDocuments({
-      ...query,
-      translatedText: { $nin: [null, ''] },
-    });
-
-    const percentage = total > 0 ? (completed / total) * 100 : 0;
-
-    return {
-      total,
-      completed,
-      percentage: Math.round(percentage * 100) / 100, // Round to 2 decimal places
-    };
-  }
-
-  async getTranslationPreview(
-    projectId: string,
-    branchId: string,
-    fileId: string,
-    language: string,
-    pages: number[] = []
-  ): Promise<any[]> {
-    // If projectId or branchId are empty, derive them from the file
-    let actualProjectId = projectId;
-    let actualBranchId = branchId;
-    
-    if (!projectId || !branchId) {
-      const fileEntity = await this.fileRepository.findOne({
-        where: { id: BigInt(fileId) },
-        relations: ['project', 'branch'],
-      });
-      
-      if (!fileEntity) {
-        throw new Error(`File with ID ${fileId} not found`);
-      }
-      
-      actualProjectId = fileEntity.project?.id?.toString() || projectId;
-      actualBranchId = fileEntity.branch?.id?.toString() || branchId;
-      
-      if (!actualProjectId || !actualBranchId) {
-        throw new Error(`File ${fileId} is not associated with a project or branch`);
-      }
-    }
-
-    const query: any = { 
-      projectId: actualProjectId, 
-      branchId: actualBranchId, 
-      fileId, 
-      language,
-      obsolete: { $ne: true } // Only get non-obsolete strings
-    };
-    
-    if (pages.length > 0) {
-      query.filePart = { $in: pages };
-    }
-
-    const translations = await this.translationModel
-      .find(query)
-      .sort({ filePart: 1, _id: 1 })
-      .limit(100) // Limit preview to 100 items for performance
-      .lean();
-
-    return translations.map((translation) => ({
-      id: translation._id.toString(),
-      originalText: translation.originalText,
-      translatedText: translation.translatedText || '',
-      filePart: translation.filePart || 0,
-      position: translation.position,
-      style: translation.style,
-      font: translation.font,
-    }));
   }
 }
 

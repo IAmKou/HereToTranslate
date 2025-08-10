@@ -103,26 +103,73 @@ defineExpose({
   reloadFiles
 });
 
+const DOCX_STRINGS_PER_PAGE = 100; // DOCX: 100 strings/page
+
 function getTotalParts(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
-  // Nhóm strings theo filePart (đã được chia theo trang từ backend)
-  const parts = new Set<number>();
-  for (const str of arr) {
-    parts.add(str.filePart || 0);
+  // Lọc strings theo filePart
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+
+  if (!file) {
+    // Fallback: chia theo 100 strings/page
+    return Math.ceil(arr.length / DOCX_STRINGS_PER_PAGE);
   }
-  return parts.size;
+
+  // Nếu là PDF, chia theo page gốc
+  if (file.fileType === 'application/pdf') {
+    // Đếm số page khác nhau trong strings
+    const pages = new Set<number>();
+    arr.forEach((str: any) => {
+      const page = str.position?.page || 1;
+      pages.add(page);
+    });
+    return pages.size;
+  }
+
+  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  return Math.ceil(arr.length / DOCX_STRINGS_PER_PAGE);
 }
 
 function getStringsOfPart(fileId: string | number, part: number) {
   const arr = stringsByFile.value[fileId] || [];
-  // Lọc strings theo filePart
-  return arr.filter(str => (str.filePart || 0) === part);
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+
+  if (!file) {
+    // Fallback: chia theo 100 strings/page
+    const start = part * DOCX_STRINGS_PER_PAGE;
+    return arr.slice(start, start + DOCX_STRINGS_PER_PAGE);
+  }
+
+  // Nếu là PDF, lấy strings theo page
+  if (file.fileType === 'application/pdf') {
+    const pageNumber = part + 1; // part bắt đầu từ 0, page bắt đầu từ 1
+    return arr.filter((str: any) => (str.position?.page || 1) === pageNumber);
+  }
+
+  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  const start = part * DOCX_STRINGS_PER_PAGE;
+  return arr.slice(start, start + DOCX_STRINGS_PER_PAGE);
 }
 
 function getStringsCountOfPart(fileId: string | number, part: number) {
   const arr = stringsByFile.value[fileId] || [];
-  // Đếm strings theo filePart
-  return arr.filter(str => (str.filePart || 0) === part).length;
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+
+  if (!file) {
+    // Fallback: chia theo 100 strings/page
+    const start = part * DOCX_STRINGS_PER_PAGE;
+    return Math.min(DOCX_STRINGS_PER_PAGE, arr.length - start);
+  }
+
+  // Nếu là PDF, đếm strings theo page
+  if (file.fileType === 'application/pdf') {
+    const pageNumber = part + 1; // part bắt đầu từ 0, page bắt đầu từ 1
+    return arr.filter((str: any) => (str.position?.page || 1) === pageNumber).length;
+  }
+
+  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  const start = part * DOCX_STRINGS_PER_PAGE;
+  return Math.min(DOCX_STRINGS_PER_PAGE, arr.length - start);
 }
 
 async function loadFiles() {
@@ -307,6 +354,9 @@ const { hasPermission } = useProjectPermission(
 
 const canEditTranslation = computed(() => hasPermission('EditTranslation'));
 
+// Thêm computed để kiểm tra quyền mở editor
+const canOpenEditor = computed(() => hasPermission('EditTranslation') || hasPermission('ManageTranslation'));
+
 // Watch cho projectId, branchId và selectedLanguage thay đổi
 watch([() => props.projectId, () => props.branchId], () => {
   loadFiles();
@@ -422,11 +472,14 @@ async function saveTranslation(str: any) {
             {{ fileProgress[file.fileId || file.id]?.translated || 0 }} / {{ fileProgress[file.fileId || file.id]?.total || 0 }}
           </div>
           <a
-            :href="`/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}&language=${selectedLanguage?.code || 'en'}`"
+            :href="canOpenEditor ? `/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}&language=${selectedLanguage?.code || 'en'}` : '#'"
             class="open-translator-btn"
+            :class="{ 'disabled': !canOpenEditor }"
             style="background: #7c5dfa; color: white; border: none; padding: 0.4rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; margin-left: 0.8rem; transition: all 0.2s; font-size: 0.9rem;"
-            @mouseenter="$event.target.style.background = '#5f43ea'"
-            @mouseleave="$event.target.style.background = '#7c5dfa'"
+            @mouseenter="canOpenEditor && ($event.target.style.background = '#5f43ea')"
+            @mouseleave="canOpenEditor && ($event.target.style.background = '#7c5dfa')"
+            :title="!canOpenEditor ? 'You do not have permission to open the translation editor (requires EditTranslation or ManageTranslation permission)' : ''"
+            @click="!canOpenEditor && $event.preventDefault()"
           >
             <i class="pi pi-external-link" style="font-size: 0.9rem;"></i>
             Open Editor
@@ -1004,5 +1057,22 @@ async function saveTranslation(str: any) {
   .language-dropdown {
     min-width: 100%;
   }
+}
+
+/* Disabled button styles */
+.open-translator-btn.disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.3);
+  pointer-events: none;
+  background: #a0aec0 !important;
+  color: #e2e8f0 !important;
+}
+
+.open-translator-btn.disabled:hover {
+  background: #a0aec0 !important;
+  color: #e2e8f0 !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
 </style>

@@ -6,31 +6,16 @@ import {
   ProjectEntity,
   ProjectGroupEntity,
   ProjectRoleEntity,
-  RequestRegistrationEntity,
   ProjectTagEntity,
-  ProjectInvitationEntity,
-  RequestEntity,
-  TransactionEntity,
-  UserEntity,
-  UserTypeEntity,
-  WalletEntity,
-  TranslationApprovalEntity,
-  BranchEntity,
-  CommitEntity,
-  FileEntity,
-  TaskEntity,
-  NotificationEntity,
-  SettingsEntity,
-  WorkflowTransitionEntity,
-  WorkflowEntity,
-  TaskStatusEntity,
-  TaskStatusHistoryEntity,
-  TaskCommentEntity, TranslationPreviewEntity, DeadlineExtensionEntity, ProjectCancellationEntity,
-  PageDifficultyEntity,
-  AssignmentHistoryEntity,
-  DifficultyConfigEntity,
-  TaskAssignmentEntity,
+  RequestEntity, TransactionEntity,
+  UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
+  BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
 } from '#LocalProject/Entities';
+import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
+import { RequestRegistrationEntity } from '#LocalProject/Entities';
+import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
+
+import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '#LocalProject/Auth/auth.module';
@@ -80,17 +65,8 @@ import { AdminNotificationController } from '#LocalProject/Managers/controller/a
 import { ProjectInvitationController } from './controller/project-invitation.controller';
 import { ProjectInvitationService } from './service/project-invitation.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
-import { StatusManagerService } from '#LocalProject/Managers/service/status-manager.service';
-import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
-import { StatusController } from '#LocalProject/Managers/controller/status.controller';
-import { WorkflowController } from '#LocalProject/Managers/controller/workflow.controller';
-import { ProjectCancellationService } from '#LocalProject/Managers/service/project-cancellation.service';
-import { ProjectCancellationController } from '#LocalProject/Managers/controller/project-cancellation.controller';
-import { DeadlineManagementController } from '#LocalProject/Managers/controller/deadline-management.controller';
-import { DeadlineCheckerService } from '#LocalProject/Managers/service/deadlinechecker.service';
-import { PageDifficultyService } from './service/page-difficulty.service';
-import { PageDifficultyController } from './controller/page-difficulty.controller';
-import { TaskAssignmentService } from './service/task-assignment.service';
+import { ActivityManagerService } from './service/activity-manager.service';
+import { ActivityController } from './controller/activity.controller';
 
 @Global()
 @Module({
@@ -117,27 +93,14 @@ import { TaskAssignmentService } from './service/task-assignment.service';
       CommitEntity,
       FileEntity,
       TaskEntity,
+      TaskHistoryEntity,
       NotificationEntity,
       ProjectInvitationEntity,
       RequestRegistrationEntity,
       SettingsEntity,
-      TaskStatusEntity,
-      TaskCommentEntity,
-      TaskStatusHistoryEntity,
-      WorkflowEntity,
-      WorkflowTransitionEntity,
-      TranslationPreviewEntity,
-      DeadlineExtensionEntity,
-      AssignmentHistoryEntity,
-      DifficultyConfigEntity,
-      PageDifficultyEntity, 
-      ProjectCancellationEntity,
-      TaskAssignmentEntity,
+      ProjectActivity,
     ]),
-    BullModule.registerQueue({
-      name: 'extract',
-      redis: { host: 'localhost', port: 6379 },
-    }),
+    BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
   ],
   providers: [
     CategoryManagerService,
@@ -163,12 +126,7 @@ import { TaskAssignmentService } from './service/task-assignment.service';
     NotificationGateway,
     ProjectInvitationService,
     FeeService,
-    StatusManagerService,
-    WorkflowManagerService,
-    ProjectCancellationService,
-    DeadlineCheckerService,
-    TaskAssignmentService,
-    PageDifficultyService,
+    ActivityManagerService,
   ],
   exports: [
     CategoryManagerService,
@@ -192,12 +150,7 @@ import { TaskAssignmentService } from './service/task-assignment.service';
     AiChatService,
     ProjectInvitationService,
     FeeService,
-    StatusManagerService,
-    WorkflowManagerService,
-    ProjectCancellationService,
-    DeadlineCheckerService,
-    TaskAssignmentService,
-    PageDifficultyService,
+    ActivityManagerService
   ],
   controllers: [
     CategoryController,
@@ -220,13 +173,9 @@ import { TaskAssignmentService } from './service/task-assignment.service';
     AiChatController,
     NotificationController,
     AdminNotificationController,
-    PageDifficultyController,
     ProjectInvitationController,
-    StatusController,
-    ProjectCancellationController,
-    DeadlineManagementController,
-    WorkflowController,
-
-  ],
+    ActivityController
+  ]
 })
-export class ManagersModule {}
+export class ManagersModule {
+}

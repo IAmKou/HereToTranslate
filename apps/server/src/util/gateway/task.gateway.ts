@@ -6,8 +6,8 @@ import { TaskEntity } from '#LocalProject/Entities';
   cors: {
     origin: [
       'http://localhost:4200',  // Always allow localhost for development
-      'https://heretotranslate.onrender.com', // Frontend domain
-      'https://htt-ekpa.onrender.com', // Backend domain
+      process.env.CLIENT_URL || 'http://localhost:4200',
+      process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com',
       /^http:\/\/26\.82\.216\.\d+:4200$/  // Allow any IP in RadVPN range
     ],
     credentials: true,

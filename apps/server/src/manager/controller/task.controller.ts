@@ -18,6 +18,7 @@ import { CreateTaskDto, UpdateTaskDto } from '../../dto/task.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '../../auth/types';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
+import { TransitionTaskDto } from '#LocalProject/Dtos';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -103,5 +104,11 @@ export class TaskController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Post(':id/transition')
+  async transitionTask(@Param('id') id: string, @Body() dto: TransitionTaskDto, @Req() req: AuthenticatedRequest) {
+    const userId = req.user.id;
+    return await this.taskService.transitionTask(id, dto, userId.toString());
   }
 }

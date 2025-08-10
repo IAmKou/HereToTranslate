@@ -57,7 +57,7 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: true,
+      synchronize: false,
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',

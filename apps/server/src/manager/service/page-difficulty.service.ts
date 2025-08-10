@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -29,6 +31,7 @@ export class PageDifficultyService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly translationService: TranslationService,
+    @Inject(forwardRef(() => FileService))
     private readonly fileService: FileService
   ) {}
 
@@ -41,7 +44,7 @@ export class PageDifficultyService {
       {
         difficultyLevel: DifficultyLevel.SIMPLE,
         multiplier: 1.0,
-        basePrice: 10.0,
+        basePrice: 1.0,
         description: 'Simple text with basic vocabulary',
         criteria: {
           textDensity: 'Low',
@@ -54,7 +57,7 @@ export class PageDifficultyService {
       {
         difficultyLevel: DifficultyLevel.MEDIUM,
         multiplier: 1.5,
-        basePrice: 15.0,
+        basePrice: 1.5,
         description: 'Moderate complexity with some technical terms',
         criteria: {
           textDensity: 'Medium',
@@ -67,7 +70,7 @@ export class PageDifficultyService {
       {
         difficultyLevel: DifficultyLevel.COMPLEX,
         multiplier: 2.0,
-        basePrice: 20.0,
+        basePrice: 2.0,
         description: 'Complex text with technical terminology',
         criteria: {
           textDensity: 'High',
@@ -80,7 +83,7 @@ export class PageDifficultyService {
       {
         difficultyLevel: DifficultyLevel.VERY_COMPLEX,
         multiplier: 3.0,
-        basePrice: 30.0,
+        basePrice: 3.0,
         description: 'Very complex specialized content',
         criteria: {
           textDensity: 'Very High',
@@ -461,6 +464,145 @@ export class PageDifficultyService {
       
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to get available pages for file ${fileId}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Automatically assign page difficulty for all pages in a file based on content analysis
+   */
+  async autoAssignPageDifficulties(fileId: string, userId: string) {
+    try {
+      // Validate file has required relationships
+      const { projectId, branchId } = await this.fileService.validateFileForPageDifficulty(fileId);
+      
+      // Ensure default difficulty configs exist for the project
+      await this.createDefaultDifficultyConfigs(projectId, userId);
+      
+      // Get file pages from translation service
+      const filePages = await this.translationService.getFilePages(fileId, projectId, branchId);
+      
+      if (filePages.totalPages === 0) {
+        return {
+          success: true,
+          message: 'No pages found in file',
+          assignedPages: 0,
+          skippedPages: 0,
+        };
+      }
+      
+      // Get already assigned pages to avoid duplicates
+      const existingAssignments = await this.pageDifficultyRepository.find({
+        where: { fileId },
+        select: ['pageNumber'],
+      });
+      const assignedPageNumbers = new Set(existingAssignments.map(p => p.pageNumber));
+      
+      const user = await this.userRepository.findOneOrFail({
+        where: { id: BigInt(userId) },
+      });
+      
+      let assignedCount = 0;
+      let skippedCount = 0;
+      const results = [];
+      
+      // Process each page
+      for (const page of filePages.pages) {
+        const pageNumber = page.pageNumber;
+        
+        // Skip if already assigned
+        if (assignedPageNumbers.has(pageNumber)) {
+          skippedCount++;
+          continue;
+        }
+        
+        try {
+          // Get page content for analysis
+          const translations = await this.translationService.getTranslationPreview(
+            projectId,
+            branchId,
+            fileId,
+            'en', // Default language for analysis
+            [page.filePart]
+          );
+          
+          if (translations.length === 0) {
+            skippedCount++;
+            continue;
+          }
+          
+          // Analyze page complexity
+          const analysis = this.analyzePageComplexity(translations);
+          const suggestedDifficulty = this.suggestDifficultyLevel(analysis);
+          
+          // Get difficulty config for scoring
+          const config = await this.difficultyConfigRepository.findOne({
+            where: {
+              project: { id: BigInt(projectId) },
+              difficultyLevel: suggestedDifficulty,
+              isActive: true,
+            },
+          });
+          
+          if (!config) {
+            console.warn(`No config found for difficulty level: ${suggestedDifficulty}`);
+            skippedCount++;
+            continue;
+          }
+          
+          const baseScore = config.basePrice;
+          const calculatedScore = baseScore * config.multiplier;
+          
+          // Create page difficulty assignment
+          const pageDifficulty = this.pageDifficultyRepository.create({
+            projectId,
+            branchId,
+            fileId,
+            pageNumber,
+            filePart: page.filePart,
+            difficultyLevel: suggestedDifficulty,
+            baseScore,
+            calculatedScore,
+            notes: `Auto-assigned based on content analysis. Complexity score: ${analysis.complexityScore}, Word count: ${analysis.wordCount}, Special chars: ${analysis.hasSpecialChars}, Technical terms: ${analysis.hasTechnicalTerms}, Complex formatting: ${analysis.hasComplexFormatting}`,
+            previewData: {
+              textCount: analysis.textCount,
+              complexity: `Score: ${analysis.complexityScore} (${suggestedDifficulty})`,
+              estimatedTime: analysis.estimatedTime,
+            },
+            assignedBy: user,
+          });
+          
+          await this.pageDifficultyRepository.save(pageDifficulty);
+          assignedCount++;
+          
+          results.push({
+            pageNumber,
+            difficultyLevel: suggestedDifficulty,
+            calculatedScore,
+            analysis: {
+              complexityScore: analysis.complexityScore,
+              textCount: analysis.textCount,
+              wordCount: analysis.wordCount,
+            },
+          });
+          
+        } catch (pageError) {
+          console.error(`Error processing page ${pageNumber}:`, pageError);
+          skippedCount++;
+        }
+      }
+      
+      return {
+        success: true,
+        message: `Auto-assigned difficulty for ${assignedCount} pages`,
+        assignedPages: assignedCount,
+        skippedPages: skippedCount,
+        totalPages: filePages.totalPages,
+        results,
+      };
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to auto-assign page difficulties for file ${fileId}: ${errorMessage}`);
     }
   }
 }

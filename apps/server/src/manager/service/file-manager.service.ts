@@ -1,14 +1,15 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
-import  { Express } from 'express';
+import { Express } from 'express';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
 import { CommitEntity } from '../../db/mysql/entity/commit.entity';
+import { PageDifficultyService } from './page-difficulty.service';
 
 @Injectable()
 export class FileService {
@@ -23,6 +24,8 @@ export class FileService {
     private readonly manifestService : ManifestService,
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
+    @Inject(forwardRef(() => PageDifficultyService))
+    private readonly pageDifficultyService: PageDifficultyService,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
@@ -178,9 +181,14 @@ export class FileService {
         }
       } catch (err) {
         // Nếu lỗi, cập nhật status file thành 'error'
+        this.logger.error(`Background extraction failed for file ${saved.fileId}:`, err);
         const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
         if (fileEntity) {
           fileEntity.status = 'error';
+          // Add error details to extractLog
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          const errorLog = `[${new Date().toISOString()}] EXTRACTION FAILED: ${errorMessage}\n`;
+          fileEntity.extractLog = (fileEntity.extractLog || '') + errorLog;
           await this.fileRepository.save(fileEntity);
         }
       }
@@ -246,6 +254,48 @@ export class FileService {
       fileContent: file.fileContent,
       status: file.status || 'ready',
       extractLog: file.extractLog || '',
+    };
+  }
+
+  /**
+   * Get detailed file information including error logs for debugging
+   */
+  async getFileDetails(fileId: string) {
+    const file = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['uploader', 'project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'status', 'extractLog', 'createdAt', 'updatedAt', 'uploader', 'project', 'branch'],
+    });
+    
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Get translation strings count
+    const translationCount = await this.translationModel.countDocuments({ fileId: fileId });
+
+    return {
+      fileId: file.id.toString(),
+      fileName: file.fileName,
+      fileType: file.fileType,
+      status: file.status || 'ready',
+      extractLog: file.extractLog || '',
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+      translationCount,
+      uploader: file.uploader ? {
+        id: file.uploader.id.toString(),
+        username: file.uploader.username,
+        fullName: file.uploader.fullName,
+      } : null,
+      project: file.project ? {
+        id: file.project.id.toString(),
+        name: file.project.name,
+      } : null,
+      branch: file.branch ? {
+        id: file.branch.id.toString(),
+        name: file.branch.name,
+      } : null,
     };
   }
 
@@ -428,6 +478,15 @@ export class FileService {
       throw new Error('You do not have permission to extract strings from this file');
     }
 
+    // Additional validation
+    if (!file.fileContent || file.fileContent.length === 0) {
+      throw new Error('File has no content to extract');
+    }
+
+    if (!file.project || !file.branch) {
+      throw new Error('File must be associated with a project and branch for string extraction');
+    }
+
     let log = '';
     function appendLog(msg: string) {
       log += `[${new Date().toISOString()}] ${msg}\n`;
@@ -444,6 +503,20 @@ export class FileService {
       appendLog('Generating manifest...');
       await this.manifestService.generateManifest(file); // Đảm bảo hàm này set obsolete: false cho string mới
       appendLog('Manifest generated.');
+      
+      // Auto-assign page difficulties after manifest generation
+      try {
+        appendLog('Auto-assigning page difficulties...');
+        const autoAssignResult = await this.pageDifficultyService.autoAssignPageDifficulties(
+          file.id.toString(),
+          userId.toString()
+        );
+        appendLog(`Page difficulties auto-assigned: ${autoAssignResult.assignedPages} assigned, ${autoAssignResult.skippedPages} skipped`);
+      } catch (autoAssignError: any) {
+        appendLog('Warning: Auto-assignment of page difficulties failed: ' + (autoAssignError?.message || autoAssignError));
+        // Don't fail the entire extraction if auto-assignment fails
+      }
+      
       // Optionally push manifest to GitHub if project/branch info is present
       if (file.project && file.branch) {
         appendLog('Pushing manifest to GitHub...');
@@ -573,6 +646,62 @@ export class FileService {
     };
   }
 
+  /**
+   * Retry extraction for a failed file
+   */
+  async retryExtraction(fileId: string, userId: string | bigint) {
+    this.logger.log(`Retrying extraction for file ${fileId}`);
+    
+    // Reset file status to processing
+    const file = await this.fileRepository.findOne({ 
+      where: { id: BigInt(fileId) },
+      relations: ['uploader', 'project', 'branch']
+    });
+    
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
 
+    // Check permission
+    if (file.uploader.id.toString() !== userId.toString()) {
+      throw new Error('You do not have permission to retry extraction for this file');
+    }
+
+    // Reset status and clear previous error log
+    file.status = 'processing';
+    file.extractLog = `[${new Date().toISOString()}] Retrying extraction...\n`;
+    await this.fileRepository.save(file);
+
+    // Retry extraction in background
+    setTimeout(async () => {
+      try {
+        await this.extractStringsFromFile(fileId, userId);
+        // Update status to ready
+        const updatedFile = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
+        if (updatedFile) {
+          updatedFile.status = 'ready';
+          await this.fileRepository.save(updatedFile);
+        }
+      } catch (err) {
+        // Update status to error with new error details
+        this.logger.error(`Retry extraction failed for file ${fileId}:`, err);
+        const updatedFile = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
+        if (updatedFile) {
+          updatedFile.status = 'error';
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          const errorLog = `[${new Date().toISOString()}] RETRY FAILED: ${errorMessage}\n`;
+          updatedFile.extractLog = (updatedFile.extractLog || '') + errorLog;
+          await this.fileRepository.save(updatedFile);
+        }
+      }
+    }, 100);
+
+    return {
+      success: true,
+      message: 'Extraction retry initiated',
+      fileId: fileId,
+      status: 'processing'
+    };
+  }
 
 }

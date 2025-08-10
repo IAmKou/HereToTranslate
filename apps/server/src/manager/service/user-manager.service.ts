@@ -59,7 +59,7 @@ export class UserManagerService {
     const user = this.userRepository.create({
       ...data,
       passwordHash,
-      role: { id: BigInt(UserRole.Member) },
+      role: { id: UserRole.Member.toString() },
     } as DeepPartial<UserEntity>);
 
     await this.userRepository.save(user);

@@ -11,7 +11,26 @@
 
       <!-- Main Content -->
       <div :class="['content-wrapper', { 'sidebar-hidden': !isSidebarVisible }]" @click="closeDropdowns">
-        <!-- Page Header - Removed to save space -->
+        <!-- Page Header -->
+        <div class="page-header">
+          <div class="page-header-content">
+            <div class="page-title-section">
+              <h1 class="page-title">
+                <span class="page-icon">📋</span>
+                Project Details
+              </h1>
+              <p class="page-subtitle">
+                View and manage project information, members, and settings
+              </p>
+            </div>
+            <div class="page-actions">
+              <router-link to="/projects" class="btn btn-outline btn-back">
+                <span class="icon">←</span>
+                Back to Projects
+              </router-link>
+            </div>
+          </div>
+        </div>
 
         <div class="project-detail-view">
           <!-- Loading State -->
@@ -164,9 +183,6 @@
                   </button>
                 </div>
                 <div class="actions-dropdown-menu" v-if="showActionsMenu">
-                  <router-link to="/projects" class="dropdown-action">
-                    <span class="icon">←</span> Back to Projects
-                  </router-link>
                   <button class="dropdown-action" @click="goToManage">
                     <span class="icon">⚙️</span> Manage Project
                   </button>
@@ -187,9 +203,6 @@
                   </button>
                 </div>
                 <div class="actions-desktop" v-if="!isMobile">
-                  <router-link to="/projects" class="btn btn-outline btn-back">
-                    <span class="icon">←</span> Back
-                  </router-link>
                   <router-link
                     v-if="isProjectOwner || isProjectAdmin"
                     :to="`/projects/${project.id}/manage`"
@@ -214,7 +227,47 @@
               </div>
             </div>
 
-
+            <!-- Stat Cards ngay sau Header -->
+            <div class="project-stats">
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Roles & Members"
+                @click="activeTab = 'members'"
+              >
+                <div class="stat-icon stat-icon-circle">👥</div>
+                <div class="stat-number">
+                  {{ actualRoleCount }}
+                </div>
+                <div class="stat-label">Roles</div>
+              </div>
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Groups"
+                @click="activeTab = 'groups'"
+              >
+                <div class="stat-icon stat-icon-circle">👨‍👩‍👧‍👦</div>
+                <div class="stat-number">{{ project.groups?.length || 0 }}</div>
+                <div class="stat-label">Groups</div>
+              </div>
+              <div
+                class="stat-card stat-card-clickable"
+                title="View Files"
+                @click="scrollToFiles"
+              >
+                <div class="stat-icon stat-icon-circle">📁</div>
+                <div class="stat-number">{{ projectFiles.length }}</div>
+                <div class="stat-label">Files</div>
+              </div>
+              <div
+                class="stat-card stat-card-clickable"
+                title="Branches"
+                @click="window.alert('Branch detail coming soon!')"
+              >
+                <div class="stat-icon stat-icon-circle">🌿</div>
+                <div class="stat-number">{{ branches.length }}</div>
+                <div class="stat-label">Branches</div>
+              </div>
+            </div>
 
             <!-- Project Members + Add User lên ngay sau Stat Cards -->
             <div class="management-sections">
@@ -238,14 +291,12 @@
                 >
                   Roles
                 </button>
-                <!-- Groups tab - temporarily commented out
                 <button
                   :class="['tab', { active: activeTab === 'groups' }]"
                   @click="activeTab = 'groups'"
                 >
                   Groups
                 </button>
-                -->
                 <button
                   :class="['tab', { active: activeTab === 'discussions' }]"
                   @click="activeTab = 'discussions'"
@@ -276,12 +327,6 @@
                 >
                   Tasks
                 </button>
-                <button
-                  :class="['tab', { active: activeTab === 'activity' }]"
-                  @click="activeTab = 'activity'"
-                >
-                  Activity
-                </button>
               </div>
               <!-- Bỏ transition, render trực tiếp tab con -->
               <ProjectMemberTab
@@ -294,7 +339,6 @@
                 v-else-if="activeTab === 'roles'"
                 :project="project"
               />
-              <!-- ProjectGroupTab - temporarily commented out
               <ProjectGroupTab
                 v-else-if="activeTab === 'groups'"
                 :project="project"
@@ -307,7 +351,6 @@
                 @delete-group="handleDeleteGroup"
                 @refresh-groups="loadGroups"
               />
-              -->
               <ProjectDisscusionTab
                 v-else-if="activeTab === 'discussions'"
                 :project-id="Number(project.id)"
@@ -359,19 +402,10 @@
                 :project-id="project.id"
                 :branch-id="selectedBranchId"
                 :project-members="members"
-                :project-groups="[]"
+                :project-groups="groups"
                 :project="project"
                 custom-title="Tasks"
                 key="task"
-              />
-              <ProjectActivityTab
-                v-else-if="activeTab === 'activity'"
-                :project-id="Number(project.id)"
-                :branch-id="selectedBranchId ? Number(selectedBranchId) : undefined"
-                :project="project"
-                :members="members"
-                :current-user="currentUser"
-                key="activity"
               />
               <div v-else-if="activeTab === 'description'" key="description">
                 <!-- Project Description Section giữ nguyên như cũ -->
@@ -490,9 +524,7 @@
         <!-- Footer -->
         <AppFooter />
 
-        <!-- Groups functionality temporarily commented out -->
         <!-- Enhanced Create Group Modal -->
-        <!--
         <div
           v-if="showCreateGroupModal"
           class="modal-overlay"
@@ -555,7 +587,6 @@
             </div>
           </div>
         </div>
-        -->
 
         <!-- Delete Project Modal -->
         <div
@@ -668,9 +699,7 @@
           @roles-updated="handleRolesUpdated"
         />
 
-        <!-- Groups functionality temporarily commented out -->
         <!-- Thêm modal xác nhận xóa group vào template (nếu chưa có) -->
-        <!--
         <div v-if="showDeleteConfirmModal" class="modal-overlay" @click.self="showDeleteConfirmModal = false">
           <div class="modal-content">
             <h2>Confirm Delete</h2>
@@ -681,7 +710,6 @@
             </div>
           </div>
         </div>
-        -->
       </div>
     </div>
   </div>
@@ -699,13 +727,12 @@ import AppFooter from '../components/AppFooter.vue';
 import ProjectDisscusionTab from '../components/ProjectDisscusionTab.vue';
 import ProjectRoleManagementView from './ProjectRoleManagementView.vue';
 import ProjectMemberTab from '../components/ProjectMemberTab.vue';
-// import ProjectGroupTab from '../components/ProjectGroupTab.vue';
+import ProjectGroupTab from '../components/ProjectGroupTab.vue';
 import ProjectTranslationTab from '../components/ProjectTranslationTab.vue';
 import ProjectCommitTab from '../components/ProjectCommitTab.vue';
 import ProjectTaskTab from '../components/ProjectTaskTab.vue';
 import ProjectFileTab from '../components/ProjectFileTab.vue';
 import ProjectRoleTab from '../components/ProjectRoleTab.vue';
-import ProjectActivityTab from '../components/ProjectActivityTab.vue';
 import type { Ref } from 'vue';
 import { useAuthStore } from '../store/auth';
 const authStore = useAuthStore();
@@ -730,7 +757,7 @@ interface Project {
   };
   tags?: Array<{ id: string; name: string }>;
   projectRoles?: ProjectRole[];
-  // groups?: ProjectGroup[];
+  groups?: ProjectGroup[];
 }
 
 interface ProjectRole {
@@ -739,13 +766,12 @@ interface ProjectRole {
   permissionFlags: string;
 }
 
-// Groups functionality temporarily commented out
-// interface ProjectGroup {
-//   id: string;
-//   name: string;
-//   permissionFlags: string;
-//   members?: Array<{ id: string; username: string; fullName?: string }>;
-// }
+interface ProjectGroup {
+  id: string;
+  name: string;
+  permissionFlags: string;
+  members?: Array<{ id: string; username: string; fullName?: string }>;
+}
 
 interface ProjectFile {
   id: string;
@@ -760,10 +786,9 @@ interface ProjectFile {
   };
 }
 
-// Groups functionality temporarily commented out
-// interface CreateGroupData {
-//   name: string;
-// }
+interface CreateGroupData {
+  name: string;
+}
 
 const project = ref<Project | null>(null);
 const loading = ref(true);
@@ -775,10 +800,9 @@ const availablePermissions = Object.keys(PermissionFlags).filter(
     key !== 'None'
 ) as PermissionStrings[];
 
-// Groups functionality temporarily commented out
 // Modal states
-// const showCreateGroupModal = ref(false);
-// const isCreatingGroup = ref(false);
+const showCreateGroupModal = ref(false);
+const isCreatingGroup = ref(false);
 const showDeleteModal = ref(false);
 const showSuccessModal = ref(false);
 const showAddUserSuccessModal = ref(false);
@@ -791,11 +815,10 @@ const memberToEdit = ref<any>(null);
 const selectedRoles = ref<string[]>([]);
 const showAddRoleModal = ref(false);
 
-// Groups functionality temporarily commented out
 // Form data
-// const newGroup = ref<CreateGroupData>({
-//   name: '',
-// });
+const newGroup = ref<CreateGroupData>({
+  name: '',
+});
 
 // User search/add state
 const userSearch = ref({
@@ -856,9 +879,9 @@ watch(
 watch(
   () => activeTab.value,
   (newTab) => {
-    // if (newTab === 'groups') {
-    //   loadGroups();
-    // }
+    if (newTab === 'groups') {
+      loadGroups();
+    }
   },
   { immediate: true }
 );
@@ -932,12 +955,9 @@ const handleSuccessModalOk = () => {
   showSuccessModal.value = false;
   router.push('/projects');
 };
-// Groups functionality temporarily commented out
-// const groups = ref<ProjectGroup[]>([]);
-// const groupsLoading = ref(false);
-// const groupsError = ref<string | null>(null);
-// Groups functionality temporarily commented out
-/*
+const groups = ref<ProjectGroup[]>([]);
+const groupsLoading = ref(false);
+const groupsError = ref<string | null>(null);
 const createGroup = async () => {
   if (!project.value) return;
 
@@ -997,7 +1017,6 @@ const deleteGroup = async (groupId: string) => {
     alert('Failed to delete group: ' + err.message);
   }
 };
-*/
 
 const searchUser = async () => {
   if (!project.value) return;
@@ -1176,12 +1195,12 @@ const loadMembers = async () => {
 watch(activeTab, (tab: string) => {
   if (tab === 'members') loadMembers();
   else if (tab === 'files') loadFiles();
-    // else if (tab === 'groups') {
-    //   console.log('[DEBUG] groups:', groups.value);
-    //   console.log('[DEBUG] groupsLoading:', groupsLoading.value);
-    //   console.log('[DEBUG] groupsError:', groupsError.value);
-    //   loadGroups();
-  // }
+  else if (tab === 'groups') {
+    console.log('[DEBUG] groups:', groups.value);
+    console.log('[DEBUG] groupsLoading:', groupsLoading.value);
+    console.log('[DEBUG] groupsError:', groupsError.value);
+    loadGroups();
+  }
   else if (tab === 'task') {
     console.log('[DEBUG] Switching to task tab, tasks will be loaded by ProjectTaskTab component');
     // ProjectTaskTab sẽ tự động load tasks khi được mount
@@ -1577,8 +1596,6 @@ const isProjectAdmin = computed(() => {
   return member.roles.some((r: any) => r.name && r.name.toLowerCase().includes('admin'));
 });
 
-// Groups functionality temporarily commented out
-/*
 // Thêm các handler ở script:
 const handleCreateGroup = async (group) => {
   if (!project.value) return;
@@ -1595,10 +1612,7 @@ const handleDeleteGroup = async (group) => {
   await axiosInstance.delete(`/projects/${project.value.id}/groups/${group.id}`);
   await loadGroups();
 };
-*/
 
-// Groups functionality temporarily commented out
-/*
 // Thêm hàm confirmDeleteGroup vào script
 const confirmDeleteGroup = async () => {
   if (!project.value || !groupToDelete.value?.id) return;
@@ -1611,15 +1625,13 @@ const confirmDeleteGroup = async () => {
     alert('Failed to delete group: ' + err.message);
   }
 };
-*/
 
 
 
 
 
-// Groups functionality temporarily commented out
-// const groupToDelete = ref<ProjectGroup | null>(null);
-// const showDeleteConfirmModal = ref(false);
+const groupToDelete = ref<ProjectGroup | null>(null);
+const showDeleteConfirmModal = ref(false);
 
 const toast = ref(null);
 
@@ -1687,35 +1699,89 @@ const handleFileReady = (fileId: string | number) => {
   transform: translateX(-100%);
 }
 
-/* Page Header - Removed to save space */
+/* Page Header */
+.page-header {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
 
-/* Back button styling */
+.page-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.page-title-section {
+  flex: 1;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.page-icon {
+  font-size: 2rem;
+  width: 3rem;
+  height: 3rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.page-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
+}
+
+.page-actions {
+  display: flex;
+  gap: 1rem;
+}
+
 .btn-back {
   background: rgba(255, 255, 255, 0.2);
   border: 2px solid rgba(255, 255, 255, 0.3);
   color: white;
   backdrop-filter: blur(10px);
-  font-size: 0.85rem;
-  padding: 0.5rem 0.75rem;
   transition: all 0.3s ease;
 }
 
 .btn-back:hover {
   background: rgba(255, 255, 255, 0.3);
   border-color: rgba(255, 255, 255, 0.5);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .project-detail-view {
   max-width: 1700px;
   margin: 0 auto;
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 16px 48px rgba(76, 34, 128, 0.15),
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(76, 34, 128, 0.18),
   0 2px 8px rgba(49, 130, 206, 0.1);
   overflow: hidden;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
   position: relative;
 }
 .project-detail-view::before {
@@ -1747,56 +1813,49 @@ const handleFileReady = (fileId: string | number) => {
 
 /* Nút chính */
 .btn-manage {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  border: 2px solid #22c55e;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); /* Xanh lá nổi bật hơn */
+  border: 2.5px solid #22c55e;
   color: white;
-  box-shadow: 0 3px 12px #22c55e33;
-  font-weight: 600;
-  font-size: 0.85rem;
-  padding: 0.5rem 0.75rem;
+  box-shadow: 0 4px 16px #22c55e33;
+  font-weight: 700;
   transition: all 0.22s cubic-bezier(0.4, 1, 0.7, 1.2);
 }
 .btn-manage:hover {
   background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
   border-color: #16a34a;
   color: #fff;
-  box-shadow: 0 6px 24px #22c55e33;
-  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 8px 32px #22c55e33;
+  transform: translateY(-2px) scale(1.04);
   filter: brightness(1.08);
 }
 .btn-outline {
   background: #fff;
   color: #2563eb;
-  border: 2px solid #2563eb;
-  font-weight: 600;
-  font-size: 0.85rem;
-  padding: 0.5rem 0.75rem;
-  box-shadow: 0 2px 6px #2563eb22;
+  border: 2.5px solid #2563eb;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #2563eb22;
   transition: all 0.18s;
 }
 .btn-outline:hover {
   background: #2563eb;
   color: #fff;
   border-color: #1e40af;
-  box-shadow: 0 4px 16px #2563eb33;
-  transform: translateY(-1px);
+  box-shadow: 0 6px 24px #2563eb33;
 }
 .btn-danger {
   background: linear-gradient(135deg, #e53e3e 0%, #b91c1c 100%);
   color: #fff;
-  border: 2px solid #b91c1c;
-  font-weight: 600;
-  font-size: 0.85rem;
-  padding: 0.5rem 0.75rem;
-  box-shadow: 0 3px 12px #e53e3e33;
+  border: 2.5px solid #b91c1c;
+  font-weight: 700;
+  box-shadow: 0 4px 16px #e53e3e33;
   transition: all 0.18s;
 }
 .btn-danger:hover {
   background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
   color: #fff;
   border-color: #7f1d1d;
-  box-shadow: 0 6px 24px #e53e3e44;
-  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 8px 32px #e53e3e44;
+  transform: scale(1.04);
 }
 
 /* Badge Public/Private */
@@ -1908,12 +1967,12 @@ const handleFileReady = (fileId: string | number) => {
   position: relative;
   background: linear-gradient(135deg, #4f2c8c 0%, #764ba2 100%);
   color: white;
-  padding: 1rem 1.5rem 1rem 1.5rem;
+  padding: 1.5rem 2rem 1.5rem 2rem;
   display: flex;
   align-items: flex-start;
-  gap: 1.5rem;
-  border-radius: 0 0 24px 24px;
-  box-shadow: 0 8px 32px rgba(76, 34, 128, 0.15);
+  gap: 2rem;
+  border-radius: 0 0 32px 32px;
+  box-shadow: 0 10px 40px rgba(76, 34, 128, 0.18);
   overflow: visible;
 }
 
@@ -1942,18 +2001,18 @@ const handleFileReady = (fileId: string | number) => {
 }
 
 .creator-avatar {
-  width: 42px;
-  height: 42px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.25);
-  font-size: 1.5rem;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
+  font-size: 1.8rem;
   font-weight: 700;
   color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  border: 3px solid rgba(255, 255, 255, 0.5);
   overflow: hidden;
 }
 
@@ -1973,8 +2032,8 @@ const handleFileReady = (fileId: string | number) => {
 .creator-info-block {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin-left: 1rem;
+  gap: 0.5rem;
+  margin-left: 1.2rem;
 }
 
 .project-title-row {
@@ -1986,7 +2045,7 @@ const handleFileReady = (fileId: string | number) => {
 .project-title {
   margin: 0;
   color: white;
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   font-weight: 800;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -1999,9 +2058,9 @@ const handleFileReady = (fileId: string | number) => {
 
 .project-meta-row {
   display: flex;
-  gap: 1.5rem;
-  margin-top: 0.4rem;
-  font-size: 0.9rem;
+  gap: 2.5rem;
+  margin-top: 0.5rem;
+  font-size: 1rem;
   color: rgba(255, 255, 255, 0.85);
 }
 
@@ -2057,8 +2116,8 @@ const handleFileReady = (fileId: string | number) => {
 .project-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-width: 160px;
+  gap: 1rem;
+  min-width: 200px;
 }
 
 .btn-manage {
@@ -2447,8 +2506,8 @@ const handleFileReady = (fileId: string | number) => {
 /* Management Sections */
 .management-sections {
   display: grid;
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: 2rem;
+  padding: 2rem;
   background: #f8fafc;
 }
 
@@ -5327,17 +5386,17 @@ const handleFileReady = (fileId: string | number) => {
 
 .actions-desktop {
   display: flex;
-  gap: 0.5rem;
+  gap: 1rem;
 }
 
 .icon-btn {
-  padding: 0.4rem 0.6rem;
-  font-size: 1.1rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 1.3rem;
   border-radius: 8px;
   background: #fff;
   border: 2px solid #e2e8f0;
   color: #4a5568;
-  box-shadow: 0 2px 6px #2563eb22;
+  box-shadow: 0 2px 8px #2563eb22;
   transition: all 0.18s;
 }
 

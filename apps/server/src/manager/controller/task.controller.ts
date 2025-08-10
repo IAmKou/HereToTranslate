@@ -16,7 +16,8 @@ import { JsonSerializerInterceptor } from '../../util/json-serializer.intercepto
 import { TaskManagerService } from '../service/task-manager.service';
 import { CreateTaskDto, UpdateTaskDto } from '../../dto/task.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
-import { AuthenticatedRequest } from '../../auth/types';
+import type { AuthenticatedRequest } from '../../auth/types';
+import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -25,7 +26,10 @@ export class TaskController {
   constructor(private readonly taskService: TaskManagerService) {}
 
   @Post()
-  async createTask(@Body() dto: CreateTaskDto, @Req() req: AuthenticatedRequest) {
+  async createTask(
+    @Body() dto: CreateTaskDto,
+    @Req() req: AuthenticatedRequest
+  ) {
     const userId = req.user.id;
     return await this.taskService.createTask({
       ...dto,
@@ -45,8 +49,12 @@ export class TaskController {
   }
 
   @Patch(':id')
-  async updateTask(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
-    return await this.taskService.updateTask(id, dto);
+  async updateTask(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return await this.taskService.updateTask(id, dto, req.user.id);
   }
 
   @Delete(':id')
@@ -61,13 +69,9 @@ export class TaskController {
   }
 
   @Patch(':id/reopen')
-  async reopenTask(
-    @Param('id') id: string,
-    @Body() body: { reason?: string },
-    @Req() req: AuthenticatedRequest
-  ) {
+  async reopenTask(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const userId = req.user.id;
-    return await this.taskService.reopenTask(id, userId.toString(), body.reason);
+    return await this.taskService.reopenTask(id, userId.toString());
   }
 
   @Get('/user/:userId')
@@ -76,13 +80,13 @@ export class TaskController {
   }
 
   @Get(':id/progress')
-  async getTaskProgress(@Param('id') id: string) {
+  async getTaskProgress(@Param('id', BigIntTransformPipe) id: bigint) {
     try {
       const progress = await this.taskService.getTaskProgress(id);
       return progress;
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to get task progress',
+        'Failed to get task progress',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -95,7 +99,7 @@ export class TaskController {
       return history;
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to get task history',
+        'Failed to get task history',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

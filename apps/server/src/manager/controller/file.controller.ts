@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors, Get, Param, Res, Delete, Patch } from '@nestjs/common';
+import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors, Get, Param, Res, Delete } from '@nestjs/common';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { FileService } from '../service/file-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
@@ -86,28 +86,9 @@ export class FileController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch(':fileId')
-  async renameFile(
-    @Param('fileId', BigIntTransformPipe) fileId: bigint,
-    @Body() body: { fileName: string },
-    @Req() req: AuthenticatedRequest
-  ) {
-    return this.fileService.renameFile(fileId, body.fileName, req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Get(':fileId/preview')
   async getFilePreview(@Param('fileId') fileId: string) {
     return this.fileService.getFilePreview(fileId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post(':fileId/highlight')
-  async highlightTextInPdf(
-    @Param('fileId') fileId: string,
-    @Body() body: { text: string }
-  ) {
-    return this.fileService.highlightTextInPdf(fileId, body.text);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -4,7 +4,6 @@ import { ProjectGroupEntity } from './project-group.entity';
 import { TaskStatusEntity } from './task-status.entity';
 import { WorkflowEntity } from './workflow.entity';
 import { TaskAssignmentEntity } from './task-assignment.entity';
-import { PageDifficultyEntity } from './page-difficulty.entity';
 
 @Entity('task')
 export class TaskEntity {
@@ -71,9 +70,8 @@ export class TaskEntity {
   @Column({ type: 'int', nullable: true })
   storyPoints?: number;
 
-  // New fields for pagination & scoring
   @Column({ type: 'json', nullable: true })
-  selectedPages?: number[]; // Array of selected page numbers
+  selectedPages?: number[]; 
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   totalScore: number;
@@ -84,14 +82,9 @@ export class TaskEntity {
   @Column({ type: 'int', default: 0 })
   totalPages: number;
 
-  // Assignment relationships
   @OneToMany(() => TaskAssignmentEntity, assignment => assignment.task, { cascade: true })
   assignments: TaskAssignmentEntity[];
 
-  // Note: PageDifficultyEntity is related by fileId, not directly to task
-  // This would need to be fetched separately using fileId
-
-  // Quick access to current assignments (computed from assignments)
   get currentTranslator(): UserEntity | undefined {
     return this.assignments?.find(a => a.role === 'translator' && a.status === 'assigned')?.assignedTo;
   }

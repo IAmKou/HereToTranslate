@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import AiChat from '../components/AiChat.vue';
+import TaskTest from '../components/TestComponent.vue';
 </script>
 
 <template>
-  <div><AiChat /></div>
+  <div><TaskTest /></div>
 </template>
 
 <style scoped></style>

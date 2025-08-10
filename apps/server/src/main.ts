@@ -32,13 +32,15 @@ async function bootstrap() {
     }
   ));
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
+
   app.enableCors({
     origin: [
-      'http://localhost:4200',  // Always allow localhost for development
-      process.env.CLIENT_URL || 'http://localhost:4200',
-      process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com',
-      /^http:\/\/26\.82\.216\.\d+:4200$/ ,
-      'https://heretotranslate-lrdi.onrender.com'// Allow any IP in RadVPN range
+      'http://localhost:4200',
+      'http://localhost:3000',
+      'https://heretotranslate.onrender.com',
+      'https://htt-ekpa.onrender.com',
+      /^http:\/\/26\.82\.216\.\d+:4200$/,
+      'https://heretotranslate.onrender.com'
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,

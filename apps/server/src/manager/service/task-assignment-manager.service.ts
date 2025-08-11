@@ -54,61 +54,43 @@ export class TaskAssignmentManagerService {
         reason: string;
       }> = [];
 
-      // Handle translator assignment
-      if (dto.assignedToId && dto.assignedToId !== task.assignedTo?.id?.toString()) {
-        const newTranslator = await queryRunner.manager.findOne(UserEntity, {
-          where: { id: BigInt(dto.assignedToId) },
-        });
-        if (!newTranslator) {
-          throw new NotFoundException('Translator not found');
-        }
-
-        changes.push({
-          role: AssignmentRole.TRANSLATOR,
-          fromUser: task.assignedTo,
-          toUser: newTranslator,
-          reason: dto.reason,
-        });
-
-        task.assignedTo = newTranslator;
+      // Handle single assignment based on role
+      const newUser = await queryRunner.manager.findOne(UserEntity, {
+        where: { id: BigInt(dto.assignedToId) },
+      });
+      if (!newUser) {
+        throw new NotFoundException(`User not found for role ${dto.role}`);
       }
 
-      // Handle reviewer assignment
-      if (dto.reviewerId && dto.reviewerId !== task.reviewer?.id?.toString()) {
-        const newReviewer = await queryRunner.manager.findOne(UserEntity, {
-          where: { id: BigInt(dto.reviewerId) },
-        });
-        if (!newReviewer) {
-          throw new NotFoundException('Reviewer not found');
-        }
-
-        changes.push({
-          role: AssignmentRole.REVIEWER,
-          fromUser: task.reviewer,
-          toUser: newReviewer,
-          reason: dto.reason,
-        });
-
-        task.reviewer = newReviewer;
+      let currentUser: UserEntity | undefined;
+      switch (dto.role) {
+        case AssignmentRole.TRANSLATOR:
+          currentUser = task.assignedTo;
+          if (dto.assignedToId !== task.assignedTo?.id?.toString()) {
+            task.assignedTo = newUser;
+          }
+          break;
+        case AssignmentRole.REVIEWER:
+          currentUser = task.reviewer;
+          if (dto.assignedToId !== task.reviewer?.id?.toString()) {
+            task.reviewer = newUser;
+          }
+          break;
+        case AssignmentRole.APPROVER:
+          currentUser = task.approver;
+          if (dto.assignedToId !== task.approver?.id?.toString()) {
+            task.approver = newUser;
+          }
+          break;
       }
 
-      // Handle approver assignment
-      if (dto.approverId && dto.approverId !== task.approver?.id?.toString()) {
-        const newApprover = await queryRunner.manager.findOne(UserEntity, {
-          where: { id: BigInt(dto.approverId) },
-        });
-        if (!newApprover) {
-          throw new NotFoundException('Approver not found');
-        }
-
+      if (dto.assignedToId !== currentUser?.id?.toString()) {
         changes.push({
-          role: AssignmentRole.APPROVER,
-          fromUser: task.approver,
-          toUser: newApprover,
-          reason: dto.reason,
+          role: dto.role,
+          fromUser: currentUser,
+          toUser: newUser,
+          reason: 'Task assignment',
         });
-
-        task.approver = newApprover;
       }
 
       // Update due date if provided
@@ -137,7 +119,7 @@ export class TaskAssignmentManagerService {
       }
 
       // Send notifications and emails
-      await this.sendAssignmentNotifications(changes, task, dto.reason, dto.notes);
+      await this.sendAssignmentNotifications(changes, task, 'Task assignment', dto.notes);
 
       await queryRunner.commitTransaction();
 
@@ -155,7 +137,16 @@ export class TaskAssignmentManagerService {
 
   async reassignTask(projectId: string, dto: ReassignTaskDto, reassignedByUserId: string) {
     await this.validateReassignmentPermissions(projectId, reassignedByUserId);
-    return this.assignTask(projectId, dto, reassignedByUserId);
+    
+    // Convert ReassignTaskDto to AssignTaskDto format
+    const assignDto: AssignTaskDto = {
+      taskId: dto.assignmentId, // This needs to be the task ID, not assignment ID
+      assignedToId: dto.newAssigneeId,
+      role: AssignmentRole.TRANSLATOR, // Default role, should be determined from assignment
+      notes: dto.notes,
+    };
+    
+    return this.assignTask(projectId, assignDto, reassignedByUserId);
   }
 
   async getTaskAssignments(taskId: string) {

@@ -734,4 +734,44 @@ export class RequestManagerService {
     }
   }
 
+  async getMyRegisteredRequests(uid: bigint) {
+    const queryBuilder = this.requestRepository
+      .createQueryBuilder('requests')
+      .select([
+        'requests.id',
+        'requests.title',
+        'requests.description',
+        'requests.dealAmount',
+        'requests.deadline',
+        'requests.status',
+        'requests.isPublic',
+        'requests.createdAt',
+        'requester.id',
+        'requester.username',
+        'requester.fullName',
+        'project.id',
+        'project.name',
+        'category.name',
+        'tags.id',
+        'tags.name',
+      ])
+      .leftJoin('requests.registrants', 'registrants')
+      .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.project', 'project')
+      .leftJoin('requests.category', 'category')
+      .leftJoinAndSelect('requests.tags', 'tags')
+      .where('registrants.id = :uid', { uid: BigInt(uid) });
+
+    return await queryBuilder.getMany();
+  }
+
+  async getPendingRequestsCount(): Promise<number> {
+    const count = await this.requestRepository
+      .createQueryBuilder('requests')
+      .where('requests.status = :status', { status: RequestStatus.Pending })
+      .getCount();
+
+    return count;
+  }
+
 }

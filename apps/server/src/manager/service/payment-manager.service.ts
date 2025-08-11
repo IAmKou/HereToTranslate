@@ -97,16 +97,6 @@ export class PaypalService {
     const accessToken = await this.getAccessToken();
 
     try {
-      let locationEn = 'N/A';
-      if (user.location) {
-        if (user.location.toLowerCase().includes('hà nội'))
-          locationEn = 'Hanoi';
-        else if (
-          user.location.toLowerCase().includes('hcm') ||
-          user.location.toLowerCase().includes('hồ chí minh')
-        )
-          locationEn = 'Ho Chi Minh City';
-      }
       const { data } = await axios.post(
         `${this.api}/v2/checkout/orders`,
         {
@@ -124,7 +114,6 @@ export class PaypalService {
                 },
                 address: {
                   address_line_1: user.email, // Email luôn là tiếng Anh
-                  admin_area_2: locationEn, // Thành phố tiếng Anh
                   admin_area_1: '',
                   postal_code: '000000',
                   country_code: 'VN',

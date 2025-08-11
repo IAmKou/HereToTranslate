@@ -40,7 +40,6 @@ async function bootstrap() {
       'https://heretotranslate.onrender.com',
       'https://htt-ekpa.onrender.com',
       /^http:\/\/26\.82\.216\.\d+:4200$/,
-      'https://heretotranslate.onrender.com'
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,

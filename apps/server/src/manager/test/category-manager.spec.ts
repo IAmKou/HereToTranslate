@@ -1,5 +1,5 @@
 import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { CreateCategoryDto } from '../../dto';
+import { CreateCategoryDto, UpdateCategoryDto } from '../../dto';
 import { validateName, sanitizeName } from '../../util/validation';
 
 jest.mock('../../util/validation', () => ({
@@ -25,6 +25,9 @@ describe('CategoryManagerService', () => {
     exists: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
+    update: jest.Mock;
+    findOne: jest.Mock;
+    delete: jest.Mock;
   };
 
   beforeEach(() => {
@@ -33,89 +36,349 @@ describe('CategoryManagerService', () => {
       exists: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+      update: jest.fn(),
+      findOne: jest.fn(),
+      delete: jest.fn(),
     };
 
-    service = new CategoryManagerService(mockRepo as any); // no DI container
+    service = new CategoryManagerService(mockRepo as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('getCategories', () => {
-    it('should return all categories', async () => {
-      const expected = [{ id: 1, name: 'A' }];
-      mockRepo.find.mockResolvedValue(expected);
+    it('should return all categories successfully', async () => {
+      const expectedCategories = [
+        { id: 1n, name: 'Category A', description: 'Description A' },
+        { id: 2n, name: 'Category B', description: 'Description B' },
+      ];
+      mockRepo.find.mockResolvedValue(expectedCategories);
 
       const result = await service.getCategories();
-      expect(result).toEqual(expected);
+
+      expect(mockRepo.find).toHaveBeenCalledWith();
+      expect(result).toEqual(expectedCategories);
+    });
+
+    it('should return empty array when no categories exist', async () => {
+      mockRepo.find.mockResolvedValue([]);
+
+      const result = await service.getCategories();
+
+      expect(mockRepo.find).toHaveBeenCalledWith();
+      expect(result).toEqual([]);
+    });
+
+    it('should handle database errors gracefully', async () => {
+      const dbError = new Error('Database connection failed');
+      mockRepo.find.mockRejectedValue(dbError);
+
+      await expect(service.getCategories()).rejects.toThrow('Database connection failed');
+      expect(mockRepo.find).toHaveBeenCalledWith();
     });
   });
 
   describe('createCategory', () => {
-    const dto: CreateCategoryDto = {
+    const validDto: CreateCategoryDto = {
       name: 'NewCategory',
-      description: 'Sample',
+      description: 'Sample description',
     };
 
-    it('should throw if name is missing', async () => {
-      await expect(service.createCategory({ name: '', description: '' }))
-        .rejects.toThrow(BadRequestException);
+    it('should create category successfully with valid data', async () => {
+      const sanitizedName = 'newcategory';
+      const createdCategory = { id: 1n, name: sanitizedName, description: validDto.description };
+
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.exists.mockResolvedValue(false);
+      mockRepo.create.mockReturnValue(createdCategory);
+      mockRepo.save.mockResolvedValue(createdCategory);
+
+      const result = await service.createCategory(validDto);
+
+      expect(validateName).toHaveBeenCalledWith(validDto.name);
+      expect(sanitizeName).toHaveBeenCalledWith(validDto.name);
+      expect(mockRepo.exists).toHaveBeenCalledWith({
+        where: { name: sanitizedName },
+      });
+      expect(mockRepo.create).toHaveBeenCalledWith({
+        name: sanitizedName,
+        description: validDto.description,
+      });
+      expect(mockRepo.save).toHaveBeenCalledWith(createdCategory);
+      expect(result).toEqual(createdCategory);
     });
 
-    it('should throw if name is invalid', async () => {
+    it('should throw BadRequestException when name is missing', async () => {
+      const invalidDto = { name: '', description: 'Test' };
+
+      await expect(service.createCategory(invalidDto)).rejects.toThrow(
+        new BadRequestException('Category name is required')
+      );
+    });
+
+    it('should throw BadRequestException when name is null', async () => {
+      const invalidDto = { name: null as any, description: 'Test' };
+
+      await expect(service.createCategory(invalidDto)).rejects.toThrow(
+        new BadRequestException('Category name is required')
+      );
+    });
+
+    it('should throw BadRequestException when name is undefined', async () => {
+      const invalidDto = { name: undefined as any, description: 'Test' };
+
+      await expect(service.createCategory(invalidDto)).rejects.toThrow(
+        new BadRequestException('Category name is required')
+      );
+    });
+
+    it('should throw BadRequestException when name contains invalid characters', async () => {
       (validateName as jest.Mock).mockReturnValue(false);
 
-      await expect(service.createCategory(dto)).rejects.toThrow(
-        /invalid characters/
+      await expect(service.createCategory(validDto)).rejects.toThrow(
+        new BadRequestException('Category name contains invalid characters or is empty after trimming')
       );
     });
 
-    it('should throw if category already exists', async () => {
+    it('should throw BadRequestException when category already exists', async () => {
+      const sanitizedName = 'existingcategory';
       (validateName as jest.Mock).mockReturnValue(true);
-      (sanitizeName as jest.Mock).mockReturnValue('NewCategory');
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
       mockRepo.exists.mockResolvedValue(true);
 
-      await expect(service.createCategory(dto)).rejects.toThrow(
-        /already exists/
+      await expect(service.createCategory(validDto)).rejects.toThrow(
+        new BadRequestException(`Category with name "${sanitizedName}" already exists`)
       );
     });
 
-    it('should create and save new category', async () => {
-      const sanitized = 'newcategory';
-      const created = { id: 1, name: sanitized };
-      (validateName as jest.Mock).mockReturnValue(true);
-      (sanitizeName as jest.Mock).mockReturnValue(sanitized);
-      mockRepo.exists.mockResolvedValue(false);
-      mockRepo.create.mockReturnValue(created);
-      mockRepo.save.mockResolvedValue(created);
+    it('should throw BadRequestException on ER_DUP_ENTRY database error', async () => {
+      const sanitizedName = 'duplicatecategory';
+      const dbError = new Error('Duplicate entry') as any;
+      dbError.code = 'ER_DUP_ENTRY';
 
-      const result = await service.createCategory(dto);
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.exists.mockResolvedValue(false);
+      mockRepo.create.mockReturnValue({});
+      mockRepo.save.mockRejectedValue(dbError);
+
+      await expect(service.createCategory(validDto)).rejects.toMatchObject({
+        response: {
+          message: 'A category with this name already exists'
+        }
+      });
+    });
+
+    it('should throw InternalServerErrorException on unknown database error', async () => {
+      const sanitizedName = 'newcategory';
+      const dbError = new Error('Unknown database error');
+
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.exists.mockResolvedValue(false);
+      mockRepo.create.mockReturnValue({});
+      mockRepo.save.mockRejectedValue(dbError);
+
+      await expect(service.createCategory(validDto)).rejects.toThrow(
+        new InternalServerErrorException('Failed to create category')
+      );
+    });
+
+    it('should create category with undefined description', async () => {
+      const dtoWithUndefinedDescription = { name: 'TestCategory', description: undefined };
+      const sanitizedName = 'testcategory';
+      const createdCategory = { id: 1n, name: sanitizedName, description: undefined };
+
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.exists.mockResolvedValue(false);
+      mockRepo.create.mockReturnValue(createdCategory);
+      mockRepo.save.mockResolvedValue(createdCategory);
+
+      const result = await service.createCategory(dtoWithUndefinedDescription);
 
       expect(mockRepo.create).toHaveBeenCalledWith({
-        name: sanitized,
-        description: dto.description,
+        name: sanitizedName,
+        description: undefined,
       });
-      expect(mockRepo.save).toHaveBeenCalledWith(created);
-      expect(result).toEqual(created);
+      expect(result).toEqual(createdCategory);
+    });
+  });
+
+  describe('updateCategory', () => {
+    const categoryId = 1n;
+    const validUpdateDto: UpdateCategoryDto = {
+      name: 'UpdatedCategory',
+      description: 'Updated description',
+    };
+
+    it('should update category successfully with valid data', async () => {
+      const sanitizedName = 'updatedcategory';
+      const updatedCategory = { id: categoryId, name: sanitizedName, description: validUpdateDto.description };
+
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.update.mockResolvedValue({ affected: 1 });
+      mockRepo.findOne.mockResolvedValue(updatedCategory);
+
+      const result = await service.updateCategory(categoryId, validUpdateDto);
+
+      expect(validateName).toHaveBeenCalledWith(validUpdateDto.name);
+      expect(sanitizeName).toHaveBeenCalledWith(validUpdateDto.name);
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        { id: categoryId },
+        { name: sanitizedName, description: validUpdateDto.description }
+      );
+      expect(mockRepo.findOne).toHaveBeenCalledWith({ where: { id: categoryId } });
+      expect(result).toEqual(updatedCategory);
     });
 
-    it('should throw InternalServerErrorException on unknown DB error', async () => {
-      (validateName as jest.Mock).mockReturnValue(true);
-      (sanitizeName as jest.Mock).mockReturnValue('new');
-      mockRepo.exists.mockResolvedValue(false);
-      mockRepo.create.mockReturnValue({});
-      mockRepo.save.mockRejectedValue(new Error('Unexpected'));
+    it('should update only name when only name is provided', async () => {
+      const nameOnlyDto = { name: 'NewName' };
+      const sanitizedName = 'newname';
+      const updatedCategory = { id: categoryId, name: sanitizedName, description: 'Original description' };
 
-      await expect(service.createCategory(dto)).rejects.toThrow(InternalServerErrorException);
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.update.mockResolvedValue({ affected: 1 });
+      mockRepo.findOne.mockResolvedValue(updatedCategory);
+
+      const result = await service.updateCategory(categoryId, nameOnlyDto);
+
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        { id: categoryId },
+        { name: sanitizedName }
+      );
+      expect(result).toEqual(updatedCategory);
     });
 
-    it('should throw BadRequestException on ER_DUP_ENTRY error', async () => {
-      (validateName as jest.Mock).mockReturnValue(true);
-      (sanitizeName as jest.Mock).mockReturnValue('dup');
-      mockRepo.exists.mockResolvedValue(false);
-      mockRepo.create.mockReturnValue({});
-      const dbErr = new Error('Duplicate') as any;
-      dbErr.code = 'ER_DUP_ENTRY';
-      mockRepo.save.mockRejectedValue(dbErr);
+    it('should update only description when only description is provided', async () => {
+      const descriptionOnlyDto = { description: 'New description' };
+      const updatedCategory = { id: categoryId, name: 'Original name', description: 'New description' };
 
-      await expect(service.createCategory(dto)).rejects.toThrow(BadRequestException);
+      mockRepo.update.mockResolvedValue({ affected: 1 });
+      mockRepo.findOne.mockResolvedValue(updatedCategory);
+
+      const result = await service.updateCategory(categoryId, descriptionOnlyDto);
+
+      expect(validateName).not.toHaveBeenCalled();
+      expect(sanitizeName).not.toHaveBeenCalled();
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        { id: categoryId },
+        { description: 'New description' }
+      );
+      expect(result).toEqual(updatedCategory);
+    });
+
+    it('should update description to undefined when description is explicitly set to undefined', async () => {
+      const undefinedDescriptionDto = { description: undefined };
+      const updatedCategory = { id: categoryId, name: 'Original name', description: undefined };
+
+      mockRepo.update.mockResolvedValue({ affected: 1 });
+      mockRepo.findOne.mockResolvedValue(updatedCategory);
+
+      const result = await service.updateCategory(categoryId, undefinedDescriptionDto);
+
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        { id: categoryId },
+        { description: undefined }
+      );
+      expect(result).toEqual(updatedCategory);
+    });
+
+    it('should throw BadRequestException when name contains invalid characters', async () => {
+      (validateName as jest.Mock).mockReturnValue(false);
+
+      await expect(service.updateCategory(categoryId, validUpdateDto)).rejects.toThrow(
+        new BadRequestException('Category name contains invalid characters or is empty after trimming')
+      );
+    });
+
+    it('should throw BadRequestException on ER_DUP_ENTRY database error', async () => {
+      const sanitizedName = 'duplicatecategory';
+      const dbError = new Error('Duplicate entry') as any;
+      dbError.code = 'ER_DUP_ENTRY';
+
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.update.mockRejectedValue(dbError);
+
+      await expect(service.updateCategory(categoryId, validUpdateDto)).rejects.toThrow(
+        new BadRequestException('A category with this name already exists')
+      );
+    });
+
+    it('should throw InternalServerErrorException on unknown database error', async () => {
+      const sanitizedName = 'updatedcategory';
+      const dbError = new Error('Unknown database error');
+
+      (validateName as jest.Mock).mockReturnValue(true);
+      (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
+      mockRepo.update.mockRejectedValue(dbError);
+
+      await expect(service.updateCategory(categoryId, validUpdateDto)).rejects.toThrow(
+        new InternalServerErrorException('Failed to update category')
+      );
+    });
+
+    it('should handle empty update data gracefully', async () => {
+      const emptyDto = {};
+      const originalCategory = { id: categoryId, name: 'Original name', description: 'Original description' };
+
+      mockRepo.update.mockResolvedValue({ affected: 1 });
+      mockRepo.findOne.mockResolvedValue(originalCategory);
+
+      const result = await service.updateCategory(categoryId, emptyDto);
+
+      expect(mockRepo.update).toHaveBeenCalledWith({ id: categoryId }, {});
+      expect(result).toEqual(originalCategory);
+    });
+  });
+
+  describe('deleteCategory', () => {
+    const categoryId = 1n;
+
+    it('should delete category successfully', async () => {
+      const deleteResult = { affected: 1 };
+      mockRepo.delete.mockResolvedValue(deleteResult);
+
+      const result = await service.deleteCategory(categoryId);
+
+      expect(mockRepo.delete).toHaveBeenCalledWith({ id: categoryId });
+      expect(result).toEqual(deleteResult);
+    });
+
+    it('should handle deletion of non-existent category', async () => {
+      const deleteResult = { affected: 0 };
+      mockRepo.delete.mockResolvedValue(deleteResult);
+
+      const result = await service.deleteCategory(categoryId);
+
+      expect(mockRepo.delete).toHaveBeenCalledWith({ id: categoryId });
+      expect(result).toEqual(deleteResult);
+    });
+
+    it('should throw InternalServerErrorException on database error', async () => {
+      const dbError = new Error('Database connection failed');
+      mockRepo.delete.mockRejectedValue(dbError);
+
+      await expect(service.deleteCategory(categoryId)).rejects.toThrow(
+        new InternalServerErrorException('Failed to delete category')
+      );
+      expect(mockRepo.delete).toHaveBeenCalledWith({ id: categoryId });
+    });
+
+    it('should handle foreign key constraint errors', async () => {
+      const fkError = new Error('Cannot delete or update a parent row: a foreign key constraint fails');
+      mockRepo.delete.mockRejectedValue(fkError);
+
+      await expect(service.deleteCategory(categoryId)).rejects.toThrow(
+        new InternalServerErrorException('Failed to delete category')
+      );
+      expect(mockRepo.delete).toHaveBeenCalledWith({ id: categoryId });
     });
   });
 });

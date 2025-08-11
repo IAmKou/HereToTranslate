@@ -1936,9 +1936,9 @@ watch(() => props.members, (val) => {
 /* Management Section Styles */
 .management-section {
   background: #fff;
-  border-radius: 20px;
+  border-radius: 16px;
   box-shadow: 0 10px 32px rgba(49,130,206,0.10), 0 2px 8px rgba(76,34,128,0.08);
-  padding: 0.6rem 0.6rem 0.4rem 0.6rem;
+  padding: 0.5rem 0.5rem 0.3rem 0.5rem;
   margin-bottom: 0.2rem;
   position: relative;
 }
@@ -1964,24 +1964,24 @@ watch(() => props.members, (val) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.4rem;
+  gap: 0.8rem;
+  margin-bottom: 0.3rem;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.4rem;
   color: #2d3748;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   margin: 0;
 }
 
 .title-icon {
-  font-size: 1.4rem;
-  width: 2rem;
-  height: 2rem;
+  font-size: 1.2rem;
+  width: 1.6rem;
+  height: 1.6rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
   display: flex;
@@ -1993,9 +1993,9 @@ watch(() => props.members, (val) => {
 
 .toggle-btn {
   margin-left: auto;
-  font-size: 0.75rem;
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 5px;
   transition: all 0.2s;
 }
 
@@ -2015,7 +2015,7 @@ watch(() => props.members, (val) => {
 /* Form Styles */
 .form-row {
   display: flex;
-  gap: 0.8rem;
+  gap: 0.6rem;
   align-items: flex-end;
 }
 
@@ -2026,24 +2026,24 @@ watch(() => props.members, (val) => {
 .form-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   color: #2d3748;
   font-weight: 600;
-  margin-bottom: 0.4rem;
-  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.8rem;
 }
 
 .label-icon {
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: #3182ce;
 }
 
 .form-control {
   width: 100%;
-  padding: 0.7rem 1rem;
+  padding: 0.6rem 0.8rem;
   border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
   background: white;
   color: #2d3748;
   transition: all 0.2s;
@@ -2066,12 +2066,12 @@ watch(() => props.members, (val) => {
 .btn {
   display: inline-flex !important;
   align-items: center !important;
-  gap: 0.25rem !important;
+  gap: 0.2rem !important;
   font-weight: 600 !important;
-  border-radius: 4px !important;
+  border-radius: 3px !important;
   border: none !important;
-  padding: 0.35rem 0.8rem !important;
-  font-size: 0.75rem !important;
+  padding: 0.3rem 0.7rem !important;
+  font-size: 0.7rem !important;
   cursor: pointer !important;
   transition: all 0.18s !important;
   box-shadow: 0 1px 3px #3182ce11 !important;
@@ -2110,8 +2110,8 @@ watch(() => props.members, (val) => {
 }
 
 .btn-sm {
-  font-size: 0.7rem !important;
-  padding: 0.25rem 0.5rem !important;
+  font-size: 0.65rem !important;
+  padding: 0.2rem 0.4rem !important;
   border-radius: 3px !important;
 }
 
@@ -2313,9 +2313,9 @@ watch(() => props.members, (val) => {
 .members-table th,
 .members-table td {
   border: 1px solid #e2e8f0;
-  padding: 0.7rem;
+  padding: 0.6rem;
   text-align: left;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .members-table th {
@@ -2323,7 +2323,7 @@ watch(() => props.members, (val) => {
   font-weight: 700;
   color: #2d3748;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .members-table td {
@@ -2345,13 +2345,13 @@ watch(() => props.members, (val) => {
 }
 
 .user-avatar {
-  width: 1.8rem;
-  height: 1.8rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   background: linear-gradient(135deg, #7f53ac 0%, #4299e1 100%);
   color: #fff;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2365,7 +2365,7 @@ watch(() => props.members, (val) => {
 
 .user-email {
   color: #a0aec0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   margin-top: 0.1rem;
 }
 
@@ -2376,8 +2376,8 @@ watch(() => props.members, (val) => {
   background: #e2e8f0;
   color: #475569;
   border-radius: 999px;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
   font-weight: 500;
   margin-right: 0.2rem;
   margin-bottom: 0.1rem;
@@ -2399,7 +2399,7 @@ watch(() => props.members, (val) => {
 
 .joined-date {
   color: #6b7280;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
@@ -2486,11 +2486,11 @@ watch(() => props.members, (val) => {
   position: relative;
   z-index: 10000; /* Đảm bảo content cũng có z-index cao */
   background: #fff;
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  width: 360px;
+  width: 340px;
   max-width: 90vw;
-  max-height: 400px;
+  max-height: 380px;
   overflow: hidden;
   animation: modalSlideIn 0.3s ease-out;
 }
@@ -2507,11 +2507,11 @@ watch(() => props.members, (val) => {
 }
 
 .new-modal-header {
-  padding: 0.8rem 1rem; /* Giảm padding */
+  padding: 0.6rem 0.8rem; /* Giảm padding */
 }
 
 .new-modal-header h3 {
-  font-size: 1rem; /* Giảm font size */
+  font-size: 0.9rem; /* Giảm font size */
 }
 
 .new-modal-close {
@@ -2536,16 +2536,16 @@ watch(() => props.members, (val) => {
 }
 
 .new-modal-body {
-  padding: 0.8rem 1rem; /* Giảm padding */
+  padding: 0.6rem 0.8rem; /* Giảm padding */
 }
 
 .new-modal-footer {
-  padding: 0.8rem 1rem; /* Giảm padding */
+  padding: 0.6rem 0.8rem; /* Giảm padding */
 }
 
 .new-modal-footer .btn {
-  padding: 0.4rem 0.8rem; /* Giảm padding của button */
-  font-size: 0.85rem; /* Giảm font size của button */
+  padding: 0.3rem 0.7rem; /* Giảm padding của button */
+  font-size: 0.8rem; /* Giảm font size của button */
 }
 
 .form-group {

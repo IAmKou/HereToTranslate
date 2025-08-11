@@ -15,7 +15,8 @@ export function getEnvironmentConfig(): EnvironmentConfig {
   // Automatic detection based on current URL - NO manual config needed!
   const isRadVPN = hostname.startsWith('26.82.216.');
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  const isProduction = !isLocalhost && import.meta.env.NODE_ENV !== 'development';
+  const isDevelopment = isLocalhost || import.meta.env.NODE_ENV === 'development';
+  const isProduction = !isDevelopment;
 
   // AUTOMATIC API URL - matches the hostname user is accessing from
   let apiUrl: string;
@@ -29,10 +30,6 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     // Localhost access: use localhost API
     apiUrl = 'http://localhost:3000/api';
     serverUrl = 'http://localhost:3000';
-  } else if (hostname === 'heretotranslate.onrender.com') {
-    // Frontend domain: use backend domain for API
-    apiUrl = 'https://htt-ekpa.onrender.com/api';
-    serverUrl = 'https://htt-ekpa.onrender.com';
   } else {
     // Production or other environments: use production URL
     apiUrl = 'https://htt-ekpa.onrender.com/api';
@@ -53,7 +50,7 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     apiUrl,
     serverUrl,
     isProduction,
-    isDevelopment: !isProduction,
+    isDevelopment,
     isRadVPN,
     jwtRefreshInterval
   };

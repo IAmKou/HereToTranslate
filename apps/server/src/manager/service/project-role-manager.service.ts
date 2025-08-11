@@ -12,6 +12,7 @@ import { In, Repository } from 'typeorm';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ProjectManagerService } from './project-manager.service';
+import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class ProjectRoleManagerService extends CommonHttpServiceImpl {
@@ -24,7 +25,8 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     private readonly projectRoleRepository: Repository<ProjectRoleEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    private readonly projectManager: ProjectManagerService
+    private readonly projectManager: ProjectManagerService,
+    private readonly activityManagerService: ActivityManagerService
   ) {
     super();
   }
@@ -261,6 +263,17 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     for (const user of usersToAdd) {
       if (!existingUserIds.has(user.id.toString())) {
         role.users.push(user);
+
+        // Log activity for each user added
+        try {
+          await this.activityManagerService.logMemberAdd(
+            Number(projectId),
+            Number(uid),
+            user.fullName || user.username
+          );
+        } catch (error) {
+          this.logger.error('Failed to log member add activity:', error);
+        }
       }
     }
 
@@ -304,6 +317,35 @@ export class ProjectRoleManagerService extends CommonHttpServiceImpl {
     }
 
     const toRemoveSet = new Set(userIds.map((id) => BigInt(id)));
+
+    // Log activity for each user being removed - get user info from database
+    for (const userId of userIds) {
+      this.logger.debug(`Processing user removal for userId: ${userId}`);
+
+      // Get user info directly from database instead of relying on role.users relation
+      const user = await this.userRepository.findOne({
+        where: { id: BigInt(userId) }
+      });
+
+      this.logger.debug(`Found user in database:`, user ? { id: user.id, username: user.username, fullName: user.fullName } : 'NOT FOUND');
+
+      if (user) {
+        try {
+          this.logger.debug(`Attempting to log member remove activity for user: ${user.fullName || user.username}`);
+          await this.activityManagerService.logMemberRemove(
+            Number(projectId),
+            Number(uid),
+            user.fullName || user.username
+          );
+          this.logger.debug(`Successfully logged member remove activity`);
+        } catch (error) {
+          this.logger.error('Failed to log member remove activity:', error);
+          this.logger.error('Error details:', error.message, error.stack);
+        }
+      } else {
+        this.logger.warn(`User ${userId} not found in database`);
+      }
+    }
 
     try {
       // Delete the relationships directly from the join table

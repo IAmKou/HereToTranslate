@@ -97,16 +97,16 @@ export class PaypalService {
     const accessToken = await this.getAccessToken();
 
     try {
-      // let locationEn = 'N/A';
-      // if (user.location) {
-      //   if (user.location.toLowerCase().includes('hà nội'))
-      //     locationEn = 'Hanoi';
-      //   else if (
-      //     user.location.toLowerCase().includes('hcm') ||
-      //     user.location.toLowerCase().includes('hồ chí minh')
-      //   )
-      //     locationEn = 'Ho Chi Minh City';
-      // }
+      let locationEn = 'N/A';
+      if (user.location) {
+        if (user.location.toLowerCase().includes('hà nội'))
+          locationEn = 'Hanoi';
+        else if (
+          user.location.toLowerCase().includes('hcm') ||
+          user.location.toLowerCase().includes('hồ chí minh')
+        )
+          locationEn = 'Ho Chi Minh City';
+      }
       const { data } = await axios.post(
         `${this.api}/v2/checkout/orders`,
         {
@@ -124,7 +124,7 @@ export class PaypalService {
                 },
                 address: {
                   address_line_1: user.email, // Email luôn là tiếng Anh
-                  // admin_area_2: locationEn, // Thành phố tiếng Anh
+                  admin_area_2: locationEn, // Thành phố tiếng Anh
                   admin_area_1: '',
                   postal_code: '000000',
                   country_code: 'VN',
@@ -1124,65 +1124,6 @@ export class PaypalService {
     });
 
     await this.transactionRepo.save(tx);
-  }
-
-  async refundDeposit(request: RequestEntity): Promise<void> {
-    logger.log(`Starting refund process for request ID: ${request.id}`);
-
-    // Find the pending deposit transaction for this request
-    const depositTransaction = await this.transactionRepo.findOne({
-      where: {
-        request: { id: request.id },
-        user: { id: request.requester.id },
-        status: TransactionStatus.Pending,
-      },
-      relations: ['user'],
-    });
-
-    if (!depositTransaction) {
-      logger.warn(`No pending deposit transaction found for request ID: ${request.id}`);
-      return;
-    }
-
-    try {
-      // Get or create wallet for the requester
-      const wallet = await this.walletManagerService.getOrCreateWallet(
-        request.requester.id
-      );
-
-      // Refund the amount to the wallet
-      wallet.balance = Number(wallet.balance) + Number(depositTransaction.amount);
-      await this.walletRepository.save(wallet);
-
-      // Mark the transaction as failed (refunded)
-      depositTransaction.status = TransactionStatus.Failed;
-      await this.transactionRepo.save(depositTransaction);
-
-      // Create a refund transaction record
-      const refundTransaction = this.transactionRepo.create({
-        user: { id: request.requester.id } as UserEntity,
-        request: { id: request.id } as RequestEntity,
-        amount: depositTransaction.amount,
-        status: TransactionStatus.Completed,
-      });
-
-      await this.transactionRepo.save(refundTransaction);
-
-      // Send notification to requester about the refund
-      await this.notificationService.createNotification({
-        userId: request.requester.id,
-        type: 'REFUND_PROCESSED',
-        message: `Your deposit of $${depositTransaction.amount} has been refunded for request "${request.title}".`,
-        createdBy: this.ADMIN_USER_ID,
-      });
-
-      logger.log(
-        `Successfully refunded $${depositTransaction.amount} to user ID ${request.requester.id} for request ID ${request.id}`
-      );
-    } catch (error) {
-        logger.error(`Failed to process refund for request ID ${request.id}: ${error}`);
-      throw new InternalServerErrorException('Failed to process refund');
-    }
   }
 
 }

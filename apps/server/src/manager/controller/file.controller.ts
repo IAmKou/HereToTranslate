@@ -1,20 +1,15 @@
-import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors, Get, Param, Res, Delete } from '@nestjs/common';
+import { Body, Controller, Post, Req, UploadedFile, UseGuards, UseInterceptors, Get, Param, Res, Delete, Patch } from '@nestjs/common';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { FileService } from '../service/file-manager.service';
-import { ManifestService } from '../service/manifest.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import type { Response } from 'express';
 import { NotFoundException } from '@nestjs/common';
-import { FileEntity } from '#LocalProject/Entities';
 
 @Controller('files')
 export class FileController {
-  constructor(
-    private readonly fileService: FileService,
-    private readonly manifestService: ManifestService
-  ) {
+  constructor(private readonly fileService: FileService) {
   }
 
   @UseGuards(JwtAuthGuard)
@@ -90,7 +85,30 @@ export class FileController {
     return this.fileService.getFileById(fileId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Patch(':fileId')
+  async renameFile(
+    @Param('fileId', BigIntTransformPipe) fileId: bigint,
+    @Body() body: { fileName: string },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.fileService.renameFile(fileId, body.fileName, req.user.id);
+  }
 
+  @UseGuards(JwtAuthGuard)
+  @Get(':fileId/preview')
+  async getFilePreview(@Param('fileId') fileId: string) {
+    return this.fileService.getFilePreview(fileId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':fileId/highlight')
+  async highlightTextInPdf(
+    @Param('fileId') fileId: string,
+    @Body() body: { text: string }
+  ) {
+    return this.fileService.highlightTextInPdf(fileId, body.text);
+  }
 
   @UseGuards(JwtAuthGuard)
   @Get(':fileId/download')
@@ -109,51 +127,6 @@ export class FileController {
     });
 
     res.send(file.fileContent);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':fileId/details')
-  async getFileDetails(@Param('fileId') fileId: string) {
-    return this.fileService.getFileDetails(fileId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post(':fileId/retry-extraction')
-  async retryExtraction(
-    @Param('fileId') fileId: string,
-    @Req() req: AuthenticatedRequest
-  ) {
-    return this.fileService.retryExtraction(fileId, req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post(':fileId/test-extraction')
-  async testExtraction(@Param('fileId') fileId: string) {
-    const file = await this.fileService.getFileById(fileId);
-    if (!file) {
-      throw new NotFoundException(`File with ID ${fileId} not found`);
-    }
-
-    // We need to get the full file entity with relations for testing
-    const fileEntity = await this.fileService.getFileMetadata(fileId);
-    if (!fileEntity.project || !fileEntity.branch) {
-      return {
-        success: false,
-        error: 'File must be associated with a project and branch for testing'
-      };
-    }
-
-    // Create a mock file entity for testing
-    const mockFileEntity = {
-      id: BigInt(fileId),
-      fileName: file.fileName,
-      fileType: file.fileType,
-      fileContent: file.fileContent,
-      project: { id: BigInt(fileEntity.project.id) },
-      branch: { id: BigInt(fileEntity.branch.id) }
-    };
-
-    return this.manifestService.testManifestGeneration(mockFileEntity as FileEntity);
   }
 
 }

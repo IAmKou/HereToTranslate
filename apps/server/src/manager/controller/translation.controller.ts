@@ -13,9 +13,10 @@ export class TranslationController {
     @Query('branchId') branchId: string,
     @Query('language') language: string ,
     @Query('fileId') fileId?: string,
-    @Query('filePart') filePart?: number
+    @Query('page') page?: number,
+    @Query('fileType') fileType?: string
   ) {
-    return this.translationService.getAllString(projectId, branchId, language, fileId, filePart);
+    return this.translationService.getAllString(projectId, branchId, language, fileId, page, fileType);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -66,18 +67,4 @@ export class TranslationController {
     return this.translationService.exportTranslation(fileId, language);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('languages/:fileId')
-  async getAvailableLanguages(@Param('fileId') fileId: string) {
-    return this.translationService.getAvailableLanguages(fileId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('github-preview/:fileId')
-  async getGitHubPreview(
-    @Param('fileId') fileId: string,
-    @Query('language') language: string
-  ) {
-    return this.translationService.getGitHubPreview(fileId, language);
-  }
 }

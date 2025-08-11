@@ -1,15 +1,18 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
 import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
-import { Express } from 'express';
+import  { Express } from 'express';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
 import { CommitEntity } from '../../db/mysql/entity/commit.entity';
-import { PageDifficultyService } from './page-difficulty.service';
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+import { renderAsync } from 'docx-preview';
+import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
 export class FileService {
@@ -24,8 +27,8 @@ export class FileService {
     private readonly manifestService : ManifestService,
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
-    @Inject(forwardRef(() => PageDifficultyService))
-    private readonly pageDifficultyService: PageDifficultyService,
+    @Inject(forwardRef(() => ActivityManagerService))
+    private readonly activityManagerService: ActivityManagerService,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
@@ -74,6 +77,28 @@ export class FileService {
     const safeFileName = fileName.replace(/[\\/:*?"<>|]/g, '_');
     const timestamped = `${Date.now()}_${safeFileName}`;
     const repoName = `project-${projectId}`;
+
+    // Log activity if this is a project file
+    if (projectId) {
+      try {
+        // Count strings if it's a text-based file
+        let stringCount = 0;
+        if (fileType.includes('text') || fileType.includes('document') || fileType.includes('pdf')) {
+          // This is a simplified count - in a real implementation you'd extract actual strings
+          stringCount = Math.floor(fileContent.length / 100); // Rough estimate
+        }
+
+        await this.activityManagerService.logFileUpload(
+          Number(projectId),
+          Number(uid),
+          fileName,
+          stringCount,
+          branchId ? Number(branchId) : undefined
+        );
+      } catch (error) {
+        this.logger.error('Failed to log file upload activity:', error);
+      }
+    }
 
     try {
       await this.githubService.pushInitialFile({
@@ -169,6 +194,28 @@ export class FileService {
       };
     }
 
+    // Log activity if this is a project file
+    if (projectId) {
+      try {
+        // Count strings if it's a text-based file
+        let stringCount = 0;
+        if (file.mimetype.includes('text') || file.mimetype.includes('document') || file.mimetype.includes('pdf')) {
+          // This is a simplified count - in a real implementation you'd extract actual strings
+          stringCount = Math.floor(file.buffer.length / 100); // Rough estimate
+        }
+
+        await this.activityManagerService.logFileUpload(
+          Number(projectId),
+          Number(uid),
+          fileName,
+          stringCount,
+          branchId ? Number(branchId) : undefined
+        );
+      } catch (error) {
+        this.logger.error('Failed to log file upload activity:', error);
+      }
+    }
+
     // Chạy extract string ở background, trả về ngay cho client
     setTimeout(async () => {
       try {
@@ -181,14 +228,9 @@ export class FileService {
         }
       } catch (err) {
         // Nếu lỗi, cập nhật status file thành 'error'
-        this.logger.error(`Background extraction failed for file ${saved.fileId}:`, err);
         const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
         if (fileEntity) {
           fileEntity.status = 'error';
-          // Add error details to extractLog
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          const errorLog = `[${new Date().toISOString()}] EXTRACTION FAILED: ${errorMessage}\n`;
-          fileEntity.extractLog = (fileEntity.extractLog || '') + errorLog;
           await this.fileRepository.save(fileEntity);
         }
       }
@@ -254,48 +296,6 @@ export class FileService {
       fileContent: file.fileContent,
       status: file.status || 'ready',
       extractLog: file.extractLog || '',
-    };
-  }
-
-  /**
-   * Get detailed file information including error logs for debugging
-   */
-  async getFileDetails(fileId: string) {
-    const file = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-      relations: ['uploader', 'project', 'branch'],
-      select: ['id', 'fileName', 'fileType', 'status', 'extractLog', 'createdAt', 'updatedAt', 'uploader', 'project', 'branch'],
-    });
-    
-    if (!file) {
-      throw new NotFoundException('File not found');
-    }
-
-    // Get translation strings count
-    const translationCount = await this.translationModel.countDocuments({ fileId: fileId });
-
-    return {
-      fileId: file.id.toString(),
-      fileName: file.fileName,
-      fileType: file.fileType,
-      status: file.status || 'ready',
-      extractLog: file.extractLog || '',
-      createdAt: file.createdAt,
-      updatedAt: file.updatedAt,
-      translationCount,
-      uploader: file.uploader ? {
-        id: file.uploader.id.toString(),
-        username: file.uploader.username,
-        fullName: file.uploader.fullName,
-      } : null,
-      project: file.project ? {
-        id: file.project.id.toString(),
-        name: file.project.name,
-      } : null,
-      branch: file.branch ? {
-        id: file.branch.id.toString(),
-        name: file.branch.name,
-      } : null,
     };
   }
 
@@ -390,79 +390,30 @@ export class FileService {
 
     await this.fileRepository.delete(String(file.id));
     this.logger.log(`File deleted successfully: ${file.fileName}`);
+
+    // Log activity if this is a project file
+    if (file.project?.id) {
+      try {
+        await this.activityManagerService.logFileDelete(
+          Number(file.project.id),
+          Number(userId),
+          file.fileName,
+          file.branch?.id ? Number(file.branch.id) : undefined
+        );
+      } catch (error) {
+        this.logger.error('Failed to log file delete activity:', error);
+      }
+    }
+
     return { success: true, message: 'File deleted' };
   }
 
+  // Hàm kiểm tra quyền AttachFiles (giả định, bạn cần implement đúng logic thực tế)
   async checkUserAttachFilesPermission(userId: string | bigint, projectId: string | bigint): Promise<boolean> {
- 
-    return true;
-  }
-
-  /**
-   * Get file metadata including project and branch information
-   * Used by page difficulty service to validate file relationships
-   */
-  async getFileMetadata(fileId: string) {
-    const file = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-      relations: ['project', 'branch', 'uploader'],
-      select: ['id', 'fileName', 'fileType', 'createdAt', 'updatedAt', 'status', 'project', 'branch', 'uploader'],
-    });
-
-    if (!file) {
-      throw new NotFoundException(`File with ID ${fileId} not found`);
-    }
-
-    return {
-      fileId: file.id.toString(),
-      fileName: file.fileName,
-      fileType: file.fileType,
-      createdAt: file.createdAt,
-      updatedAt: file.updatedAt,
-      status: file.status || 'ready',
-      project: file.project ? {
-        id: file.project.id.toString(),
-        name: file.project.name,
-      } : null,
-      branch: file.branch ? {
-        id: file.branch.id.toString(),
-        name: file.branch.name,
-      } : null,
-      uploader: file.uploader ? {
-        id: file.uploader.id.toString(),
-        username: file.uploader.username,
-        fullName: file.uploader.fullName,
-      } : null,
-    };
-  }
-
-  /**
-   * Validate that a file has the required project and branch relationships
-   * for page difficulty analysis
-   */
-  async validateFileForPageDifficulty(fileId: string): Promise<{ projectId: string; branchId: string }> {
-    const file = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-      relations: ['project', 'branch'],
-      select: ['id', 'fileName', 'project', 'branch'],
-    });
-
-    if (!file) {
-      throw new NotFoundException(`File with ID ${fileId} not found`);
-    }
-
-    if (!file.project) {
-      throw new BadRequestException(`File ${file.fileName} is not associated with a project. Page difficulty analysis requires a project association.`);
-    }
-
-    if (!file.branch) {
-      throw new BadRequestException(`File ${file.fileName} is not associated with a branch. Page difficulty analysis requires a branch association.`);
-    }
-
-    return {
-      projectId: file.project.id.toString(),
-      branchId: file.branch.id.toString(),
-    };
+    // TODO: Thay bằng logic thực tế kiểm tra quyền AttachFiles của user trên project
+    // Ví dụ: kiểm tra bảng project_member, roles, permissionFlags, ...
+    // Trả về true nếu có quyền, false nếu không
+    return true; // Tạm thời cho phép tất cả, bạn cần thay thế bằng logic thực tế
   }
 
   async extractStringsFromFile(fileId: string, userId: string | bigint) {
@@ -478,19 +429,10 @@ export class FileService {
       throw new Error('You do not have permission to extract strings from this file');
     }
 
-    // Additional validation
-    if (!file.fileContent || file.fileContent.length === 0) {
-      throw new Error('File has no content to extract');
-    }
-
-    if (!file.project || !file.branch) {
-      throw new Error('File must be associated with a project and branch for string extraction');
-    }
-
     let log = '';
     function appendLog(msg: string) {
       log += `[${new Date().toISOString()}] ${msg}\n`;
-      file!.extractLog = log;
+      file.extractLog = log;
     }
     try {
       appendLog('Start extracting strings...');
@@ -503,20 +445,6 @@ export class FileService {
       appendLog('Generating manifest...');
       await this.manifestService.generateManifest(file); // Đảm bảo hàm này set obsolete: false cho string mới
       appendLog('Manifest generated.');
-      
-      // Auto-assign page difficulties after manifest generation
-      try {
-        appendLog('Auto-assigning page difficulties...');
-        const autoAssignResult = await this.pageDifficultyService.autoAssignPageDifficulties(
-          file.id.toString(),
-          userId.toString()
-        );
-        appendLog(`Page difficulties auto-assigned: ${autoAssignResult.assignedPages} assigned, ${autoAssignResult.skippedPages} skipped`);
-      } catch (autoAssignError: any) {
-        appendLog('Warning: Auto-assignment of page difficulties failed: ' + (autoAssignError?.message || autoAssignError));
-        // Don't fail the entire extraction if auto-assignment fails
-      }
-      
       // Optionally push manifest to GitHub if project/branch info is present
       if (file.project && file.branch) {
         appendLog('Pushing manifest to GitHub...');
@@ -646,62 +574,217 @@ export class FileService {
     };
   }
 
-  /**
-   * Retry extraction for a failed file
-   */
-  async retryExtraction(fileId: string, userId: string | bigint) {
-    this.logger.log(`Retrying extraction for file ${fileId}`);
-    
-    // Reset file status to processing
-    const file = await this.fileRepository.findOne({ 
-      where: { id: BigInt(fileId) },
-      relations: ['uploader', 'project', 'branch']
+  async renameFile(fileId: bigint, newFileName: string, userId: bigint) {
+    this.logger.log(`Renaming file ${fileId} to ${newFileName} by user ${userId}`);
+
+    const file = await this.fileRepository.findOne({
+      where: { id: fileId },
+      relations: ['project', 'branch'],
     });
-    
+
     if (!file) {
-      throw new NotFoundException('File not found');
+      throw new NotFoundException(`File with ID ${fileId} not found`);
     }
 
-    // Check permission
-    if (file.uploader.id.toString() !== userId.toString()) {
-      throw new Error('You do not have permission to retry extraction for this file');
+    // Check if user has permission to rename this file
+    const hasPermission = await this.checkUserAttachFilesPermission(userId, file.project?.id || 0);
+    if (!hasPermission) {
+      throw new Error('You do not have permission to rename this file');
     }
 
-    // Reset status and clear previous error log
-    file.status = 'processing';
-    file.extractLog = `[${new Date().toISOString()}] Retrying extraction...\n`;
-    await this.fileRepository.save(file);
+    // Update file name
+    file.fileName = newFileName;
+    file.updatedAt = new Date();
 
-    // Retry extraction in background
-    setTimeout(async () => {
-      try {
-        await this.extractStringsFromFile(fileId, userId);
-        // Update status to ready
-        const updatedFile = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
-        if (updatedFile) {
-          updatedFile.status = 'ready';
-          await this.fileRepository.save(updatedFile);
-        }
-      } catch (err) {
-        // Update status to error with new error details
-        this.logger.error(`Retry extraction failed for file ${fileId}:`, err);
-        const updatedFile = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
-        if (updatedFile) {
-          updatedFile.status = 'error';
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          const errorLog = `[${new Date().toISOString()}] RETRY FAILED: ${errorMessage}\n`;
-          updatedFile.extractLog = (updatedFile.extractLog || '') + errorLog;
-          await this.fileRepository.save(updatedFile);
-        }
-      }
-    }, 100);
+    const updatedFile = await this.fileRepository.save(file);
+
+    this.logger.log(`File ${fileId} renamed to ${newFileName}`);
 
     return {
-      success: true,
-      message: 'Extraction retry initiated',
-      fileId: fileId,
-      status: 'processing'
+      fileId: updatedFile.id.toString(),
+      fileName: updatedFile.fileName,
+      fileType: updatedFile.fileType,
+      createdAt: updatedFile.createdAt,
+      updatedAt: updatedFile.updatedAt,
+      uploaderId: updatedFile.uploader?.id?.toString(),
+      projectId: updatedFile.project?.id?.toString(),
+      branchId: updatedFile.branch?.id?.toString(),
+      requestId: updatedFile.request?.id?.toString(),
     };
   }
 
+  async getFilePreview(fileId: string): Promise<{ fileType: string; content?: string; url?: string; previewType?: string; textSegments?: any[] }> {
+    this.logger.log(`Getting file preview for fileId: ${fileId}`);
+    const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
+    if (!fileEntity) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    // For PDF files, extract text segments with coordinates
+    if (fileEntity.fileType === 'application/pdf') {
+      try {
+        const textSegments = await this.extractPdfTextSegments(fileEntity.fileContent);
+        return {
+          fileType: fileEntity.fileType,
+          content: fileEntity.fileContent.toString('base64'),
+          previewType: 'pdf',
+          textSegments: textSegments
+        };
+      } catch (error) {
+        this.logger.error(`Error extracting PDF text segments: ${error.message}`);
+        return {
+          fileType: fileEntity.fileType,
+          content: fileEntity.fileContent.toString('base64'),
+          previewType: 'pdf'
+        };
+      }
+    }
+
+    switch (fileEntity.fileType) {
+      case 'text/plain': case 'application/json': case 'text/html': case 'text/css': case 'application/javascript': case 'text/xml': {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
+      }
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+        try {
+          // Use docx-preview to render DOCX with perfect formatting
+          return {
+            fileType: fileEntity.fileType,
+            content: fileEntity.fileContent.toString('base64'),
+            previewType: 'docx-preview'
+          };
+        } catch (error) {
+          this.logger.error(`Error processing DOCX with docx-preview: ${error.message}`);
+          return {
+            fileType: fileEntity.fileType,
+            content: fileEntity.fileContent.toString('base64'),
+            previewType: 'docx-preview'
+          };
+        }
+      }
+      case 'application/vnd.ms-excel':
+      case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+      case 'application/vnd.ms-powerpoint':
+      case 'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'office-viewer' };
+      }
+      case 'image/jpeg': case 'image/png': case 'image/gif': case 'image/webp': {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'image' };
+      }
+      default: {
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
+      }
+    }
+  }
+
+  private async extractPdfTextSegments(pdfBuffer: Buffer): Promise<any[]> {
+    try {
+      this.logger.log('Starting PDF text extraction...');
+      this.logger.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
+
+      // Set up PDF.js worker for Node.js environment
+      pdfjsLib.GlobalWorkerOptions.workerSrc = false; // Disable worker for Node.js
+      this.logger.log('PDF.js worker disabled for Node.js environment');
+
+      // Load PDF document
+      this.logger.log('Loading PDF document...');
+      // Convert Buffer to Uint8Array for PDF.js
+      const uint8Array = new Uint8Array(pdfBuffer);
+      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+      const pdf = await loadingTask.promise;
+      this.logger.log(`PDF loaded successfully, pages: ${pdf.numPages}`);
+
+      const textSegments = [];
+      let segmentId = 1;
+
+      // Process each page
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        this.logger.log(`Processing page ${pageNum}...`);
+        const page = await pdf.getPage(pageNum);
+
+        // Use scale that matches iframe display (typically 1.0 for iframe)
+        const viewport = page.getViewport({ scale: 1.0 });
+        this.logger.log(`Page ${pageNum} viewport: ${viewport.width} x ${viewport.height}`);
+
+        // Extract text content with positions
+        const textContent = await page.getTextContent();
+        this.logger.log(`Page ${pageNum} has ${textContent.items.length} text items`);
+
+        // Process each text item individually for precise highlighting
+        textContent.items.forEach((item: any, index: number) => {
+          const text = item.str.trim();
+          if (text && text.length > 0) {
+            // Calculate coordinates for iframe display
+            const x = item.transform[4];
+            const y = viewport.height - item.transform[5]; // Flip Y for iframe
+            const width = item.width;
+            const height = item.height;
+
+            const segment = {
+              id: `segment_${segmentId}`,
+              text: text,
+              coordinates: [{
+                x: x,
+                y: y,
+                width: width,
+                height: height
+              }],
+              page: pageNum
+            };
+
+            textSegments.push(segment);
+            this.logger.log(`Created segment ${segmentId}: "${text.substring(0, 30)}..." at (${x}, ${y})`);
+            segmentId++;
+          }
+        });
+      }
+
+      this.logger.log(`Extracted ${textSegments.length} text segments from PDF`);
+      return textSegments;
+
+    } catch (error) {
+      this.logger.error(`Error extracting PDF text segments: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      throw error;
+    }
+  }
+
+  async highlightTextInPdf(fileId: string, searchText: string): Promise<{ highlights: any[] }> {
+    try {
+      this.logger.log(`Highlighting text in PDF: "${searchText}"`);
+
+      const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
+      if (!fileEntity) {
+        throw new NotFoundException(`File with ID ${fileId} not found`);
+      }
+
+      if (fileEntity.fileType !== 'application/pdf') {
+        throw new Error('File is not a PDF');
+      }
+
+      // Extract text segments
+      const textSegments = await this.extractPdfTextSegments(fileEntity.fileContent);
+
+      // Find matching segments
+      const matchingSegments = textSegments.filter(segment => {
+        const segmentText = segment.text.toLowerCase();
+        const searchTextLower = searchText.toLowerCase();
+        return segmentText.includes(searchTextLower) || searchTextLower.includes(segmentText);
+      });
+
+      this.logger.log(`Found ${matchingSegments.length} matching segments for "${searchText}"`);
+
+      return {
+        highlights: matchingSegments.map(segment => ({
+          id: segment.id,
+          text: segment.text,
+          coordinates: segment.coordinates,
+          page: segment.page
+        }))
+      };
+
+    } catch (error) {
+      this.logger.error(`Error highlighting text in PDF: ${error.message}`);
+      throw error;
+    }
+  }
 }

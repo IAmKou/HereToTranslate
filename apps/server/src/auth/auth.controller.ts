@@ -37,7 +37,7 @@ export class AuthController {
     // Set access token cookie
     res.cookie('access_token', accessToken, {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       expires: this.authService.getExpiryDate(
         this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
@@ -47,7 +47,7 @@ export class AuthController {
     // Set refresh token cookie similarly
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       expires: this.authService.getExpiryDate(
         this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
@@ -68,15 +68,15 @@ export class AuthController {
     logger.log(idToken);
     res.cookie('access_token', accessToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       maxAge: 1000 * 60 * 15, // 15 mins
     });
 
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       maxAge: 1000 * 60 * 60 * 24 * 7,
     });
     logger.log(user);
@@ -88,45 +88,36 @@ export class AuthController {
   async refreshTokens(@Req() req: Request, @Res() res: Response) {
     const refreshToken = req.cookies?.refresh_token;
     if (!refreshToken) {
-      res.clearCookie('access_token', { secure: false, sameSite: 'strict' });
-      res.clearCookie('refresh_token', { secure: false, sameSite: 'strict' });
       return res.status(401).json({ message: 'Refresh token not found' });
     }
 
-    try {
-      const {
-        accessToken,
-        refreshToken: newRefreshToken,
-        user,
-      } = await this.authService.refreshTokens(refreshToken);
+    const {
+      accessToken,
+      refreshToken: newRefreshToken,
+      user,
+    } = await this.authService.refreshTokens(refreshToken);
 
-      // Set new access token cookie
-      res.cookie('access_token', accessToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
-        expires: this.authService.getExpiryDate(
-          this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
-        ),
-      });
+    // Set new access token cookie
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      expires: this.authService.getExpiryDate(
+        this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
+      ),
+    });
 
-      // Set new refresh token cookie
-      res.cookie('refresh_token', newRefreshToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
-        expires: this.authService.getExpiryDate(
-          this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
-        ),
-      });
+    // Set new refresh token cookie
+    res.cookie('refresh_token', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      expires: this.authService.getExpiryDate(
+        this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
+      ),
+    });
 
-      return res.json({ user });
-    } catch (error) {
-      // Clear invalid cookies on any error
-      res.clearCookie('access_token', { secure: false, sameSite: 'strict' });
-      res.clearCookie('refresh_token', { secure: false, sameSite: 'strict' });
-      return res.status(401).json({ message: 'Invalid refresh token' });
-    }
+    return res.json({ user });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -158,14 +149,10 @@ export class AuthController {
     // }
 
     // Clear both old and new cookie names for backward compatibility
-    res.clearCookie('access_token', {
-      secure: false,
-      sameSite: 'none'
-    });
-    res.clearCookie('refresh_token', {
-      secure: false,
-      sameSite: 'none'
-    });
+    res.clearCookie('access_token');
+    res.clearCookie('refresh_token');
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
 
     return res.json({ message: 'Logged out successfully' });
   }
@@ -203,17 +190,5 @@ export class AuthController {
     }
 
     return await this.authService.validateToken(token);
-  }
-
-  @IsPublicEndpoint()
-  @Get('clear-cookies')
-  @Post('clear-cookies')
-  async clearAllCookies(@Res() res: Response) {
-    // Clear all possible cookie variations
-    res.clearCookie('access_token', { secure: false, sameSite: 'strict' });
-    res.clearCookie('refresh_token', { secure: false, sameSite: 'strict' });
-
-
-    return res.json({ message: 'All cookies cleared' });
   }
 }

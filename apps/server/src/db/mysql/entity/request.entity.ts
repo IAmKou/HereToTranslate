@@ -23,13 +23,6 @@ export enum RequestStatus {
   Completed = 'COMPLETED',
   DeliveryPending = 'DELIVERYPENDING',
   Failed = 'FAILED',
-  WaitingApproval = 'WAITING_APPROVAL',
-  ExtensionRequested = 'EXTENSION_REQUESTED',
-  ExtensionApproved = 'EXTENSION_APPROVED',
-  ExtensionRejected = 'EXTENSION_REJECTED',
-  CancellationRequested = 'CANCELLATION_REQUESTED',
-  CancellationPending = 'CANCELLATION_PENDING',
-  Archived = 'ARCHIVED',
 }
 
 @Entity('requests')

@@ -1,9 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectGroupEntity } from './project-group.entity';
-import { TaskStatusEntity } from './task-status.entity';
-import { WorkflowEntity } from './workflow.entity';
-import { TaskAssignmentEntity } from './task-assignment.entity';
+
+export enum TaskStatus {
+  Pending = 'pending',
+  InProgress = 'in_progress',
+  Completed = 'completed',
+  Closed = 'closed',
+}
 
 @Entity('task')
 export class TaskEntity {
@@ -16,11 +20,8 @@ export class TaskEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @ManyToOne(() => TaskStatusEntity, { nullable: false, onDelete: 'RESTRICT' })
-  status: TaskStatusEntity;
-
-  @ManyToOne(() => WorkflowEntity, { nullable: true, onDelete: 'SET NULL' })
-  workflow?: WorkflowEntity;
+  @Column({ type: 'enum', enum: TaskStatus, default: TaskStatus.Pending })
+  status: TaskStatus;
 
   @Column({ type: 'varchar', nullable: true })
   projectId?: string;
@@ -32,7 +33,10 @@ export class TaskEntity {
   fileId?: string;
 
   @Column({ type: 'int', nullable: true })
-  filePart?: number;
+  page?: number;
+
+  @Column({ type: 'json', nullable: true })
+  pages?: number[];
 
   @Column({ type: 'varchar', length: 10, nullable: true })
   language?: string;
@@ -52,48 +56,10 @@ export class TaskEntity {
   @CreateDateColumn()
   createdAt: Date;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
-
   @Column({ type: 'datetime', nullable: true })
   startedAt?: Date;
 
   @Column({ type: 'datetime', nullable: true })
   completedAt?: Date;
-
-  @Column({ type: 'json', nullable: true })
-  customFields?: Record<string, any>;
-
-  @Column({ type: 'enum', enum: ['lowest', 'low', 'medium', 'high', 'highest'], default: 'medium' })
-  priority: string;
-
-  @Column({ type: 'int', nullable: true })
-  storyPoints?: number;
-
-  @Column({ type: 'json', nullable: true })
-  selectedPages?: number[]; 
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  totalScore: number;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  totalAmount: number;
-
-  @Column({ type: 'int', default: 0 })
-  totalPages: number;
-
-  @OneToMany(() => TaskAssignmentEntity, assignment => assignment.task, { cascade: true })
-  assignments: TaskAssignmentEntity[];
-
-  get currentTranslator(): UserEntity | undefined {
-    return this.assignments?.find(a => a.role === 'translator' && a.status === 'assigned')?.assignedTo;
-  }
-
-  get currentReviewer(): UserEntity | undefined {
-    return this.assignments?.find(a => a.role === 'reviewer' && a.status === 'assigned')?.assignedTo;
-  }
-
-  get currentApprover(): UserEntity | undefined {
-    return this.assignments?.find(a => a.role === 'approver' && a.status === 'assigned')?.assignedTo;
-  }
 }
+

@@ -19,8 +19,8 @@ import { ChatMessageDocument } from '../db/mongo/schema/chat-message.schema';
   cors: {
     origin: [
       'http://localhost:4200',  // Always allow localhost for development
-      'https://heretotranslate.onrender.com', // Frontend domain
-      'https://htt-ekpa.onrender.com', // Backend domain
+      process.env.CLIENT_URL || 'http://localhost:4200',
+      process.env.PRODUCTION_URL || 'https://htt-ekpa.onrender.com',
     ],
     credentials: true,
     methods: ['GET', 'POST'],

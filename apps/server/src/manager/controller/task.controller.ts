@@ -16,9 +16,7 @@ import { JsonSerializerInterceptor } from '../../util/json-serializer.intercepto
 import { TaskManagerService } from '../service/task-manager.service';
 import { CreateTaskDto, UpdateTaskDto } from '../../dto/task.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
-import type { AuthenticatedRequest } from '../../auth/types';
-import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
-import { TransitionTaskDto } from '#LocalProject/Dtos';
+import { AuthenticatedRequest } from '../../auth/types';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -27,10 +25,7 @@ export class TaskController {
   constructor(private readonly taskService: TaskManagerService) {}
 
   @Post()
-  async createTask(
-    @Body() dto: CreateTaskDto,
-    @Req() req: AuthenticatedRequest
-  ) {
+  async createTask(@Body() dto: CreateTaskDto, @Req() req: AuthenticatedRequest) {
     const userId = req.user.id;
     return await this.taskService.createTask({
       ...dto,
@@ -50,12 +45,8 @@ export class TaskController {
   }
 
   @Patch(':id')
-  async updateTask(
-    @Param('id') id: string,
-    @Body() dto: UpdateTaskDto,
-    @Req() req: AuthenticatedRequest
-  ) {
-    return await this.taskService.updateTask(id, dto, req.user.id);
+  async updateTask(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
+    return await this.taskService.updateTask(id, dto);
   }
 
   @Delete(':id')
@@ -70,9 +61,13 @@ export class TaskController {
   }
 
   @Patch(':id/reopen')
-  async reopenTask(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+  async reopenTask(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req: AuthenticatedRequest
+  ) {
     const userId = req.user.id;
-    return await this.taskService.reopenTask(id, userId.toString());
+    return await this.taskService.reopenTask(id, userId.toString(), body.reason);
   }
 
   @Get('/user/:userId')
@@ -81,13 +76,13 @@ export class TaskController {
   }
 
   @Get(':id/progress')
-  async getTaskProgress(@Param('id', BigIntTransformPipe) id: bigint) {
+  async getTaskProgress(@Param('id') id: string) {
     try {
       const progress = await this.taskService.getTaskProgress(id);
       return progress;
     } catch (error) {
       throw new HttpException(
-        'Failed to get task progress',
+        error.message || 'Failed to get task progress',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -100,15 +95,9 @@ export class TaskController {
       return history;
     } catch (error) {
       throw new HttpException(
-        'Failed to get task history',
+        error.message || 'Failed to get task history',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
-  }
-
-  @Post(':id/transition')
-  async transitionTask(@Param('id') id: string, @Body() dto: TransitionTaskDto, @Req() req: AuthenticatedRequest) {
-    const userId = req.user.id;
-    return await this.taskService.transitionTask(id, dto, userId.toString());
   }
 }

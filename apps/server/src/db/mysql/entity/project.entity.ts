@@ -23,9 +23,6 @@ export class ProjectEntity {
   @Column({ type: 'boolean', default: true })
   isPrivate: boolean;
 
-  @Column({ type: 'boolean', default: false })
-  isArchived: boolean;
-
   @Column({ type: 'json', nullable: true })
   targetLanguages: string[];
 

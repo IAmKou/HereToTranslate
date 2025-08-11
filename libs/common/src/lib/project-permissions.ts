@@ -23,7 +23,7 @@ export const PermissionFlags = Object.freeze({
   ManageWorkspaces: 1n << 59n,
 
   /** Permission to manage project groups. */
-  ManageGroups: 1n << 58n,
+  ManageTasks: 1n << 58n,
 
   /** Permission to manage project metadata. */
   ManageProjectMetadata: 1n << 57n,

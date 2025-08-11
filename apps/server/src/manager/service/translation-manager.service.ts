@@ -96,7 +96,7 @@ export class TranslationService {
         );
       }
     } catch (error) {
-      logger.error('Failed to log translation activity:', error);
+      logger.error('Failed to log translation activity:' + error);
     }
 
     let updatedBuffer: Buffer;
@@ -320,6 +320,32 @@ export class TranslationService {
       safeFileName
     )}`;
     return { githubUrl };
+  }
+
+  async getTranslationPreview(
+    projectId: string,
+    branchId: string,
+    fileId: string,
+    language: string,
+    pages: number[]
+  ): Promise<Array<{ originalText: string; translatedText?: string; style?: any; font?: string; filePart: number }>> {
+    const query: any = { fileId };
+    if (projectId) query.projectId = projectId;
+    if (branchId) query.branchId = branchId;
+    if (pages && pages.length > 0) query.filePart = { $in: pages };
+
+    const entries = await this.translationModel
+      .find(query)
+      .sort({ filePart: 1, _id: 1 })
+      .lean();
+
+    return entries.map((e: any) => ({
+      originalText: e.originalText,
+      translatedText: e.translatedText,
+      style: e.style,
+      font: e.font,
+      filePart: e.filePart ?? 0,
+    }));
   }
 
   async getAllString(

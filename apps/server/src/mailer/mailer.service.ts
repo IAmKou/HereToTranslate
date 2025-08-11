@@ -68,4 +68,34 @@ export class MailService {
       throw error;
     }
   }
+
+  async sendTaskAssignmentNotification(
+    to: string,
+    assignmentData: {
+      taskTitle: string;
+      role: string;
+      reason: string;
+      notes?: string;
+      projectName: string;
+    }
+  ) {
+    try {
+      await this.mailerService.sendMail({
+        to,
+        subject: `Task Assignment: ${assignmentData.taskTitle}`,
+        template: './task-assignment',
+        context: {
+          taskTitle: assignmentData.taskTitle,
+          role: assignmentData.role,
+          reason: assignmentData.reason,
+          notes: assignmentData.notes || '',
+          projectName: assignmentData.projectName,
+        },
+      });
+      console.log('📧 Task assignment email sent successfully to:', to);
+    } catch (error) {
+      console.error('📧 Failed to send task assignment email:', error);
+      throw error;
+    }
+  }
 }

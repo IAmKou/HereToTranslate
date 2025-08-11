@@ -32,6 +32,8 @@ import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.i
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 import { ActivityManagerService } from './activity-manager.service';
+import { StatusManagerService } from '#LocalProject/Managers/service/task-status-manager.service';
+import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
 
 @Injectable()
 export class ProjectManagerService extends CommonHttpServiceImpl {
@@ -53,7 +55,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly dataSource: DataSource,
     private readonly githubService: GitHubService,
     private readonly notificationService: NotificationManagerService,
-    private readonly activityManagerService: ActivityManagerService
+    private readonly activityManagerService: ActivityManagerService,
+    private readonly statusManagerService: StatusManagerService,
+    private readonly workflowManagerService: WorkflowManagerService
   ) {
     super();
   }
@@ -243,6 +247,19 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       });
 
       await queryRunner.commitTransaction();
+
+      // Create default statuses and workflow (Kanban: To Do, In Progress, Done)
+      try {
+        const createdStatuses = await this.statusManagerService.createDefaultStatuses(
+          savedProject.id.toString()
+        );
+        await this.workflowManagerService.createDefaultWorkflow(
+          savedProject.id.toString(),
+          createdStatuses
+        );
+      } catch (err) {
+        this.logger.error('Failed to create default statuses/workflow', err);
+      }
 
       this.logger.debug(
         `Project created successfully with ID: ${savedProject.id}`

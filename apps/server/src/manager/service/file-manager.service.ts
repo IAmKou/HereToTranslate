@@ -432,7 +432,9 @@ export class FileService {
     let log = '';
     function appendLog(msg: string) {
       log += `[${new Date().toISOString()}] ${msg}\n`;
-      file.extractLog = log;
+      if (file) {
+        file.extractLog = log;
+      }
     }
     try {
       appendLog('Start extracting strings...');
@@ -587,7 +589,7 @@ export class FileService {
     }
 
     // Check if user has permission to rename this file
-    const hasPermission = await this.checkUserAttachFilesPermission(userId, file.project?.id || 0);
+    const hasPermission = await this.checkUserAttachFilesPermission(userId, file.project?.id);
     if (!hasPermission) {
       throw new Error('You do not have permission to rename this file');
     }
@@ -631,7 +633,7 @@ export class FileService {
           textSegments: textSegments
         };
       } catch (error) {
-        this.logger.error(`Error extracting PDF text segments: ${error.message}`);
+        this.logger.error(`Error extracting PDF text segments: ${error instanceof Error ? error.message : String(error)}`);
         return {
           fileType: fileEntity.fileType,
           content: fileEntity.fileContent.toString('base64'),
@@ -653,7 +655,7 @@ export class FileService {
             previewType: 'docx-preview'
           };
         } catch (error) {
-          this.logger.error(`Error processing DOCX with docx-preview: ${error.message}`);
+          this.logger.error(`Error processing DOCX with docx-preview: ${error instanceof Error ? error.message : String(error)}`);
           return {
             fileType: fileEntity.fileType,
             content: fileEntity.fileContent.toString('base64'),
@@ -742,8 +744,8 @@ export class FileService {
       return textSegments;
 
     } catch (error) {
-      this.logger.error(`Error extracting PDF text segments: ${error.message}`);
-      this.logger.error(`Error stack: ${error.stack}`);
+      this.logger.error(`Error extracting PDF text segments: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(`Error stack: ${error instanceof Error ? error.stack : 'No stack available'}`);
       throw error;
     }
   }
@@ -783,8 +785,48 @@ export class FileService {
       };
 
     } catch (error) {
-      this.logger.error(`Error highlighting text in PDF: ${error.message}`);
+      this.logger.error(`Error highlighting text in PDF: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
+  }
+
+  async validateFileForPageDifficulty(fileId: string): Promise<{ projectId: string; branchId: string }> {
+    const file = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'status', 'extractLog', 'project', 'branch'],
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    const projectId = file.project?.id?.toString();
+    const branchId = file.branch?.id?.toString();
+
+    if (!projectId || !branchId) {
+      throw new BadRequestException('File must be linked to a project and a branch to assign page difficulty');
+    }
+
+    return { projectId, branchId };
+  }
+
+  async getFileMetadata(fileId: string): Promise<{ fileName: string; fileType: string; projectId?: string; branchId?: string }> {
+    const file = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'project', 'branch'],
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File with ID ${fileId} not found`);
+    }
+
+    return {
+      fileName: file.fileName,
+      fileType: file.fileType,
+      projectId: file.project?.id?.toString(),
+      branchId: file.branch?.id?.toString(),
+    };
   }
 }

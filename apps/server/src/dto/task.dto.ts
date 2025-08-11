@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsOptional, IsString, IsDateString, IsEnum, IsNumber, IsArray } from 'class-validator';
-import { TaskStatus } from '../db/mysql/entity/task.entity';
+import { StatusType } from '#LocalProject/Entities';
 
 export class CreateTaskDto {
   @IsNotEmpty()
@@ -12,6 +12,14 @@ export class CreateTaskDto {
 
   @IsOptional()
   assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
+
+  @IsOptional()
+  @IsString()
+  approverId?: string;
 
   @IsOptional()
   groupId?: string;
@@ -53,11 +61,19 @@ export class UpdateTaskDto {
   description?: string;
 
   @IsOptional()
-  @IsEnum(TaskStatus)
-  status?: TaskStatus;
+  @IsEnum(StatusType)
+  status?: StatusType;
 
   @IsOptional()
   assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
+
+  @IsOptional()
+  @IsString()
+  approverId?: string;
 
   @IsOptional()
   groupId?: string;
@@ -78,4 +94,64 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   language?: string;
+}
+
+export class AssignTaskDto {
+  @IsNotEmpty()
+  @IsString()
+  taskId: string;
+
+  @IsOptional()
+  @IsString()
+  assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
+
+  @IsOptional()
+  @IsString()
+  approverId?: string;
+
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+}
+
+export class ReassignTaskDto {
+  @IsNotEmpty()
+  @IsString()
+  taskId: string;
+
+  @IsOptional()
+  @IsString()
+  assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
+
+  @IsOptional()
+  @IsString()
+  approverId?: string;
+
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
 }

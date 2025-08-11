@@ -16,6 +16,16 @@ export interface Task {
     username: string;
     fullName?: string;
   };
+  reviewer?: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+  approver?: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
   createdBy: {
     id: string;
     username: string;
@@ -36,6 +46,8 @@ export interface CreateTaskDto {
   description?: string;
   projectId: string;
   assignedToId?: string;
+  reviewerId?: string;
+  approverId?: string;
   groupId?: string;
   dueDate?: string;
   dueDateTime?: string;
@@ -51,8 +63,74 @@ export interface UpdateTaskDto {
   description?: string;
   status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   assignedToId?: string;
+  reviewerId?: string;
+  approverId?: string;
   groupId?: string;
   dueDate?: string;
+}
+
+export interface AssignTaskDto {
+  taskId: string;
+  assignedToId?: string;
+  reviewerId?: string;
+  approverId?: string;
+  reason: string;
+  notes?: string;
+  dueDate?: string;
+}
+
+export interface ReassignTaskDto {
+  taskId: string;
+  assignedToId?: string;
+  reviewerId?: string;
+  approverId?: string;
+  reason: string;
+  notes?: string;
+  dueDate?: string;
+}
+
+export interface TaskAssignment {
+  id: string;
+  role: 'translator' | 'reviewer' | 'approver';
+  assignedTo: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+  assignedBy: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+  status: 'assigned' | 'reassigned' | 'accepted' | 'declined' | 'completed' | 'cancelled';
+  notes?: string;
+  dueDate?: string;
+  createdAt: string;
+}
+
+export interface TaskAssignmentHistory {
+  id: string;
+  changeType: 'assigned' | 'reassigned' | 'removed';
+  role: 'translator' | 'reviewer' | 'approver';
+  fromUser?: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+  toUser?: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+  changedBy: {
+    id: string;
+    username: string;
+    fullName?: string;
+  };
+  reason: string;
+  notes?: string;
+  dueDate?: string;
+  createdAt: string;
 }
 
 export interface ProjectFile {
@@ -138,6 +216,45 @@ export const taskService = {
     const { data } = await axiosInstance.patch(`/tasks/${id}/reopen`, {
       reason
     });
+    return data;
+  },
+
+  // Task Assignment Methods
+  async assignTask(dto: AssignTaskDto): Promise<{ message: string; task: Task }> {
+    const { data } = await axiosInstance.post('/task-assignment/assign', dto);
+    return data;
+  },
+
+  async reassignTask(dto: ReassignTaskDto): Promise<{ message: string; task: Task }> {
+    const { data } = await axiosInstance.post('/task-assignment/reassign', dto);
+    return data;
+  },
+
+  async getTaskAssignments(taskId: string): Promise<{
+    task: Task;
+    assignments: TaskAssignment[];
+    currentAssignments: {
+      translator?: { id: string; username: string; fullName?: string };
+      reviewer?: { id: string; username: string; fullName?: string };
+      approver?: { id: string; username: string; fullName?: string };
+    };
+  }> {
+    const { data } = await axiosInstance.get(`/task-assignment/task/${taskId}`);
+    return data;
+  },
+
+  async getAssignmentHistory(taskId: string): Promise<TaskAssignmentHistory[]> {
+    const { data } = await axiosInstance.get(`/task-assignment/task/${taskId}/history`);
+    return data;
+  },
+
+  async getProjectParticipants(projectId: string): Promise<Array<{
+    id: string;
+    username: string;
+    fullName?: string;
+    email: string;
+  }>> {
+    const { data } = await axiosInstance.get(`/task-assignment/project/${projectId}/participants`);
     return data;
   },
 

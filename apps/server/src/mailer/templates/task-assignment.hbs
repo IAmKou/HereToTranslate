@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Assignment Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .content {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .role-badge {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .task-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        .info-row {
+            margin-bottom: 15px;
+        }
+        .label {
+            font-weight: bold;
+            color: #495057;
+            display: inline-block;
+            width: 120px;
+        }
+        .value {
+            color: #6c757d;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+            font-size: 12px;
+            color: #6c757d;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📋 Task Assignment Notification</h1>
+    </div>
+    
+    <div class="content">
+        <div class="task-title">{{taskTitle}}</div>
+        
+        <div class="info-row">
+            <span class="label">Role:</span>
+            <span class="role-badge">{{role}}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="label">Project:</span>
+            <span class="value">{{projectName}}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="label">Reason:</span>
+            <span class="value">{{reason}}</span>
+        </div>
+        
+        {{#if notes}}
+        <div class="info-row">
+            <span class="label">Notes:</span>
+            <span class="value">{{notes}}</span>
+        </div>
+        {{/if}}
+        
+        <div class="info-row">
+            <span class="label">Due Date:</span>
+            <span class="value">{{#if dueDate}}{{dueDate}}{{else}}Not specified{{/if}}</span>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>This is an automated notification from HereToTranslate.</p>
+        <p>Please log in to your account to view task details and start working.</p>
+    </div>
+</body>
+</html>

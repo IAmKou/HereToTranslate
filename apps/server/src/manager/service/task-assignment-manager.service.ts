@@ -1,0 +1,292 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, DataSource } from 'typeorm';
+import { 
+  TaskEntity, 
+  TaskAssignmentHistoryEntity,
+  AssignmentRole,
+  AssignmentChangeType,
+  UserEntity,
+  ProjectEntity
+} from '#LocalProject/Entities';
+import { AssignTaskDto, ReassignTaskDto } from '#LocalProject/Dtos';
+import { NotificationManagerService } from './notification-manager.service';
+import { MailService } from '../../mailer/mailer.service';
+import { ProjectManagerService } from './project-manager.service';
+import { PermissionFlags } from '@here-to-translate/common';
+
+@Injectable()
+export class TaskAssignmentManagerService {
+  constructor(
+    @InjectRepository(TaskEntity)
+    private readonly taskRepository: Repository<TaskEntity>,
+    @InjectRepository(TaskAssignmentHistoryEntity)
+    private readonly assignmentHistoryRepository: Repository<TaskAssignmentHistoryEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectRepository: Repository<ProjectEntity>,
+    private readonly dataSource: DataSource,
+    private readonly notificationService: NotificationManagerService,
+    private readonly mailService: MailService,
+    private readonly projectManagerService: ProjectManagerService,
+  ) {}
+
+  async assignTask(projectId: string, dto: AssignTaskDto, assignedByUserId: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const task = await queryRunner.manager.findOne(TaskEntity, {
+        where: { id: BigInt(dto.taskId) },
+        relations: ['assignedTo', 'reviewer', 'approver'],
+      });
+
+      if (!task) {
+        throw new NotFoundException('Task not found');
+      }
+
+      await this.validateAssignmentPermissions(projectId, assignedByUserId);
+
+      const changes: Array<{
+        role: AssignmentRole;
+        fromUser?: UserEntity;
+        toUser?: UserEntity;
+        reason: string;
+      }> = [];
+
+      // Handle translator assignment
+      if (dto.assignedToId && dto.assignedToId !== task.assignedTo?.id?.toString()) {
+        const newTranslator = await queryRunner.manager.findOne(UserEntity, {
+          where: { id: BigInt(dto.assignedToId) },
+        });
+        if (!newTranslator) {
+          throw new NotFoundException('Translator not found');
+        }
+
+        changes.push({
+          role: AssignmentRole.TRANSLATOR,
+          fromUser: task.assignedTo,
+          toUser: newTranslator,
+          reason: dto.reason,
+        });
+
+        task.assignedTo = newTranslator;
+      }
+
+      // Handle reviewer assignment
+      if (dto.reviewerId && dto.reviewerId !== task.reviewer?.id?.toString()) {
+        const newReviewer = await queryRunner.manager.findOne(UserEntity, {
+          where: { id: BigInt(dto.reviewerId) },
+        });
+        if (!newReviewer) {
+          throw new NotFoundException('Reviewer not found');
+        }
+
+        changes.push({
+          role: AssignmentRole.REVIEWER,
+          fromUser: task.reviewer,
+          toUser: newReviewer,
+          reason: dto.reason,
+        });
+
+        task.reviewer = newReviewer;
+      }
+
+      // Handle approver assignment
+      if (dto.approverId && dto.approverId !== task.approver?.id?.toString()) {
+        const newApprover = await queryRunner.manager.findOne(UserEntity, {
+          where: { id: BigInt(dto.approverId) },
+        });
+        if (!newApprover) {
+          throw new NotFoundException('Approver not found');
+        }
+
+        changes.push({
+          role: AssignmentRole.APPROVER,
+          fromUser: task.approver,
+          toUser: newApprover,
+          reason: dto.reason,
+        });
+
+        task.approver = newApprover;
+      }
+
+      // Update due date if provided
+      if (dto.dueDate) {
+        task.dueDate = new Date(dto.dueDate);
+      }
+
+      // Save task
+      await queryRunner.manager.save(task);
+
+      // Create assignment history records
+      for (const change of changes) {
+        const history = this.assignmentHistoryRepository.create({
+          task,
+          changeType: change.fromUser ? AssignmentChangeType.REASSIGNED : AssignmentChangeType.ASSIGNED,
+          role: change.role,
+          fromUser: change.fromUser,
+          toUser: change.toUser,
+          changedBy: { id: BigInt(assignedByUserId) } as UserEntity,
+          reason: change.reason,
+          notes: dto.notes,
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        });
+
+        await queryRunner.manager.save(history);
+      }
+
+      // Send notifications and emails
+      await this.sendAssignmentNotifications(changes, task, dto.reason, dto.notes);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Task assigned successfully',
+        task: await this.getTaskWithAssignments(dto.taskId),
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async reassignTask(projectId: string, dto: ReassignTaskDto, reassignedByUserId: string) {
+    await this.validateReassignmentPermissions(projectId, reassignedByUserId);
+    return this.assignTask(projectId, dto, reassignedByUserId);
+  }
+
+  async getTaskAssignments(taskId: string) {
+    const task = await this.taskRepository.findOne({
+      where: { id: BigInt(taskId) },
+      relations: ['assignedTo', 'reviewer', 'approver', 'assignments'],
+    });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+
+    return {
+      task,
+      assignments: task.assignments,
+      currentAssignments: {
+        translator: task.assignedTo,
+        reviewer: task.reviewer,
+        approver: task.approver,
+      },
+    };
+  }
+
+  async getAssignmentHistory(taskId: string) {
+    return await this.assignmentHistoryRepository.find({
+      where: { task: { id: BigInt(taskId) } },
+      relations: ['fromUser', 'toUser', 'changedBy'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getProjectParticipants(projectId: string) {
+    const project = await this.projectRepository.findOne({
+      where: { id: BigInt(projectId) },
+      relations: ['members', 'createdBy'],
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const participants = new Set<UserEntity>();
+
+    // Add project creator
+    if (project.createdBy) {
+      participants.add(project.createdBy);
+    }
+
+    // Add project members
+    project.members.forEach(member => participants.add(member));
+
+    return Array.from(participants);
+  }
+
+  private async sendAssignmentNotifications(
+    changes: Array<{
+      role: AssignmentRole;
+      fromUser?: UserEntity;
+      toUser?: UserEntity;
+      reason: string;
+    }>,
+    task: TaskEntity,
+    reason: string,
+    notes?: string,
+  ) {
+    // Resolve project name if available
+    let projectName = 'Unknown Project';
+    if (task.projectId) {
+      const project = await this.projectRepository.findOne({
+        where: { id: BigInt(task.projectId) },
+        select: ['name'],
+      });
+      if (project?.name) projectName = project.name;
+    }
+
+    for (const change of changes) {
+      if (change.toUser) {
+        await this.notificationService.createNotification({
+          userId: change.toUser.id,
+          type: 'TASK_ASSIGNED',
+          message: `Assigned as ${change.role} to task "${task.title}". Reason: ${reason}${notes ? ` | Notes: ${notes}` : ''}`,
+          createdBy: task.createdBy.id,
+        });
+
+        try {
+          await this.mailService.sendTaskAssignmentNotification(
+            change.toUser.email,
+            {
+              taskTitle: task.title,
+              role: change.role,
+              reason,
+              notes,
+              projectName,
+            }
+          );
+        } catch (error) {
+          console.error('Failed to send email notification:', error);
+        }
+      }
+
+      if (change.fromUser) {
+        await this.notificationService.createNotification({
+          userId: change.fromUser.id,
+          type: 'TASK_REASSIGNED',
+          message: `You have been unassigned as ${change.role} from task "${task.title}". Reason: ${reason}`,
+          createdBy: task.createdBy.id,
+        });
+      }
+    }
+  }
+
+  private async getTaskWithAssignments(taskId: string) {
+    return await this.taskRepository.findOne({
+      where: { id: BigInt(taskId) },
+      relations: ['assignedTo', 'reviewer', 'approver', 'assignments', 'status'],
+    });
+  }
+
+  private async validateAssignmentPermissions(projectId: string, byUserId: string) {
+    await this.projectManagerService.testPermissions(
+      BigInt(projectId),
+      BigInt(byUserId),
+      PermissionFlags.ManageTasks
+    );
+  }
+
+  private async validateReassignmentPermissions(projectId: string, byUserId: string) {
+    await this.projectManagerService.testPermissions(
+      BigInt(projectId),
+      BigInt(byUserId),
+      PermissionFlags.ManageTasks
+    );
+  }
+}

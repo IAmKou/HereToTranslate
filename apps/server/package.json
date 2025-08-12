@@ -61,6 +61,20 @@
           "jestConfig": "apps/server/jest.config.js",
           "passWithNoTests": true
         }
+      },
+      "migration:generate": {
+        "executor": "@nx/js:node",
+        "options": {
+          "buildTarget": "@here-to-translate/server:build",
+          "script": "node dist/apps/server/migration-generate.js"
+        }
+      },
+      "migration:run": {
+        "executor": "@nx/js:node",
+        "options": {
+          "buildTarget": "@here-to-translate/server:build",
+          "script": "node dist/apps/server/migration-run.js"
+        }
       }
     },
     "dependencies": {

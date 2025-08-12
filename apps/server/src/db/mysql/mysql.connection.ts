@@ -56,10 +56,12 @@ export class MySqlConnection {
       ssl : {
         rejectUnauthorized: false,
       },
-      synchronize: false,
+      synchronize: process.env.NODE_ENV === 'development',
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
+      migrations: process.env.NODE_ENV === 'production' ? ['dist/migrations/*.js'] : [],
+      migrationsRun: process.env.NODE_ENV === 'production',
       entities: [UserEntity, BranchEntity, ProjectEntity, CategoryEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, ProjectInvitationEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,

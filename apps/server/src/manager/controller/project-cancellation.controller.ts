@@ -1,362 +1,243 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
-  ProjectEntity,
-  RequestEntity,
-  RequestStatus,
-  ProjectCancellationEntity,
-  CancellationType,
-  CancellationStatus,
-  UserEntity,
-  TransactionEntity,
-  TransactionStatus,
-} from '#LocalProject/Entities';
-import { PaypalService } from '#LocalProject/Managers/service/payment-manager.service';
-import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
-import { MailerService } from '@nestjs-modules/mailer';
-import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
-import { CancellationAction } from '#LocalProject/Dtos';
+  Controller,
+  Post,
+  Get,
+  Put,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import { ProjectCancellationService } from '../service/project-cancellation.service';
+import {
+  CreateCancellationRequestDto,
+  RespondToCancellationDto,
+  CancellationResponseDto,
+  CancellationSummaryDto,
+} from '#LocalProject/Dtos';
 
-@Injectable()
-export class ProjectCancellationService {
-  private readonly logger = new Logger(ProjectCancellationService.name);
-
+@Controller('project-cancellation')
+@UseGuards(JwtAuthGuard)
+export class ProjectCancellationController {
   constructor(
-    @InjectRepository(ProjectCancellationEntity)
-    private readonly cancellationRepo: Repository<ProjectCancellationEntity>,
-    @InjectRepository(RequestEntity)
-    private readonly requestRepo: Repository<RequestEntity>,
-    @InjectRepository(ProjectEntity)
-    private readonly projectRepo: Repository<ProjectEntity>,
-    @InjectRepository(TransactionEntity)
-    private readonly transactionRepo: Repository<TransactionEntity>,
-    private readonly paymentService: PaypalService,
-    private readonly projectService: ProjectManagerService,
-    private readonly mailerService: MailerService,
-    private readonly notificationService: NotificationManagerService,
+    private readonly cancellationService: ProjectCancellationService
   ) {}
 
-  async requestCancellation(
-    requestId: bigint,
-    initiatorId: bigint,
-    reason: string,
-    action: CancellationAction
-  ): Promise<ProjectCancellationEntity> {
-    this.logger.log(`Processing cancellation request for request ${requestId} by user ${initiatorId}`);
-
-    const request = await this.requestRepo.findOne({
-      where: { id: requestId },
-      relations: ['requester', 'assignee', 'project'],
-    });
-
-    if (!request) {
-      throw new NotFoundException('Request not found');
-    }
-
-    // Validate that the initiator is either requester or translator
-    const isRequester = request.requester.id === initiatorId;
-    const isTranslator = request.assignee?.id === initiatorId;
-
-    if (!isRequester && !isTranslator) {
-      throw new ForbiddenException('Only the requester or translator can cancel this request');
-    }
-
-    // Check if request can be cancelled
-    const cancellableStatuses = [
-      RequestStatus.Approved,
-      RequestStatus.WaitingApproval,
-      RequestStatus.ExtensionRequested,
-      RequestStatus.ExtensionApproved,
-    ];
-
-    if (!cancellableStatuses.includes(request.status)) {
-      throw new BadRequestException(`Request cannot be cancelled in status: ${request.status}`);
-    }
-
-    // Check for existing pending cancellation
-    const existingCancellation = await this.cancellationRepo.findOne({
-      where: {
-        request: { id: requestId },
-        status: CancellationStatus.PENDING,
-      },
-    });
-
-    if (existingCancellation) {
-      throw new BadRequestException('There is already a pending cancellation request');
-    }
-
-    const cancellationType = isRequester ? CancellationType.REQUESTER_INITIATED : CancellationType.TRANSLATOR_INITIATED;
-    const requiresConfirmation = action === CancellationAction.DELETE;
-    const isArchiveOnly = action === CancellationAction.ARCHIVE;
-
-    // Create cancellation request
-    const cancellation = this.cancellationRepo.create({
-      project: request.project,
-      request,
-      initiator: { id: initiatorId },
-      cancellationType,
-      reason,
-      requiresConfirmation,
-      isArchiveOnly,
-      status: requiresConfirmation ? CancellationStatus.PENDING : CancellationStatus.CONFIRMED,
-    });
-
-    const savedCancellation = await this.cancellationRepo.save(cancellation);
-
-    if (requiresConfirmation) {
-      // Send notification to the other party for confirmation
-      const otherPartyId = isRequester ? request.assignee?.id : request.requester.id;
-      if (otherPartyId) {
-        await this.sendCancellationNotification(savedCancellation, otherPartyId);
-      }
-
-      // Update request status
-      request.status = RequestStatus.CancellationPending;
-      await this.requestRepo.save(request);
-    } else {
-      // Process cancellation immediately for archive-only requests
-      await this.processCancellation(savedCancellation);
-    }
-
-    return savedCancellation;
-  }
-
-  async respondToCancellation(
-    cancellationId: bigint,
-    responderId: bigint,
-    approved: boolean,
-    responseReason?: string
-  ): Promise<void> {
-    const cancellation = await this.cancellationRepo.findOne({
-      where: { id: cancellationId },
-      relations: ['request', 'project', 'initiator'],
-    });
-
-    if (!cancellation) {
-      throw new NotFoundException('Cancellation request not found');
-    }
-
-    if (cancellation.status !== CancellationStatus.PENDING) {
-      throw new BadRequestException('Cancellation request has already been responded to');
-    }
-
-    // Validate responder
-    const request = cancellation.request;
-    const isValidResponder = 
-      (cancellation.cancellationType === CancellationType.REQUESTER_INITIATED && request.assignee?.id === responderId) ||
-      (cancellation.cancellationType === CancellationType.TRANSLATOR_INITIATED && request.requester.id === responderId);
-
-    if (!isValidResponder) {
-      throw new ForbiddenException('You are not authorized to respond to this cancellation request');
-    }
-
-    // Update cancellation
-    cancellation.responder = { id: responderId } as UserEntity;
-    cancellation.status = approved ? CancellationStatus.CONFIRMED : CancellationStatus.REJECTED;
-    cancellation.responseReason = responseReason;
-    cancellation.respondedAt = new Date();
-
-    await this.cancellationRepo.save(cancellation);
-
-    if (approved) {
-      // Process the cancellation
-      await this.processCancellation(cancellation);
-    } else {
-      // Revert request status back to previous state
-      request.status = RequestStatus.Approved; // or determine previous status
-      await this.requestRepo.save(request);
-
-      // Notify initiator of rejection
-      await this.sendCancellationRejectedNotification(cancellation);
-    }
-  }
-
-  private async processCancellation(cancellation: ProjectCancellationEntity): Promise<void> {
-    this.logger.log(`Processing cancellation ${cancellation.id}`);
-
-    const request = cancellation.request;
-    const project = cancellation.project;
+  @Get('summary/:requestId')
+  async getCancellationSummary(
+    @Param('requestId') requestId: string,
+    @Request() req: any
+  ): Promise<CancellationSummaryDto> {
+    const userId = BigInt(req.user.id);
 
     try {
-      // Handle refunds/penalties based on who initiated
-      if (cancellation.cancellationType === CancellationType.TRANSLATOR_INITIATED) {
-        // Translator cancels - full refund to requester
-        await this.paymentService.refundDeposit(request);
-        this.logger.log(`Full refund processed for translator-initiated cancellation`);
-      } else {
-        // Requester cancels - deposit is lost (no refund)
-        await this.markDepositAsLost(request);
-        this.logger.log(`Deposit marked as lost for requester-initiated cancellation`);
-      }
-
-      // Update request status
-      if (cancellation.isArchiveOnly) {
-        request.status = RequestStatus.Archived;
-        await this.requestRepo.save(request);
-        
-        // Archive the project
-        await this.projectService.archive(project);
-      } else {
-        // Delete request (mark as cancelled)
-        request.status = RequestStatus.Cancelled;
-        await this.requestRepo.save(request);
-        
-        // Delete the project
-        await this.projectService.deleteProject(project.id, cancellation.initiator.id);
-      }
-
-      // Mark cancellation as completed
-      cancellation.status = CancellationStatus.COMPLETED;
-      cancellation.completedAt = new Date();
-      await this.cancellationRepo.save(cancellation);
-
-      // Send completion notifications
-      await this.sendCancellationCompletedNotifications(cancellation);
-
-      this.logger.log(`Cancellation ${cancellation.id} processed successfully`);
+      return await this.cancellationService.getCancellationSummary(
+        BigInt(requestId),
+        userId
+      );
     } catch (error) {
-      this.logger.error(`Failed to process cancellation ${cancellation.id}:`, error);
-      throw error;
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 
-  private async markDepositAsLost(request: RequestEntity): Promise<void> {
-    // Find the deposit transaction
-    const depositTransaction = await this.transactionRepo.findOne({
-      where: {
-        request: { id: request.id },
-        user: { id: request.requester.id },
-        status: TransactionStatus.Pending,
-      },
-    });
+  @Post('request')
+  async requestCancellation(
+    @Body() dto: CreateCancellationRequestDto,
+    @Request() req: any
+  ) {
+    const userId = BigInt(req.user.id);
 
-    if (depositTransaction) {
-      // Mark as completed (lost to platform)
-      depositTransaction.status = TransactionStatus.Completed;
-      await this.transactionRepo.save(depositTransaction);
+    try {
+      const cancellation = await this.cancellationService.requestCancellation(
+        BigInt(dto.requestId),
+        userId,
+        dto.reason,
+        dto.action
+      );
+
+      return {
+        success: true,
+        message: cancellation.requiresConfirmation
+          ? 'Cancellation request sent for confirmation'
+          : 'Project has been archived successfully',
+        cancellation: {
+          id: cancellation.id.toString(),
+          requestId: cancellation.request.id.toString(),
+          projectId: cancellation.project.id.toString(),
+          cancellationType: cancellation.cancellationType,
+          status: cancellation.status,
+          reason: cancellation.reason,
+          requiresConfirmation: cancellation.requiresConfirmation,
+          isArchiveOnly: cancellation.isArchiveOnly,
+          createdAt: cancellation.createdAt,
+        },
+      };
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 
-  private async sendCancellationNotification(
-    cancellation: ProjectCancellationEntity,
-    recipientId: bigint
-  ): Promise<void> {
-    const isRequesterInitiated = cancellation.cancellationType === CancellationType.REQUESTER_INITIATED;
-    
-    await this.notificationService.createNotification({
-      userId: recipientId,
-      type: 'CANCELLATION_REQUEST',
-      message: `${isRequesterInitiated ? 'Requester' : 'Translator'} has requested to ${cancellation.isArchiveOnly ? 'archive' : 'delete'} the project: "${cancellation.request.title}"`,
-      createdBy: cancellation.initiator.id,
-    });
+  @Put('respond')
+  async respondToCancellation(
+    @Body() dto: RespondToCancellationDto,
+    @Request() req: any
+  ) {
+    const userId = BigInt(req.user.id);
 
-    // Send email notification
+    try {
+      await this.cancellationService.respondToCancellation(
+        BigInt(dto.cancellationId),
+        userId,
+        dto.approved,
+        dto.responseReason
+      );
+
+      return {
+        success: true,
+        message: `Cancellation request ${dto.approved ? 'approved' : 'rejected'} successfully`,
+      };
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
+    }
   }
 
-  private async sendCancellationRejectedNotification(
-    cancellation: ProjectCancellationEntity
-  ): Promise<void> {
-    await this.notificationService.createNotification({
-      userId: cancellation.initiator.id,
-      type: 'CANCELLATION_REJECTED',
-      message: `Your cancellation request for project "${cancellation.request.title}" has been rejected.`,
-      createdBy: cancellation.responder?.id || BigInt(1),
-    });
+  @Get('pending')
+  async getPendingCancellations(@Request() req: any) {
+    const userId = BigInt(req.user.id);
+
+    try {
+      const cancellations = await this.cancellationService.getPendingCancellations(userId);
+
+      return cancellations.map((cancellation): CancellationResponseDto => ({
+        id: Number(cancellation.id),
+        projectId: Number(cancellation.project.id),
+        requestId: Number(cancellation.request.id),
+        initiatorId: Number(cancellation.initiator.id),
+        responderId: cancellation.responder ? Number(cancellation.responder.id) : undefined,
+        cancellationType: cancellation.cancellationType,
+        status: cancellation.status,
+        reason: cancellation.reason,
+        responseReason: cancellation.responseReason,
+        requiresConfirmation: cancellation.requiresConfirmation,
+        isArchiveOnly: cancellation.isArchiveOnly,
+        createdAt: cancellation.createdAt,
+        respondedAt: cancellation.respondedAt,
+        completedAt: cancellation.completedAt,
+      }));
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
+    }
   }
 
-  private async sendCancellationCompletedNotifications(
-    cancellation: ProjectCancellationEntity
-  ): Promise<void> {
-    const request = cancellation.request;
-    const action = cancellation.isArchiveOnly ? 'archived' : 'deleted';
-    
-    // Notify initiator
-    await this.notificationService.createNotification({
-      userId: cancellation.initiator.id,
-      type: 'CANCELLATION_COMPLETED',
-      message: `Project "${request.title}" has been ${action} successfully.`,
-      createdBy: BigInt(1), // System
-    });
+  @Get('history/:requestId')
+  async getCancellationHistory(
+    @Param('requestId') requestId: string,
+    @Request() req: any
+  ) {
+    const userId = BigInt(req.user.id);
 
-    // Notify responder if exists
-    if (cancellation.responder) {
-      await this.notificationService.createNotification({
-        userId: cancellation.responder.id,
-        type: 'CANCELLATION_COMPLETED',
-        message: `Project "${request.title}" has been ${action}.`,
-        createdBy: BigInt(1), // System
+    try {
+      // First verify user has access to this request
+      const summary = await this.cancellationService.getCancellationSummary(
+        BigInt(requestId),
+        userId
+      );
+
+      if (!summary.canCancel && !summary.message.includes('status')) {
+        throw new BadRequestException('You are not authorized to view this request');
+      }
+
+      // Get all cancellations for this request
+      const cancellations = await this.cancellationService['cancellationRepo'].find({
+        where: { request: { id: BigInt(requestId) } },
+        relations: ['initiator', 'responder'],
+        order: { createdAt: 'DESC' },
       });
+
+      return cancellations.map((cancellation): CancellationResponseDto => ({
+        id: Number(cancellation.id),
+        projectId: Number(cancellation.project.id),
+        requestId: Number(cancellation.request.id),
+        initiatorId: Number(cancellation.initiator.id),
+        responderId: cancellation.responder ? Number(cancellation.responder.id) : undefined,
+        cancellationType: cancellation.cancellationType,
+        status: cancellation.status,
+        reason: cancellation.reason,
+        responseReason: cancellation.responseReason,
+        requiresConfirmation: cancellation.requiresConfirmation,
+        isArchiveOnly: cancellation.isArchiveOnly,
+        createdAt: cancellation.createdAt,
+        respondedAt: cancellation.respondedAt,
+        completedAt: cancellation.completedAt,
+      }));
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }
 
-  async getCancellationSummary(requestId: bigint, userId: bigint): Promise<any> {
-    const request = await this.requestRepo.findOne({
-      where: { id: requestId },
-      relations: ['requester', 'assignee', 'project'],
-    });
+  @Get('details/:cancellationId')
+  async getCancellationDetails(
+    @Param('cancellationId') cancellationId: string,
+    @Request() req: any
+  ) {
+    const userId = BigInt(req.user.id);
 
-    if (!request) {
-      throw new NotFoundException('Request not found');
-    }
+    try {
+      const cancellation = await this.cancellationService['cancellationRepo'].findOne({
+        where: { id: BigInt(cancellationId) },
+        relations: ['request', 'project', 'initiator', 'responder'],
+      });
 
-    const isRequester = request.requester.id === userId;
-    const isTranslator = request.assignee?.id === userId;
+      if (!cancellation) {
+        throw new NotFoundException('Cancellation request not found');
+      }
 
-    if (!isRequester && !isTranslator) {
+      // Verify user has access
+      const hasAccess =
+        cancellation.initiator.id === userId ||
+        cancellation.responder?.id === userId ||
+        cancellation.request.requester.id === userId ||
+        cancellation.request.assignee?.id === userId;
+
+      if (!hasAccess) {
+        throw new BadRequestException('You are not authorized to view this cancellation');
+      }
+
       return {
-        canCancel: false,
-        message: 'You are not authorized to cancel this request',
+        id: Number(cancellation.id),
+        projectId: Number(cancellation.project.id),
+        requestId: Number(cancellation.request.id),
+        initiatorId: Number(cancellation.initiator.id),
+        responderId: cancellation.responder ? Number(cancellation.responder.id) : undefined,
+        cancellationType: cancellation.cancellationType,
+        status: cancellation.status,
+        reason: cancellation.reason,
+        responseReason: cancellation.responseReason,
+        requiresConfirmation: cancellation.requiresConfirmation,
+        isArchiveOnly: cancellation.isArchiveOnly,
+        createdAt: cancellation.createdAt,
+        respondedAt: cancellation.respondedAt,
+        completedAt: cancellation.completedAt,
+        request: {
+          id: Number(cancellation.request.id),
+          title: cancellation.request.title,
+          status: cancellation.request.status,
+          dealAmount: cancellation.request.dealAmount,
+        },
+        project: {
+          id: Number(cancellation.project.id),
+          name: cancellation.project.name,
+          isArchived: cancellation.project.isArchived,
+        },
       };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
     }
-
-    // Check if request can be cancelled
-    const cancellableStatuses = [
-      RequestStatus.Approved,
-      RequestStatus.WaitingApproval,
-      RequestStatus.ExtensionRequested,
-      RequestStatus.ExtensionApproved,
-    ];
-
-    if (!cancellableStatuses.includes(request.status)) {
-      return {
-        canCancel: false,
-        message: `Request cannot be cancelled in status: ${request.status}`,
-      };
-    }
-
-    const cancellationType = isRequester ? 'REQUESTER_INITIATED' : 'TRANSLATOR_INITIATED';
-    let refundAmount = 0;
-    let penaltyAmount = 0;
-
-    if (isTranslator) {
-      // Translator cancels - requester gets full refund
-      refundAmount = request.dealAmount;
-    } else {
-      // Requester cancels - loses deposit
-      penaltyAmount = request.dealAmount;
-    }
-
-    return {
-      canCancel: true,
-      cancellationType,
-      refundAmount,
-      penaltyAmount,
-      requiresConfirmation: true, // For delete action
-      message: isTranslator 
-        ? 'If you cancel, the requester will receive a full refund.'
-        : 'If you cancel, you will lose your deposit.',
-    };
-  }
-
-  async getPendingCancellations(userId: bigint): Promise<ProjectCancellationEntity[]> {
-    return this.cancellationRepo.find({
-      where: [
-        { initiator: { id: userId }, status: CancellationStatus.PENDING },
-        { responder: { id: userId }, status: CancellationStatus.PENDING },
-      ],
-      relations: ['request', 'project', 'initiator', 'responder'],
-      order: { createdAt: 'DESC' },
-    });
   }
 }

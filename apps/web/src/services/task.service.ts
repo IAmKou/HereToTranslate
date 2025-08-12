@@ -110,7 +110,7 @@ export interface TaskAssignment {
 
 export interface TaskAssignmentHistory {
   id: string;
-  changeType: 'assigned' | 'reassigned' | 'removed';
+  action: 'assigned' | 'reassigned' | 'accepted' | 'declined' | 'completed' | 'cancelled';
   role: 'translator' | 'reviewer' | 'approver';
   fromUser?: {
     id: string;
@@ -122,14 +122,19 @@ export interface TaskAssignmentHistory {
     username: string;
     fullName?: string;
   };
-  changedBy: {
+  actionBy: {
     id: string;
     username: string;
     fullName?: string;
   };
-  reason: string;
+  reason?: string;
   notes?: string;
-  dueDate?: string;
+  metadata?: {
+    previousStatus?: string;
+    newStatus?: string;
+    pagesAffected?: number[];
+    estimatedImpact?: string;
+  };
   createdAt: string;
 }
 

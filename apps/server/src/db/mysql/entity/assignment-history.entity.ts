@@ -6,9 +6,6 @@ import { TaskEntity } from './task.entity';
 export enum HistoryAction {
   ASSIGNED = 'assigned',
   REASSIGNED = 'reassigned',
-  ACCEPTED = 'accepted',
-  DECLINED = 'declined',
-  COMPLETED = 'completed',
   CANCELLED = 'cancelled',
 }
 

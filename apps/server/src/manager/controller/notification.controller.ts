@@ -17,7 +17,8 @@ import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
-import { NotificationManagerService, CreateNotificationDto, UpdateNotificationDto } from '../service/notification-manager.service';
+import { NotificationManagerService } from '../service/notification-manager.service';
+import type { CreateNotificationDto, UpdateNotificationDto } from '../service/notification-manager.service';
 
 @Controller('notifications')
 @UseInterceptors(JsonSerializerInterceptor)

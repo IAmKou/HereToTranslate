@@ -20,7 +20,17 @@ import {
   TransactionEntity,
   CommitEntity,
   ProjectTagEntity, TranslationApprovalEntity, WalletEntity,
-  NotificationEntity, SettingsEntity
+  NotificationEntity, SettingsEntity,
+  TaskStatusEntity,
+  AssignmentHistoryEntity,
+  DeadlineExtensionEntity,
+  DifficultyConfigEntity,
+  PageDifficultyEntity,
+  ProjectCancellationEntity,
+  TaskAssignmentEntity,
+  WorkflowEntity,
+  WorkflowTransitionEntity,
+  TaskStatusHistoryEntity
 } from '#LocalProject/Entities';
 import { TaskHistoryEntity } from './entity/task-history.entity';
 import { ProjectActivity } from './entity/project-activity.entity';
@@ -46,14 +56,15 @@ export class MySqlConnection {
       ssl : {
         rejectUnauthorized: false,
       },
-      synchronize: true,
+      synchronize: false,
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
       entities: [UserEntity, BranchEntity, ProjectEntity, CategoryEntity, FileEntity,
         ProjectGroupEntity, ProjectRoleEntity, ProjectInvitationEntity, ReportEntity, RequestEntity, TaskEntity,
         TransactionEntity, CommitEntity, ProjectTagEntity, ProjectDiscussionCommentEntity,
-        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity, NotificationEntity, SettingsEntity, TaskHistoryEntity, ProjectActivity],
+        ProjectDiscussionThreadEntity, DiscussionAccessPolicyEntity, UserTypeEntity, TranslationApprovalEntity, WalletEntity, NotificationEntity, SettingsEntity, TaskHistoryEntity, ProjectActivity,
+        TaskStatusEntity, AssignmentHistoryEntity, DeadlineExtensionEntity, DifficultyConfigEntity, PageDifficultyEntity, ProjectCancellationEntity, TaskAssignmentEntity, WorkflowEntity, WorkflowTransitionEntity, TaskStatusHistoryEntity],
     });
     MySqlConnection.instance = this;
   }

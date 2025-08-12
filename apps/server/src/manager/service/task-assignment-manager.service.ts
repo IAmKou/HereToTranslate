@@ -3,9 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { 
   TaskEntity, 
-  TaskAssignmentHistoryEntity,
+  AssignmentHistoryEntity,
   AssignmentRole,
-  AssignmentChangeType,
+  HistoryAction,
   UserEntity,
   ProjectEntity
 } from '#LocalProject/Entities';
@@ -20,8 +20,8 @@ export class TaskAssignmentManagerService {
   constructor(
     @InjectRepository(TaskEntity)
     private readonly taskRepository: Repository<TaskEntity>,
-    @InjectRepository(TaskAssignmentHistoryEntity)
-    private readonly assignmentHistoryRepository: Repository<TaskAssignmentHistoryEntity>,
+    @InjectRepository(AssignmentHistoryEntity)
+    private readonly assignmentHistoryRepository: Repository<AssignmentHistoryEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
     private readonly dataSource: DataSource,
@@ -105,14 +105,13 @@ export class TaskAssignmentManagerService {
       for (const change of changes) {
         const history = this.assignmentHistoryRepository.create({
           task,
-          changeType: change.fromUser ? AssignmentChangeType.REASSIGNED : AssignmentChangeType.ASSIGNED,
+          action: change.fromUser ? HistoryAction.REASSIGNED : HistoryAction.ASSIGNED,
           role: change.role,
           fromUser: change.fromUser,
           toUser: change.toUser,
-          changedBy: { id: BigInt(assignedByUserId) } as UserEntity,
+          actionBy: { id: BigInt(assignedByUserId) } as UserEntity,
           reason: change.reason,
           notes: dto.notes,
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         });
 
         await queryRunner.manager.save(history);
@@ -173,7 +172,7 @@ export class TaskAssignmentManagerService {
   async getAssignmentHistory(taskId: string) {
     return await this.assignmentHistoryRepository.find({
       where: { task: { id: BigInt(taskId) } },
-      relations: ['fromUser', 'toUser', 'changedBy'],
+      relations: ['fromUser', 'toUser', 'actionBy'],
       order: { createdAt: 'DESC' },
     });
   }

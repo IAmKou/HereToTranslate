@@ -9,7 +9,17 @@ import {
   ProjectTagEntity,
   RequestEntity, TransactionEntity,
   UserEntity, UserTypeEntity, WalletEntity, TranslationApprovalEntity,
-  BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity
+  BranchEntity, CommitEntity, FileEntity, TaskEntity, NotificationEntity, SettingsEntity,
+  TaskStatusEntity,
+  AssignmentHistoryEntity,
+  DeadlineExtensionEntity,
+  DifficultyConfigEntity,
+  PageDifficultyEntity,
+  ProjectCancellationEntity,
+  TaskAssignmentEntity,
+  WorkflowEntity,
+  WorkflowTransitionEntity,
+  TaskStatusHistoryEntity
 } from '#LocalProject/Entities';
 import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
 import { RequestRegistrationEntity } from '#LocalProject/Entities';
@@ -47,7 +57,6 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
 import { FileService } from './service/file-manager.service';
 import { TranslationService } from './service/translation-manager.service';
 import { FileController } from './controller/file.controller';
-import { PermissionsController } from './controller/project-role.controller';
 import { TranslationController } from './controller/translation.controller';
 import { AdminTransactionController } from './controller/admin-transaction.controller';
 import { ChatController } from '../chat/chat.controller';
@@ -67,6 +76,18 @@ import { ProjectInvitationService } from './service/project-invitation.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
 import { ActivityManagerService } from './service/activity-manager.service';
 import { ActivityController } from './controller/activity.controller';
+import { PageDifficultyService } from './service/page-difficulty.service';
+import { ProjectCancellationService } from './service/project-cancellation.service';
+import { TaskAssignmentManagerService } from './service/task-assignment-manager.service';
+import { WorkflowManagerService } from './service/workflow-manager.service';
+import { DeadlineCheckerService } from './service/deadlinechecker.service';
+import { StatusManagerService } from './service/task-status-manager.service';
+import { DeadlineManagementController } from './controller/deadline-management.controller';
+import { PageDifficultyController } from './controller/page-difficulty.controller';
+import { ProjectCancellationController } from './controller/project-cancellation.controller';
+import { StatusController } from './controller/status.controller';
+import { TaskAssignmentController } from './controller/task-assignment.controller';
+import { WorkflowController } from './controller/workflow.controller';
 
 @Global()
 @Module({
@@ -75,6 +96,7 @@ import { ActivityController } from './controller/activity.controller';
     MongoModule,
     TypeOrmModule.forFeature([
       CategoryEntity,
+      TaskStatusEntity,
       DiscussionAccessPolicyEntity,
       ProjectEntity,
       ProjectDiscussionThreadEntity,
@@ -99,6 +121,15 @@ import { ActivityController } from './controller/activity.controller';
       RequestRegistrationEntity,
       SettingsEntity,
       ProjectActivity,
+      AssignmentHistoryEntity,
+      DeadlineExtensionEntity,
+      DifficultyConfigEntity,
+      PageDifficultyEntity,
+      ProjectCancellationEntity,
+      TaskAssignmentEntity,
+      WorkflowEntity,
+      WorkflowTransitionEntity,
+      TaskStatusHistoryEntity,
     ]),
     BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
   ],
@@ -127,6 +158,12 @@ import { ActivityController } from './controller/activity.controller';
     ProjectInvitationService,
     FeeService,
     ActivityManagerService,
+    DeadlineCheckerService,
+    PageDifficultyService,
+    ProjectCancellationService,
+    TaskAssignmentManagerService,
+    StatusManagerService,
+    WorkflowManagerService,
   ],
   exports: [
     CategoryManagerService,
@@ -150,31 +187,41 @@ import { ActivityController } from './controller/activity.controller';
     AiChatService,
     ProjectInvitationService,
     FeeService,
-    ActivityManagerService
+    ActivityManagerService,
+    DeadlineCheckerService,
+    PageDifficultyService,
+    ProjectCancellationService,
+    TaskAssignmentManagerService,
+    StatusManagerService,
+    WorkflowManagerService,
   ],
   controllers: [
-    CategoryController,
-    ProjectController,
-    RequestController,
-    UserController,
-    ProjectRoleController,
-    DiscussionController,
-    GroupController,
-    ProjectTagController,
-    WalletController,
-    PaymentController,
-    FileController,
-    PermissionsController,
-    TranslationController,
-    AdminTransactionController,
-    ChatController,
-    TaskController,
-    NotificationController,
-    AiChatController,
-    NotificationController,
-    AdminNotificationController,
-    ProjectInvitationController,
-    ActivityController
+    // CategoryController,
+    // ProjectController,
+    // RequestController,
+    // UserController,
+    // ProjectRoleController,
+    // DiscussionController,
+    // GroupController,
+    // ProjectTagController,
+    // WalletController,
+    // PaymentController,
+    // FileController,
+    // TranslationController,
+    // AdminTransactionController,
+    // ChatController,
+    // TaskController,
+    // NotificationController,
+    // AiChatController,
+    // AdminNotificationController,
+    // ProjectInvitationController,
+    // ActivityController,
+    // DeadlineManagementController,
+    // PageDifficultyController,
+    // ProjectCancellationController,
+    // StatusController,
+    // TaskAssignmentController,
+    // WorkflowController,
   ]
 })
 export class ManagersModule {

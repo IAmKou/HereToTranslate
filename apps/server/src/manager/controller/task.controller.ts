@@ -16,7 +16,7 @@ import { JsonSerializerInterceptor } from '../../util/json-serializer.intercepto
 import { TaskManagerService } from '../service/task-manager.service';
 import { CreateTaskDto, UpdateTaskDto } from '../../dto/task.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
-import { AuthenticatedRequest } from '../../auth/types';
+import type { AuthenticatedRequest } from '../../auth/types';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)

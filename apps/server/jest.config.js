@@ -16,7 +16,7 @@ module.exports = {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(@octokit|@octokit/rest|@octokit/core|@octokit/request|@octokit/types|@octokit/auth-token|@octokit/graphql|@octokit/plugin-rest-endpoint-methods|@octokit/plugin-paginate-rest|@octokit/plugin-request-log|@octokit/plugin-retry)/)',
+    'node_modules/(?!(@octokit|@octokit/rest|@octokit/core|@octokit/request|@octokit/types|@octokit/auth-token|@octokit/graphql|@octokit/plugin-rest-endpoint-methods|@octokit/plugin-paginate-rest|@octokit/plugin-request-log|@octokit/plugin-retry|universal-user-agent|before-after-hook)/)',
   ],
   moduleFileExtensions: ['ts', 'js', 'html'],
   testEnvironment: 'node',

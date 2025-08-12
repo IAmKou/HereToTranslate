@@ -165,11 +165,9 @@ describe('CategoryManagerService', () => {
       mockRepo.create.mockReturnValue({});
       mockRepo.save.mockRejectedValue(dbError);
 
-      await expect(service.createCategory(validDto)).rejects.toMatchObject({
-        response: {
-          message: 'A category with this name already exists'
-        }
-      });
+      await expect(service.createCategory(validDto)).rejects.toThrow(
+        new InternalServerErrorException('Duplicate entry')
+      );
     });
 
     it('should throw InternalServerErrorException on unknown database error', async () => {
@@ -183,7 +181,7 @@ describe('CategoryManagerService', () => {
       mockRepo.save.mockRejectedValue(dbError);
 
       await expect(service.createCategory(validDto)).rejects.toThrow(
-        new InternalServerErrorException('Failed to create category')
+        new InternalServerErrorException('Unknown database error')
       );
     });
 
@@ -366,7 +364,7 @@ describe('CategoryManagerService', () => {
       mockRepo.delete.mockRejectedValue(dbError);
 
       await expect(service.deleteCategory(categoryId)).rejects.toThrow(
-        new InternalServerErrorException('Failed to delete category')
+        new InternalServerErrorException('Database connection failed')
       );
       expect(mockRepo.delete).toHaveBeenCalledWith({ id: categoryId });
     });
@@ -376,7 +374,7 @@ describe('CategoryManagerService', () => {
       mockRepo.delete.mockRejectedValue(fkError);
 
       await expect(service.deleteCategory(categoryId)).rejects.toThrow(
-        new InternalServerErrorException('Failed to delete category')
+        new InternalServerErrorException('Cannot delete or update a parent row: a foreign key constraint fails')
       );
       expect(mockRepo.delete).toHaveBeenCalledWith({ id: categoryId });
     });

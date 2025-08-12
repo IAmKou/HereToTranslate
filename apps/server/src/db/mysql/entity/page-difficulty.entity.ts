@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { UserEntity } from './user.entity';
+import type { UserEntity } from './user.entity';
 
 export enum DifficultyLevel {
   SIMPLE = 'simple',
@@ -52,10 +52,10 @@ export class PageDifficultyEntity {
     estimatedTime: number;
   };
 
-  @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: false, onDelete: 'CASCADE' })
   assignedBy: UserEntity;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: true, onDelete: 'SET NULL' })
   reviewedBy?: UserEntity;
 
   @Column({ type: 'datetime', nullable: true })

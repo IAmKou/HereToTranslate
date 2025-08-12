@@ -8,15 +8,15 @@ import {
   OneToMany,
   PrimaryGeneratedColumn
 } from 'typeorm';
-import { ProjectEntity } from './project.entity';
-import { ProjectRoleEntity } from './project-role.entity';
-import { BranchEntity } from './branch.entity';
-import { CommitEntity } from './commit.entity';
-import { FileEntity } from './file.entity';
-import { ProjectGroupEntity } from './project-group.entity';
-import { UserTypeEntity } from './user-type.entity';
-import { RequestEntity } from './request.entity';
-import { ProjectDiscussionCommentEntity } from './project-discussion.entity';
+import type { ProjectEntity } from './project.entity';
+import type { ProjectRoleEntity } from './project-role.entity';
+import type { BranchEntity } from './branch.entity';
+import type { CommitEntity } from './commit.entity';
+import type { FileEntity } from './file.entity';
+import type { ProjectGroupEntity } from './project-group.entity';
+import type { UserTypeEntity } from './user-type.entity';
+import type { RequestEntity } from './request.entity';
+import type { ProjectDiscussionCommentEntity } from './project-discussion.entity';
 
 export enum UserRole {
   SuperAdmin = 1,
@@ -47,7 +47,7 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   avatarUrl?: string;
 
-  @ManyToOne(() => UserTypeEntity, role => role.users)
+  @ManyToOne(() => require('./user-type.entity').UserTypeEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: UserTypeEntity;
 
@@ -57,34 +57,34 @@ export class UserEntity {
   @CreateDateColumn()
   createdAt: Date;
 
-  @OneToMany(() => ProjectEntity, project => project.createdBy)
+  @OneToMany(() => require('./project.entity').ProjectEntity, project => project.createdBy)
   createdProjects: ProjectEntity[];
 
-  @ManyToMany(() => ProjectRoleEntity, projectRole => projectRole.users)
+  @ManyToMany(() => require('./project-role.entity').ProjectRoleEntity, projectRole => projectRole.users)
   projectRoles: ProjectRoleEntity[];
 
-  @ManyToMany(() => ProjectEntity, project => project.members, { cascade: true })
+  @ManyToMany(() => require('./project.entity').ProjectEntity, project => project.members, { cascade: true })
   projects: ProjectEntity[];
 
-  @ManyToMany(() => ProjectGroupEntity, group => group.members, { cascade: true })
+  @ManyToMany(() => require('./project-group.entity').ProjectGroupEntity, group => group.members, { cascade: true })
   groups: ProjectGroupEntity[];
 
-  @OneToMany(() => BranchEntity, branch => branch.user)
+  @OneToMany(() => require('./branch.entity').BranchEntity, branch => branch.user)
   branch: BranchEntity[];
 
-  @OneToMany(() => CommitEntity, commit => commit.author)
+  @OneToMany(() => require('./commit.entity').CommitEntity, commit => commit.author)
   commit: CommitEntity[];
 
-  @OneToMany(() => FileEntity, file => file.uploader)
+  @OneToMany(() => require('./file.entity').FileEntity, file => file.uploader)
   file: FileEntity[];
 
-  @ManyToMany(() => RequestEntity, request => request.registrants)
+  @ManyToMany(() => require('./request.entity').RequestEntity, request => request.registrants)
   registeredRequests: RequestEntity[];
 
-  @ManyToMany(() => ProjectDiscussionCommentEntity, upvote => upvote.upvotes, { cascade: true })
+  @ManyToMany(() => require('./project-discussion.entity').ProjectDiscussionCommentEntity, upvote => upvote.upvotes, { cascade: true })
   upvote: ProjectDiscussionCommentEntity[];
 
-  @ManyToMany(() => ProjectDiscussionCommentEntity, downvote => downvote.downvotes, { cascade: true })
+  @ManyToMany(() => require('./project-discussion.entity').ProjectDiscussionCommentEntity, downvote => downvote.downvotes, { cascade: true })
   downvote: ProjectDiscussionCommentEntity[];
 
 }

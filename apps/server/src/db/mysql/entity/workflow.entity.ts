@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
-import { ProjectEntity } from './project.entity';
+import type { ProjectEntity } from './project.entity';
 
 @Entity('workflow')
 export class WorkflowEntity {
@@ -18,7 +18,7 @@ export class WorkflowEntity {
   @Column({ default: false })
   isDefault: boolean; // Default workflow for project
 
-  @ManyToOne(() => ProjectEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./project.entity').ProjectEntity, { onDelete: 'CASCADE' })
   project: ProjectEntity;
 
   @CreateDateColumn()

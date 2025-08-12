@@ -8,18 +8,18 @@ import {
   PrimaryGeneratedColumn,
   Unique
 } from 'typeorm';
-import { ProjectRoleEntity } from "./project-role.entity";
+import type { ProjectRoleEntity } from "./project-role.entity";
 import { BigIntColumnTransformer } from "#LocalProject/Utils/extensions/typeorm.extensions";
 import { Permission, PermissionFlags } from "@here-to-translate/common";
-import { ProjectEntity } from "./project.entity";
-import { UserEntity } from "./user.entity";
+import type { ProjectEntity } from "./project.entity";
+import type { UserEntity } from "./user.entity";
 
 @Entity('threads')
 export class ProjectDiscussionThreadEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => ProjectEntity, project => project.discussions, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./project.entity').ProjectEntity, project => project.discussions, { onDelete: 'CASCADE' })
   project: ProjectEntity;
 
   @Column({ type: 'national varchar', length: 32 })
@@ -47,7 +47,7 @@ export class ProjectDiscussionCommentEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { onDelete: 'CASCADE' })
   author: UserEntity;
 
   @Column({ type: 'text' })
@@ -66,11 +66,11 @@ export class ProjectDiscussionCommentEntity {
   editedAt: Date | null;
 
   // Sửa từ ManyToOne sang ManyToMany cho upvotes/downvotes
-  @ManyToMany(() => UserEntity)
+  @ManyToMany(() => require('./user.entity').UserEntity)
   @JoinTable()
   upvotes: UserEntity[];
 
-  @ManyToMany(() => UserEntity)
+  @ManyToMany(() => require('./user.entity').UserEntity)
   @JoinTable()
   downvotes: UserEntity[];
 }
@@ -85,7 +85,7 @@ export class DiscussionAccessPolicyEntity {
   @JoinColumn({ name: 'threadId', referencedColumnName: 'id' })
   thread: ProjectDiscussionThreadEntity;
 
-  @ManyToOne(() => ProjectRoleEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./project-role.entity').ProjectRoleEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'roleId', referencedColumnName: 'id' })
   role: ProjectRoleEntity;
 

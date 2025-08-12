@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
-import { WorkflowEntity } from './workflow.entity';
-import { TaskStatusEntity } from './task-status.entity';
+import type { WorkflowEntity } from './workflow.entity';
+import type { TaskStatusEntity } from './task-status.entity';
 
 
 export enum TransitionConditionType {
@@ -20,13 +20,13 @@ export class WorkflowTransitionEntity {
   @Column()
   name: string;
 
-  @ManyToOne(() => WorkflowEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./workflow.entity').WorkflowEntity, { onDelete: 'CASCADE' })
   workflow: WorkflowEntity;
 
-  @ManyToOne(() => TaskStatusEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./task-status.entity').TaskStatusEntity, { onDelete: 'CASCADE' })
   fromStatus: TaskStatusEntity;
 
-  @ManyToOne(() => TaskStatusEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./task-status.entity').TaskStatusEntity, { onDelete: 'CASCADE' })
   toStatus: TaskStatusEntity;
 
   @Column({ type: 'enum', enum: TransitionConditionType, default: TransitionConditionType.ANYONE })

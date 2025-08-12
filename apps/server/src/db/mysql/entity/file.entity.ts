@@ -1,21 +1,21 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
-import { ProjectEntity } from './project.entity';
-import { BranchEntity } from './branch.entity';
-import { UserEntity } from './user.entity';
-import { RequestEntity } from './request.entity';
+import type { ProjectEntity } from './project.entity';
+import type { BranchEntity } from './branch.entity';
+import type { UserEntity } from './user.entity';
+import type { RequestEntity } from './request.entity';
 
 @Entity('file')
 export class FileEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./project.entity').ProjectEntity, { nullable: true, onDelete: 'CASCADE' })
   project: ProjectEntity;
 
-  @ManyToOne(() => BranchEntity, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./branch.entity').BranchEntity, { nullable: true, onDelete: 'CASCADE' })
   branch: BranchEntity;
 
-  @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: false, onDelete: 'CASCADE' })
   uploader: UserEntity;
 
   @Column({ type: 'varchar', length: 255, charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' })
@@ -45,7 +45,7 @@ export class FileEntity {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => RequestEntity, {nullable: true})
+  @ManyToOne(() => require('./request.entity').RequestEntity, {nullable: true})
   request: RequestEntity;
 
 }

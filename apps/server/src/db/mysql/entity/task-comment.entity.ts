@@ -6,8 +6,8 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
   } from 'typeorm';
-  import { TaskEntity } from './task.entity';
-  import { UserEntity } from './user.entity';
+  import type { TaskEntity } from './task.entity';
+  import type { UserEntity } from './user.entity';
   @Entity('task_comment')
   export class TaskCommentEntity {
     @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
@@ -16,10 +16,10 @@ import {
     @Column({ type: 'text' })
     content: string;
   
-    @ManyToOne(() => TaskEntity, { onDelete: 'CASCADE' })
+    @ManyToOne(() => require('./task.entity').TaskEntity, { onDelete: 'CASCADE' })
     task: TaskEntity;
   
-    @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+    @ManyToOne(() => require('./user.entity').UserEntity, { onDelete: 'CASCADE' })
     author: UserEntity;
   
     @ManyToOne(() => TaskCommentEntity, { nullable: true, onDelete: 'CASCADE' })

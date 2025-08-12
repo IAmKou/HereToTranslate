@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
-import { ProjectEntity } from './project.entity';
+import type { ProjectEntity } from './project.entity';
 
 @Entity('projecttag')
 export class ProjectTagEntity {
@@ -9,7 +9,7 @@ export class ProjectTagEntity {
   @Column({ unique: true })
   name: string;
 
-  @ManyToMany(() => ProjectEntity, project => project.tags,{
+  @ManyToMany(() => require('./project.entity').ProjectEntity, (project: ProjectEntity) => project.tags,{
 
   })
   projects: ProjectEntity[];

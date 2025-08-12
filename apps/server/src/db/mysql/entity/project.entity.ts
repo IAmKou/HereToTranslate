@@ -1,13 +1,13 @@
 import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, CreateDateColumn, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
-import { UserEntity } from './user.entity';
-import { ProjectRoleEntity } from './project-role.entity';
-import { ProjectGroupEntity } from './project-group.entity';
-import { BranchEntity } from './branch.entity';
-import { CommitEntity } from './commit.entity';
-import { FileEntity } from './file.entity';
-import { CategoryEntity } from './category.entity';
-import { ProjectTagEntity } from './project-tag.entity';
-import { ProjectDiscussionThreadEntity } from './project-discussion.entity';
+import type { UserEntity } from './user.entity';
+import type { ProjectRoleEntity } from './project-role.entity';
+import type { ProjectGroupEntity } from './project-group.entity';
+import type { BranchEntity } from './branch.entity';
+import type { CommitEntity } from './commit.entity';
+import type { FileEntity } from './file.entity';
+import type { CategoryEntity } from './category.entity';
+import type { ProjectTagEntity } from './project-tag.entity';
+import type { ProjectDiscussionThreadEntity } from './project-discussion.entity';
 
 @Entity('project')
 export class ProjectEntity {
@@ -29,51 +29,51 @@ export class ProjectEntity {
   @Column({ type: 'json', nullable: true })
   targetLanguages: string[];
 
-  @ManyToOne(() => UserEntity, user => user.createdProjects)
+  @ManyToOne(() => require('./user.entity').UserEntity, (user: UserEntity) => user.createdProjects)
   createdBy: UserEntity;
 
   @CreateDateColumn()
   createdAt: Date;
 
-  @OneToMany(() => ProjectRoleEntity, projectRole => projectRole.project, {
+  @OneToMany(() => require('./project-role.entity').ProjectRoleEntity, (projectRole: ProjectRoleEntity) => projectRole.project, {
     cascade: true,
     onDelete: 'CASCADE',
   })
   projectRoles: ProjectRoleEntity[];
 
-  @OneToMany(() => ProjectGroupEntity, group => group.project, {
+  @OneToMany(() => require('./project-group.entity').ProjectGroupEntity, (group: ProjectGroupEntity) => group.project, {
     cascade: true,
     onDelete: 'CASCADE',
   })
   groups: ProjectGroupEntity[];
 
-  @OneToMany(() => BranchEntity, branch => branch.project)
+  @OneToMany(() => require('./branch.entity').BranchEntity, (branch: BranchEntity) => branch.project)
   branches: BranchEntity[];
 
-  @ManyToOne(() => BranchEntity, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./branch.entity').BranchEntity, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'defaultBranchId' })
   defaultBranch: BranchEntity;
 
-  @OneToMany(() => CommitEntity, commit => commit.project)
+  @OneToMany(() => require('./commit.entity').CommitEntity, (commit: CommitEntity) => commit.project)
   commits: CommitEntity[];
 
-  @OneToMany(() => ProjectDiscussionThreadEntity, thread => thread.project)
+  @OneToMany(() => require('./project-discussion.entity').ProjectDiscussionThreadEntity, (thread: ProjectDiscussionThreadEntity) => thread.project)
   discussions: ProjectDiscussionThreadEntity[];
 
-  @OneToMany(() => FileEntity, file => file.project)
+  @OneToMany(() => require('./file.entity').FileEntity, (file: FileEntity) => file.project)
   file: FileEntity[];
 
-  @ManyToOne(() => CategoryEntity, category => category.id)
+  @ManyToOne(() => require('./category.entity').CategoryEntity, (category: CategoryEntity) => category.id)
   category: CategoryEntity;
 
-  @ManyToMany(() => UserEntity, user => user.projects)
+  @ManyToMany(() => require('./user.entity').UserEntity, (user: UserEntity) => user.projects)
   @JoinTable({
     joinColumn: { name: 'projectId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'userId', referencedColumnName: 'id' }
   })
   members: UserEntity[];
 
-  @ManyToMany(() => ProjectTagEntity, { cascade: true })
+  @ManyToMany(() => require('./project-tag.entity').ProjectTagEntity, { cascade: true })
   @JoinTable({
     joinColumn: { name: 'projectId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'tagId', referencedColumnName: 'id' }

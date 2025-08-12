@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { TaskAssignmentEntity, AssignmentRole } from './task-assignment.entity';
-import { UserEntity } from './user.entity';
-import { TaskEntity } from './task.entity';
+import type { UserEntity } from './user.entity';
+import type { TaskEntity } from './task.entity';
 
 export enum HistoryAction {
   ASSIGNED = 'assigned',
@@ -14,7 +14,7 @@ export class AssignmentHistoryEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => TaskEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./task.entity').TaskEntity, { onDelete: 'CASCADE' })
   task: TaskEntity;
 
   @ManyToOne(() => TaskAssignmentEntity, { nullable: true, onDelete: 'CASCADE' })
@@ -26,13 +26,13 @@ export class AssignmentHistoryEntity {
   @Column({ type: 'enum', enum: HistoryAction })
   action: HistoryAction;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: true, onDelete: 'SET NULL' })
   fromUser?: UserEntity; 
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: true, onDelete: 'SET NULL' })
   toUser?: UserEntity; 
 
-  @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: false, onDelete: 'CASCADE' })
   actionBy: UserEntity; 
 
   @Column({ type: 'text', nullable: true })

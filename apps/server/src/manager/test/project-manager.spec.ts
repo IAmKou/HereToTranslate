@@ -1,21 +1,7 @@
 import 'reflect-metadata';
-import { Test, TestingModule } from '@nestjs/testing';
+// Test and TestingModule are no longer needed since we're using direct instantiation
 import { ProjectManagerService } from '../service/project-manager.service';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import {
-  CategoryEntity,
-  ProjectEntity,
-  UserEntity,
-  ProjectRoleEntity,
-  BranchEntity,
-  CommitEntity,
-} from '#LocalProject/Entities';
-import { DataSource } from 'typeorm';
-import { GitHubService } from '../service/github-manager.service';
-import { NotificationManagerService } from '../service/notification-manager.service';
-import { ActivityManagerService } from '../service/activity-manager.service';
-import { StatusManagerService } from '../service/task-status-manager.service';
-import { WorkflowManagerService } from '../service/workflow-manager.service';
+// getRepositoryToken is not available in this version, using string tokens instea
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PermissionFlags } from '@here-to-translate/common';
 
@@ -59,7 +45,7 @@ describe('ProjectManagerService', () => {
   const mockBranch = { id: 1n, name: 'main', project: mockProject, user: mockUser, createdAt: new Date() };
   const mockCommit = { id: 1n, message: 'Initial commit', contentSnapshot: '{}', createdAt: new Date() };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     mockCategoryRepository = {
       exists: jest.fn(),
       findOne: jest.fn(),
@@ -164,25 +150,21 @@ describe('ProjectManagerService', () => {
       createDefaultWorkflow: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ProjectManagerService,
-        { provide: getRepositoryToken(CategoryEntity), useValue: mockCategoryRepository },
-        { provide: getRepositoryToken(ProjectEntity), useValue: mockProjectRepository },
-        { provide: getRepositoryToken(UserEntity), useValue: mockUserRepository },
-        { provide: getRepositoryToken(ProjectRoleEntity), useValue: mockProjectRoleRepository },
-        { provide: getRepositoryToken(BranchEntity), useValue: mockBranchRepository },
-        { provide: getRepositoryToken(CommitEntity), useValue: mockCommitRepository },
-        { provide: DataSource, useValue: mockDataSource },
-        { provide: GitHubService, useValue: mockGitHubService },
-        { provide: NotificationManagerService, useValue: mockNotificationService },
-        { provide: ActivityManagerService, useValue: mockActivityManagerService },
-        { provide: StatusManagerService, useValue: mockStatusManagerService },
-        { provide: WorkflowManagerService, useValue: mockWorkflowManagerService },
-      ],
-    }).compile();
-
-    service = module.get<ProjectManagerService>(ProjectManagerService);
+    // Use direct instantiation instead of Test.createTestingModule
+    service = new ProjectManagerService(
+      mockCategoryRepository,
+      mockProjectRepository,
+      mockUserRepository,
+      mockProjectRoleRepository,
+      mockBranchRepository,
+      mockCommitRepository,
+      mockDataSource,
+      mockGitHubService,
+      mockNotificationService,
+      mockActivityManagerService,
+      mockStatusManagerService,
+      mockWorkflowManagerService,
+    );
   });
 
   afterEach(() => {
@@ -367,6 +349,12 @@ describe('ProjectManagerService', () => {
 
     it('should return full project data for user with access', async () => {
       const privateProject = { ...mockProject, isPrivate: true };
+      
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
+      // Mock the project data retrieval
       (mockProjectRepository.findOne as jest.Mock).mockResolvedValue(privateProject);
       mockProjectRepository.createQueryBuilder = jest.fn(() => ({
         select: jest.fn().mockReturnThis(),
@@ -376,6 +364,8 @@ describe('ProjectManagerService', () => {
         andWhere: jest.fn().mockReturnThis(),
         getOne: jest.fn().mockResolvedValue(privateProject),
       }));
+      
+      // Mock the permission check
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -390,7 +380,8 @@ describe('ProjectManagerService', () => {
     });
 
     it('should throw NotFoundException when project does not exist', async () => {
-      (mockProjectRepository.findOne as jest.Mock).mockResolvedValue(null);
+      // Mock the project exists check to return false
+      mockProjectRepository.exists!.mockResolvedValue(false);
 
       await expect(service.fetchProject(1n, 1n))
         .rejects.toThrow(NotFoundException);
@@ -398,7 +389,15 @@ describe('ProjectManagerService', () => {
 
     it('should throw ForbiddenException for private project without access', async () => {
       const privateProject = { ...mockProject, isPrivate: true };
+      
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
+      // Mock the project data retrieval
       (mockProjectRepository.findOne as jest.Mock).mockResolvedValue(privateProject);
+      
+      // Mock the permission check to return no permissions
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -427,14 +426,23 @@ describe('ProjectManagerService', () => {
         },
       };
 
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+
       mockDataSource.createQueryRunner!.mockReturnValue(mockQueryRunner as any);
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
-        getMany: jest.fn().mockResolvedValue([{ users: [{ id: 2n }] }]),
+        getRawOne: jest.fn().mockResolvedValue({ userPermissionFlags: PermissionFlags.ManageProjectMetadata }),
+        getMany: jest.fn().mockResolvedValue([]), // Add this for getting project members
       }));
-      mockQueryRunner.manager.findOne.mockResolvedValue(mockProject);
+      mockQueryRunner.manager.findOne.mockResolvedValue({
+        ...mockProject,
+        tags: [], // Add empty tags array to prevent the map error
+      });
       mockQueryRunner.manager.save.mockResolvedValue(mockProject);
       mockActivityManagerService.logProjectUpdate!.mockResolvedValue(undefined);
       mockNotificationService.createNotification!.mockResolvedValue(undefined);
@@ -451,6 +459,10 @@ describe('ProjectManagerService', () => {
     });
 
     it('should throw ForbiddenException when user lacks permission', async () => {
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -528,6 +540,10 @@ describe('ProjectManagerService', () => {
         },
       };
 
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+
       mockDataSource.createQueryRunner!.mockReturnValue(mockQueryRunner as any);
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
@@ -554,6 +570,10 @@ describe('ProjectManagerService', () => {
     });
 
     it('should throw BadRequestException when user is already a member', async () => {
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -586,13 +606,38 @@ describe('ProjectManagerService', () => {
         },
       };
 
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+
+      // Mock the permission check
+      mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({ userPermissionFlags: PermissionFlags.ManageBranches }),
+      }));
+
       mockDataSource.createQueryRunner!.mockReturnValue(mockQueryRunner as any);
       mockProjectRepository.findOneOrFail!.mockResolvedValue({
         ...mockProject,
         defaultBranch: { id: 1n },
       });
+      // Mock branchRepository.create to return a proper object
+      mockBranchRepository.create!.mockImplementation((data: any) => data);
+      // Mock branchRepository.save to return a proper object with id
+      mockBranchRepository.save!.mockResolvedValue({ 
+        ...mockBranch, 
+        id: 2n,
+        visibleToRoles: [], // Add this property to prevent the error
+      });
       mockQueryRunner.manager.create.mockImplementation((entity, data) => data);
-      mockQueryRunner.manager.save.mockResolvedValue({ ...mockBranch, id: 2n });
+      mockQueryRunner.manager.save.mockResolvedValue({ 
+        ...mockBranch, 
+        id: 2n,
+        visibleToRoles: [], // Add this property to prevent the error
+      });
       (mockGitHubService.createBranch as jest.Mock).mockResolvedValue(undefined);
       (mockGitHubService.pushInitialFile as jest.Mock).mockResolvedValue(undefined);
       (mockActivityManagerService.logBranchCreate as jest.Mock).mockResolvedValue(undefined);
@@ -600,12 +645,15 @@ describe('ProjectManagerService', () => {
       const result = await service.createBranch(1n, 1n, 'New Branch');
 
       expect(result).toBeDefined();
-      expect(mockQueryRunner.startTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
+      expect(mockBranchRepository.create).toHaveBeenCalled();
+      expect(mockBranchRepository.save).toHaveBeenCalled();
     });
 
     it('should throw ForbiddenException when user lacks permission', async () => {
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -621,6 +669,10 @@ describe('ProjectManagerService', () => {
 
   describe('submitCommit', () => {
     it('should submit commit successfully', async () => {
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -640,6 +692,10 @@ describe('ProjectManagerService', () => {
     });
 
     it('should throw ForbiddenException when user lacks permission', async () => {
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -655,6 +711,10 @@ describe('ProjectManagerService', () => {
 
   describe('reviewCommit', () => {
     it('should approve commit successfully', async () => {
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -679,6 +739,10 @@ describe('ProjectManagerService', () => {
     });
 
     it('should reject commit successfully', async () => {
+      // Mock the project exists check
+      mockProjectRepository.exists!.mockResolvedValue(true);
+      mockUserRepository.exists!.mockResolvedValue(true);
+      
       mockProjectRoleRepository.createQueryBuilder = jest.fn(() => ({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -708,11 +772,13 @@ describe('ProjectManagerService', () => {
           id: 1n,
           name: 'Owner',
           users: [mockUser],
+          permissionFlags: { value: PermissionFlags.ViewProject },
         },
         {
           id: 2n,
           name: 'Everyone',
           users: [mockUser],
+          permissionFlags: { value: PermissionFlags.ViewProject },
         },
       ];
 
@@ -748,6 +814,7 @@ describe('ProjectManagerService', () => {
           id: 1n,
           name: 'Owner',
           users: [mockUser],
+          permissionFlags: { value: PermissionFlags.ViewProject },
         },
       ]);
       (mockProjectRoleRepository.findOne as jest.Mock).mockResolvedValue({

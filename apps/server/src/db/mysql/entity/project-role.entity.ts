@@ -1,6 +1,6 @@
 import { Column, Entity, JoinTable, ManyToMany, ManyToOne, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
-import { UserEntity } from './user.entity';
-import { ProjectEntity } from './project.entity';
+import type { UserEntity } from './user.entity';
+import type { ProjectEntity } from './project.entity';
 import { Permission, PermissionFlags } from '@here-to-translate/common';
 import { BigIntColumnTransformer } from '#LocalProject/Utils/extensions/typeorm.extensions';
 import { BranchEntity } from './branch.entity';
@@ -10,12 +10,12 @@ export class ProjectRoleEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => ProjectEntity, project => project.projectRoles,{
+  @ManyToOne(() => require('./project.entity').ProjectEntity, project => project.projectRoles,{
     onDelete: 'CASCADE',
   })
   project: ProjectEntity;
 
-  @ManyToMany(() => UserEntity, user => user.projectRoles, { cascade: true })
+  @ManyToMany(() => require('./user.entity').UserEntity, user => user.projectRoles, { cascade: true })
   @JoinTable({
     name: 'user_project_roles',
     joinColumn: { name: 'roleId', referencedColumnName: 'id' },
@@ -34,7 +34,7 @@ export class ProjectRoleEntity {
   })
   permissionFlags: Permission;
 
-  @ManyToMany(() => BranchEntity, branch => branch.visibleToRoles)
+  @ManyToMany(() => require('./branch.entity').BranchEntity, branch => branch.visibleToRoles)
   branch: BranchEntity;
 
   @CreateDateColumn()

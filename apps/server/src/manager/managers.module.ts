@@ -91,12 +91,15 @@ import { TaskAssignmentManagerService } from './service/task-assignment-manager.
 import { WorkflowManagerService } from './service/workflow-manager.service';
 import { DeadlineCheckerService } from './service/deadlinechecker.service';
 import { StatusManagerService } from './service/task-status-manager.service';
+import { ScannerCronService } from './service/scanner-cron.service';
 import { DeadlineManagementController } from './controller/deadline-management.controller';
 import { PageDifficultyController } from './controller/page-difficulty.controller';
 import { ProjectCancellationController } from './controller/project-cancellation.controller';
 import { StatusController } from './controller/status.controller';
 import { TaskAssignmentController } from './controller/task-assignment.controller';
 import { WorkflowController } from './controller/workflow.controller';
+import { ScannerCronController } from './controller/scanner-cron.controller';
+import { DeadlineCheckerController } from './controller/deadline-checker.controller';
 
 @Global()
 @Module({
@@ -174,6 +177,7 @@ import { WorkflowController } from './controller/workflow.controller';
     FeeService,
     ActivityManagerService,
     DeadlineCheckerService,
+    ScannerCronService,
     PageDifficultyService,
     ProjectCancellationService,
     TaskAssignmentManagerService,
@@ -204,6 +208,7 @@ import { WorkflowController } from './controller/workflow.controller';
     FeeService,
     ActivityManagerService,
     DeadlineCheckerService,
+    ScannerCronService,
     PageDifficultyService,
     ProjectCancellationService,
     TaskAssignmentManagerService,
@@ -237,6 +242,8 @@ import { WorkflowController } from './controller/workflow.controller';
     StatusController,
     TaskAssignmentController,
     WorkflowController,
+    ScannerCronController,
+    DeadlineCheckerController,
   ],
 })
 export class ManagersModule {}

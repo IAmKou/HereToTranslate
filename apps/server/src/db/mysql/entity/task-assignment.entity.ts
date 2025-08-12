@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { TaskEntity } from './task.entity';
-import { UserEntity } from './user.entity';
+import type { TaskEntity } from './task.entity';
+import type { UserEntity } from './user.entity';
 
 export enum AssignmentRole {
   TRANSLATOR = 'translator',
@@ -23,10 +23,10 @@ export class TaskAssignmentEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => TaskEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./task.entity').TaskEntity, { onDelete: 'CASCADE' })
   task: TaskEntity;
 
-  @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: false, onDelete: 'CASCADE' })
   assignedTo: UserEntity;
 
   @Column({ type: 'enum', enum: AssignmentRole })
@@ -49,10 +49,10 @@ export class TaskAssignmentEntity {
     qualityScore?: number;
   };
 
-  @ManyToOne(() => UserEntity, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: false, onDelete: 'CASCADE' })
   assignedBy: UserEntity;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: true, onDelete: 'SET NULL' })
   reassignedBy?: UserEntity;
 
   @Column({ type: 'datetime', nullable: true })

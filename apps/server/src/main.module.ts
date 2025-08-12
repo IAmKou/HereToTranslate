@@ -11,7 +11,8 @@ import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import * as path from 'path';
-import { ChatModule } from './chat/chat.module'
+import { ChatModule } from './chat/chat.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -55,7 +56,8 @@ import { ChatModule } from './chat/chat.module'
     SeederModule,
     AuthModule,
     ManagersModule,
-    ChatModule
+    ChatModule,
+    ScheduleModule.forRoot()
 
   ],
   controllers: [],

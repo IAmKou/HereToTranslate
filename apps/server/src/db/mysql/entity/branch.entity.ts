@@ -8,36 +8,36 @@ import {
   ManyToMany,
   JoinTable
 } from 'typeorm';
-import { ProjectEntity } from './project.entity';
-import { UserEntity } from './user.entity';
-import { CommitEntity } from './commit.entity';
-import { FileEntity } from './file.entity';
-import { ProjectRoleEntity } from './project-role.entity';
+import type { ProjectEntity } from './project.entity';
+import type { UserEntity } from './user.entity';
+import type { CommitEntity } from './commit.entity';
+import type { FileEntity } from './file.entity';
+import type { ProjectRoleEntity } from './project-role.entity';
 
 @Entity('branches')
 export class BranchEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => ProjectEntity, project => project.id, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./project.entity').ProjectEntity, (project: ProjectEntity) => project.id, { nullable: false, onDelete: 'CASCADE' })
   project: ProjectEntity
 
   @Column({ length: 100 })
   name: string;
 
-  @ManyToOne(() => UserEntity, user => user.id, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./user.entity').UserEntity, (user: UserEntity) => user.id, { nullable: false, onDelete: 'CASCADE' })
   user: UserEntity;
 
   @CreateDateColumn()
   createdAt: Date;
 
-  @OneToMany(() => CommitEntity, commit => commit.branch)
+  @OneToMany(() => require('./commit.entity').CommitEntity, (commit: CommitEntity) => commit.branch)
   commits: CommitEntity[];
 
-  @OneToMany(() => FileEntity, file => file.branch)
+  @OneToMany(() => require('./file.entity').FileEntity, (file: FileEntity) => file.branch)
   files: FileEntity[];
 
-  @ManyToMany(() => ProjectRoleEntity, { cascade: true })
+  @ManyToMany(() => require('./project-role.entity').ProjectRoleEntity, { cascade: true })
   @JoinTable({
     name: 'branch_visible_roles',
     joinColumn: { name: 'branchId', referencedColumnName: 'id' },

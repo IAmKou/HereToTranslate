@@ -5,9 +5,9 @@ import {
   CreateDateColumn,
   ManyToOne,
 } from 'typeorm';
-import { BranchEntity } from './branch.entity';
-import { ProjectEntity } from './project.entity';
-import { UserEntity } from './user.entity';
+import type { BranchEntity } from './branch.entity';
+import type { ProjectEntity } from './project.entity';
+import type { UserEntity } from './user.entity';
 
 export enum CommitStatus {
   Pending = 'pending',
@@ -20,19 +20,19 @@ export class CommitEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => BranchEntity, branch => branch.commits, {
+  @ManyToOne(() => require('./branch.entity').BranchEntity, (branch: BranchEntity) => branch.commits, {
     nullable: false,
     onDelete: 'CASCADE',
   })
   branch: BranchEntity;
 
-  @ManyToOne(() => ProjectEntity, {
+  @ManyToOne(() => require('./project.entity').ProjectEntity, {
     nullable: true,
     onDelete: 'SET NULL',
   })
   project: ProjectEntity;
 
-  @ManyToOne(() => UserEntity, user => user.id, {
+  @ManyToOne(() => require('./user.entity').UserEntity, (user: UserEntity) => user.id, {
     nullable: false,
     onDelete: 'CASCADE',
   })

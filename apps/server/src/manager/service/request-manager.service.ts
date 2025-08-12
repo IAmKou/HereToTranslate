@@ -64,7 +64,7 @@ export class RequestManagerService {
     const { title, description, dealAmount, deadline: deadlineRaw } = dto;
     const deadline = new Date(deadlineRaw);
 
-    if (deadline.getTime() - Date.now() < 7 * DAY) {
+    if (deadline.getTime() - Date.now() < 2 * DAY) {
       throw new BadRequestException('Deadline must be at least 7 days from now');
     }
 

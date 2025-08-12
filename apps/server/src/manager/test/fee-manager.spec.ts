@@ -1,12 +1,10 @@
 import 'reflect-metadata';
 import { FeeService } from '../service/fee-manager.service';
 
-// Provide a lightweight mock for the Entities barrel to avoid importing the whole graph
 jest.mock('#LocalProject/Entities', () => ({
   SettingsEntity: class SettingsEntityMock {},
 }));
 
-// Ensure InjectRepository decorator is a no-op for unit tests (we construct with a mock repo manually)
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));

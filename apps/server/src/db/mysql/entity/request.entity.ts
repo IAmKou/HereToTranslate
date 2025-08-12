@@ -9,11 +9,11 @@ import {
   OneToMany,
   JoinColumn
 } from 'typeorm';
-import { UserEntity } from './user.entity';
-import { ProjectEntity } from './project.entity';
-import { CategoryEntity } from './category.entity';
-import { ProjectTagEntity } from './project-tag.entity';
-import { FileEntity } from './file.entity';
+import type { UserEntity } from './user.entity';
+import type { ProjectEntity } from './project.entity';
+import type { CategoryEntity } from './category.entity';
+import type { ProjectTagEntity } from './project-tag.entity';
+import type { FileEntity } from './file.entity';
 
 export enum RequestStatus {
   Cancelled = 'CANCELLED',
@@ -37,14 +37,14 @@ export class RequestEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'requesterId' })
   requester: UserEntity;
 
-  @ManyToOne(() => ProjectEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./project.entity').ProjectEntity, { nullable: true, onDelete: 'SET NULL' })
   project: ProjectEntity;
 
-  @ManyToMany(() => UserEntity)
+  @ManyToMany(() => require('./user.entity').UserEntity)
   @JoinTable({
     name: 'request_registrants',
     joinColumn: { name: 'request_id', referencedColumnName: 'id' },
@@ -73,20 +73,20 @@ export class RequestEntity {
   @Column()
   isPublic: boolean;
 
-  @ManyToOne(() => CategoryEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./category.entity').CategoryEntity, { nullable: true, onDelete: 'SET NULL' })
   category: CategoryEntity;
 
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => require('./user.entity').UserEntity, { nullable: true, onDelete: 'SET NULL' })
   assignee: UserEntity;
 
-  @ManyToMany(() => ProjectTagEntity, { cascade: true })
+  @ManyToMany(() => require('./project-tag.entity').ProjectTagEntity, { cascade: true })
   @JoinTable({
     joinColumn: { name: 'requestId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'tagId', referencedColumnName: 'id' }
   })
   tags: ProjectTagEntity[];
 
-  @OneToMany(() => FileEntity, file => file.request, {
+  @OneToMany(() => require('./file.entity').FileEntity, (file: FileEntity) => file.request, {
     cascade: true
   })
   files: FileEntity[];

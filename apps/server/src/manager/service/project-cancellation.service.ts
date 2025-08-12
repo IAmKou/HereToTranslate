@@ -181,28 +181,22 @@ export class ProjectCancellationService {
     try {
       // Handle refunds/penalties based on who initiated
       if (cancellation.cancellationType === CancellationType.TRANSLATOR_INITIATED) {
-        // Translator cancels - full refund to requester
         await this.paymentService.refundDeposit(request);
         this.logger.log(`Full refund processed for translator-initiated cancellation`);
       } else {
-        // Requester cancels - deposit is lost (no refund)
         await this.markDepositAsLost(request);
         this.logger.log(`Deposit marked as lost for requester-initiated cancellation`);
       }
 
-      // Update request status
       if (cancellation.isArchiveOnly) {
         request.status = RequestStatus.Archived;
         await this.requestRepo.save(request);
         
-        // Archive the project
         await this.projectService.archive(project);
       } else {
-        // Delete request (mark as cancelled)
         request.status = RequestStatus.Cancelled;
         await this.requestRepo.save(request);
         
-        // Delete the project
         await this.projectService.deleteProject(project.id, cancellation.initiator.id);
       }
 

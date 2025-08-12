@@ -322,6 +322,75 @@ export class TranslationService {
     return { githubUrl };
   }
 
+  async exportTranslatedFile(
+    projectId: string,
+    branchId: string,
+    fileId: string,
+    language: string
+  ): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
+    logger.log(`Exporting translated file for project ${projectId}, file ${fileId}, language ${language}`);
+
+    // Get file entity
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+    });
+
+    if (!fileEntity) {
+      throw new Error(`File with ID ${fileId} not found`);
+    }
+
+    // Get all translations for this file
+    const translations = await this.translationModel
+      .find({ projectId, branchId, fileId, language })
+      .lean();
+
+    if (translations.length === 0) {
+      throw new Error(`No translations found for file ${fileId} in language ${language}`);
+    }
+
+    let exportedBuffer: Buffer;
+    const originalFileName = fileEntity.fileName;
+    const fileExtension = originalFileName.split('.').pop();
+    const baseFileName = originalFileName.replace(`.${fileExtension}`, '');
+    const exportFileName = `${baseFileName}_${language}.${fileExtension}`;
+
+    if (
+      fileEntity.fileType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      // Handle DOCX files
+      const translationMap = new Map<string, string>();
+      for (const translation of translations) {
+        if (translation.translatedText && translation.translatedText.trim().length > 0) {
+          translationMap.set(translation.originalText, translation.translatedText);
+        }
+      }
+
+      const originalBuffer = fileEntity.fileContent as Buffer;
+      exportedBuffer = await replaceDocxText(originalBuffer, translationMap);
+    } else if (fileEntity.fileType === 'application/pdf') {
+      // Handle PDF files
+      const translatedEntries = translations.map((translation) => ({
+        text: translation.translatedText?.trim() ? translation.translatedText : translation.originalText,
+        style: translation.style,
+        font: translation.font,
+        position: translation.position,
+      }));
+
+      const originalBuffer = fileEntity.fileContent as Buffer;
+      exportedBuffer = await buildTranslatedPdf(originalBuffer, translatedEntries);
+    } else {
+     
+      throw new Error(`File type ${fileEntity.fileType} is not supported for export`);
+    }
+
+    return {
+      buffer: exportedBuffer,
+      fileName: exportFileName,
+      mimeType: fileEntity.fileType,
+    };
+  }
+
   async getTranslationPreview(
     projectId: string,
     branchId: string,
@@ -346,6 +415,31 @@ export class TranslationService {
       font: e.font,
       filePart: e.filePart ?? 0,
     }));
+  }
+
+  async getTranslationProgress(
+    projectId: string,
+    branchId: string,
+    language?: string
+  ): Promise<{ total: number; completed: number; percentage: number }> {
+    const query: any = { projectId, branchId };
+    if (language) {
+      query.language = language;
+    }
+
+    const total = await this.translationModel.countDocuments(query);
+    const completed = await this.translationModel.countDocuments({
+      ...query,
+      translatedText: { $nin: [null, ''] },
+    });
+
+    const percentage = total > 0 ? (completed / total) * 100 : 0;
+
+    return {
+      total,
+      completed,
+      percentage: Math.round(percentage * 100) / 100, // Round to 2 decimal places
+    };
   }
 
   async getAllString(
@@ -517,4 +611,6 @@ async function rebuildFileWithManifest(
       return Buffer.from(defaultCombined, 'utf8');
     }
   }
+
+  
 }

@@ -1274,6 +1274,69 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   async listCommits(projectId: bigint, branchId: bigint) {
     return this.githubService.listCommits(projectId, branchId);
   }
+
+  async lockProjectEdits(projectId: bigint): Promise<void> {
+    this.logger.debug(`Locking project edits for project ID: ${projectId}`);
+
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project with ID ${projectId} not found`);
+    }
+
+    this.logger.log(`Project ${projectId} edits have been locked`);
+  }
+
+  async archive(project: ProjectEntity): Promise<void> {
+    this.logger.debug(`Archiving project ID: ${project.id}`);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.delete('task', {
+        projectId: project.id.toString(),
+      });
+
+      await queryRunner.manager.delete('task_status', {
+        project: { id: project.id },
+      });
+
+      await queryRunner.manager.delete('workflow_transition', {
+        workflow: { project: { id: project.id } },
+      });
+
+      await queryRunner.manager.delete('workflow', {
+        project: { id: project.id },
+      });
+
+      await queryRunner.manager.update(
+        'project',
+        { id: project.id },
+        { isArchived: true }
+      );
+
+      // Lock all branches for editing
+      await queryRunner.manager.update(
+        'branches',
+        { projectId: project.id },
+        { archived: true }
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Project ${project.id} has been archived successfully`);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to archive project ${project.id}:`, error);
+      throw new InternalServerErrorException('Failed to archive project');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
 }
 function normalizePermission(input: IntoPermission): bigint {
   if (typeof input === 'bigint') return input;
@@ -1282,5 +1345,5 @@ function normalizePermission(input: IntoPermission): bigint {
     return PermissionFlags[input as keyof typeof PermissionFlags] ?? 0n;
   }
   return input.value;
-  throw new Error('Invalid permission input type');
+  throw new Error('Invalid permission input type'); 
 }

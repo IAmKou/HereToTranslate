@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Body, Param, UseGuards, Req } from '@nestjs/common';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
+import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
 import { TaskAssignmentManagerService } from '../service/task-assignment-manager.service';
 import { AssignTaskDto, ReassignTaskDto } from '#LocalProject/Dtos';
 
@@ -16,7 +16,6 @@ export class TaskAssignmentController {
     @Body() dto: AssignTaskDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    // Extract projectId from the task itself
     const task = await this.taskAssignmentService.getTaskAssignments(dto.taskId);
     const projectId = task.task.projectId?.toString();
     
@@ -24,7 +23,7 @@ export class TaskAssignmentController {
       throw new Error('Task must be associated with a project');
     }
 
-    return this.taskAssignmentService.assignTask(projectId, dto, req.user.id);
+    return this.taskAssignmentService.assignTask(projectId, dto, req.user.id.toString());
   }
 
   @UseGuards(JwtAuthGuard)
@@ -41,7 +40,7 @@ export class TaskAssignmentController {
       throw new Error('Task must be associated with a project');
     }
 
-    return this.taskAssignmentService.reassignTask(projectId, dto, req.user.id);
+    return this.taskAssignmentService.reassignTask(projectId, dto, req.user.id.toString());
   }
 
   @UseGuards(JwtAuthGuard)

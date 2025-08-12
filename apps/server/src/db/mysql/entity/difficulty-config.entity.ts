@@ -18,8 +18,6 @@ export class DifficultyConfigEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 1.0 })
   multiplier: number; // Multiplier for base score
 
-  // Removed basePrice as per new scoring model
-
   @Column({ type: 'varchar', length: 255, nullable: true })
   description?: string;
 

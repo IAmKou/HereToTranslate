@@ -110,10 +110,10 @@ export class PaypalService {
               description: `50% Deposit for request ID ${request.id}`,
               shipping: {
                 name: {
-                  full_name: user.fullName || user.username || user.email, // Giữ nguyên tên
+                  full_name: user.fullName || user.username || user.email, 
                 },
                 address: {
-                  address_line_1: user.email, // Email luôn là tiếng Anh
+                  address_line_1: user.email, 
                   admin_area_1: '',
                   postal_code: '000000',
                   country_code: 'VN',
@@ -1094,7 +1094,7 @@ export class PaypalService {
       relations: ['user'],
     });
 
-    const remainingAmount = originalTx.amount; // remaining 50%
+    const remainingAmount = originalTx.amount; 
 
     const wallet = await this.walletManagerService.getOrCreateWallet(request.requester.id);
 
@@ -1113,6 +1113,59 @@ export class PaypalService {
     });
 
     await this.transactionRepo.save(tx);
+  }
+
+  async refundDeposit(request: RequestEntity): Promise<void> {
+    logger.log(`Starting refund process for request ID: ${request.id}`);
+
+    const depositTransaction = await this.transactionRepo.findOne({
+      where: {
+        request: { id: request.id },
+        user: { id: request.requester.id },
+        status: TransactionStatus.Pending,
+      },
+      relations: ['user'],
+    });
+
+    if (!depositTransaction) {
+      logger.warn(`No pending deposit transaction found for request ID: ${request.id}`);
+      return;
+    }
+
+    try {
+      const wallet = await this.walletManagerService.getOrCreateWallet(
+        request.requester.id
+      );
+
+      wallet.balance = Number(wallet.balance) + Number(depositTransaction.amount);
+      await this.walletRepository.save(wallet);
+
+      depositTransaction.status = TransactionStatus.Failed;
+      await this.transactionRepo.save(depositTransaction);
+
+      const refundTransaction = this.transactionRepo.create({
+        user: { id: request.requester.id } as UserEntity,
+        request: { id: request.id } as RequestEntity,
+        amount: depositTransaction.amount,
+        status: TransactionStatus.Completed,
+      });
+
+      await this.transactionRepo.save(refundTransaction);
+
+      await this.notificationService.createNotification({
+        userId: request.requester.id,
+        type: 'REFUND_PROCESSED',
+        message: `Your deposit of $${depositTransaction.amount} has been refunded for request "${request.title}".`,
+        createdBy: this.ADMIN_USER_ID,
+      });
+
+      logger.log(
+        `Successfully refunded $${depositTransaction.amount} to user ID ${request.requester.id} for request ID ${request.id}`
+      );
+    } catch (error) {
+        logger.error(`Failed to process refund for request ID ${request.id}: ${error}`);
+      throw new InternalServerErrorException('Failed to process refund');
+    }
   }
 
 }

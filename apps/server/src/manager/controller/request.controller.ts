@@ -76,12 +76,6 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('debug/registrations')
-  async debugRegistrations(@Req() req: AuthenticatedRequest) {
-    return this.requests.getMyRegisteredRequests(req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Get('pending/count')
   async getPendingRequestsCount(@Req() req: AuthenticatedRequest) {
     const count = await this.requests.getPendingRequestsCount();

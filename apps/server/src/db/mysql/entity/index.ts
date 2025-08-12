@@ -32,4 +32,3 @@ export * from './difficulty-config.entity';
 export * from './task-assignment.entity';
 export * from './assignment-history.entity';
 export * from './task-assignment-history.entity';    
-export * from './task-status.entity';

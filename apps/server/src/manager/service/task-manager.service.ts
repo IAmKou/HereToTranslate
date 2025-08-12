@@ -871,8 +871,7 @@ export class TaskManagerService {
 
       task.selectedPages = params.selectedPages;
       task.totalScore = scoreData.totalScore;
-      task.totalAmount = scoreData.totalScore; // Can be adjusted with additional pricing logic
-      task.totalPages = scoreData.totalPages;
+      task.totalAmount = scoreData.totalScore; 
 
       await this.taskRepository.save(task);
     }

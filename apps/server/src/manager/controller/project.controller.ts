@@ -279,7 +279,7 @@ export class ProjectController {
       return result;
     } catch (error) {
       console.error('Upload file error:', error);
-      throw new InternalServerErrorException('Upload failed: ' + (error?.message || error));
+      throw new InternalServerErrorException('Upload failed: ' + (error as Error).message);
     }
   }
 }

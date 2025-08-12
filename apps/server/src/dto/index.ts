@@ -15,4 +15,3 @@ export * from './status.dto';
 export * from './deadline-extension.dto';
 export * from './translation-preview.dto';
 export * from './project-cancellation.dto';
-export * from './page-difficulty.dto';

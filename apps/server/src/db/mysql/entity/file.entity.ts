@@ -21,6 +21,9 @@ export class FileEntity {
   @Column({ type: 'varchar', length: 255, charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' })
   fileName: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true, charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' })
+  title?: string;
+
   @Column({ nullable: true })
   fileType: string;
 

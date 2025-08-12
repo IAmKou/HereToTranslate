@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import type { Response } from 'express';
 
 @Controller('translation')
 export class TranslationController {
@@ -65,6 +66,19 @@ export class TranslationController {
     @Body('language') language: string
   ) {
     return this.translationService.exportTranslation(fileId, language);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('export/download/:fileId')
+  async downloadExport(
+    @Param('fileId') fileId: string,
+    @Query('language') language: string,
+    @Res() res: Response
+  ) {
+    const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language);
+    res.setHeader('Content-Type', fileType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    return res.send(buffer);
   }
 
 }

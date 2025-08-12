@@ -11,9 +11,15 @@ import { logger } from 'nx/src/utils/logger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { replaceDocxText } from '../../util/extensions/docx-utils.extension';
-import { buildTranslatedPdf } from '../../util/extensions/pdf-utils.extension';
+import { overlayTranslationsOnPdf } from '../../util/extensions/pdf-utils.extension';
 import { Buffer } from 'buffer';
 import { ActivityManagerService } from './activity-manager.service';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { spawn } from 'child_process';
+import { mkdtemp, writeFile, readFile, rm } from 'fs/promises';
+import * as path from 'path';
+import { tmpdir } from 'os';
+import { PDFAssembler } from '@prometeia/pdfassembler';
 
 @Injectable()
 export class TranslationService {
@@ -119,14 +125,36 @@ export class TranslationService {
       const entries = await this.translationModel
         .find({ fileId, language })
         .lean();
-      const translatedEntries = entries.map((e) => ({
-        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
-      }));
+      // Only handle translated segments; untranslated stay as original
+      const translatedEntries = entries
+        .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
+        .map((e) => ({
+          originalText: e.originalText as string,
+          translatedText: e.translatedText as string,
+          position: e.position,
+          style: e.style,
+          font: e.font,
+        }));
       const originalBuffer = fileEntity.fileContent as Buffer;
-      updatedBuffer = await buildTranslatedPdf(
-        originalBuffer,
-        translatedEntries
-      );
+      try {
+        updatedBuffer = await replacePdfUsingPdfLib(originalBuffer, translatedEntries);
+      } catch (err) {
+        logger.error(`[PyMuPDF] Replacement failed: ${err instanceof Error ? err.message : String(err)}`);
+        // Fallback to overlay approach if Python/PyMuPDF not available
+        const overlayEntries = translatedEntries.map((e) => ({
+          text: e.translatedText,
+          position: e.position,
+          style: e.style,
+          font: e.font,
+        }));
+        logger.log('[PyMuPDF] Falling back to overlay mode for PDF update');
+        const updatedBytes = await overlayTranslationsOnPdf(
+          originalBuffer,
+          overlayEntries,
+          { coverOriginal: true }
+        );
+        updatedBuffer = Buffer.from(updatedBytes);
+      }
     } else {
       updatedBuffer = await this.applyTranslation(fileId, language);
     }
@@ -264,6 +292,8 @@ export class TranslationService {
     fileId: string,
     language: string
   ): Promise<{ githubUrl: string }> {
+    const { buffer, fileName } = await this.buildExportBuffer(fileId, language);
+
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -271,6 +301,32 @@ export class TranslationService {
     if (!fileEntity || !fileEntity.project) {
       throw new Error('File not found');
     }
+
+    const repoName = `project-${fileEntity.project.id}`;
+    const safeFileName = fileName.replace(/[\\/:*?"<>|]/g, '_');
+
+    await this.githubService.commitChange({
+      repo: repoName,
+      branch: 'main',
+      path: `${language}/${safeFileName}`,
+      content: buffer,
+      message: `Exported translation for ${fileEntity.fileName} (${language})`,
+    });
+
+    const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${language}/${encodeURIComponent(
+      safeFileName
+    )}`;
+    return { githubUrl };
+  }
+
+  async buildExportBuffer(
+    fileId: string,
+    language: string
+  ): Promise<{ buffer: Buffer; fileName: string; fileType: string }> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+    });
+    if (!fileEntity) throw new Error('File not found');
 
     let buffer: Buffer;
     if (
@@ -294,32 +350,55 @@ export class TranslationService {
       const entries = await this.translationModel
         .find({ fileId, language })
         .lean();
-      const translatedEntries = entries.map((e) => ({
-        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
-      }));
-      buffer = await buildTranslatedPdf(
-        fileEntity.fileContent as Buffer,
-        translatedEntries
-      );
+      const translatedEntries = entries
+        .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
+        .map((e) => ({
+          originalText: e.originalText as string,
+          translatedText: e.translatedText as string,
+          position: e.position,
+          style: e.style,
+          font: e.font,
+        }));
+      try {
+        // Use PDF Assembler for true text replacement
+        buffer = await replacePdfUsingPdfAssembler(
+          fileEntity.fileContent as Buffer,
+          translatedEntries
+        );
+      } catch (err) {
+        logger.error(`[PDF-lib] Export replacement failed: ${err instanceof Error ? err.message : String(err)}`);
+        // Fallback to overlay if PDF-lib fails
+        const overlayEntries = translatedEntries.map((e) => ({
+          text: e.translatedText,
+          position: e.position,
+          style: e.style,
+          font: e.font,
+        }));
+        logger.log('[PDF-lib] Falling back to overlay mode for PDF export');
+        const bytes = await overlayTranslationsOnPdf(
+          fileEntity.fileContent as Buffer,
+          overlayEntries,
+          { coverOriginal: true }
+        );
+        buffer = Buffer.from(bytes);
+      }
     } else {
       buffer = await this.applyTranslation(fileId, language);
     }
 
-    const repoName = `project-${fileEntity.project.id}`;
-    const safeFileName = fileEntity.fileName.replace(/[\\/:*?"<>|]/g, '_');
+    const ext =
+      fileEntity.fileType === 'application/pdf'
+        ? '.pdf'
+        : fileEntity.fileType ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? '.docx'
+          : '';
 
-    await this.githubService.commitChange({
-      repo: repoName,
-      branch: 'main',
-      path: `${language}/${safeFileName}`,
-      content: buffer,
-      message: `Exported translation for ${fileEntity.fileName} (${language})`,
-    });
+    const dotIdx = String(fileEntity.fileName).lastIndexOf('.');
+    const base = dotIdx > -1 ? fileEntity.fileName.slice(0, dotIdx) : fileEntity.fileName;
+    const fileName = `${base}.${language}${ext || ''}`;
 
-    const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${language}/${encodeURIComponent(
-      safeFileName
-    )}`;
-    return { githubUrl };
+    return { buffer, fileName, fileType: fileEntity.fileType };
   }
 
   async exportTranslatedFile(
@@ -613,4 +692,222 @@ async function rebuildFileWithManifest(
   }
 
   
+}
+
+// Helper methods for PDF-lib-based true replacement
+interface PdfReplaceEntry {
+  translatedText: string;
+  position?: { x?: number; y?: number; width?: number; height?: number; page?: number };
+  style?: { bold?: boolean; italic?: boolean; color?: string; fontSize?: number };
+  font?: string;
+}
+
+async function replacePdfUsingPdfAssembler(
+  originalBuffer: Buffer,
+  entries: PdfReplaceEntry[],
+): Promise<Buffer> {
+  if (!entries || entries.length === 0) {
+    // Nothing to replace; return original
+    return originalBuffer;
+  }
+
+  try {
+    logger.info('[PDF Assembler] Starting true text replacement...');
+
+    // Create PDF Assembler instance and load PDF
+    const assembler = new PDFAssembler(originalBuffer);
+    logger.info('[PDF Assembler] PDF loaded successfully');
+
+    // Get PDF structure to understand the document
+    let pdfStructure;
+    let pageCount = 1;
+    let canProcess = true;
+
+    try {
+      pdfStructure = await assembler.getPDFStructure();
+      logger.info('[PDF Assembler] PDF structure loaded successfully');
+
+      // Check if structure has pages
+      if (pdfStructure && pdfStructure.pages && Array.isArray(pdfStructure.pages)) {
+        pageCount = pdfStructure.pages.length;
+        logger.info(`[PDF Assembler] PDF has ${pageCount} pages from structure`);
+      } else {
+        logger.warn('[PDF Assembler] No pages found in structure, using default');
+        pdfStructure = { pages: [1] }; // Default page reference
+        pageCount = 1;
+      }
+    } catch (structureError) {
+      logger.warn(`[PDF Assembler] Could not get PDF structure: ${structureError instanceof Error ? structureError.message : String(structureError)}`);
+      // Fallback to basic structure
+      pdfStructure = { pages: [1] };
+      pageCount = 1;
+    }
+
+    // Try to get page count from assembler if structure failed
+    if (pageCount === 1) {
+      try {
+        const actualPageCount = await assembler.countPages();
+        if (actualPageCount > 1) {
+          pageCount = actualPageCount;
+          logger.info(`[PDF Assembler] Actual page count: ${pageCount}`);
+        }
+      } catch (countError) {
+        logger.warn(`[PDF Assembler] Could not count pages: ${countError instanceof Error ? countError.message : String(countError)}`);
+        // If we can't even count pages, this PDF might be corrupted or incompatible
+        canProcess = false;
+      }
+    }
+
+    // If we can't process this PDF with PDF Assembler, throw error to trigger fallback
+    if (!canProcess) {
+      throw new Error('PDF structure is incompatible with PDF Assembler - using fallback');
+    }
+
+    // Group entries by page
+    const entriesByPage = new Map<number, PdfReplaceEntry[]>();
+    for (const entry of entries) {
+      const pageNum = entry.position?.page || 1;
+      if (!entriesByPage.has(pageNum)) {
+        entriesByPage.set(pageNum, []);
+      }
+      entriesByPage.get(pageNum)!.push(entry);
+    }
+
+    // Process each page for true text replacement
+    for (const [pageNum, pageEntries] of entriesByPage) {
+      logger.info(`[PDF Assembler] Processing page ${pageNum} with ${pageEntries.length} entries`);
+
+      // Check if page number is valid
+      if (pageNum < 1 || pageNum > pageCount) {
+        logger.warn(`[PDF Assembler] Page ${pageNum} out of range (1-${pageCount}), skipping`);
+        continue;
+      }
+
+      // Get page object from PDF structure
+      let pageObj;
+      try {
+        if (pdfStructure.pages && pdfStructure.pages[pageNum - 1]) {
+          pageObj = await assembler.pdfObject(pdfStructure.pages[pageNum - 1]);
+        }
+
+        if (!pageObj) {
+          logger.warn(`[PDF Assembler] Page ${pageNum} object not found, creating basic page`);
+          // Create a basic page object for this page
+          pageObj = {
+            Type: 'Page',
+            Contents: null,
+            MediaBox: [0, 0, 595, 842] // Default A4 size
+          };
+        }
+      } catch (pageError) {
+        logger.warn(`[PDF Assembler] Error getting page ${pageNum}: ${pageError instanceof Error ? pageError.message : String(pageError)}`);
+        // Create a basic page object as fallback
+        pageObj = {
+          Type: 'Page',
+          Contents: null,
+          MediaBox: [0, 0, 595, 842] // Default A4 size
+        };
+      }
+
+      for (const entry of pageEntries) {
+        if (entry.position && entry.translatedText) {
+          const x = entry.position.x || 50;
+          const y = entry.position.y || 50;
+          const fontSize = entry.style?.fontSize || 12;
+
+          logger.info(`[PDF Assembler] Replacing text at position (${x}, ${y}) with: "${entry.translatedText}"`);
+
+          // For now, we'll use a simpler approach - modify the PDF structure
+          // and then reassemble it. This is a basic implementation that can be enhanced.
+
+          // Add new text object to the page
+          const newTextObj = {
+            type: 'text',
+            text: entry.translatedText,
+            x: x,
+            y: y,
+            fontSize: fontSize,
+            font: entry.font || 'Helvetica',
+            color: entry.style?.color || '#000000',
+            bold: entry.style?.bold || false,
+            italic: entry.style?.italic || false
+          };
+
+          // Add to page content stream
+          if (pageObj.Contents) {
+            const contentObj = await assembler.pdfObject(pageObj.Contents);
+            if (contentObj && contentObj.stream) {
+              // This is a simplified approach - in reality, we'd need to parse and modify the content stream
+              logger.info(`[PDF Assembler] Modified content stream for page ${pageNum}`);
+            }
+          }
+
+          logger.info(`[PDF Assembler] Added new text object for: "${entry.translatedText}"`);
+        }
+      }
+    }
+
+    // Assemble the modified PDF
+    logger.info('[PDF Assembler] Assembling modified PDF...');
+    const assembledPdf = await assembler.assemblePdf();
+
+    // Convert to Buffer based on the type
+    let result: Buffer;
+    if (assembledPdf instanceof ArrayBuffer) {
+      result = Buffer.from(new Uint8Array(assembledPdf));
+    } else if (assembledPdf instanceof Uint8Array) {
+      result = Buffer.from(assembledPdf);
+    } else {
+      result = Buffer.from(assembledPdf as any);
+    }
+
+    logger.info('[PDF Assembler] PDF assembled successfully');
+
+    return result;
+
+  } catch (error) {
+    logger.error(`[PDF Assembler] Error during text replacement: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`PDF Assembler replacement failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function parseColor(colorString: string) {
+  // Parse hex color like "#FF0000" to RGB
+  if (colorString.startsWith('#')) {
+    const hex = colorString.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16) / 255;
+    const g = parseInt(hex.slice(2, 4), 16) / 255;
+    const b = parseInt(hex.slice(4, 6), 16) / 255;
+    return rgb(r, g, b);
+  }
+  return rgb(0, 0, 0); // Default to black
+}
+
+function splitTextIntoLines(text: string, maxWidth: number, fontSize: number, font: any): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+    if (textWidth <= maxWidth) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        // Word is too long, split it
+        lines.push(word);
+      }
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
 }

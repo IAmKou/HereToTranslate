@@ -677,6 +677,9 @@ export class ManifestService {
               for (const [page, pageItems] of itemsByPage) {
                 const pageText = pageItems.map((i: any) => i.text).join(' ').trim();
                 if (pageText.length >= 5) {
+                  const minX = Math.min(...pageItems.map((i: any) => i.x));
+                  const maxX = Math.max(...pageItems.map((i: any) => (i.x || 0) + (i.width || 0)));
+                  const maxH = Math.max(...pageItems.map((i: any) => i.height || i.fontSize || 0));
                   manifestEntries.push({
                     projectId: String(file.project.id),
                     branchId: String(file.branch.id),
@@ -685,15 +688,17 @@ export class ManifestService {
                     originalText: pageText,
                     language: 'en',
                     font: pageItems[0]?.font || 'default',
-                    // fontSize: pageItems[0]?.fontSize, // Commented out as it's not in the schema
                     style: {
                       bold: pageItems.some((i: any) => i.bold),
                       italic: pageItems.some((i: any) => i.italic),
                       color: pageItems[0]?.color,
+                      fontSize: pageItems[0]?.fontSize || maxH || undefined,
                     },
                     position: {
-                      x: Math.min(...pageItems.map((i: any) => i.x)),
+                      x: minX,
                       y: Math.min(...pageItems.map((i: any) => i.y)),
+                      width: isFinite(maxX - minX) ? maxX - minX : undefined,
+                      height: maxH || undefined,
                       page: page,
                     },
                   });
@@ -705,6 +710,9 @@ export class ManifestService {
             // Lấy page từ item đầu tiên (vì đã được sắp xếp theo page)
             const page = lineObj.items[0]?.page || 1;
 
+            const minX = Math.min(...lineObj.items.map((i: any) => i.x));
+            const maxX = Math.max(...lineObj.items.map((i: any) => (i.x || 0) + (i.width || 0)));
+            const maxH = Math.max(...lineObj.items.map((i: any) => i.height || i.fontSize || 0));
             manifestEntries.push({
               projectId: String(file.project.id),
               branchId: String(file.branch.id),
@@ -713,15 +721,17 @@ export class ManifestService {
               originalText: lineObj.text,
               language: 'en',
               font: lineObj.items[0]?.font || 'default',
-              // fontSize: lineObj.items[0]?.fontSize, // Commented out as it's not in the schema
               style: {
                 bold: lineObj.items.some((i: any) => i.bold),
                 italic: lineObj.items.some((i: any) => i.italic),
                 color: lineObj.items[0]?.color,
+                fontSize: lineObj.items[0]?.fontSize || maxH || undefined,
               },
               position: {
-                x: Math.min(...lineObj.items.map((i: any) => i.x)),
+                x: minX,
                 y: Math.min(...lineObj.items.map((i: any) => i.y)),
+                width: isFinite(maxX - minX) ? maxX - minX : undefined,
+                height: maxH || undefined,
                 page: page,
               },
             });

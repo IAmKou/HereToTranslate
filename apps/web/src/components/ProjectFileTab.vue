@@ -6,6 +6,7 @@ import TreeTable from 'primevue/treetable';
 import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
+import Dialog from 'primevue/dialog';
 import { FilterMatchMode } from 'primevue/api';
 import Menu from 'primevue/menu';
 import axiosInstance from '../api';
@@ -16,6 +17,7 @@ import { isSidebarCollapsed } from '../store/sidebar';
 interface ProjectFile {
   id: string | number;
   fileName: string;
+  title?: string | null;
   projectId?: string | number;
   children?: ProjectFile[];
   strings?: number;
@@ -46,6 +48,11 @@ const toast = useToast();
 const uploading = ref(false);
 const uploadError = ref('');
 const uploadInput = ref<HTMLInputElement | null>(null);
+// Batch upload with per-file titles
+const showTitleDialog = ref(false);
+const filesToUpload = ref<File[]>([]);
+const titles = ref<string[]>([]);
+const titlesFilled = computed(() => titles.value.length > 0 && titles.value.every((t: string) => !!t && t.trim().length > 0));
 const searchValue = ref('');
 const filters = ref({
   global: { value: null, matchMode: FilterMatchMode.CONTAINS },
@@ -150,70 +157,87 @@ function triggerUpload() {
 async function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   if (!input.files || input.files.length === 0) return;
-  const file = input.files[0];
-  // Kiểm tra kích thước file
   const maxSize = 10 * 1024 * 1024; // 10MB
-  if (file.size > maxSize) {
-    uploadError.value = `File ${file.name} is too large. Maximum size is 10MB.`;
-    toast.add({
-      severity: 'error',
-      summary: 'File too large',
-      detail: uploadError.value,
-      life: 4000,
-    });
+  const selected = Array.from(input.files);
+  // Validate sizes first
+  for (const f of selected) {
+    if (f.size > maxSize) {
+      uploadError.value = `File ${f.name} is too large. Maximum size is 10MB.`;
+      toast.add({ severity: 'error', summary: 'File too large', detail: uploadError.value, life: 4000 });
+      return;
+    }
+  }
+  filesToUpload.value = selected;
+  titles.value = selected.map(() => '');
+  showTitleDialog.value = true;
+}
+
+async function uploadSingleFile(file: File, title: string) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const projectId = props.projectId;
+  const branchId = props.branchId;
+  if (!projectId) throw new Error('Project ID not found');
+  if (!branchId) throw new Error('Branch ID not found');
+  formData.append('projectId', projectId.toString());
+  formData.append('branchId', branchId.toString());
+  formData.append('title', title);
+  const response = await axiosInstance.post('/files/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (progressEvent: ProgressEvent) => {
+      if (progressEvent.lengthComputable) {
+        uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+      }
+    }
+  });
+  const respData = response.data;
+  const isUpdate = respData?.updated;
+  const message = isUpdate
+    ? `File "${file.name}" updated successfully!`
+    : `File "${file.name}" uploaded successfully!`;
+  toast.add({ severity: 'success', summary: 'Success', detail: message, life: 3000 });
+  // Refresh list and poll last file
+  props.loadFiles();
+  lastUploadedFileId.value = respData && respData.fileId ? respData.fileId : null;
+  if (lastUploadedFileId.value) {
+    startPollingFileStatus(lastUploadedFileId.value);
+  }
+}
+
+async function uploadFilesWithTitles() {
+  if (!props.projectId) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Project ID not found', life: 3000 });
     return;
   }
-  uploading.value = true;
+  if (!props.branchId) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Branch ID not found', life: 3000 });
+    return;
+  }
+  if (!titlesFilled.value) {
+    toast.add({ severity: 'warn', summary: 'Missing title', detail: 'Please enter a title for each file.', life: 2500 });
+    return;
+  }
+  showTitleDialog.value = false;
   uploadError.value = '';
+  uploading.value = true;
   uploadProgress.value = 0;
   uploadPhase.value = 'uploading';
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-    const projectId = props.projectId;
-    const branchId = props.branchId;
-    if (!projectId) throw new Error('Project ID not found');
-    if (!branchId) throw new Error('Branch ID not found');
-    formData.append('projectId', projectId.toString());
-    formData.append('branchId', branchId.toString());
-    console.log('Uploading file:', file.name, 'to project:', projectId, 'branch:', branchId);
-    // Sử dụng axios để lấy onUploadProgress
-    const response = await axiosInstance.post('/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (progressEvent: ProgressEvent) => {
-        if (progressEvent.lengthComputable) {
-          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        }
-      }
-    });
-
-    // Upload xong, tắt overlay ngay lập tức
-    uploading.value = false;
-    uploadProgress.value = 0;
-    uploadPhase.value = null;
-
-    const respData = response.data;
-    const isUpdate = respData?.updated;
-    const message = isUpdate
-      ? `File "${file.name}" updated successfully!`
-      : `File "${file.name}" uploaded successfully!`;
-    toast.add({ severity: 'success', summary: 'Success', detail: message, life: 3000 });
-
-    // Reload files ngay để hiển thị file với status processing
-    props.loadFiles();
-
-    lastUploadedFileId.value = respData && respData.fileId ? respData.fileId : null;
-    // Polling trạng thái file nếu status là processing
-    if (lastUploadedFileId.value) {
-      startPollingFileStatus(lastUploadedFileId.value);
+    for (let i = 0; i < filesToUpload.value.length; i++) {
+      const file = filesToUpload.value[i];
+      const title = titles.value[i];
+      await uploadSingleFile(file, title);
     }
   } catch (e: any) {
-    uploadError.value = e.message || 'Upload failed';
-    toast.add({ severity: 'error', summary: 'Error', detail: uploadError.value, life: 3000 });
-    console.error('File upload error:', e);
+    const msg = e?.message || 'Upload failed';
+    uploadError.value = msg;
+    toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 3000 });
+  } finally {
     uploading.value = false;
     uploadProgress.value = 0;
     uploadPhase.value = null;
+    filesToUpload.value = [];
+    titles.value = [];
   }
 }
 
@@ -466,11 +490,11 @@ defineExpose({
 
 // Permission logic
 const normalizedMembers = computed(() => {
-  if (!props.members) return [];
-  return props.members.map(m => ({
+  if (!props.members) return [] as any[];
+  return props.members.map((m: any) => ({
     ...m,
     roles: Array.isArray(m.roles)
-      ? m.roles.map(r => {
+      ? m.roles.map((r: any) => {
         // Luôn parse lại từ permissionFlags, không dùng r.permissions từ backend
         const permissions = r.permissionFlags ? parsePermissionFlags(r.permissionFlags) : [];
         return { ...r, permissions };
@@ -536,18 +560,8 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
                 :disabled="uploading || !props.branchId || !canAttachFiles"
                 :title="!canAttachFiles ? 'You do not have permission to add files (requires AttachFiles permission)' : ''"
         />
-        <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" />
+        <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" multiple />
       </div>
-    </div>
-    <div class="file-format-note" style="background:#fffbe6;border:1.2px solid #ffe58f;color:#ad8b00;padding:11px 16px;border-radius:9px;margin:13px 0 16px 0;font-size:0.98em;display:flex;align-items:center;gap:0.65em;">
-      <i class="pi pi-exclamation-triangle" style="color:#faad14;font-size:1.2em;"></i>
-      <span>
-        <b>Note:</b><br>
-        - For <b>DOCX</b> files: The exported translation will retain about <b>80–90%</b> of the original formatting and layout. Some complex layouts or advanced styles may not be fully preserved.<br>
-        - For <b>PDF</b> files:<br>
-        &nbsp;&nbsp;• If the PDF contains selectable text, about <b>60–70%</b> of the original formatting may be preserved.<br>
-        &nbsp;&nbsp;• If the PDF is a scanned image (OCR), only the text content will be extracted; formatting and layout will <b>not</b> be preserved.
-      </span>
     </div>
     <div v-if="uploadError" style="color:#e53e3e; margin-bottom: 0.5em">{{ uploadError }}</div>
     <div v-if="searchLoading" class="search-loading">Searching...</div>
@@ -556,6 +570,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       <thead>
       <tr>
         <th>Name</th>
+        <th>Title</th>
         <th></th>
       </tr>
       </thead>
@@ -578,6 +593,9 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
             <i class="pi pi-spin pi-spinner" style="font-size:1em;margin-left:8px;"></i> Processing...
           </span>
           <span v-else-if="file.status === 'error'" class="file-status error" style="color:#e53e3e;margin-left:8px;">Error extracting strings</span>
+        </td>
+        <td class="file-title-cell">
+          <span class="file-title">{{ file.title || '' }}</span>
         </td>
         <td class="file-actions-cell" style="position:relative;">
           <Button icon="pi pi-ellipsis-v" class="p-button-rounded p-button-text p-button-sm" @click="toggleDropdown(file.id || file.fileId)" :ref="setEllipsisBtnRef(file.id || file.fileId)" />
@@ -616,6 +634,31 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 
     <!-- Modal xác nhận xóa file đẹp -->
     <teleport to="body">
+      <!-- Custom Modal nhập tiêu đề file -->
+      <div v-if="showTitleDialog && filesToUpload.length > 0" class="custom-title-dialog-modal">
+        <div class="modal-overlay" @click="showTitleDialog=false; filesToUpload=[]; titles=[];"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Enter title for each file</h3>
+            <button class="close-btn" @click="showTitleDialog=false; filesToUpload=[]; titles=[];">
+              <span style="font-size: 1.5rem; color: #6b7280; font-weight: bold;">×</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <div v-for="(f, idx) in filesToUpload" :key="idx" style="display:flex;flex-direction:column;gap:8px;width:100%;">
+                <span style="word-break: break-all; font-weight: 500; color:#0f172a;">File name: {{ f.name }}</span>
+                <input v-model="titles[idx]" type="text" placeholder="Enter title" class="title-input" style="width:100%;" :autofocus="idx === 0" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showTitleDialog=false; filesToUpload=[]; titles=[];">Cancel</button>
+            <button class="btn btn-primary" :disabled="!titlesFilled" @click="uploadFilesWithTitles">Upload</button>
+          </div>
+        </div>
+      </div>
+      <!-- End Custom Modal nhập tiêu đề file -->
       <div v-if="showDeleteDialog" class="delete-dialog-modal">
         <div class="modal-overlay" @click="closeDeleteDialog"></div>
         <div class="modal-content">
@@ -699,6 +742,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   padding: 0.7em 1em;
   font-size: 1em;
   border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
 }
 .custom-treetable ::v-deep .p-button {
   min-width: 32px;
@@ -714,12 +758,15 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   margin-top: 1em;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
 }
 .file-table th, .file-table td {
   padding: 0.5em 0.8em;
   font-size: 0.9em;
   border-bottom: 1px solid #e5e7eb;
   text-align: left;
+  vertical-align: top;
+  line-height: 1.4;
 }
 .file-table th {
   background: #f3f4f6;
@@ -732,8 +779,14 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
 }
 .file-name-cell {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+}
+.file-name-cell i {
+  line-height: 1; /* tránh icon làm lệch baseline */
+  display: flex;
+  align-items: flex-start;
+  margin-top: 2px; /* căn icon với baseline của text */
 }
 .file-base-name {
   font-weight: 500;
@@ -741,7 +794,15 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   overflow: visible;
   white-space: normal;
   font-size: 0.9em;
+  line-height: 1.4;
   word-wrap: break-word;
+}
+.file-title {
+  font-size: 0.9em;
+  font-weight: 400;
+  color: #374151;
+  line-height: 1.4;
+  vertical-align: middle;
 }
 .version-select {
   margin-left: 10px;
@@ -764,6 +825,18 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   text-align: center;
   position: relative;
 }
+.file-title-cell {
+  vertical-align: top;
+  padding-top: 0.5em; /* căn với padding của td */
+}
+
+/* Đảm bảo 3 cột luôn thẳng hàng, kể cả khi Title trống */
+.file-table th:nth-child(1),
+.file-table td:nth-child(1) { width: 55%; }
+.file-table th:nth-child(2),
+.file-table td:nth-child(2) { width: 40%; }
+.file-table th:nth-child(3),
+.file-table td:nth-child(3) { width: 5%; }
 .search-loading {
   color: #6366f1;
   font-weight: 500;
@@ -1138,5 +1211,56 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   color: #e53e3e;
   font-weight: 500;
   margin-left: 8px;
+}
+.custom-title-dialog-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 300000; /* cao hơn toast và overlay khác */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+.custom-title-dialog-modal .modal-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 300000;
+}
+.custom-title-dialog-modal .modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 95vw;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+  z-index: 300001 !important; /* đảm bảo nổi trên overlay */
+  display: flex;
+  flex-direction: column;
+}
+.title-input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #f8fafc;
+  color: #0f172a;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.title-input::placeholder {
+  color: #94a3b8;
+}
+.title-input:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+.title-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+  background: #fff;
 }
 </style>

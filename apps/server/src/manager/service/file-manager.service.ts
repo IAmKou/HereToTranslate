@@ -133,6 +133,7 @@ export class FileService {
     projectId?: bigint,
     branchId?: bigint,
     requestId?: bigint,
+    title?: string,
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
 
@@ -156,6 +157,7 @@ export class FileService {
       existingFile.uploader = { id: uid } as any;
       existingFile.updatedAt = new Date();
       existingFile.status = 'processing';
+      if (title !== undefined) existingFile.title = title;
       await this.fileRepository.save(existingFile);
       saved = {
         fileId: existingFile.id.toString(),
@@ -180,6 +182,7 @@ export class FileService {
         branch: branchId ? { id: branchId } : undefined,
         request: requestId ? { id: requestId } : undefined,
         status: 'processing',
+        title: title,
       });
       const savedFile = await this.fileRepository.save(fileEntity);
       saved = {
@@ -241,6 +244,7 @@ export class FileService {
       ...saved,
       updated: isUpdate,
       status: 'processing',
+      title: title ?? undefined,
     };
   }
 
@@ -265,7 +269,7 @@ export class FileService {
     const files = await this.fileRepository.find({
       where: { project: { id: projectId } },
       relations: ['uploader'],
-      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader', 'status'],
+      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader', 'status', 'title'],
       order: { createdAt: 'DESC' }
     });
 
@@ -273,6 +277,7 @@ export class FileService {
       fileId: file.id.toString(),
       fileName: file.fileName,
       fileType: file.fileType,
+      title: file.title ?? null,
       createdAt: file.createdAt,
       status: file.status || 'ready',
       uploader: {
@@ -286,7 +291,7 @@ export class FileService {
   async getFileById(fileId: string) {
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      select: ['id', 'fileName', 'fileType', 'fileContent', 'status', 'extractLog'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'status', 'extractLog', 'title'],
     });
     if (!file) return null;
     return {
@@ -294,6 +299,7 @@ export class FileService {
       fileName: file.fileName,
       fileType: file.fileType,
       fileContent: file.fileContent,
+      title: file.title ?? null,
       status: file.status || 'ready',
       extractLog: file.extractLog || '',
     };

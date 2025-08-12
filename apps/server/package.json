@@ -6,7 +6,9 @@
     "targets": {
       "build": {
         "executor": "@nx/webpack:webpack",
-        "outputs": ["{options.outputPath}"],
+        "outputs": [
+          "{options.outputPath}"
+        ],
         "options": {
           "outputPath": "dist/apps/server",
           "main": "apps/server/src/main.ts",
@@ -74,8 +76,9 @@
     }
   },
   "dependencies": {
+    "@prometeia/pdfassembler": "^0.1.0-beta.8.fix1",
     "docx": "^9.5.1",
-    "pdf-lib": "^1.17.1",
-    "mammoth": "^1.6.0"
+    "mammoth": "^1.6.0",
+    "pdf-lib": "^1.17.1"
   }
 }

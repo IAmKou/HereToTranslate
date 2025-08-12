@@ -401,14 +401,48 @@ async function saveTranslation(str: any) {
   console.log('saveTranslation str:', str);
   const id = str.id;
   try {
+    const currentLanguage = selectedLanguage.value?.code || defaultLanguage.value.code;
     await axiosInstance.post(`/translation/translate/${id}`, {
-      translatedText: str.translatedText
+      translatedText: str.translatedText,
+      language: currentLanguage,
     });
     str._dirty = false;
     str._saved = true;
     toast.add({ severity: 'success', summary: 'Saved', detail: 'Translation saved successfully', life: 2000 });
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: e?.message || 'Failed to save translation', life: 3000 });
+  }
+}
+
+// Export translated file (download)
+async function exportTranslatedFile(file: any) {
+  const fileId = file.fileId || file.id;
+  const currentLanguage = selectedLanguage.value?.code || defaultLanguage.value.code;
+  try {
+    const res = await axiosInstance.get(`/translation/export/download/${fileId}`, {
+      params: { language: currentLanguage },
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
+    // Prefer filename from header; fallback to constructed name
+    const disposition = res.headers['content-disposition'] as string | undefined;
+    let filename = file.fileName || `export_${fileId}`;
+    if (disposition) {
+      const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      const extracted = decodeURIComponent(match?.[1] || match?.[2] || '');
+      if (extracted) filename = extracted;
+    }
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    toast.add({ severity: 'success', summary: 'Exported', detail: `Downloaded ${filename}`, life: 2500 });
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Export failed', detail: e?.message || 'Unable to export file', life: 3000 });
   }
 }
 </script>
@@ -471,19 +505,32 @@ async function saveTranslation(str: any) {
           <div class="progress-bar-wrapper" style="font-weight: 600; color: #222; min-width: 70px; font-size: 0.9rem;">
             {{ fileProgress[file.fileId || file.id]?.translated || 0 }} / {{ fileProgress[file.fileId || file.id]?.total || 0 }}
           </div>
-          <a
-            :href="canOpenEditor ? `/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}&language=${selectedLanguage?.code || 'en'}` : '#'"
-            class="open-translator-btn"
-            :class="{ 'disabled': !canOpenEditor }"
-            style="background: #7c5dfa; color: white; border: none; padding: 0.4rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; margin-left: 0.8rem; transition: all 0.2s; font-size: 0.9rem;"
-            @mouseenter="canOpenEditor && ($event.target.style.background = '#5f43ea')"
-            @mouseleave="canOpenEditor && ($event.target.style.background = '#7c5dfa')"
-            :title="!canOpenEditor ? 'You do not have permission to open the translation editor (requires EditTranslation or ManageTranslation permission)' : ''"
-            @click="!canOpenEditor && $event.preventDefault()"
-          >
-            <i class="pi pi-external-link" style="font-size: 0.9rem;"></i>
-            Open Editor
-          </a>
+          <div style="display:flex; align-items:center; gap:0.5rem; margin-left:0.8rem;">
+            <a
+              :href="canOpenEditor ? `/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}&language=${selectedLanguage?.code || 'en'}` : '#'"
+              class="open-translator-btn"
+              :class="{ 'disabled': !canOpenEditor }"
+              style="background: #7c5dfa; color: white; border: none; padding: 0.4rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s; font-size: 0.9rem;"
+              @mouseenter="canOpenEditor && ($event.target.style.background = '#5f43ea')"
+              @mouseleave="canOpenEditor && ($event.target.style.background = '#7c5dfa')"
+              :title="!canOpenEditor ? 'You do not have permission to open the translation editor (requires EditTranslation or ManageTranslation permission)' : ''"
+              @click="!canOpenEditor && $event.preventDefault()"
+            >
+              <i class="pi pi-external-link" style="font-size: 0.9rem;"></i>
+              Open Editor
+            </a>
+            <button
+              class="open-translator-btn"
+              style="background: #10b981; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s; font-size: 0.9rem;"
+              @mouseenter="$event.target.style.background = '#0ea371'"
+              @mouseleave="$event.target.style.background = '#10b981'"
+              title="Export translated file (download)"
+              @click="exportTranslatedFile(file)"
+            >
+              <i class="pi pi-download" style="font-size: 0.9rem;"></i>
+              Export
+            </button>
+          </div>
         </div>
       </div>
     </div>

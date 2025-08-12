@@ -26,9 +26,10 @@ export class FileController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadFile(@UploadedFile() file: Express.Multer.File, @Body() body: {
     projectId: bigint,
-    branchId: bigint
+    branchId: bigint,
+    title?: string
   }, @Req() req: AuthenticatedRequest) {
-    return this.fileService.handleUpload(file, req.user.id, body.projectId, body.branchId);
+    return this.fileService.handleUpload(file, req.user.id, body.projectId, body.branchId, undefined, body.title);
   }
 
   @UseGuards(JwtAuthGuard)

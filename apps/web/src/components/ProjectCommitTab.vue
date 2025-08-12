@@ -8,6 +8,8 @@ import Dialog from 'primevue/dialog';
 import axiosInstance from '../api';
 import Calendar from 'primevue/calendar';
 import { useProjectPermission } from '../composables/useProjectPermission';
+import Dropdown from 'primevue/dropdown';
+import { SUPPORTED_LANGUAGES, type Language } from '../utils/languages';
 
 interface Commit {
   id: string;
@@ -497,6 +499,7 @@ async function autoFillTranslationContent() {
       params: {
         projectId: props.projectId,
         branchId: props.branchId,
+        language: currentLanguageCode.value,
       },
     });
 
@@ -517,13 +520,14 @@ async function autoFillTranslationContent() {
       });
 
       if (str.translatedText && str.translatedText.trim()) {
-        const currentFilePath = str.filePath || str.fileName || 'translations.json';
-        console.log('Checking file match:', currentFilePath, 'vs', selectedFileForAutoFill.value);
-
-        if (currentFilePath === selectedFileForAutoFill.value) {
-          fileTranslations[str.originalText] = str.translatedText;
-          matchedStrings++;
-          console.log('✓ Matched string added:', str.originalText, '->', str.translatedText);
+        const currentFilePath = str.filePath || str.fileName;
+        if (currentFilePath && currentFilePath !== 'translations.json') {
+          console.log('Checking file match:', currentFilePath, 'vs', selectedFileForAutoFill.value);
+          if (currentFilePath === selectedFileForAutoFill.value) {
+            fileTranslations[str.originalText] = str.translatedText;
+            matchedStrings++;
+            console.log('✓ Matched string added:', str.originalText, '->', str.translatedText);
+          }
         }
       }
     });
@@ -609,6 +613,7 @@ async function loadAvailableFiles() {
       params: {
         projectId: props.projectId,
         branchId: props.branchId,
+        language: currentLanguageCode.value,
       },
     });
 
@@ -618,9 +623,11 @@ async function loadAvailableFiles() {
     const files = new Set<string>();
     (res.data || []).forEach((str: any) => {
       if (str.translatedText && str.translatedText.trim()) {
-        const filePath = str.filePath || str.fileName || 'translations.json';
-        files.add(filePath);
-        console.log('Added file:', filePath);
+        const filePath = str.filePath || str.fileName;
+        if (filePath && filePath !== 'translations.json') {
+          files.add(filePath);
+          console.log('Added file:', filePath);
+        }
       }
     });
 
@@ -833,13 +840,39 @@ const isLatestForFile = computed(() => {
 // Thêm state cho file được chọn
 const selectedFileForAutoFill = ref('');
 
+// Language selection for commit modal
+const projectLanguages = computed<Language[]>(() => {
+  const codes: string[] = (props.project?.targetLanguages as string[] | undefined) || [];
+  if (codes.length === 0) return SUPPORTED_LANGUAGES;
+  return SUPPORTED_LANGUAGES.filter(l => codes.includes(l.code));
+});
+const selectedCommitLanguage = ref<Language | null>(null);
+// Current language code to use in API requests
+const currentLanguageCode = computed<string>(() => {
+  if (selectedCommitLanguage.value?.code) return selectedCommitLanguage.value.code;
+  const codes: string[] = (props.project?.targetLanguages as string[] | undefined) || [];
+  return codes.length > 0 ? codes[0] : 'en';
+});
+
 // Watcher: Khi mở modal, reset form và load files
 watch(showSubmitDialog, (val: boolean) => {
   if (val) {
     // Reset form
     submitForm.value = { filePath: '', content: '', message: '' };
     selectedFileForAutoFill.value = '';
+    // Default language selection
+    selectedCommitLanguage.value = projectLanguages.value[0] || SUPPORTED_LANGUAGES.find(l => l.code === 'en') || null;
     // Load available files
+    loadAvailableFiles();
+  }
+});
+
+// When language changes inside the modal, reload available files and clear selections
+watch(selectedCommitLanguage, () => {
+  if (showSubmitDialog.value) {
+    submitForm.value.filePath = '';
+    submitForm.value.content = '';
+    selectedFileForAutoFill.value = '';
     loadAvailableFiles();
   }
 });
@@ -1020,6 +1053,17 @@ watch(showSubmitDialog, (val: boolean) => {
       <div class="submit-form commit-form-upgrade">
         <div class="form-group file-path-group">
           <label class="input-label"><span class="icon">📂</span> File Path</label>
+          <!-- Language selector for commit modal -->
+          <div style="margin-bottom:0.6em; display:flex; align-items:center; gap:0.6em;">
+            <span class="input-label" style="margin:0; display:inline-flex; align-items:center; gap:0.4em;"><span class="icon">🌐</span> Target Language</span>
+            <Dropdown
+              v-model="selectedCommitLanguage"
+              :options="projectLanguages"
+              optionLabel="name"
+              placeholder="Select language"
+              style="min-width: 220px;"
+            />
+          </div>
           <select v-model="submitForm.filePath" class="file-select-dropdown" @change="selectedFileForAutoFill = submitForm.filePath">
             <option value="">-- Select a file --</option>
             <option v-for="f in autoFillFiles" :key="f" :value="f">{{ f }}</option>
@@ -1292,6 +1336,10 @@ watch(showSubmitDialog, (val: boolean) => {
 
 <style scoped>
 .commits-tab-wrapper {
+  /* Thu nhỏ toàn bộ tab Commit 20% */
+  transform: scale(0.8);
+  transform-origin: top left;
+  width: 125%; /* Đảm bảo chiều rộng không bị co lại khi scale */
   padding: 0;
 }
 
@@ -1299,16 +1347,16 @@ watch(showSubmitDialog, (val: boolean) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
   background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid #e0e7ff;
 }
 
 .commits-title h2 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.5rem;
+  margin: 0 0 0.4rem 0;
+  font-size: clamp(1.1rem, 1.2vw + 0.6rem, 1.3rem);
   font-weight: 700;
   color: #1e293b;
 }
@@ -1316,12 +1364,12 @@ watch(showSubmitDialog, (val: boolean) => {
 .commits-title p {
   margin: 0;
   color: #64748b;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .commits-stats {
   display: flex;
-  gap: 2rem;
+  gap: 1.4rem;
 }
 
 .stat-item {
@@ -1329,7 +1377,7 @@ watch(showSubmitDialog, (val: boolean) => {
 }
 
 .stat-number {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 800;
   color: #3b82f6;
   line-height: 1;
@@ -1393,9 +1441,10 @@ watch(showSubmitDialog, (val: boolean) => {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   border: none;
   color: white;
-  padding: 0.5rem 1.5rem;
+  padding: 0.45rem 1.1rem;
   border-radius: 8px;
   font-weight: 600;
+  font-size: 0.95em;
   transition: all 0.2s;
 }
 
@@ -1761,9 +1810,9 @@ watch(showSubmitDialog, (val: boolean) => {
   border-left: 4px solid #10b981;
   background: #fff;
   border-radius: 12px;
-  padding: 1.25rem 1.5rem;
-  margin-bottom: 1.2rem;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.08);
+  padding: 1rem 1.2rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.08);
   transition: box-shadow 0.18s;
 }
 .commit-card-upgrade.status-pending {
@@ -1788,16 +1837,16 @@ watch(showSubmitDialog, (val: boolean) => {
   flex: 1;
 }
 .commit-message {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #1e293b;
 }
 .commit-meta {
-  margin-top: 0.5rem;
+  margin-top: 0.4rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 1.2rem;
-  font-size: 0.93rem;
+  gap: 1rem;
+  font-size: 0.88rem;
   color: #64748b;
 }
 .commit-card-right {
@@ -1807,8 +1856,8 @@ watch(showSubmitDialog, (val: boolean) => {
   gap: 0.5rem;
 }
 .status-badge-upgrade {
-  font-size: 0.8rem;
-  padding: 0.2em 0.9em;
+  font-size: 0.75rem;
+  padding: 0.15em 0.7em;
   border-radius: 999px;
   font-weight: 700;
   display: flex;
@@ -1843,9 +1892,9 @@ watch(showSubmitDialog, (val: boolean) => {
   border: none;
   color: #2563eb;
   font-weight: 600;
-  font-size: 0.95em;
+  font-size: 0.9em;
   cursor: pointer;
-  padding: 0.2em 0.7em;
+  padding: 0.15em 0.6em;
   border-radius: 6px;
   transition: background 0.15s, color 0.15s;
 }
@@ -2068,16 +2117,16 @@ watch(showSubmitDialog, (val: boolean) => {
 }
 
 .commit-form-upgrade .input-label {
-  font-size: 0.97em;
+  font-size: 0.92em;
   color: #64748b;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 0.4em;
-  margin-bottom: 0.2em;
+  gap: 0.35em;
+  margin-bottom: 0.15em;
 }
 .commit-form-upgrade .icon {
-  font-size: 1.1em;
+  font-size: 1em;
 }
 .textarea-group {
   position: relative;

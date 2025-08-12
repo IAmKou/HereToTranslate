@@ -46,3 +46,22 @@ declare module 'docx4js' {
     load: load,
   };
 }
+
+declare module 'pdfjs-dist' {
+  export * as pdfjs from 'pdfjs-dist';
+}
+
+declare module 'pdf-lib' {
+  export const StandardFonts: any;
+  export function rgb(r: number, g: number, b: number): any;
+  export class PDFDocument {
+    static load(data: any): Promise<PDFDocument>;
+    static create(): Promise<PDFDocument>;
+    getPageCount(): number;
+    getPages(): any[];
+    getPage(index: number): any;
+    addPage(size?: [number, number] | any): any;
+    save(): Promise<any>;
+    embedFont(font: any): Promise<any>;
+  }
+}

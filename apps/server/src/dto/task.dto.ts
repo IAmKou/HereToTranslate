@@ -22,6 +22,10 @@ export class CreateTaskDto {
   @IsDateString()
   dueDate?: string;
 
+  @IsOptional()
+  @IsNumber()
+  estimatedBusinessHours?: number;
+
   @IsNotEmpty()
   projectId: string;
 
@@ -56,6 +60,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  estimatedBusinessHours?: number;
 
   @IsOptional()
   @IsString()

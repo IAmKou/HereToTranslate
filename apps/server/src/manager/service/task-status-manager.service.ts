@@ -110,6 +110,33 @@ export class StatusManagerService {
     return await this.getProjectStatuses(projectId);
   }
 
+  async getOrCreateOpenStatus(projectId: string) {
+    const existing = await this.statusRepository.findOne({
+      where: { project: { id: BigInt(projectId) }, type: StatusType.OPEN },
+    });
+    if (existing) return existing;
+
+    const project = await this.projectRepository.findOneOrFail({ where: { id: BigInt(projectId) } });
+    const maxPosition = await this.statusRepository
+      .createQueryBuilder('status')
+      .select('MAX(status.position)', 'max')
+      .where('status.projectId = :projectId', { projectId })
+      .getRawOne();
+
+    const status = this.statusRepository.create({
+      name: 'Open',
+      description: 'Task is created without assignee',
+      color: '#6B778C',
+      type: StatusType.OPEN,
+      position: (maxPosition?.max || 0) + 1,
+      isActive: true,
+      isDefault: false,
+      project,
+    });
+
+    return await this.statusRepository.save(status);
+  }
+
   async createDefaultStatuses(projectId: string) {
     const project = await this.projectRepository.findOneOrFail({
       where: { id: BigInt(projectId) },
@@ -137,7 +164,7 @@ export class StatusManagerService {
         description: 'Task is completed',
         color: '#00875A',
         type: StatusType.DONE,
-        position: 3,
+        position: 2,
         isDefault: false,
       },
     ];

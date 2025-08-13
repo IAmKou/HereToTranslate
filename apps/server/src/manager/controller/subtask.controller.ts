@@ -20,11 +20,12 @@ export class SubtaskController {
   constructor(private readonly subtaskService: SubtaskManagerService) {}
 
   @Post()
-  async createSubtask(@Body() dto: CreateSubtaskDto, @Request() req: any) {
+  async createSubtask(@Body() dto: CreateSubtaskDto, @Request() req: { user: { id: string } }) {
     return await this.subtaskService.createSubtask({
       ...dto,
       createdById: req.user.id,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+      estimatedBusinessHours: dto.estimatedBusinessHours,
     });
   }
 
@@ -42,7 +43,7 @@ export class SubtaskController {
   async updateSubtask(
     @Param('id') id: string,
     @Body() dto: UpdateSubtaskDto,
-    @Request() req: any
+    @Request() req: { user: { id: string } }
   ) {
     return await this.subtaskService.updateSubtask(id, dto, req.user.id);
   }

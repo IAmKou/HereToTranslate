@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, Up
 import { ProjectEntity } from './project.entity';
 
 export enum StatusType {
+  OPEN = 'open',
   TODO = 'todo',
   IN_PROGRESS = 'in_progress',
   DONE = 'done',

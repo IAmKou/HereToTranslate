@@ -29,6 +29,10 @@ export class CreateSubtaskDto {
   dueDate?: string;
 
   @IsOptional()
+  @IsNumber()
+  estimatedBusinessHours?: number;
+
+  @IsOptional()
   @IsEnum(['low', 'medium', 'high'])
   priority?: string;
 
@@ -65,6 +69,10 @@ export class UpdateSubtaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  estimatedBusinessHours?: number;
 
   @IsOptional()
   @IsEnum(['low', 'medium', 'high'])

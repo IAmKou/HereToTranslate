@@ -45,6 +45,7 @@ export class SubtaskManagerService {
     reviewerId?: string;
     approverId?: string;
     dueDate?: Date;
+    estimatedBusinessHours?: number;
     priority?: string;
     kind?: 'discreet' | 'range';
     workCount?: number;
@@ -58,6 +59,7 @@ export class SubtaskManagerService {
       reviewerId,
       approverId,
       dueDate,
+      estimatedBusinessHours,
       priority = 'medium',
       kind = 'discreet',
       workCount = 0,
@@ -159,6 +161,7 @@ export class SubtaskManagerService {
       reviewer,
       approver,
       dueDate,
+      estimatedBusinessHours,
       priority,
       kind,
       workCount,
@@ -211,6 +214,7 @@ export class SubtaskManagerService {
     if (dto.dueDate !== undefined) subtask.dueDate = new Date(dto.dueDate);
     if (dto.priority !== undefined) subtask.priority = dto.priority;
     if (dto.workCount !== undefined) subtask.workCount = dto.workCount;
+    if (dto.estimatedBusinessHours !== undefined) subtask.estimatedBusinessHours = dto.estimatedBusinessHours;
 
     if (dto.assignedToId !== undefined) {
       subtask.assignedTo = dto.assignedToId
@@ -252,7 +256,10 @@ export class SubtaskManagerService {
       subtask.status = toStatus;
 
       // Update timestamps based on status type
-      if (toStatus.type === StatusType.IN_PROGRESS && !subtask.startedAt) {
+      if (toStatus.type === StatusType.OPEN) {
+        subtask.startedAt = undefined;
+        subtask.dueDate = undefined;
+      } else if (toStatus.type === StatusType.IN_PROGRESS && !subtask.startedAt) {
         subtask.startedAt = new Date();
       } else if (toStatus.type === StatusType.DONE && !subtask.completedAt) {
         subtask.completedAt = new Date();

@@ -58,7 +58,7 @@ export class TaskEntity {
   createdBy: UserEntity;
 
   @Column({ type: 'datetime', nullable: true })
-  dueDate: Date;
+  dueDate?: Date;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -72,8 +72,11 @@ export class TaskEntity {
   @Column({ type: 'datetime', nullable: true })
   completedAt?: Date;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  estimatedBusinessHours?: number;
+
   @Column({ type: 'json', nullable: true })
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
 
   @Column({ type: 'enum', enum: ['low', 'medium', 'high'], default: 'medium' })
   priority: string;
@@ -81,7 +84,6 @@ export class TaskEntity {
   @Column({ type: 'int', nullable: true })
   storyPoints?: number;
 
-  // New fields for pagination & scoring
   @Column({ type: 'json', nullable: true })
   selectedPages?: number[]; // Array of selected page numbers
 

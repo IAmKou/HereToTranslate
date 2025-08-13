@@ -65,6 +65,9 @@ export class SubtaskEntity {
   @Column({ type: 'datetime', nullable: true })
   completedAt?: Date;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  estimatedBusinessHours?: number;
+
   @Column({ type: 'enum', enum: ['low', 'medium', 'high'], default: 'medium' })
   priority: string;
 

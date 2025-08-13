@@ -7,13 +7,16 @@ import {
   AssignmentRole,
   HistoryAction,
   UserEntity,
-  ProjectEntity
+  ProjectEntity,
+  TaskStatusEntity,
+  StatusType,
 } from '#LocalProject/Entities';
 import { AssignTaskDto, ReassignTaskDto } from '#LocalProject/Dtos';
 import { NotificationManagerService } from './notification-manager.service';
 import { MailService } from '../../mailer/mailer.service';
 import { ProjectManagerService } from './project-manager.service';
 import { PermissionFlags } from '@here-to-translate/common';
+import { addBusinessHours } from '../../utils/business-time.js';
 
 @Injectable()
 export class TaskAssignmentManagerService {
@@ -96,6 +99,22 @@ export class TaskAssignmentManagerService {
       // Update due date if provided
       if (dto.dueDate) {
         task.dueDate = new Date(dto.dueDate);
+      }
+
+      // If the assignee is the same as the assigning user, set startedAt and compute dueDate if estimatedBusinessHours present
+      const isSelfAssignment = dto.assignedToId === assignedByUserId;
+      if (isSelfAssignment) {
+        if (!task.startedAt) task.startedAt = new Date();
+        if (!task.dueDate && task.estimatedBusinessHours && Number(task.estimatedBusinessHours) > 0) {
+          task.dueDate = addBusinessHours(task.startedAt, Number(task.estimatedBusinessHours));
+        }
+        // Move status to IN_PROGRESS if available
+        const inProgress = await queryRunner.manager.findOne(TaskStatusEntity, {
+          where: { project: { id: BigInt(task.projectId || '0') }, type: StatusType.IN_PROGRESS, isActive: true },
+        });
+        if (inProgress) {
+          task.status = inProgress;
+        }
       }
 
       // Save task

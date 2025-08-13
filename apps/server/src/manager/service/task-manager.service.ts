@@ -59,6 +59,7 @@ export class TaskManagerService {
     assignedToId?: string;
     groupId?: string;
     dueDate?: Date;
+    estimatedBusinessHours?: number;
     projectId?: string;
     branchId?: string;
     fileId?: string;
@@ -77,6 +78,7 @@ export class TaskManagerService {
       assignedToId,
       groupId,
       dueDate,
+      estimatedBusinessHours,
       projectId,
       branchId,
       fileId,
@@ -205,7 +207,33 @@ export class TaskManagerService {
       priority,
       storyPoints,
       customFields,
+      estimatedBusinessHours,
     } as DeepPartial<TaskEntity>);
+
+    // If no assignee, force OPEN status and clear start/due
+    if (!assignedTo) {
+      const openStatus = await this.statusRepository.findOne({
+        where: {
+          project: { id: BigInt(projectId) },
+          type: StatusType.OPEN,
+          isActive: true,
+        },
+      });
+      if (openStatus) {
+        task.status = openStatus;
+      }
+      task.startedAt = undefined;
+      task.dueDate = undefined;
+    }
+
+    // If creator assigns to self at creation, set start/due
+    if (assignedTo && createdBy && assignedTo.id?.toString() === createdBy.id?.toString()) {
+      if (!task.startedAt) task.startedAt = new Date();
+      if (!task.dueDate && estimatedBusinessHours && estimatedBusinessHours > 0) {
+        const { addBusinessHours } = await import('../../utils/business-time.js');
+        task.dueDate = addBusinessHours(task.startedAt, Number(estimatedBusinessHours));
+      }
+    }
 
     await this.taskRepository.save(task);
 
@@ -264,7 +292,10 @@ export class TaskManagerService {
     task.status = toStatus;
 
     // Update timestamps based on status type
-    if (toStatus.type === StatusType.IN_PROGRESS && !task.startedAt) {
+    if (toStatus.type === StatusType.OPEN) {
+      task.startedAt = undefined;
+      task.dueDate = undefined;
+    } else if (toStatus.type === StatusType.IN_PROGRESS && !task.startedAt) {
       task.startedAt = new Date();
     } else if (toStatus.type === StatusType.DONE && !task.completedAt) {
       task.completedAt = new Date();
@@ -477,6 +508,7 @@ export class TaskManagerService {
     if (dto.priority !== undefined) task.priority = dto.priority;
     if (dto.storyPoints !== undefined) task.storyPoints = dto.storyPoints;
     if (dto.customFields !== undefined) task.customFields = dto.customFields;
+    if (dto.estimatedBusinessHours !== undefined) task.estimatedBusinessHours = dto.estimatedBusinessHours;
 
     if (dto.assignedToId !== undefined) {
       task.assignedTo = dto.assignedToId
@@ -484,6 +516,34 @@ export class TaskManagerService {
             where: { id: BigInt(dto.assignedToId) },
           })) || undefined
         : undefined;
+
+      // If assignee cleared -> move to OPEN and clear times
+      if (!task.assignedTo) {
+        const openStatus = await this.statusRepository.findOne({
+          where: { project: { id: BigInt(task.projectId || '0') }, type: StatusType.OPEN, isActive: true },
+        });
+        if (openStatus) {
+          task.status = openStatus;
+        }
+        task.startedAt = undefined;
+        task.dueDate = undefined;
+      } else {
+        // If assignee equals current user -> self-assign
+        if (dto.assignedToId === userId.toString()) {
+          if (!task.startedAt) task.startedAt = new Date();
+          if (!task.dueDate && task.estimatedBusinessHours && Number(task.estimatedBusinessHours) > 0) {
+            const { addBusinessHours } = await import('../../utils/business-time.js');
+            task.dueDate = addBusinessHours(task.startedAt, Number(task.estimatedBusinessHours));
+          }
+          // Move to IN_PROGRESS if status exists
+          const inProgress = await this.statusRepository.findOne({
+            where: { project: { id: BigInt(task.projectId || '0') }, type: StatusType.IN_PROGRESS, isActive: true },
+          });
+          if (inProgress) {
+            task.status = inProgress;
+          }
+        }
+      }
     }
 
     if (dto.groupId !== undefined) {

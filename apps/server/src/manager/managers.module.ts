@@ -32,7 +32,6 @@ import { SubtaskStatusHistoryEntity } from '../db/mysql/entity/subtask-status-hi
 import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
 import { RequestRegistrationEntity } from '../db/mysql/entity/request-registration.entity';
 import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
-
 import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -105,6 +104,7 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
 import { ExportManagerService } from '#LocalProject/Managers/service/export-manager.service';
 import { ExportController } from '#LocalProject/Managers/controller/export.controller';
 import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.processor';
+import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-config-checker';
 
 @Global()
 @Module({
@@ -191,6 +191,7 @@ import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.pr
     TaskManagerService,
     ExportManagerService,
     ExportJobProcessor,
+    PaypalConfigChecker,
   ],
   exports: [
     CategoryManagerService,
@@ -227,6 +228,7 @@ import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.pr
     TaskManagerService,
     TaskAssignmentManagerService,
     ExportManagerService,
+    PaypalConfigChecker,
   ],
   controllers: [
     CategoryController,

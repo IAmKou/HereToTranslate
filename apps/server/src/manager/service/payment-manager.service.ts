@@ -24,12 +24,13 @@ import { logger } from 'nx/src/utils/logger';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
 import { NotificationManagerService } from './notification-manager.service';
+import { PaypalConfigChecker } from './paypal-config-checker';
 
 @Injectable()
 export class PaypalService {
-  private readonly api = process.env.PAYPAL_API;
+  private readonly api: string;
   private accessToken: string;
-  private readonly ADMIN_USER_ID = 1n; // use config/env if preferred
+  private readonly ADMIN_USER_ID = 1n;
 
   constructor(
     @InjectRepository(TransactionEntity)
@@ -49,34 +50,73 @@ export class PaypalService {
     private readonly walletManagerService: WalletManagerService,
     private readonly manifestService: ManifestService,
     private readonly feeService: FeeService,
-    private readonly notificationService: NotificationManagerService
-  ) {}
+    private readonly notificationService: NotificationManagerService,
+    private readonly configChecker: PaypalConfigChecker
+  ) {
+    if (!process.env.PAYPAL_API) {
+      throw new Error('PAYPAL_API environment variable is not configured');
+    }
+    
+    this.api = process.env.PAYPAL_API.replace(/\/+$/, '');
+    
+    console.log('🔧 PayPal service initialized with API:', this.api);
+    
+    this.configChecker.logConfiguration();
+  }
 
   private async getAccessToken(): Promise<string> {
     if (this.accessToken) return this.accessToken;
+
+    if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+      throw new InternalServerErrorException(
+        'PayPal credentials not configured. Please check PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables.'
+      );
+    }
 
     const auth = Buffer.from(
       `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`
     ).toString('base64');
 
     try {
+      const tokenUrl = `${this.api.replace(/\/+$/, '')}/v1/oauth2/token`;
+      
+      console.log('🔐 Attempting PayPal authentication with URL:', tokenUrl);
+      console.log('🔐 Client ID:', process.env.PAYPAL_CLIENT_ID?.substring(0, 8) + '...');
+      
       const res = await axios.post(
-        `${this.api}/v1/oauth2/token`,
+        tokenUrl,
         'grant_type=client_credentials',
         {
           headers: {
             Authorization: `Basic ${auth}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
+          timeout: 10000, 
         }
       );
 
       this.accessToken = res.data.access_token;
+      console.log('✅ PayPal authentication successful');
       return this.accessToken;
     } catch (err) {
-      console.error(err);
+      if (axios.isAxiosError(err)) {
+        console.error('❌ PayPal authentication failed:', {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data,
+          url: err.config?.url,
+        });
+        
+        if (err.response?.status === 403) {
+          throw new InternalServerErrorException(
+            'PayPal authentication failed. Please check your client ID and secret, and ensure they are valid for the sandbox environment.'
+          );
+        }
+      }
+      
+      console.error('❌ Unexpected error during PayPal authentication:', err);
       throw new InternalServerErrorException(
-        'Failed to authenticate with PayPal'
+        'Failed to authenticate with PayPal. Please check your configuration and try again.'
       );
     }
   }
@@ -94,47 +134,43 @@ export class PaypalService {
 
     const depositAmount = parseFloat((baseAmount * 0.5).toFixed(2));
 
+    if (depositAmount <= 0) {
+      throw new BadRequestException('Deposit amount must be greater than 0');
+    }
+
     const accessToken = await this.getAccessToken();
 
     try {
+      const orderData = {
+        intent: 'CAPTURE',
+        purchase_units: [
+          {
+            amount: {
+              currency_code: 'USD',
+              value: depositAmount.toFixed(2),
+            },
+            description: `50% Deposit for request ID ${request.id}`,
+          },
+        ],
+        application_context: {
+          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal-success`,
+          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal/cancel`,
+          brand_name: 'HereToTranslate',
+          user_action: 'PAY_NOW',
+        },
+      };
+
+      console.log('🔄 Creating PayPal order with data:', JSON.stringify(orderData, null, 2));
+
       const { data } = await axios.post(
         `${this.api}/v2/checkout/orders`,
-        {
-          intent: 'CAPTURE',
-          purchase_units: [
-            {
-              amount: {
-                currency_code: 'USD',
-                value: depositAmount.toFixed(2),
-              },
-              description: `50% Deposit for request ID ${request.id}`,
-              shipping: {
-                name: {
-                  full_name: user.fullName || user.username || user.email, 
-                },
-                address: {
-                  address_line_1: user.email, 
-                  admin_area_1: '',
-                  postal_code: '000000',
-                  country_code: 'VN',
-                },
-                phone: user.phone || '',
-              },
-            },
-          ],
-          application_context: {
-            return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
-            cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
-            shipping_preference: 'SET_PROVIDED_ADDRESS',
-            brand_name: 'HereToTranslate',
-            user_action: 'PAY_NOW',
-          },
-        },
+        orderData,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
+          timeout: 15000, 
         }
       );
 
@@ -195,22 +231,38 @@ export class PaypalService {
         paypalOrderId: requesterTransaction.paypalOrderId,
         userEmail: requesterTransaction.user?.email,
         requestDescription: requesterTransaction.request?.description,
-        type: 'Deposit', // Thêm type để debug
+        type: 'Deposit',
       });
 
       return approvalUrl;
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        console.error('PayPal API error:', {
+        console.error('❌ PayPal API error in createDeposit:', {
           status: err.response?.status,
+          statusText: err.response?.statusText,
           data: err.response?.data,
           message: err.message,
+          url: err.config?.url,
         });
+        
+        if (err.response?.status === 422) {
+          const errorDetails = err.response?.data?.details?.[0];
+          const errorMessage = errorDetails?.issue || err.response?.data?.message || 'PayPal order validation failed';
+          throw new BadRequestException(`PayPal order creation failed: ${errorMessage}`);
+        }
+        
+        if (err.response?.status === 400) {
+          throw new BadRequestException('Invalid PayPal order data. Please check the request parameters.');
+        }
+        
+        if (err.response?.status && err.response.status >= 500) {
+          throw new InternalServerErrorException('PayPal service temporarily unavailable. Please try again later.');
+        }
       } else {
-        console.error('Unexpected error:', err);
+        console.error('❌ Unexpected error during PayPal order creation:', err);
       }
 
-      throw new InternalServerErrorException('Failed to create PayPal deposit');
+      throw new InternalServerErrorException('Failed to create PayPal deposit. Please try again.');
     }
   }
 
@@ -227,32 +279,41 @@ export class PaypalService {
 
     const depositAmount = parseFloat((baseAmount * 0.5).toFixed(2));
 
+    if (depositAmount <= 0) {
+      throw new BadRequestException('Deposit amount must be greater than 0');
+    }
+
     const accessToken = await this.getAccessToken();
 
     try {
+      const orderData = {
+        intent: 'CAPTURE',
+        purchase_units: [
+          {
+            amount: {
+              currency_code: 'USD',
+              value: depositAmount.toFixed(2),
+            },
+            description: `50% Deposit (5% fee included) for request ID ${request.id}`,
+          },
+        ],
+        application_context: {
+          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal-success`,
+          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal/cancel`,
+        },
+      };
+
+      console.log('🔄 Creating private PayPal order with data:', JSON.stringify(orderData, null, 2));
+
       const { data } = await axios.post(
         `${this.api}/v2/checkout/orders`,
-        {
-          intent: 'CAPTURE',
-          purchase_units: [
-            {
-              amount: {
-                currency_code: 'USD',
-                value: depositAmount.toFixed(2),
-              },
-              description: `50% Deposit (5% fee included) for request ID ${request.id}`,
-            },
-          ],
-          application_context: {
-            return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
-            cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
-          },
-        },
+        orderData,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
+          timeout: 15000, 
         }
       );
 
@@ -281,7 +342,7 @@ export class PaypalService {
       const requesterTransaction = await this.transactionRepo.save({
         user,
         request,
-        amount: depositAmount, // ✅ SỬA LẠI: Requester deposit nên amount > 0
+        amount: depositAmount,
         status: TransactionStatus.Pending,
         paypalOrderId: data.id,
       });
@@ -304,16 +365,32 @@ export class PaypalService {
       return approvalUrl;
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        console.error('PayPal API error:', {
+        console.error('❌ PayPal API error in createPrivateDeposit:', {
           status: err.response?.status,
+          statusText: err.response?.statusText,
           data: err.response?.data,
           message: err.message,
+          url: err.config?.url,
         });
+        
+        if (err.response?.status === 422) {
+          const errorDetails = err.response?.data?.details?.[0];
+          const errorMessage = errorDetails?.issue || err.response?.data?.message || 'PayPal order validation failed';
+          throw new BadRequestException(`PayPal order creation failed: ${errorMessage}`);
+        }
+        
+        if (err.response?.status === 400) {
+          throw new BadRequestException('Invalid PayPal order data. Please check the request parameters.');
+        }
+        
+        if (err.response?.status && err.response.status >= 500) { 
+          throw new InternalServerErrorException('PayPal service temporarily unavailable. Please try again later.');
+        }
       } else {
-        console.error('Unexpected error:', err);
+        console.error('❌ Unexpected error during PayPal order creation:', err);
       }
 
-      throw new InternalServerErrorException('Failed to create PayPal deposit');
+      throw new InternalServerErrorException('Failed to create PayPal deposit. Please try again.');
     }
   }
 

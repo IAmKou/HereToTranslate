@@ -15,10 +15,10 @@ import { overlayTranslationsOnPdf } from '../../util/extensions/pdf-utils.extens
 import { Buffer } from 'buffer';
 import { ActivityManagerService } from './activity-manager.service';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { spawn } from 'child_process';
-import { mkdtemp, writeFile, readFile, rm } from 'fs/promises';
-import * as path from 'path';
-import { tmpdir } from 'os';
+// import { spawn } from 'child_process';
+// import { mkdtemp, writeFile, readFile, rm } from 'fs/promises';
+// import * as path from 'path';
+// import { tmpdir } from 'os';
 import { PDFAssembler } from '@prometeia/pdfassembler';
 import * as xliff from 'xliff';
 

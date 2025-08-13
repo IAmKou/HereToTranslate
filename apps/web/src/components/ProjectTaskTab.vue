@@ -2101,7 +2101,7 @@ async function updateTaskAssignee(newAssigneeId: string) {
     toast.add({
       severity: 'success',
       summary: 'Assignee Updated',
-      detail: 'Assignee has been updated successfully.',
+      detail: 'Task assignee has been updated successfully.',
       life: 3000
     });
 
@@ -2162,7 +2162,7 @@ async function updateTaskReviewer(newReviewerId: string) {
     toast.add({
       severity: 'success',
       summary: 'Reviewer Updated',
-      detail: 'Reviewer has been updated successfully.',
+      detail: 'Task reviewer has been updated successfully.',
       life: 3000
     });
 
@@ -3095,9 +3095,7 @@ function closeAllDropdowns() {
                         v-if="getTasksByStatus(status.id).length"
                         class="status-count"
                       >{{ getTasksByStatus(status.id).length }}</span>
-                      <span v-if="status.id === '3'" class="status-info">
-                      <i class="pi pi-info-circle" />
-                    </span>
+
                     </div>
                   </div>
 
@@ -5055,19 +5053,7 @@ function closeAllDropdowns() {
   padding: 0.1em 0.7em;
   margin-left: 0.5em;
 }
-.status-info {
-  color: #2563eb;
-  font-size: 1.1em;
-  margin-left: 0.5em;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-.status-info i {
-  background: #e0e7ff;
-  border-radius: 50%;
-  padding: 0.1em 0.3em;
-}
+
 .kanban-board {
   display: flex !important;
   white-space: nowrap !important;

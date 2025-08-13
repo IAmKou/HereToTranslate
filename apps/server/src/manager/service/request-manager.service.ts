@@ -90,8 +90,31 @@ export class RequestManagerService {
       status: RequestStatus.Pending,
       isPublic : true,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
+      targetLanguages: dto.targetLanguages || [],
       files: fileEntities,
     });
+
+
+
+    // Handle tags if provided
+    if (dto.tags && dto.tags.length > 0) {
+      const requestTags: ProjectTagEntity[] = [];
+
+      for (const tag of dto.tags) {
+        let tagEntity = await this.projectTagRepository.findOne({
+          where: { name: tag },
+        });
+
+        if (!tagEntity) {
+          const newTag = this.projectTagRepository.create({ name: tag });
+          tagEntity = await this.projectTagRepository.save(newTag);
+        }
+
+        requestTags.push(tagEntity);
+      }
+
+      request.tags = requestTags;
+    }
 
     const savedRequest = await this.requestRepository.save(request);
 
@@ -130,7 +153,7 @@ export class RequestManagerService {
     const request = this.requestRepository.create({
       requester: { id: uid } as any,
       project: dto.projectId ? ({ id: BigInt(dto.projectId) } as any) : undefined,
-      registrants: dto.assigneeId ? ([{ id: BigInt(dto.assigneeId) }] as any) : [],
+      registrants: dto.assigneeId ? ([{ id: BigInt(dto.assigneeId) }] as any) : undefined,
       assignee: dto.assigneeId ? ({ id: BigInt(dto.assigneeId) } as any) : undefined,
       title,
       description,
@@ -140,8 +163,11 @@ export class RequestManagerService {
       status: RequestStatus.Pending,
       isPublic,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
+      targetLanguages: dto.targetLanguages || [],
       files: fileEntities,
     });
+
+
 
     const requesterUser = await this.userRepository.findOneOrFail({
       where: { id: BigInt(uid) },
@@ -169,6 +195,26 @@ export class RequestManagerService {
         deadline,
         username: requesterUser.username,
       });
+    }
+
+    // Handle tags if provided
+    if (dto.tags && dto.tags.length > 0) {
+      const requestTags: ProjectTagEntity[] = [];
+
+      for (const tag of dto.tags) {
+        let tagEntity = await this.projectTagRepository.findOne({
+          where: { name: tag },
+        });
+
+        if (!tagEntity) {
+          const newTag = this.projectTagRepository.create({ name: tag });
+          tagEntity = await this.projectTagRepository.save(newTag);
+        }
+
+        requestTags.push(tagEntity);
+      }
+
+      request.tags = requestTags;
     }
 
     const savedRequest = await this.requestRepository.save(request);
@@ -215,6 +261,7 @@ export class RequestManagerService {
         'requests.status',
         'requests.isPublic',
         'requests.createdAt',
+        'requests.targetLanguages',
         'requester.id',
         'requester.username',
         'project.id',
@@ -243,6 +290,7 @@ export class RequestManagerService {
         'requests.deadline',
         'requests.status',
         'requests.createdAt',
+        'requests.targetLanguages',
         'requester.id',
         'requester.username',
         'requester.fullName',
@@ -286,6 +334,7 @@ export class RequestManagerService {
         'requests.status',
         'requests.isPublic',
         'requests.createdAt',
+        'requests.targetLanguages',
         'requester.id',
         'requester.fullName',
         'requester.email',
@@ -316,6 +365,7 @@ export class RequestManagerService {
         'requests.status',
         'requests.createdAt',
         'requests.isPublic',
+        'requests.targetLanguages',
 
         'requester.id',
         'requester.username',
@@ -371,6 +421,7 @@ export class RequestManagerService {
       deadline,
       categoryId,
       tags,
+      targetLanguages,
       files,
       status,
     } = data;
@@ -383,6 +434,7 @@ export class RequestManagerService {
       !deadline &&
       !categoryId &&
       !tags &&
+      targetLanguages === undefined &&
       status === undefined &&
       (!files || files.length === 0)
     ) {
@@ -413,6 +465,7 @@ export class RequestManagerService {
     if (title) request.title = title;
     if (description) request.description = description;
     if (dealAmount) request.dealAmount = dealAmount;
+    if (targetLanguages !== undefined) request.targetLanguages = targetLanguages;
 
     if (categoryId) {
       const category = await this.categoryRepository.findOne({
@@ -727,7 +780,7 @@ export class RequestManagerService {
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      console.error('Accept private request failed:', err);
+      logger.error('Accept private request failed:', err);
       throw new InternalServerErrorException('Failed to accept private request');
     } finally {
       await queryRunner.release();
@@ -746,6 +799,7 @@ export class RequestManagerService {
         'requests.status',
         'requests.isPublic',
         'requests.createdAt',
+        'requests.targetLanguages',
         'requester.id',
         'requester.username',
         'requester.fullName',

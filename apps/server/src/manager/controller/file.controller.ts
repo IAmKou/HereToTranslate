@@ -119,12 +119,17 @@ export class FileController {
       throw new NotFoundException(`File with ID ${fileId} not found`);
     }
 
+    // Encode filename để tránh lỗi với ký tự đặc biệt (tiếng Việt, dấu cách)
+    const encodedFilename = encodeURIComponent(file.fileName).replace(/['()]/g, escape);
+    const contentDisposition = `attachment; filename*=UTF-8''${encodedFilename}`;
+
     res.set({
       'Content-Type': file.fileType,
-      'Content-Disposition': `attachment; filename="${file.fileName}"`,
-      'Access-Control-Allow-Origin': '*',
+      'Content-Disposition': contentDisposition,
+      'Access-Control-Allow-Origin': 'http://localhost:4200',
+      'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Content-Type'
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     });
 
     res.send(file.fileContent);

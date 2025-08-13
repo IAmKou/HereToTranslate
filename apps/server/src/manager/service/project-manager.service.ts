@@ -12,6 +12,7 @@ import {
   BranchEntity,
   CategoryEntity,
   CommitEntity,
+  FileEntity,
   ProjectEntity,
   ProjectRoleEntity,
   ProjectTagEntity,
@@ -52,6 +53,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly branchRepository: Repository<BranchEntity>,
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
+    @InjectRepository(FileEntity)
+    private readonly fileRepository: Repository<FileEntity>,
     private readonly dataSource: DataSource,
     private readonly githubService: GitHubService,
     private readonly notificationService: NotificationManagerService,
@@ -124,6 +127,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     const { name, description, isPrivate, tags = [], categoryId, targetLanguages } = data;
 
     this.logger.debug('Received project data:', data);
+    this.logger.debug(`Project targetLanguages: ${JSON.stringify(targetLanguages)}`);
 
     const userExists = await this.userRepository.exists({
       where: { id: BigInt(uid) },
@@ -174,6 +178,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       });
 
       const savedProject = await queryRunner.manager.save(project);
+
+      this.logger.debug(`Project saved with ID: ${savedProject.id}, targetLanguages: ${JSON.stringify(savedProject.targetLanguages)}`);
 
       // Create 'main' branch in DB
       const mainBranch = queryRunner.manager.create(BranchEntity, {
@@ -282,6 +288,10 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
   }
 
   async createProjectFromRequest(request: RequestEntity, uid: bigint) {
+    this.logger.debug(`Creating project from request: ${request.title} (ID: ${request.id})`);
+    this.logger.debug(`Request targetLanguages: ${JSON.stringify(request.targetLanguages)}`);
+    this.logger.debug(`Request files count: ${request.files?.length || 0}`);
+
     const tags = request.tags?.map((tag) => tag.name) ?? [];
 
     const createProjectDto: any = {
@@ -295,7 +305,37 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       createProjectDto.categoryId = request.category.id.toString();
     }
 
-    return this.createProject(uid, createProjectDto);
+    this.logger.debug(`Project DTO: ${JSON.stringify(createProjectDto)}`);
+
+    // Create project first
+    const projectResult = await this.createProject(uid, createProjectDto);
+
+    // Copy files from request to project if they exist
+    if (request.files && request.files.length > 0) {
+      try {
+        for (const file of request.files) {
+          // Create a copy of the file for the project
+          const projectFile = this.fileRepository.create({
+            fileName: file.fileName,
+            fileType: file.fileType,
+            fileContent: file.fileContent,
+            project: { id: projectResult.projectId },
+            uploader: { id: uid },
+            createdAt: new Date(),
+          });
+
+          await this.fileRepository.save(projectFile);
+        }
+
+        this.logger.debug(`Copied ${request.files.length} files from request to project ${projectResult.projectId}`);
+      } catch (error) {
+        this.logger.error('Failed to copy files from request to project', error);
+        // Don't fail the entire operation if file copying fails
+      }
+    }
+
+    this.logger.debug(`Project created successfully from request: ${projectResult.projectId}`);
+    return projectResult;
   }
 
   async getProjectsCount(): Promise<number> {
@@ -1345,5 +1385,5 @@ function normalizePermission(input: IntoPermission): bigint {
     return PermissionFlags[input as keyof typeof PermissionFlags] ?? 0n;
   }
   return input.value;
-  throw new Error('Invalid permission input type'); 
+  throw new Error('Invalid permission input type');
 }

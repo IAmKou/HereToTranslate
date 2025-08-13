@@ -215,7 +215,6 @@ import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.pr
     ProjectInvitationService,
     FeeService,
     ActivityManagerService,
-
     DeadlineCheckerService,
     ScannerCronService,
     PageDifficultyService,
@@ -228,7 +227,6 @@ import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.pr
     TaskManagerService,
     TaskAssignmentManagerService,
     ExportManagerService,
-
   ],
   controllers: [
     CategoryController,

@@ -94,7 +94,6 @@ export class MySqlConnection {
         TaskHistoryEntity,
         ProjectActivity,
         TaskStatusEntity,
-        TaskAssignmentHistoryEntity,
         DeadlineExtensionEntity,
         DifficultyConfigEntity,
         PageDifficultyEntity,

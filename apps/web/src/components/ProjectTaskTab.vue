@@ -165,6 +165,14 @@ onMounted(() => {
   loadStatuses();
 });
 
+// Watch for tab changes to refresh statuses when switching from workflows to board
+watch(activeTab, (newTab: 'board' | 'all' | 'workflows', oldTab: 'board' | 'all' | 'workflows') => {
+  if (oldTab === 'workflows' && newTab === 'board') {
+    console.log('🔄 Switching from workflows to board, refreshing statuses...');
+    loadStatuses();
+  }
+});
+
 function onStatusDragStart(event: DragEvent, statusId: string) {
   draggedStatusId.value = statusId;
   if (event.dataTransfer) {
@@ -1641,6 +1649,15 @@ onMounted(() => {
     }
   });
 
+  // Add click outside listener for assignee and reviewer dropdowns
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.assignee-dropdown') && !target.closest('.reviewer-dropdown') &&
+      !target.closest('.assignee-dropdown-trigger') && !target.closest('.reviewer-dropdown-trigger')) {
+      closeAllDropdowns();
+    }
+  });
+
   // Add keyboard event listener for close task modal
   document.addEventListener('keydown', handleKeydown);
 
@@ -1717,10 +1734,26 @@ function handleStatusDeleted() {
   // Refresh statuses and tasks when status is deleted
   loadStatuses();
   reloadTasks();
+}
+
+function handleStatusCreated() {
+  // Refresh statuses when new status is created
+  loadStatuses();
   toast.add({
     severity: 'success',
-    summary: 'Status Deleted',
-    detail: 'Status has been deleted successfully.',
+    summary: 'Status Created',
+    detail: 'New status has been created successfully.',
+    life: 3000
+  });
+}
+
+function handleStatusUpdated() {
+  // Refresh statuses when status is updated
+  loadStatuses();
+  toast.add({
+    severity: 'success',
+    summary: 'Status Updated',
+    detail: 'Status has been updated successfully.',
     life: 3000
   });
 }
@@ -2024,6 +2057,156 @@ function formatSelectedPages(pages: number[]): string {
   return ranges.join(', ');
 }
 
+// State for assignee and reviewer dropdowns
+const showAssigneeDropdown = ref(false);
+const showReviewerDropdown = ref(false);
+const isUpdatingAssignee = ref(false);
+const isUpdatingReviewer = ref(false);
+
+// Function to update task assignee
+async function updateTaskAssignee(newAssigneeId: string) {
+  if (!selectedTask.value || isUpdatingAssignee.value) return;
+
+  // Check if new assignee is already the reviewer
+  if (newAssigneeId !== 'none' && selectedTask.value.reviewer && selectedTask.value.reviewer.id === newAssigneeId) {
+    toast.add({
+      severity: 'error',
+      summary: 'Invalid Assignment',
+      detail: 'A person cannot be both assignee and reviewer for the same task.',
+      life: 4000
+    });
+    return;
+  }
+
+  isUpdatingAssignee.value = true;
+
+  try {
+    console.log('Updating task assignee:', selectedTask.value.id, 'to:', newAssigneeId);
+
+    // Call API to update task assignee
+    const updatedTask = await taskService.updateTask(selectedTask.value.id, {
+      assignedToId: newAssigneeId === 'none' ? undefined : newAssigneeId
+    });
+
+    // Update local task data
+    const taskIndex = tasks.value.findIndex((t: Task) => t.id === selectedTask.value!.id);
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = updatedTask;
+    }
+
+    // Update selected task
+    selectedTask.value = updatedTask;
+
+    // Show success message
+    toast.add({
+      severity: 'success',
+      summary: 'Assignee Updated',
+      detail: 'Assignee has been updated successfully.',
+      life: 3000
+    });
+
+    // Close dropdown
+    showAssigneeDropdown.value = false;
+
+    console.log('Task assignee updated successfully');
+  } catch (error: any) {
+    console.error('Failed to update task assignee:', error);
+
+    // Show error message
+    toast.add({
+      severity: 'error',
+      summary: 'Update Failed',
+      detail: error.response?.data?.message || 'Failed to update task assignee. Please try again.',
+      life: 4000
+    });
+  } finally {
+    isUpdatingAssignee.value = false;
+  }
+}
+
+// Function to update task reviewer
+async function updateTaskReviewer(newReviewerId: string) {
+  if (!selectedTask.value || isUpdatingReviewer.value) return;
+
+  // Check if new reviewer is already the assignee
+  if (newReviewerId !== 'none' && selectedTask.value.assignedTo && selectedTask.value.assignedTo.id === newReviewerId) {
+    toast.add({
+      severity: 'error',
+      summary: 'Invalid Assignment',
+      detail: 'A person cannot be both assignee and reviewer for the same task.',
+      life: 4000
+    });
+    return;
+  }
+
+  isUpdatingReviewer.value = true;
+
+  try {
+    console.log('Updating task reviewer:', selectedTask.value.id, 'to:', newReviewerId);
+
+    // Call API to update task reviewer
+    const updatedTask = await taskService.updateTask(selectedTask.value.id, {
+      reviewerId: newReviewerId === 'none' ? undefined : newReviewerId
+    });
+
+    // Update local task data
+    const taskIndex = tasks.value.findIndex((t: Task) => t.id === selectedTask.value!.id);
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = updatedTask;
+    }
+
+    // Update selected task
+    selectedTask.value = updatedTask;
+
+    // Show success message
+    toast.add({
+      severity: 'success',
+      summary: 'Reviewer Updated',
+      detail: 'Reviewer has been updated successfully.',
+      life: 3000
+    });
+
+    // Close dropdown
+    showReviewerDropdown.value = false;
+
+    console.log('Task reviewer updated successfully');
+  } catch (error: any) {
+    console.error('Failed to update task reviewer:', error);
+
+    // Show success message
+    toast.add({
+      severity: 'error',
+      summary: 'Update Failed',
+      detail: error.response?.data?.message || 'Failed to update task reviewer. Please try again.',
+      life: 4000
+    });
+  } finally {
+    isUpdatingReviewer.value = false;
+  }
+}
+
+// Function to toggle assignee dropdown
+function toggleAssigneeDropdown() {
+  showAssigneeDropdown.value = !showAssigneeDropdown.value;
+  if (showAssigneeDropdown.value) {
+    showReviewerDropdown.value = false; // Close other dropdown
+  }
+}
+
+// Function to toggle reviewer dropdown
+function toggleReviewerDropdown() {
+  showReviewerDropdown.value = !showReviewerDropdown.value;
+  if (showReviewerDropdown.value) {
+    showAssigneeDropdown.value = false; // Close other dropdown
+  }
+}
+
+// Function to close all dropdowns
+function closeAllDropdowns() {
+  showAssigneeDropdown.value = false;
+  showReviewerDropdown.value = false;
+}
+
 </script>
 
 <template>
@@ -2183,39 +2366,218 @@ function formatSelectedPages(pages: number[]): string {
           <table class="members-table">
             <thead>
             <tr>
-              <th>Project members</th>
+              <th>Assignee</th>
+              <th>Reviewer</th>
               <th>Assigned strings</th>
             </tr>
             </thead>
             <tbody>
-            <tr v-if="selectedTask.assignedTo">
-              <td>
-                <div class="assignee-info">
-                  <img
-                    v-if="selectedTask.assignedTo.avatarUrl"
-                    :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
-                    :alt="selectedTask.assignedTo.fullName"
-                    class="assignee-avatar"
+            <tr>
+              <td v-if="selectedTask.assignedTo">
+                <div class="assignee-dropdown-wrapper">
+                  <div
+                    class="assignee-dropdown-trigger assignee-info"
+                    @click="toggleAssigneeDropdown"
                   >
-                  <span
-                    v-else
-                    class="assignee-avatar-placeholder"
-                  >{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
-                  <span class="assignee-name">{{ selectedTask.assignedTo.fullName || selectedTask.assignedTo.username }}</span>
+                    <img
+                      v-if="selectedTask.assignedTo.avatarUrl"
+                      :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
+                      :alt="selectedTask.assignedTo.fullName"
+                      class="assignee-avatar"
+                    >
+                    <span
+                      v-else
+                      class="assignee-avatar-placeholder"
+                    >{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
+                    <span class="assignee-name">{{ selectedTask.assignedTo.fullName || selectedTask.assignedTo.username }}</span>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
+
+                  <!-- Assignee Dropdown -->
+                  <div v-if="showAssigneeDropdown" class="assignee-dropdown">
+
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{
+                          'current-assignee': member.id === selectedTask.assignedTo?.id,
+                          'disabled-option': member.id === selectedTask.reviewer?.id
+                        }"
+                        @click="member.id === selectedTask.reviewer?.id ? null : updateTaskAssignee(member.id)"
+                      >
+                        <div class="member-option">
+                          <img
+                            v-if="member.avatarUrl"
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="member.fullName"
+                            class="member-avatar"
+                          >
+                          <span
+                            v-else
+                            class="member-avatar-placeholder"
+                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
+                          <span class="member-name">{{ member.fullName || member.username }}</span>
+                          <span v-if="member.id === selectedTask.assignedTo?.id" class="current-badge">Current</span>
+                          <span v-if="member.id === selectedTask.reviewer?.id" class="disabled-badge">Already Reviewer</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="isUpdatingAssignee" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td v-else>
+                <div class="assignee-dropdown-wrapper">
+                  <div
+                    class="assignee-dropdown-trigger empty-assignee"
+                    @click="toggleAssigneeDropdown"
+                  >
+                    <span class="empty-text">Click to assign</span>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
+
+                  <!-- Assignee Dropdown for empty assignee -->
+                  <div v-if="showAssigneeDropdown" class="assignee-dropdown">
+
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{ 'disabled-option': member.id === selectedTask.reviewer?.id }"
+                        @click="member.id === selectedTask.reviewer?.id ? null : updateTaskAssignee(member.id)"
+                      >
+                        <div class="member-option">
+                          <img
+                            v-if="member.avatarUrl"
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="member.fullName"
+                            class="member-avatar"
+                          >
+                          <span
+                            v-else
+                            class="member-avatar-placeholder"
+                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
+                          <span class="member-name">{{ member.fullName || member.username }}</span>
+                          <span v-if="member.id === selectedTask.reviewer?.id" class="disabled-badge">Already Reviewer</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="isUpdatingAssignee" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td v-if="selectedTask.reviewer">
+                <div class="reviewer-dropdown-wrapper">
+                  <div
+                    class="reviewer-dropdown-trigger assignee-info"
+                    @click="toggleReviewerDropdown"
+                  >
+                    <img
+                      v-if="selectedTask.reviewer.avatarUrl"
+                      :src="getAvatarUrl(selectedTask.reviewer.avatarUrl)"
+                      :alt="selectedTask.reviewer.fullName"
+                      class="assignee-avatar"
+                    >
+                    <span
+                      v-else
+                      class="assignee-avatar-placeholder"
+                    >{{ selectedTask.reviewer.fullName ? selectedTask.reviewer.fullName[0] : selectedTask.reviewer.username[0] }}</span>
+                    <span class="assignee-name">{{ selectedTask.reviewer.fullName || selectedTask.reviewer.username }}</span>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
+
+                  <!-- Reviewer Dropdown -->
+                  <div v-if="showReviewerDropdown" class="reviewer-dropdown">
+
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{
+                          'current-reviewer': member.id === selectedTask.reviewer?.id,
+                          'disabled-option': member.id === selectedTask.assignedTo?.id
+                        }"
+                        @click="member.id === selectedTask.assignedTo?.id ? null : updateTaskReviewer(member.id)"
+                      >
+                        <div class="member-option">
+                          <img
+                            v-if="member.avatarUrl"
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="member.fullName"
+                            class="member-avatar"
+                          >
+                          <span
+                            v-else
+                            class="member-avatar-placeholder"
+                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
+                          <span class="member-name">{{ member.fullName || member.username }}</span>
+                          <span v-if="member.id === selectedTask.reviewer?.id" class="current-badge">Current</span>
+                          <span v-if="member.id === selectedTask.assignedTo?.id" class="disabled-badge">Already Assignee</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="isUpdatingReviewer" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td v-else>
+                <div class="reviewer-dropdown-wrapper">
+                  <div
+                    class="reviewer-dropdown-trigger empty-reviewer"
+                    @click="toggleReviewerDropdown"
+                  >
+                    <span class="empty-text">Click to assign reviewer</span>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
+
+                  <!-- Reviewer Dropdown for empty reviewer -->
+                  <div v-if="showReviewerDropdown" class="reviewer-dropdown">
+
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{ 'disabled-option': member.id === selectedTask.assignedTo?.id }"
+                        @click="member.id === selectedTask.assignedTo?.id ? null : updateTaskReviewer(member.id)"
+                      >
+                        <div class="member-option">
+                          <img
+                            v-if="member.avatarUrl"
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="member.fullName"
+                            class="member-avatar"
+                          >
+                          <span
+                            v-else
+                            class="member-avatar-placeholder"
+                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
+                          <span class="member-name">{{ member.fullName || member.username }}</span>
+                          <span v-if="member.id === selectedTask.assignedTo?.id" class="disabled-badge">Already Assignee</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="isUpdatingReviewer" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
+                    </div>
+                  </div>
                 </div>
               </td>
               <td>
                 {{ currentPageInfo?.stringCount !== undefined ? currentPageInfo.stringCount : selectedTaskStringCount }}
               </td>
             </tr>
-            <tr v-else>
-              <td
-                colspan="2"
-                class="empty-row"
-              >
-                Nothing to display
-              </td>
-            </tr>
+
             </tbody>
           </table>
         </div>
@@ -3098,6 +3460,8 @@ function formatSelectedPages(pages: number[]): string {
           :project-groups="projectGroups"
           @workflow-updated="handleWorkflowUpdated"
           @status-deleted="handleStatusDeleted"
+          @status-created="handleStatusCreated"
+          @status-updated="handleStatusUpdated"
         />
       </div>
 
@@ -3408,6 +3772,15 @@ function formatSelectedPages(pages: number[]): string {
                         Assigned to: {{ task.assignedTo.fullName || task.assignedTo.username }}
                       </span>
                     </div>
+                    <div
+                      v-if="task.reviewer"
+                      class="task-detail-row"
+                    >
+                      <i class="pi pi-eye detail-icon" />
+                      <span class="task-reviewer">
+                        Reviewer: {{ task.reviewer.fullName || task.reviewer.username }}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div class="task-item-right">
@@ -3648,7 +4021,8 @@ function formatSelectedPages(pages: number[]): string {
   zoom: 0.9;
   width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
+  /* Allow vertical overflow for dropdowns */
+  overflow-y: visible;
 }
 
 @supports not (zoom: 1) {
@@ -4633,9 +5007,9 @@ function formatSelectedPages(pages: number[]): string {
 .kanban-status-card {
   background: #f7f8fa;
   border-radius: 12px;
-  width: 250px;
-  min-width: 250px;
-  max-width: 250px;
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
   flex-shrink: 0;
   flex-grow: 0;
   padding: 0.7em 1em 0.6em 1em;
@@ -4739,10 +5113,10 @@ function formatSelectedPages(pages: number[]): string {
 .kanban-column {
   background: #f8fafc !important;
   border-radius: 10px !important;
-  padding: 0.8em !important;
-  width: 250px !important;
-  min-width: 250px !important;
-  max-width: 250px !important;
+  padding: 0.5em 0.4em 0.4em 0.4em !important;
+  width: 280px !important;
+  min-width: 280px !important;
+  max-width: 280px !important;
   flex-shrink: 0 !important;
   flex-grow: 0 !important;
   margin-right: 0.8em !important;
@@ -4973,17 +5347,18 @@ function formatSelectedPages(pages: number[]): string {
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(34,197,94,0.12);
-  padding: 1em 0.8em 0.7em 0.8em;
+  padding: 0.5em 0.4em 0.4em 0.4em;
   margin-bottom: 0.5em;
   display: flex;
   flex-direction: column;
-  gap: 0.5em;
-  border: 1.5px solid #22c55e33;
+  gap: 0.25em;
+  border: 1px solid #22c55e33;
   transition: box-shadow 0.2s, border 0.2s, background 0.2s, opacity 0.2s;
   cursor: pointer;
-  width: 95%;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .task-card:active {
@@ -5120,9 +5495,13 @@ function formatSelectedPages(pages: number[]): string {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 .task-detail-view {
   padding: 0 0 1.2em 0;
+  /* Ensure dropdowns can be fully visible */
+  overflow: visible;
+  min-height: fit-content;
 }
 
 .task-detail-header-row {
@@ -5396,6 +5775,23 @@ function formatSelectedPages(pages: number[]): string {
 .task-detail-members {
   margin-top: 2em;
 }
+
+/* Ensure task detail content can expand for dropdowns */
+.task-detail-content {
+  overflow: visible;
+  min-height: fit-content;
+  position: relative;
+}
+
+/* Ensure all parent containers allow dropdowns to be visible */
+.task-detail-view *,
+.task-detail-content *,
+.task-detail-members *,
+.members-table *,
+.assignee-dropdown-wrapper *,
+.reviewer-dropdown-wrapper * {
+  overflow: visible !important;
+}
 .members-title {
   font-size: 1em;
   font-weight: 600;
@@ -5406,12 +5802,17 @@ function formatSelectedPages(pages: number[]): string {
   border-collapse: collapse;
   background: #fff;
   border-radius: 8px;
-  overflow: hidden;
+  /* Remove overflow hidden to allow dropdowns to be visible */
+  overflow: visible;
 }
 .members-table th, .members-table td {
   padding: 0.7em 1em;
   text-align: left;
   color: #374151;
+  /* Ensure dropdowns can be positioned relative to table cells */
+  position: relative;
+  /* Ensure dropdowns can expand outside table cells */
+  overflow: visible;
 }
 .members-table th {
   background: #f3f4f6;
@@ -5994,11 +6395,15 @@ body.modal-open main {
 .crowdin-title {
   color: #2563eb;
   font-weight: 700;
-  font-size: 0.95em;
-  margin-left: 0.4em;
+  font-size: 0.9em;
+  margin-left: 0.3em;
   transition: text-decoration 0.2s;
   white-space: pre-line;
   line-height: 1.3;
+  max-width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .crowdin-title.clickable:hover {
   text-decoration: underline;
@@ -6094,6 +6499,36 @@ body.modal-open main {
 .task-card:focus {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
+}
+
+/* Ensure task cards don't overflow columns */
+.kanban-column .task-card,
+.kanban-column .task-card-link {
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding-left: 0.1em !important;
+  padding-right: 0.1em !important;
+}
+
+/* Force task card content to stay within bounds */
+.kanban-column .task-card * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Additional overflow prevention */
+.kanban-column {
+  overflow-x: hidden !important;
+}
+
+.kanban-column .task-card {
+  transform: translateZ(0) !important;
+  will-change: transform !important;
 }
 
 .task-status-badge {
@@ -6572,6 +7007,7 @@ body.modal-open main {
   width: 100%;
   max-width: 100%;
   margin: 0;
+  padding: 0.8em 0.6em 0.6em 0.6em;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -7225,6 +7661,254 @@ body.modal-open main {
   font-weight: bold;
   font-size: 0.9rem;
   margin: 0 0.25rem;
+}
+
+/* Dropdown styles for assignee and reviewer */
+.assignee-dropdown-wrapper,
+.reviewer-dropdown-wrapper {
+  position: relative;
+  /* Ensure dropdowns can expand outside their containers */
+  overflow: visible;
+  z-index: 1;
+}
+
+.assignee-dropdown-trigger,
+.reviewer-dropdown-trigger {
+  cursor: pointer;
+  user-select: none;
+  padding: 0.75rem;
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+
+.assignee-dropdown-trigger:hover,
+.reviewer-dropdown-trigger:hover {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.dropdown-arrow {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-left: 0.5rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.7;
+}
+
+.assignee-dropdown-trigger:hover .dropdown-arrow,
+.reviewer-dropdown-trigger:hover .dropdown-arrow {
+  transform: translateY(1px);
+  opacity: 1;
+  color: #4b5563;
+}
+
+.assignee-dropdown,
+.reviewer-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 99999;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  min-width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  animation: dropdownFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Ensure dropdown is visible */
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  /* Ensure dropdown can expand outside any container */
+  contain: none;
+  isolation: isolate;
+  /* Add subtle border */
+  border: 1px solid #e5e7eb;
+  backdrop-filter: blur(8px);
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+
+
+.dropdown-options {
+  padding: 0.5rem 0;
+}
+
+.dropdown-option {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f9fafb;
+  position: relative;
+}
+
+.dropdown-option:hover {
+  background: #f8fafc;
+  transform: translateX(2px);
+}
+
+.dropdown-option:last-child {
+  border-bottom: none;
+}
+
+.dropdown-option:active {
+  transform: translateX(1px);
+  background: #e2e8f0;
+}
+
+
+
+.member-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 32px;
+}
+
+.member-avatar,
+.member-avatar-placeholder {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.member-avatar-placeholder {
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.member-name {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.current-badge {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 0.375rem 0.75rem;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  transition: all 0.2s ease;
+}
+
+.current-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+.current-assignee,
+.current-reviewer {
+  background: #f0fdf4;
+}
+
+.disabled-option {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f8fafc;
+  position: relative;
+}
+
+.disabled-option:hover {
+  background: #f8fafc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.disabled-option::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.05);
+  pointer-events: none;
+}
+
+.disabled-badge {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  padding: 0.375rem 0.75rem;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.2);
+  transition: all 0.2s ease;
+}
+
+.disabled-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(245, 158, 11, 0.3);
+}
+
+.dropdown-loading {
+  padding: 0.75rem 1rem;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.dropdown-loading i {
+  margin-right: 0.5rem;
+}
+
+.empty-assignee,
+.empty-reviewer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.empty-assignee:hover,
+.empty-reviewer:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.empty-text {
+  color: #64748b;
+  font-size: 0.875rem;
+  font-style: italic;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.empty-assignee:hover .empty-text,
+.empty-reviewer:hover .empty-text {
+  color: #475569;
 }
 
 

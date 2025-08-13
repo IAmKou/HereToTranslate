@@ -60,7 +60,8 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: process.env.NODE_ENV === 'development',
+      // synchronize: process.env.NODE_ENV === 'development',
+      synchronize: true,
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',

@@ -28,9 +28,8 @@ export class TaskStatusEntity {
   @Column({ type: 'enum', enum: StatusType })
   type: StatusType;
 
-
-
-
+  @Column({ type: 'int', default: 0 })
+  position: number;
 
   @Column({ default: true })
   isActive: boolean;

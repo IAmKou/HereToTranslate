@@ -16,6 +16,9 @@ export class CreateTaskDto {
   assignedToId?: string;
 
   @IsOptional()
+  reviewerId?: string;
+
+  @IsOptional()
   groupId?: string;
 
   @IsOptional()
@@ -68,6 +71,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
 
   @IsOptional()
   @IsString()

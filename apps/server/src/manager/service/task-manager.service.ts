@@ -57,6 +57,7 @@ export class TaskManagerService {
     description?: string;
     createdById: string;
     assignedToId?: string;
+    reviewerId?: string;
     groupId?: string;
     dueDate?: Date;
     estimatedBusinessHours?: number;
@@ -76,6 +77,7 @@ export class TaskManagerService {
       description,
       createdById,
       assignedToId,
+      reviewerId,
       groupId,
       dueDate,
       estimatedBusinessHours,
@@ -113,6 +115,17 @@ export class TaskManagerService {
         where: { id: BigInt(assignedToId) },
       })
       : undefined;
+
+    const reviewer = reviewerId
+      ? await this.userRepository.findOne({
+        where: { id: BigInt(reviewerId) },
+      })
+      : undefined;
+
+    // Validate that reviewer and assignee are not the same person
+    if (assignedTo && reviewer && assignedTo.id === reviewer.id) {
+      throw new BadRequestException('Reviewer and assignee cannot be the same person');
+    }
 
     const group = groupId
       ? await this.projectGroupRepository.findOne({
@@ -195,6 +208,7 @@ export class TaskManagerService {
       description,
       createdBy,
       assignedTo,
+      reviewer,
       group,
       dueDate,
       projectId,
@@ -394,7 +408,7 @@ export class TaskManagerService {
   async getTasksByProject(projectId: string) {
     const tasks = await this.taskRepository.find({
       where: { projectId },
-      relations: ['createdBy', 'assignedTo', 'group', 'status', 'workflow'],
+      relations: ['createdBy', 'assignedTo', 'reviewer', 'group', 'status', 'workflow'],
       order: { createdAt: 'DESC' },
       select: {
         id: true,
@@ -423,6 +437,12 @@ export class TaskManagerService {
           fullName: true,
           avatarUrl: true,
         },
+        reviewer: {
+          id: true,
+          username: true,
+          fullName: true,
+          avatarUrl: true,
+        },
         group: true,
         status: {
           id: true,
@@ -442,7 +462,7 @@ export class TaskManagerService {
   async getTask(id: string) {
     const task = await this.taskRepository.findOne({
       where: { id: BigInt(id) },
-      relations: ['createdBy', 'assignedTo', 'group', 'status', 'workflow'],
+      relations: ['createdBy', 'assignedTo', 'reviewer', 'group', 'status', 'workflow'],
       select: {
         id: true,
         title: true,
@@ -467,6 +487,12 @@ export class TaskManagerService {
           avatarUrl: true,
         },
         assignedTo: {
+          id: true,
+          username: true,
+          fullName: true,
+          avatarUrl: true,
+        },
+        reviewer: {
           id: true,
           username: true,
           fullName: true,
@@ -545,6 +571,19 @@ export class TaskManagerService {
           }
         }
       }
+    }
+
+    if (dto.reviewerId !== undefined) {
+      task.reviewer = dto.reviewerId
+        ? (await this.userRepository.findOne({
+        where: { id: BigInt(dto.reviewerId) },
+      })) || undefined
+        : undefined;
+    }
+
+    // Validate that reviewer and assignee are not the same person
+    if (task.assignedTo && task.reviewer && task.assignedTo.id === task.reviewer.id) {
+      throw new BadRequestException('Reviewer and assignee cannot be the same person');
     }
 
     if (dto.groupId !== undefined) {

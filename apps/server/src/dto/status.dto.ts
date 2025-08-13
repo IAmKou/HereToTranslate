@@ -16,6 +16,10 @@ export class CreateStatusDto {
   type: StatusType;
 
   @IsOptional()
+  @IsNumber()
+  position?: number;
+
+  @IsOptional()
   @IsBoolean()
   isDefault?: boolean;
 
@@ -52,6 +56,10 @@ export class UpdateStatusDto {
   @IsOptional()
   @IsEnum(StatusType)
   type?: StatusType;
+
+  @IsOptional()
+  @IsNumber()
+  position?: number;
 
   @IsOptional()
   @IsBoolean()

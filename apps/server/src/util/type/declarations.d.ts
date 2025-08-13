@@ -65,3 +65,35 @@ declare module 'pdf-lib' {
     embedFont(font: any): Promise<any>;
   }
 }
+
+declare module 'xliff' {
+  export function js2xliff(
+    data: any,
+    options?: {
+      indent?: string;
+      xmlDeclaration?: boolean;
+    }
+  ): string;
+
+  export function xliff2js(
+    xliff: string,
+    options?: {
+      ignoreAttributes?: boolean;
+    }
+  ): Promise<any>;
+
+  export function target2js(
+    xliff: string,
+    options?: {
+      ignoreAttributes?: boolean;
+    }
+  ): Promise<any>;
+
+  export function js2target(
+    data: any,
+    options?: {
+      indent?: string;
+      xmlDeclaration?: boolean;
+    }
+  ): string;
+}

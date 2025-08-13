@@ -8,6 +8,8 @@ export enum StatusType {
   OVERDUE = 'overdue',
 }
 
+
+
 @Entity('task_status')
 export class TaskStatusEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
@@ -25,14 +27,27 @@ export class TaskStatusEntity {
   @Column({ type: 'enum', enum: StatusType })
   type: StatusType;
 
-  @Column({ type: 'int', default: 0 })
-  position: number;
+
+
+
 
   @Column({ default: true })
   isActive: boolean;
 
   @Column({ default: false })
   isDefault: boolean;
+
+  @Column({ default: false })
+  isStartStatus: boolean;
+
+  @Column({ default: false })
+  isEndStatus: boolean;
+
+  @Column({ default: false })
+  isResolved: boolean;
+
+  @Column({ default: false })
+  isClosed: boolean;
 
   @ManyToOne(() => ProjectEntity, { onDelete: 'CASCADE' })
   project: ProjectEntity;

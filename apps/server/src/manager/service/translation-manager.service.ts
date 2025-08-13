@@ -20,6 +20,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'fs/promises';
 import * as path from 'path';
 import { tmpdir } from 'os';
 import { PDFAssembler } from '@prometeia/pdfassembler';
+import * as xliff from 'xliff';
 
 @Injectable()
 export class TranslationService {
@@ -141,7 +142,7 @@ export class TranslationService {
       } catch (err) {
         logger.error(`[PyMuPDF] Replacement failed: ${err instanceof Error ? err.message : String(err)}`);
         // Fallback to overlay approach if Python/PyMuPDF not available
-        const overlayEntries = translatedEntries.map((e) => ({
+        const overlayEntries = translatedEntries.map((e: any) => ({
           text: e.translatedText,
           position: e.position,
           style: e.style,
@@ -278,7 +279,7 @@ export class TranslationService {
       .limit(limit)
       .lean();
 
-    const previews = entries.map((e) =>
+    const previews = entries.map((e: any) =>
       e.translatedText?.trim() ? e.translatedText : e.originalText
     );
 
@@ -321,12 +322,18 @@ export class TranslationService {
 
   async buildExportBuffer(
     fileId: string,
-    language: string
+    language: string,
+    format: 'original' | 'xliff' = 'original'
   ): Promise<{ buffer: Buffer; fileName: string; fileType: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
     });
     if (!fileEntity) throw new Error('File not found');
+
+    // Handle XLIFF export
+    if (format === 'xliff') {
+      return this.buildXliffExport(fileId, language);
+    }
 
     let buffer: Buffer;
     if (
@@ -368,7 +375,7 @@ export class TranslationService {
       } catch (err) {
         logger.error(`[PDF-lib] Export replacement failed: ${err instanceof Error ? err.message : String(err)}`);
         // Fallback to overlay if PDF-lib fails
-        const overlayEntries = translatedEntries.map((e) => ({
+        const overlayEntries = translatedEntries.map((e: any) => ({
           text: e.translatedText,
           position: e.position,
           style: e.style,
@@ -401,72 +408,98 @@ export class TranslationService {
     return { buffer, fileName, fileType: fileEntity.fileType };
   }
 
-  async exportTranslatedFile(
-    projectId: string,
-    branchId: string,
+  async buildXliffExport(
     fileId: string,
     language: string
-  ): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
-    logger.log(`Exporting translated file for project ${projectId}, file ${fileId}, language ${language}`);
+  ): Promise<{ buffer: Buffer; fileName: string; fileType: string }> {
+    console.log(`[buildXliffExport] Starting export for fileId: ${fileId}, language: ${language}`);
 
-    // Get file entity
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
+      relations: ['project'],
     });
+    if (!fileEntity) throw new Error('File not found');
 
-    if (!fileEntity) {
-      throw new Error(`File with ID ${fileId} not found`);
-    }
-
-    // Get all translations for this file
-    const translations = await this.translationModel
-      .find({ projectId, branchId, fileId, language })
+    // Lấy tất cả translation entries cho file này
+    const entries = await this.translationModel
+      .find({ fileId, language })
+      .sort({ filePart: 1, _id: 1 })
       .lean();
 
-    if (translations.length === 0) {
-      throw new Error(`No translations found for file ${fileId} in language ${language}`);
-    }
+    console.log(`[buildXliffExport] Found ${entries.length} translation entries`);
 
-    let exportedBuffer: Buffer;
-    const originalFileName = fileEntity.fileName;
-    const fileExtension = originalFileName.split('.').pop();
-    const baseFileName = originalFileName.replace(`.${fileExtension}`, '');
-    const exportFileName = `${baseFileName}_${language}.${fileExtension}`;
-
-    if (
-      fileEntity.fileType ===
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ) {
-      // Handle DOCX files
-      const translationMap = new Map<string, string>();
-      for (const translation of translations) {
-        if (translation.translatedText && translation.translatedText.trim().length > 0) {
-          translationMap.set(translation.originalText, translation.translatedText);
+    // Tạo XLIFF data structure
+    const xliffData = {
+      resources: {
+        [`${fileEntity.project?.name || 'project'}_${fileId}`]: {
+          [`${language}`]: {
+            translation: {}
+          }
         }
       }
+    };
 
-      const originalBuffer = fileEntity.fileContent as Buffer;
-      exportedBuffer = await replaceDocxText(originalBuffer, translationMap);
-    } else if (fileEntity.fileType === 'application/pdf') {
-      // Handle PDF files
-      const translatedEntries = translations.map((translation) => ({
-        text: translation.translatedText?.trim() ? translation.translatedText : translation.originalText,
-        style: translation.style,
-        font: translation.font,
-        position: translation.position,
-      }));
+    // Populate translations
+    entries.forEach((entry, index) => {
+      const key = `string_${index + 1}`;
+      xliffData.resources[`${fileEntity.project?.name || 'project'}_${fileId}`][language].translation[key] = {
+        target: entry.translatedText || entry.originalText,
+        source: entry.originalText,
+        note: `Page: ${entry.filePart || 1}, Position: ${entry.position || 'unknown'}`,
+        approved: entry.translatedText && entry.translatedText.trim().length > 0
+      };
+    });
 
-      const originalBuffer = fileEntity.fileContent as Buffer;
-      exportedBuffer = await buildTranslatedPdf(originalBuffer, translatedEntries);
-    } else {
-     
-      throw new Error(`File type ${fileEntity.fileType} is not supported for export`);
+    console.log(`[buildXliffExport] XLIFF data prepared, calling xliff.js2xliff...`);
+
+    // Convert to XLIFF format - ALWAYS await the result
+    let xliffString: string;
+    try {
+      const result = xliff.js2xliff(xliffData, {
+        indent: '  ',
+        xmlDeclaration: true
+      });
+
+      console.log(`[buildXliffExport] xliff.js2xliff result type:`, typeof result);
+      console.log(`[buildXliffExport] xliff.js2xliff result is Promise:`, result && typeof result.then === 'function');
+
+      // Always await the result
+      xliffString = await result;
+
+      console.log(`[buildXliffExport] xliffString type:`, typeof xliffString);
+      console.log(`[buildXliffExport] xliffString length:`, xliffString?.length);
+      console.log(`[buildXliffExport] xliffString preview:`, xliffString?.substring(0, 100));
+
+    } catch (xliffError) {
+      console.error(`[buildXliffExport] Error in xliff.js2xliff:`, xliffError);
+      throw new Error(`XLIFF conversion failed: ${xliffError instanceof Error ? xliffError.message : String(xliffError)}`);
     }
 
+    // Validate xliffString
+    if (!xliffString || typeof xliffString !== 'string') {
+      console.error(`[buildXliffExport] Invalid xliffString:`, xliffString);
+      throw new Error('XLIFF conversion returned invalid string');
+    }
+
+    console.log(`[buildXliffExport] Creating buffer from xliffString...`);
+
+    // Create buffer
+    const buffer = Buffer.from(xliffString, 'utf-8');
+
+    console.log(`[buildXliffExport] Buffer created, size:`, buffer.length);
+    console.log(`[buildXliffExport] Buffer is valid:`, Buffer.isBuffer(buffer));
+
+    // Generate filename
+    const dotIdx = String(fileEntity.fileName).lastIndexOf('.');
+    const base = dotIdx > -1 ? fileEntity.fileName.slice(0, dotIdx) : fileEntity.fileName;
+    const fileName = `${base}.${language}.xliff`;
+
+    console.log(`[buildXliffExport] Export completed successfully:`, fileName);
+
     return {
-      buffer: exportedBuffer,
-      fileName: exportFileName,
-      mimeType: fileEntity.fileType,
+      buffer,
+      fileName,
+      fileType: 'application/x-xliff+xml'
     };
   }
 
@@ -494,31 +527,6 @@ export class TranslationService {
       font: e.font,
       filePart: e.filePart ?? 0,
     }));
-  }
-
-  async getTranslationProgress(
-    projectId: string,
-    branchId: string,
-    language?: string
-  ): Promise<{ total: number; completed: number; percentage: number }> {
-    const query: any = { projectId, branchId };
-    if (language) {
-      query.language = language;
-    }
-
-    const total = await this.translationModel.countDocuments(query);
-    const completed = await this.translationModel.countDocuments({
-      ...query,
-      translatedText: { $nin: [null, ''] },
-    });
-
-    const percentage = total > 0 ? (completed / total) * 100 : 0;
-
-    return {
-      total,
-      completed,
-      percentage: Math.round(percentage * 100) / 100, // Round to 2 decimal places
-    };
   }
 
   async getAllString(
@@ -629,6 +637,47 @@ export class TranslationService {
       pages: pageInfo
     };
   }
+
+  async getProjectLanguages(projectId: string): Promise<Array<{ code: string; name: string }>> {
+    try {
+      console.log(`[getProjectLanguages] Getting languages for project: ${projectId}`);
+
+      // Lấy tất cả ngôn ngữ có trong project từ translation strings
+      const languages = await this.translationModel.distinct('language', { projectId });
+
+      console.log(`[getProjectLanguages] Found languages:`, languages);
+
+      // Map language codes to names
+      const languageMap: Record<string, string> = {
+        'en': 'English',
+        'vi': 'Vietnamese',
+        'ar': 'Arabic',
+        'zh': 'Chinese',
+        'ja': 'Japanese',
+        'ko': 'Korean',
+        'fr': 'French',
+        'de': 'German',
+        'es': 'Spanish',
+        'pt': 'Portuguese',
+        'bg': 'Bulgarian'
+      };
+
+      const result = languages
+        .filter(lang => lang && lang.trim() !== '')
+        .map(lang => ({
+          code: lang,
+          name: languageMap[lang] || lang
+        }));
+
+      console.log(`[getProjectLanguages] Returning languages:`, result);
+      return result;
+
+    } catch (error) {
+      console.error(`[getProjectLanguages] Error:`, error);
+      // Return empty array if error
+      return [];
+    }
+  }
 }
 
 async function rebuildFileWithManifest(
@@ -690,8 +739,6 @@ async function rebuildFileWithManifest(
       return Buffer.from(defaultCombined, 'utf8');
     }
   }
-
-  
 }
 
 // Helper methods for PDF-lib-based true replacement
@@ -871,6 +918,41 @@ async function replacePdfUsingPdfAssembler(
   }
 }
 
+// Helper function for PDF-lib based replacement (fallback)
+async function replacePdfUsingPdfLib(
+  originalBuffer: Buffer,
+  entries: PdfReplaceEntry[],
+): Promise<Buffer> {
+  if (!entries || entries.length === 0) {
+    return originalBuffer;
+  }
+
+  try {
+    const pdfDoc = await PDFDocument.load(originalBuffer);
+
+    for (const entry of entries) {
+      if (entry.position && entry.translatedText) {
+        const page = pdfDoc.getPage(entry.position.page ? entry.position.page - 1 : 0);
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+        page.drawText(entry.translatedText, {
+          x: entry.position.x || 50,
+          y: entry.position.y || 50,
+          size: entry.style?.fontSize || 12,
+          font: font,
+          color: entry.style?.color ? parseColor(entry.style.color) : rgb(0, 0, 0)
+        });
+      }
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    return Buffer.from(pdfBytes);
+  } catch (error) {
+    logger.error(`[PDF-lib] Error during PDF replacement: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  }
+}
+
 function parseColor(colorString: string) {
   // Parse hex color like "#FF0000" to RGB
   if (colorString.startsWith('#')) {
@@ -881,33 +963,4 @@ function parseColor(colorString: string) {
     return rgb(r, g, b);
   }
   return rgb(0, 0, 0); // Default to black
-}
-
-function splitTextIntoLines(text: string, maxWidth: number, fontSize: number, font: any): string[] {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let currentLine = '';
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const textWidth = font.widthOfTextAtSize(testLine, fontSize);
-
-    if (textWidth <= maxWidth) {
-      currentLine = testLine;
-    } else {
-      if (currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        // Word is too long, split it
-        lines.push(word);
-      }
-    }
-  }
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  return lines;
 }

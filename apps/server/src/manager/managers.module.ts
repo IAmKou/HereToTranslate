@@ -19,6 +19,7 @@ import {
   TaskEntity,
   NotificationEntity,
   SettingsEntity,
+<<<<<<< Updated upstream
   TaskStatusEntity,
   AssignmentHistoryEntity,
   DeadlineExtensionEntity,
@@ -28,10 +29,20 @@ import {
   TaskAssignmentEntity,
   WorkflowEntity,
   WorkflowTransitionEntity,
-  TaskStatusHistoryEntity, 
+  TaskStatusHistoryEntity,
   TranslationPreviewEntity,
   SubtaskEntity,
   SubtaskStatusHistoryEntity,
+=======
+  TaskStatusHistoryEntity,
+  TaskStatusEntity,
+  WorkflowEntity,
+  WorkflowTransitionEntity,
+  PageDifficultyEntity,
+  DifficultyConfigEntity,
+  TaskAssignmentHistoryEntity,
+  TaskAssignmentEntity
+>>>>>>> Stashed changes
 } from '#LocalProject/Entities';
 import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
 import { RequestRegistrationEntity } from '#LocalProject/Entities';
@@ -88,6 +99,7 @@ import { ProjectInvitationService } from './service/project-invitation.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
 import { ActivityManagerService } from './service/activity-manager.service';
 import { ActivityController } from './controller/activity.controller';
+<<<<<<< Updated upstream
 import { PageDifficultyService } from './service/page-difficulty.service';
 import { ProjectCancellationService } from './service/project-cancellation.service';
 import { TaskAssignmentManagerService } from './service/task-assignment-manager.service';
@@ -106,6 +118,17 @@ import { DeadlineCheckerController } from './controller/deadline-checker.control
 import { SubtaskManagerService } from './service/subtask-manager.service';
 import { SubtaskController } from './controller/subtask.controller';
 import { OverdueCheckerService } from './service/overdue-checker.service';
+=======
+import { StatusManagerService } from '#LocalProject/Managers/service/task-status-manager.service';
+import { StatusController } from './controller/status.controller';
+import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
+import { WorkflowController } from './controller/workflow.controller';
+import { PageDifficultyService } from '#LocalProject/Managers/service/page-difficulty.service';
+import { TaskAssignmentManagerService } from '#LocalProject/Managers/service/task-assignment-manager.service';
+import { ExportManagerService } from '#LocalProject/Managers/service/export-manager.service';
+import { ExportController } from '#LocalProject/Managers/controller/export.controller';
+import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.processor';
+>>>>>>> Stashed changes
 
 @Global()
 @Module({
@@ -139,6 +162,7 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
       RequestRegistrationEntity,
       SettingsEntity,
       ProjectActivity,
+<<<<<<< Updated upstream
       AssignmentHistoryEntity,
       DeadlineExtensionEntity,
       DifficultyConfigEntity,
@@ -158,6 +182,19 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
       name: 'extract',
       redis: { host: 'localhost', port: 6379 },
     }),
+=======
+      TaskStatusHistoryEntity,
+      TaskStatusEntity,
+      WorkflowEntity,
+      WorkflowTransitionEntity,
+      PageDifficultyEntity,
+      DifficultyConfigEntity,
+      TaskAssignmentHistoryEntity,
+      TaskAssignmentEntity
+    ]),
+    BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
+    BullModule.registerQueue({ name: 'export', redis: { host: 'localhost', port: 6379 } }),
+>>>>>>> Stashed changes
   ],
   providers: [
     CategoryManagerService,
@@ -184,6 +221,7 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
     ProjectInvitationService,
     FeeService,
     ActivityManagerService,
+<<<<<<< Updated upstream
     DeadlineCheckerService,
     ScannerCronService,
     PageDifficultyService,
@@ -193,6 +231,15 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
     WorkflowManagerService,
     SubtaskManagerService,
     OverdueCheckerService,
+=======
+    StatusManagerService,
+    WorkflowManagerService,
+    TaskManagerService,
+    PageDifficultyService,
+    TaskAssignmentManagerService,
+    ExportManagerService,
+    ExportJobProcessor,
+>>>>>>> Stashed changes
   ],
   exports: [
     CategoryManagerService,
@@ -217,6 +264,7 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
     ProjectInvitationService,
     FeeService,
     ActivityManagerService,
+<<<<<<< Updated upstream
     DeadlineCheckerService,
     ScannerCronService,
     PageDifficultyService,
@@ -226,6 +274,14 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
     WorkflowManagerService,
     SubtaskManagerService,
     OverdueCheckerService,
+=======
+    StatusManagerService,
+    WorkflowManagerService,
+    TaskManagerService,
+    PageDifficultyService,
+    TaskAssignmentManagerService,
+    ExportManagerService,
+>>>>>>> Stashed changes
   ],
   controllers: [
     CategoryController,
@@ -248,6 +304,7 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
     AdminNotificationController,
     ProjectInvitationController,
     ActivityController,
+<<<<<<< Updated upstream
     DeadlineManagementController,
     PageDifficultyController,
     ProjectCancellationController,
@@ -258,5 +315,11 @@ import { OverdueCheckerService } from './service/overdue-checker.service';
     DeadlineCheckerController,
     SubtaskController,
   ],
+=======
+    ExportController,
+    WorkflowController,
+    StatusController
+  ]
+>>>>>>> Stashed changes
 })
 export class ManagersModule {}

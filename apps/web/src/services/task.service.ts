@@ -61,7 +61,8 @@ export interface CreateTaskDto {
 export interface UpdateTaskDto {
   title?: string;
   description?: string;
-  status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  // Backend expects statusId for transitions
+  statusId?: string;
   assignedToId?: string;
   reviewerId?: string;
   approverId?: string;

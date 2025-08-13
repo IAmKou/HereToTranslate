@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TaskStatusEntity, StatusType, ProjectEntity } from '#LocalProject/Entities';
+import { TaskStatusEntity, StatusType, ProjectEntity, TaskEntity } from '#LocalProject/Entities';
 import { CreateStatusDto, UpdateStatusDto } from '#LocalProject/Dtos';
 
 @Injectable()
@@ -11,6 +11,8 @@ export class StatusManagerService {
     private readonly statusRepository: Repository<TaskStatusEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
+    @InjectRepository(TaskEntity)
+    private readonly taskRepository: Repository<TaskEntity>,
   ) {}
 
   async createStatus(projectId: string, dto: CreateStatusDto) {
@@ -26,15 +28,23 @@ export class StatusManagerService {
       );
     }
 
-    // Set position if not provided
-    if (dto.position === undefined) {
-      const maxPosition = await this.statusRepository
-        .createQueryBuilder('status')
-        .select('MAX(status.position)', 'max')
-        .where('status.projectId = :projectId', { projectId })
-        .getRawOne();
-      dto.position = (maxPosition?.max || 0) + 1;
+    // If this is set as start status, unset other start statuses
+    if (dto.isStartStatus) {
+      await this.statusRepository.update(
+        { project: { id: BigInt(projectId) } },
+        { isStartStatus: false }
+      );
     }
+
+    // If this is set as end status, unset other end statuses
+    if (dto.isEndStatus) {
+      await this.statusRepository.update(
+        { project: { id: BigInt(projectId) } },
+        { isEndStatus: false }
+      );
+    }
+
+
 
     const status = this.statusRepository.create({
       ...dto,
@@ -58,6 +68,22 @@ export class StatusManagerService {
       );
     }
 
+    // If setting as start status, unset other start statuses
+    if (dto.isStartStatus) {
+      await this.statusRepository.update(
+        { project: { id: status.project.id } },
+        { isStartStatus: false }
+      );
+    }
+
+    // If setting as end status, unset other end statuses
+    if (dto.isEndStatus) {
+      await this.statusRepository.update(
+        { project: { id: status.project.id } },
+        { isEndStatus: false }
+      );
+    }
+
     Object.assign(status, dto);
     return await this.statusRepository.save(status);
   }
@@ -72,12 +98,12 @@ export class StatusManagerService {
       throw new NotFoundException('Status not found');
     }
 
-    // Check if status is being used by tasks
-    const taskCount = await this.statusRepository
-      .createQueryBuilder('status')
-      .leftJoin('task', 'task', 'task.statusId = status.id')
-      .where('status.id = :id', { id })
-      .getCount();
+    // Check if status is being used by tasks. We must count tasks referencing this status
+    // using the Task repository; a left join on status will always return at least 1 row
+    // for the status itself, even when there are no tasks.
+    const taskCount = await this.taskRepository.count({
+      where: { status: { id: BigInt(id) } },
+    });
 
     if (taskCount > 0) {
       throw new BadRequestException('Cannot delete status that is being used by tasks');
@@ -90,25 +116,10 @@ export class StatusManagerService {
   async getProjectStatuses(projectId: string) {
     return await this.statusRepository.find({
       where: { project: { id: BigInt(projectId) }, isActive: true },
-      order: { position: 'ASC' },
     });
   }
 
-  async reorderStatuses(projectId: string, statusIds: string[]) {
-    const statuses = await this.statusRepository.find({
-      where: { project: { id: BigInt(projectId) } },
-    });
 
-    for (let i = 0; i < statusIds.length; i++) {
-      const status = statuses.find(s => s.id.toString() === statusIds[i]);
-      if (status) {
-        status.position = i;
-        await this.statusRepository.save(status);
-      }
-    }
-
-    return await this.getProjectStatuses(projectId);
-  }
 
   async createDefaultStatuses(projectId: string) {
     const project = await this.projectRepository.findOneOrFail({
@@ -121,24 +132,39 @@ export class StatusManagerService {
         description: 'Task is ready to be worked on',
         color: '#42526E',
         type: StatusType.TODO,
-        position: 0,
+
+
         isDefault: true,
+        isStartStatus: true,
+        isEndStatus: false,
+        isResolved: false,
+        isClosed: false,
       },
       {
         name: 'In Progress',
         description: 'Task is being worked on',
         color: '#0052CC',
         type: StatusType.IN_PROGRESS,
-        position: 1,
+
+
         isDefault: false,
+        isStartStatus: false,
+        isEndStatus: false,
+        isResolved: false,
+        isClosed: false,
       },
       {
         name: 'Done',
         description: 'Task is completed',
         color: '#00875A',
         type: StatusType.DONE,
-        position: 3,
+
+
         isDefault: false,
+        isStartStatus: false,
+        isEndStatus: true,
+        isResolved: true,
+        isClosed: true,
       },
     ];
 

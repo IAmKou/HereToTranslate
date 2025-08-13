@@ -55,7 +55,13 @@ export class TaskController {
     @Body() dto: UpdateTaskDto,
     @Req() req: AuthenticatedRequest
   ) {
+<<<<<<< Updated upstream
     return await this.taskService.updateTask(id, dto, req.user.id);
+=======
+    // Pass userId so service can validate transitions/permissions
+    const userId = req.user.id;
+    return await this.taskService.updateTask(id, dto, userId);
+>>>>>>> Stashed changes
   }
 
   @Delete(':id')

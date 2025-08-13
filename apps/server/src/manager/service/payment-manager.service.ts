@@ -56,11 +56,11 @@ export class PaypalService {
     if (!process.env.PAYPAL_API) {
       throw new Error('PAYPAL_API environment variable is not configured');
     }
-    
+
     this.api = process.env.PAYPAL_API.replace(/\/+$/, '');
-    
+
     console.log('🔧 PayPal service initialized with API:', this.api);
-    
+
     this.configChecker.logConfiguration();
   }
 
@@ -79,10 +79,10 @@ export class PaypalService {
 
     try {
       const tokenUrl = `${this.api.replace(/\/+$/, '')}/v1/oauth2/token`;
-      
+
       console.log('🔐 Attempting PayPal authentication with URL:', tokenUrl);
       console.log('🔐 Client ID:', process.env.PAYPAL_CLIENT_ID?.substring(0, 8) + '...');
-      
+
       const res = await axios.post(
         tokenUrl,
         'grant_type=client_credentials',
@@ -91,7 +91,7 @@ export class PaypalService {
             Authorization: `Basic ${auth}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-          timeout: 10000, 
+          timeout: 10000,
         }
       );
 
@@ -106,14 +106,14 @@ export class PaypalService {
           data: err.response?.data,
           url: err.config?.url,
         });
-        
+
         if (err.response?.status === 403) {
           throw new InternalServerErrorException(
             'PayPal authentication failed. Please check your client ID and secret, and ensure they are valid for the sandbox environment.'
           );
         }
       }
-      
+
       console.error('❌ Unexpected error during PayPal authentication:', err);
       throw new InternalServerErrorException(
         'Failed to authenticate with PayPal. Please check your configuration and try again.'
@@ -153,8 +153,8 @@ export class PaypalService {
           },
         ],
         application_context: {
-          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal-success`,
-          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal/cancel`,
+          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
+          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
           brand_name: 'HereToTranslate',
           user_action: 'PAY_NOW',
         },
@@ -170,7 +170,7 @@ export class PaypalService {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          timeout: 15000, 
+          timeout: 15000,
         }
       );
 
@@ -244,17 +244,17 @@ export class PaypalService {
           message: err.message,
           url: err.config?.url,
         });
-        
+
         if (err.response?.status === 422) {
           const errorDetails = err.response?.data?.details?.[0];
           const errorMessage = errorDetails?.issue || err.response?.data?.message || 'PayPal order validation failed';
           throw new BadRequestException(`PayPal order creation failed: ${errorMessage}`);
         }
-        
+
         if (err.response?.status === 400) {
           throw new BadRequestException('Invalid PayPal order data. Please check the request parameters.');
         }
-        
+
         if (err.response?.status && err.response.status >= 500) {
           throw new InternalServerErrorException('PayPal service temporarily unavailable. Please try again later.');
         }
@@ -298,8 +298,8 @@ export class PaypalService {
           },
         ],
         application_context: {
-          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal-success`,
-          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}paypal/cancel`,
+          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
+          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
         },
       };
 
@@ -313,7 +313,7 @@ export class PaypalService {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          timeout: 15000, 
+          timeout: 15000,
         }
       );
 
@@ -372,18 +372,18 @@ export class PaypalService {
           message: err.message,
           url: err.config?.url,
         });
-        
+
         if (err.response?.status === 422) {
           const errorDetails = err.response?.data?.details?.[0];
           const errorMessage = errorDetails?.issue || err.response?.data?.message || 'PayPal order validation failed';
           throw new BadRequestException(`PayPal order creation failed: ${errorMessage}`);
         }
-        
+
         if (err.response?.status === 400) {
           throw new BadRequestException('Invalid PayPal order data. Please check the request parameters.');
         }
-        
-        if (err.response?.status && err.response.status >= 500) { 
+
+        if (err.response?.status && err.response.status >= 500) {
           throw new InternalServerErrorException('PayPal service temporarily unavailable. Please try again later.');
         }
       } else {
@@ -1171,7 +1171,7 @@ export class PaypalService {
       relations: ['user'],
     });
 
-    const remainingAmount = originalTx.amount; 
+    const remainingAmount = originalTx.amount;
 
     const wallet = await this.walletManagerService.getOrCreateWallet(request.requester.id);
 

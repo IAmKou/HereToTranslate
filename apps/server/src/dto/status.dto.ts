@@ -16,12 +16,24 @@ export class CreateStatusDto {
   type: StatusType;
 
   @IsOptional()
-  @IsNumber()
-  position?: number;
+  @IsBoolean()
+  isDefault?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  isDefault?: boolean;
+  isStartStatus?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isEndStatus?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isResolved?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isClosed?: boolean;
 }
 
 export class UpdateStatusDto {
@@ -42,14 +54,26 @@ export class UpdateStatusDto {
   type?: StatusType;
 
   @IsOptional()
-  @IsNumber()
-  position?: number;
-
-  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
   @IsOptional()
   @IsBoolean()
   isDefault?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isStartStatus?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isEndStatus?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isResolved?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isClosed?: boolean;
 }

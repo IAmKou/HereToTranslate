@@ -25,16 +25,23 @@ import {
   NotificationEntity,
   SettingsEntity,
   TaskStatusEntity,
-  AssignmentHistoryEntity,
-  DeadlineExtensionEntity,
-  DifficultyConfigEntity,
-  PageDifficultyEntity,
-  ProjectCancellationEntity,
-  TaskAssignmentEntity,
   WorkflowEntity,
   WorkflowTransitionEntity,
+<<<<<<< Updated upstream
+=======
+  TaskStatusHistoryEntity,
+>>>>>>> Stashed changes
+  PageDifficultyEntity,
+  DifficultyConfigEntity,
+  TaskAssignmentHistoryEntity,
+  TaskAssignmentEntity,
+<<<<<<< Updated upstream
+  RequestRegistrationEntity,
   TaskStatusHistoryEntity, SubtaskAssignmentHistoryEntity,
-  SubtaskEntity, SubtaskAssignmentEntity, SubtaskStatusHistoryEntity
+  SubtaskEntity, SubtaskAssignmentEntity, SubtaskStatusHistoryEntity, ProjectCancellationEntity, DeadlineExtensionEntity
+=======
+  RequestRegistrationEntity
+>>>>>>> Stashed changes
 } from '#LocalProject/Entities';
 import { TaskHistoryEntity } from './entity/task-history.entity';
 import { ProjectActivity } from './entity/project-activity.entity';
@@ -63,9 +70,12 @@ export class MySqlConnection {
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
+<<<<<<< Updated upstream
       migrations:
         process.env.NODE_ENV === 'production' ? ['dist/migrations/*.js'] : [],
       migrationsRun: process.env.NODE_ENV === 'production',
+=======
+>>>>>>> Stashed changes
       entities: [
         UserEntity,
         BranchEntity,
@@ -92,7 +102,8 @@ export class MySqlConnection {
         TaskHistoryEntity,
         ProjectActivity,
         TaskStatusEntity,
-        AssignmentHistoryEntity,
+<<<<<<< Updated upstream
+        TaskAssignmentHistoryEntity,
         DeadlineExtensionEntity,
         DifficultyConfigEntity,
         PageDifficultyEntity,
@@ -105,6 +116,16 @@ export class MySqlConnection {
         SubtaskAssignmentEntity,
         SubtaskStatusHistoryEntity,
         SubtaskAssignmentHistoryEntity,
+=======
+        WorkflowEntity,
+        WorkflowTransitionEntity,
+        TaskStatusHistoryEntity,
+        PageDifficultyEntity,
+        DifficultyConfigEntity,
+        TaskAssignmentHistoryEntity,
+        TaskAssignmentEntity,
+        RequestRegistrationEntity
+>>>>>>> Stashed changes
       ],
     });
     MySqlConnection.instance = this;

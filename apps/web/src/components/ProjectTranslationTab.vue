@@ -7,6 +7,7 @@ import Dropdown from 'primevue/dropdown';
 import axiosInstance from '../api';
 import { useProjectPermission } from '../composables/useProjectPermission';
 import { SUPPORTED_LANGUAGES, type Language } from '../utils/languages';
+import BulkExportDialog from './BulkExportDialog.vue';
 
 interface TranslationString {
   id: string;
@@ -72,11 +73,30 @@ const focusUntranslated = ref(false);
 
 
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
+const showExportMenu = ref(false); // Control export dropdown menu
+const showBulkExportDialog = ref(false); // Control bulk export dialog
 
 // Hàm kiểm tra file đang processing
 function isFileProcessing(file: any): boolean {
   return file.status === 'processing';
 }
+
+// Close export menu when clicking outside
+function handleClickOutside(event: Event) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.export-dropdown')) {
+    showExportMenu.value = false;
+  }
+}
+
+// Add click outside listener
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 
 // Expose method để component cha có thể gọi reload files
 function reloadFiles() {
@@ -415,12 +435,15 @@ async function saveTranslation(str: any) {
 }
 
 // Export translated file (download)
-async function exportTranslatedFile(file: any) {
+async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'original') {
   const fileId = file.fileId || file.id;
   const currentLanguage = selectedLanguage.value?.code || defaultLanguage.value.code;
   try {
     const res = await axiosInstance.get(`/translation/export/download/${fileId}`, {
-      params: { language: currentLanguage },
+      params: {
+        language: currentLanguage,
+        format: format
+      },
       responseType: 'blob',
     });
     const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
@@ -488,6 +511,22 @@ async function exportTranslatedFile(file: any) {
 
     </div>
 
+    <!-- Bulk Export Section -->
+    <div v-if="files.length > 0" class="bulk-export-section" style="background: #f0f9ff; padding: 1rem 1.2rem; border-radius: 10px; margin-bottom: 1.2rem; border: 2px solid #0ea5e9; display: flex; align-items: center; justify-content: space-between;">
+      <div class="bulk-export-info" style="display: flex; align-items: center; gap: 0.6rem;">
+        <i class="pi pi-download" style="color: #0ea5e9; font-size: 1.1rem;"></i>
+        <span style="font-weight: 600; color: #0c4a6e; font-size: 0.95rem;">Bulk Export Options</span>
+        <span style="color: #0369a1; font-size: 0.85rem;">({{ files.length }} file{{ files.length > 1 ? 's' : '' }} available)</span>
+      </div>
+      <Button
+        label="Bulk Export"
+        icon="pi pi-download"
+        @click="showBulkExportDialog = true"
+        class="p-button-primary"
+        style="background: #0ea5e9; border-color: #0ea5e9; font-weight: 600;"
+      />
+    </div>
+
     <div v-if="loading">Loading translation strings...</div>
     <div v-else-if="error" style="color:red">{{ error }}</div>
     <div v-else>
@@ -519,21 +558,52 @@ async function exportTranslatedFile(file: any) {
               <i class="pi pi-external-link" style="font-size: 0.9rem;"></i>
               Open Editor
             </a>
-            <button
-              class="open-translator-btn"
-              style="background: #10b981; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s; font-size: 0.9rem;"
-              @mouseenter="$event.target.style.background = '#0ea371'"
-              @mouseleave="$event.target.style.background = '#10b981'"
-              title="Export translated file (download)"
-              @click="exportTranslatedFile(file)"
-            >
-              <i class="pi pi-download" style="font-size: 0.9rem;"></i>
-              Export
-            </button>
+            <div class="export-dropdown" style="position: relative; display: inline-block;">
+              <button
+                class="open-translator-btn"
+                style="background: #10b981; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s; font-size: 0.9rem;"
+                @mouseenter="$event.target.style.background = '#0ea371'"
+                @mouseleave="$event.target.style.background = '#10b981'"
+                title="Export translated file (download)"
+                @click="exportTranslatedFile(file, 'original')"
+              >
+                <i class="pi pi-download" style="font-size: 0.9rem;"></i>
+                Export
+              </button>
+              <button
+                class="export-dropdown-btn"
+                style="background: #6366f1; color: white; border: none; padding: 0.4rem 0.6rem; border-radius: 0 6px 6px 0; font-weight: 600; display: flex; align-items: center; transition: all 0.2s; font-size: 0.9rem; margin-left: -1px;"
+                @mouseenter="$event.target.style.background = '#4f46e5'"
+                @mouseleave="$event.target.style.background = '#6366f1'"
+                title="Export options"
+                @click="showExportMenu = !showExportMenu"
+              >
+                <i class="pi pi-chevron-down" style="font-size: 0.8rem;"></i>
+              </button>
+              <div v-if="showExportMenu" class="export-menu" style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; min-width: 180px; margin-top: 4px;">
+                <div class="export-menu-item" style="padding: 0.6rem 1rem; cursor: pointer; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s;" @click="exportTranslatedFile(file, 'original'); showExportMenu = false">
+                  <i class="pi pi-file" style="font-size: 0.9rem; color: #6b7280;"></i>
+                  <span style="font-size: 0.9rem;">Original Format</span>
+                </div>
+                <div class="export-menu-item" style="padding: 0.6rem 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s;" @click="exportTranslatedFile(file, 'xliff'); showExportMenu = false">
+                  <i class="pi pi-file-edit" style="font-size: 0.9rem; color: #6b7280;"></i>
+                  <span style="font-size: 0.9rem;">XLIFF Format</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Bulk Export Dialog -->
+    <BulkExportDialog
+      v-model:visible="showBulkExportDialog"
+      :project-id="String(props.projectId)"
+      :branch-id="props.branchId ? String(props.branchId) : undefined"
+      :available-languages="projectLanguages"
+      :default-language="defaultLanguage"
+    />
   </div>
 </template>
 
@@ -1121,5 +1191,23 @@ async function exportTranslatedFile(file: any) {
   color: #e2e8f0 !important;
   transform: none !important;
   box-shadow: none !important;
+}
+
+/* Export dropdown styles */
+.export-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.export-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.export-menu-item:last-child {
+  border-bottom: none;
+}
+
+.export-dropdown-btn:hover {
+  background: #4f46e5 !important;
 }
 </style>

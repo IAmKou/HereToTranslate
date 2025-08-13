@@ -224,6 +224,7 @@ export class WorkflowManagerService {
   async getWorkflowVisualization(workflowId: string) {
     const workflow = await this.workflowRepository.findOneOrFail({
       where: { id: BigInt(workflowId) },
+      relations: ['project'],
     });
 
     const transitions = await this.transitionRepository.find({
@@ -232,8 +233,7 @@ export class WorkflowManagerService {
     });
 
     const statuses = await this.statusRepository.find({
-      where: { project: { id: workflow.project.id }, isActive: true },
-      order: { position: 'ASC' },
+      where: { project: { id: BigInt(workflow.project.id) }, isActive: true },
     });
 
     const nodes = statuses.map(status => ({
@@ -241,7 +241,6 @@ export class WorkflowManagerService {
       name: status.name,
       color: status.color,
       type: status.type,
-      position: status.position,
     }));
 
     const edges = transitions.map(transition => ({

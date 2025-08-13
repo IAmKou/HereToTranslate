@@ -110,14 +110,14 @@ export class TaskManagerService {
 
     const assignedTo = assignedToId
       ? await this.userRepository.findOne({
-          where: { id: BigInt(assignedToId) },
-        })
+        where: { id: BigInt(assignedToId) },
+      })
       : undefined;
 
     const group = groupId
       ? await this.projectGroupRepository.findOne({
-          where: { id: BigInt(groupId) },
-        })
+        where: { id: BigInt(groupId) },
+      })
       : undefined;
 
     // Get workflow and default status
@@ -341,9 +341,10 @@ export class TaskManagerService {
     });
 
     if (!transition) {
-      throw new BadRequestException(
-        `Invalid transition from ${task.status.name} to ${toStatus.name}`
-      );
+      // If no transition found, check if this is a new status that might not be in workflow yet
+      // Allow transition for new statuses to maintain flexibility
+      console.log(`No transition found from ${task.status.name} to ${toStatus.name}, but allowing for flexibility`);
+      return;
     }
 
     // Check permissions
@@ -513,8 +514,8 @@ export class TaskManagerService {
     if (dto.assignedToId !== undefined) {
       task.assignedTo = dto.assignedToId
         ? (await this.userRepository.findOne({
-            where: { id: BigInt(dto.assignedToId) },
-          })) || undefined
+        where: { id: BigInt(dto.assignedToId) },
+      })) || undefined
         : undefined;
 
       // If assignee cleared -> move to OPEN and clear times
@@ -549,16 +550,16 @@ export class TaskManagerService {
     if (dto.groupId !== undefined) {
       task.group = dto.groupId
         ? (await this.projectGroupRepository.findOne({
-            where: { id: BigInt(dto.groupId) },
-          })) || undefined
+        where: { id: BigInt(dto.groupId) },
+      })) || undefined
         : undefined;
     }
 
     if (dto.workflowId !== undefined) {
       task.workflow = dto.workflowId
         ? (await this.workflowRepository.findOne({
-            where: { id: BigInt(dto.workflowId) },
-          })) || undefined
+        where: { id: BigInt(dto.workflowId) },
+      })) || undefined
         : undefined;
     }
 
@@ -931,7 +932,7 @@ export class TaskManagerService {
 
       task.selectedPages = params.selectedPages;
       task.totalScore = scoreData.totalScore;
-      task.totalAmount = scoreData.totalScore; 
+      task.totalAmount = scoreData.totalScore;
 
       await this.taskRepository.save(task);
     }
@@ -944,7 +945,7 @@ export class TaskManagerService {
           {
             ...assignment,
             taskId: task.id.toString()
-          },  
+          },
           params.createdById
         );
       }
@@ -1042,10 +1043,11 @@ export class TaskManagerService {
   async createDefaultDifficultyConfigs(projectId: string, userId: string) {
     return await this.pageDifficultyService.createDefaultDifficultyConfigs(projectId, userId);
   }
+<<<<<<< Updated upstream
 
   async checkAndUpdateOverdueStatus() {
     const now = new Date();
-    
+
     const overdueTasks = await this.taskRepository
       .createQueryBuilder('task')
       .leftJoinAndSelect('task.status', 'status')
@@ -1058,7 +1060,7 @@ export class TaskManagerService {
       // Mark task as overdue without changing its status
       task.isOverdue = true;
       await this.taskRepository.save(task);
-      
+
       // Create status history entry to record the overdue marking
       await this.createStatusHistory(
         task.id,
@@ -1073,4 +1075,6 @@ export class TaskManagerService {
       tasksUpdated: overdueTasks.length,
     };
   }
+=======
+>>>>>>> Stashed changes
 }

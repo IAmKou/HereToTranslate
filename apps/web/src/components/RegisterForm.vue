@@ -16,17 +16,11 @@
           <p class="subtitle">Join our community today</p>
         </div>
         <div
-          v-if="message"
+          v-if="message && messageType === 'success'"
           :class="['message', messageType]"
           style="margin-bottom: 1.5rem"
         >
-          <i
-            :class="
-              messageType === 'success'
-                ? 'pi pi-check-circle'
-                : 'pi pi-times-circle'
-            "
-          ></i>
+          <i class="pi pi-check-circle"></i>
           {{ message }}
         </div>
         <form @submit.prevent="submitForm" class="form-content">
@@ -272,6 +266,11 @@ const validateForm = () => {
 
 // Add real-time validation
 const validateField = (field) => {
+  // Clear any server error when user starts typing
+  if (errors[field] && !errors[field].includes('required') && !errors[field].includes('must be') && !errors[field].includes('Please enter') && !errors[field].includes('Passwords do not match')) {
+    errors[field] = '';
+  }
+
   switch (field) {
     case 'username':
       if (!form.username.trim()) {
@@ -340,6 +339,10 @@ const validateField = (field) => {
 const submitForm = async () => {
   if (!validateForm()) return;
   isSubmitting.value = true;
+
+  // Clear any previous server errors
+  message.value = '';
+
   const payload = {
     username: form.username,
     email: form.email,
@@ -364,9 +367,24 @@ const submitForm = async () => {
       router.push('/login');
     }, 3000);
   } catch (err) {
-    message.value =
-      err.response?.data?.message || 'Register failed. Please try again.';
-    messageType.value = 'error';
+    const errorMessage = err.response?.data?.message || 'Register failed. Please try again.';
+
+    // Map server errors to specific fields
+    if (errorMessage.toLowerCase().includes('phone') || errorMessage.toLowerCase().includes('số điện thoại')) {
+      errors.phone = errorMessage;
+    } else if (errorMessage.toLowerCase().includes('email')) {
+      errors.email = errorMessage;
+    } else if (errorMessage.toLowerCase().includes('username')) {
+      errors.username = errorMessage;
+    } else if (errorMessage.toLowerCase().includes('password')) {
+      errors.password = errorMessage;
+    } else if (errorMessage.toLowerCase().includes('name')) {
+      errors.fullName = errorMessage;
+    } else {
+      // If error doesn't match any specific field, show as general message
+      message.value = errorMessage;
+      messageType.value = 'error';
+    }
   } finally {
     isSubmitting.value = false;
   }

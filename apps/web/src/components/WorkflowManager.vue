@@ -192,102 +192,69 @@
 
     <!-- Status Management View -->
     <div v-else-if="viewMode === 'status'" class="status-page">
-      <!-- Delete Status Confirmation Modal -->
 
-      <div v-if="showDeleteStatusModal" class="delete-status-modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>Delete Status</h3>
-            <button class="close-btn" @click="closeDeleteStatusModal">
-              <i class="icon">×</i>
-            </button>
-          </div>
-
-          <div class="modal-body">
-            <div class="warning-message">
-              <div class="warning-icon">
-                <i class="pi pi-exclamation-triangle"></i>
-              </div>
-              <h4>Are you sure you want to delete status "{{ statusToDelete?.name }}"?</h4>
-              <p>This action cannot be undone. All tasks using this status will need to be reassigned.</p>
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn btn-secondary" @click="closeDeleteStatusModal">
-              Keep Status
-            </button>
-            <button
-              class="btn btn-danger"
-              @click="confirmDeleteStatus"
-              :disabled="deletingStatus"
-            >
-              <span v-if="deletingStatus" class="loading-spinner"></span>
-              {{ deletingStatus ? 'Deleting...' : 'Delete Status' }}
-            </button>
-          </div>
-        </div>
-      </div>
 
       <!-- Move Tasks Modal (when status has tasks) -->
-      <div v-if="showMoveTasksModal" class="delete-status-modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>Move work from {{ statusToDelete?.name }} column</h3>
-            <button class="close-btn" @click="closeMoveTasksModal">
-              <i class="pi pi-times" style="font-size: 18px; font-weight: bold;">×</i>
-            </button>
-          </div>
+      <Teleport to="body">
+        <div v-if="showMoveTasksModal" class="modal-overlay">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Move work from {{ statusToDelete?.name }} column</h3>
+              <button class="close-btn" @click="closeMoveTasksModal">
+                <i class="pi pi-times" style="font-size: 18px; font-weight: bold;">×</i>
+              </button>
+            </div>
 
-          <div class="modal-body">
-            <div class="move-tasks-content">
-              <div class="warning-icon">
-                <i class="pi pi-exclamation-triangle"></i>
-              </div>
-              <p class="move-description">Select a new home for any work with the {{ statusToDelete?.name }} status, including work in the backlog.</p>
-
-              <div class="status-migration">
-                <div class="status-to-delete">
-                  <span>This status will be deleted:</span>
-                  <div class="status-badge">{{ statusToDelete?.name }}</div>
+            <div class="modal-body">
+              <div class="move-tasks-content">
+                <div class="warning-icon">
+                  <i class="pi pi-exclamation-triangle"></i>
                 </div>
+                <p class="move-description">Select a new home for any work with the {{ statusToDelete?.name }} status, including work in the backlog.</p>
 
-                <div class="move-arrow">
-                  <i class="pi pi-arrow-right"></i>
-                </div>
+                <div class="status-migration">
+                  <div class="status-to-delete">
+                    <span>This status will be deleted:</span>
+                    <div class="status-badge">{{ statusToDelete?.name }}</div>
+                  </div>
 
-                <div class="status-selection">
-                  <span>Move existing work items to:</span>
-                  <select v-model="selectedNewStatus" class="status-dropdown">
-                    <option value="">Select a status...</option>
-                    <option
-                      v-for="status in availableStatuses.filter(s => s.id !== statusToDelete?.id)"
-                      :key="status.id"
-                      :value="status.id"
-                    >
-                      {{ status.name }}
-                    </option>
-                  </select>
+                  <div class="move-arrow">
+                    <i class="pi pi-arrow-right"></i>
+                  </div>
+
+                  <div class="status-selection">
+                    <span>Move existing work items to:</span>
+                    <select v-model="selectedNewStatus" class="status-dropdown">
+                      <option value="">Select a status...</option>
+                      <option
+                        v-for="status in availableStatuses.filter((s: any) => s.id !== statusToDelete?.id)"
+                        :key="status.id"
+                        :value="status.id"
+                      >
+                        {{ status.name }}
+                      </option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="modal-footer">
-            <button class="btn btn-secondary" @click="closeMoveTasksModal">
-              Cancel
-            </button>
-            <button
-              class="btn btn-danger"
-              @click="confirmMoveAndDelete"
-              :disabled="!selectedNewStatus || movingTasks"
-            >
-              <span v-if="movingTasks" class="loading-spinner"></span>
-              {{ movingTasks ? 'Moving Tasks...' : 'Move Tasks & Delete Status' }}
-            </button>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="closeMoveTasksModal">
+                Cancel
+              </button>
+              <button
+                class="btn btn-danger"
+                @click="confirmMoveAndDelete"
+                :disabled="!selectedNewStatus || movingTasks"
+              >
+                <span v-if="movingTasks" class="loading-spinner"></span>
+                {{ movingTasks ? 'Moving Tasks...' : 'Move Tasks & Delete Status' }}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </Teleport>
 
       <div class="status-page-header">
         <button class="btn-secondary" @click="backToList">
@@ -804,6 +771,12 @@ const props = defineProps<{
   projectId: string;
 }>();
 
+const emit = defineEmits<{
+  statusCreated: [];
+  statusUpdated: [];
+  statusDeleted: [];
+}>();
+
 const toast = useToast();
 
 // State
@@ -827,7 +800,7 @@ const showCreateTransition = ref(false);
 const showEditTransition = ref(false);
 const showCreateStatus = ref(false);
 const showEditStatus = ref(false);
-const showDeleteStatusModal = ref(false);
+
 const deletingStatus = ref(false);
 const statusToDelete = ref<TaskStatus | null>(null);
 const showMoveTasksModal = ref(false);
@@ -1259,16 +1232,18 @@ async function saveStatus() {
       });
     } else {
       await axiosInstance.post(`/task-statuses/project/${props.projectId}`, statusForm.value);
-      toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Status created successfully',
-        life: 3000
-      });
+
     }
 
     await loadTaskStatuses();
     closeStatusForm();
+
+    // Emit event to notify parent component
+    if (showEditStatus.value && selectedStatus.value) {
+      emit('statusUpdated');
+    } else {
+      emit('statusCreated');
+    }
   } catch (error) {
     console.error('Error saving status:', error);
     toast.add({
@@ -1286,17 +1261,36 @@ async function deleteStatus(status: TaskStatus) {
   console.log('🚀 deleteStatus called with:', status);
   statusToDelete.value = status;
 
-  // Since we can't check tasks via API, always show move tasks modal first
-  // This is better UX - let user choose where to move tasks before deleting
-  console.log('📋 Showing move tasks modal directly');
-  showMoveTasksModal.value = true;
-  selectedNewStatus.value = '';
+  // Try to delete status directly first
+  // If it fails with 400 error (has tasks), then show move tasks modal
+  console.log('🗑️ Attempting to delete status directly first');
+  deletingStatus.value = true;
+  try {
+    await axiosInstance.delete(`/task-statuses/${status.id}`);
+    await loadTaskStatuses();
+    emit('statusDeleted');
+  } catch (error: any) {
+    console.error('❌ Error deleting status:', error);
+
+    // If 400 error, it means status has tasks, show move tasks modal
+    if (error.response?.status === 400) {
+      console.log('🔄 400 error detected, showing move tasks modal');
+      showMoveTasksModal.value = true;
+      selectedNewStatus.value = '';
+    } else {
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to delete status',
+        life: 3000
+      });
+    }
+  } finally {
+    deletingStatus.value = false;
+  }
 }
 
-function closeDeleteStatusModal() {
-  showDeleteStatusModal.value = false;
-  statusToDelete.value = null;
-}
+
 
 function closeMoveTasksModal() {
   showMoveTasksModal.value = false;
@@ -1316,52 +1310,27 @@ async function confirmMoveAndDelete() {
 
   movingTasks.value = true;
   try {
-    console.log('📡 Getting tasks from project...');
+    console.log('📡 Using new server endpoint to move tasks and delete status...');
 
-    // Get all tasks from the project
-    const tasksResponse = await axiosInstance.get(`/tasks/project/${props.projectId}`);
-    const allTasks = tasksResponse.data;
-    console.log('📋 All project tasks:', allTasks.length);
-    console.log('📋 All tasks details:', allTasks);
-
-    // Filter tasks that are in the status to be deleted
-    const tasksToMove = allTasks.filter(task => {
-      // Check different possible properties for status ID
-      const taskStatusId = task.statusId || task.status?.id || task.statusId;
-      console.log(`🔍 Checking task ${task.id}: statusId=${task.statusId}, status.id=${task.status?.id}, statusToDelete=${statusToDelete.value.id}, match=${taskStatusId === statusToDelete.value.id}`);
-      console.log(`🔍 Full task object:`, task);
-      return taskStatusId === statusToDelete.value.id;
-    });
-    console.log('🎯 Tasks to move:', tasksToMove.length);
-
-    if (tasksToMove.length > 0) {
-      console.log('📤 Moving tasks individually...');
-      // Move each task to the new status
-      for (const task of tasksToMove) {
-        console.log(`🔄 Moving task ${task.id} from status ${task.statusId} to ${selectedNewStatus.value}`);
-        await axiosInstance.patch(`/tasks/${task.id}`, {
-          statusId: selectedNewStatus.value
-        });
+    // Use the new server endpoint to move tasks and delete status in one operation
+    await axiosInstance.delete(`/task-statuses/${statusToDelete.value.id}/move-tasks`, {
+      data: {
+        newStatusId: selectedNewStatus.value
       }
-      console.log('✅ All tasks moved successfully');
-    } else {
-      console.log('ℹ️ No tasks found to move');
-    }
+    });
 
-    console.log('🗑️ Deleting old status:', statusToDelete.value.id);
-    await axiosInstance.delete(`/task-statuses/${statusToDelete.value.id}`);
-    console.log('✅ Status deleted successfully');
-
+    console.log('✅ Tasks moved and status deleted successfully');
     toast.add({
       severity: 'success',
-      summary: 'Success',
-      detail: 'Tasks moved and status deleted successfully',
+      summary: 'Status Deleted',
+      detail: 'Tasks moved and status deleted successfully.',
       life: 3000
     });
 
     await loadTaskStatuses();
     closeMoveTasksModal();
-  } catch (error) {
+    emit('statusDeleted');
+  } catch (error: any) {
     console.error('❌ Error moving tasks and deleting status:', error);
     console.log('📊 Error details:', {
       message: error.message,
@@ -1380,56 +1349,7 @@ async function confirmMoveAndDelete() {
   }
 }
 
-async function confirmDeleteStatus() {
-  console.log('🚀 confirmDeleteStatus called');
-  if (!statusToDelete.value) {
-    console.log('❌ No status to delete');
-    return;
-  }
 
-  console.log('🗑️ Attempting to delete status:', statusToDelete.value);
-  deletingStatus.value = true;
-  try {
-    console.log('📡 Making DELETE request to:', `/task-statuses/${statusToDelete.value.id}`);
-    await axiosInstance.delete(`/task-statuses/${statusToDelete.value.id}`);
-    console.log('✅ Status deleted successfully');
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Status deleted successfully',
-      life: 3000
-    });
-    await loadTaskStatuses();
-    closeDeleteStatusModal();
-  } catch (error) {
-    console.error('❌ Error deleting status:', error);
-    console.log('📊 Error details:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      url: error.config?.url,
-      method: error.config?.method
-    });
-
-    // If 400 error, it means status has tasks, show move tasks modal
-    if (error.response?.status === 400) {
-      console.log('🔄 400 error detected, showing move tasks modal');
-      closeDeleteStatusModal();
-      showMoveTasksModal.value = true;
-      selectedNewStatus.value = '';
-    } else {
-      toast.add({
-        severity: 'error',
-        summary: 'Error',
-        detail: 'Failed to delete status',
-        life: 3000
-      });
-    }
-  } finally {
-    deletingStatus.value = false;
-  }
-}
 
 async function createDefaultStatuses() {
   try {
@@ -2205,35 +2125,20 @@ watch(() => props.projectId, () => {
   }
 }
 
-/* Delete Status Modal Styles */
-.delete-status-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  pointer-events: none;
-  padding-top: 100px;
-}
+/* Delete Status Modal Styles - Updated to use modal-overlay */
 
 .modal-content {
   pointer-events: auto;
-}
-
-.modal-content {
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
   width: 80%;
-  max-width: 400px;
+  max-width: 450px;
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
   z-index: 200;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .modal-header {
@@ -2242,6 +2147,8 @@ watch(() => props.projectId, () => {
   justify-content: space-between;
   padding: 1.5rem;
   border-bottom: 1px solid #e5e7eb;
+  border-radius: 16px 16px 0 0;
+  background: #f8fafc;
 }
 
 .modal-header h3 {
@@ -2258,7 +2165,7 @@ watch(() => props.projectId, () => {
   color: #6b7280;
   cursor: pointer;
   padding: 0.5rem;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: all 0.2s;
 }
 
@@ -2276,7 +2183,7 @@ watch(() => props.projectId, () => {
   margin-bottom: 2rem;
   padding: 1.5rem;
   background: #fef2f2;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid #fecaca;
 }
 
@@ -2284,6 +2191,15 @@ watch(() => props.projectId, () => {
   font-size: 3rem;
   color: #dc2626;
   margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 80px;
+  height: 80px;
+  background: #fef2f2;
+  border-radius: 50%;
+  margin: 0 auto 1rem auto;
+  border: 2px solid #fecaca;
 }
 
 .warning-message h4 {
@@ -2305,11 +2221,13 @@ watch(() => props.projectId, () => {
   gap: 1rem;
   padding: 1.5rem;
   border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 16px 16px;
+  background: #f8fafc;
 }
 
 .btn {
   padding: 0.75rem 1.5rem;
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: 500;
   font-size: 0.875rem;
   cursor: pointer;
@@ -2377,7 +2295,8 @@ watch(() => props.projectId, () => {
   margin: 20px 0;
   padding: 20px;
   background: #f8f9fa;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
 }
 
 .status-to-delete, .status-selection {
@@ -2390,10 +2309,11 @@ watch(() => props.projectId, () => {
 .status-badge {
   background: #007bff;
   color: white;
-  padding: 8px 16px;
-  border-radius: 20px;
+  padding: 10px 20px;
+  border-radius: 25px;
   font-weight: 500;
   font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
 }
 
 .move-arrow {
@@ -2402,11 +2322,12 @@ watch(() => props.projectId, () => {
 }
 
 .status-dropdown {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: 1px solid #ddd;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
   min-width: 150px;
+  background: white;
 }
 
 .status-dropdown:focus {

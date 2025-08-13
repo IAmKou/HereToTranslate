@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TaskStatusEntity, StatusType, ProjectEntity } from '#LocalProject/Entities';
+import { TaskStatusEntity, StatusType, ProjectEntity, TaskEntity } from '#LocalProject/Entities';
 import { CreateStatusDto, UpdateStatusDto } from '#LocalProject/Dtos';
 
 @Injectable()
@@ -11,6 +11,8 @@ export class StatusManagerService {
     private readonly statusRepository: Repository<TaskStatusEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
+    @InjectRepository(TaskEntity)
+    private readonly taskRepository: Repository<TaskEntity>,
   ) {}
 
   async createStatus(projectId: string, dto: CreateStatusDto) {
@@ -85,6 +87,41 @@ export class StatusManagerService {
 
     await this.statusRepository.remove(status);
     return { success: true };
+  }
+
+  async moveTasksAndDeleteStatus(statusId: string, newStatusId: string) {
+    const status = await this.statusRepository.findOne({
+      where: { id: BigInt(statusId) },
+      relations: ['project'],
+    });
+
+    if (!status) {
+      throw new NotFoundException('Status not found');
+    }
+
+    const newStatus = await this.statusRepository.findOne({
+      where: { id: BigInt(newStatusId) },
+    });
+
+    if (!newStatus) {
+      throw new NotFoundException('Target status not found');
+    }
+
+    // Find all tasks that are using the old status
+    const tasksToMove = await this.taskRepository.find({
+      where: { status: { id: BigInt(statusId) } },
+      relations: ['status'],
+    });
+
+    // Move all tasks from the old status to the new status
+    for (const task of tasksToMove) {
+      task.status = newStatus;
+      await this.taskRepository.save(task);
+    }
+
+    // Delete the old status
+    await this.statusRepository.remove(status);
+    return { success: true, movedTasks: true, movedTaskCount: tasksToMove.length };
   }
 
   async getProjectStatuses(projectId: string) {

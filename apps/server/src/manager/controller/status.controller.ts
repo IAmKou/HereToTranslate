@@ -30,6 +30,14 @@ export class StatusController {
     return this.statusService.deleteStatus(id);
   }
 
+  @Delete(':id/move-tasks')
+  async moveTasksAndDeleteStatus(
+    @Param('id') id: string,
+    @Body() body: { newStatusId: string }
+  ) {
+    return this.statusService.moveTasksAndDeleteStatus(id, body.newStatusId);
+  }
+
   @Post('project/:projectId/defaults')
   async createDefaultStatuses(@Param('projectId') projectId: string) {
     return this.statusService.createDefaultStatuses(projectId);

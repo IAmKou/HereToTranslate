@@ -583,7 +583,7 @@ const saveCategory = async () => {
       await fetchCategories();
       closeDialog();
     } else {
-      await axios.post(`${API_BASE_URL}categories/create`, {
+      await axios.post(`${API_BASE_URL}/categories/create`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description
       });

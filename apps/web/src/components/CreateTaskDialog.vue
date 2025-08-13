@@ -188,8 +188,30 @@
               v-for="member in projectMembers"
               :key="member.id"
               :value="member.id"
+              :disabled="formData.reviewerId === member.id"
             >
               {{ member.fullName || member.username }}
+              {{ formData.reviewerId === member.id ? ' (Already reviewer)' : '' }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="reviewer">Reviewer</label>
+          <select
+            id="reviewer"
+            v-model="formData.reviewerId"
+            class="form-control"
+          >
+            <option value="">No Reviewer</option>
+            <option
+              v-for="member in projectMembers"
+              :key="member.id"
+              :value="member.id"
+              :disabled="formData.assignedToId === member.id"
+            >
+              {{ member.fullName || member.username }}
+              {{ formData.assignedToId === member.id ? ' (Already assigned)' : '' }}
             </option>
           </select>
         </div>
@@ -494,6 +516,26 @@
       </div>
 
       <div class="form-group">
+        <label for="reviewer">Reviewer</label>
+        <select
+          id="reviewer"
+          v-model="formData.reviewerId"
+          class="form-control"
+        >
+          <option value="">No Reviewer</option>
+          <option
+            v-for="member in projectMembers"
+            :key="member.id"
+            :value="member.id"
+            :disabled="formData.assignedToId === member.id"
+          >
+            {{ member.fullName || member.username }}
+            {{ formData.assignedToId === member.id ? ' (Already assigned)' : '' }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
         <label for="dueDateTime">Due Date & Time</label>
         <div class="datetime-picker-container">
           <input
@@ -636,6 +678,7 @@ const formData = ref<CreateTaskDto>({
   description: '',
   projectId: props.projectId,
   assignedToId: '',
+  reviewerId: '',
   dueDate: '',
   dueTime: '',
   dueDateTime: '',
@@ -655,6 +698,7 @@ const initializeFormWithEditData = () => {
       description: props.editTask.description || '',
       projectId: props.projectId,
       assignedToId: props.editTask.assignedToId || '',
+      reviewerId: props.editTask.reviewerId || '',
       dueDate: props.editTask.dueDate ? new Date(props.editTask.dueDate).toISOString().split('T')[0] : '',
       dueTime: props.editTask.dueDate ? new Date(props.editTask.dueDate).toTimeString().slice(0, 5) : '',
       dueDateTime: props.editTask.dueDate || '',
@@ -743,6 +787,7 @@ watch(() => props.visible, (newVal: boolean) => {
       description: '',
       projectId: props.projectId,
       assignedToId: '',
+      reviewerId: '',
       dueDate: '',
       dueTime: '',
       dueDateTime: '',
@@ -1155,6 +1200,7 @@ async function onSubmit() {
         title: formData.value.title.trim(),
         description: formData.value.description?.trim() || undefined,
         assignedToId: formData.value.assignedToId || undefined,
+        reviewerId: formData.value.reviewerId || undefined,
         dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
         fileId: formData.value.fileId || undefined,
         page: formData.value.page,
@@ -1176,6 +1222,7 @@ async function onSubmit() {
           projectId: props.projectId,
           description: formData.value.description?.trim() || undefined,
           assignedToId: formData.value.assignedToId || undefined,
+          reviewerId: formData.value.reviewerId || undefined,
           dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
           branchId: props.branchId || undefined,
           fileId: formData.value.fileId || undefined,

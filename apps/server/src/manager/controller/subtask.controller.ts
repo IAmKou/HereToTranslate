@@ -6,17 +6,16 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
 import { SubtaskManagerService } from '../service/subtask-manager.service';
-import { JwtGuard } from '#LocalProject/Auth/guards/jwt.guard';
+import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
-import { CreateSubtaskDto, UpdateSubtaskDto, TransitionSubtaskDto } from '#LocalProject/Dtos';
+import { CreateSubtaskDto, UpdateSubtaskDto } from '#LocalProject/Dtos';
 
 @Controller('subtasks')
-@UseGuards(JwtGuard)
+@UseGuards(JwtAuthGuard)
 export class SubtaskController {
   constructor(private readonly subtaskService: SubtaskManagerService) {}
 
@@ -25,6 +24,7 @@ export class SubtaskController {
     return await this.subtaskService.createSubtask({
       ...dto,
       createdById: req.user.id,
+      dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
     });
   }
 

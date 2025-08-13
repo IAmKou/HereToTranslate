@@ -982,4 +982,35 @@ export class TaskManagerService {
   async createDefaultDifficultyConfigs(projectId: string, userId: string) {
     return await this.pageDifficultyService.createDefaultDifficultyConfigs(projectId, userId);
   }
+
+  async checkAndUpdateOverdueStatus() {
+    const now = new Date();
+    
+    const overdueTasks = await this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.status', 'status')
+      .where('task.dueDate < :now', { now })
+      .andWhere('task.isOverdue = :isOverdue', { isOverdue: false })
+      .andWhere('status.type != :doneType', { doneType: StatusType.DONE })
+      .getMany();
+
+    for (const task of overdueTasks) {
+      // Mark task as overdue without changing its status
+      task.isOverdue = true;
+      await this.taskRepository.save(task);
+      
+      // Create status history entry to record the overdue marking
+      await this.createStatusHistory(
+        task.id,
+        task.status,
+        task.status,
+        task.createdBy,
+        'Task marked as overdue automatically'
+      );
+    }
+
+    return {
+      tasksUpdated: overdueTasks.length,
+    };
+  }
 }

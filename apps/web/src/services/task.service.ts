@@ -110,7 +110,7 @@ export interface TaskAssignment {
 
 export interface TaskAssignmentHistory {
   id: string;
-  action: 'assigned' | 'reassigned' | 'accepted' | 'declined' | 'completed' | 'cancelled';
+  action: 'assigned' | 'reassigned'| 'cancelled';
   role: 'translator' | 'reviewer' | 'approver';
   fromUser?: {
     id: string;

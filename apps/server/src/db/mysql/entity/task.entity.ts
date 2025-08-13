@@ -5,6 +5,7 @@ import { TaskStatusEntity } from './task-status.entity';
 import { WorkflowEntity } from './workflow.entity';
 import { TaskAssignmentEntity } from './task-assignment.entity';
 import { TaskStatusHistoryEntity } from './task-status-history.entity';
+import { SubtaskEntity } from './subtask.entity';
 
 @Entity('task')
 export class TaskEntity {
@@ -47,6 +48,9 @@ export class TaskEntity {
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   approver?: UserEntity;
 
+  @Column({ type: 'boolean', default: false })
+  isOverdue: boolean;
+
   @ManyToOne(() => ProjectGroupEntity, { nullable: true, onDelete: 'SET NULL' })
   group?: ProjectGroupEntity;
 
@@ -71,7 +75,7 @@ export class TaskEntity {
   @Column({ type: 'json', nullable: true })
   customFields?: Record<string, any>;
 
-  @Column({ type: 'enum', enum: ['lowest', 'low', 'medium', 'high', 'highest'], default: 'medium' })
+  @Column({ type: 'enum', enum: ['low', 'medium', 'high'], default: 'medium' })
   priority: string;
 
   @Column({ type: 'int', nullable: true })
@@ -95,6 +99,9 @@ export class TaskEntity {
 
   @OneToMany(() => TaskStatusHistoryEntity, history => history.task, { cascade: true })
   statusHistory: TaskStatusHistoryEntity[];
+
+  @OneToMany(() => SubtaskEntity, subtask => subtask.parentTask, { cascade: true })
+  subtasks: SubtaskEntity[];
 
   get currentTranslator(): UserEntity | undefined {
     return this.assignments?.find(a => a.role === 'translator' && a.status === 'assigned')?.assignedTo;

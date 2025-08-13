@@ -28,7 +28,10 @@ import {
   TaskAssignmentEntity,
   WorkflowEntity,
   WorkflowTransitionEntity,
-  TaskStatusHistoryEntity, TranslationPreviewEntity
+  TaskStatusHistoryEntity, 
+  TranslationPreviewEntity,
+  SubtaskEntity,
+  SubtaskStatusHistoryEntity,
 } from '#LocalProject/Entities';
 import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
 import { RequestRegistrationEntity } from '#LocalProject/Entities';
@@ -100,6 +103,9 @@ import { TaskAssignmentController } from './controller/task-assignment.controlle
 import { WorkflowController } from './controller/workflow.controller';
 import { ScannerCronController } from './controller/scanner-cron.controller';
 import { DeadlineCheckerController } from './controller/deadline-checker.controller';
+import { SubtaskManagerService } from './service/subtask-manager.service';
+import { SubtaskController } from './controller/subtask.controller';
+import { OverdueCheckerService } from './service/overdue-checker.service';
 
 @Global()
 @Module({
@@ -144,6 +150,8 @@ import { DeadlineCheckerController } from './controller/deadline-checker.control
       TaskStatusHistoryEntity,
       TranslationPreviewEntity,
       DeadlineExtensionEntity,
+      SubtaskEntity,
+      SubtaskStatusHistoryEntity,
 
     ]),
     BullModule.registerQueue({
@@ -183,6 +191,8 @@ import { DeadlineCheckerController } from './controller/deadline-checker.control
     TaskAssignmentManagerService,
     StatusManagerService,
     WorkflowManagerService,
+    SubtaskManagerService,
+    OverdueCheckerService,
   ],
   exports: [
     CategoryManagerService,
@@ -214,6 +224,8 @@ import { DeadlineCheckerController } from './controller/deadline-checker.control
     TaskAssignmentManagerService,
     StatusManagerService,
     WorkflowManagerService,
+    SubtaskManagerService,
+    OverdueCheckerService,
   ],
   controllers: [
     CategoryController,
@@ -244,6 +256,7 @@ import { DeadlineCheckerController } from './controller/deadline-checker.control
     WorkflowController,
     ScannerCronController,
     DeadlineCheckerController,
+    SubtaskController,
   ],
 })
 export class ManagersModule {}

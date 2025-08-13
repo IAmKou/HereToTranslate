@@ -2,7 +2,6 @@ import { Controller, Get, Post, Put, UseGuards, Body } from '@nestjs/common';
 import { ScannerCronService } from '../service/scanner-cron.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import { ForRoles } from '../../auth/decorators/for-role.decorator';
-import { UserRole } from '../../db/mysql/entity/user.entity';
 
 @Controller('scanner-cron')
 @UseGuards(JwtAuthGuard)

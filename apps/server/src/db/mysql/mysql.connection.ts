@@ -29,7 +29,7 @@ import {
   WorkflowTransitionEntity,
   PageDifficultyEntity,
   DifficultyConfigEntity,
-  TaskAssignmentHistoryEntity,
+  AssignmentHistoryEntity,
   TaskAssignmentEntity,
   RequestRegistrationEntity,
   TaskStatusHistoryEntity, SubtaskAssignmentHistoryEntity,
@@ -112,7 +112,7 @@ export class MySqlConnection {
         TaskStatusHistoryEntity,
         PageDifficultyEntity,
         DifficultyConfigEntity,
-        TaskAssignmentHistoryEntity,
+        AssignmentHistoryEntity,
         TaskAssignmentEntity,
         RequestRegistrationEntity
       ],

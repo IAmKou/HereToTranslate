@@ -1,43 +1,36 @@
-import {
-  CategoryEntity,
-  DiscussionAccessPolicyEntity,
-  ProjectDiscussionCommentEntity,
-  ProjectDiscussionThreadEntity,
-  ProjectEntity,
-  ProjectGroupEntity,
-  ProjectRoleEntity,
-  ProjectTagEntity,
-  RequestEntity,
-  TransactionEntity,
-  UserEntity,
-  UserTypeEntity,
-  WalletEntity,
-  TranslationApprovalEntity,
-  BranchEntity,
-  CommitEntity,
-  FileEntity,
-  TaskEntity,
-  NotificationEntity,
-  SettingsEntity,
-  TaskStatusEntity,
-  AssignmentHistoryEntity,
-  DeadlineExtensionEntity,
-  DifficultyConfigEntity,
-  PageDifficultyEntity,
-  ProjectCancellationEntity,
-  TaskAssignmentEntity,
-  WorkflowEntity,
-  WorkflowTransitionEntity,
-  TaskStatusHistoryEntity,
-  TranslationPreviewEntity,
-  SubtaskEntity,
-  SubtaskStatusHistoryEntity,
-  TaskStatusHistoryEntity,
-  TaskAssignmentHistoryEntity,
-
-} from '#LocalProject/Entities';
+import { CategoryEntity } from '../db/mysql/entity/category.entity';
+import { DiscussionAccessPolicyEntity, ProjectDiscussionCommentEntity, ProjectDiscussionThreadEntity } from '../db/mysql/entity/project-discussion.entity';
+import { ProjectEntity } from '../db/mysql/entity/project.entity';
+import { ProjectGroupEntity } from '../db/mysql/entity/project-group.entity';
+import { ProjectRoleEntity } from '../db/mysql/entity/project-role.entity';
+import { ProjectTagEntity } from '../db/mysql/entity/project-tag.entity';
+import { RequestEntity } from '../db/mysql/entity/request.entity';
+import { TransactionEntity } from '../db/mysql/entity/transaction.entity';
+import { UserEntity } from '../db/mysql/entity/user.entity';
+import { UserTypeEntity } from '../db/mysql/entity/user-type.entity';
+import { WalletEntity } from '../db/mysql/entity/wallet.entity';
+import { TranslationApprovalEntity } from '../db/mysql/entity/translation-approval.entity';
+import { BranchEntity } from '../db/mysql/entity/branch.entity';
+import { CommitEntity } from '../db/mysql/entity/commit.entity';
+import { FileEntity } from '../db/mysql/entity/file.entity';
+import { TaskEntity } from '../db/mysql/entity/task.entity';
+import { NotificationEntity } from '../db/mysql/entity/notification.entity';
+import { SettingsEntity } from '../db/mysql/entity/setting.entity';
+import { TaskStatusEntity } from '../db/mysql/entity/task-status.entity';
+import { AssignmentHistoryEntity } from '../db/mysql/entity/assignment-history.entity';
+import { DeadlineExtensionEntity } from '../db/mysql/entity/deadline-extension.entity';
+import { DifficultyConfigEntity } from '../db/mysql/entity/difficulty-config.entity';
+import { PageDifficultyEntity } from '../db/mysql/entity/page-difficulty.entity';
+import { ProjectCancellationEntity } from '../db/mysql/entity/project-cancellation.entity';
+import { TaskAssignmentEntity } from '../db/mysql/entity/task-assignment.entity';
+import { WorkflowEntity } from '../db/mysql/entity/workflow.entity';
+import { WorkflowTransitionEntity } from '../db/mysql/entity/workflow-transition.entity';
+import { TaskStatusHistoryEntity } from '../db/mysql/entity/task-status-history.entity';
+import { TranslationPreviewEntity } from '../db/mysql/entity/translation-preview.entity';
+import { SubtaskEntity } from '../db/mysql/entity/subtask.entity';
+import { SubtaskStatusHistoryEntity } from '../db/mysql/entity/subtask-status-history.entity';
 import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
-import { RequestRegistrationEntity } from '#LocalProject/Entities';
+import { RequestRegistrationEntity } from '../db/mysql/entity/request-registration.entity';
 import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
 
 import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
@@ -146,23 +139,17 @@ import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.pr
       SettingsEntity,
       ProjectActivity,
       TaskStatusHistoryEntity,
-      TaskStatusEntity,
       WorkflowEntity,
       WorkflowTransitionEntity,
       PageDifficultyEntity,
       DifficultyConfigEntity,
-      TaskAssignmentHistoryEntity,
       TaskAssignmentEntity,
       AssignmentHistoryEntity,
       DeadlineExtensionEntity,
       ProjectCancellationEntity,
-      TaskAssignmentEntity,
-      TaskStatusHistoryEntity,
       TranslationPreviewEntity,
-      DeadlineExtensionEntity,
       SubtaskEntity,
       SubtaskStatusHistoryEntity,
-
     ]),
     BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
     BullModule.registerQueue({ name: 'export', redis: { host: 'localhost', port: 6379 } }),

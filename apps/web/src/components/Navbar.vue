@@ -181,8 +181,13 @@ const getRandomColor = (seed: string): string => {
 const getFullAvatarUrl = (avatarUrl: string) => {
   if (!avatarUrl) return '';
   if (avatarUrl.startsWith('http')) return avatarUrl;
-  const base = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3000';
-  return base + avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl; // Data URL từ preview
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const result = base + '/users' + avatarUrl;
+  console.log('🟣 [NAVBAR] getFullAvatarUrl:', { avatarUrl, result });
+  return result;
 };
 
 const loadUserInfo = async (): Promise<void> => {
@@ -201,6 +206,13 @@ const loadUserInfo = async (): Promise<void> => {
 
 onMounted(() => {
   loadUserInfo();
+
+  // Listen for avatar update events
+  window.addEventListener('user-avatar-updated', async () => {
+    console.log('🟣 [NAVBAR] Avatar updated, reloading user info');
+    await loadUserInfo();
+  });
+
   document.addEventListener('sign-out', async () => {
     try {
       await authService.logout();

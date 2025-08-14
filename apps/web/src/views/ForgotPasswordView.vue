@@ -100,7 +100,6 @@
         </template>
       </Card>
     </transition>
-    <Toast />
   </div>
 </template>
 

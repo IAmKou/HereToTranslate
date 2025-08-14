@@ -77,7 +77,9 @@
             <!-- Search and Filter Bar for My Requests -->
             <div class="filter-bar">
               <div class="search-container">
-                <i class="pi pi-search search-icon"></i>
+                <div class="search-icon-wrapper">
+                  <i class="pi pi-search search-icon"></i>
+                </div>
                 <input
                   v-model="myRequestsSearch"
                   type="text"
@@ -85,23 +87,31 @@
                   class="search-input"
                 />
               </div>
-              <select v-model="myRequestsStatusFilter" class="filter-select">
-                <option value="">All Status</option>
-                <option value="PENDING">Pending</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-              <select v-model="myRequestsVisibilityFilter" class="filter-select">
-                <option value="">All Visibility</option>
-                <option value="public">Public</option>
-                <option value="private">Private</option>
-              </select>
-              <button @click="clearMyRequestsFilters" class="btn btn-secondary btn-small">
-                <i class="pi pi-times"></i>
-                Clear
-              </button>
+              <div class="filter-controls">
+                <div class="select-wrapper">
+                  <select v-model="myRequestsStatusFilter" class="filter-select">
+                    <option value="">All Status</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                  <i class="pi pi-chevron-down select-arrow"></i>
+                </div>
+                <div class="select-wrapper">
+                  <select v-model="myRequestsVisibilityFilter" class="filter-select">
+                    <option value="">All Visibility</option>
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <i class="pi pi-chevron-down select-arrow"></i>
+                </div>
+                <button @click="clearMyRequestsFilters" class="clear-btn">
+                  <span class="clear-icon">✕</span>
+                  <span class="clear-text">Clear</span>
+                </button>
+              </div>
             </div>
 
             <!-- Empty State for My Requests -->
@@ -122,113 +132,145 @@
                 <table class="requests-table">
                   <thead>
                   <tr>
-                    <th @click="sortTable('id')" style="cursor: pointer;" class="text-xs font-semibold text-center" width="60">
-                      ID
+                    <th @click="sortTable('id')" class="table-header sortable" width="60">
+                      <div class="header-content">
+                        <span>ID</span>
+                        <i :class="[ 'sort-icon', sortKey === 'id' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('title')" style="cursor: pointer;" class="text-xs font-semibold text-left">
-                      Title
-                      <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    <th @click="sortTable('title')" class="table-header sortable">
+                      <div class="header-content">
+                        <span>Title</span>
+                        <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('project')" style="cursor: pointer;" class="text-xs font-semibold text-left">
-                      Project
-                      <i :class="[ 'sort-icon', sortKey === 'project' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    <th @click="sortTable('project')" class="table-header sortable">
+                      <div class="header-content">
+                        <span>Project</span>
+                        <i :class="[ 'sort-icon', sortKey === 'project' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('category')" style="cursor: pointer;" class="text-xs font-semibold text-left">
-                      Category
+                    <th class="table-header">
+                      <span>Category</span>
                     </th>
-                    <th @click="sortTable('dealAmount')" style="cursor: pointer;" class="text-xs font-semibold text-center th-flex" width="120">
-                      <span class="th-flex">Deal Amount <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" /></span>
+                    <th @click="sortTable('dealAmount')" class="table-header sortable" width="120">
+                      <div class="header-content">
+                        <span>Deal Amount</span>
+                        <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('deadline')" style="cursor: pointer;" class="text-xs font-semibold text-left" width="130">
-                      Deadline
-                      <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    <th @click="sortTable('deadline')" class="table-header sortable" width="130">
+                      <div class="header-content">
+                        <span>Deadline</span>
+                        <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th class="text-xs font-semibold text-left">Status</th>
-                    <th class="text-xs font-semibold text-left">Visibility</th>
-                    <th class="text-xs font-semibold text-left">Actions</th>
+                    <th class="table-header">Status</th>
+                    <th class="table-header">Visibility</th>
+                    <th class="table-header">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row table-row-hover">
-                    <td class="text-center text-sm text-gray-700" width="60">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
-                    <td class="request-title text-sm text-gray-700 text-left"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
-                    <td class="text-sm text-gray-700 text-left">{{ req.project?.name || '-' }}</td>
-                    <td class="text-sm text-gray-700 text-left">{{ req.category?.name || '-' }}</td>
-                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
-                    <td class="text-sm text-gray-500 italic text-left" width="130"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
-                    <td>
-                        <span v-if="req.status === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
-                          ✅ Approved
+                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row">
+                    <td class="id-cell">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
+                    <td class="title-cell">
+                      <a href="#" @click.prevent="goToRequestDetail(req.id)" class="request-link">{{ req.title }}</a>
+                    </td>
+                    <td class="project-cell">{{ req.project?.name || '-' }}</td>
+                    <td class="category-cell">{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount-cell">
+                      <div class="amount-wrapper">
+                        <span class="deal-icon">💵</span>
+                        <span class="amount-text">${{ req.dealAmount }}</span>
+                      </div>
+                    </td>
+                    <td class="deadline-cell">
+                      <div class="deadline-wrapper">
+                        <span class="deadline-icon">🗓</span>
+                        <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
+                      </div>
+                    </td>
+                    <td class="status-cell">
+                        <span v-if="req.status === 'APPROVED'" class="status-badge status-approved">
+                          <span class="status-icon">✅</span>
+                          <span class="status-text">Approved</span>
                         </span>
-                      <span v-else-if="req.status === 'PENDING'" class="status-badge status-pending custom-badge pending-badge">
-                          ⏳ Pending
+                      <span v-else-if="req.status === 'PENDING'" class="status-badge status-pending">
+                          <span class="status-icon">⏳</span>
+                          <span class="status-text">Pending</span>
                         </span>
                       <span v-else :class="['status-badge', `status-${req.status.toLowerCase()}`]">
                           {{ formatStatus(req.status) }}
                         </span>
                     </td>
-                    <td>
-                      <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
-                        🌐 Public
+                    <td class="visibility-cell">
+                      <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
+                        <span class="visibility-icon">🌐</span>
+                        <span class="visibility-text">Public</span>
                       </span>
-                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge custom-badge private-badge">
-                        🔒 Private
+                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge private-badge">
+                        <span class="visibility-icon">🔒</span>
+                        <span class="visibility-text">Private</span>
                       </span>
-                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
-                        🌐 Public
+                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
+                        <span class="visibility-icon">🌐</span>
+                        <span class="visibility-text">Public</span>
                       </span>
-                      <span v-else class="visibility-badge custom-badge private-badge">
-                        🔒 Private
+                      <span v-else class="visibility-badge private-badge">
+                        <span class="visibility-icon">🔒</span>
+                        <span class="visibility-text">Private</span>
                       </span>
                     </td>
-                    <td class="actions text-left">
-                      <!-- Cancel button - only show for PENDING requests without project -->
-                      <button
-                        @click="onCancel(req)"
-                        class="btn btn-small btn-danger"
-                        v-if="req.status === 'PENDING' && !req.project"
-                        title="Cancel Request"
-                      >
-                        <i class="pi pi-times"></i>
-                      </button>
+                    <td class="actions-cell">
+                      <div class="actions-wrapper">
+                        <!-- Cancel button - only show for PENDING requests without project -->
+                        <button
+                          @click="onCancel(req)"
+                          class="action-btn cancel-btn"
+                          v-if="req.status === 'PENDING' && !req.project"
+                          title="Cancel Request"
+                        >
+                          <span class="btn-icon">✕</span>
+                        </button>
 
-                      <!-- Review button - only show for PENDING requests without project -->
-                      <button
-                        v-if="canReview(req) && req.status === 'PENDING' && !req.project"
-                        @click="onReview(req)"
-                        class="btn btn-small btn-primary"
-                        title="Review Request"
-                      >
-                        <i class="pi pi-eye"></i>
-                      </button>
+                        <!-- Review button - only show for PENDING requests without project -->
+                        <button
+                          v-if="canReview(req) && req.status === 'PENDING' && !req.project"
+                          @click="onReview(req)"
+                          class="action-btn review-btn"
+                          title="Review Request"
+                        >
+                          <i class="pi pi-eye btn-icon"></i>
+                        </button>
 
-                      <!-- Candidates button - only show for PENDING public requests without project -->
-                      <router-link
-                        v-if="req.status === 'PENDING' && req.isPublic && !req.project"
-                        :to="{ name: 'request-registrants', params: { requestId: req.id } }"
-                        class="btn btn-small btn-candidate"
-                        :class="{ disabled: req.registrantCount === 0 }"
-                        :title="req.registrantCount > 0 ? 'View registered candidates' : 'No candidates yet'"
-                      >
-                        <i class="pi pi-users"></i>
-                        <span>Candidates</span>
-                        <span v-if="typeof req.registrantCount === 'number'" class="badge">{{ req.registrantCount }}</span>
-                      </router-link>
+                        <!-- Candidates button - only show for PENDING public requests without project -->
+                        <router-link
+                          v-if="req.status === 'PENDING' && req.isPublic && !req.project"
+                          :to="{ name: 'request-registrants', params: { requestId: req.id } }"
+                          class="action-btn candidates-btn"
+                          :class="{ disabled: req.registrantCount === 0 }"
+                          :title="req.registrantCount > 0 ? 'View registered candidates' : 'No candidates yet'"
+                        >
+                          <i class="pi pi-users btn-icon"></i>
+                          <span class="btn-text">Candidates</span>
+                          <span v-if="typeof req.registrantCount === 'number'" class="candidate-count">{{ req.registrantCount }}</span>
+                        </router-link>
 
-                      <!-- Show message for cancelled requests -->
-                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
-                        Request cancelled
-                      </span>
+                        <!-- Show message for cancelled requests -->
+                        <span v-if="req.status === 'CANCELLED'" class="status-message cancelled">
+                          Request cancelled
+                        </span>
 
-                      <!-- Show message for completed requests -->
-                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
-                        ✓ Completed
-                      </span>
+                        <!-- Show message for completed requests -->
+                        <span v-if="req.status === 'COMPLETED'" class="status-message completed">
+                          ✓ Completed
+                        </span>
 
-                      <!-- Show message for rejected requests -->
-                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
-                        ✗ Rejected
-                      </span>
+                        <!-- Show message for rejected requests -->
+                        <span v-if="req.status === 'REJECTED'" class="status-message rejected">
+                          ✗ Rejected
+                        </span>
+                      </div>
                     </td>
                   </tr>
                   </tbody>
@@ -292,7 +334,7 @@
                 <option value="private">Private</option>
               </select>
               <button @click="clearAssignedRequestsFilters" class="btn btn-secondary btn-small">
-                <i class="pi pi-times"></i>
+                ✕
                 Clear
               </button>
             </div>
@@ -522,7 +564,7 @@
                 <option value="private">Private</option>
               </select>
               <button @click="clearMyRegistrationsFilters" class="btn btn-secondary btn-small">
-                <i class="pi pi-times"></i>
+                ✕
                 Clear
               </button>
 
@@ -678,7 +720,6 @@
       </div>
     </div>
     <Footer />
-    <Toast />
   </div>
 </template>
 
@@ -788,6 +829,42 @@ const filteredMyRequests = computed(() => {
     }
   }
 
+  // Sort the filtered results
+  if (sortKey.value) {
+    filtered = [...filtered].sort((a, b) => {
+      let aValue, bValue
+
+      switch (sortKey.value) {
+        case 'id':
+          aValue = a.id
+          bValue = b.id
+          break
+        case 'title':
+          aValue = a.title?.toLowerCase() || ''
+          bValue = b.title?.toLowerCase() || ''
+          break
+        case 'project':
+          aValue = a.project?.name?.toLowerCase() || ''
+          bValue = b.project?.name?.toLowerCase() || ''
+          break
+        case 'dealAmount':
+          aValue = parseFloat(a.dealAmount) || 0
+          bValue = parseFloat(b.dealAmount) || 0
+          break
+        case 'deadline':
+          aValue = new Date(a.deadline) || new Date(0)
+          bValue = new Date(b.deadline) || new Date(0)
+          break
+        default:
+          return 0
+      }
+
+      if (aValue < bValue) return -1 * sortOrder.value
+      if (aValue > bValue) return 1 * sortOrder.value
+      return 0
+    })
+  }
+
   return filtered
 })
 
@@ -819,6 +896,46 @@ const filteredAssignedRequests = computed(() => {
     } else if (assignedRequestsVisibilityFilter.value === 'private') {
       filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
     }
+  }
+
+  // Sort the filtered results
+  if (sortKey.value) {
+    filtered = [...filtered].sort((a, b) => {
+      let aValue, bValue
+
+      switch (sortKey.value) {
+        case 'id':
+          aValue = a.id
+          bValue = b.id
+          break
+        case 'title':
+          aValue = a.title?.toLowerCase() || ''
+          bValue = b.title?.toLowerCase() || ''
+          break
+        case 'requester':
+          aValue = (a.requester?.name || a.requester?.email || '').toLowerCase()
+          bValue = (b.requester?.name || b.requester?.email || '').toLowerCase()
+          break
+        case 'category':
+          aValue = a.category?.name?.toLowerCase() || ''
+          bValue = b.category?.name?.toLowerCase() || ''
+          break
+        case 'dealAmount':
+          aValue = parseFloat(a.dealAmount) || 0
+          bValue = parseFloat(b.dealAmount) || 0
+          break
+        case 'deadline':
+          aValue = new Date(a.deadline) || new Date(0)
+          bValue = new Date(b.deadline) || new Date(0)
+          break
+        default:
+          return 0
+      }
+
+      if (aValue < bValue) return -1 * sortOrder.value
+      if (aValue > bValue) return 1 * sortOrder.value
+      return 0
+    })
   }
 
   return filtered.filter(req => req.status !== 'CANCELLED')
@@ -855,6 +972,46 @@ const filteredMyRegistrations = computed(() => {
     } else if (myRegistrationsVisibilityFilter.value === 'private') {
       filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
     }
+  }
+
+  // Sort the filtered results
+  if (sortKey.value) {
+    filtered = [...filtered].sort((a, b) => {
+      let aValue, bValue
+
+      switch (sortKey.value) {
+        case 'id':
+          aValue = a.id
+          bValue = b.id
+          break
+        case 'title':
+          aValue = a.title?.toLowerCase() || ''
+          bValue = b.title?.toLowerCase() || ''
+          break
+        case 'requester':
+          aValue = (a.requester?.fullName || a.requester?.email || '').toLowerCase()
+          bValue = (b.requester?.fullName || b.requester?.email || '').toLowerCase()
+          break
+        case 'category':
+          aValue = a.category?.name?.toLowerCase() || ''
+          bValue = b.category?.name?.toLowerCase() || ''
+          break
+        case 'dealAmount':
+          aValue = parseFloat(a.dealAmount) || 0
+          bValue = parseFloat(b.dealAmount) || 0
+          break
+        case 'deadline':
+          aValue = new Date(a.deadline) || new Date(0)
+          bValue = new Date(b.deadline) || new Date(0)
+          break
+        default:
+          return 0
+      }
+
+      if (aValue < bValue) return -1 * sortOrder.value
+      if (aValue > bValue) return 1 * sortOrder.value
+      return 0
+    })
   }
 
   return filtered
@@ -1402,23 +1559,115 @@ onMounted(fetchRequests)
   font-size: 0.8rem;
 }
 
-.requests-table th {
-  background: #f8fafc;
+.table-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   padding: 0.8rem;
   text-align: left;
   font-weight: 600;
   color: #374151;
   border-bottom: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.table-header.sortable {
+  cursor: pointer;
+}
+
+.table-header.sortable:hover {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  color: #3b82f6;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
 }
 
 .requests-table td {
   padding: 0.8rem;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
+  transition: all 0.2s ease;
+}
+
+.request-row {
+  transition: all 0.2s ease;
 }
 
 .request-row:hover {
   background: #f8fafc;
+}
+
+/* Cell specific styles */
+.id-cell {
+  text-align: center;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.title-cell {
+  font-weight: 500;
+}
+
+.request-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.request-link:hover {
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+.project-cell, .category-cell {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.deal-amount-cell {
+  text-align: center;
+}
+
+.amount-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-radius: 6px;
+  border: 1px solid #bbf7d0;
+}
+
+.amount-text {
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.deadline-cell {
+  color: #64748b;
+}
+
+.deadline-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  background: #f8fafc;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.deadline-text {
+  font-weight: 500;
+  font-style: italic;
+  font-size: 0.8rem;
 }
 
 .request-title {
@@ -1432,9 +1681,149 @@ onMounted(fetchRequests)
 }
 
 .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
   font-size: 0.7rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.status-icon {
+  font-size: 0.8rem;
+}
+
+.status-text {
+  font-weight: 600;
+}
+
+.visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.visibility-icon {
+  font-size: 0.8rem;
+}
+
+.visibility-text {
+  font-weight: 600;
+}
+
+.actions-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.action-btn:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.cancel-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.review-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.candidates-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.candidates-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+}
+
+.candidates-btn.disabled {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.candidates-btn.disabled:hover {
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.btn-icon {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.btn-text {
+  font-weight: 500;
+}
+
+.candidate-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+}
+
+.status-message {
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.status-message.cancelled {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.status-message.completed {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.status-message.rejected {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }
 
 .status-badge.status-pending {
@@ -1877,10 +2266,11 @@ onMounted(fetchRequests)
   gap: 1rem;
   align-items: center;
   margin-bottom: 1.5rem;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   padding: 1rem 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.6);
   flex-wrap: wrap;
 }
 
@@ -1890,13 +2280,25 @@ onMounted(fetchRequests)
   min-width: 200px;
 }
 
-.search-icon {
+.search-icon-wrapper {
   position: absolute;
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #9ca3af;
-  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.search-icon {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .search-input {
@@ -1906,7 +2308,8 @@ onMounted(fetchRequests)
   border-radius: 6px;
   font-size: 0.8rem;
   background: white;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+  color: #374151;
 }
 
 .search-input:focus {
@@ -1915,21 +2318,83 @@ onMounted(fetchRequests)
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.select-wrapper {
+  position: relative;
+  min-width: 120px;
+}
+
 .filter-select {
+  width: 100%;
   padding: 0.4rem 0.8rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 0.8rem;
   background: white;
   color: #374151;
-  min-width: 120px;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+  appearance: none;
+  cursor: pointer;
 }
 
 .filter-select:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  font-size: 10px;
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.select-wrapper:hover .select-arrow {
+  color: #3b82f6;
+}
+
+.clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(100, 116, 139, 0.3);
+}
+
+.clear-btn:hover {
+  background: linear-gradient(135deg, #475569 0%, #334155 100%);
+  box-shadow: 0 2px 6px rgba(100, 116, 139, 0.4);
+}
+
+.clear-icon {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.clear-text {
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {
@@ -2042,6 +2507,11 @@ onMounted(fetchRequests)
   margin-left: 4px;
   font-size: 0.75rem;
   color: #9ca3af;
+  transition: color 0.2s ease;
+}
+
+.table-header:hover .sort-icon {
+  color: #3b82f6;
 }
 
 th:hover .sort-icon {

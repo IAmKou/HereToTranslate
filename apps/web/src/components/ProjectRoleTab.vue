@@ -1229,8 +1229,6 @@ watch([currentMember, currentUserId, canManageRoles], () => {
       >
         <div class="modal-overlay" @click="cancelDeleteRole"></div>
         <div class="modal-content">
-          <!-- Add Toast inside modal -->
-          <Toast position="top-right" group="modal-messages" />
           <div class="modal-header">
             <h3>Delete Role</h3>
             <button class="close-btn" @click="cancelDeleteRole">

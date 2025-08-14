@@ -47,6 +47,12 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   avatarUrl?: string;
 
+  @Column({ type: 'longblob', nullable: true })
+  avatarData?: Buffer;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  avatarMimeType?: string;
+
   @ManyToOne(() => require('./user-type.entity').UserTypeEntity, role => role.users)
   @JoinColumn({ name: 'roleId' })
   role: UserTypeEntity;

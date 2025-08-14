@@ -165,6 +165,33 @@
         </form>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
+      <div class="modal-content" @click.stop>
+        <h3>Confirm Delete</h3>
+        <div class="delete-content">
+          <div class="delete-icon">
+            <i class="pi pi-exclamation-triangle"></i>
+          </div>
+          <h4>Delete Global Notification</h4>
+          <p>Are you sure you want to delete this notification?</p>
+          <div class="notification-preview">
+            <strong>Type:</strong> {{ notificationToDelete?.type }}<br>
+            <strong>Message:</strong> {{ notificationToDelete?.message }}
+          </div>
+          <p class="warning-text">This action cannot be undone.</p>
+        </div>
+        <div class="form-actions">
+          <button @click="showDeleteModal = false" class="btn-secondary">
+            Cancel
+          </button>
+          <button @click="confirmDeleteNotification" :disabled="deleting" class="btn-danger">
+            {{ deleting ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -192,6 +219,7 @@ const loading = ref(false)
 const showCreateModal = ref(false)
 const showCreateForAllModal = ref(false)
 const showEditModal = ref(false)
+const showDeleteModal = ref(false)
 
 const createForm = reactive({
   type: 'announcement',
@@ -209,6 +237,9 @@ const editForm = reactive({
   type: 'announcement',
   message: ''
 })
+
+const notificationToDelete = ref<Notification | null>(null)
+const deleting = ref(false)
 
 const canCreateNotification = computed(() => {
   return createForm.type && createForm.message.trim()
@@ -302,16 +333,29 @@ const updateNotification = async () => {
   }
 }
 
-const deleteNotification = async (id: string) => {
-  if (!confirm('Are you sure you want to delete this notification?')) return
+const deleteNotification = (id: string) => {
+  const notification = globalNotifications.value.find((n: Notification) => n.id === id)
+  if (notification) {
+    notificationToDelete.value = notification
+    showDeleteModal.value = true
+  }
+}
 
+const confirmDeleteNotification = async () => {
+  if (!notificationToDelete.value) return
+
+  deleting.value = true
   try {
-    await adminNotificationService.deleteNotification(id)
+    await adminNotificationService.deleteNotification(notificationToDelete.value.id)
+    showDeleteModal.value = false
+    notificationToDelete.value = null
     await loadGlobalNotifications()
     await loadGlobalNotificationCount()
   } catch (error) {
     console.error('Error deleting notification:', error)
     alert('Error deleting notification')
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -699,6 +743,67 @@ onMounted(() => {
 .btn-secondary:hover {
   background: #e2e8f0;
   transform: translateY(-1px);
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
+}
+
+.delete-content {
+  text-align: center;
+  padding: 32px;
+}
+
+.delete-icon {
+  font-size: 64px;
+  color: #ef4444;
+  margin-bottom: 24px;
+}
+
+.delete-content h4 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+}
+
+.delete-content p {
+  font-size: 16px;
+  color: #475569;
+  margin-bottom: 24px;
+}
+
+.notification-preview {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 20px;
+  font-size: 14px;
+  color: #374151;
+  font-style: italic;
+}
+
+.warning-text {
+  color: #92400e;
+  font-size: 14px;
+  margin-top: 20px;
+  font-weight: 600;
 }
 
 /* Responsive Design */

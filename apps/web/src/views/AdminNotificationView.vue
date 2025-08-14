@@ -216,7 +216,7 @@ const isSidebarCollapsed = ref(false)
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   .layout-wrapper {
     background: #0f172a;
   }

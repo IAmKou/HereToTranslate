@@ -97,7 +97,7 @@
                 'unread': !notification.isRead,
                 'global': notification.isGlobal
               }"
-              @click="viewNotification(notification.id)"
+              @click="handleNotificationClick(notification)"
             >
               <div class="notification-indicator" v-if="!notification.isRead"></div>
 
@@ -394,8 +394,35 @@ const deleteAllNotifications = async () => {
   }
 }
 
-const viewNotification = (notificationId: string) => {
-  router.push(`/notifications/${notificationId}`)
+const handleNotificationClick = (notification: Notification) => {
+  const t = notification.type
+  if (
+    t === 'PRIVATE_REQUEST_CREATED' ||
+    t === 'PUBLIC_REQUEST_REGISTERED' ||
+    t === 'REGISTRANT_APPROVED' ||
+    t === 'PRIVATE_REQUEST_ACCEPTED' ||
+    t === 'PRIVATE_REQUEST_DECLINED' ||
+    t === 'request_status'
+  ) {
+    router.push('/my-requests')
+  } else if (
+    t === 'PROJECT_UPDATED' ||
+    t === 'USER_ADDED_TO_PROJECT' ||
+    t === 'USER_REMOVED_FROM_PROJECT'
+  ) {
+    router.push('/projects')
+  } else if (t === 'project_invite') {
+    // giữ lại nút Accept/Decline, click container sẽ tới trang lời mời
+    router.push('/project-invitations')
+  } else if (t === 'new_message') {
+    router.push('/chat')
+  } else if (t === 'WITHDRAW_REQUEST' || t === 'WITHDRAW_APPROVED') {
+    router.push('/transactions')
+  } else if (t === 'PUBLIC_REQUEST_CREATED') {
+    router.push('/all-requests')
+  } else {
+    router.push('/notifications')
+  }
 }
 
 // Methods for handling project invitations from notifications

@@ -34,7 +34,7 @@
             :key="notification.id"
             class="notification-item"
             :class="{ 'unread': !notification.isRead }"
-            @click="viewNotificationDetail(notification.id)"
+            @click="handleNotificationClick(notification)"
           >
             <div class="notification-content">
               <div class="notification-header">
@@ -598,15 +598,43 @@ const navigateToNotifications = () => {
   showNotificationPanel.value = false
 }
 
+const handleNotificationClick = (notification: Notification) => {
+  const t = notification.type
+  if (
+    t === 'PRIVATE_REQUEST_CREATED' ||
+    t === 'PUBLIC_REQUEST_REGISTERED' ||
+    t === 'REGISTRANT_APPROVED' ||
+    t === 'PRIVATE_REQUEST_ACCEPTED' ||
+    t === 'PRIVATE_REQUEST_DECLINED' ||
+    t === 'request_status'
+  ) {
+    router.push('/my-requests')
+  } else if (
+    t === 'PROJECT_UPDATED' ||
+    t === 'USER_ADDED_TO_PROJECT' ||
+    t === 'USER_REMOVED_FROM_PROJECT'
+  ) {
+    router.push('/projects')
+  } else if (t === 'project_invite') {
+    router.push('/project-invitations')
+  } else if (t === 'new_message') {
+    router.push('/chat')
+  } else if (t === 'WITHDRAW_REQUEST' || t === 'WITHDRAW_APPROVED') {
+    router.push('/transactions')
+  } else if (t === 'PUBLIC_REQUEST_CREATED') {
+    router.push('/all-requests')
+  } else {
+    router.push('/notifications')
+  }
+  showNotificationPanel.value = false
+}
+
 const navigateToProjectInvitations = () => {
   router.push('/project-invitations')
   showNotificationPanel.value = false
 }
 
-const viewNotificationDetail = (notificationId: string) => {
-  router.push(`/notifications/${notificationId}`)
-  showNotificationPanel.value = false
-}
+// Removed: navigating to detail view is deprecated; use navigateToNotifications instead
 
 const acceptProjectInvitation = async (invitation: ProjectInvitation) => {
   try {

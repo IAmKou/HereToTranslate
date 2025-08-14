@@ -118,13 +118,7 @@ export class RequestManagerService {
 
     const savedRequest = await this.requestRepository.save(request);
 
-    // Create global notification for new public request
-    await this.notificationService.createGlobalNotification({
-      type: 'PUBLIC_REQUEST_CREATED',
-      message: `New public request available: "${title}" - $${dealAmount}`,
-      createdBy: uid,
-    });
-
+    // No global notification when creating a new request
     return savedRequest;
   }
 

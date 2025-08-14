@@ -200,9 +200,7 @@
           <div class="modal-content">
             <div class="modal-header">
               <h3>Move work from {{ statusToDelete?.name }} column</h3>
-              <button class="close-btn" @click="closeMoveTasksModal">
-                <i class="pi pi-times" style="font-size: 18px; font-weight: bold;">×</i>
-              </button>
+
             </div>
 
             <div class="modal-body">
@@ -377,68 +375,7 @@
         </div>
 
         <!-- Create/Edit Status Form -->
-        <div v-if="showCreateStatus || showEditStatus" class="status-form">
-          <h4>{{ showEditStatus ? 'Edit Status' : 'Create Status' }}</h4>
-          <form @submit.prevent="saveStatus" class="form">
-            <div class="form-group">
-              <label for="statusName">Name *</label>
-              <input id="statusName" v-model="statusForm.name" type="text" required placeholder="Enter status name" />
-            </div>
-            <div class="form-group">
-              <label for="statusDescription">Description</label>
-              <textarea id="statusDescription" v-model="statusForm.description" placeholder="Enter status description" rows="3"></textarea>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="statusColor">Color *</label>
-                <input id="statusColor" v-model="statusForm.color" type="color" required />
-              </div>
-              <div class="form-group">
-                <label for="statusType">Type *</label>
-                <select id="statusType" v-model="statusForm.type" required>
-                  <option value="todo">To Do</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="done">Done</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-checkboxes">
-              <label class="checkbox-label">
-                <input v-model="statusForm.isDefault" type="checkbox" />
-                <span class="checkmark"></span>
-                Set as default status
-              </label>
-              <label class="checkbox-label">
-                <input v-model="statusForm.isStartStatus" type="checkbox" />
-                <span class="checkmark"></span>
-                Set as start status
-              </label>
-              <label class="checkbox-label">
-                <input v-model="statusForm.isEndStatus" type="checkbox" />
-                <span class="checkmark"></span>
-                Set as end status
-              </label>
-              <label class="checkbox-label">
-                <input v-model="statusForm.isResolved" type="checkbox" />
-                <span class="checkmark"></span>
-                Mark as resolved
-              </label>
-              <label class="checkbox-label">
-                <input v-model="statusForm.isClosed" type="checkbox" />
-                <span class="checkmark"></span>
-                Mark as closed
-              </label>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn-secondary" @click="closeStatusForm">Cancel</button>
-              <button type="submit" class="btn-primary" :disabled="savingStatus">
-                <i v-if="savingStatus" class="pi pi-spin pi-spinner"></i>
-                {{ showEditStatus ? 'Update' : 'Create' }}
-              </button>
-            </div>
-          </form>
-        </div>
+        <!-- Form content moved to modal below -->
       </div>
     </div>
 
@@ -710,6 +647,148 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- Create/Edit Status Modal -->
+    <Teleport to="body">
+      <div v-if="showCreateStatus || showEditStatus" class="modal-overlay">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>{{ showEditStatus ? 'Edit Status' : 'Create Status' }}</h3>
+            <button class="btn-icon" @click="closeStatusForm" data-close="true">
+
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <form @submit.prevent="saveStatus" class="form">
+              <div class="form-group">
+                <label for="statusName">Name *</label>
+                <input
+                  id="statusName"
+                  v-model="statusForm.name"
+                  type="text"
+                  required
+                  placeholder="Enter status name"
+                  maxlength="20"
+                  @input="validateStatusForm"
+                />
+                <div v-if="nameError" class="form-error">{{ nameError }}</div>
+                <div class="char-counter">{{ statusForm.name.length }}/20</div>
+              </div>
+              <div class="form-group">
+                <label for="statusDescription">Description</label>
+                <textarea
+                  id="statusDescription"
+                  v-model="statusForm.description"
+                  placeholder="Enter status description"
+                  rows="3"
+                  maxlength="100"
+                  @input="validateStatusForm"
+                ></textarea>
+                <div v-if="descriptionError" class="form-error">{{ descriptionError }}</div>
+                <div class="char-counter">{{ statusForm.description.length }}/100</div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="statusColor">Color *</label>
+                  <div class="color-input-wrapper">
+                    <div class="color-preview" :style="{ backgroundColor: statusForm.color }" @click="$refs.colorInput.click()"></div>
+                    <input ref="colorInput" id="statusColor" v-model="statusForm.color" type="color" required class="hidden-color-input" />
+                    <span class="color-value">{{ statusForm.color }}</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="statusType">Type *</label>
+                  <select id="statusType" v-model="statusForm.type" required>
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="done">Done</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-checkboxes">
+                <label class="checkbox-label">
+                  <input v-model="statusForm.isDefault" type="checkbox" />
+                  <span class="checkmark"></span>
+                  Set as default status
+                </label>
+                <label class="checkbox-label">
+                  <input v-model="statusForm.isStartStatus" type="checkbox" />
+                  <span class="checkmark"></span>
+                  Set as start status
+                </label>
+                <label class="checkbox-label">
+                  <input v-model="statusForm.isEndStatus" type="checkbox" />
+                  <span class="checkmark"></span>
+                  Set as end status
+                </label>
+                <label class="checkbox-label">
+                  <input v-model="statusForm.isResolved" type="checkbox" />
+                  <span class="checkmark"></span>
+                  Mark as resolved
+                </label>
+                <label class="checkbox-label">
+                  <input v-model="statusForm.isClosed" type="checkbox" />
+                  <span class="checkmark"></span>
+                  Mark as closed
+                </label>
+              </div>
+              <p v-if="statusValidationMessage" class="form-error">{{ statusValidationMessage }}</p>
+            </form>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="closeStatusForm">
+              Cancel
+            </button>
+            <button
+              class="btn btn-primary"
+              @click="saveStatus"
+              :disabled="savingStatus || !!statusValidationMessage || !!nameError || !!descriptionError || !statusForm.name.trim()"
+            >
+              <span v-if="savingStatus" class="loading-spinner"></span>
+              {{ showEditStatus ? 'Update' : 'Create' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Default Statuses Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showDefaultStatusesModal" class="modal-overlay">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Create Default Statuses</h3>
+          </div>
+
+          <div class="modal-body">
+            <div class="default-statuses-content">
+              <div class="warning-icon">
+                <i class="pi pi-exclamation-triangle"></i>
+              </div>
+              <h4>Default statuses already exist</h4>
+              <p>Do you want to create them again? This may result in duplicates.</p>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="closeDefaultStatusesModal">
+              Cancel
+            </button>
+            <button
+              class="btn btn-primary"
+              @click="confirmCreateDefaultStatuses"
+              :disabled="creatingDefaultStatuses"
+            >
+              <span v-if="creatingDefaultStatuses" class="loading-spinner"></span>
+              {{ creatingDefaultStatuses ? 'Creating...' : 'Create Default Statuses' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -807,6 +886,10 @@ const showMoveTasksModal = ref(false);
 const movingTasks = ref(false);
 const selectedNewStatus = ref<string>('');
 
+// Default statuses confirmation modal
+const showDefaultStatusesModal = ref(false);
+const creatingDefaultStatuses = ref(false);
+
 // Selected items
 const selectedWorkflow = ref<Workflow | null>(null);
 const selectedTransition = ref<WorkflowTransition | null>(null);
@@ -841,6 +924,69 @@ const statusForm = ref({
   isResolved: false,
   isClosed: false,
 });
+
+// Validation for status form
+const statusValidationMessage = computed(() => {
+  const start = statusForm.value.isStartStatus;
+  const end = statusForm.value.isEndStatus;
+
+  if (start && end) return 'A status cannot be both start and end.';
+
+  // Check for duplicate name
+  const currentName = statusForm.value.name.trim().toLowerCase();
+  if (currentName) {
+    const existingStatus = taskStatuses.value.find((status: TaskStatus) => {
+      // Skip current status when editing
+      if (showEditStatus.value && selectedStatus.value && status.id === selectedStatus.value.id) {
+        return false;
+      }
+      return status.name.toLowerCase() === currentName;
+    });
+
+
+  }
+
+  return '';
+});
+
+// Character limit validation
+const nameError = ref('');
+const descriptionError = ref('');
+
+function validateStatusForm() {
+  // Reset errors
+  nameError.value = '';
+  descriptionError.value = '';
+
+  // Validate name length
+  if (statusForm.value.name.length > 20) {
+    nameError.value = 'Name cannot exceed 20 characters';
+  }
+
+  // Validate duplicate name
+  const currentName = statusForm.value.name.trim().toLowerCase();
+  if (currentName) {
+    const existingStatus = taskStatuses.value.find((status: TaskStatus) => {
+      // Skip current status when editing
+      if (showEditStatus.value && selectedStatus.value && status.id === selectedStatus.value.id) {
+        return false;
+      }
+      return status.name.toLowerCase() === currentName;
+    });
+
+    if (existingStatus) {
+      nameError.value = `Status name "${existingStatus.name}" already exists`;
+    }
+  }
+
+  // Validate description length
+  if (statusForm.value.description.length > 100) {
+    descriptionError.value = 'Description cannot exceed 100 characters';
+  }
+
+  // Return true if no errors
+  return !nameError.value && !descriptionError.value;
+}
 
 // Computed
 const availableStatuses = computed(() =>
@@ -1220,6 +1366,11 @@ function editStatus(status: TaskStatus) {
 }
 
 async function saveStatus() {
+  // Validate form before saving
+  if (!validateStatusForm()) {
+    return;
+  }
+
   savingStatus.value = true;
   try {
     if (showEditStatus.value && selectedStatus.value) {
@@ -1352,6 +1503,20 @@ async function confirmMoveAndDelete() {
 
 
 async function createDefaultStatuses() {
+  // Check if default statuses already exist
+  const existingStatuses = taskStatuses.value.filter((status: TaskStatus) => status.isDefault);
+  if (existingStatuses.length > 0) {
+    // Show confirmation modal instead of browser alert
+    showDefaultStatusesModal.value = true;
+    return;
+  }
+
+  // If no existing default statuses, create them directly
+  await confirmCreateDefaultStatuses();
+}
+
+async function confirmCreateDefaultStatuses() {
+  creatingDefaultStatuses.value = true;
   try {
     const defaultStatuses = [
       {
@@ -1416,15 +1581,6 @@ async function createDefaultStatuses() {
       }
     ];
 
-    // Check if default statuses already exist
-    const existingStatuses = taskStatuses.value.filter(status => status.isDefault);
-    if (existingStatuses.length > 0) {
-      const confirmCreate = confirm('Default statuses already exist. Do you want to create them again? This may result in duplicates.');
-      if (!confirmCreate) {
-        return;
-      }
-    }
-
     // Create each default status
     for (const statusData of defaultStatuses) {
       try {
@@ -1443,6 +1599,9 @@ async function createDefaultStatuses() {
       detail: 'Default statuses created successfully',
       life: 3000
     });
+
+    // Close modal
+    closeDefaultStatusesModal();
   } catch (error) {
     console.error('Error creating default statuses:', error);
     toast.add({
@@ -1451,7 +1610,13 @@ async function createDefaultStatuses() {
       detail: 'Failed to create default statuses',
       life: 3000
     });
+  } finally {
+    creatingDefaultStatuses.value = false;
   }
+}
+
+function closeDefaultStatusesModal() {
+  showDefaultStatusesModal.value = false;
 }
 
 function closeStatusForm() {
@@ -1532,6 +1697,17 @@ watch(() => props.projectId, () => {
 .btn-primary:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+/* Form Error Message */
+.form-error {
+  color: #dc2626;
+  font-size: 0.74375rem;
+  margin: 8.5px 0;
+  padding: 6.8px 10.2px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 5.1px;
 }
 
 .btn-secondary {
@@ -1767,39 +1943,48 @@ watch(() => props.projectId, () => {
 
 /* Form Styles */
 .workflow-form, .form {
-  padding: 20px;
+  padding: 17px;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 17px;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 17px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 5.1px;
   color: #333;
   font-weight: 500;
+  font-size: 0.8rem;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 10px;
+  padding: 8.5px;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 3.4px;
+  font-size: 15px;
 }
 
 .form-group textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: 68px;
+}
+
+.char-counter {
+  font-size: 0.6375rem;
+  color: #666;
+  text-align: right;
+  margin-top: 3.4px;
+  font-style: italic;
 }
 
 .checkbox-group {
@@ -1810,20 +1995,22 @@ watch(() => props.projectId, () => {
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6.8px;
   cursor: pointer;
+  font-size: 0.7225rem;
 }
 
 .checkbox-label input[type="checkbox"] {
   width: auto;
   margin: 0;
+  transform: scale(0.85);
 }
 
 .form-actions {
   display: flex;
-  gap: 12px;
+  gap: 10.2px;
   justify-content: flex-end;
-  margin-top: 24px;
+  margin-top: 20.4px;
 }
 
 /* Workflow Visualization */
@@ -2088,19 +2275,21 @@ watch(() => props.projectId, () => {
 .form-checkboxes {
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
-  margin-top: 15px;
+  gap: 12.75px;
+  margin-top: 12.75px;
 }
 
 .form-checkboxes .checkbox-label {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6.8px;
+  font-size: 0.7225rem;
 }
 
 .form-checkboxes .checkbox-label input[type="checkbox"] {
   width: auto;
   margin: 0;
+  transform: scale(0.85);
 }
 
 /* Responsive */
@@ -2131,21 +2320,23 @@ watch(() => props.projectId, () => {
   pointer-events: auto;
   background: white;
   border-radius: 16px;
-  width: 80%;
-  max-width: 450px;
+  width: 100%;
+  max-width: 800px;
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
   z-index: 200;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(0, 0, 0, 0.1);
+  transform: scale(0.85);
+  transform-origin: center center;
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.5rem;
+  padding: 0.85rem;
   border-bottom: 1px solid #e5e7eb;
   border-radius: 16px 16px 0 0;
   background: #f8fafc;
@@ -2153,7 +2344,7 @@ watch(() => props.projectId, () => {
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.0rem;
   font-weight: 600;
   color: #1e293b;
 }
@@ -2175,7 +2366,7 @@ watch(() => props.projectId, () => {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: 0.85rem;
 }
 
 .warning-message {
@@ -2218,24 +2409,24 @@ watch(() => props.projectId, () => {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 1rem;
-  padding: 1.5rem;
+  gap: 0.6375rem;
+  padding: 0.85rem;
   border-top: 1px solid #e5e7eb;
   border-radius: 0 0 16px 16px;
   background: #f8fafc;
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  padding: 0.51rem 1.02rem;
+  border-radius: 5.1px;
   font-weight: 500;
-  font-size: 0.875rem;
+  font-size: 0.68rem;
   cursor: pointer;
   transition: all 0.2s;
   border: none;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.34rem;
 }
 
 .btn-secondary {
@@ -2360,5 +2551,119 @@ watch(() => props.projectId, () => {
 .p-toast-message-content {
   z-index: 10001 !important;
   position: relative !important;
+}
+
+/* Color Input Styles */
+.color-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #f8f9fa;
+  position: relative;
+}
+
+.color-preview {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  border: 3px solid #fff;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.color-preview:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.color-preview::after {
+  content: "🎨";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.color-preview:hover::after {
+  opacity: 1;
+}
+
+.hidden-color-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.color-value {
+  font-family: monospace;
+  font-size: 14px;
+  color: #666;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* Default Statuses Modal Styles */
+.default-statuses-content {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.default-statuses-content h4 {
+  margin: 0 0 10px 0;
+  color: #dc2626;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.default-statuses-content p {
+  margin: 0 0 20px 0;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+}
+
+.btn-primary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 </style>

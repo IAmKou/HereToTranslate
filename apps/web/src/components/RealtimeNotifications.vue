@@ -34,7 +34,7 @@
             :key="notification.id"
             class="notification-item"
             :class="{ 'unread': !notification.isRead }"
-            @click="viewNotificationDetail(notification.id)"
+            @click="navigateToNotifications()"
           >
             <div class="notification-content">
               <div class="notification-header">
@@ -603,10 +603,7 @@ const navigateToProjectInvitations = () => {
   showNotificationPanel.value = false
 }
 
-const viewNotificationDetail = (notificationId: string) => {
-  router.push(`/notifications/${notificationId}`)
-  showNotificationPanel.value = false
-}
+// Removed: navigating to detail view is deprecated; use navigateToNotifications instead
 
 const acceptProjectInvitation = async (invitation: ProjectInvitation) => {
   try {

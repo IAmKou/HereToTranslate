@@ -22,10 +22,8 @@ import { TaskGateway } from '#LocalProject/Utils/gateway/task.gateway';
 import { UpdateTaskDto, TransitionTaskDto } from '#LocalProject/Dtos';
 import { TransitionConditionType, StatusType } from '#LocalProject/Entities';
 import { StatusManagerService } from './task-status-manager.service';
-import { PageDifficultyService } from './page-difficulty.service';
 import { TaskAssignmentManagerService } from './task-assignment-manager.service';
-import { AssignTaskDto, PageDifficultyDto, ReassignTaskDto, DifficultyConfigDto } from '#LocalProject/Dtos';
-import { PageDifficultyEntity } from '#LocalProject/Entities';
+import { AssignTaskDto, ReassignTaskDto } from '#LocalProject/Dtos';
 
 @Injectable()
 export class TaskManagerService {
@@ -48,7 +46,6 @@ export class TaskManagerService {
     private readonly translationService: TranslationService,
     private readonly taskGateway: TaskGateway,
     private readonly statusManagerService: StatusManagerService,
-    private readonly pageDifficultyService: PageDifficultyService,
     private readonly taskAssignmentService: TaskAssignmentManagerService
   ) {}
 
@@ -945,36 +942,12 @@ export class TaskManagerService {
     storyPoints?: number;
     customFields?: Record<string, unknown>;
     selectedPages?: number[];
-    pageDifficulties?: PageDifficultyDto[];
     assignments?: AssignTaskDto[];
   }) {
     // Create the basic task first
     const task = await this.createTask(params);
 
-    // Handle page difficulties if provided
-    if (params.pageDifficulties && params.fileId && params.projectId && params.branchId) {
-      for (const pageDifficulty of params.pageDifficulties) {
-        await this.pageDifficultyService.assignPageDifficulty(
-          params.projectId,
-          params.branchId,
-          params.fileId,
-          pageDifficulty,
-          params.createdById
-        );
-      }
 
-      // Calculate and update task score
-      const scoreData = await this.pageDifficultyService.calculateTaskScore(
-        params.fileId,
-        params.selectedPages
-      );
-
-      task.selectedPages = params.selectedPages;
-      task.totalScore = scoreData.totalScore;
-      task.totalAmount = scoreData.totalScore;
-
-      await this.taskRepository.save(task);
-    }
 
     // Handle assignments if provided
     if (params.assignments) {
@@ -999,16 +972,9 @@ export class TaskManagerService {
     // Get assignments
     const assignments = await this.taskAssignmentService.getTaskAssignments(id);
 
-    // Get page difficulties if task has fileId
-    let pageDifficulties: PageDifficultyEntity[] = [];
-    if (task.fileId) {
-      pageDifficulties = await this.pageDifficultyService.getPageDifficulties(task.fileId);
-    }
-
     return {
       ...task,
       assignments,
-      pageDifficulties,
     };
   }
 
@@ -1024,22 +990,8 @@ export class TaskManagerService {
       throw new BadRequestException('Task must have a file to update pagination');
     }
 
-    // Validate no duplicate pages
-    await this.pageDifficultyService.validateNoDuplicatePages(
-      task.fileId,
-      selectedPages
-    );
-
-    // Calculate new score
-    const scoreData = await this.pageDifficultyService.calculateTaskScore(
-      task.fileId,
-      selectedPages
-    );
-
     task.selectedPages = selectedPages;
-    task.totalScore = scoreData.totalScore;
-    task.totalAmount = scoreData.totalScore;
-    task.totalPages = scoreData.totalPages;
+    await this.taskRepository.save(task);
 
     await this.taskRepository.save(task);
     this.taskGateway.emitTaskUpdate(task);
@@ -1047,13 +999,7 @@ export class TaskManagerService {
     return this.getTaskWithDetails(taskId);
   }
 
-  async getPagePreview(fileId: string, pageNumber: number, language: string) {
-    return await this.pageDifficultyService.getPagePreview({
-      fileId,
-      pageNumber,
-      language,
-    });
-  }
+
 
   async assignTaskRole(projectId: string, dto: AssignTaskDto, assignedById: string) {
     return await this.taskAssignmentService.assignTask(projectId, dto, assignedById);
@@ -1071,15 +1017,26 @@ export class TaskManagerService {
     return await this.taskAssignmentService.getAssignmentHistory(taskId);
   }
 
-  async getDifficultyConfigs(projectId: string) {
-    return await this.pageDifficultyService.getDifficultyConfigs(projectId);
+  async checkAndUpdateOverdueStatus() {
+    const now = new Date();
+    
+    const overdueTasks = await this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.status', 'status')
+      .where('task.dueDate < :now', { now })
+      .andWhere('task.isOverdue = :isOverdue', { isOverdue: false })
+      .andWhere('status.type != :doneType', { doneType: StatusType.DONE })
+      .getMany();
+
+    for (const task of overdueTasks) {
+      task.isOverdue = true;
+      await this.taskRepository.save(task);
+    }
+
+    return {
+      tasksUpdated: overdueTasks.length,
+      subtasksUpdated: 0,
+    };
   }
 
-  async updateDifficultyConfig(configId: string, dto: Partial<DifficultyConfigDto>, userId: string) {
-    return await this.pageDifficultyService.updateDifficultyConfig(configId, dto, userId);
-  }
-
-  async createDefaultDifficultyConfigs(projectId: string, userId: string) {
-    return await this.pageDifficultyService.createDefaultDifficultyConfigs(projectId, userId);
-  }
 }

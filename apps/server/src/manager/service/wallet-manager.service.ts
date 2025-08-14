@@ -130,11 +130,11 @@ export class WalletManagerService implements OnModuleInit {
       .getMany();
   }
 
-  // async linkPaypal(userId: bigint, paypalEmail: string) {
-  //   const user = await this.userRepository.findOneOrFail({ where: { id: userId } });
-  //   user.paypalEmail = paypalEmail;
-  //   await this.userRepository.save(user);
-  // }
+  async linkPaypal(userId: bigint, paypalEmail: string) {
+    const wallet = await this.walletRepository.findOneOrFail({ where: { user: { id: userId } } });
+    wallet.paypalEmail = paypalEmail;
+    await this.walletRepository.save(wallet);
+  }
 
   // Đồng bộ balance cho tất cả ví dựa trên transaction deposit đã hoàn thành
   async syncAllWalletBalances() {

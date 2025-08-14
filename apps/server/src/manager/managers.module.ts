@@ -19,8 +19,6 @@ import { SettingsEntity } from '../db/mysql/entity/setting.entity';
 import { TaskStatusEntity } from '../db/mysql/entity/task-status.entity';
 import { AssignmentHistoryEntity } from '../db/mysql/entity/assignment-history.entity';
 import { DeadlineExtensionEntity } from '../db/mysql/entity/deadline-extension.entity';
-import { DifficultyConfigEntity } from '../db/mysql/entity/difficulty-config.entity';
-import { PageDifficultyEntity } from '../db/mysql/entity/page-difficulty.entity';
 import { ProjectCancellationEntity } from '../db/mysql/entity/project-cancellation.entity';
 import { TaskAssignmentEntity } from '../db/mysql/entity/task-assignment.entity';
 import { WorkflowEntity } from '../db/mysql/entity/workflow.entity';
@@ -83,7 +81,6 @@ import { ProjectInvitationService } from './service/project-invitation.service';
 import { FeeService } from '#LocalProject/Managers/service/fee-manager.service';
 import { ActivityManagerService } from './service/activity-manager.service';
 import { ActivityController } from './controller/activity.controller';
-import { PageDifficultyService } from './service/page-difficulty.service';
 import { ProjectCancellationService } from './service/project-cancellation.service';
 import { TaskAssignmentManagerService } from './service/task-assignment-manager.service';
 import { WorkflowManagerService } from './service/workflow-manager.service';
@@ -91,7 +88,6 @@ import { DeadlineCheckerService } from './service/deadlinechecker.service';
 import { StatusManagerService } from './service/task-status-manager.service';
 import { ScannerCronService } from './service/scanner-cron.service';
 import { DeadlineManagementController } from './controller/deadline-management.controller';
-import { PageDifficultyController } from './controller/page-difficulty.controller';
 import { ProjectCancellationController } from './controller/project-cancellation.controller';
 import { StatusController } from './controller/status.controller';
 import { TaskAssignmentController } from './controller/task-assignment.controller';
@@ -141,8 +137,6 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
       TaskStatusHistoryEntity,
       WorkflowEntity,
       WorkflowTransitionEntity,
-      PageDifficultyEntity,
-      DifficultyConfigEntity,
       TaskAssignmentEntity,
       AssignmentHistoryEntity,
       DeadlineExtensionEntity,
@@ -181,7 +175,6 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
     ActivityManagerService,
     DeadlineCheckerService,
     ScannerCronService,
-    PageDifficultyService,
     ProjectCancellationService,
     TaskAssignmentManagerService,
     StatusManagerService,
@@ -218,7 +211,6 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
     ActivityManagerService,
     DeadlineCheckerService,
     ScannerCronService,
-    PageDifficultyService,
     ProjectCancellationService,
     TaskAssignmentManagerService,
     StatusManagerService,
@@ -252,7 +244,6 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
     ProjectInvitationController,
     ActivityController,
     DeadlineManagementController,
-    PageDifficultyController,
     ProjectCancellationController,
     StatusController,
     TaskAssignmentController,

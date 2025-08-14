@@ -1,7 +1,5 @@
 import 'reflect-metadata';
-// Test and TestingModule are no longer needed since we're using direct instantiation
 import { ProjectManagerService } from '../service/project-manager.service';
-// getRepositoryToken is not available in this version, using string tokens instea
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PermissionFlags } from '@here-to-translate/common';
 
@@ -25,6 +23,7 @@ describe('ProjectManagerService', () => {
   let mockProjectRoleRepository: any;
   let mockBranchRepository: any;
   let mockCommitRepository: any;
+  let mockFileRepository: any;
   let mockDataSource: any;
   let mockGitHubService: any;
   let mockNotificationService: any;
@@ -109,6 +108,10 @@ describe('ProjectManagerService', () => {
       find: jest.fn(),
       findOneOrFail: jest.fn(),
     };
+    mockFileRepository = {
+      findOne: jest.fn(),
+      save: jest.fn(),
+    };
      mockDataSource = {
       createQueryRunner: jest.fn(() => ({
         connect: jest.fn(),
@@ -158,6 +161,7 @@ describe('ProjectManagerService', () => {
       mockProjectRoleRepository,
       mockBranchRepository,
       mockCommitRepository,
+      mockFileRepository,
       mockDataSource,
       mockGitHubService,
       mockNotificationService,

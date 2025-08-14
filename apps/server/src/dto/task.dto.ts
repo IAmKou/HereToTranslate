@@ -1,6 +1,5 @@
 import { IsNotEmpty, IsOptional, IsString, IsDateString, IsEnum, IsNumber, IsArray, ValidateNested, IsDecimal } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DifficultyLevel } from '../db/mysql/entity/page-difficulty.entity';
 import { AssignmentRole } from '../db/mysql/entity/task-assignment.entity';
 
 export class CreateTaskDto {
@@ -101,11 +100,7 @@ export class UpdateTaskDto {
   @IsNumber({}, { each: true })
   selectedPages?: number[];
 
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PageDifficultyDto)
-  pageDifficulties?: PageDifficultyDto[];
+
 
   @IsOptional()
   @IsArray()
@@ -114,35 +109,7 @@ export class UpdateTaskDto {
   assignments?: TaskAssignmentDto[];
 }
 
-// New DTOs for pagination & scoring
-export class PageDifficultyDto {
-  @IsNotEmpty()
-  @IsNumber()
-  pageNumber: number;
 
-  @IsNotEmpty()
-  @IsNumber()
-  filePart: number;
-
-  @IsNotEmpty()
-  @IsEnum(DifficultyLevel)
-  difficultyLevel: DifficultyLevel;
-
-  @IsOptional()
-  @IsDecimal()
-  baseScore?: number;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
-
-  @IsOptional()
-  previewData?: {
-    textCount: number;
-    complexity: string;
-    estimatedTime: number;
-  };
-}
 
 export class TaskAssignmentDto {
   @IsNotEmpty()
@@ -168,19 +135,7 @@ export class TaskAssignmentDto {
   };
 }
 
-export class UpdatePageDifficultyDto {
-  @IsNotEmpty()
-  @IsString()
-  pageId: string;
 
-  @IsNotEmpty()
-  @IsEnum(DifficultyLevel)
-  difficultyLevel: DifficultyLevel;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
-}
 
 export class AssignTaskDto {
   @IsNotEmpty()
@@ -227,47 +182,6 @@ export class ReassignTaskDto {
   notes?: string;
 }
 
-export class PagePreviewDto {
-  @IsNotEmpty()
-  @IsString()
-  fileId: string;
 
-  @IsNotEmpty()
-  @IsNumber()
-  pageNumber: number;
 
-  @IsNotEmpty()
-  @IsString()
-  language: string;
-}
 
-export class DifficultyConfigDto {
-  @IsNotEmpty()
-  @IsString()
-  projectId: string;
-
-  @IsNotEmpty()
-  @IsEnum(DifficultyLevel)
-  difficultyLevel: DifficultyLevel;
-
-  @IsNotEmpty()
-  @IsDecimal()
-  multiplier: number;
-
-  @IsNotEmpty()
-  @IsDecimal()
-  basePrice: number;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  criteria?: {
-    textDensity: string;
-    technicalTerms: boolean;
-    formatting: string;
-    specialCharacters: boolean;
-    estimatedTimeRange: string;
-  };
-}

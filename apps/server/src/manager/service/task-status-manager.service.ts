@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { TaskStatusEntity, StatusType, ProjectEntity, TaskEntity } from '#LocalProject/Entities';
 import { CreateStatusDto, UpdateStatusDto } from '#LocalProject/Dtos';
 
@@ -19,6 +19,29 @@ export class StatusManagerService {
     const project = await this.projectRepository.findOneOrFail({
       where: { id: BigInt(projectId) },
     });
+
+    // Validate: Cannot be both start and end status
+    if (dto.isStartStatus && dto.isEndStatus) {
+      throw new BadRequestException('A status cannot be both start and end status');
+    }
+
+    // Validate: Only one start status per project
+    if (dto.isStartStatus) {
+      const existingStart = await this.statusRepository.findOne({
+        where: { project: { id: BigInt(projectId) }, isStartStatus: true },
+      });
+      if (existingStart) {
+        throw new BadRequestException('There is already a start status for this project');
+      }
+    }
+
+    // Validate: Closed/Resolved implies End
+    if (dto.isClosed && !dto.isEndStatus) {
+      throw new BadRequestException('A closed status must also be an end status');
+    }
+    if (dto.isResolved && !dto.isEndStatus) {
+      throw new BadRequestException('A resolved status must also be an end status');
+    }
 
     // If this is set as default, unset other defaults
     if (dto.isDefault) {
@@ -51,6 +74,39 @@ export class StatusManagerService {
       where: { id: BigInt(id) },
       relations: ['project'],
     });
+
+    // Effective flags after update
+    const nextIsStart = dto.isStartStatus ?? status.isStartStatus;
+    const nextIsEnd = dto.isEndStatus ?? status.isEndStatus;
+    const nextIsClosed = dto.isClosed ?? status.isClosed;
+    const nextIsResolved = dto.isResolved ?? status.isResolved;
+
+    // Validate: Cannot be both start and end status
+    if (nextIsStart && nextIsEnd) {
+      throw new BadRequestException('A status cannot be both start and end status');
+    }
+
+    // Validate: Only one start status per project (exclude current)
+    if (nextIsStart) {
+      const existingStart = await this.statusRepository.findOne({
+        where: {
+          project: { id: status.project.id },
+          isStartStatus: true,
+          id: Not(BigInt(id)),
+        },
+      });
+      if (existingStart) {
+        throw new BadRequestException('There is already a start status for this project');
+      }
+    }
+
+    // Validate: Closed/Resolved implies End
+    if (nextIsClosed && !nextIsEnd) {
+      throw new BadRequestException('A closed status must also be an end status');
+    }
+    if (nextIsResolved && !nextIsEnd) {
+      throw new BadRequestException('A resolved status must also be an end status');
+    }
 
     // If setting as default, unset other defaults in the same project
     if (dto.isDefault) {
@@ -137,7 +193,7 @@ export class StatusManagerService {
     });
 
     for (let i = 0; i < statusIds.length; i++) {
-      const status = statuses.find(s => s.id.toString() === statusIds[i]);
+      const status = statuses.find((s: TaskStatusEntity) => s.id.toString() === statusIds[i]);
       if (status) {
         status.position = i;
         await this.statusRepository.save(status);
@@ -182,27 +238,68 @@ export class StatusManagerService {
     const defaultStatuses = [
       {
         name: 'To Do',
-        description: 'Task is ready to be worked on',
-        color: '#42526E',
+        description: 'Task is pending and not yet started',
+        color: '#ef4444',
         type: StatusType.TODO,
         position: 0,
         isDefault: true,
+        isStartStatus: true,
+        isEndStatus: false,
+        isResolved: false,
+        isClosed: false,
+        isActive: true,
       },
       {
         name: 'In Progress',
-        description: 'Task is being worked on',
-        color: '#0052CC',
+        description: 'Task is currently being worked on',
+        color: '#f59e0b',
         type: StatusType.IN_PROGRESS,
         position: 1,
         isDefault: false,
+        isStartStatus: false,
+        isEndStatus: false,
+        isResolved: false,
+        isClosed: false,
+        isActive: true,
+      },
+      {
+        name: 'Review',
+        description: 'Task is completed and waiting for review',
+        color: '#3b82f6',
+        type: StatusType.IN_PROGRESS,
+        position: 2,
+        isDefault: false,
+        isStartStatus: false,
+        isEndStatus: false,
+        isResolved: false,
+        isClosed: false,
+        isActive: true,
       },
       {
         name: 'Done',
-        description: 'Task is completed',
-        color: '#00875A',
+        description: 'Task is completed and approved',
+        color: '#10b981',
         type: StatusType.DONE,
-        position: 2,
+        position: 3,
         isDefault: false,
+        isStartStatus: false,
+        isEndStatus: true,
+        isResolved: true,
+        isClosed: false,
+        isActive: true,
+      },
+      {
+        name: 'Closed',
+        description: 'Task is closed and archived',
+        color: '#6b7280',
+        type: StatusType.DONE,
+        position: 4,
+        isDefault: false,
+        isStartStatus: false,
+        isEndStatus: true,
+        isResolved: false,
+        isClosed: true,
+        isActive: true,
       },
     ];
 

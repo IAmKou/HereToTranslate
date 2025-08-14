@@ -10,8 +10,8 @@ import {
 import { TaskEntity } from './task.entity';
 import { UserEntity } from './user.entity';
 import { TaskStatusEntity } from './task-status.entity';
-import { SubtaskAssignmentEntity } from './subtask-assignment.entity';
-import { SubtaskStatusHistoryEntity } from './subtask-status-history.entity';
+import type { SubtaskAssignmentEntity } from './subtask-assignment.entity';
+import type { SubtaskStatusHistoryEntity } from './subtask-status-history.entity';
 
 export enum SubtaskKind {
   DISCREET = 'discreet',
@@ -71,10 +71,18 @@ export class SubtaskEntity {
   @Column({ type: 'enum', enum: ['low', 'medium', 'high'], default: 'medium' })
   priority: string;
 
-  @OneToMany(() => SubtaskAssignmentEntity, assignment => assignment.subtask, { cascade: true })
+  @OneToMany(
+    () => require('./subtask-assignment.entity').SubtaskAssignmentEntity,
+    (assignment: SubtaskAssignmentEntity) => assignment.subtask,
+    { cascade: true }
+  )
   assignments: SubtaskAssignmentEntity[];
 
-  @OneToMany(() => SubtaskStatusHistoryEntity, history => history.subtask, { cascade: true })
+  @OneToMany(
+    () => require('./subtask-status-history.entity').SubtaskStatusHistoryEntity,
+    (history: SubtaskStatusHistoryEntity) => history.subtask,
+    { cascade: true }
+  )
   statusHistory: SubtaskStatusHistoryEntity[];
 
   @CreateDateColumn()
@@ -84,14 +92,14 @@ export class SubtaskEntity {
   updatedAt: Date;
 
   get currentTranslator(): UserEntity | undefined {
-    return this.assignments?.find(a => a.role === 'translator' && a.status === 'assigned')?.assignedTo;
+    return this.assignments?.find((a: SubtaskAssignmentEntity) => a.role === 'translator' && a.status === 'assigned')?.assignedTo;
   }
 
   get currentReviewer(): UserEntity | undefined {
-    return this.assignments?.find(a => a.role === 'reviewer' && a.status === 'assigned')?.assignedTo;
+    return this.assignments?.find((a: SubtaskAssignmentEntity) => a.role === 'reviewer' && a.status === 'assigned')?.assignedTo;
   }
 
   get currentApprover(): UserEntity | undefined {
-    return this.assignments?.find(a => a.role === 'approver' && a.status === 'assigned')?.assignedTo;
+    return this.assignments?.find((a: SubtaskAssignmentEntity) => a.role === 'approver' && a.status === 'assigned')?.assignedTo;
   }
 }

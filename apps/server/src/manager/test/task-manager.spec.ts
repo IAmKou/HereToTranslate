@@ -14,7 +14,6 @@ jest.mock('#LocalProject/Entities', () => ({
   WorkflowEntity: class { id!: bigint; project?: any },
   WorkflowTransitionEntity: class { id!: bigint; name!: string; conditionType!: string; toStatus!: any },
   TaskStatusHistoryEntity: class {},
-  PageDifficultyEntity: class {},
   StatusType: { TODO: 'todo', IN_PROGRESS: 'in_progress', DONE: 'done' },
   TransitionConditionType: {
     ROLE: 'role', USER: 'user', GROUP: 'group', ASSIGNEE_ONLY: 'assignee_only', CREATOR_ONLY: 'creator_only', ANYONE: 'anyone'
@@ -30,10 +29,7 @@ jest.mock('#LocalProject/Managers/service/translation-manager.service', () => ({
 jest.mock('#LocalProject/Utils/gateway/task.gateway', () => ({
   TaskGateway: class {},
 }));
-// Mock local services that bring in heavier dependencies down the chain
-jest.mock('../service/page-difficulty.service', () => ({
-  PageDifficultyService: class {},
-}));
+
 jest.mock('../service/task-assignment-manager.service', () => ({
   TaskAssignmentManagerService: class {},
 }));
@@ -58,7 +54,6 @@ describe('TaskManagerService', () => {
   const translationService: any = {};
   const taskGateway: any = { emitTaskUpdate: jest.fn(), emitTaskDelete: jest.fn() };
   const statusManagerService: any = { createDefaultStatuses: jest.fn() };
-  const pageDifficultyService: any = {};
   const taskAssignmentService: any = {};
 
   beforeEach(() => {
@@ -93,7 +88,6 @@ describe('TaskManagerService', () => {
       translationService,
       taskGateway,
       statusManagerService,
-      pageDifficultyService,
       taskAssignmentService,
     );
   });

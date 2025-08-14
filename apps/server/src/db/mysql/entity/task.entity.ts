@@ -5,7 +5,7 @@ import { TaskStatusEntity } from './task-status.entity';
 import { WorkflowEntity } from './workflow.entity';
 import { TaskAssignmentEntity } from './task-assignment.entity';
 import { TaskStatusHistoryEntity } from './task-status-history.entity';
-import { SubtaskEntity } from './subtask.entity';
+import type { SubtaskEntity } from './subtask.entity';
 
 @Entity('task')
 export class TaskEntity {
@@ -102,7 +102,11 @@ export class TaskEntity {
   @OneToMany(() => TaskStatusHistoryEntity, history => history.task, { cascade: true })
   statusHistory: TaskStatusHistoryEntity[];
 
-  @OneToMany(() => SubtaskEntity, subtask => subtask.parentTask, { cascade: true })
+  @OneToMany(
+    () => require('./subtask.entity').SubtaskEntity,
+    (subtask: SubtaskEntity) => subtask.parentTask,
+    { cascade: true }
+  )
   subtasks: SubtaskEntity[];
 
   get currentTranslator(): UserEntity | undefined {

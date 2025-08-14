@@ -14,7 +14,7 @@ export class SubtaskAssignmentHistoryEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => SubtaskEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./subtask.entity').SubtaskEntity, { onDelete: 'CASCADE' })
   subtask: SubtaskEntity;
 
   @ManyToOne(() => SubtaskAssignmentEntity, { nullable: true, onDelete: 'CASCADE' })

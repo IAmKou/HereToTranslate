@@ -313,6 +313,7 @@ describe('RequestManagerService', () => {
         status: RequestStatus.Pending,
         isPublic: true,
         category: { id: 1n },
+        targetLanguages: [],
         files: [mockFile],
       });
 
@@ -356,6 +357,7 @@ describe('RequestManagerService', () => {
         status: RequestStatus.Pending,
         isPublic: true,
         category: undefined,
+        targetLanguages: [],
         files: [],
       });
 
@@ -365,7 +367,7 @@ describe('RequestManagerService', () => {
     it('should throw BadRequestException when deadline is less than 7 days', async () => {
       const dtoWithShortDeadline = {
         ...mockCreateRequestDto,
-        deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
+        deadline: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
       };
 
       await expect(service.createRequest(dtoWithShortDeadline, 1n))
@@ -433,7 +435,7 @@ describe('RequestManagerService', () => {
     it('should throw BadRequestException when deadline is less than 7 days', async () => {
       const dtoWithShortDeadline = {
         ...mockCreateRequestDto,
-        deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+        deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
         isPublic: false,
       };
 
@@ -642,7 +644,7 @@ describe('RequestManagerService', () => {
 
     it('should throw BadRequestException when deadline is less than 7 days', async () => {
       const updateData = {
-        deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+        deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
       };
 
       const existingRequest = { ...mockRequest };

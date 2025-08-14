@@ -1,11 +1,21 @@
-import { Controller, Post, Body, UseGuards, Req, Get, Query, Res, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Get,
+  Query,
+  Res,
+  Patch,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import { PaypalService } from '../service/payment-manager.service';
 import { UserEntity } from '../../db/mysql/entity';
 import { WithdrawDto } from '../../dto/withdraw.dto';
 import { WalletManagerService } from '../service/wallet-manager.service';
-import { Response } from 'express';
+import type { Response } from 'express';
 import axios from 'axios';
 
 @ApiTags('Wallet')
@@ -20,17 +30,17 @@ export class WalletController {
 
   @Get()
   async getWallet(@Req() req: { user: UserEntity }) {
-    const details = await this.walletManagerService.getWalletDetails(req.user.id);
-    const latestTransaction = await this.walletManagerService.getLatestTransaction(req.user.id);
+    const details = await this.walletManagerService.getWalletDetails(
+      req.user.id
+    );
+    const latestTransaction =
+      await this.walletManagerService.getLatestTransaction(req.user.id);
     return { ...details, latestTransaction };
   }
 
   @Post('withdraw')
   @UseGuards(JwtAuthGuard)
-  async withdraw(
-    @Req() req: { user: UserEntity },
-    @Body() dto: WithdrawDto
-  ) {
+  async withdraw(@Req() req: { user: UserEntity }, @Body() dto: WithdrawDto) {
     return this.paypalService.withdraw(req.user.id, dto);
   }
 
@@ -48,7 +58,10 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   getPaypalConnectUrl(@Req() req: { user: UserEntity }) {
     const clientId = process.env.PAYPAL_CLIENT_ID;
-    const redirectUri = encodeURIComponent(process.env.PAYPAL_REDIRECT_URI || '${import.meta.env.VITE_API_URL}/wallet/paypal/callback');
+    const redirectUri = encodeURIComponent(
+      process.env.PAYPAL_REDIRECT_URI ||
+        '${import.meta.env.VITE_API_URL}/wallet/paypal/callback'
+    );
     const scope = encodeURIComponent('openid email');
     const state = encodeURIComponent(req.user.id.toString());
     const url = `https://www.sandbox.paypal.com/signin/authorize?client_id=${clientId}&response_type=code&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;
@@ -65,7 +78,11 @@ export class WalletController {
     try {
       const clientId = process.env.PAYPAL_CLIENT_ID;
       const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-      const redirectUri = process.env.PAYPAL_REDIRECT_URI || `${process.env.API_URL || 'http://localhost:3000'}/api/wallet/paypal/callback`;
+      const redirectUri =
+        process.env.PAYPAL_REDIRECT_URI ||
+        `${
+          process.env.API_URL || 'http://localhost:3000'
+        }/api/wallet/paypal/callback`;
       const tokenRes = await axios.post(
         'https://api.sandbox.paypal.com/v1/oauth2/token',
         new URLSearchParams({
@@ -79,9 +96,12 @@ export class WalletController {
         }
       );
       const accessToken = tokenRes.data.access_token;
-      const userRes = await axios.get('https://api.sandbox.paypal.com/v1/identity/openidconnect/userinfo/?schema=openid', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const userRes = await axios.get(
+        'https://api.sandbox.paypal.com/v1/identity/openidconnect/userinfo/?schema=openid',
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
       const email = userRes.data.email;
       const userId = BigInt(state);
       await this.walletManagerService.linkPaypal(userId, email);
@@ -93,13 +113,21 @@ export class WalletController {
 
   @Patch('paypal-email')
   @UseGuards(JwtAuthGuard)
-  async updatePaypalEmail(@Req() req: { user: UserEntity }, @Body('email') email: string) {
+  async updatePaypalEmail(
+    @Req() req: { user: UserEntity },
+    @Body('email') email: string
+  ) {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new Error('Invalid email');
     }
     // Lấy wallet theo user
-    const wallet = await this.walletManagerService.getOrCreateWallet(req.user.id);
-    await this.walletManagerService.updatePaypalEmailByWalletId(wallet.id, email);
+    const wallet = await this.walletManagerService.getOrCreateWallet(
+      req.user.id
+    );
+    await this.walletManagerService.updatePaypalEmailByWalletId(
+      wallet.id,
+      email
+    );
     return { success: true, email };
   }
 
@@ -119,5 +147,4 @@ export class WalletController {
   async getUserTransactions(@Req() req: { user: UserEntity }) {
     return this.walletManagerService.getUserTransactions(req.user.id);
   }
-
 }

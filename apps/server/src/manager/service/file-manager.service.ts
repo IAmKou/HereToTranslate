@@ -796,26 +796,7 @@ export class FileService {
     }
   }
 
-  async validateFileForPageDifficulty(fileId: string): Promise<{ projectId: string; branchId: string }> {
-    const file = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-      relations: ['project', 'branch'],
-      select: ['id', 'fileName', 'fileType', 'status', 'extractLog', 'project', 'branch'],
-    });
 
-    if (!file) {
-      throw new NotFoundException(`File with ID ${fileId} not found`);
-    }
-
-    const projectId = file.project?.id?.toString();
-    const branchId = file.branch?.id?.toString();
-
-    if (!projectId || !branchId) {
-      throw new BadRequestException('File must be linked to a project and a branch to assign page difficulty');
-    }
-
-    return { projectId, branchId };
-  }
 
   async getFileMetadata(fileId: string): Promise<{ fileName: string; fileType: string; projectId?: string; branchId?: string }> {
     const file = await this.fileRepository.findOne({

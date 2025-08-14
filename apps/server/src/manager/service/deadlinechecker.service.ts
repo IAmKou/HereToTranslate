@@ -7,19 +7,13 @@ import {
   RequestStatus,
   DeadlineExtensionEntity,
   ExtensionStatus,
-  // TranslationPreviewEntity
 } from '#LocalProject/Entities';
-// import {
-//   TranslationString,
-//   TranslationStringDocument,
-// } from '../../db/mongo/schema/translation.schema';
-// import { Model } from 'mongoose';
+
 import { MailerService } from '@nestjs-modules/mailer';
 import { addDays, subDays } from 'date-fns';
 import { PaypalService } from '../service/payment-manager.service';
 import { ProjectManagerService } from '../service/project-manager.service';
 import { TranslationService } from '../service/translation-manager.service';
-// import { InjectModel } from '@nestjs/mongoose';
 import { Logger } from '@nestjs/common';
 import { CronJob } from 'cron';
 
@@ -37,8 +31,6 @@ export class DeadlineCheckerService {
     @InjectRepository(DeadlineExtensionEntity)
     private readonly extensionRepo: Repository<DeadlineExtensionEntity>,
 
-    // @InjectRepository(TranslationPreviewEntity)
-    // private readonly previewRepo: Repository<TranslationPreviewEntity>,
 
     private readonly mailerService: MailerService,
     private readonly paymentService: PaypalService,
@@ -46,8 +38,6 @@ export class DeadlineCheckerService {
     private readonly translationService: TranslationService,
     private readonly schedulerRegistry: SchedulerRegistry,
 
-    // @InjectModel(TranslationString.name)
-    // private readonly translationModel: Model<TranslationStringDocument>
   ) {
     this.initializeCronJob();
   }
@@ -60,7 +50,7 @@ export class DeadlineCheckerService {
 
     // Register with scheduler
     this.schedulerRegistry.addCronJob('deadline-checker-cron', this.cronJob);
-    
+
     // Start the cron job
     this.cronJob.start();
     this.logger.log('Deadline checker cron job started - scanning every minute with 10-second rest');
@@ -101,14 +91,14 @@ export class DeadlineCheckerService {
 
     try {
       const today = new Date();
-      
+
       // Perform quick checks every minute
       await this.performQuickDeadlineChecks(today);
-      
+
       // Rest for 10 seconds after scan
       this.logger.log('Minute scan completed, resting for 10 seconds...');
       await this.sleep(10000); // 10 seconds
-      
+
       this.logger.log('Rest period completed, ready for next scan');
     } catch (error) {
       this.logger.error('Error during minute deadline scan:', error);
@@ -119,16 +109,16 @@ export class DeadlineCheckerService {
 
   private async performQuickDeadlineChecks(today: Date) {
     this.logger.log('Performing quick deadline checks...');
-    
+
     // Quick check for urgent deadlines (within next hour)
     await this.checkUrgentDeadlines(today);
-    
+
     // Quick check for overdue requests
     await this.checkOverdueRequests(today);
-    
+
     // Quick check for extension requests that need immediate attention
     await this.checkUrgentExtensions(today);
-    
+
     this.logger.log('Quick deadline checks completed');
   }
 
@@ -143,14 +133,14 @@ export class DeadlineCheckerService {
 
     if (urgentDeadlines.length > 0) {
       this.logger.log(`Found ${urgentDeadlines.length} requests with urgent deadlines`);
-      
+
       for (const req of urgentDeadlines) {
         const hoursLeft = Math.ceil((+req.deadline - +today) / (1000 * 60 * 60));
-        
+
         if (hoursLeft <= 1) {
           // Send immediate notification for very urgent deadlines
           this.logger.warn(`CRITICAL: Request ${req.id} due in ${hoursLeft} hour(s)`);
-          
+
           if (req.assignee?.email) {
             await this.mailerService.sendMail({
               to: req.assignee.email,
@@ -178,15 +168,15 @@ export class DeadlineCheckerService {
 
     if (overdueRequests.length > 0) {
       this.logger.log(`Found ${overdueRequests.length} overdue requests`);
-      
+
       for (const req of overdueRequests) {
         // Mark as failed if not already handled (since Overdue status doesn't exist)
         if (req.status === RequestStatus.Approved) {
           req.status = RequestStatus.Failed;
           await this.requestRepo.save(req);
-          
+
           this.logger.warn(`Request ${req.id} marked as failed due to overdue deadline`);
-          
+
           // Send overdue notification
           if (req.assignee?.email) {
             await this.mailerService.sendMail({
@@ -207,14 +197,14 @@ export class DeadlineCheckerService {
     const urgentExtensions = await this.extensionRepo.find({
       where: {
         status: ExtensionStatus.PENDING,
-        createdAt: LessThanOrEqual(subDays(today, 2)), 
+        createdAt: LessThanOrEqual(subDays(today, 2)),
       },
       relations: ['request', 'translator', 'requester'],
     });
 
     if (urgentExtensions.length > 0) {
       this.logger.log(`Found ${urgentExtensions.length} urgent extension requests`);
-      
+
       for (const extension of urgentExtensions) {
         // Send reminder to requester about pending extension
         await this.mailerService.sendMail({
@@ -270,7 +260,7 @@ export class DeadlineCheckerService {
     if (this.isRunning) {
       throw new Error('Minute scan is already running');
     }
-    
+
     this.logger.log('Manual minute scan triggered');
     await this.handleMinuteScan();
   }

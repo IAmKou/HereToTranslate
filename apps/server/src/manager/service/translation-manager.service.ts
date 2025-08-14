@@ -34,6 +34,31 @@ export class TranslationService {
     private readonly activityManagerService: ActivityManagerService,
   ) {}
 
+  async getTranslationProgress(
+    projectId: string,
+    branchId: string,
+    language?: string
+  ): Promise<{ total: number; completed: number; percentage: number }> {
+    const query: any = { projectId, branchId };
+    if (language) {
+      query.language = language;
+    }
+
+    const total = await this.translationModel.countDocuments(query);
+    const completed = await this.translationModel.countDocuments({
+      ...query,
+      translatedText: { $nin: [null, ''] },
+    });
+
+    const percentage = total > 0 ? (completed / total) * 100 : 0;
+
+    return {
+      total,
+      completed,
+      percentage: Math.round(percentage * 100) / 100, // Round to 2 decimal places
+    };
+  }
+
   async addTranslation(id: string, translatedText: string, language: string) {
     // Tìm bản ghi gốc để lấy thông tin
     const originalEntry = await this.translationModel.findById(id);

@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Model } from 'mongoose';
 import { FileService } from '../service/file-manager.service';
@@ -638,43 +638,7 @@ describe('FileService', () => {
     });
   });
 
-  describe('validateFileForPageDifficulty', () => {
-    it('should return project and branch IDs for valid file', async () => {
-      const mockFile = {
-        id: 1n,
-        fileName: 'test.txt',
-        fileType: 'text/plain',
-        status: 'ready',
-        extractLog: 'Extracted',
-        project: { id: 1n },
-        branch: { id: 1n },
-      };
 
-      (fileRepository.findOne as jest.Mock).mockResolvedValue(mockFile);
-
-      const result = await service.validateFileForPageDifficulty('1');
-
-      expect(result.projectId).toBe('1');
-      expect(result.branchId).toBe('1');
-    });
-
-    it('should throw BadRequestException when file lacks project or branch', async () => {
-      const mockFile = {
-        id: 1n,
-        fileName: 'test.txt',
-        fileType: 'text/plain',
-        status: 'ready',
-        extractLog: 'Extracted',
-        project: null,
-        branch: null,
-      };
-
-      (fileRepository.findOne as jest.Mock).mockResolvedValue(mockFile);
-
-      await expect(service.validateFileForPageDifficulty('1'))
-        .rejects.toThrow(BadRequestException);
-    });
-  });
 
   describe('getFileMetadata', () => {
     it('should return file metadata', async () => {

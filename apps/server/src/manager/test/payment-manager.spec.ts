@@ -17,6 +17,7 @@ import { WalletManagerService } from '../service/wallet-manager.service';
 import { ManifestService } from '../service/manifest.service';
 import { FeeService } from '../service/fee-manager.service';
 import { NotificationManagerService } from '../service/notification-manager.service';
+import { PaypalConfigChecker } from '../service/paypal-config-checker';
 import { WithdrawDto } from '../../dto/withdraw.dto';
 
 // Mock axios
@@ -45,6 +46,7 @@ describe('PaypalService', () => {
   let mockManifestService: jest.Mocked<ManifestService>;
   let mockFeeService: jest.Mocked<FeeService>;
   let mockNotificationService: jest.Mocked<NotificationManagerService>;
+  let mockConfigChecker: jest.Mocked<PaypalConfigChecker>;
 
   const mockUser: any = {
     id: 1n,
@@ -152,6 +154,10 @@ describe('PaypalService', () => {
       createNotification: jest.fn(),
     } as any;
 
+    mockConfigChecker = {
+      logConfiguration: jest.fn(),
+    } as any;
+
     // Mock query runner
     const mockQueryRunner = {
       connect: jest.fn(),
@@ -184,7 +190,8 @@ describe('PaypalService', () => {
       mockWalletManagerService,
       mockManifestService,
       mockFeeService,
-      mockNotificationService
+      mockNotificationService,
+      mockConfigChecker
     );
 
     // Reset axios mocks
@@ -224,6 +231,7 @@ describe('PaypalService', () => {
             Authorization: 'Basic dGVzdC1jbGllbnQtaWQ6dGVzdC1jbGllbnQtc2VjcmV0',
             'Content-Type': 'application/x-www-form-urlencoded',
           },
+          timeout: 10000,
         }
       );
     });

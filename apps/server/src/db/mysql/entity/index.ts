@@ -27,8 +27,6 @@ export * from './workflow.entity';
 export * from './workflow-transition.entity';
 export * from './task-status-history.entity';
 export * from './task-comment.entity';
-export * from './page-difficulty.entity';
-export * from './difficulty-config.entity';
 export * from './task-assignment.entity';
 export * from './assignment-history.entity';
 export * from './subtask.entity';

@@ -742,34 +742,6 @@ export class ManifestService {
             page: entry.position?.page,
             font: entry.font
           })));
-        }
-
-        // Store images separately for export (not in manifest entries)
-        if (result.images && result.images.length > 0) {
-          console.log('[PDF] Step 4: Processing images...');
-          console.log('[PDF] Found', result.images.length, 'images');
-
-          // Store images in a separate property for later export
-          // Don't add to manifestEntries to avoid cluttering the UI
-          const imageData = result.images.map((image: any, i: number) => ({
-            index: i + 1,
-            data: image.data,
-            type: image.type,
-            position: {
-              x: image.x,
-              y: image.y,
-              width: image.width,
-              height: image.height,
-              page: image.page,
-            }
-          }));
-
-          // Store image data in the manifest for later export
-          // This will be used when generating the final document
-          console.log('[PDF] SUCCESS: Stored', result.images.length, 'images for export');
-
-          // Store image data for later use (not as manifest entries)
-          console.log('[PDF] Image data stored for export:', imageData.length, 'images');
         } else if (text) {
           // Xử lý kết quả text thô từ OCR
           console.log('[PDF] Step 3: Processing OCR text into lines...');
@@ -828,6 +800,34 @@ export class ManifestService {
           console.error('[PDF] Items count:', items?.length || 0);
           console.error('[PDF] Text length:', text?.length || 0);
           throw new Error('No text could be extracted from PDF (parser and OCR failed)');
+        }
+
+        // Store images separately for export (not in manifest entries)
+        if (result.images && result.images.length > 0) {
+          console.log('[PDF] Step 4: Processing images...');
+          console.log('[PDF] Found', result.images.length, 'images');
+
+          // Store images in a separate property for later export
+          // Don't add to manifestEntries to avoid cluttering the UI
+          const imageData = result.images.map((image: any, i: number) => ({
+            index: i + 1,
+            data: image.data,
+            type: image.type,
+            position: {
+              x: image.x,
+              y: image.y,
+              width: image.width,
+              height: image.height,
+              page: image.page,
+            }
+          }));
+
+          // Store image data in the manifest for later export
+          // This will be used when generating the final document
+          console.log('[PDF] SUCCESS: Stored', result.images.length, 'images for export');
+
+          // Store image data for later use (not as manifest entries)
+          console.log('[PDF] Image data stored for export:', imageData.length, 'images');
         }
 
         // Debug: Kiểm tra page distribution

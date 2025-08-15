@@ -23,11 +23,6 @@
                   <span class="money-icon">💵</span>
                   {{ formatCurrency(wallet.balance) }}
                 </div>
-                <div class="withdraw-fee-tip">
-                  <span v-if="wallet && wallet.balance > 0">
-                    If you withdraw all, you will receive: <b>{{ formatCurrency(wallet.balance * 0.95) }}</b> after 5% fee.
-                  </span>
-                </div>
                 <div class="user-info-block">
                   <div class="user-avatar user-avatar-upgrade">
                     <template v-if="wallet.user?.avatar">
@@ -105,17 +100,7 @@
                   <div class="mini-stat-label">Total Withdrawn</div>
                   <div class="mini-stat-value" :class="currencyClass(wallet.totalWithdrawn)">{{ formatCurrency(wallet.totalWithdrawn) }}</div>
                 </div>
-                <div class="mini-stat-card pending" @click="filterTransactions('pending')" tabindex="0" title="Show only pending withdrawals">
-                  <div class="mini-stat-icon">
-                    <!-- SVG icon for pending -->
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="14" cy="14" r="14" fill="#FEF9C3"/>
-                      <path d="M14 8v6l4 2" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </div>
-                  <div class="mini-stat-label">Pending Withdrawals</div>
-                  <div class="mini-stat-value" :class="currencyClass(wallet.pendingWithdrawals)">{{ formatCurrency(wallet.pendingWithdrawals) }}</div>
-                </div>
+
               </div>
               <div v-if="wallet.latestTransaction" class="latest-transaction-summary">
                 <div class="lts-title">Latest Transaction</div>
@@ -192,39 +177,82 @@
       <div class="modal-content withdraw-modal">
         <h3>Withdraw to PayPal</h3>
         <div class="withdraw-info-tip">
-          💡 <span>Fee: 5%<span class="fee-tooltip" title="A 5% fee will be deducted from your withdrawal amount to cover transaction and processing costs.">ℹ️</span></span> | Processed within 24h<br>
-          <span class="withdraw-admin-tip" title="Withdrawals require admin approval.">Withdrawals will be processed after admin approval.</span>
+          💡 <span>No fees</span> | Processed immediately<br>
+          <span class="withdraw-admin-tip" title="Withdrawals are processed instantly.">Withdrawals are processed instantly to your PayPal account.</span>
         </div>
         <form @submit.prevent="handleWithdrawSubmit">
           <div class="form-group">
             <label for="withdraw-amount"><span class="amount-label-icon">💵</span> Amount (USD):</label>
-            <input id="withdraw-amount" v-model.number="withdrawAmount" type="number" min="1" :max="wallet?.balance || 0" placeholder="Enter amount (e.g. 10)" @input="validateWithdrawAmount" :class="{'input-invalid': withdrawAmountError || withdrawAmount <= 0}" />
+            <div class="amount-input-group">
+              <div class="amount-input-wrapper">
+                <span class="currency-prefix">$</span>
+                <input
+                  id="withdraw-amount"
+                  v-model.number="withdrawAmount"
+                  type="number"
+                  min="1"
+                  :max="wallet?.balance || 0"
+                  placeholder="0.00"
+                  step="0.01"
+                  @input="validateWithdrawAmount"
+                  @blur="validateWithdrawAmount"
+                  :class="{'input-invalid': withdrawAmountError && withdrawAmount <= 0}"
+                />
+              </div>
+              <button type="button" class="withdraw-all-btn" @click="withdrawAll" :disabled="!wallet?.balance || wallet.balance <= 0">
+                <span class="withdraw-all-icon">💸</span>
+                Withdraw All
+              </button>
+            </div>
             <div v-if="withdrawAmountError" class="input-error">{{ withdrawAmountError }}</div>
             <div v-if="withdrawAmount > 0 && !withdrawAmountError" class="after-fee-tip">
-              You will receive <b>{{ formatCurrency(withdrawAmount * 0.95) }}</b> after the 5% fee.
+              You will receive <b>{{ formatCurrency(withdrawAmount) }}</b> (no fees applied).
             </div>
           </div>
           <div class="form-group">
-            <label for="withdraw-email"><span class="email-label-icon">📧</span> PayPal Email:</label>
-            <input id="withdraw-email" v-model="withdrawEmail" type="email" placeholder="Enter your PayPal email" @input="validateWithdrawEmail" :class="{'input-invalid': withdrawEmailError}" />
+            <label for="withdraw-email">
+              <img :src="paypalIcon" alt="PayPal" class="paypal-icon-img" />
+              PayPal Email:
+            </label>
+            <div class="email-input-wrapper">
+              <input
+                id="withdraw-email"
+                v-model="withdrawEmail"
+                type="email"
+                placeholder="your-email@example.com"
+                @input="validateWithdrawEmail"
+                @blur="validateWithdrawEmail"
+                :class="{'input-invalid': withdrawEmailError}"
+              />
+              <div class="email-validation-indicator" v-if="withdrawEmail">
+                <span v-if="isValidEmail" class="valid-email">✓</span>
+                <span v-else class="invalid-email">✗</span>
+              </div>
+            </div>
             <div v-if="withdrawEmailError" class="input-error">{{ withdrawEmailError }}</div>
-            <div class="email-warning" style="color: #ef4444; font-size: 0.97rem; margin-top: 4px;">
-              <i class="pi pi-exclamation-triangle" style="margin-right: 4px;"></i>
-              <b>We are not responsible if you enter the wrong PayPal email. Please double-check before confirming!</b>
+            <div class="email-warning-alert">
+              <div class="warning-icon">⚠️</div>
+              <div class="warning-content">
+                <strong>Important:</strong> Please double-check your PayPal email address. We are not responsible for transfers sent to incorrect addresses.
+              </div>
             </div>
           </div>
           <div v-if="withdrawError" class="input-error">{{ withdrawError }}</div>
           <div class="modal-actions">
-            <button type="submit" class="btn btn-primary" :disabled="withdrawLoading || withdrawAmountError || withdrawEmailError || hasPendingWithdraw || withdrawAmount <= 0 || withdrawAmount > (wallet?.balance || 0)">
+            <button type="submit" class="btn btn-primary" :disabled="withdrawLoading || withdrawAmountError || withdrawEmailError || withdrawAmount <= 0 || withdrawAmount > (wallet?.balance || 0)">
               <span v-if="withdrawLoading" class="spinner"></span>
               <span v-if="withdrawLoading">Processing…</span>
-              <span v-else>Confirm</span>
+              <span v-else>
+                <span class="btn-icon">💳</span>
+                Confirm Withdrawal
+              </span>
             </button>
-            <button type="button" class="btn btn-secondary" @click="closeWithdrawModal" :disabled="withdrawLoading">Cancel</button>
+            <button type="button" class="btn btn-secondary" @click="closeWithdrawModal" :disabled="withdrawLoading">
+              <span class="btn-icon">✕</span>
+              Cancel
+            </button>
           </div>
-          <div v-if="hasPendingWithdraw" class="pending-withdraw-tip">
-            You already have a pending withdrawal request. Please wait for admin approval before submitting another.
-          </div>
+          <!-- Removed pending withdrawal check since withdrawals are now instant -->
         </form>
       </div>
     </div>
@@ -234,7 +262,7 @@
         <h3>Confirm Withdrawal</h3>
         <div style="margin-bottom: 18px; color: #f59e0b; font-weight: 500;">
           You are about to withdraw <b>{{ formatCurrency(withdrawAmount) }}</b>.<br>
-          After fee, you will receive <b>{{ formatCurrency(withdrawAmount * 0.95) }}</b>.<br>
+          You will receive <b>{{ formatCurrency(withdrawAmount) }}</b> (no fees).<br>
           Are you sure you want to proceed?
         </div>
         <div class="modal-actions">
@@ -254,6 +282,7 @@ import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
 import axios from 'axios';
 import { useToast } from 'primevue/usetoast';
+import paypalIcon from '../assets/paypal.png';
 
 interface UserInfo {
   id: number | string;
@@ -292,7 +321,6 @@ const withdrawAmount = ref(0);
 const withdrawEmail = ref('');
 const withdrawError = ref('');
 const withdrawLoading = ref(false);
-const pendingWithdrawals = ref([]);
 const withdrawAmountError = ref('');
 const withdrawEmailError = ref('');
 const withdrawSuccessMsg = ref('');
@@ -301,6 +329,11 @@ const sidebarCollapsed = ref(false);
 
 const router = useRouter();
 const toast = useToast();
+
+const isValidEmail = computed(() => {
+  if (!withdrawEmail.value) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(withdrawEmail.value);
+});
 
 function getInitials(name: string): string {
   if (!name) return '?';
@@ -348,15 +381,6 @@ async function reloadWallet() {
   }
 }
 
-async function loadPendingWithdrawals() {
-  try {
-    const res = await axios.get('/api/wallet/pending-withdrawals');
-    pendingWithdrawals.value = res.data || [];
-  } catch {
-    pendingWithdrawals.value = [];
-  }
-}
-
 async function submitWithdraw() {
   withdrawError.value = '';
   withdrawSuccessMsg.value = '';
@@ -381,8 +405,8 @@ async function submitWithdraw() {
       amount: withdrawAmount.value,
       paypalEmail: withdrawEmail.value,
     });
-    await loadPendingWithdrawals();
-    withdrawSuccessMsg.value = 'Your withdrawal request has been submitted and is pending admin approval.';
+    await reloadWallet(); // Reload wallet to update balance immediately
+    withdrawSuccessMsg.value = 'Your withdrawal has been processed successfully!';
     toast.add({ severity: 'success', summary: 'Success', detail: withdrawSuccessMsg.value, life: 3000 });
     showWithdrawModal.value = false;
   } catch (e: any) {
@@ -407,15 +431,22 @@ function closeWithdrawModal() {
 function validateWithdrawAmount() {
   withdrawAmountError.value = '';
   if (!withdrawAmount.value || withdrawAmount.value <= 0) {
-    withdrawAmountError.value = 'Amount must be greater than 0';
+    withdrawAmountError.value = 'Amount must be greater than $1';
   } else if (withdrawAmount.value > (wallet.value?.balance || 0)) {
-    withdrawAmountError.value = 'Insufficient balance';
+    withdrawAmountError.value = `Insufficient balance. You have ${formatCurrency(wallet.value?.balance || 0)} available.`;
   }
 }
 function validateWithdrawEmail() {
   withdrawEmailError.value = '';
   if (!withdrawEmail.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(withdrawEmail.value)) {
     withdrawEmailError.value = 'Invalid PayPal email';
+  }
+}
+
+function withdrawAll() {
+  if (wallet.value?.balance && wallet.value.balance > 0) {
+    withdrawAmount.value = wallet.value.balance;
+    validateWithdrawAmount();
   }
 }
 
@@ -430,10 +461,6 @@ function currencyClass(amount: number | undefined | null) {
   if (!amount || amount === 0) return 'currency-zero';
   return 'currency-positive';
 }
-
-const hasPendingWithdraw = computed(() => {
-  return pendingWithdrawals.value && pendingWithdrawals.value.some(txn => txn.status === 'Pending');
-});
 
 function handleWithdrawSubmit() {
   if (withdrawAmount.value > 100) {
@@ -454,7 +481,6 @@ function goToTransactionHistory() {
 
 onMounted(() => {
   reloadWallet();
-  loadPendingWithdrawals();
 });
 </script>
 
@@ -535,7 +561,7 @@ onMounted(() => {
   font-size: 2.7rem;
   font-weight: 800;
   color: #10b981;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -715,7 +741,7 @@ onMounted(() => {
   font-weight: 700;
   color: #2563eb;
   margin-bottom: 6px;
-  font-size: 1.08rem;
+  font-size: 1rem;
 }
 .lts-row {
   display: flex;
@@ -774,13 +800,13 @@ onMounted(() => {
   margin: 24px 0 16px 0;
 }
 @media (max-width: 700px) {
-  .wallet-finance-grid { grid-template-columns: 1fr; gap: 18px; }
+  .wallet-finance-grid { grid-template-columns: 1fr 1fr; gap: 18px; }
 }
 .mini-stat-card {
   background: #fff;
   border-radius: 20px; /* rounded-xl */
   box-shadow: 0 2px 12px rgba(37,99,235,0.07);
-  padding: 24px 18px 18px 18px;
+  padding: 18px 16px 16px 16px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -809,7 +835,7 @@ onMounted(() => {
 .mini-stat-card.pending .mini-stat-icon { background: #fef9c3; color: #f59e0b; }
 .mini-stat-card.hold .mini-stat-icon { background: #e0e7ff; color: #2563eb; }
 .mini-stat-label {
-  font-size: 1.01rem;
+  font-size: 0.95rem;
   color: #475569;
   font-weight: 500;
 }
@@ -894,9 +920,34 @@ onMounted(() => {
   /* Đảm bảo không bị lệch khi co nhỏ màn hình */
   box-sizing: border-box;
 }
-.form-group { margin-bottom: 12px; }
-.form-group label { font-weight: 600; margin-bottom: 4px; display: block; }
-.form-group input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0e7ef; font-size: 1.08rem; }
+.form-group {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-group label {
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: block;
+  color: #374151;
+  font-size: 0.95rem;
+}
+.form-group input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid #e5e7eb;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: #fafafa;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
 .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
 .pending-withdrawals-section { margin-top: 24px; }
 .pending-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -1041,6 +1092,13 @@ onMounted(() => {
   font-size: 1.1em;
   vertical-align: middle;
 }
+.paypal-icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  margin-right: 6px;
+  vertical-align: middle;
+}
 .fee-tooltip {
   margin-left: 4px;
   color: #f59e0b;
@@ -1050,26 +1108,26 @@ onMounted(() => {
 }
 .modal-content.withdraw-modal {
   background: #fff;
-  border-radius: 22px;
-  box-shadow: 0 12px 48px rgba(37,99,235,0.18), 0 2px 12px rgba(0,0,0,0.10);
-  padding: 56px 48px 40px 48px;
-  min-width: 420px;
-  max-width: 98vw;
-  width: 520px;
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(37,99,235,0.18), 0 4px 16px rgba(0,0,0,0.10);
+  padding: 40px 36px 32px 36px;
+  min-width: 400px;
+  max-width: 90vw;
+  width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
   align-items: stretch;
   margin: 0;
   box-sizing: border-box;
   position: relative;
-  animation: modal-pop 0.18s cubic-bezier(.4,1.4,.6,1) 1;
+  animation: modal-pop 0.25s cubic-bezier(.4,1.4,.6,1) 1;
 }
 @media (max-width: 700px) {
   .modal-content.withdraw-modal {
     min-width: 0;
-    width: 98vw;
-    padding: 28px 4vw 24px 4vw;
+    width: 95vw;
+    padding: 24px 3vw 20px 3vw;
   }
 }
 @keyframes modal-pop {
@@ -1134,7 +1192,7 @@ onMounted(() => {
 }
 .withdraw-admin-tip {
   color: #f59e0b;
-  font-size: 0.98rem;
+  font-size: 0.8rem;
   font-style: italic;
   margin-top: 2px;
   display: inline-block;
@@ -1238,12 +1296,7 @@ onMounted(() => {
   background: #bfdbfe;
   color: #1d4ed8;
 }
-.withdraw-fee-tip {
-  margin-top: 4px;
-  color: #b45309;
-  font-size: 0.98rem;
-  font-weight: 500;
-}
+/* .withdraw-fee-tip removed */
 .status-badge.hold {
   background: #e0e7ff;
   color: #6366f1;
@@ -1258,5 +1311,242 @@ onMounted(() => {
   font-size: 0.95rem;
   color: #6366f1;
   margin-top: 2px;
+}
+
+.amount-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.amount-input-group input {
+  flex: 1;
+  min-width: 0;
+}
+
+.withdraw-all-btn {
+  padding: 6px 12px;
+  background: #f3f4f6;
+  color: #2563eb;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.withdraw-all-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #1d4ed8;
+  border-color: #9ca3af;
+}
+
+.withdraw-all-btn:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  border-color: #e5e7eb;
+}
+
+/* Amount input improvements */
+.amount-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.currency-prefix {
+  position: absolute;
+  left: 14px;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 1rem;
+  z-index: 1;
+}
+
+.amount-input-wrapper input {
+  padding-left: 28px;
+}
+
+.withdraw-all-icon {
+  margin-right: 6px;
+  font-size: 1rem;
+}
+
+/* Email input improvements */
+.paypal-logo {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.paypal-logo svg {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+}
+
+.email-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.email-validation-indicator {
+  position: absolute;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.valid-email {
+  color: #10b981;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.invalid-email {
+  color: #ef4444;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.email-warning-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+}
+
+.warning-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.warning-content {
+  color: #991b1b;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* Button improvements */
+.btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 110px;
+  justify-content: center;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(37,99,235,0.4);
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 2px solid #e5e7eb;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.btn-icon {
+  font-size: 1rem;
+}
+
+/* Info tip improvements */
+.withdraw-info-tip {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  color: #0c4a6e;
+  font-size: 0.9rem;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  font-weight: 500;
+  flex-wrap: wrap;
+  border: 1px solid #bae6fd;
+}
+
+.withdraw-info-tip > span, .withdraw-info-tip > b, .withdraw-info-tip > div {
+  white-space: nowrap;
+}
+
+/* After fee tip improvements */
+.after-fee-tip {
+  color: #065f46;
+  font-size: 0.8rem;
+  margin-top: 10px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: inline-block;
+  border: 1px solid #6ee7b7;
+}
+
+/* Input error improvements */
+.input-error {
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-top: 6px;
+  font-weight: 500;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+/* Modal actions improvements */
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 18px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Responsive improvements */
+@media (max-width: 640px) {
+  .wallet-actions-upgrade .wallet-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

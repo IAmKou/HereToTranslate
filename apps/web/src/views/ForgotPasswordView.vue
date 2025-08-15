@@ -86,7 +86,7 @@
               <span class="input-icon"><i class="pi pi-lock"></i></span>
             </div>
             <p v-if="passwordTouched && !isNewPasswordValid" class="error-message">
-              <i class="pi pi-times-circle"></i> Password must be at least 6 characters
+              <i class="pi pi-times-circle"></i> Password must be at least 8 characters and include uppercase, lowercase, number, and special character
             </p>
             <p v-if="confirmTouched && !isPasswordValid" class="error-message">
               <i class="pi pi-times-circle"></i> Passwords do not match
@@ -134,7 +134,11 @@ const isEmailValid = computed(() => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)
 })
 const isCodeValid = computed(() => code.value.trim().length > 0)
-const isNewPasswordValid = computed(() => newPassword.value.length >= 6)
+const isNewPasswordValid = computed(() => {
+  const pwd = newPassword.value
+  // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+  return /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(pwd)
+})
 const isPasswordValid = computed(() => newPassword.value && confirmPassword.value && newPassword.value === confirmPassword.value)
 
 watch(step, async (val) => {

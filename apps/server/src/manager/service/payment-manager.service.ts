@@ -32,6 +32,15 @@ export class PaypalService {
   private accessToken: string;
   private readonly ADMIN_USER_ID = 1n;
 
+  private buildUrl(path: string): string {
+    const baseUrl = process.env.CLIENT_URL || 'http://localhost:4200';
+    // Remove trailing slash from baseUrl if it exists
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    // Remove leading slash from path if it exists
+    const cleanPath = path.replace(/^\/+/, '');
+    return `${cleanBaseUrl}/${cleanPath}`;
+  }
+
   constructor(
     @InjectRepository(TransactionEntity)
     private transactionRepo: Repository<TransactionEntity>,
@@ -153,8 +162,8 @@ export class PaypalService {
           },
         ],
         application_context: {
-          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
-          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
+          return_url: this.buildUrl('paypal-success'),
+          cancel_url: this.buildUrl('paypal/cancel'),
           brand_name: 'HereToTranslate',
           user_action: 'PAY_NOW',
         },
@@ -298,8 +307,8 @@ export class PaypalService {
           },
         ],
         application_context: {
-          return_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal-success`,
-          cancel_url: `${process.env.CLIENT_URL || 'http://localhost:4200'}/paypal/cancel`,
+          return_url: this.buildUrl('paypal-success'),
+          cancel_url: this.buildUrl('paypal/cancel'),
         },
       };
 
@@ -865,6 +874,29 @@ export class PaypalService {
     const userEntity = await this.userRepository.findOneOrFail({
       where: { id: userId },
     });
+
+    // Check if user has enough balance - use dynamic balance calculation
+    const userWallet = await this.walletManagerService.getOrCreateWallet(userId);
+    const walletDetails = await this.walletManagerService.getWalletDetails(userId);
+    
+    // Debug: log balance values and types
+    console.log('Withdraw - Balance check:', {
+      userId,
+      requestedAmount: amount,
+      requestedAmountType: typeof amount,
+      staticWalletBalance: userWallet.balance,
+      dynamicBalance: walletDetails.balance,
+      totalDeposits: walletDetails.totalDeposits,
+      totalWithdrawn: walletDetails.totalWithdrawn,
+      pendingWithdrawals: walletDetails.pendingWithdrawals,
+      holdAmount: walletDetails.holdAmount,
+      comparison: walletDetails.balance < amount
+    });
+    
+    if (walletDetails.balance < amount) {
+      throw new BadRequestException(`Insufficient balance for withdrawal. You have $${walletDetails.balance} but requested $${amount}`);
+    }
+
     let request: RequestEntity | undefined = undefined;
     if (requestId) {
       request = await this.requestRepository.findOneOrFail({
@@ -874,33 +906,117 @@ export class PaypalService {
 
     // Debug: log giá trị paypalEmail khi tạo transaction
     console.log('Withdraw - paypalEmail:', paypalEmail, 'DTO:', dto);
-    const transactionPayload: DeepPartial<TransactionEntity> = {
-      user: userEntity,
-      amount: -Math.abs(amount),
-      status: TransactionStatus.Pending,
-      paypalOrderId: paypalOrderId ?? undefined,
-      request,
-      paypalEmail,
-    };
 
-    const transaction = this.transactionRepo.create(transactionPayload);
-    await this.transactionRepo.save(transaction);
+    try {
+      // Process PayPal payout directly
+      const payoutResult = await this.processPayPalPayout(paypalEmail, amount, userId);
+      
+      if (!payoutResult.success) {
+        throw new BadRequestException(`PayPal payout failed: ${payoutResult.error}`);
+      }
 
-    // Debug: log transaction sau khi lưu
-    console.log('Saved transaction:', transaction);
+      // Create completed transaction
+      const transactionPayload: DeepPartial<TransactionEntity> = {
+        user: userEntity,
+        amount: -Math.abs(amount),
+        status: TransactionStatus.Completed,
+        paypalOrderId: paypalOrderId ?? undefined,
+        request,
+        paypalEmail,
+      };
 
-    // Create notification for admin about new withdrawal request
-    await this.notificationService.createNotification({
-      userId: this.ADMIN_USER_ID,
-      type: 'WITHDRAWAL_REQUESTED',
-      message: `New withdrawal request from ${userEntity.username || userEntity.email} for $${amount}`,
-      createdBy: userId,
-    });
+      const transaction = this.transactionRepo.create(transactionPayload);
+      await this.transactionRepo.save(transaction);
 
-    return transaction;
+      // Update user wallet balance
+      userWallet.balance = Number(userWallet.balance) - amount;
+      await this.walletRepository.save(userWallet);
+
+      // Update admin wallet (receive the withdrawn amount)
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      adminWallet.balance = Number(adminWallet.balance) + amount;
+      await this.walletRepository.save(adminWallet);
+
+      // Create notification for user about successful withdrawal
+      await this.notificationService.createNotification({
+        userId: userId,
+        type: 'WITHDRAWAL_COMPLETED',
+        message: `Your withdrawal of $${amount} has been processed successfully via PayPal.`,
+        createdBy: userId,
+      });
+
+      // Debug: log transaction sau khi lưu
+      console.log('Saved completed withdrawal transaction:', transaction);
+
+      return transaction;
+
+    } catch (error) {
+      console.error('Withdrawal failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new BadRequestException(`Withdrawal failed: ${errorMessage}`);
+    }
+  }
+
+  private async processPayPalPayout(paypalEmail: string, amount: number, userId: bigint) {
+    try {
+      // Use the existing getAccessToken method to avoid URL issues
+      const accessToken = await this.getAccessToken();
+      console.log('[PayPal] Processing direct payout with access token:', accessToken.slice(0, 12) + '...');
+      console.log('[PayPal] Payout endpoint:', `${this.api}/v1/payments/payouts`);
+      console.log('[PayPal] Payout to email:', paypalEmail, 'Amount:', amount);
+
+      const payoutData = {
+        sender_batch_header: {
+          sender_batch_id: `user_withdrawal_${userId}_${Date.now()}`,
+          email_subject: 'Your withdrawal has been processed!',
+          email_message: 'You have received your withdrawal via PayPal.',
+        },
+        items: [
+          {
+            recipient_type: 'EMAIL',
+            amount: {
+              value: amount.toFixed(2),
+              currency: 'USD',
+            },
+            note: 'Direct withdrawal processed.',
+            receiver: paypalEmail,
+            sender_item_id: `withdrawal_${userId}_${Date.now()}`,
+          },
+        ],
+      };
+
+      const res = await axios.post(
+        `${this.api}/v1/payments/payouts`,
+        payoutData,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (res.status !== 201) {
+        throw new Error('PayPal payout failed with status: ' + res.status);
+      }
+
+      console.log('[PayPal] Direct payout successful:', res.data);
+      return { success: true, payoutId: res.data.batch_header.payout_batch_id };
+
+    } catch (err) {
+      console.error('PayPal direct payout failed:', err);
+      if (axios.isAxiosError(err)) {
+        const errorMessage = err.response?.data?.message || err.message;
+        return { success: false, error: `PayPal API error: ${errorMessage}` };
+      }
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      return { success: false, error: errorMessage };
+    }
   }
 
   async approveWithdrawal(transactionId: number): Promise<TransactionEntity> {
+    // Note: This method is now mainly for handling legacy pending withdrawal requests
+    // since users can now withdraw directly. It may be deprecated in the future.
     const transaction = await this.transactionRepo.findOneOrFail({
       where: { id: transactionId },
       relations: ['user', 'request', 'request.assignee'],
@@ -917,25 +1033,12 @@ export class PaypalService {
     const paypalEmail = userWallet.paypalEmail || transaction.user.email;
     const amount = Math.abs(Number(transaction.amount));
 
-    // Luôn lấy access token mới cho payout
-    const auth = Buffer.from(
-      `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`
-    ).toString('base64');
-    const tokenRes = await axios.post(
-      `${process.env.PAYPAL_API}/v1/oauth2/token`,
-      'grant_type=client_credentials',
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
-    );
-    const accessToken = tokenRes.data.access_token;
+    // Use the existing getAccessToken method to avoid URL issues
+    const accessToken = await this.getAccessToken();
     console.log('[PayPal] Access token:', accessToken.slice(0, 12) + '...');
     console.log(
       '[PayPal] Payout endpoint:',
-      `${process.env.PAYPAL_API}/v1/payments/payouts`
+      `${this.api}/v1/payments/payouts`
     );
     console.log('[PayPal] Payout to email:', paypalEmail);
 
@@ -961,7 +1064,7 @@ export class PaypalService {
 
     try {
       const res = await axios.post(
-        `${process.env.PAYPAL_API}/v1/payments/payouts`,
+        `${this.api}/v1/payments/payouts`,
         payoutData,
         {
           headers: {
@@ -1007,11 +1110,12 @@ export class PaypalService {
   }
 
   async getAllPendingWithdrawals() {
+    // Since users can now withdraw directly, this method now returns all withdrawal history
+    // for admin monitoring purposes
     const txns = await this.transactionRepo
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.user', 'user')
       .where('t.amount < 0')
-      .andWhere('t.status = :status', { status: TransactionStatus.Pending })
       .orderBy('t.createdAt', 'DESC')
       .getMany();
     return txns.map((txn) => ({

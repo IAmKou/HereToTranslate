@@ -122,10 +122,11 @@ export class WalletManagerService implements OnModuleInit {
   }
 
   async getPendingWithdrawals(userId: bigint): Promise<TransactionEntity[]> {
+    // Since users can now withdraw directly, this method now returns all withdrawal history
+    // for better user experience and transparency
     return this.transactionRepository.createQueryBuilder('t')
       .where('t.userId = :userId', { userId })
       .andWhere('t.amount < 0')
-      .andWhere('t.status = :status', { status: TransactionStatus.Pending })
       .orderBy('t.createdAt', 'DESC')
       .getMany();
   }

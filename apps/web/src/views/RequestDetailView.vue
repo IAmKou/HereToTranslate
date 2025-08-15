@@ -288,13 +288,33 @@
               </div>
               <div class="requester-block">
                 <div class="avatar-container" @click="viewProfile(request?.requester?.id)" title="View Profile">
-                  <Avatar
-                    :image="request?.requester?.avatar"
-                    :label="getInitial(request?.requester?.fullName || request?.requester?.username)"
-                    shape="circle"
-                    size="large"
-                    class="avatar-bordered"
-                  />
+                  <div v-if="request?.requester?.avatarUrl" class="avatar-wrapper">
+                    <img
+                      :src="getFullAvatarUrl(request?.requester?.avatarUrl)"
+                      :alt="request?.requester?.fullName || request?.requester?.username"
+                      class="avatar-img"
+                      @error="(e: Event) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const nextSibling = target.nextElementSibling as HTMLElement;
+                        if (nextSibling) nextSibling.style.display = 'flex';
+                      }"
+                    />
+                    <div
+                      class="avatar-text"
+                      :style="{ backgroundColor: getRandomColor(request?.requester?.username || request?.requester?.id) }"
+                      style="display: none;"
+                    >
+                      {{ getInitial(request?.requester?.fullName || request?.requester?.username) }}
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="avatar-text"
+                    :style="{ backgroundColor: getRandomColor(request?.requester?.username || request?.requester?.id) }"
+                  >
+                    {{ getInitial(request?.requester?.fullName || request?.requester?.username) }}
+                  </div>
                   <div class="avatar-overlay">
                     <i class="pi pi-external-link"></i>
                   </div>
@@ -315,6 +335,8 @@
                     <span v-else>N/A</span>
                   </span>
                 </div>
+
+
               </div>
             </div>
             <!-- Assigned Translator Card (only if exists) -->
@@ -325,13 +347,33 @@
               </div>
               <div class="requester-block">
                 <div class="avatar-container" @click="viewProfile(request?.assignee?.id)" title="View Profile">
-                  <Avatar
-                    :image="request.assignee?.avatar"
-                    :label="getInitial(request.assignee?.username)"
-                    shape="circle"
-                    size="large"
-                    class="avatar-bordered translator-avatar"
-                  />
+                  <div v-if="request.assignee?.avatarUrl" class="avatar-wrapper">
+                    <img
+                      :src="getFullAvatarUrl(request.assignee?.avatarUrl)"
+                      :alt="request.assignee?.fullName || request.assignee?.username"
+                      class="avatar-img"
+                      @error="(e: Event) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const nextSibling = target.nextElementSibling as HTMLElement;
+                        if (nextSibling) nextSibling.style.display = 'flex';
+                      }"
+                    />
+                    <div
+                      class="avatar-text"
+                      :style="{ backgroundColor: getRandomColor(request.assignee?.username || request.assignee?.id) }"
+                      style="display: none;"
+                    >
+                      {{ getInitial(request.assignee?.username) }}
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="avatar-text"
+                    :style="{ backgroundColor: getRandomColor(request.assignee?.username || request.assignee?.id) }"
+                  >
+                    {{ getInitial(request.assignee?.username) }}
+                  </div>
                   <div class="avatar-overlay">
                     <i class="pi pi-external-link"></i>
                   </div>
@@ -352,6 +394,8 @@
                     <span v-else>N/A</span>
                   </span>
                 </div>
+
+
               </div>
             </div>
             <!-- Actions Card -->
@@ -459,7 +503,7 @@ interface UserInfo {
   fullName?: string;
   email: string;
   phone?: string;
-  avatar?: string;
+  avatarUrl?: string;
   createdAt?: string;
   role?: string;
   company?: string;
@@ -493,7 +537,7 @@ interface UserInfo {
   fullName?: string;
   email: string;
   phone?: string;
-  avatar?: string;
+  avatarUrl?: string;
   createdAt?: string;
   role?: string;
   company?: string;
@@ -627,7 +671,50 @@ function statusClass(status: string) {
   }[status] || 'pending';
 }
 function getInitial(name: string | undefined) {
-  return name ? name.charAt(0).toUpperCase() : '?';
+  if (!name) return '?';
+  // Lấy 2 ký tự đầu tiên nếu có thể
+  const initials = name.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+  return initials.length >= 2 ? initials.substring(0, 2) : initials;
+}
+
+function getFullAvatarUrl(avatarUrl?: string) {
+  if (!avatarUrl) {
+    return '';
+  }
+  if (avatarUrl.startsWith('http')) {
+    return avatarUrl;
+  }
+  if (avatarUrl.startsWith('data:')) {
+    return avatarUrl; // Data URL từ preview
+  }
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const fullUrl = base + '/users' + avatarUrl;
+  return fullUrl;
+}
+
+function getRandomColor(username: string | number) {
+  const colors = [
+    '#3b82f6', // blue
+    '#10b981', // green
+    '#f59e0b', // yellow
+    '#ef4444', // red
+    '#8b5cf6', // purple
+    '#ec4899', // pink
+    '#06b6d4', // cyan
+    '#84cc16', // lime
+    '#f97316', // orange
+    '#8b5cf6', // violet
+  ];
+
+  // Tạo hash từ username để có màu nhất quán
+  const hash = String(username).split('').reduce((a, b) => {
+    a = ((a << 5) - a + b.charCodeAt(0)) & 0xffffffff;
+    return a;
+  }, 0);
+
+  return colors[Math.abs(hash) % colors.length];
 }
 
 function getLanguageName(code: string): string {
@@ -788,6 +875,9 @@ async function fetchRequestDetail() {
     console.log('Target language (singular):', res.data.targetLanguage);
     console.log('Assignee data:', res.data.assignee);
     console.log('Assignee username:', res.data.assignee?.username);
+
+
+
     request.value = res.data;
   } catch (e) {
     console.error('Error fetching request detail:', e);
@@ -845,6 +935,8 @@ onMounted(async () => {
   userId.value = user?.id ?? null;
   await fetchRequestDetail();
 });
+
+
 </script>
 
 <style scoped>
@@ -1212,15 +1304,45 @@ body, .request-detail-wrapper {
   cursor: pointer;
   transition: transform 0.2s;
 }
+
 .avatar-container:hover {
   transform: scale(1.05);
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.avatar-bordered {
+
+.avatar-wrapper {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
   border: 3px solid #e0e7ff;
   box-shadow: 0 2px 8px rgba(59,130,246,0.10);
 }
-.translator-avatar {
+
+.avatar-text {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #e0e7ff;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.10);
+  min-width: 64px;
+  min-height: 64px;
+}
+
+.translator-avatar .avatar-img,
+.translator-avatar .avatar-text {
   border-color: #d1fae5;
   box-shadow: 0 2px 8px rgba(16,185,129,0.10);
 }

@@ -724,7 +724,12 @@ function getJoinedDateValue(member: any): string | null {
 // Helper to get avatar text safely
 function getAvatarText(user: User) {
   const name = user?.fullName || user?.username || user?.email || user?.phone || '';
-  return name ? name.charAt(0).toUpperCase() : '?';
+  if (name) {
+    // Lấy 2 ký tự đầu tiên nếu có thể
+    const initials = name.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+    return initials.length >= 2 ? initials.substring(0, 2) : initials;
+  }
+  return '?';
 }
 
 // Helper to get full avatar URL
@@ -750,6 +755,10 @@ function getRandomColor(seed: string): string {
     '#ef4444', // red
     '#8b5cf6', // purple
     '#ec4899', // pink
+    '#06b6d4', // cyan
+    '#84cc16', // lime
+    '#f97316', // orange
+    '#8b5cf6', // violet
   ];
   const index = seed.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
   return colors[index % colors.length];
@@ -2415,6 +2424,11 @@ watch(() => props.members, (val) => {
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #7f53ac 0%, #4299e1 100%);
+  border: 2px solid #e0e7ef;
+  box-shadow: 0 2px 6px #3182ce22;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  min-width: 1.5rem;
+  min-height: 1.5rem;
 }
 
 .user-info {

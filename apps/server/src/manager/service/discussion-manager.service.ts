@@ -151,7 +151,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       uid,
       threadId
     );
-    if (!resultPermission.has(PermissionFlags.ViewThread)) {
+    if (!resultPermission.has(PermissionFlags.ViewThread) && !resultPermission.has(PermissionFlags.ManageDiscussions)) {
       throw new ForbiddenException(
         'You do not have permission to view this discussion'
       );
@@ -165,7 +165,6 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
         'comments.upvotes',
         'comments.downvotes',
       ],
-      // Bỏ select để trả về đầy đủ thông tin author
     });
   }
   async fetchDiscussions(uid: Maybe<bigint>, projectId: bigint) {
@@ -192,7 +191,7 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
           })
         )
       ).filter((thread) =>
-        thread.userPermission.has(PermissionFlags.ViewThread)
+        thread.userPermission.has(PermissionFlags.ViewThread) || thread.userPermission.has(PermissionFlags.ManageDiscussions)
       );
     } catch (error) {
       this.unknownErrorHanlder(error, 'Failed to fetch discussions');
@@ -433,24 +432,16 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
   ) {
     const comment = await this.discussionCommentRepository.findOne({
       where: { id: commentId, thread: { id: threadId } },
-      select: ['author'],
+      relations: ['author'],
     });
     if (!comment) {
       throw new NotFoundException('Unknown comment');
     }
 
     const { content } = commentUpdateData;
-    const resultPermission = await this.getUserPermissionForThread(
-      uid,
-      threadId
-    );
-    if (!resultPermission.has(PermissionFlags.PostComment)) {
-      throw new ForbiddenException(
-        'You do not have permission to edit comments in this discussion'
-      );
-    }
 
-    if (comment.author.id !== uid) {
+    // Chỉ comment author mới được edit comment
+    if (!comment.author || comment.author.id !== uid) {
       throw new ForbiddenException('You are not the author of this comment');
     }
 
@@ -463,31 +454,34 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       );
     }
 
-    return await this.discussionCommentRepository.save({
-      id: commentId,
-      content,
-      isEdited: true,
-    });
+    return await this.discussionCommentRepository.update(
+      { id: commentId },
+      {
+        content,
+        isEdited: true,
+      }
+    );
   }
   async deleteDiscussionComment(
     uid: bigint,
     threadId: bigint,
     commentId: bigint
   ) {
-    const commentExists = await this.discussionCommentRepository.exists({
+    const comment = await this.discussionCommentRepository.findOne({
       where: { id: commentId, thread: { id: threadId } },
+      relations: ['author', 'thread'],
     });
-    if (!commentExists) {
+    if (!comment) {
       throw new NotFoundException('Unknown comment');
     }
 
-    const resultPermission = await this.getUserPermissionForThread(
-      uid,
-      threadId
-    );
-    if (!resultPermission.has(PermissionFlags.ManageComments)) {
+    // Kiểm tra quyền: comment author hoặc discussion owner
+    const isCommentAuthor = comment.author && comment.author.id === uid;
+    const isDiscussionOwner = comment.thread.author && comment.thread.author.id === uid;
+
+    if (!isCommentAuthor && !isDiscussionOwner) {
       throw new ForbiddenException(
-        'You do not have permission to delete comments in this discussion'
+        'You do not have permission to delete this comment'
       );
     }
 

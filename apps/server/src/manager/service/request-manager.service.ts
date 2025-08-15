@@ -64,7 +64,7 @@ export class RequestManagerService {
     const { title, description, dealAmount, deadline: deadlineRaw } = dto;
     const deadline = new Date(deadlineRaw);
 
-    if (deadline.getTime() - Date.now() < 7 * DAY) {
+    if (deadline.getTime() - Date.now() < 2 * DAY) {
       throw new BadRequestException('Deadline must be at least 7 days from now');
     }
 
@@ -366,11 +366,14 @@ export class RequestManagerService {
         'requester.fullName',
         'requester.email',
         'requester.phone',
+        'requester.avatarUrl',
 
         'assignee.id',
+        'assignee.username',
         'assignee.fullName',
         'assignee.email',
         'assignee.phone',
+        'assignee.avatarUrl',
 
         'category.name',
 
@@ -774,7 +777,7 @@ export class RequestManagerService {
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      logger.error('Accept private request failed:' + err);
+      logger.error('Accept private request failed:', err);
       throw new InternalServerErrorException('Failed to accept private request');
     } finally {
       await queryRunner.release();

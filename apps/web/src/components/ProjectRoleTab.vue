@@ -27,6 +27,7 @@ interface User {
   phone?: string;
   fullName?: string;
   username?: string;
+  avatarUrl?: string;
   roles?: Role[];
   selectedRole?: string;
 }
@@ -446,7 +447,52 @@ function sortBy(key: 'name' | 'roles') {
 // Helper to get avatar text safely
 function getAvatarText(user: User) {
   const name = user?.fullName || user?.username || user?.email || user?.phone || '';
-  return name ? name.charAt(0).toUpperCase() : '?';
+  if (name) {
+    // Lấy 2 ký tự đầu tiên nếu có thể
+    const initials = name.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+    return initials.length >= 2 ? initials.substring(0, 2) : initials;
+  }
+  return '?';
+}
+
+function getFullAvatarUrl(avatarUrl?: string) {
+  if (!avatarUrl) {
+    return '';
+  }
+  if (avatarUrl.startsWith('http')) {
+    return avatarUrl;
+  }
+  if (avatarUrl.startsWith('data:')) {
+    return avatarUrl; // Data URL từ preview
+  }
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const fullUrl = base + '/users' + avatarUrl;
+  return fullUrl;
+}
+
+function getRandomColor(username: string | number) {
+  const colors = [
+    '#3b82f6', // blue
+    '#10b981', // green
+    '#f59e0b', // yellow
+    '#ef4444', // red
+    '#8b5cf6', // purple
+    '#ec4899', // pink
+    '#06b6d4', // cyan
+    '#84cc16', // lime
+    '#f97316', // orange
+    '#8b5cf6', // violet
+  ];
+
+  // Tạo hash từ username để có màu nhất quán
+  const hash = String(username).split('').reduce((a, b) => {
+    a = ((a << 5) - a + b.charCodeAt(0)) & 0xffffffff;
+    return a;
+  }, 0);
+
+  return colors[Math.abs(hash) % colors.length];
 }
 
 const permissionBitmaskMap = availablePermissions.reduce((map, perm, index) => {
@@ -988,7 +1034,33 @@ watch([currentMember, currentUserId, canManageRoles], () => {
               <td>{{ idx + 1 }}</td>
               <td>
                 <div :title="member.fullName + ' - ' + member.email" class="user-cell">
-                  <div class="user-avatar">{{ (member.fullName || member.username).charAt(0).toUpperCase() }}</div>
+                  <div v-if="member.avatarUrl" class="user-avatar-wrapper">
+                    <img
+                      :src="getFullAvatarUrl(member.avatarUrl)"
+                      :alt="member.fullName || member.username"
+                      class="user-avatar-img"
+                      @error="(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const nextSibling = target.nextElementSibling as HTMLElement;
+                        if (nextSibling) nextSibling.style.display = 'flex';
+                      }"
+                    />
+                    <div
+                      class="user-avatar-text"
+                      :style="{ backgroundColor: getRandomColor(member.username || member.id) }"
+                      style="display: none;"
+                    >
+                      {{ getAvatarText(member) }}
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="user-avatar-text"
+                    :style="{ backgroundColor: getRandomColor(member.username || member.id) }"
+                  >
+                    {{ getAvatarText(member) }}
+                  </div>
                   <div class="user-info">
                     <div class="user-name">{{ member.fullName || member.username }}</div>
                     <div class="user-email">{{ member.email }}</div>
@@ -1815,6 +1887,39 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   gap: 0.6rem;
 }
 
+.user-avatar-wrapper {
+  position: relative;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin-right: 0.6rem;
+  flex-shrink: 0;
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e7ff;
+  box-shadow: 0 2px 6px rgba(59,130,246,0.15);
+}
+
+.user-avatar-text {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #e0e7ff;
+  box-shadow: 0 2px 6px rgba(59,130,246,0.15);
+  min-width: 1.8rem;
+  min-height: 1.8rem;
+}
+
 .user-avatar {
   width: 1.8rem;
   height: 1.8rem;
@@ -1827,6 +1932,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px #3182ce22;
+  margin-right: 0.6rem;
 }
 
 .user-info {
@@ -2117,7 +2223,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .btn-primary {
   background: linear-gradient(135deg, #38b2ac 0%, #4299e1 100%) !important;
   color: #fff !important;
-  box-shadow: 0 1px 4px #4299e133 !important;
+  box-shadow: 0 1px 3px #4299e133 !important;
   border: 1px solid #4299e1 !important;
 }
 

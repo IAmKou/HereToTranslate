@@ -90,10 +90,10 @@ export class UserController {
     console.log('[UPLOAD AVATAR]', { userId: req.user.id, avatarUrl, file });
 
     try {
-      // Lưu file và data vào database
+      // Chỉ lưu vào database, không lưu vào disk
       await this.users.updateAvatarWithData(req.user.id, avatarUrl, file.buffer, file.mimetype);
 
-      console.log('[UPLOAD AVATAR] File saved to database');
+      console.log('[UPLOAD AVATAR] File saved to database only');
 
       return { avatarUrl };
     } catch (error) {

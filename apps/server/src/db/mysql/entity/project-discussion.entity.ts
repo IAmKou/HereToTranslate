@@ -42,7 +42,6 @@ export class ProjectDiscussionThreadEntity {
 }
 
 @Entity('comments')
-@Unique(['thread'])
 export class ProjectDiscussionCommentEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;

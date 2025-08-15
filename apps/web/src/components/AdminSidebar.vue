@@ -51,11 +51,6 @@
           <span class="menu-text">Settings</span>
         </router-link>
 
-        <router-link to="/admin/withdrawals" class="menu-item" :title="isCollapsed ? 'Withdraw Approvals' : ''">
-          <span class="material-icons">account_balance_wallet</span>
-          <span class="menu-text">Withdraw Approvals</span>
-          <span v-if="pendingCount > 0" class="sidebar-badge">{{ pendingCount }}</span>
-        </router-link>
         <router-link to="/admin/transactions" class="menu-item" :title="isCollapsed ? 'Transaction History' : ''">
           <span class="material-icons">history</span>
           <span class="menu-text">Transaction History</span>

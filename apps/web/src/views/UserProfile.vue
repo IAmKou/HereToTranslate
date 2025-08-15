@@ -11,7 +11,15 @@
               <!-- Avatar Card -->
               <div class="avatar-card card-header">
                 <div class="avatar-wrapper">
-                  <img v-if="fullAvatarUrl" :src="fullAvatarUrl" alt="Avatar" class="avatar" @click="triggerAvatarUpload" />
+                  <img
+                    v-if="fullAvatarUrl"
+                    :src="fullAvatarUrl"
+                    alt="Avatar"
+                    class="avatar"
+                    @click="triggerAvatarUpload"
+                    @load="() => console.log('🟣 [DEBUG] Avatar image loaded successfully:', fullAvatarUrl)"
+                    @error="(e: Event) => console.error('🟣 [DEBUG] Avatar image failed to load:', fullAvatarUrl, e)"
+                  />
                   <div v-else class="avatar avatar-fallback" @click="triggerAvatarUpload">
                     <i class="pi pi-user"></i>
                   </div>
@@ -38,120 +46,134 @@
 
               <!-- Change Password Card -->
               <div class="profile-card password-card">
-                <div class="section-header">
-                  <i class="pi pi-shield"></i>
-                  <h3>Password Security</h3>
+                <div class="section-header password-section-header">
+                  <div class="header-left">
+                    <i class="pi pi-shield"></i>
+                    <h3>Password Security</h3>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-secondary toggle-password-btn"
+                    @click="togglePasswordForm"
+                    :aria-label="showPasswordForm ? 'Hide password form' : 'Show password form'"
+                  >
+                    <i :class="showPasswordForm ? 'pi pi-eye-slash' : 'pi pi-key'"></i>
+                    <span>{{ showPasswordForm ? 'Hide' : 'Change Password' }}</span>
+                  </button>
                 </div>
-                <form @submit.prevent="changePassword" class="password-form" :class="{ 'shake': shakePassword }">
-                  <div class="form-group">
-                    <label for="currentPassword" class="input-label"><i class="pi pi-lock"></i> Current Password</label>
-                    <div class="input-wrapper">
-                      <input
-                        :type="showCurrentPassword ? 'text' : 'password'"
-                        id="currentPassword"
-                        v-model="passwordForm.currentPassword"
-                        placeholder="Enter your current password"
-                        required
-                        aria-label="Current Password"
-                        tabindex="0"
-                      />
-                      <button
-                        type="button"
-                        class="toggle-password"
-                        @click="showCurrentPassword = !showCurrentPassword"
-                        :aria-label="showCurrentPassword ? 'Hide password' : 'Show password'"
-                        tabindex="0"
-                      >
-                        <i :class="showCurrentPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
-                      </button>
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label for="newPassword" class="input-label"><i class="pi pi-key"></i> New Password</label>
-                    <div class="input-wrapper">
-                      <input
-                        :type="showNewPassword ? 'text' : 'password'"
-                        id="newPassword"
-                        v-model="passwordForm.newPassword"
-                        placeholder="Enter your new password"
-                        required
-                        aria-label="New Password"
-                        tabindex="0"
-                        @focus="showPasswordRequirements = true"
-                        @input="showPasswordRequirements = true"
-                        @blur="showPasswordRequirements = false"
-                      />
-                      <button
-                        type="button"
-                        class="toggle-password"
-                        @click="showNewPassword = !showNewPassword"
-                        :aria-label="showNewPassword ? 'Hide password' : 'Show password'"
-                        tabindex="0"
-                      >
-                        <i :class="showNewPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
-                      </button>
-                    </div>
-                  </div>
-                  <div v-if="passwordError" class="error-message">{{ passwordError }}</div>
-                  <transition name="fade-slide" mode="out-in">
-                    <div v-if="showPasswordRequirements" class="password-requirements">
-                      <div class="requirements-header">
-                        <i class="pi pi-info-circle"></i>
-                        <span>Password Requirements</span>
+
+                <div v-if="showPasswordForm" class="password-form-container">
+                  <form @submit.prevent="changePassword" class="password-form" :class="{ 'shake': shakePassword }">
+                    <div class="form-group">
+                      <label for="currentPassword" class="input-label"><i class="pi pi-lock"></i> Current Password</label>
+                      <div class="input-wrapper">
+                        <input
+                          :type="showCurrentPassword ? 'text' : 'password'"
+                          id="currentPassword"
+                          v-model="passwordForm.currentPassword"
+                          placeholder="Enter your current password"
+                          required
+                          aria-label="Current Password"
+                          tabindex="0"
+                        />
+                        <button
+                          type="button"
+                          class="toggle-password"
+                          @click="showCurrentPassword = !showCurrentPassword"
+                          :aria-label="showCurrentPassword ? 'Hide password' : 'Show password'"
+                          tabindex="0"
+                        >
+                          <i :class="showCurrentPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+                        </button>
                       </div>
-                      <div class="requirements-grid">
-                        <div :class="['requirement-item', { met: passwordForm.newPassword.length >= 8 }]">
-                          <i :class="passwordForm.newPassword.length >= 8 ? 'pi pi-check' : 'pi pi-circle'"></i>
-                          <span>At least 8 characters</span>
-                        </div>
-                        <div :class="['requirement-item', { met: /[A-Z]/.test(passwordForm.newPassword) }]">
-                          <i :class="/[A-Z]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
-                          <span>One uppercase letter</span>
-                        </div>
-                        <div :class="['requirement-item', { met: /[a-z]/.test(passwordForm.newPassword) }]">
-                          <i :class="/[a-z]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
-                          <span>One lowercase letter</span>
-                        </div>
-                        <div :class="['requirement-item', { met: /[0-9]/.test(passwordForm.newPassword) }]">
-                          <i :class="/[0-9]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
-                          <span>One number</span>
-                        </div>
-                        <div :class="['requirement-item', { met: /[^A-Za-z0-9]/.test(passwordForm.newPassword) }]">
-                          <i :class="/[^A-Za-z0-9]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
-                          <span>One special character</span>
-                        </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="newPassword" class="input-label"><i class="pi pi-key"></i> New Password</label>
+                      <div class="input-wrapper">
+                        <input
+                          :type="showNewPassword ? 'text' : 'password'"
+                          id="newPassword"
+                          v-model="passwordForm.newPassword"
+                          placeholder="Enter your new password"
+                          required
+                          aria-label="New Password"
+                          tabindex="0"
+                          @focus="showPasswordRequirements = true"
+                          @input="showPasswordRequirements = true"
+                          @blur="onNewPasswordBlur"
+                        />
+                        <button
+                          type="button"
+                          class="toggle-password"
+                          @click="showNewPassword = !showNewPassword"
+                          :aria-label="showNewPassword ? 'Hide password' : 'Show password'"
+                          tabindex="0"
+                        >
+                          <i :class="showNewPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+                        </button>
                       </div>
-                      <div class="password-strength">
-                        <div class="strength-label">
-                          <span>Password Strength:</span>
-                          <span :class="['strength-text', strengthClass]">{{ strengthText }}</span>
+                    </div>
+                    <div v-if="passwordError" class="error-message">{{ passwordError }}</div>
+                    <transition name="fade-slide" mode="out-in">
+                      <div v-if="showPasswordRequirements" class="password-requirements">
+                        <div class="requirements-header">
+                          <i class="pi pi-info-circle"></i>
+                          <span>Password Requirements</span>
                         </div>
-                        <div class="strength-bar-container">
-                          <div class="strength-bar">
-                            <div
-                              :class="['strength-fill', strengthClass]"
-                              :style="{width: passwordStrength + '%'}"
-                            ></div>
+                        <div class="requirements-grid">
+                          <div :class="['requirement-item', { met: passwordForm.newPassword.length >= 8 }]">
+                            <i :class="passwordForm.newPassword.length >= 8 ? 'pi pi-check' : 'pi pi-circle'"></i>
+                            <span>At least 8 characters</span>
+                          </div>
+                          <div :class="['requirement-item', { met: /[A-Z]/.test(passwordForm.newPassword) }]">
+                            <i :class="/[A-Z]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
+                            <span>One uppercase letter</span>
+                          </div>
+                          <div :class="['requirement-item', { met: /[a-z]/.test(passwordForm.newPassword) }]">
+                            <i :class="/[a-z]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
+                            <span>One lowercase letter</span>
+                          </div>
+                          <div :class="['requirement-item', { met: /[0-9]/.test(passwordForm.newPassword) }]">
+                            <i :class="/[0-9]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
+                            <span>One number</span>
+                          </div>
+                          <div :class="['requirement-item', { met: /[^A-Za-z0-9]/.test(passwordForm.newPassword) }]">
+                            <i :class="/[^A-Za-z0-9]/.test(passwordForm.newPassword) ? 'pi pi-check' : 'pi pi-circle'"></i>
+                            <span>One special character</span>
+                          </div>
+                        </div>
+                        <div class="password-strength">
+                          <div class="strength-label">
+                            <span>Password Strength:</span>
+                            <span :class="['strength-text', strengthClass]">{{ strengthText }}</span>
+                          </div>
+                          <div class="strength-bar-container">
+                            <div class="strength-bar">
+                              <div
+                                :class="['strength-fill', strengthClass]"
+                                :style="{width: passwordStrength + '%'}"
+                              ></div>
+                            </div>
                           </div>
                         </div>
                       </div>
+                    </transition>
+                    <div class="form-actions" v-if="showPasswordForm">
+                      <button type="submit" class="btn-primary" :disabled="isLoading || !isPasswordValid" @click="logUpdatePasswordClick">
+                        <i v-if="!isLoading" class="pi pi-shield"></i>
+                        <span v-if="!isLoading">Update Password</span>
+                        <div v-else class="loading-spinner"></div>
+                      </button>
                     </div>
-                  </transition>
-                  <div class="form-actions" v-if="showPasswordRequirements">
-                    <button type="submit" class="btn-primary" :disabled="isLoading || !isPasswordValid">
-                      <i v-if="!isLoading" class="pi pi-shield"></i>
-                      <span v-if="!isLoading">Update Password</span>
-                      <div v-else class="loading-spinner"></div>
-                    </button>
-                  </div>
-                  <div v-if="passwordSuccess" class="success-message">
-                    <i class="pi pi-check-circle"></i>
-                    <div>
-                      <strong>Password Updated!</strong>
-                      <p>Your password has been successfully changed.</p>
+                    <div v-if="passwordSuccess" class="success-message">
+                      <i class="pi pi-check-circle"></i>
+                      <div>
+                        <strong>Password Updated!</strong>
+                        <p>Your password has been successfully changed.</p>
+                      </div>
                     </div>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             </div>
 
@@ -293,6 +315,37 @@ const shakePassword = ref(false);
 const shakeProfile = ref(false);
 const isSidebarCollapsed = ref(false);
 const showPasswordRequirements = ref(false);
+const showPasswordForm = ref(false);
+
+const logUpdatePasswordClick = () => {
+  console.log('🟣 [DEBUG] Update Password clicked', {
+    isLoading: isLoading.value,
+    isPasswordValid: isPasswordValid.value,
+    currentPasswordLength: passwordForm.value.currentPassword.length,
+    newPasswordLength: passwordForm.value.newPassword.length,
+    showPasswordRequirements: showPasswordRequirements.value
+  });
+};
+
+const onNewPasswordBlur = () => {
+  // Giữ nút Update luôn hiển thị khi đã mở form đổi mật khẩu
+  showPasswordRequirements.value = true;
+};
+
+const togglePasswordForm = () => {
+  showPasswordForm.value = !showPasswordForm.value;
+  if (!showPasswordForm.value) {
+    // Reset form khi ẩn
+    passwordForm.value = {
+      currentPassword: '',
+      newPassword: '',
+    };
+    passwordError.value = '';
+    showPasswordRequirements.value = false;
+    showCurrentPassword.value = false;
+    showNewPassword.value = false;
+  }
+};
 
 const userInitials = computed(() => {
   if (!user.value.fullName) return '';
@@ -304,11 +357,35 @@ const userInitials = computed(() => {
 });
 
 const fullAvatarUrl = computed(() => {
-  if (!user.value.avatarUrl) return null;
-  if (user.value.avatarUrl.startsWith('http')) return user.value.avatarUrl;
-  // Lấy baseURL từ env hoặc mặc định
-  const base = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3000';
-  return base + user.value.avatarUrl;
+  console.log('🟣 [DEBUG] fullAvatarUrl computed - avatarUrl:', avatarUrl.value);
+  console.log('🟣 [DEBUG] fullAvatarUrl computed - user.avatarUrl:', user.value.avatarUrl);
+
+  // Ưu tiên avatarUrl.value (avatar mới upload) trước
+  if (avatarUrl.value) {
+    if (avatarUrl.value.startsWith('data:')) return avatarUrl.value; // Data URL từ preview
+    if (avatarUrl.value.startsWith('http')) return avatarUrl.value; // Full URL
+    // Relative URL từ server - sử dụng endpoint database
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const result = base + '/users' + avatarUrl.value + '?t=' + Date.now(); // Force refresh
+    console.log('🟣 [DEBUG] fullAvatarUrl computed - returning avatarUrl result:', result);
+    return result;
+  }
+
+  // Fallback về user.value.avatarUrl
+  if (!user.value.avatarUrl) {
+    console.log('🟣 [DEBUG] fullAvatarUrl computed - no avatarUrl, returning null');
+    return null;
+  }
+  if (user.value.avatarUrl.startsWith('http')) {
+    console.log('🟣 [DEBUG] fullAvatarUrl computed - returning user.avatarUrl (http):', user.value.avatarUrl);
+    return user.value.avatarUrl;
+  }
+
+  // Lấy baseURL từ env hoặc mặc định - sử dụng endpoint database
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const result = base + '/users' + user.value.avatarUrl + '?t=' + Date.now(); // Force refresh
+  console.log('🟣 [DEBUG] fullAvatarUrl computed - returning user.avatarUrl result:', result);
+  return result;
 });
 
 const triggerAvatarUpload = () => {
@@ -322,7 +399,8 @@ const onAvatarChange = (e: Event) => {
     avatarError.value = '';
     const reader = new FileReader();
     reader.onload = (ev) => {
-      avatarUrl.value = ev.target?.result as string;
+      const result = ev.target?.result as string;
+      avatarUrl.value = result;
     };
     reader.readAsDataURL(file);
   }
@@ -333,9 +411,27 @@ const uploadAvatar = async () => {
   avatarError.value = '';
   try {
     const url = await uploadAvatarApi(avatarFile.value);
+
+    console.log('🟣 [DEBUG] Avatar upload response:', url);
+
+    // Cập nhật cả hai giá trị để đảm bảo reactive
     avatarUrl.value = url;
     user.value.avatarUrl = url;
+
+    console.log('🟣 [DEBUG] After update - avatarUrl:', avatarUrl.value);
+    console.log('🟣 [DEBUG] After update - user.avatarUrl:', user.value.avatarUrl);
+    console.log('🟣 [DEBUG] After update - fullAvatarUrl:', fullAvatarUrl.value);
+
+    // Force re-render và trigger reactive update
+    await nextTick();
+
+    // Force trigger reactive update bằng cách reassign
+    avatarUrl.value = url;
+    await nextTick();
+
     avatarChanged.value = false;
+    avatarFile.value = null; // Reset file
+
     // Thông báo cho Navbar.vue cập nhật avatar mới
     window.dispatchEvent(new Event('user-avatar-updated'));
 
@@ -346,6 +442,7 @@ const uploadAvatar = async () => {
       life: 2500
     });
   } catch (e) {
+    console.error('🟣 [DEBUG] Avatar upload error:', e);
     avatarError.value = 'Failed to upload avatar. Please try again.';
     toast.add({
       severity: 'error',
@@ -385,10 +482,13 @@ const fetchUserData = async () => {
     if (!authService.isAuthenticated()) {
       throw new Error('User is not authenticated');
     }
-    user.value = await userService.getUserProfile();
+    const userData = await userService.getUserProfile();
+
+    user.value = userData;
     updateForm.value.fullName = user.value.fullName || '';
     updateForm.value.phone = user.value.phone || '';
     avatarUrl.value = user.value.avatarUrl || null;
+
   } catch (error) {
     console.error('Error fetching user data:', error);
   } finally {
@@ -446,27 +546,50 @@ const changePassword = async () => {
     setTimeout(() => shakePassword.value = false, 600);
     return;
   }
+
+  // Validate required fields
+  if (!passwordForm.value.currentPassword || !passwordForm.value.newPassword) {
+    passwordError.value = 'Please fill in all password fields.';
+    shakePassword.value = true;
+    setTimeout(() => shakePassword.value = false, 600);
+    return;
+  }
+
+  if (!user.value.id) {
+    passwordError.value = 'User ID not found. Please refresh the page.';
+    shakePassword.value = true;
+    setTimeout(() => shakePassword.value = false, 600);
+    return;
+  }
+
   try {
     isLoading.value = true;
+
     await userService.changePassword(passwordForm.value, user.value.id.toString());
+
     passwordForm.value = {
       currentPassword: '',
       newPassword: '',
     };
     passwordSuccess.value = true;
+
+    // Thêm toast notification thành công
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Password changed successfully!',
+      life: 3000
+    });
+
     setTimeout(() => {
       passwordSuccess.value = false;
+      showPasswordForm.value = false; // Tự động ẩn form sau khi thành công
     }, 3000);
   } catch (error) {
     passwordError.value = 'Failed to change password. Please check your current password and try again.';
     shakePassword.value = true;
     setTimeout(() => shakePassword.value = false, 600);
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: passwordError.value,
-      life: 3000
-    });
+    // Xóa toast error để tránh hiển thị trùng lặp với error message dưới input
   } finally {
     isLoading.value = false;
   }
@@ -474,13 +597,15 @@ const changePassword = async () => {
 
 const isPasswordValid = computed(() => {
   const password = passwordForm.value.newPassword;
-  return (
+  const isValid = (
     password.length >= 8 &&
     /[A-Z]/.test(password) &&
     /[a-z]/.test(password) &&
     /[0-9]/.test(password) &&
     /[^A-Za-z0-9]/.test(password)
   );
+
+  return isValid;
 });
 
 // Animation chuyển tab + lưu trạng thái tab
@@ -509,9 +634,9 @@ onMounted(() => {
 
 <style scoped>
 :root {
-  --profile-font-size: 0.95rem;
-  --profile-title-size: 1.5rem;
-  --profile-icon-size: 1.1rem;
+  --profile-font-size: 0.85rem;
+  --profile-title-size: 1.3rem;
+  --profile-icon-size: 1rem;
   --profile-padding: 1rem;
   --profile-avatar-size: 120px;
 }
@@ -551,11 +676,15 @@ onMounted(() => {
 .content {
   flex: 1;
   padding: 2rem;
+  width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  position: relative;
 }
 @media (min-width: 1200px) {
   .content {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 }
 
@@ -564,27 +693,37 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
+  width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  position: relative;
 }
 
 /* Layout 2 cột 60/40 */
 .profile-layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: 40% 1fr;
   gap: 2rem;
-  align-items: flex-start;
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+  position: relative;
 }
 .profile-left-col {
-  flex: 0 0 40%;
+  width: 100%;
   max-width: 420px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2rem;
 }
 .profile-right-col {
-  flex: 1 1 60%;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  position: relative;
 }
 @media (max-width: 1024px) {
   .profile-layout {
@@ -594,6 +733,7 @@ onMounted(() => {
   .profile-left-col, .profile-right-col {
     max-width: 100%;
     min-width: 0;
+    flex: 1 1 100%;
   }
 }
 
@@ -659,14 +799,14 @@ onMounted(() => {
 
 /* Avatar info - tên lớn, email nhỏ màu xám */
 .avatar-info h3 {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: #1e293b;
   margin-bottom: 0.25rem;
 }
 .avatar-info p {
   color: #64748b;
-  font-size: 1rem;
+  font-size: 0.9rem;
   margin: 0;
 }
 
@@ -693,25 +833,79 @@ onMounted(() => {
   margin-bottom: 2.5rem;
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #e2e8f0;
-}
-
 .section-header i {
   color: #6366f1;
   font-size: var(--profile-icon-size) !important;
 }
 
 .section-header h3 {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: #1e293b;
   margin: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.password-section-header {
+  justify-content: space-between;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.toggle-password-btn {
+  background: #f8fafc;
+  color: #6366f1;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem !important;
+  font-weight: 500;
+  font-size: 0.8rem !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.toggle-password-btn:hover {
+  background: #6366f1;
+  color: white;
+  border-color: #6366f1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.toggle-password-btn i {
+  font-size: 1rem;
+}
+
+.password-form-container {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .section-header p {
@@ -748,7 +942,7 @@ onMounted(() => {
 
 .input-label {
   display: block;
-  font-size: 0.92rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #6c63ff;
   margin-bottom: 0.25rem;
@@ -762,10 +956,10 @@ onMounted(() => {
 
 .input-wrapper input {
   width: 100%;
-  padding: 0.7rem 0.6rem 0.7rem 0.8rem !important;
+  padding: 0.6rem 0.5rem 0.6rem 0.7rem !important;
   border: 2px solid #e2e8f0;
   border-radius: 10px;
-  font-size: 1rem !important;
+  font-size: 0.9rem !important;
   background: #f8fafc;
   transition: all 0.3s, box-shadow 0.2s;
   color: #1e293b;
@@ -821,7 +1015,7 @@ onMounted(() => {
 
 .field-note {
   color: #64748b;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -844,9 +1038,9 @@ onMounted(() => {
   color: white;
   border: none;
   border-radius: 12px;
-  padding: 0.6rem 1.1rem !important;
+  padding: 0.5rem 1rem !important;
   font-weight: 600;
-  font-size: 0.95rem !important;
+  font-size: 0.85rem !important;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
@@ -908,7 +1102,7 @@ onMounted(() => {
 
 .success-message strong {
   color: #15803d;
-  font-size: 1.1rem;
+  font-size: 1rem;
   margin-bottom: 0.25rem;
   display: block;
 }
@@ -916,7 +1110,7 @@ onMounted(() => {
 .success-message p {
   color: #166534;
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 /* Loading Spinner */
@@ -1008,7 +1202,7 @@ onMounted(() => {
 }
 
 .requirement-item span {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 500;
 }
 
@@ -1029,7 +1223,7 @@ onMounted(() => {
 .strength-text {
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   letter-spacing: 0.5px;
 }
 
@@ -1146,7 +1340,7 @@ onMounted(() => {
 }
 .error-message {
   color: #ef4444;
-  font-size: 0.92rem !important;
+  font-size: 0.8rem !important;
   margin-top: 0.2rem;
   font-weight: 500;
 }
@@ -1165,9 +1359,9 @@ onMounted(() => {
   color: #6366f1;
   border: 1.5px solid #d1d5db;
   border-radius: 8px;
-  padding: 0.6rem 1.1rem !important;
+  padding: 0.5rem 1rem !important;
   font-weight: 500;
-  font-size: 0.95rem !important;
+  font-size: 0.85rem !important;
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s;
 }

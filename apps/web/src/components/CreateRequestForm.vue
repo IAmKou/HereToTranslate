@@ -714,7 +714,6 @@
           </button>
         </div>
       </form>
-      <Toast />
     </div>
   </div>
 </template>

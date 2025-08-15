@@ -175,11 +175,11 @@ import axiosInstance from '../api'
 import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
 import AppFooter from '../components/AppFooter.vue'
-import { useToast } from "vue-toastification";
+import { useUnifiedToast } from '../utils/toast'
 
 const route = useRoute()
 const router = useRouter()
-const toast = useToast();
+const toast = useUnifiedToast();
 
 // Interfaces
 interface Project {
@@ -278,10 +278,10 @@ const confirmDelete = async () => {
   if (!project.value) return;
   try {
     await axiosInstance.delete(`/projects/${project.value.id}`)
-    toast.success('Project deleted successfully');
+    toast.success('Project deleted successfully', 'Project deleted');
     router.push('/projects')
   } catch (err: any) {
-    toast.error('Failed to delete project: ' + err.message)
+    toast.error('Failed to delete project: ' + err.message, 'Error deleting project');
   } finally {
     showDeleteConfirm.value = false;
   }

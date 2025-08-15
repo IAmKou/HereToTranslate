@@ -21,7 +21,7 @@ async function bootstrap() {
 
   app.use(
     '/uploads',
-    express.static(join(__dirname, '..', '..', '..', 'uploads')),
+    express.static(join(__dirname, '..', 'uploads')),
   );
 
 

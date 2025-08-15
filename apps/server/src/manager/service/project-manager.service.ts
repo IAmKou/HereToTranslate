@@ -850,6 +850,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       username: string;
       fullName: string;
       email: string;
+      avatarUrl?: string;
       joinedAt?: string;
       roles: {
         id: string;
@@ -952,6 +953,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         username: string;
         fullName: string;
         email: string;
+        avatarUrl?: string;
         joinedAt?: string;
         roles: {
           id: string;
@@ -968,6 +970,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         username: member.username,
         fullName: member.fullName,
         email: member.email,
+        avatarUrl: member.avatarUrl,
         roles: [],
         // For project owner, use project creation date as joinedAt
         joinedAt: project.createdBy && member.id === project.createdBy.id ? project.createdAt.toISOString() : undefined,
@@ -995,6 +998,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
             username: user.username,
             fullName: user.fullName,
             email: user.email,
+            avatarUrl: user.avatarUrl,
             roles: [],
           };
         }

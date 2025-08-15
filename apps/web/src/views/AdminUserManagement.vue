@@ -287,9 +287,6 @@
             </div>
           </div>
 
-          <!-- Toast -->
-          <Toast position="top-right" class="enhanced-toast" />
-
           <!-- Confirmation Dialog -->
           <ConfirmDialog class="enhanced-dialog">
             <template #message="slotProps">
@@ -331,7 +328,6 @@ import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/dropdown';
 import Tag from 'primevue/tag';
 import Avatar from 'primevue/avatar';
-import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Tooltip from 'primevue/tooltip';
 import { userService, type User } from '../services/user.service';
@@ -1850,10 +1846,10 @@ body, .admin-user-management {
   /* Áp dụng cho cột Role và Status (th cột 5 và 6) */
   :deep(.p-datatable-tbody > tr > td:nth-child(5)),
   :deep(.p-datatable-tbody > tr > td:nth-child(6)) {
-    white-space: nowrap !important;   /* Không xuống dòng */
-    max-width: 160px;                 /* tùy chỉnh giới hạn rộng nếu cần */
-    overflow: hidden;                 /* ẩn phần tràn */
-    text-overflow: ellipsis;          /* nếu dài quá thì hiện ... */
+    white-space: nowrap !important;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Nếu muốn áp dụng trực tiếp cho Tag bên trong */

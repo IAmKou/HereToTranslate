@@ -1,7 +1,6 @@
 /* eslint-disable */
 <template>
   <div class="request-detail-wrapper">
-    <Toast position="top-right" />
     <Navbar />
     <div class="main-content">
       <Sidebar />
@@ -277,34 +276,7 @@
               </div>
             </div>
 
-            <!-- Activity Timeline Card -->
-            <div class="info-card info-card-hover">
-              <div class="info-card-title">
-                <i class="pi pi-calendar"></i>
-                Activity Timeline
-              </div>
-              <div class="activity-timeline">
-                <div class="timeline-step">
-                  <div class="timeline-icon created"><i class="pi pi-plus-circle"></i></div>
-                  <div class="timeline-content">
-                    <div class="timeline-title">Created</div>
-                    <div class="timeline-date">{{ formatDateTime(request?.createdAt) }}</div>
-                  </div>
-                </div>
-                <div v-if="isApprovedOrAssigned" class="timeline-step">
-                  <div class="timeline-icon approved"><i class="pi pi-check-circle"></i></div>
-                  <div class="timeline-content">
-                    <div class="timeline-title">Approved</div>
-                    <div class="timeline-date">
-                      {{ request?.approvedAt ? formatDateTime(request.approvedAt) : '-' }}
-                    </div>
-                    <div v-if="request?.assignee" class="timeline-user">
-                      To: {{ request.assignee.fullName || request.assignee.username }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+
           </div>
           <!-- RIGHT COLUMN -->
           <div class="right-column">
@@ -316,13 +288,33 @@
               </div>
               <div class="requester-block">
                 <div class="avatar-container" @click="viewProfile(request?.requester?.id)" title="View Profile">
-                  <Avatar
-                    :image="request?.requester?.avatar"
-                    :label="getInitial(request?.requester?.fullName || request?.requester?.username)"
-                    shape="circle"
-                    size="large"
-                    class="avatar-bordered"
-                  />
+                  <div v-if="request?.requester?.avatarUrl" class="avatar-wrapper">
+                    <img
+                      :src="getFullAvatarUrl(request?.requester?.avatarUrl)"
+                      :alt="request?.requester?.fullName || request?.requester?.username"
+                      class="avatar-img"
+                      @error="(e: Event) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const nextSibling = target.nextElementSibling as HTMLElement;
+                        if (nextSibling) nextSibling.style.display = 'flex';
+                      }"
+                    />
+                    <div
+                      class="avatar-text"
+                      :style="{ backgroundColor: getRandomColor(request?.requester?.username || request?.requester?.id) }"
+                      style="display: none;"
+                    >
+                      {{ getInitial(request?.requester?.fullName || request?.requester?.username) }}
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="avatar-text"
+                    :style="{ backgroundColor: getRandomColor(request?.requester?.username || request?.requester?.id) }"
+                  >
+                    {{ getInitial(request?.requester?.fullName || request?.requester?.username) }}
+                  </div>
                   <div class="avatar-overlay">
                     <i class="pi pi-external-link"></i>
                   </div>
@@ -343,6 +335,8 @@
                     <span v-else>N/A</span>
                   </span>
                 </div>
+
+
               </div>
             </div>
             <!-- Assigned Translator Card (only if exists) -->
@@ -353,13 +347,33 @@
               </div>
               <div class="requester-block">
                 <div class="avatar-container" @click="viewProfile(request?.assignee?.id)" title="View Profile">
-                  <Avatar
-                    :image="request.assignee?.avatar"
-                    :label="getInitial(request.assignee?.username)"
-                    shape="circle"
-                    size="large"
-                    class="avatar-bordered translator-avatar"
-                  />
+                  <div v-if="request.assignee?.avatarUrl" class="avatar-wrapper">
+                    <img
+                      :src="getFullAvatarUrl(request.assignee?.avatarUrl)"
+                      :alt="request.assignee?.fullName || request.assignee?.username"
+                      class="avatar-img"
+                      @error="(e: Event) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const nextSibling = target.nextElementSibling as HTMLElement;
+                        if (nextSibling) nextSibling.style.display = 'flex';
+                      }"
+                    />
+                    <div
+                      class="avatar-text"
+                      :style="{ backgroundColor: getRandomColor(request.assignee?.username || request.assignee?.id) }"
+                      style="display: none;"
+                    >
+                      {{ getInitial(request.assignee?.username) }}
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="avatar-text"
+                    :style="{ backgroundColor: getRandomColor(request.assignee?.username || request.assignee?.id) }"
+                  >
+                    {{ getInitial(request.assignee?.username) }}
+                  </div>
                   <div class="avatar-overlay">
                     <i class="pi pi-external-link"></i>
                   </div>
@@ -380,6 +394,8 @@
                     <span v-else>N/A</span>
                   </span>
                 </div>
+
+
               </div>
             </div>
             <!-- Actions Card -->
@@ -415,7 +431,7 @@
                   class="action-btn danger"
                   @click="cancelRequest"
                 >
-                  <i class="pi pi-times"></i> Cancel Request
+                  <span class="btn-icon">✕</span> Cancel Request
                 </button>
                 <button
                   v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
@@ -429,7 +445,7 @@
                   class="action-btn reject"
                   @click="rejectRequest"
                 >
-                  <i class="pi pi-times"></i> Reject
+                  <span class="btn-icon">✕</span> Reject
                 </button>
                 <button
                   v-if="request && request.isPublic && !request.assignee && userId !== null && request.requester && request.requester.id !== userId && request.status === 'PENDING'"
@@ -476,7 +492,6 @@ import { authService } from '../services/auth.service';
 import RequestEditView from './RequestEditView.vue'
 import CancelRequestDialog from '../components/CancelRequestDialog.vue'
 import { nextTick } from 'vue';
-import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
 import { getEnvironmentConfig } from '../utils/environment';
 import { SUPPORTED_LANGUAGES } from '../utils/languages';
@@ -488,7 +503,7 @@ interface UserInfo {
   fullName?: string;
   email: string;
   phone?: string;
-  avatar?: string;
+  avatarUrl?: string;
   createdAt?: string;
   role?: string;
   company?: string;
@@ -522,7 +537,7 @@ interface UserInfo {
   fullName?: string;
   email: string;
   phone?: string;
-  avatar?: string;
+  avatarUrl?: string;
   createdAt?: string;
   role?: string;
   company?: string;
@@ -656,7 +671,50 @@ function statusClass(status: string) {
   }[status] || 'pending';
 }
 function getInitial(name: string | undefined) {
-  return name ? name.charAt(0).toUpperCase() : '?';
+  if (!name) return '?';
+  // Lấy 2 ký tự đầu tiên nếu có thể
+  const initials = name.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+  return initials.length >= 2 ? initials.substring(0, 2) : initials;
+}
+
+function getFullAvatarUrl(avatarUrl?: string) {
+  if (!avatarUrl) {
+    return '';
+  }
+  if (avatarUrl.startsWith('http')) {
+    return avatarUrl;
+  }
+  if (avatarUrl.startsWith('data:')) {
+    return avatarUrl; // Data URL từ preview
+  }
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const fullUrl = base + '/users' + avatarUrl;
+  return fullUrl;
+}
+
+function getRandomColor(username: string | number) {
+  const colors = [
+    '#3b82f6', // blue
+    '#10b981', // green
+    '#f59e0b', // yellow
+    '#ef4444', // red
+    '#8b5cf6', // purple
+    '#ec4899', // pink
+    '#06b6d4', // cyan
+    '#84cc16', // lime
+    '#f97316', // orange
+    '#8b5cf6', // violet
+  ];
+
+  // Tạo hash từ username để có màu nhất quán
+  const hash = String(username).split('').reduce((a, b) => {
+    a = ((a << 5) - a + b.charCodeAt(0)) & 0xffffffff;
+    return a;
+  }, 0);
+
+  return colors[Math.abs(hash) % colors.length];
 }
 
 function getLanguageName(code: string): string {
@@ -817,6 +875,9 @@ async function fetchRequestDetail() {
     console.log('Target language (singular):', res.data.targetLanguage);
     console.log('Assignee data:', res.data.assignee);
     console.log('Assignee username:', res.data.assignee?.username);
+
+
+
     request.value = res.data;
   } catch (e) {
     console.error('Error fetching request detail:', e);
@@ -874,6 +935,8 @@ onMounted(async () => {
   userId.value = user?.id ?? null;
   await fetchRequestDetail();
 });
+
+
 </script>
 
 <style scoped>
@@ -1241,15 +1304,45 @@ body, .request-detail-wrapper {
   cursor: pointer;
   transition: transform 0.2s;
 }
+
 .avatar-container:hover {
   transform: scale(1.05);
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.avatar-bordered {
+
+.avatar-wrapper {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
   border: 3px solid #e0e7ff;
   box-shadow: 0 2px 8px rgba(59,130,246,0.10);
 }
-.translator-avatar {
+
+.avatar-text {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #e0e7ff;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.10);
+  min-width: 64px;
+  min-height: 64px;
+}
+
+.translator-avatar .avatar-img,
+.translator-avatar .avatar-text {
   border-color: #d1fae5;
   box-shadow: 0 2px 8px rgba(16,185,129,0.10);
 }
@@ -1303,117 +1396,208 @@ body, .request-detail-wrapper {
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
-}
-.action-btn {
-  width: 100%;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 10px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.08);
-  position: relative;
-  overflow: hidden;
-}
-.action-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: left 0.5s;
-}
-.action-btn:hover::before {
-  left: 100%;
-  transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.action-btn.primary {
-  background: linear-gradient(90deg, #2563eb 60%, #60a5fa 100%);
-  color: #fff;
-}
-.action-btn.primary:hover:enabled {
-  background: linear-gradient(90deg, #1d4ed8 60%, #3b82f6 100%);
-  box-shadow: 0 4px 16px rgba(59,130,246,0.16);
-  transform: translateY(-1px);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.action-btn.edit {
-  background: #e0e7ff;
-  color: #2563eb;
-  border: 1.5px solid #2563eb;
-}
-.action-btn.edit:hover:enabled {
-  background: #2563eb;
-  color: #fff;
-  border-color: #1d4ed8;
-}
-.action-btn.danger {
-  background: #fee2e2;
-  color: #ef4444;
-  border: 1.5px solid #ef4444;
-}
-.action-btn.danger:hover:enabled {
-  background: #ef4444;
-  color: #fff;
-  border-color: #b91c1c;
-}
-.action-btn.info {
-  background: #e0f2fe;
-  color: #0369a1;
-  border: 1.5px solid #0369a1;
-}
-.action-btn.info:hover:enabled {
-  background: #0369a1;
-  color: #fff;
-  border-color: #0c4a6e;
-}
-.action-btn.approve {
-  background: #d1fae5;
-  color: #059669;
-  border: 1.5px solid #059669;
-  margin-bottom: 4px;
-}
-.action-btn.approve:hover:enabled {
-  background: #059669;
-  color: #fff;
-  border-color: #047857;
-}
-.action-btn.reject {
-  background: #fee2e2;
-  color: #ef4444;
-  border: 1.5px solid #ef4444;
-  margin-bottom: 4px;
-}
-.action-btn.reject:hover:enabled {
-  background: #ef4444;
-  color: #fff;
-  border-color: #b91c1c;
-}
-.action-btn.secondary {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1.5px solid #cbd5e1;
-}
-.action-btn.secondary:hover:enabled {
-  background: #475569;
-  color: #fff;
-  border-color: #64748b;
-}
-.action-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  gap: 12px;
+  margin-top: 8px;
 }
 
+.action-btn {
+  width: 100%;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  text-decoration: none;
+  font-family: inherit;
+  letter-spacing: 0.025em;
+}
+
+.action-btn i,
+.action-btn .btn-icon {
+  font-size: 16px;
+  transition: transform 0.2s ease;
+}
+
+.action-btn:hover i,
+.action-btn:hover .btn-icon {
+  transform: scale(1.1);
+}
+
+/* Primary Button - Contact Translator */
+.action-btn.primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
+  border: 2px solid #3b82f6;
+}
+
+.action-btn.primary:hover:enabled {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35);
+  transform: translateY(-2px);
+  border-color: #1d4ed8;
+}
+
+.action-btn.primary:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* Secondary Button - Edit Request */
+.action-btn.edit {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #475569;
+  border: 2px solid #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.action-btn.edit:hover:enabled {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  color: #1e293b;
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.action-btn.edit:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* Danger Button - Cancel Request */
+.action-btn.danger {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #dc2626;
+  border: 2px solid #fecaca;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08);
+}
+
+.action-btn.danger:hover:enabled {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #b91c1c;
+  border-color: #fca5a5;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+  transform: translateY(-1px);
+}
+
+.action-btn.danger:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.1);
+}
+/* Info Button - Contact Requester */
+.action-btn.info {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  color: #0369a1;
+  border: 2px solid #7dd3fc;
+  box-shadow: 0 2px 8px rgba(3, 105, 161, 0.08);
+}
+
+.action-btn.info:hover:enabled {
+  background: linear-gradient(135deg, #bae6fd 0%, #7dd3fc 100%);
+  color: #0c4a6e;
+  border-color: #0ea5e9;
+  box-shadow: 0 4px 12px rgba(3, 105, 161, 0.15);
+  transform: translateY(-1px);
+}
+
+.action-btn.info:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(3, 105, 161, 0.1);
+}
+
+/* Success Button - Approve */
+.action-btn.approve {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #047857;
+  border: 2px solid #6ee7b7;
+  box-shadow: 0 2px 8px rgba(4, 120, 87, 0.08);
+  margin-bottom: 4px;
+}
+
+.action-btn.approve:hover:enabled {
+  background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%);
+  color: #065f46;
+  border-color: #10b981;
+  box-shadow: 0 4px 12px rgba(4, 120, 87, 0.15);
+  transform: translateY(-1px);
+}
+
+.action-btn.approve:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(4, 120, 87, 0.1);
+}
+
+/* Danger Button - Reject */
+.action-btn.reject {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #dc2626;
+  border: 2px solid #fca5a5;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08);
+  margin-bottom: 4px;
+}
+
+.action-btn.reject:hover:enabled {
+  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+  color: #b91c1c;
+  border-color: #ef4444;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+  transform: translateY(-1px);
+}
+
+.action-btn.reject:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.1);
+}
+
+/* Secondary Button */
+.action-btn.secondary {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #475569;
+  border: 2px solid #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.action-btn.secondary:hover:enabled {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  color: #1e293b;
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.action-btn.secondary:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+/* Disabled State */
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+  color: #94a3b8 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.action-btn:disabled:hover {
+  transform: none !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.action-btn:disabled i {
+  transform: none !important;
+}
+
+/* Loading Spinner */
 .action-btn .pi-spinner {
   animation: spin 1s linear infinite;
 }
@@ -1424,6 +1608,32 @@ body, .request-detail-wrapper {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Focus States for Accessibility */
+.action-btn:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.action-btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .actions {
+    gap: 10px;
+  }
+
+  .action-btn {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .action-btn i {
+    font-size: 14px;
   }
 }
 .tag-badge {
@@ -1639,59 +1849,7 @@ body, .request-detail-wrapper {
   color: #6b7280;
 }
 
-.activity-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin-top: 8px;
-}
-.timeline-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-.timeline-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  background: #f3f4f6;
-  color: #64748b;
-}
-.timeline-icon.created {
-  background: #dbeafe;
-  color: #2563eb;
-}
-.timeline-icon.approved {
-  background: #d1fae5;
-  color: #059669;
-}
-.timeline-icon.assigned {
-  background: #fef3c7;
-  color: #b45309;
-}
-.timeline-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.timeline-title {
-  font-weight: 700;
-  color: #1e293b;
-  font-size: 15px;
-}
-.timeline-date {
-  color: #64748b;
-  font-size: 13px;
-}
-.timeline-user {
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 600;
-}
+
 @media (max-width: 1100px) {
   .request-detail-grid {
     flex-direction: column;

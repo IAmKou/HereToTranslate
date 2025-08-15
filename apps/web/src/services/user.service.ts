@@ -125,9 +125,20 @@ export const userService = new UserService();
 export async function uploadAvatar(file: File): Promise<string> {
   const formData = new FormData();
   formData.append('avatar', file);
+
   const res = await userService.api.post('/users/avatar', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
+
   console.log('[FE] uploadAvatar response', res.data);
+
+  if (!res.data.avatarUrl) {
+    throw new Error('No avatarUrl received from server');
+  }
+
   return res.data.avatarUrl;
+}
+
+export function getAvatarUrl(userId: number): string {
+  return `${userService.api.defaults.baseURL}/users/avatar/${userId}`;
 }

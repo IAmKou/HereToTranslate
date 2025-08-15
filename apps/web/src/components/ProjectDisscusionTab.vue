@@ -165,173 +165,234 @@
     </div>
 
     <!-- Create Discussion Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click="closeCreateModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header modal-header-enhanced">
-          <h3 class="modal-title">
-            <span class="title-icon gradient-icon">💬</span>
-            Create New Discussion
-          </h3>
-          <button @click="closeCreateModal" class="btn-close">×</button>
+    <Teleport to="body">
+      <div v-if="showCreateModal" class="modal-overlay" @click="closeCreateModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header modal-header-enhanced">
+            <h3 class="modal-title">
+              <span class="title-icon gradient-icon">💬</span>
+              Create New Discussion
+            </h3>
+            <button @click="closeCreateModal" class="btn-close">×</button>
+          </div>
+          <div class="modal-body">
+            <form @submit.prevent="createDiscussion" class="create-discussion-form">
+              <div class="form-group">
+                <label for="discussionTitle" class="form-label form-label-enhanced">Title *</label>
+                <input
+                  id="discussionTitle"
+                  v-model="newDiscussion.title"
+                  :class="['form-control', { 'input-error': showTitleError }]"
+                  type="text"
+                  required
+                  placeholder="Enter discussion title"
+                  minlength="3"
+                  @blur="validateTitle"
+                  @input="validateTitle"
+                />
+                <div v-if="showTitleError" class="form-error">Title is required</div>
+              </div>
+              <div class="form-group">
+                <label for="discussionDescription" class="form-label form-label-enhanced">Description</label>
+                <textarea
+                  id="discussionDescription"
+                  v-model="newDiscussion.description"
+                  class="form-control"
+                  placeholder="Enter discussion description (optional)"
+                  rows="2"
+                  ref="descTextarea"
+                  @input="autoGrow"
+                  style="max-height: 120px; overflow-y: auto;"
+                ></textarea>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer modal-footer-enhanced">
+            <button @click="closeCreateModal" class="btn btn-outline btn-cancel">Cancel</button>
+            <button
+              @click="createDiscussion"
+              class="btn btn-primary btn-create"
+              :disabled="creating"
+              style="display: flex; align-items: center; gap: 0.5rem;"
+            >
+              <span v-if="creating" class="loading-spinner-small"></span>
+              <span v-else class="icon">💬</span>
+              {{ creating ? 'Creating...' : 'Create Discussion' }}
+            </button>
+          </div>
+          <div v-if="createError" class="form-error form-error-global">{{ createError }}</div>
+          <div v-if="createSuccess" class="form-success">Discussion created successfully!</div>
         </div>
-        <div class="modal-body">
-          <form @submit.prevent="createDiscussion" class="create-discussion-form">
-            <div class="form-group">
-              <label for="discussionTitle" class="form-label form-label-enhanced">Title *</label>
-              <input
-                id="discussionTitle"
-                v-model="newDiscussion.title"
-                :class="['form-control', { 'input-error': showTitleError }]"
-                type="text"
-                required
-                placeholder="Enter discussion title"
-                minlength="3"
-                @blur="validateTitle"
-                @input="validateTitle"
-              />
-              <div v-if="showTitleError" class="form-error">Title is required</div>
-            </div>
-            <div class="form-group">
-              <label for="discussionDescription" class="form-label form-label-enhanced">Description</label>
-              <textarea
-                id="discussionDescription"
-                v-model="newDiscussion.description"
-                class="form-control"
-                placeholder="Enter discussion description (optional)"
-                rows="2"
-                ref="descTextarea"
-                @input="autoGrow"
-                style="max-height: 120px; overflow-y: auto;"
-              ></textarea>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer modal-footer-enhanced">
-          <button @click="closeCreateModal" class="btn btn-outline btn-cancel">Cancel</button>
-          <button
-            @click="createDiscussion"
-            class="btn btn-primary btn-create"
-            :disabled="creating"
-            style="display: flex; align-items: center; gap: 0.5rem;"
-          >
-            <span v-if="creating" class="loading-spinner-small"></span>
-            <span v-else class="icon">💬</span>
-            {{ creating ? 'Creating...' : 'Create Discussion' }}
-          </button>
-        </div>
-        <div v-if="createError" class="form-error form-error-global">{{ createError }}</div>
-        <div v-if="createSuccess" class="form-success">Discussion created successfully!</div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Discussion Detail Modal -->
-    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
-      <div class="modal-content discussion-detail-modal" @click.stop>
-        <div class="modal-header">
-          <h3 class="modal-title">
-            <span class="title-icon">💬</span>
-            {{ selectedDiscussion?.title }}
-          </h3>
-          <button @click="closeDetailModal" class="btn-close">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="selectedDiscussion" class="discussion-detail">
-            <div class="discussion-description-full">
-              {{ selectedDiscussion.description || 'No description provided.' }}
-            </div>
-
-            <!-- Comments Section -->
-            <div class="comments-section">
-              <h4 class="comments-title">
-                <span class="title-icon">💬</span>
-                Comments ({{ selectedDiscussion.comments?.length || 0 }})
-              </h4>
-
-              <!-- Add Comment -->
-              <div class="add-comment">
-                <textarea
-                  v-model="newComment"
-                  class="form-control"
-                  placeholder="Write a comment..."
-                  rows="3"
-                  :disabled="selectedDiscussion?.isArchived || !canPostComment"
-                  :title="!canPostComment ? 'You do not have permission to post comments (requires PostComment permission)' : ''"
-                ></textarea>
-                <button
-                  @click="canPostComment && postComment()"
-                  class="btn btn-primary btn-sm"
-                  :disabled="!newComment.trim() || posting || selectedDiscussion?.isArchived || !canPostComment"
-                  :title="!canPostComment ? 'You do not have permission to post comments (requires PostComment permission)' : ''"
-                >
-                  <span v-if="posting" class="loading-spinner-small"></span>
-                  <span v-else class="icon">💬</span>
-                  {{ posting ? 'Posting...' : 'Post Comment' }}
-                </button>
+    <Teleport to="body">
+      <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+        <div class="modal-content discussion-detail-modal" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">
+              <span class="title-icon">💬</span>
+              {{ selectedDiscussion?.title }}
+            </h3>
+            <button @click="closeDetailModal" class="btn-close">×</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="selectedDiscussion" class="discussion-detail">
+              <div class="discussion-description-full">
+                {{ selectedDiscussion.description || 'No description provided.' }}
               </div>
 
-              <!-- Comments List -->
-              <div class="comments-list">
-                <div
-                  v-for="comment in selectedDiscussion.comments"
-                  :key="comment.id"
-                  class="comment-item"
-                >
-                  <div class="comment-header">
-                    <div class="comment-author">
-                      <span class="author-avatar">
-                        {{ comment.author?.username?.charAt(0)?.toUpperCase() || 'U' }}
-                      </span>
-                      <span class="author-name">{{ comment.author?.fullName || 'Unknown' }}</span>
+              <!-- Comments Section -->
+              <div class="comments-section">
+                <h4 class="comments-title">
+                  <span class="title-icon">💬</span>
+                  Comments ({{ selectedDiscussion.comments?.length || 0 }})
+                </h4>
+
+                <!-- Add Comment -->
+                <div class="add-comment">
+                  <textarea
+                    v-model="newComment"
+                    class="form-control"
+                    placeholder="Write a comment..."
+                    rows="3"
+                    :disabled="selectedDiscussion?.isArchived || !canPostComment"
+                    :title="!canPostComment ? 'You do not have permission to post comments (requires PostComment permission)' : ''"
+                  ></textarea>
+                  <button
+                    @click="canPostComment && postComment()"
+                    class="btn btn-primary btn-sm"
+                    :disabled="!newComment.trim() || posting || selectedDiscussion?.isArchived || !canPostComment"
+                    :title="!canPostComment ? 'You do not have permission to post comments (requires PostComment permission)' : ''"
+                  >
+                    <span v-if="posting" class="loading-spinner-small"></span>
+                    <span v-else class="icon">💬</span>
+                    {{ posting ? 'Posting...' : 'Post Comment' }}
+                  </button>
+                </div>
+
+                <!-- Comments List -->
+                <div class="comments-list">
+                  <div
+                    v-for="comment in selectedDiscussion.comments"
+                    :key="comment.id"
+                    class="comment-item"
+                  >
+                    <div class="comment-header">
+                      <div class="comment-author">
+                        <div v-if="comment.author?.avatarUrl" class="author-avatar-wrapper">
+                          <img
+                            :src="getFullAvatarUrl(comment.author.avatarUrl)"
+                            :alt="comment.author.fullName || comment.author.username"
+                            class="author-avatar-img"
+                            @error="(e: Event) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const nextSibling = target.nextElementSibling as HTMLElement;
+                              if (nextSibling) nextSibling.style.display = 'flex';
+                            }"
+                          />
+                          <div
+                            class="author-avatar-text"
+                            :style="{ backgroundColor: getRandomColor(comment.author.username || comment.author.id) }"
+                            style="display: none;"
+                          >
+                            {{ getAvatarText(comment.author) }}
+                          </div>
+                        </div>
+                        <div
+                          v-else
+                          class="author-avatar-text"
+                          :style="{ backgroundColor: getRandomColor(comment.author?.username || comment.author?.id || 'default') }"
+                        >
+                          {{ getAvatarText(comment.author || { username: 'Unknown' }) }}
+                        </div>
+                        <span class="author-name">{{ comment.author?.fullName || comment.author?.username || 'Unknown' }}</span>
+                      </div>
+                      <div class="comment-meta">
+                        <span class="comment-date">{{ formatDate(comment.createdAt) }}</span>
+                        <span v-if="comment.isEdited" class="edited-badge">(edited)</span>
+                      </div>
                     </div>
-                    <div class="comment-meta">
-                      <span class="comment-date">{{ formatDate(comment.createdAt) }}</span>
-                      <span v-if="comment.isEdited" class="edited-badge">(edited)</span>
+                    <div class="comment-content">
+                      <!-- Edit Form -->
+                      <div v-if="editingComment?.id === comment.id && isEditingComment" class="comment-edit-form">
+                        <textarea
+                          v-model="editingCommentContent"
+                          class="form-control"
+                          rows="3"
+                          :disabled="isSavingComment"
+                        ></textarea>
+                        <div class="edit-actions">
+                          <button
+                            @click="saveEditComment"
+                            class="btn btn-sm btn-primary"
+                            :disabled="!editingCommentContent.trim() || isSavingComment"
+                          >
+                            <span v-if="isSavingComment" class="loading-spinner-small"></span>
+                            <span v-else class="icon">💾</span>
+                            {{ isSavingComment ? 'Saving...' : 'Save' }}
+                          </button>
+                          <button
+                            @click="cancelEditComment"
+                            class="btn btn-sm btn-outline"
+                            :disabled="isSavingComment"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                      <!-- Normal Content -->
+                      <div v-else>
+                        {{ comment.content }}
+                      </div>
                     </div>
-                  </div>
-                  <div class="comment-content">
-                    {{ comment.content }}
-                  </div>
-                  <div class="comment-actions">
-                    <!-- Upvote/Downvote -->
-                    <button
-                      @click="canVote && upvoteComment(comment.id)"
-                      class="btn btn-sm btn-outline"
-                      :class="{ 'voted': comment.upvotes?.some((u: { id: number }) => u.id === currentUser?.id) }"
-                      :disabled="selectedDiscussion?.isArchived || !canVote"
-                      :title="!canVote ? 'You do not have permission to vote (requires Vote permission)' : ''"
-                    >
-                      <span class="icon">👍</span>
-                      {{ comment.upvotes?.length || 0 }}
-                    </button>
-                    <button
-                      @click="canVote && downvoteComment(comment.id)"
-                      class="btn btn-sm btn-outline"
-                      :class="{ 'voted': comment.downvotes?.some((d: { id: number }) => d.id === currentUser?.id) }"
-                      :disabled="selectedDiscussion?.isArchived || !canVote"
-                      :title="!canVote ? 'You do not have permission to vote (requires Vote permission)' : ''"
-                    >
-                      <span class="icon">👎</span>
-                      {{ comment.downvotes?.length || 0 }}
-                    </button>
-                    <!-- Edit/Delete comment -->
-                    <button
-                      @click="(canEditComment(comment) || canManageComments) && editComment(comment)"
-                      class="btn btn-sm btn-outline"
-                      :disabled="selectedDiscussion?.isArchived || !(canEditComment(comment) || canManageComments)"
-                      :title="!(canEditComment(comment) || canManageComments) ? 'You do not have permission to edit comments (requires ManageComments or be the comment owner)' : ''"
-                    >
-                      <span class="icon">✏️</span>
-                      Edit
-                    </button>
-                    <button
-                      @click="(canDeleteComment(comment) || canManageComments) && deleteComment(comment.id)"
-                      class="btn btn-sm btn-outline btn-danger"
-                      :disabled="selectedDiscussion?.isArchived || !(canDeleteComment(comment) || canManageComments)"
-                      :title="!(canDeleteComment(comment) || canManageComments) ? 'You do not have permission to delete comments (requires ManageComments or be the comment owner)' : ''"
-                    >
-                      <span class="icon">🗑️</span>
-                      Delete
-                    </button>
+                    <div class="comment-actions">
+                      <!-- Upvote/Downvote -->
+                      <button
+                        @click="canVote && upvoteComment(comment.id)"
+                        class="btn btn-sm btn-outline"
+                        :class="{ 'voted': comment.upvotes?.some((u: { id: number }) => u.id === currentUser?.id) }"
+                        :disabled="selectedDiscussion?.isArchived || !canVote"
+                        :title="!canVote ? 'You do not have permission to vote (requires Vote permission)' : ''"
+                      >
+                        <span class="icon">👍</span>
+                        {{ comment.upvotes?.length || 0 }}
+                      </button>
+                      <button
+                        @click="canVote && downvoteComment(comment.id)"
+                        class="btn btn-sm btn-outline"
+                        :class="{ 'voted': comment.downvotes?.some((u: { id: number }) => u.id === currentUser?.id) }"
+                        :disabled="selectedDiscussion?.isArchived || !canVote"
+                        :title="!canVote ? 'You do not have permission to vote (requires Vote permission)' : ''"
+                      >
+                        <span class="icon">👎</span>
+                        {{ comment.downvotes?.length || 0 }}
+                      </button>
+
+                      <!-- Edit/Delete Actions -->
+                      <div class="comment-action-buttons">
+                        <button
+                          v-if="canEditComment(comment)"
+                          @click="editComment(comment)"
+                          class="btn btn-sm btn-outline"
+                          :disabled="selectedDiscussion?.isArchived"
+                        >
+                          <span class="icon">✏️</span>
+                          Edit
+                        </button>
+                        <button
+                          v-if="canDeleteComment(comment)"
+                          @click="deleteComment(comment.id)"
+                          class="btn btn-sm btn-outline btn-danger"
+                          :disabled="selectedDiscussion?.isArchived"
+                        >
+                          <span class="icon">🗑️</span>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -339,7 +400,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Delete Discussion Dialog -->
     <DeleteDiscussionDialog
@@ -358,6 +419,16 @@
       @close="closeEditDialog"
       @updated="loadDiscussions"
     />
+
+    <!-- Delete Comment Dialog -->
+    <DeleteCommentDialog
+      v-if="showDeleteCommentDialog && commentToDelete"
+      :comment="commentToDelete"
+      :discussion-id="Number(selectedDiscussion?.id) || 0"
+      :project-id="props.projectId"
+      @close="closeDeleteCommentDialog"
+      @deleted="handleDeleteCommentConfirmed"
+    />
   </div>
 </template>
 
@@ -366,6 +437,7 @@ import { ref, onMounted, computed, nextTick, type ComputedRef, watch, watchEffec
 import { useAuthStore } from '../store/auth'
 import DeleteDiscussionDialog from './DeleteDiscussionDialog.vue'
 import EditDiscussionDialog from './EditDiscussionDialog.vue'
+import DeleteCommentDialog from './DeleteCommentDialog.vue'
 import axiosInstance from '../api'
 import { useProjectMemberPermissions } from '../composables/useProjectMemberPermissions'
 import { parsePermissionFlags } from '../utils/permissions'
@@ -388,6 +460,7 @@ interface Comment {
     id: number
     username: string
     fullName?: string
+    avatarUrl?: string
   }
   createdAt: string
   isEdited: boolean
@@ -428,6 +501,12 @@ const showDeleteDialog = ref(false)
 const discussionToDelete = ref<Discussion | null>(null)
 const showEditDialog = ref(false)
 const discussionToEdit = ref<Discussion | null>(null)
+const showDeleteCommentDialog = ref(false)
+const commentToDelete = ref<Comment | null>(null)
+const editingComment = ref<Comment | null>(null)
+const editingCommentContent = ref('')
+const isEditingComment = ref(false)
+const isSavingComment = ref(false)
 
 // Form data
 const newDiscussion = ref({
@@ -607,27 +686,131 @@ const closeDeleteDialog = () => {
 }
 
 const editComment = (comment: Comment) => {
-  // TODO: Implement edit comment
-  console.log('Edit comment:', comment)
+  editingComment.value = comment
+  editingCommentContent.value = comment.content
+  isEditingComment.value = true
 }
 
-const deleteComment = async (commentId: number) => {
-  if (!selectedDiscussion.value || !confirm('Are you sure you want to delete this comment?')) return
+const saveEditComment = async () => {
+  if (!editingComment.value || !editingCommentContent.value.trim()) return
 
+  isSavingComment.value = true
   try {
-    await axiosInstance.delete(`/projects/${props.projectId}/discussions/${selectedDiscussion.value.id}/${commentId}`)
-    await viewDiscussion(selectedDiscussion.value)
+    await axiosInstance.patch(`/projects/${props.projectId}/discussions/${selectedDiscussion.value?.id}/${editingComment.value.id}`, {
+      content: editingCommentContent.value.trim()
+    })
+
+    // Cập nhật comment trong state local
+    if (selectedDiscussion.value?.comments) {
+      const commentIndex = selectedDiscussion.value.comments.findIndex((c: Comment) => c.id === editingComment.value?.id)
+      if (commentIndex !== -1) {
+        selectedDiscussion.value.comments[commentIndex].content = editingCommentContent.value.trim()
+        selectedDiscussion.value.comments[commentIndex].isEdited = true
+      }
+    }
+
+    // Reset editing state
+    editingComment.value = null
+    editingCommentContent.value = ''
+    isEditingComment.value = false
+    isSavingComment.value = false
+
+    // Reload discussion list để cập nhật
+    await loadDiscussions()
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Failed to delete comment'
+    console.error('Failed to edit comment:', err)
+    // Không reset editing state nếu có lỗi để user có thể sửa lại
   }
 }
 
+const cancelEditComment = () => {
+  editingComment.value = null
+  editingCommentContent.value = ''
+  isEditingComment.value = false
+  isSavingComment.value = false
+}
+
+const deleteComment = async (commentId: number) => {
+  if (!selectedDiscussion.value) return
+
+  // Tìm comment cần xóa
+  const comment = selectedDiscussion.value.comments?.find((c: Comment) => c.id === commentId)
+  if (comment) {
+    commentToDelete.value = comment
+    showDeleteCommentDialog.value = true
+  }
+}
+
+const handleDeleteCommentConfirmed = async () => {
+  if (!selectedDiscussion.value || !commentToDelete.value) return
+
+  try {
+    // Lưu comment ID trước khi reset state
+    const commentIdToDelete = commentToDelete.value.id
+
+    // Đóng modal và reset state ngay lập tức
+    showDeleteCommentDialog.value = false
+    commentToDelete.value = null
+
+    // Xóa comment khỏi state local ngay lập tức để UI cập nhật
+    if (selectedDiscussion.value.comments) {
+      selectedDiscussion.value.comments = selectedDiscussion.value.comments.filter(
+        (c: Comment) => c.id !== commentIdToDelete
+      )
+    }
+
+    // Gọi API xóa comment (không cần await để không block UI)
+    axiosInstance.delete(`/projects/${props.projectId}/discussions/${selectedDiscussion.value.id}/${commentIdToDelete}`)
+      .catch((err: any) => {
+        console.error('Failed to delete comment:', err)
+      })
+
+    // Reload lại danh sách discussions để cập nhật số comment
+    await loadDiscussions()
+  } catch (err: any) {
+    console.error('Failed to delete comment:', err)
+    await loadDiscussions()
+  }
+}
+
+const closeDeleteCommentDialog = () => {
+  showDeleteCommentDialog.value = false
+  commentToDelete.value = null
+}
+
 const canEditComment = (comment: Comment) => {
-  return currentUser.value?.id === comment.author?.id
+  // Chỉ comment author mới được edit comment
+  const currentUserId = Number(currentUser.value?.id)
+  const commentAuthorId = Number(comment.author?.id)
+
+  console.log('=== DEBUG canEditComment ===')
+  console.log('currentUserId:', currentUserId, typeof currentUserId)
+  console.log('commentAuthorId:', commentAuthorId, typeof commentAuthorId)
+  console.log('comment.author:', comment.author)
+  console.log('currentUser.value:', currentUser.value)
+  console.log('Result:', currentUserId === commentAuthorId)
+
+  return currentUserId === commentAuthorId
 }
 
 const canDeleteComment = (comment: Comment) => {
-  return currentUser.value?.id === comment.author?.id || props.canManageDiscussions
+  // Comment author hoặc discussion owner có thể delete comment
+  const currentUserId = Number(currentUser.value?.id)
+  const commentAuthorId = Number(comment.author?.id)
+  const projectAuthorId = Number(props.project?.author?.id)
+
+  const isCommentAuthor = currentUserId === commentAuthorId
+  const isDiscussionOwner = currentUserId === projectAuthorId
+
+  console.log('=== DEBUG canDeleteComment ===')
+  console.log('currentUserId:', currentUserId)
+  console.log('commentAuthorId:', commentAuthorId)
+  console.log('projectAuthorId:', projectAuthorId)
+  console.log('isCommentAuthor:', isCommentAuthor)
+  console.log('isDiscussionOwner:', isDiscussionOwner)
+  console.log('Result:', isCommentAuthor || isDiscussionOwner)
+
+  return isCommentAuthor || isDiscussionOwner
 }
 
 const toggleDropdown = (discussionId: number) => {
@@ -652,6 +835,47 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString()
 }
 
+// Avatar helper functions
+const getAvatarText = (user: { fullName?: string; username: string }) => {
+  const name = user.fullName || user.username
+  const words = name.trim().split(' ')
+  if (words.length >= 2) {
+    return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase()
+  }
+  return name.charAt(0).toUpperCase()
+}
+
+const getFullAvatarUrl = (avatarUrl: string) => {
+  if (!avatarUrl) return ''
+  if (avatarUrl.startsWith('http')) return avatarUrl
+
+  // avatarUrl từ backend có dạng '/uploads/avatars/filename.jpg'
+  // Chúng ta cần lấy ra chỉ 'filename.jpg'
+  const parts = avatarUrl.split('/');
+  const filename = parts[parts.length - 1]; // Lấy phần tử cuối cùng, là tên file
+
+  // Đường dẫn đầy đủ sẽ là VITE_API_URL + /users/uploads/avatars/ + filename
+  // VITE_API_URL thường là http://localhost:3000/api
+  return `${import.meta.env.VITE_API_URL}/users/uploads/avatars/${filename}`;
+}
+
+const getRandomColor = (seed: string | number) => {
+  const colors = [
+    '#4299e1', '#3182ce', '#2b6cb0', '#2c5282', // Blue shades
+    '#48bb78', '#38a169', '#2f855a', '#276749', // Green shades
+    '#ed8936', '#dd6b20', '#c05621', '#9c4221', // Orange shades
+    '#f56565', '#e53e3e', '#c53030', '#9b2c2c', // Red shades
+    '#9f7aea', '#805ad5', '#6b46c1', '#553c9a', // Purple shades
+    '#ed64a6', '#d53f8c', '#b83280', '#97266d', // Pink shades
+    '#38b2ac', '#319795', '#2c7a7b', '#285e61', // Teal shades
+    '#f6ad55', '#ed8936', '#dd6b20', '#c05621'  // Yellow shades
+  ]
+  const index = typeof seed === 'string'
+    ? seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    : seed
+  return colors[index % colors.length]
+}
+
 const closeEditDialog = () => {
   showEditDialog.value = false
   discussionToEdit.value = null
@@ -665,10 +889,10 @@ onMounted(() => {
 // Permission logic
 const normalizedMembers = computed(() => {
   if (!props.members) return [];
-  return props.members.map(m => ({
+  return props.members.map((m: any) => ({
     ...m,
     roles: Array.isArray(m.roles)
-      ? m.roles.map(r => {
+      ? m.roles.map((r: any) => {
         let permissions = r.permissions;
         if ((!permissions || permissions.length === 0) && r.permissionFlags) {
           permissions = parsePermissionFlags(r.permissionFlags);
@@ -684,10 +908,10 @@ const { hasPermission } = useProjectMemberPermissions(
   normalizedMembers,
   computed(() => props.currentUser || null)
 )
-const canViewThread = computed(() => hasPermission('ViewThread'))
+const canViewThread = computed(() => hasPermission('ViewThread') || hasPermission('ManageDiscussions'))
 const canManageDiscussions = computed(() => hasPermission('ManageDiscussions'))
 const canManageComments = computed(() => hasPermission('ManageComments'))
-const canPostComment = computed(() => hasPermission('PostComment'))
+const canPostComment = computed(() => hasPermission('PostComment') || hasPermission('ManageDiscussions'))
 const canVote = computed(() => hasPermission('Vote'))
 
 // Debug: log dữ liệu khi normalizedMembers hoặc quyền thay đổi
@@ -696,9 +920,13 @@ watch([normalizedMembers], () => {
   console.log('normalizedMembers:', normalizedMembers.value);
 });
 watchEffect(() => {
+  console.log('=== DEBUG PERMISSIONS ===');
   console.log('canManageDiscussions:', canManageDiscussions.value);
   console.log('canPostComment:', canPostComment.value);
   console.log('currentUser:', currentUser.value);
+  console.log('hasPermission("PostComment"):', hasPermission('PostComment'));
+  console.log('normalizedMembers:', normalizedMembers.value);
+  console.log('selectedDiscussion?.isArchived:', selectedDiscussion.value?.isArchived);
 });
 </script>
 
@@ -931,12 +1159,11 @@ watchEffect(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 9999;
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000;
-  padding: 1rem;
+  justify-content: center;
 }
 
 .modal-content {
@@ -946,7 +1173,9 @@ watchEffect(() => {
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 10000;
 }
 
 .discussion-detail-modal {
@@ -1093,7 +1322,21 @@ watchEffect(() => {
   gap: 0.5rem;
 }
 
-.author-avatar {
+.author-avatar-wrapper {
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.author-avatar-img {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e2e8f0;
+}
+
+.author-avatar-text {
   width: 1.5rem;
   height: 1.5rem;
   background: #4299e1;
@@ -1104,6 +1347,7 @@ watchEffect(() => {
   justify-content: center;
   font-weight: 600;
   font-size: 0.75rem;
+  border: 2px solid #e2e8f0;
 }
 
 .author-name {
@@ -1130,10 +1374,46 @@ watchEffect(() => {
   color: #4a5568;
 }
 
+.comment-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.comment-edit-form textarea {
+  padding: 0.5rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 5px;
+  font-size: 0.85rem;
+  transition: border-color 0.3s ease;
+  min-height: 50px; /* Ensure minimum height for the textarea */
+  max-height: 120px; /* Max height for the textarea */
+  overflow-y: auto;
+}
+
+.comment-edit-form textarea:focus {
+  outline: none;
+  border-color: #4299e1;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
 .comment-actions {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.comment-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
 .btn-sm {

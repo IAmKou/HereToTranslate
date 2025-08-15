@@ -288,4 +288,26 @@ export class UserManagerService {
   async updateAvatar(userId: number, avatarUrl: string) {
     await this.userRepository.update(userId, { avatarUrl });
   }
+
+  async updateAvatarWithData(userId: number, avatarUrl: string, avatarData: Buffer, avatarMimeType: string) {
+    await this.userRepository.update(userId, {
+      avatarUrl,
+      avatarData,
+      avatarMimeType
+    });
+  }
+
+  async getUserWithAvatar(userId: number) {
+    return this.userRepository.findOne({
+      where: { id: BigInt(userId) },
+      select: ['id', 'avatarData', 'avatarMimeType', 'avatarUrl']
+    });
+  }
+
+  async findUserByAvatarFilename(filename: string) {
+    return this.userRepository.findOne({
+      where: { avatarUrl: `/uploads/avatars/${filename}` },
+      select: ['id']
+    });
+  }
 }

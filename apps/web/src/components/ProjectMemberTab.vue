@@ -29,6 +29,7 @@ interface User {
   phone?: string;
   fullName?: string;
   username?: string;
+  avatarUrl?: string;
   roles?: Role[];
   selectedRole?: string;
 }
@@ -217,6 +218,7 @@ const loadMembers = async () => {
     const { data } = await axiosInstance.get(`/projects/${props.project.id}/members`);
     console.log('🔍 Raw members data from backend:', data);
     console.log('🔍 Members array:', data.members);
+    console.log('🔍 Sample member avatarUrl:', data.members?.[0]?.avatarUrl);
 
     const memberMap: MemberMap = {};
 
@@ -722,7 +724,44 @@ function getJoinedDateValue(member: any): string | null {
 // Helper to get avatar text safely
 function getAvatarText(user: User) {
   const name = user?.fullName || user?.username || user?.email || user?.phone || '';
-  return name ? name.charAt(0).toUpperCase() : '?';
+  if (name) {
+    // Lấy 2 ký tự đầu tiên nếu có thể
+    const initials = name.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+    return initials.length >= 2 ? initials.substring(0, 2) : initials;
+  }
+  return '?';
+}
+
+// Helper to get full avatar URL
+function getFullAvatarUrl(avatarUrl?: string) {
+  console.log('🔍 getFullAvatarUrl input:', avatarUrl);
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl; // Data URL từ preview
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const fullUrl = base + '/users' + avatarUrl;
+  console.log('🔍 getFullAvatarUrl output:', fullUrl);
+  return fullUrl;
+}
+
+// Helper to get random color for avatar
+function getRandomColor(seed: string): string {
+  const colors = [
+    '#3b82f6', // blue
+    '#10b981', // green
+    '#f59e0b', // yellow
+    '#ef4444', // red
+    '#8b5cf6', // purple
+    '#ec4899', // pink
+    '#06b6d4', // cyan
+    '#84cc16', // lime
+    '#f97316', // orange
+    '#8b5cf6', // violet
+  ];
+  const index = seed.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+  return colors[index % colors.length];
 }
 
 const permissionBitmaskMap = availablePermissions.reduce((map, perm, index) => {
@@ -1423,7 +1462,22 @@ watch(() => props.members, (val) => {
               <td>{{ idx + 1 }}</td>
               <td>
                 <div :title="member.fullName + ' - ' + member.email" class="user-cell">
-                  <div class="user-avatar">{{ (member.fullName || member.username).charAt(0).toUpperCase() }}</div>
+                  <div class="user-avatar">
+                    <img
+                      v-if="member.avatarUrl"
+                      :src="getFullAvatarUrl(member.avatarUrl)"
+                      :alt="member.fullName || member.username"
+                      class="avatar-img"
+                      @error="(e) => { e.target.style.display = 'none'; e.target.nextElementSibling.style.display = 'flex'; }"
+                    />
+                    <div
+                      v-else
+                      class="avatar-text"
+                      :style="{ backgroundColor: getRandomColor(member.username || member.id) }"
+                    >
+                      {{ getAvatarText(member) }}
+                    </div>
+                  </div>
                   <div class="user-info">
                     <div class="user-name">{{ member.fullName || member.username }}</div>
                     <div class="user-email">{{ member.email }}</div>
@@ -1612,8 +1666,6 @@ watch(() => props.members, (val) => {
       >
         <div class="modal-overlay" @click="cancelDeleteRole"></div>
         <div class="modal-content">
-          <!-- Add Toast inside modal -->
-          <Toast position="top-right" group="modal-messages" />
           <div class="modal-header">
             <h3>Delete Role</h3>
             <button class="close-btn" @click="cancelDeleteRole">
@@ -1816,8 +1868,6 @@ watch(() => props.members, (val) => {
       >
         <div class="modal-overlay" @click="cancelDeleteMember"></div>
         <div class="modal-content">
-          <!-- Add Toast inside modal -->
-          <Toast position="top-right" group="modal-messages" />
           <div class="modal-header">
             <h3>Remove Member</h3>
             <button class="close-btn" @click="cancelDeleteMember">
@@ -2348,14 +2398,37 @@ watch(() => props.members, (val) => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, #7f53ac 0%, #4299e1 100%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px #3182ce22;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e7ef;
+}
+
+.avatar-text {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
   color: #fff;
   font-weight: 700;
   font-size: 0.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(135deg, #7f53ac 0%, #4299e1 100%);
+  border: 2px solid #e0e7ef;
   box-shadow: 0 2px 6px #3182ce22;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  min-width: 1.5rem;
+  min-height: 1.5rem;
 }
 
 .user-info {

@@ -6,6 +6,7 @@ import {
   RequestStatus,
   TransactionEntity,
   TransactionStatus,
+  TransactionType,
   UserEntity,
   WalletEntity
 } from '#LocalProject/Entities';
@@ -528,30 +529,36 @@ export class RequestManagerService {
 
     // If it's a private request, refund the deposit
     if (!request.isPublic) {
-      const transaction = await this.transactionRepository.findOne({
+      // Find only requester's deposit transaction for this request
+      const requesterTransaction = await this.transactionRepository.findOne({
         where: {
-          request: { id: requestId },
+          request: { id: BigInt(requestId) },
           user: { id: request.requester.id },
           status: TransactionStatus.Pending,
         },
       });
 
-      if (transaction) {
-        const wallet = await this.walletService.getOrCreateWallet(
-          request.requester.id
-        );
-        wallet.balance = Number(wallet.balance) + Number(transaction.amount);
-        transaction.status = TransactionStatus.Failed;
+      if (requesterTransaction) {
+        try {
+          // Mark requester's transaction as cancelled
+          requesterTransaction.status = TransactionStatus.Cancelled;
+          await this.transactionRepository.save(requesterTransaction);
 
-        await this.transactionRepository.save(transaction);
-        await this.walletRepository.save(wallet);
+          // Money is held in admin wallet, so we need to deduct it from admin wallet
+          // This represents the money being "released" from being held for the request
+          const adminWallet = await this.walletService.getOrCreateWallet(BigInt(1)); // Admin user ID
+          adminWallet.balance = Number(adminWallet.balance) - Math.abs(Number(requesterTransaction.amount));
+          await this.walletRepository.save(adminWallet);
 
-        logger.log(
-          `Refunded $${transaction.amount} to user ID ${request.requester.id} for canceled private request ID ${request.id}`
-        );
+          logger.log(
+            `Cancelled requester transaction ID ${requesterTransaction.id} for canceled private request ID ${request.id}. Money $${Math.abs(Number(requesterTransaction.amount))} was deducted from admin wallet (released from hold).`
+          );
+        } catch (e) {
+          logger.error('Refund during private cancel failed:', e);
+        }
       } else {
         logger.warn(
-          `No pending deposit transaction found for private request ID ${request.id} and user ID ${request.requester.id}`
+          `No pending deposit transaction found for requester in private request ID ${request.id}`
         );
       }
     }

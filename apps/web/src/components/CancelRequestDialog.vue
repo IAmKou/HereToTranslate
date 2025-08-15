@@ -75,7 +75,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
+import axiosInstance from '../api'
 
 const props = defineProps({
   request: {
@@ -102,7 +102,7 @@ async function handleCancel() {
   loading.value = true
 
   try {
-    await axios.post(`/api/requests/${props.request.id}/cancel`, {
+    await axiosInstance.post(`/requests/${props.request.id}/cancel`, {
       reason: reason.value
     })
 

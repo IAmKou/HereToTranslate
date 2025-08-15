@@ -427,11 +427,25 @@
                   <i class="pi pi-pencil"></i> Edit Request
                 </button>
                 <button
-                  v-if="request && request.requester && userId !== null && request.requester.id === userId && !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.status)"
+                  v-if="request && request.requester && userId !== null && request.requester.id === userId && request.status === 'PENDING'"
                   class="action-btn danger"
                   @click="cancelRequest"
                 >
                   <span class="btn-icon">✕</span> Cancel Request
+                </button>
+                <button
+                  v-if="request && userId !== null && (request.requester?.id === userId || request.assignee?.id === userId) && ['APPROVED','WAITING_APPROVAL','EXTENSION_REQUESTED','EXTENSION_APPROVED'].includes(request.status)"
+                  class="action-btn danger"
+                  @click="openProjectCancelDialog"
+                >
+                  <span class="btn-icon">✕</span> Request Project Cancellation
+                </button>
+                <button
+                  v-if="canRespondCancellation && pendingCancellationId !== null"
+                  class="action-btn danger"
+                  @click="openRespondDialog"
+                >
+                  <span class="btn-icon">⚠</span> Respond to Cancellation
                 </button>
                 <button
                   v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
@@ -475,6 +489,18 @@
       @close="showCancelDialog = false"
       @cancelled="onRequestCancelled"
     />
+    <ProjectCancellationDialog
+      v-if="showProjectCancelDialog && request"
+      :request-id="request.id"
+      @close="showProjectCancelDialog = false"
+      @completed="onProjectCancellationRequested"
+    />
+    <CancellationRespondDialog
+      v-if="showRespondDialog && pendingCancellationId !== null"
+      :cancellation-id="pendingCancellationId"
+      @close="showRespondDialog = false"
+      @completed="onCancellationResponded"
+    />
   </div>
 </template>
 
@@ -491,6 +517,8 @@ import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
 import RequestEditView from './RequestEditView.vue'
 import CancelRequestDialog from '../components/CancelRequestDialog.vue'
+import ProjectCancellationDialog from '../components/ProjectCancellationDialog.vue'
+import CancellationRespondDialog from '../components/CancellationRespondDialog.vue'
 import { nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { getEnvironmentConfig } from '../utils/environment';
@@ -574,6 +602,9 @@ const loading = ref<boolean>(true);
 const userId = ref<number | null>(null);
 const showEdit = ref(false)
 const showCancelDialog = ref(false);
+const showProjectCancelDialog = ref(false)
+const showRespondDialog = ref(false)
+const pendingCancellationId = ref<number | null>(null)
 const registerLoading = ref<boolean>(false);
 const toast = useToast();
 
@@ -899,6 +930,43 @@ function onRequestCancelled() {
   }, 1500);
 }
 
+function openProjectCancelDialog() {
+  showProjectCancelDialog.value = true
+}
+
+function onProjectCancellationRequested() {
+  toast.add({ severity: 'success', summary: 'Submitted', detail: 'Cancellation request submitted.', life: 3000 })
+  fetchRequestDetail()
+}
+
+const canRespondCancellation = computed(() => {
+  if (!request.value || userId.value == null) return false
+  if (request.value.status !== 'CANCELLATION_PENDING') return false
+  const isParty = request.value.requester?.id === userId.value || request.value.assignee?.id === userId.value
+  return !!isParty
+})
+
+async function loadPendingCancellation() {
+  if (!request.value?.id) return
+  try {
+    const res = await axiosInstance.get(`/project-cancellation/history/${request.value.id}`)
+    const pending = (res.data || []).find((c: any) => c.status === 'PENDING')
+    pendingCancellationId.value = pending ? Number(pending.id) : null
+  } catch (e) {
+    pendingCancellationId.value = null
+  }
+}
+
+function openRespondDialog() {
+  showRespondDialog.value = true
+}
+
+function onCancellationResponded() {
+  toast.add({ severity: 'success', summary: 'Updated', detail: 'Cancellation response submitted.', life: 3000 })
+  showRespondDialog.value = false
+  fetchRequestDetail()
+}
+
 function approveRequest() {
   alert('Approve request!');
 }
@@ -934,6 +1002,9 @@ onMounted(async () => {
   const user = await authService.getCurrentUser();
   userId.value = user?.id ?? null;
   await fetchRequestDetail();
+  if (request.value?.status === 'CANCELLATION_PENDING') {
+    await loadPendingCancellation()
+  }
 });
 
 

@@ -8,8 +8,16 @@ export enum TransactionStatus {
   WaitingApproval = 'WAITING_APPROVAL', // Translation done, waiting confirmation
   Approved = 'APPROVED',         // Both parties approved the result
   Completed = 'COMPLETED',       // Payment released to translator
-  Failed = 'FAILED',
+  Failed = 'FAILED',             // Transaction failed due to technical issues
+  Cancelled = 'CANCELLED',       // Transaction cancelled by user
   Rejected = 'REJECTED',         // Admin/user actively rejected
+}
+
+export enum TransactionType {
+  DEPOSIT = 'DEPOSIT',           // User deposits money into system
+  PAYMENT = 'PAYMENT',           // Payment between users
+  WITHDRAWAL = 'WITHDRAWAL',     // User withdraws money from system
+  REFUND = 'REFUND',             // Money refunded to user
 }
 
 
@@ -29,6 +37,9 @@ export class TransactionEntity {
 
   @Column({ type: 'enum', enum: TransactionStatus, default: TransactionStatus.Pending })
   status: TransactionStatus;
+
+  @Column({ type: 'enum', enum: TransactionType, default: TransactionType.PAYMENT })
+  type: TransactionType;
 
   @Column({ nullable: true })
   paypalOrderId: string;

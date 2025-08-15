@@ -10,6 +10,7 @@ import {
   RequestStatus,
   TransactionEntity,
   TransactionStatus,
+  TransactionType,
   UserEntity,
   WalletEntity,
 } from '#LocalProject/Entities';
@@ -216,6 +217,7 @@ export class PaypalService {
         request,
         amount: depositAmount,
         status: TransactionStatus.Pending,
+        type: TransactionType.DEPOSIT,
         paypalOrderId: data.id,
       });
 
@@ -348,26 +350,31 @@ export class PaypalService {
         }
       );
 
+      // Create transaction for requester (who is paying) - positive amount (deposit)
       const requesterTransaction = await this.transactionRepo.save({
         user,
         request,
         amount: depositAmount,
         status: TransactionStatus.Pending,
+        type: TransactionType.DEPOSIT,
         paypalOrderId: data.id,
       });
+
+      // NOTE: Assignee gets NO transaction - money is held in the request
+      // Assignee will only get a transaction when project is completed
 
       console.log(
         '✅ Successfully saved requester transaction in createPrivateDeposit:',
         {
-          id: requesterTransaction.id,
-          userId: requesterTransaction.user?.id,
-          requestId: requesterTransaction.request?.id,
-          amount: requesterTransaction.amount,
-          status: requesterTransaction.status,
-          paypalOrderId: requesterTransaction.paypalOrderId,
-          userEmail: requesterTransaction.user?.email,
-          requestDescription: requesterTransaction.request?.description,
-          createdAt: requesterTransaction.createdAt,
+          requesterTransaction: {
+            id: requesterTransaction.id,
+            userId: requesterTransaction.user?.id,
+            amount: requesterTransaction.amount,
+            status: requesterTransaction.status,
+            type: requesterTransaction.type,
+          },
+          paypalOrderId: data.id,
+          note: 'Assignee gets NO transaction - money is held in request until project completion'
         }
       );
 
@@ -408,6 +415,7 @@ export class PaypalService {
       orderId,
       time: new Date().toISOString(),
     });
+    console.log('[DEBUG] ===> BẮT ĐẦU XỬ LÝ PAYMENT CAPTURE');
     const accessToken = await this.getAccessToken();
 
     try {
@@ -453,6 +461,16 @@ export class PaypalService {
 
       const { user: payerUser, request } = transaction;
 
+      console.log('[DEBUG] ===> REQUEST INFO:', {
+        requestId: request.id,
+        isPublic: request.isPublic,
+        status: request.status,
+        assigneeId: request.assignee?.id,
+        registrantsCount: request.registrants?.length || 0,
+        payerUserId: payerUser.id,
+        payerUserEmail: payerUser.email,
+      });
+
       console.log('🔄 Finding translator from registrants:', {
         registrants: request.registrants?.map((r) => ({
           id: r.id,
@@ -462,13 +480,32 @@ export class PaypalService {
         payerUserEmail: payerUser.email,
       });
 
-      const translator = request.registrants.find(
-        (registrant) => registrant.id !== payerUser.id
-      );
+      // Xử lý cả public và private request
+      let translator = null;
 
-      if (!translator) {
-        console.error('❌ No translator found in registrants');
-        throw new Error('No translator found in registrants');
+      if (request.isPublic) {
+        // Public request - tìm translator từ registrants
+        translator = request.registrants.find(
+          (registrant) => registrant.id !== payerUser.id
+        );
+
+        if (!translator) {
+          console.error('❌ No translator found in registrants');
+          throw new Error('No translator found in registrants');
+        }
+      } else {
+        // Private request - translator đã được assign sẵn
+        translator = request.assignee;
+
+        console.log('[DEBUG] ===> PRIVATE REQUEST - ASSIGNEE FOUND:', {
+          assigneeId: translator?.id,
+          assigneeEmail: translator?.email,
+        });
+
+        if (!translator) {
+          console.error('❌ No assignee found for private request');
+          throw new Error('No assignee found for private request');
+        }
       }
 
       console.log('✅ Found translator:', {
@@ -500,71 +537,33 @@ export class PaypalService {
         request.status = RequestStatus.Approved;
         transaction.status = TransactionStatus.On_Hold;
 
-        // Get translator's wallet to access paypalEmail
-        const translatorWallet =
-          await this.walletManagerService.getOrCreateWallet(translator.id);
-
-        console.log('🔄 Creating translator transaction:', {
-          userId: translator.id,
-          userEmail: translator.email,
-          amount: Math.abs(transaction.amount),
-          requestId: request.id,
-        });
-
-        const translatorTransaction = this.transactionRepo.create({
-          user: { id: translator.id },
-          request: { id: request.id },
-          amount: Math.abs(transaction.amount),
-          status: TransactionStatus.On_Hold,
-          paypalEmail: translatorWallet?.paypalEmail ?? null,
-        } as DeepPartial<TransactionEntity>);
+        // NOTE: Only requester gets a transaction - money is held in the request
+        // Translator will only get a transaction when project is completed
 
         // Get payer's wallet to access paypalEmail
         const payerWallet = await this.walletManagerService.getOrCreateWallet(
           payerUser.id
         );
 
-        console.log('🔄 Creating requester transaction:', {
+        console.log('🔄 Updating requester transaction status to ON_HOLD:', {
           userId: payerUser.id,
           userEmail: payerUser.email,
           amount: Math.abs(transaction.amount),
           requestId: request.id,
         });
 
-        const requesterTransaction = this.transactionRepo.create({
-          user: { id: payerUser.id },
-          request: { id: request.id },
-          amount: Math.abs(transaction.amount),
-          status: TransactionStatus.On_Hold,
-          paypalEmail: payerWallet?.paypalEmail ?? null,
-        } as DeepPartial<TransactionEntity>);
+        // Update the original requester transaction to ON_HOLD (no new transaction needed)
+        transaction.status = TransactionStatus.On_Hold;
+        transaction.paypalEmail = payerWallet?.paypalEmail ?? null;
 
-        console.log('✅ Created requester transaction:', {
-          id: requesterTransaction.id,
-          userId: requesterTransaction.user?.id,
-          userEmail: requesterTransaction.user?.email,
-          requestId: requesterTransaction.request?.id,
-          amount: requesterTransaction.amount,
-          status: requesterTransaction.status,
-          type: 'Deposit', // Thêm type để debug
-        });
-
-        // Log transaction của translator
-        console.log('[DEBUG] TRANSLATOR TRANSACTION:', {
-          userId: translatorTransaction.user?.id,
-          userEmail: translatorTransaction.user?.email,
-          requestId: translatorTransaction.request?.id,
-          amount: translatorTransaction.amount,
-          status: translatorTransaction.status,
-        });
-
-        // Log transaction của requester
-        console.log('[DEBUG] REQUESTER TRANSACTION:', {
-          userId: requesterTransaction.user?.id,
-          userEmail: requesterTransaction.user?.email,
-          requestId: requesterTransaction.request?.id,
-          amount: requesterTransaction.amount,
-          status: requesterTransaction.status,
+        console.log('✅ Updated requester transaction to ON_HOLD:', {
+          id: transaction.id,
+          userId: transaction.user?.id,
+          userEmail: transaction.user?.email,
+          requestId: transaction.request?.id,
+          amount: transaction.amount,
+          status: transaction.status,
+          note: 'Money is held in request until project completion'
         });
 
         // Generate manifest for each file associated with the request
@@ -590,17 +589,15 @@ export class PaypalService {
           );
         }
 
-        console.log('🔄 Saving all transactions to database...');
+        console.log('🔄 Saving request and updated transaction to database...');
         await queryRunner.manager.save([
           request,
           transaction,
-          translatorTransaction,
-          requesterTransaction,
         ]);
-        console.log('✅ Successfully saved all transactions to database');
+        console.log('✅ Successfully saved request and transaction to database');
 
         console.log(
-          '✅ Created transactions in capturePaymentAndCreateProject:',
+          '✅ Updated transaction in capturePaymentAndCreateProject:',
           {
             originalTransaction: {
               id: transaction.id,
@@ -608,20 +605,7 @@ export class PaypalService {
               userEmail: transaction.user?.email,
               amount: transaction.amount,
               status: transaction.status,
-            },
-            translatorTransaction: {
-              id: translatorTransaction.id,
-              userId: translatorTransaction.user?.id,
-              userEmail: translatorTransaction.user?.email,
-              amount: translatorTransaction.amount,
-              status: translatorTransaction.status,
-            },
-            requesterTransaction: {
-              id: requesterTransaction.id,
-              userId: requesterTransaction.user?.id,
-              userEmail: requesterTransaction.user?.email,
-              amount: requesterTransaction.amount,
-              status: requesterTransaction.status,
+              note: 'Money is held in request until project completion'
             },
           }
         );
@@ -636,9 +620,22 @@ export class PaypalService {
         const adminWallet = await this.walletManagerService.getOrCreateWallet(
           this.ADMIN_USER_ID
         );
+
+        console.log('[DEBUG] ===> ADMIN WALLET BEFORE UPDATE:', {
+          adminUserId: this.ADMIN_USER_ID,
+          oldBalance: adminWallet.balance,
+          transactionAmount: transaction.amount,
+          newBalance: Number(adminWallet.balance) + Number(transaction.amount),
+        });
+
         adminWallet.balance =
           Number(adminWallet.balance) + Number(transaction.amount);
         await queryRunner.manager.save(adminWallet);
+
+        console.log('[DEBUG] ===> ADMIN WALLET AFTER UPDATE:', {
+          adminUserId: this.ADMIN_USER_ID,
+          newBalance: adminWallet.balance,
+        });
 
         await queryRunner.commitTransaction();
 
@@ -673,6 +670,14 @@ export class PaypalService {
   }
 
   async capturePayment(orderId: string) {
+    console.log('[DEBUG] ===> ĐÃ VÀO capturePayment', {
+      orderId,
+      time: new Date().toISOString(),
+    });
+
+    // Thêm log call stack để debug
+    console.log('[DEBUG] ===> CAPTURE PAYMENT - CALL STACK:', new Error().stack);
+
     const accessToken = await this.getAccessToken();
 
     try {
@@ -717,56 +722,57 @@ export class PaypalService {
         throw new Error('Invalid request or user information.');
       }
 
+      // Kiểm tra requester wallet trước khi xử lý
+      const requesterWalletBefore = await this.walletManagerService.getOrCreateWallet(user.id);
+      console.log('[DEBUG] ===> CAPTURE PAYMENT - REQUESTER WALLET BEFORE:', {
+        requesterId: user.id,
+        oldBalance: requesterWalletBefore.balance,
+      });
+
+      console.log('[DEBUG] ===> CAPTURE PAYMENT - REQUEST INFO:', {
+        requestId: request.id,
+        isPublic: request.isPublic,
+        status: request.status,
+        assigneeId: request.assignee?.id,
+        userId: user.id,
+        userEmail: user.email,
+        transactionAmount: transaction.amount,
+      });
+
       transaction.status = TransactionStatus.On_Hold;
 
+      // KHÔNG tạo translator transaction cho cả public và private request
+      // Tiền chỉ cần hold trong admin wallet, không cần phân phối cho translator ngay
       let translatorTransaction = null;
-      if (request.assignee && request.assignee.id !== user.id) {
-        const assigneeWallet =
-          await this.walletManagerService.getOrCreateWallet(
-            request.assignee.id
-          );
+      // if (request.assignee && request.assignee.id !== user.id && request.isPublic) {
+      //   // Tạm thời comment lại - không cần translator transaction
+      //   const assigneeWallet =
+      //     await this.walletManagerService.getOrCreateWallet(
+      //       request.assignee.id
+      //     );
 
-        translatorTransaction = this.transactionRepo.create({
-          user: { id: request.assignee.id },
-          request: { id: request.id },
-          amount: transaction.amount,
-          status: TransactionStatus.On_Hold,
-          paypalEmail: assigneeWallet?.paypalEmail ?? null,
-        } as DeepPartial<TransactionEntity>);
-      }
+      //   translatorTransaction = this.transactionRepo.create({
+      //     user: { id: request.assignee.id },
+      //     request: { id: request.id },
+      //     amount: transaction.amount,
+      //     status: TransactionStatus.On_Hold,
+      //     paypalEmail: assigneeWallet?.paypalEmail ?? null,
+      //   } as DeepPartial<TransactionEntity>);
+      // }
 
       await this.transactionRepo.save(transaction);
       if (translatorTransaction) {
         await this.transactionRepo.save(translatorTransaction);
       }
 
-      const requesterWallet = await this.walletManagerService.getOrCreateWallet(
-        request.requester.id
-      );
-
-      const requesterTransaction = this.transactionRepo.create({
-        user: { id: request.requester.id },
-        request: { id: request.id },
-        amount: Math.abs(transaction.amount),
-        status: TransactionStatus.Completed,
-        paypalEmail: requesterWallet?.paypalEmail ?? null,
-      } as DeepPartial<TransactionEntity>);
-
-      await this.transactionRepo.save(requesterTransaction);
-      // Log để debug
-      console.log('[DEBUG] REQUESTER TRANSACTION (capturePayment):', {
-        id: requesterTransaction.id,
-        userId: requesterTransaction.user?.id,
-        userEmail: requesterTransaction.user?.email,
-        requestId: requesterTransaction.request?.id,
-        amount: requesterTransaction.amount,
-        status: requesterTransaction.status,
-      });
+      // Do NOT create a separate requester Completed transaction for deposit capture.
+      // The original deposit transaction is transitioned to ON_HOLD and held until completion/refund.
 
       let projectId = null;
       let receiver = null;
-      // Nếu là public request, cập nhật trạng thái sang Approved và tạo project mới
+      // Xử lý cả public và private request
       if (request.isPublic && request.status !== RequestStatus.Approved) {
+        // Xử lý public request - tạo project mới
         if (!request.category?.id) {
           console.error(
             '[PayPal] Request public thiếu category khi tạo project:',
@@ -820,25 +826,55 @@ export class PaypalService {
           receiver = request.assignee?.fullName || request.assignee?.email;
         }
         await this.requestRepository.save(request);
+      } else if (!request.isPublic) {
+        // Xử lý private request - chỉ cập nhật trạng thái transaction
+        // Private request không cần tạo project ở đây, chỉ cần hold tiền
+        console.log(
+          `[PayPal] Private request payment captured - money held in admin wallet for request ID ${request.id}`
+        );
+        receiver = request.assignee?.fullName || request.assignee?.email;
       }
 
       const adminWallet = await this.walletManagerService.getOrCreateWallet(
         this.ADMIN_USER_ID
       );
+
+      console.log('[DEBUG] ===> CAPTURE PAYMENT - ADMIN WALLET BEFORE UPDATE:', {
+        adminUserId: this.ADMIN_USER_ID,
+        oldBalance: adminWallet.balance,
+        transactionAmount: transaction.amount,
+        newBalance: Number(adminWallet.balance) + Number(transaction.amount),
+      });
+
       adminWallet.balance =
         Number(adminWallet.balance) + Number(transaction.amount);
       await this.walletRepository.save(adminWallet);
-      // Cộng tiền vào balance của user
-      const userWallet = await this.walletManagerService.getOrCreateWallet(
-        user.id
-      );
-      userWallet.balance =
-        Number(userWallet.balance) + Number(transaction.amount);
-      await this.walletManagerService['walletRepository'].save(userWallet);
+
+      console.log('[DEBUG] ===> CAPTURE PAYMENT - ADMIN WALLET AFTER UPDATE:', {
+        adminUserId: this.ADMIN_USER_ID,
+        newBalance: adminWallet.balance,
+      });
+
+      // Kiểm tra requester wallet sau khi xử lý xong
+      const requesterWalletAfter = await this.walletManagerService.getOrCreateWallet(user.id);
+      console.log('[DEBUG] ===> CAPTURE PAYMENT - REQUESTER WALLET AFTER:', {
+        requesterId: user.id,
+        newBalance: requesterWalletAfter.balance,
+        balanceChanged: requesterWalletAfter.balance !== requesterWalletBefore.balance,
+        balanceDifference: Number(requesterWalletAfter.balance) - Number(requesterWalletBefore.balance),
+      });
 
       logger.log(
         `[PayPal] Payment captured for order ${orderId}, request ID ${request.id}, user ID ${user.id}, projectId: ${projectId}`
       );
+
+      // Log cuối cùng trước khi return
+      console.log('[DEBUG] ===> CAPTURE PAYMENT - RETURNING SUCCESS:', {
+        requestId: request.id,
+        isPublic: request.isPublic,
+        adminWalletBalance: adminWallet.balance,
+        requesterWalletBalance: requesterWalletAfter.balance,
+      });
 
       return {
         success: true,
@@ -878,7 +914,7 @@ export class PaypalService {
     // Check if user has enough balance - use dynamic balance calculation
     const userWallet = await this.walletManagerService.getOrCreateWallet(userId);
     const walletDetails = await this.walletManagerService.getWalletDetails(userId);
-    
+
     // Debug: log balance values and types
     console.log('Withdraw - Balance check:', {
       userId,
@@ -892,7 +928,7 @@ export class PaypalService {
       holdAmount: walletDetails.holdAmount,
       comparison: walletDetails.balance < amount
     });
-    
+
     if (walletDetails.balance < amount) {
       throw new BadRequestException(`Insufficient balance for withdrawal. You have $${walletDetails.balance} but requested $${amount}`);
     }
@@ -910,7 +946,7 @@ export class PaypalService {
     try {
       // Process PayPal payout directly
       const payoutResult = await this.processPayPalPayout(paypalEmail, amount, userId);
-      
+
       if (!payoutResult.success) {
         throw new BadRequestException(`PayPal payout failed: ${payoutResult.error}`);
       }
@@ -920,6 +956,7 @@ export class PaypalService {
         user: userEntity,
         amount: -Math.abs(amount),
         status: TransactionStatus.Completed,
+        type: TransactionType.WITHDRAWAL,
         paypalOrderId: paypalOrderId ?? undefined,
         request,
         paypalEmail,
@@ -1344,7 +1381,7 @@ export class PaypalService {
         `Successfully refunded $${depositTransaction.amount} to user ID ${request.requester.id} for request ID ${request.id}`
       );
     } catch (error) {
-        logger.error(`Failed to process refund for request ID ${request.id}: ${error}`);
+      logger.error(`Failed to process refund for request ID ${request.id}: ${error}`);
       throw new InternalServerErrorException('Failed to process refund');
     }
   }

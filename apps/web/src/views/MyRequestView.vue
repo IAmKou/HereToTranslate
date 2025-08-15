@@ -716,6 +716,18 @@
           <!-- Dialogs -->
           <ReviewRequestDialog v-if="showReview" :request="selectedRequest" @close="showReview = false" @reviewed="onRequestReviewed" />
           <CancelRequestDialog v-if="showCancel" :request="selectedRequest" @close="showCancel = false" @cancelled="onRequestCancelled" />
+          <ProjectCancellationDialog
+            v-if="showProjectCancel && selectedRequest"
+            :request-id="selectedRequest.id"
+            @close="showProjectCancel = false"
+            @completed="onProjectCancellationRequested"
+          />
+          <CancellationRespondDialog
+            v-if="showRespond && pendingCancellationId !== null"
+            :cancellation-id="pendingCancellationId"
+            @close="showRespond = false"
+            @completed="onRespondCompleted"
+          />
         </div>
       </div>
     </div>
@@ -734,6 +746,8 @@ import Footer from '../components/AppFooter.vue';
 import EditRequestForm from '../views/RequestEditView.vue'
 import ReviewRequestDialog from '../components/ReviewRequestDialog.vue'
 import CancelRequestDialog from '../components/CancelRequestDialog.vue'
+import ProjectCancellationDialog from '../components/ProjectCancellationDialog.vue'
+import CancellationRespondDialog from '../components/CancellationRespondDialog.vue'
 
 const requests = ref([])
 const loading = ref(false)
@@ -741,6 +755,9 @@ const error = ref(null)
 const showEdit = ref(false)
 const showReview = ref(false)
 const showCancel = ref(false)
+const showProjectCancel = ref(false)
+const showRespond = ref(false)
+const pendingCancellationId = ref(null)
 const selectedRequest = ref(null)
 const sidebarCollapsed = ref(false)
 const toast = useToast()
@@ -1234,6 +1251,25 @@ function onCancel(req) {
   showCancel.value = true
 }
 
+function onProjectCancel(req) {
+  selectedRequest.value = req
+  showProjectCancel.value = true
+}
+
+async function onRequestCancellationCheck(req) {
+  try {
+    const res = await axiosInstance.get(`/project-cancellation/summary/${req.id}`)
+    return res.data?.canCancel === true
+  } catch {
+    return false
+  }
+}
+
+function onRespond(cancellationId) {
+  pendingCancellationId.value = cancellationId
+  showRespond.value = true
+}
+
 function canReview(req) {
   // Tùy quyền, ví dụ: return req.status === 'pending' && userIsAdmin
   return false
@@ -1257,6 +1293,16 @@ function onRequestCancelled() {
     detail: 'Request cancelled successfully',
     life: 3000
   })
+}
+
+function onProjectCancellationRequested() {
+  fetchRequests()
+  toast.add({ severity: 'success', summary: 'Submitted', detail: 'Cancellation request submitted.', life: 3000 })
+}
+
+function onRespondCompleted() {
+  fetchRequests()
+  toast.add({ severity: 'success', summary: 'Updated', detail: 'Cancellation response submitted.', life: 3000 })
 }
 
 function getStatusClass(status) {

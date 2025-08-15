@@ -167,6 +167,33 @@ export class GitHubService {
     });
   }
 
+  /**
+   * Get file content from GitHub if it exists. Returns Buffer and sha or null if not found.
+   */
+  async getFileContentOrNull({
+    repo,
+    path,
+    branch = 'main',
+  }: { repo: string; path: string; branch?: string; }): Promise<{ content: Buffer; sha: string } | null> {
+    try {
+      const { data } = await this.octokit.repos.getContent({
+        owner: this.username,
+        repo,
+        path,
+        ref: branch,
+      });
+
+      if (Array.isArray(data)) return null;
+      const file = data as unknown as { content?: string; sha: string };
+      if (!file || !file.content) return null;
+      const buf = Buffer.from(file.content, 'base64');
+      return { content: buf, sha: file.sha };
+    } catch (err: any) {
+      if (err.status === 404) return null;
+      throw err;
+    }
+  }
+
   async createBranch(repo: string, branchName: string, fromBranch = 'main') {
     const baseBranch = await this.octokit.rest.repos.getBranch({
       owner: this.username,

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Translation Auto-Approved</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #28a745; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background: #f8f9fa; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Translation Auto-Approved</h1>
+        </div>
+        
+        <div class="content">
+            <h2>Translation Request Completed</h2>
+            
+            <div class="success">
+                <strong>🎉 AUTO-APPROVED:</strong> Your translation request has been automatically approved and completed.
+            </div>
+            
+            <h3>Request Details:</h3>
+            <ul>
+                <li><strong>Request ID:</strong> {{request.id}}</li>
+                <li><strong>Description:</strong> {{request.description}}</li>
+                <li><strong>Status:</strong> {{request.status}}</li>
+                <strong>Reason:</strong> No response within 3 days of completion
+            </ul>
+            
+            <p><strong>What Happened:</strong></p>
+            <ul>
+                <li>Your translation was completed and ready for review</li>
+                <li>You had 3 days to review and approve</li>
+                <li>No response was received within the timeframe</li>
+                <li>The system automatically approved the translation</li>
+                <li>Final payment has been processed to the translator</li>
+            </ul>
+            
+            <p><strong>Current Status:</strong></p>
+            <ul>
+                <li>✅ Translation: Completed</li>
+                <li>✅ Approval: Auto-approved</li>
+                <li>✅ Payment: Processed</li>
+                <li>✅ Project: Archived</li>
+            </ul>
+            
+            <p><strong>Important:</strong> The translated files are available in your project. You can download them from your account.</p>
+            
+            <p>Thank you for using HereToTranslate. We hope you're satisfied with the translation quality.</p>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated message from HereToTranslate</p>
+            <p>Please do not reply to this email</p>
+        </div>
+    </div>
+</body>
+</html>

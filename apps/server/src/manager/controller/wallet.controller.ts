@@ -83,6 +83,10 @@ export class WalletController {
         `${
           process.env.API_URL || 'http://localhost:3000'
         }/api/wallet/paypal/callback`;
+      if (!clientId || !clientSecret) {
+        throw new Error('PayPal credentials not configured');
+      }
+
       const tokenRes = await axios.post(
         'https://api.sandbox.paypal.com/v1/oauth2/token',
         new URLSearchParams({

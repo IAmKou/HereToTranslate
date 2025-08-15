@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Deadline Failed</title>
+    <title>Translation Failed - Timeout</title>
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -15,14 +15,14 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>❌ Deadline Failed</h1>
+            <h1>❌ Translation Failed</h1>
         </div>
         
         <div class="content">
-            <h2>Translation Request Failed</h2>
+            <h2>Translation Request Failed Due to Timeout</h2>
             
             <div class="failed">
-                <strong>❌ FAILED:</strong> Your translation request has failed due to deadline issues.
+                <strong>⏰ TIMEOUT:</strong> Your translation request has failed due to timeout.
             </div>
             
             <h3>Request Details:</h3>
@@ -30,25 +30,32 @@
                 <li><strong>Request ID:</strong> {{request.id}}</li>
                 <li><strong>Description:</strong> {{request.description}}</li>
                 <li><strong>Status:</strong> {{request.status}}</li>
-                <strong>Reason:</strong> Deadline exceeded without extension
+                <strong>Reason:</strong> Extension request timeout
             </ul>
             
             <p><strong>What Happened:</strong></p>
             <ul>
-                <li>The translation deadline was missed</li>
-                <li>No extension was requested or approved</li>
-                <li>The request was marked as failed</li>
-                <li>Your project has been archived</li>
+                <li>You missed the original deadline</li>
+                <li>You had 3 days to request an extension</li>
+                <li>No extension was requested within the timeframe</li>
+                <li>The request was automatically marked as failed</li>
+            </ul>
+            
+            <p><strong>Impact:</strong></p>
+            <ul>
+                <li>Your reputation score may be affected</li>
+                <li>The requester's deposit has been refunded</li>
+                <li>The project has been archived</li>
             </ul>
             
             <p><strong>Next Steps:</strong></p>
             <ol>
-                <li>Review your project requirements</li>
-                <li>Consider creating a new translation request</li>
-                <li>You may choose a different translator if desired</li>
+                <li>Review your time management for future requests</li>
+                <li>Consider requesting extensions earlier if needed</li>
+                <li>Focus on completing future requests on time</li>
             </ol>
             
-            <p>We apologize for the inconvenience. If you have any questions, please contact our support team.</p>
+            <p>We encourage you to learn from this experience and improve your deadline management for future translation requests.</p>
         </div>
         
         <div class="footer">

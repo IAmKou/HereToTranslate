@@ -2,27 +2,28 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Deadline Failed</title>
+    <title>Translation Failed - No Extension</title>
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background: #dc3545; color: white; padding: 20px; text-align: center; }
         .content { padding: 20px; background: #f8f9fa; }
         .failed { background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .refund { background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; margin: 20px 0; border-radius: 5px; }
         .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>❌ Deadline Failed</h1>
+            <h1>❌ Translation Failed</h1>
         </div>
         
         <div class="content">
-            <h2>Translation Request Failed</h2>
+            <h2>Translation Request Has Failed</h2>
             
             <div class="failed">
-                <strong>❌ FAILED:</strong> Your translation request has failed due to deadline issues.
+                <strong>❌ FAILED:</strong> Your translation request has been marked as failed due to no extension request.
             </div>
             
             <h3>Request Details:</h3>
@@ -30,20 +31,24 @@
                 <li><strong>Request ID:</strong> {{request.id}}</li>
                 <li><strong>Description:</strong> {{request.description}}</li>
                 <li><strong>Status:</strong> {{request.status}}</li>
-                <strong>Reason:</strong> Deadline exceeded without extension
+                <strong>Reason:</strong> No extension requested within the allowed timeframe
             </ul>
+            
+            <div class="refund">
+                <strong>💰 REFUND PROCESSED:</strong> Your deposit has been automatically refunded to your account.
+            </div>
             
             <p><strong>What Happened:</strong></p>
             <ul>
-                <li>The translation deadline was missed</li>
-                <li>No extension was requested or approved</li>
-                <li>The request was marked as failed</li>
-                <li>Your project has been archived</li>
+                <li>The translator missed the deadline</li>
+                <li>No extension was requested within 3 days</li>
+                <li>The request was automatically marked as failed</li>
+                <li>Your deposit has been refunded</li>
             </ul>
             
             <p><strong>Next Steps:</strong></p>
             <ol>
-                <li>Review your project requirements</li>
+                <li>Check your account balance for the refund</li>
                 <li>Consider creating a new translation request</li>
                 <li>You may choose a different translator if desired</li>
             </ol>

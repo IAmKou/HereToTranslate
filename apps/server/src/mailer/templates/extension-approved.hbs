@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Extension Approved</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #28a745; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background: #f8f9fa; }
+        .approved { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .deadline { background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Extension Approved</h1>
+        </div>
+        
+        <div class="content">
+            <h2>Deadline Extension Approved</h2>
+            
+            <div class="approved">
+                <strong>🎉 APPROVED:</strong> Your deadline extension request has been approved!
+            </div>
+            
+            <h3>Request Details:</h3>
+            <ul>
+                <li><strong>Request ID:</strong> {{request.id}}</li>
+                <li><strong>Description:</strong> {{request.description}}</li>
+                <li><strong>Status:</strong> {{request.status}}</li>
+            </ul>
+            
+            <h3>Extension Details:</h3>
+            <ul>
+                <li><strong>Requested Days:</strong> {{extension.requestedDays}}</li>
+                <li><strong>Reason:</strong> {{extension.reason}}</li>
+                <li><strong>Approval Date:</strong> {{extension.respondedAt}}</li>
+            </ul>
+            
+            <div class="deadline">
+                <strong>⏰ NEW DEADLINE:</strong> {{newDeadline}}
+            </div>
+            
+            <p><strong>What This Means:</strong></p>
+            <ul>
+                <li>Your extension request has been granted</li>
+                <li>The deadline has been extended by {{extension.requestedDays}} days</li>
+                <li>You now have until {{newDeadline}} to complete the translation</li>
+                <li>The request status has been updated to "Extension Approved"</li>
+            </ul>
+            
+            <p><strong>Next Steps:</strong></p>
+            <ol>
+                <li>Continue working on your translation</li>
+                <li>Ensure completion by the new deadline</li>
+                <li>Submit your work when finished</li>
+            </ol>
+            
+            <p><strong>Important:</strong> Please make sure to complete the translation by the new deadline to avoid any further issues.</p>
+            
+            <p>Thank you for your understanding and good luck with your translation work!</p>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated message from HereToTranslate</p>
+            <p>Please do not reply to this email</p>
+        </div>
+    </div>
+</body>
+</html>

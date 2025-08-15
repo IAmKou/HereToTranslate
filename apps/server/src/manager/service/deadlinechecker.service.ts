@@ -23,6 +23,10 @@ export class DeadlineCheckerService {
 
   private cronJob: CronJob;
   private isRunning = false;
+  
+  // Track sent emails to prevent duplicates
+  private sentEmailTracker = new Map<string, Date>();
+  private readonly EMAIL_COOLDOWN_HOURS = 24; // Don't send same email type to same user within 24 hours
 
   constructor(
     @InjectRepository(RequestEntity)
@@ -43,20 +47,16 @@ export class DeadlineCheckerService {
   }
 
   private initializeCronJob() {
-    // Create custom cron job that runs every minute with 10-second rest
     this.cronJob = new CronJob('0 * * * * *', () => {
       this.handleMinuteScan();
     });
 
-    // Register with scheduler
     this.schedulerRegistry.addCronJob('deadline-checker-cron', this.cronJob);
 
-    // Start the cron job
     this.cronJob.start();
     this.logger.log('Deadline checker cron job started - scanning every minute with 10-second rest');
   }
 
-  // Keep the existing daily midnight cron for comprehensive checks
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDeadlines() {
     this.logger.log('Starting comprehensive deadline check...');
@@ -79,7 +79,6 @@ export class DeadlineCheckerService {
     }
   }
 
-  // New method for minute-by-minute scanning
   private async handleMinuteScan() {
     if (this.isRunning) {
       this.logger.warn('Previous minute scan still running, skipping this iteration');
@@ -92,12 +91,10 @@ export class DeadlineCheckerService {
     try {
       const today = new Date();
 
-      // Perform quick checks every minute
       await this.performQuickDeadlineChecks(today);
 
-      // Rest for 10 seconds after scan
       this.logger.log('Minute scan completed, resting for 10 seconds...');
-      await this.sleep(10000); // 10 seconds
+      await this.sleep(10000); 
 
       this.logger.log('Rest period completed, ready for next scan');
     } catch (error) {
@@ -110,13 +107,10 @@ export class DeadlineCheckerService {
   private async performQuickDeadlineChecks(today: Date) {
     this.logger.log('Performing quick deadline checks...');
 
-    // Quick check for urgent deadlines (within next hour)
     await this.checkUrgentDeadlines(today);
 
-    // Quick check for overdue requests
     await this.checkOverdueRequests(today);
 
-    // Quick check for extension requests that need immediate attention
     await this.checkUrgentExtensions(today);
 
     this.logger.log('Quick deadline checks completed');
@@ -126,7 +120,7 @@ export class DeadlineCheckerService {
     const urgentDeadlines = await this.requestRepo.find({
       where: {
         status: RequestStatus.Approved,
-        deadline: Between(today, addDays(today, 1)), // Next 24 hours
+        deadline: Between(today, addDays(today, 1)), 
       },
       relations: ['project', 'project.createdBy', 'assignee'],
     });
@@ -138,10 +132,9 @@ export class DeadlineCheckerService {
         const hoursLeft = Math.ceil((+req.deadline - +today) / (1000 * 60 * 60));
 
         if (hoursLeft <= 1) {
-          // Send immediate notification for very urgent deadlines
           this.logger.warn(`CRITICAL: Request ${req.id} due in ${hoursLeft} hour(s)`);
 
-          if (req.assignee?.email) {
+          if (req.assignee?.email && this.canSendEmail('deadline-critical', req.assignee.id.toString())) {
             await this.mailerService.sendMail({
               to: req.assignee.email,
               subject: '[URGENT] Translation Deadline Critical',
@@ -151,6 +144,7 @@ export class DeadlineCheckerService {
                 hoursLeft,
               },
             });
+            this.markEmailSent('deadline-critical', req.assignee.id.toString());
           }
         }
       }
@@ -178,7 +172,7 @@ export class DeadlineCheckerService {
           this.logger.warn(`Request ${req.id} marked as failed due to overdue deadline`);
 
           // Send overdue notification
-          if (req.assignee?.email) {
+          if (req.assignee?.email && this.canSendEmail('deadline-overdue', req.assignee.id.toString())) {
             await this.mailerService.sendMail({
               to: req.assignee.email,
               subject: '[OVERDUE] Translation Request Overdue',
@@ -187,6 +181,7 @@ export class DeadlineCheckerService {
                 request: req,
               },
             });
+            this.markEmailSent('deadline-overdue', req.assignee.id.toString());
           }
         }
       }
@@ -207,22 +202,52 @@ export class DeadlineCheckerService {
 
       for (const extension of urgentExtensions) {
         // Send reminder to requester about pending extension
-        await this.mailerService.sendMail({
-          to: extension.requester.email,
-          subject: '[Reminder] Pending Extension Request',
-          template: 'extension-reminder',
-          context: {
-            request: extension.request,
-            extension,
-            daysPending: Math.ceil((+today - +extension.createdAt) / (1000 * 60 * 60 * 24)),
-          },
-        });
+        if (this.canSendEmail('extension-reminder', extension.requester.id.toString())) {
+          await this.mailerService.sendMail({
+            to: extension.requester.email,
+            subject: '[Reminder] Pending Extension Request',
+            template: 'extension-reminder',
+            context: {
+              request: extension.request,
+              extension,
+              daysPending: Math.ceil((+today - +extension.createdAt) / (1000 * 60 * 60 * 24)),
+            },
+          });
+          this.markEmailSent('extension-reminder', extension.requester.id.toString());
+        }
       }
     }
   }
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private canSendEmail(emailType: string, userId: string): boolean {
+    const key = `${emailType}_${userId}`;
+    const lastSent = this.sentEmailTracker.get(key);
+    
+    if (!lastSent) {
+      return true;
+    }
+    
+    const hoursSinceLastSent = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+    return hoursSinceLastSent >= this.EMAIL_COOLDOWN_HOURS;
+  }
+
+  private markEmailSent(emailType: string, userId: string): void {
+    const key = `${emailType}_${userId}`;
+    this.sentEmailTracker.set(key, new Date());
+    
+    // Clean up old entries to prevent memory leaks
+    if (this.sentEmailTracker.size > 1000) {
+      const cutoff = new Date(Date.now() - (this.EMAIL_COOLDOWN_HOURS * 60 * 60 * 1000));
+      for (const [key, date] of this.sentEmailTracker.entries()) {
+        if (date < cutoff) {
+          this.sentEmailTracker.delete(key);
+        }
+      }
+    }
   }
 
   // Control methods for the cron job
@@ -251,7 +276,33 @@ export class DeadlineCheckerService {
       lastScanTime: new Date().toISOString(),
       serviceName: 'DeadlineCheckerService',
       scanInterval: 'Every minute with 10-second rest',
-      nextScanTime: this.cronJob ? this.cronJob.nextDate().toString() : 'N/A'
+      nextScanTime: this.cronJob ? this.cronJob.nextDate().toString() : 'N/A',
+      emailTracking: {
+        totalTrackedEmails: this.sentEmailTracker.size,
+        cooldownHours: this.EMAIL_COOLDOWN_HOURS
+      }
+    };
+  }
+
+  // Method to get email tracking details for debugging
+  getEmailTrackingDetails() {
+    const now = new Date();
+    const trackingDetails = [];
+    
+    for (const [key, date] of this.sentEmailTracker.entries()) {
+      const hoursSinceSent = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+      trackingDetails.push({
+        emailKey: key,
+        lastSent: date.toISOString(),
+        hoursSinceSent: Math.round(hoursSinceSent * 100) / 100,
+        canSendAgain: hoursSinceSent >= this.EMAIL_COOLDOWN_HOURS
+      });
+    }
+    
+    return {
+      totalTracked: this.sentEmailTracker.size,
+      cooldownHours: this.EMAIL_COOLDOWN_HOURS,
+      details: trackingDetails
     };
   }
 
@@ -279,7 +330,7 @@ export class DeadlineCheckerService {
     for (const req of soonDueRequests) {
       const daysLeft = Math.ceil((+req.deadline - +today) / (1000 * 60 * 60 * 24));
 
-      if (req.assignee?.email) {
+      if (req.assignee?.email && this.canSendEmail('deadline-warning-translator', req.assignee.id.toString())) {
         await this.mailerService.sendMail({
           to: req.assignee.email,
           subject: '[Reminder] Translation Deadline Approaching',
@@ -289,18 +340,22 @@ export class DeadlineCheckerService {
             daysLeft,
           },
         });
+        this.markEmailSent('deadline-warning-translator', req.assignee.id.toString());
       }
 
       // Send warning to requester
-      await this.mailerService.sendMail({
-        to: req.requester.email,
-        subject: '[Reminder] Translation Deadline Approaching',
-        template: 'deadline-warning-requester',
-        context: {
-          request: req,
-          daysLeft,
-        },
-      });
+      if (this.canSendEmail('deadline-warning-requester', req.requester.id.toString())) {
+        await this.mailerService.sendMail({
+          to: req.requester.email,
+          subject: '[Reminder] Translation Deadline Approaching',
+          template: 'deadline-warning-requester',
+          context: {
+            request: req,
+            daysLeft,
+          },
+        });
+        this.markEmailSent('deadline-warning-requester', req.requester.id.toString());
+      }
     }
 
     this.logger.log(`Sent deadline warnings for ${soonDueRequests.length} requests`);
@@ -344,23 +399,29 @@ export class DeadlineCheckerService {
     await this.requestRepo.save(req);
 
     try {
-      // This would typically export all files in the project
-      // For now, we'll just log the action
+  
       this.logger.log(`Auto-exporting translated files for request ${req.id}`);
-      // TODO: Implement actual file export and storage
+      // Export all files of the project (default to English). If request has targetLanguages, export all of them.
+      const languages = Array.isArray(req.project?.targetLanguages) && req.project.targetLanguages.length > 0
+        ? req.project.targetLanguages
+        : ['en'];
+      await this.translationService.exportProjectTranslations(req.project.id.toString(), languages as any);
     } catch (error) {
       this.logger.error(`Failed to export files for request ${req.id}:`, error);
     }
 
-    await this.mailerService.sendMail({
-      to: req.requester.email,
-      subject: '[Ready for Review] Your translation is complete',
-      template: 'translation-ready-for-approval',
-      context: {
-        request: req,
-        reviewDeadline: addDays(today, 3),
-      },
-    });
+    if (this.canSendEmail('translation-ready-for-approval', req.requester.id.toString())) {
+      await this.mailerService.sendMail({
+        to: req.requester.email,
+        subject: '[Ready for Review] Your translation is complete',
+        template: 'translation-ready-for-approval',
+        context: {
+          request: req,
+          reviewDeadline: addDays(today, 3),
+        },
+      });
+      this.markEmailSent('translation-ready-for-approval', req.requester.id.toString());
+    }
   }
 
   private async handleIncompleteTranslation(req: RequestEntity, today: Date, percentage: number) {
@@ -379,30 +440,34 @@ export class DeadlineCheckerService {
       req.status = RequestStatus.ExtensionRequested;
       await this.requestRepo.save(req);
 
-      // Send notification to translator about deadline miss and extension option
-      if (req.assignee?.email) {
-        await this.mailerService.sendMail({
-          to: req.assignee.email,
-          subject: '[Action Required] Translation Deadline Missed',
-          template: 'deadline-missed-extension-option',
-          context: {
-            request: req,
-            percentage: percentage.toFixed(1),
-            extensionDeadline: addDays(today, 3),
-          },
-        });
-      }
+              // Send notification to translator about deadline miss and extension option
+        if (req.assignee?.email && this.canSendEmail('deadline-missed-extension-option', req.assignee.id.toString())) {
+          await this.mailerService.sendMail({
+            to: req.assignee.email,
+            subject: '[Action Required] Translation Deadline Missed',
+            template: 'deadline-missed-extension-option',
+            context: {
+              request: req,
+              percentage: percentage.toFixed(1),
+              extensionDeadline: addDays(today, 3),
+            },
+          });
+          this.markEmailSent('deadline-missed-extension-option', req.assignee.id.toString());
+        }
 
-      // Notify requester about delay
-      await this.mailerService.sendMail({
-        to: req.requester.email,
-        subject: '[Delay Notice] Translation deadline missed',
-        template: 'translation-delayed',
-        context: {
-          request: req,
-          percentage: percentage.toFixed(1),
-        },
-      });
+        // Notify requester about delay
+        if (this.canSendEmail('translation-delayed', req.requester.id.toString())) {
+          await this.mailerService.sendMail({
+            to: req.requester.email,
+            subject: '[Delay Notice] Translation deadline missed',
+            template: 'translation-delayed',
+            context: {
+              request: req,
+              percentage: percentage.toFixed(1),
+            },
+          });
+          this.markEmailSent('translation-delayed', req.requester.id.toString());
+        }
     }
   }
 
@@ -429,16 +494,19 @@ export class DeadlineCheckerService {
       await this.projectService.archive(req.project);
 
       // Send notifications
-      await this.mailerService.sendMail({
-        to: req.requester.email,
-        subject: '[Failed] Translation request has failed',
-        template: 'translation-failed-no-extension',
-        context: {
-          request: req,
-        },
-      });
+      if (this.canSendEmail('translation-failed-no-extension', req.requester.id.toString())) {
+        await this.mailerService.sendMail({
+          to: req.requester.email,
+          subject: '[Failed] Translation request has failed',
+          template: 'translation-failed-no-extension',
+          context: {
+            request: req,
+          },
+        });
+        this.markEmailSent('translation-failed-no-extension', req.requester.id.toString());
+      }
 
-      if (req.assignee?.email) {
+      if (req.assignee?.email && this.canSendEmail('translation-failed-timeout', req.assignee.id.toString())) {
         await this.mailerService.sendMail({
           to: req.assignee.email,
           subject: '[Failed] Translation request failed due to timeout',
@@ -447,6 +515,7 @@ export class DeadlineCheckerService {
             request: req,
           },
         });
+        this.markEmailSent('translation-failed-timeout', req.assignee.id.toString());
       }
     }
 
@@ -476,16 +545,19 @@ export class DeadlineCheckerService {
       await this.projectService.archive(req.project);
 
       // Send notifications
-      await this.mailerService.sendMail({
-        to: req.requester.email,
-        subject: '[Auto-Approved] Translation request completed',
-        template: 'translation-auto-approved',
-        context: {
-          request: req,
-        },
-      });
+      if (this.canSendEmail('translation-auto-approved', req.requester.id.toString())) {
+        await this.mailerService.sendMail({
+          to: req.requester.email,
+          subject: '[Auto-Approved] Translation request completed',
+          template: 'translation-auto-approved',
+          context: {
+            request: req,
+          },
+        });
+        this.markEmailSent('translation-auto-approved', req.requester.id.toString());
+      }
 
-      if (req.assignee?.email) {
+      if (req.assignee?.email && this.canSendEmail('translation-payment-processed', req.assignee.id.toString())) {
         await this.mailerService.sendMail({
           to: req.assignee.email,
           subject: '[Payment Processed] Translation completed',
@@ -494,6 +566,7 @@ export class DeadlineCheckerService {
             request: req,
           },
         });
+        this.markEmailSent('translation-payment-processed', req.assignee.id.toString());
       }
     }
 
@@ -568,15 +641,18 @@ export class DeadlineCheckerService {
     const savedExtension = await this.extensionRepo.save(extension);
 
     // Send notification to requester
-    await this.mailerService.sendMail({
-      to: request.requester.email,
-      subject: '[Extension Request] Translator requests deadline extension',
-      template: 'extension-request-notification',
-      context: {
-        request,
-        extension: savedExtension,
-      },
-    });
+    if (this.canSendEmail('extension-request-notification', request.requester.id.toString())) {
+      await this.mailerService.sendMail({
+        to: request.requester.email,
+        subject: '[Extension Request] Translator requests deadline extension',
+        template: 'extension-request-notification',
+        context: {
+          request,
+          extension: savedExtension,
+        },
+      });
+      this.markEmailSent('extension-request-notification', request.requester.id.toString());
+    }
 
     return savedExtension;
   }
@@ -620,16 +696,19 @@ export class DeadlineCheckerService {
       await this.requestRepo.save(extension.request);
 
       // Send approval notification
-      await this.mailerService.sendMail({
-        to: extension.translator.email,
-        subject: '[Approved] Deadline extension approved',
-        template: 'extension-approved',
-        context: {
-          request: extension.request,
-          extension,
-          newDeadline,
-        },
-      });
+      if (this.canSendEmail('extension-approved', extension.translator.id.toString())) {
+        await this.mailerService.sendMail({
+          to: extension.translator.email,
+          subject: '[Approved] Deadline extension approved',
+          template: 'extension-approved',
+          context: {
+            request: extension.request,
+            extension,
+            newDeadline,
+          },
+        });
+        this.markEmailSent('extension-approved', extension.translator.id.toString());
+      }
     } else {
       // Extension rejected - mark request as failed
       extension.request.status = RequestStatus.Failed;
@@ -642,15 +721,18 @@ export class DeadlineCheckerService {
       await this.projectService.archive(extension.request.project);
 
       // Send rejection notification
-      await this.mailerService.sendMail({
-        to: extension.translator.email,
-        subject: '[Rejected] Deadline extension rejected',
-        template: 'extension-rejected',
-        context: {
-          request: extension.request,
-          extension,
-        },
-      });
+      if (this.canSendEmail('extension-rejected', extension.translator.id.toString())) {
+        await this.mailerService.sendMail({
+          to: extension.translator.email,
+          subject: '[Rejected] Deadline extension rejected',
+          template: 'extension-rejected',
+          context: {
+            request: extension.request,
+            extension,
+          },
+        });
+        this.markEmailSent('extension-rejected', extension.translator.id.toString());
+      }
     }
   }
 }

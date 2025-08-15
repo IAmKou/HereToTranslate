@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Extension Request Notification</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #17a2b8; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background: #f8f9fa; }
+        .request { background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⏰ Extension Request</h1>
+        </div>
+        
+        <div class="content">
+            <h2>Translator Requests Deadline Extension</h2>
+            
+            <div class="request">
+                <strong>📋 EXTENSION REQUEST:</strong> The translator working on your request needs more time to complete the work.
+            </div>
+            
+            <h3>Request Details:</h3>
+            <ul>
+                <li><strong>Request ID:</strong> {{request.id}}</li>
+                <li><strong>Description:</strong> {{request.description}}</li>
+                <li><strong>Current Status:</strong> {{request.status}}</li>
+                <li><strong>Translator:</strong> {{extension.translator.email}}</li>
+            </ul>
+            
+            <h3>Extension Details:</h3>
+            <ul>
+                <li><strong>Requested Days:</strong> {{extension.requestedDays}}</li>
+                <li><strong>Reason:</strong> {{extension.reason}}</li>
+                <li><strong>Request Date:</strong> {{extension.createdAt}}</li>
+            </ul>
+            
+            <p><strong>Action Required:</strong> You need to review and respond to this extension request.</p>
+            
+            <p><strong>Your Options:</strong></p>
+            <ol>
+                <li><strong>Approve:</strong> Grant the requested extension</li>
+                <li><strong>Reject:</strong> Deny the extension (request will be marked as failed)</li>
+            </ol>
+            
+            <p><strong>To Respond:</strong></p>
+            <ol>
+                <li>Log into your account</li>
+                <li>Go to the request details</li>
+                <li>Review the extension request</li>
+                <li>Approve or reject with optional comments</li>
+            </ol>
+            
+            <p><strong>Important:</strong> Please respond to this request as soon as possible to avoid delays in your translation project.</p>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated message from HereToTranslate</p>
+            <p>Please do not reply to this email</p>
+        </div>
+    </div>
+</body>
+</html>

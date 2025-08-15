@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Deadline Reminder</title>
+    <title>Extension Request Reminder</title>
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -15,29 +15,29 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>⏰ Deadline Reminder</h1>
+            <h1>⏰ Extension Request Reminder</h1>
         </div>
         
         <div class="content">
-            <h2>Translation Deadline Reminder</h2>
+            <h2>Pending Extension Request</h2>
             
             <div class="reminder">
-                <strong>📋 REMINDER:</strong> Your translation request deadline is approaching.
+                <strong>📋 REMINDER:</strong> You have a pending extension request that requires your attention.
             </div>
             
-            <h3>Request Details:</h3>
+            <h3>Extension Details:</h3>
             <ul>
                 <li><strong>Request ID:</strong> {{request.id}}</li>
                 <li><strong>Description:</strong> {{request.description}}</li>
-                <li><strong>Deadline:</strong> {{request.deadline}}</li>
-                <li><strong>Status:</strong> {{request.status}}</li>
+                <li><strong>Translator:</strong> {{extension.translator.email}}</li>
+                <li><strong>Requested Days:</strong> {{extension.requestedDays}}</li>
+                <li><strong>Reason:</strong> {{extension.reason}}</li>
+                <li><strong>Days Pending:</strong> {{daysPending}}</li>
             </ul>
             
-            <p><strong>Action Required:</strong> Please ensure your translation is completed on time.</p>
+            <p><strong>Action Required:</strong> Please review and respond to this extension request as soon as possible.</p>
             
-            <p>If you need more time, please request a deadline extension before the deadline passes.</p>
-            
-            <p>Current progress will be checked automatically when the deadline arrives.</p>
+            <p>The translator is waiting for your decision to continue with the translation work.</p>
         </div>
         
         <div class="footer">

@@ -50,11 +50,14 @@ export class WalletManagerService implements OnModuleInit {
 
   async getWalletDetails(userId: bigint) {
     const wallet = await this.getOrCreateWallet(userId);
-    // Tổng tiền đã nạp (tất cả transaction deposit, không lọc status)
+    // Tổng tiền đã nạp (CHỈ tính transaction Completed/Approved - KHÔNG tính Pending/On_Hold)
     const totalDeposits = await this.transactionRepository
       .createQueryBuilder('t')
       .where('t.user = :userId', { userId })
       .andWhere('t.amount > 0')
+      .andWhere('t.status IN (:...statuses)', {
+        statuses: [TransactionStatus.Completed, TransactionStatus.Approved]
+      })
       .select('SUM(t.amount)', 'sum')
       .getRawOne();
     // Tổng tiền đã rút
@@ -190,7 +193,7 @@ export class WalletManagerService implements OnModuleInit {
         ...txn,
         createdAt: txn.createdAt instanceof Date ? txn.createdAt.toISOString() : txn.createdAt,
         paypalEmail: txn.paypalEmail || null,
-        status: (txn.amount > 0 && txn.status !== TransactionStatus.Approved && txn.status !== TransactionStatus.Completed) ? TransactionStatus.On_Hold : txn.status,
+        status: (txn.amount > 0 && txn.status !== TransactionStatus.Approved && txn.status !== TransactionStatus.Completed && txn.status !== TransactionStatus.Cancelled) ? TransactionStatus.On_Hold : txn.status,
         requestId: txn.request?.id?.toString() || null,
         isRequester: result,
         request: txn.request ? {

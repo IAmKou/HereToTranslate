@@ -47,11 +47,13 @@
                     <option value="">All Types</option>
                     <option value="deposit">💳 Deposit</option>
                     <option value="payment">💸 Payment</option>
+                    <option value="refund">🔄 Refund</option>
                     <option value="withdraw">💸 Withdraw</option>
                   </select>
                   <span v-if="filterDraft.type" class="type-icon-preview">
                     <span v-if="filterDraft.type === 'deposit'">💳</span>
                     <span v-else-if="filterDraft.type === 'payment'">💸</span>
+                    <span v-else-if="filterDraft.type === 'refund'">🔄</span>
                     <span v-else-if="filterDraft.type === 'withdraw'">💸</span>
                     <span v-else>🔄</span>
                   </span>
@@ -360,7 +362,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
@@ -369,6 +371,8 @@ import { useRouter } from 'vue-router';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(relativeTime);
+
+const router = useRouter();
 
 interface Transaction {
   id: number;
@@ -435,6 +439,8 @@ const filteredTransactions = computed(() => {
       filtered = filtered.filter((t: any) => t.amount > 0 && getTransactionTitle(t) === 'Deposit');
     } else if (filterDraft.value.type === 'payment') {
       filtered = filtered.filter((t: any) => getTransactionTitle(t) === 'Payment');
+    } else if (filterDraft.value.type === 'refund') {
+      filtered = filtered.filter((t: any) => getTransactionTitle(t) === 'Refund');
     } else if (filterDraft.value.type === 'withdraw') {
       filtered = filtered.filter((t: any) => t.amount < 0);
     }
@@ -588,6 +594,17 @@ function getTransactionIcon(transaction: Transaction): string {
 
 function getTransactionTitle(transaction: Transaction): string {
   console.log('Transaction object:', transaction);
+
+  // Ưu tiên type field từ database
+  if (transaction.type) {
+    const type = transaction.type.toUpperCase();
+    if (type === 'REFUND') return 'Refund';
+    if (type === 'DEPOSIT') return 'Deposit';
+    if (type === 'PAYMENT') return 'Payment';
+    if (type === 'WITHDRAWAL') return 'Withdrawal';
+  }
+
+  // Fallback logic cũ
   if (transaction.amount > 0 && transaction.requestId) {
     if (transaction.isRequester === true || transaction.isRequester === 'true') return 'Deposit';
     return 'Payment';
@@ -627,7 +644,7 @@ function formatCurrency(amount: number): string {
 function formatDate(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để fix lệch múi giờ
+  // Không cộng thêm giờ nữa - để hiển thị đúng giờ từ database
   return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -640,7 +657,7 @@ function formatDate(dateString: string): string {
 function formatDateRelative(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  date.setHours(date.getHours() + 7); // Cộng thêm 7 tiếng để khớp với giờ hiển thị
+  // Không cộng thêm giờ nữa - để hiển thị đúng giờ từ database
   return dayjs(date).fromNow();
 }
 
@@ -668,6 +685,16 @@ function goToCreateRequest() {
 }
 
 function getTransactionTypeClass(transaction: Transaction) {
+  // Ưu tiên type field từ database
+  if (transaction.type) {
+    const type = transaction.type.toLowerCase();
+    if (type === 'refund') return 'refund';
+    if (type === 'deposit') return 'deposit';
+    if (type === 'payment') return 'payment';
+    if (type === 'withdrawal') return 'withdraw';
+  }
+
+  // Fallback logic cũ
   if (transaction.amount > 0) {
     // Kiểm tra xem có phải là giao dịch payment cho translator không
     if (transaction.requestId) {
@@ -697,8 +724,7 @@ const statusOptions = [
   { label: 'All Status', value: '', color: '' },
   { label: 'Pending', value: 'pending', color: 'status-pending' },
   { label: 'Completed', value: 'completed', color: 'status-completed' },
-  { label: 'Approved', value: 'approved', color: 'status-approved' },
-  { label: 'Rejected', value: 'rejected', color: 'status-failed' },
+  { label: 'Cancelled', value: 'cancelled', color: 'status-failed' },
   { label: 'Failed', value: 'failed', color: 'status-failed' },
 ];
 
@@ -731,6 +757,17 @@ function closeDetailModal() {
 onMounted(() => {
   loadTransactions();
   reloadWallet();
+
+  // Auto-refresh transactions every 30 seconds to catch status updates
+  const refreshInterval = setInterval(() => {
+    loadTransactions();
+    reloadWallet();
+  }, 30000);
+
+  // Cleanup interval on component unmount
+  onUnmounted(() => {
+    clearInterval(refreshInterval);
+  });
 });
 </script>
 

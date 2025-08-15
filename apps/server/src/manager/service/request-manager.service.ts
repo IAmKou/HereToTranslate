@@ -10,7 +10,7 @@ import {
   UserEntity,
   WalletEntity
 } from '#LocalProject/Entities';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import {
   BadRequestException,
@@ -529,42 +529,103 @@ export class RequestManagerService {
 
     // If it's a private request, refund the deposit
     if (!request.isPublic) {
-      // Find only requester's deposit transaction for this request
+      // Find requester's deposit transaction for this request (có thể là Pending hoặc On_Hold)
       const requesterTransaction = await this.transactionRepository.findOne({
         where: {
           request: { id: BigInt(requestId) },
           user: { id: request.requester.id },
-          status: TransactionStatus.Pending,
+          status: In([TransactionStatus.Pending, TransactionStatus.On_Hold]),
         },
+      });
+
+      logger.log(`[DEBUG] Cancel Request - Found transaction:`, {
+        requestId: requestId,
+        requesterId: request.requester.id,
+        transactionFound: !!requesterTransaction,
+        transactionId: requesterTransaction?.id,
+        transactionStatus: requesterTransaction?.status,
+        transactionType: requesterTransaction?.type,
+        transactionAmount: requesterTransaction?.amount,
       });
 
       if (requesterTransaction) {
         try {
           // Mark requester's transaction as cancelled
+          const oldStatus = requesterTransaction.status;
           requesterTransaction.status = TransactionStatus.Cancelled;
-          await this.transactionRepository.save(requesterTransaction);
+
+          logger.log(`[DEBUG] Cancel Request - About to save transaction:`, {
+            transactionId: requesterTransaction.id,
+            oldStatus: oldStatus,
+            newStatus: requesterTransaction.status,
+          });
+
+          const savedTransaction = await this.transactionRepository.save(requesterTransaction);
+
+          logger.log(`[DEBUG] Cancel Request - Transaction saved successfully:`, {
+            transactionId: savedTransaction.id,
+            savedStatus: savedTransaction.status,
+            savedType: savedTransaction.type,
+          });
 
           // Money is held in admin wallet, so we need to deduct it from admin wallet
           // This represents the money being "released" from being held for the request
           const adminWallet = await this.walletService.getOrCreateWallet(BigInt(1)); // Admin user ID
+          const adminOldBalance = adminWallet.balance;
           adminWallet.balance = Number(adminWallet.balance) - Math.abs(Number(requesterTransaction.amount));
           await this.walletRepository.save(adminWallet);
 
+          // REFUND: Cộng tiền vào requester wallet
+          const requesterWallet = await this.walletService.getOrCreateWallet(request.requester.id);
+          const requesterOldBalance = requesterWallet.balance;
+          requesterWallet.balance = Number(requesterWallet.balance) + Math.abs(Number(requesterTransaction.amount));
+          await this.walletRepository.save(requesterWallet);
+
+          logger.log(`[DEBUG] Cancel Request - Wallet balances updated:`, {
+            adminOldBalance: adminOldBalance,
+            adminNewBalance: adminWallet.balance,
+            requesterOldBalance: requesterOldBalance,
+            requesterNewBalance: requesterWallet.balance,
+            refundAmount: Math.abs(Number(requesterTransaction.amount)),
+          });
+
+          // Tạo transaction REFUND để ghi nhận việc hoàn tiền
+          const refundTransaction = this.transactionRepository.create({
+            user: { id: request.requester.id },
+            request: { id: BigInt(requestId) },
+            amount: Math.abs(Number(requesterTransaction.amount)),
+            status: TransactionStatus.Completed,
+            type: TransactionType.REFUND,
+          });
+          await this.transactionRepository.save(refundTransaction);
+
+          logger.log(`[DEBUG] Cancel Request - Refund transaction created:`, {
+            refundTransactionId: refundTransaction.id,
+            refundAmount: refundTransaction.amount,
+            refundStatus: refundTransaction.status,
+            refundType: refundTransaction.type,
+          });
+
           logger.log(
-            `Cancelled requester transaction ID ${requesterTransaction.id} for canceled private request ID ${request.id}. Money $${Math.abs(Number(requesterTransaction.amount))} was deducted from admin wallet (released from hold).`
+            `Cancelled requester transaction ID ${requesterTransaction.id} for canceled private request ID ${request.id}. Money $${Math.abs(Number(requesterTransaction.amount))} was deducted from admin wallet (released from hold), refunded to requester wallet, and REFUND transaction created.`
           );
         } catch (e) {
           logger.error('Refund during private cancel failed:', e);
         }
       } else {
         logger.warn(
-          `No pending deposit transaction found for requester in private request ID ${request.id}`
+          `No deposit transaction found for requester in private request ID ${request.id}`
         );
       }
     }
 
     request.status = RequestStatus.Cancelled;
     await this.requestRepository.save(request);
+
+    logger.log(`[DEBUG] Cancel Request - Request status updated:`, {
+      requestId: request.id,
+      newStatus: request.status,
+    });
 
     logger.log(`Request ID ${request.id} cancelled by user ID ${uid}`);
 

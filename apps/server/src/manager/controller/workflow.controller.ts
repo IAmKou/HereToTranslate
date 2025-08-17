@@ -57,4 +57,9 @@ export class WorkflowController {
   async getWorkflowVisualization(@Param('workflowId') workflowId: string) {
     return this.workflowService.getWorkflowVisualization(workflowId);
   }
+
+  @Put(':workflowId/visualization')
+  async updateWorkflowVisualization(@Param('workflowId') workflowId: string, @Body() visualizationData: any) {
+    return this.workflowService.updateWorkflowVisualization(workflowId, visualizationData);
+  }
 }

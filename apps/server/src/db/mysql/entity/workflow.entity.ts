@@ -18,6 +18,9 @@ export class WorkflowEntity {
   @Column({ default: false })
   isDefault: boolean; // Default workflow for project
 
+  @Column({ type: 'json', nullable: true })
+  visualizationData?: any; // Store node positions and layout data
+
   @ManyToOne(() => require('./project.entity').ProjectEntity, { onDelete: 'CASCADE' })
   project: ProjectEntity;
 

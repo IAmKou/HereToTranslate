@@ -11,6 +11,7 @@ import 'primevue/resources/primevue.min.css';
 import 'primevue/resources/themes/lara-light-indigo/theme.css';
 import 'primeicons/primeicons.css';
 
+
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';

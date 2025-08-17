@@ -43,7 +43,15 @@
                   <span class="stat-label">Total Withdrawals</span>
                 </div>
               </div>
-              <!-- Xoá card Pending -->
+              <div class="stat-card stat-card-pending">
+                <div class="stat-icon pending">
+                  <i class="pi pi-clock"></i>
+                </div>
+                <div class="stat-info">
+                  <span class="stat-value">{{ pendingTransactions }}</span>
+                  <span class="stat-label">Pending Transactions</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -54,18 +62,24 @@
                 <label class="filter-label">Type</label>
                 <select v-model="filters.type" class="filter-select">
                   <option value="">All Types</option>
-                  <option value="DEPOSIT">Deposit</option>
-                  <option value="WITHDRAW">Withdraw</option>
+                  <option value="DEPOSIT">💳 Deposit</option>
+                  <option value="PAYMENT">💸 Payment</option>
+                  <option value="REFUND">🔄 Refund</option>
+                  <option value="WITHDRAW">💸 Withdrawal</option>
                 </select>
               </div>
               <div class="filter-group">
                 <label class="filter-label">Status</label>
                 <select v-model="filters.status" class="filter-select">
                   <option value="">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="failed">Failed</option>
+                  <option value="pending">⏳ Pending</option>
+                  <option value="on_hold">⏸ On Hold</option>
+                  <option value="waiting_approval">⏳ Waiting Approval</option>
+                  <option value="approved">✅ Approved</option>
+                  <option value="completed">✅ Completed</option>
+                  <option value="rejected">❌ Rejected</option>
+                  <option value="failed">⚠️ Failed</option>
+                  <option value="cancelled">🚫 Cancelled</option>
                 </select>
               </div>
               <div class="filter-group">
@@ -178,6 +192,11 @@
                   </td>
                   <td class="type-cell">
                       <span :class="['type-badge', `type-${getTransactionType(transaction).toLowerCase()}`]">
+                        <span v-if="getTransactionType(transaction) === 'Deposit'">💳</span>
+                        <span v-else-if="getTransactionType(transaction) === 'Payment'">💸</span>
+                        <span v-else-if="getTransactionType(transaction) === 'Withdrawal'">💸</span>
+                        <span v-else-if="getTransactionType(transaction) === 'Refund'">🔄</span>
+                        <span v-else>🔄</span>
                         {{ getTransactionType(transaction) }}
                       </span>
                   </td>
@@ -199,11 +218,17 @@
                     <button @click="openDetailModal(transaction)" class="action-btn view-btn" title="View Details">
                       <i class="pi pi-eye"></i>
                     </button>
-                    <button v-if="transaction.status === 'pending'" @click="approveTransaction(transaction.id)" class="action-btn approve-btn" title="Approve">
+                    <button v-if="transaction.status === 'PENDING'" @click="approveTransaction(transaction.id)" class="action-btn approve-btn" title="Approve">
                       <i class="pi pi-check"></i>
                     </button>
-                    <button v-if="transaction.status === 'pending'" @click="rejectTransaction(transaction.id)" class="action-btn reject-btn" title="Reject">
+                    <button v-if="transaction.status === 'PENDING'" @click="rejectTransaction(transaction.id)" class="action-btn reject-btn" title="Reject">
                       <i class="pi pi-times"></i>
+                    </button>
+                    <button v-if="transaction.status === 'ON_HOLD'" @click="approveTransaction(transaction.id)" class="action-btn approve-btn" title="Release Hold">
+                      <i class="pi pi-unlock"></i>
+                    </button>
+                    <button v-if="transaction.status === 'WAITING_APPROVAL'" @click="approveTransaction(transaction.id)" class="action-btn approve-btn" title="Approve">
+                      <i class="pi pi-check"></i>
                     </button>
                   </td>
                 </tr>
@@ -274,6 +299,8 @@
                           <span v-else-if="detailTarget.status === 'REJECTED'" class="status-icon">❌</span>
                           <span v-else-if="detailTarget.status === 'FAILED'" class="status-icon">⚠️</span>
                           <span v-else-if="detailTarget.status === 'ON_HOLD'" class="status-icon">⏸</span>
+                          <span v-else-if="detailTarget.status === 'WAITING_APPROVAL'" class="status-icon">⏳</span>
+                          <span v-else-if="detailTarget.status === 'CANCELLED'" class="status-icon">🚫</span>
                           <span v-else class="status-icon">🔄</span>
                           <span class="status-text">{{ formatStatus(detailTarget.status) }}</span>
                         </span>
@@ -346,6 +373,17 @@ interface Transaction {
     assignee?: {
       id: number;
     };
+    project?: {
+      id: string;
+      name: string;
+      status: string;
+      assignee?: {
+        id: number;
+        fullName?: string;
+        username?: string;
+        email?: string;
+      };
+    };
   }; // Added request object
 }
 
@@ -384,14 +422,14 @@ const sortOrder = ref(1);
 const filteredTransactions = computed(() => {
   let filtered = [...transactions.value];
 
-  // Loại bỏ transaction pending khỏi Transaction History
-  filtered = filtered.filter(t => t.status.toLowerCase() !== 'pending');
-
   // Filter by type
   if (filters.value.type) {
     filtered = filtered.filter((t: any) => {
-      if (filters.value.type === 'DEPOSIT') return t.amount > 0;
-      if (filters.value.type === 'WITHDRAW') return t.amount < 0;
+      const transactionType = getTransactionType(t);
+      if (filters.value.type === 'DEPOSIT') return transactionType === 'Deposit';
+      if (filters.value.type === 'WITHDRAW') return transactionType === 'Withdrawal';
+      if (filters.value.type === 'PAYMENT') return transactionType === 'Payment';
+      if (filters.value.type === 'REFUND') return transactionType === 'Refund';
       return true;
     });
   }
@@ -529,7 +567,10 @@ const totalWithdrawals = computed(() => {
 });
 
 const pendingTransactions = computed(() => {
-  return filteredTransactions.value.filter(t => t.status === 'pending').length;
+  return filteredTransactions.value.filter(t => {
+    const status = t.status?.toLowerCase() || '';
+    return status === 'pending' || status === 'on_hold' || status === 'waiting_approval';
+  }).length;
 });
 
 // Methods
@@ -582,27 +623,39 @@ function getSortIcon(key: string): string {
 }
 
 function getTransactionType(transaction: Transaction): string {
-  if (transaction.amount > 0) {
-    // Kiểm tra xem có phải là giao dịch payment cho translator không
-    // Nếu có requestId và user là assignee, thì đây là Payment
-    // Nếu có requestId và user là requester, thì đây là Deposit
-    if (transaction.requestId) {
-      // Sử dụng isRequester để phân biệt
-      if (transaction.isRequester) {
-        return 'Deposit';
-      } else {
-        return 'Payment';
-      }
-    }
-    return 'Deposit';
+  // Ưu tiên type field từ database
+  if (transaction.type) {
+    const type = transaction.type.toUpperCase();
+    if (type === 'REFUND') return 'Refund';
+    if (type === 'DEPOSIT') return 'Deposit';
+    if (type === 'PAYMENT') return 'Payment';
+    if (type === 'WITHDRAWAL') return 'Withdrawal';
   }
-  if (transaction.amount < 0) return 'Withdraw';
+
+  // Fallback logic - đồng bộ với user side
+  if (transaction.amount > 0 && transaction.requestId) {
+    // Sử dụng isRequester để phân biệt
+    if (transaction.isRequester) {
+      return 'Deposit';
+    } else {
+      return 'Payment';
+    }
+  }
+  if (transaction.amount > 0) return 'Deposit';
+  if (transaction.amount < 0) return 'Withdrawal';
   return 'Transfer';
 }
 
 function formatStatus(status: string): string {
   if (!status) return '';
-  if (status.toUpperCase() === 'ON_HOLD') return 'On Hold';
+  const s = status.replace(/[-_ ]/g, '').toUpperCase();
+  if (s === 'ONHOLD') return 'On Hold';
+  if (s === 'WAITINGAPPROVAL') return 'Waiting Approval';
+  if (s === 'COMPLETED') return 'Completed';
+  if (s === 'APPROVED') return 'Approved';
+  if (s === 'REJECTED') return 'Rejected';
+  if (s === 'FAILED') return 'Failed';
+  if (s === 'CANCELLED') return 'Cancelled';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
@@ -676,13 +729,16 @@ function closeDetailModal() {
 }
 
 function badgeClass(status: string) {
-  switch (status?.toUpperCase()) {
+  const s = status?.replace(/[-_ ]/g, '').toUpperCase();
+  switch (s) {
     case 'PENDING': return 'badge bg-yellow-100 text-yellow-700';
     case 'APPROVED': return 'badge bg-green-100 text-green-700';
+    case 'COMPLETED': return 'badge bg-green-100 text-green-700';
     case 'REJECTED': return 'badge bg-red-100 text-red-700';
     case 'FAILED': return 'badge bg-gray-100 text-gray-700';
-    case 'COMPLETED': return 'badge bg-green-100 text-green-700';
-    case 'ON_HOLD': return 'badge bg-orange-100 text-orange-700 badge-on-hold'; // Badge vàng cam nổi bật cho On Hold
+    case 'CANCELLED': return 'badge bg-gray-100 text-gray-700';
+    case 'ONHOLD': return 'badge bg-orange-100 text-orange-700 badge-on-hold';
+    case 'WAITINGAPPROVAL': return 'badge bg-blue-100 text-blue-700';
     default: return 'badge';
   }
 }
@@ -1065,9 +1121,14 @@ onMounted(loadTransactions);
   color: #1e40af;
 }
 
-.type-withdraw {
+.type-withdrawal {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.type-refund {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .type-transfer {
@@ -1085,7 +1146,22 @@ onMounted(loadTransactions);
   color: #92400e;
 }
 
-.status-failed {
+.status-on_hold {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-waiting_approval {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-failed, .status-cancelled {
   background: #fee2e2;
   color: #991b1b;
 }

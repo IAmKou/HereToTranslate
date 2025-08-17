@@ -312,7 +312,6 @@ describe('CategoryManagerService', () => {
     it('should throw InternalServerErrorException on unknown database error', async () => {
       const sanitizedName = 'updatedcategory';
       const dbError = new Error('Unknown database error');
-
       (validateName as jest.Mock).mockReturnValue(true);
       (sanitizeName as jest.Mock).mockReturnValue(sanitizedName);
       mockRepo.update.mockRejectedValue(dbError);

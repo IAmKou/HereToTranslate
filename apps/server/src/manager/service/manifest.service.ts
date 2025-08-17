@@ -9,10 +9,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileEntity } from '#LocalProject/Entities';
 import axios from 'axios';
 import FormData from 'form-data';
-import * as pdfjs from 'pdfjs-dist';
 import * as path from 'path';
 import mammoth from 'mammoth';
 import * as fs from 'fs';
+import { PDFTronBridge } from '../../util/extensions/pdftron-bridge';
+import { extractPdfTextWithPDFTron } from '../../util/extensions/pdf-utils.extension';
+
+// Dynamic import for pdfjs-dist to avoid import issues
+let pdfjs: any = null;
 
 // Hàm mới sử dụng OCR.space API
 async function extractTextWithOcrSpace(fileBuffer: Buffer, apiKey: string): Promise<string> {
@@ -571,7 +575,8 @@ function assignFilePartsByPage(manifestEntries: any[]): void {
 export class ManifestService {
   constructor(
     @InjectModel(TranslationString.name)
-    private readonly translationModel: Model<TranslationStringDocument>
+    private readonly translationModel: Model<TranslationStringDocument>,
+    private readonly pdfTronBridge: PDFTronBridge
   ) {}
 
   async generateManifest(file: FileEntity): Promise<void> {
@@ -614,39 +619,58 @@ export class ManifestService {
 
         let result: any = null;
         try {
-          // 1. Thử dùng parser trước để giữ layout
-          console.log('[PDF] Step 1: Attempting to parse with pdfjs-dist...');
-          result = await parsePdfWithFonts(file.fileContent);
+          // 1. Try PDFTron first for better accuracy and layout preservation
+          console.log('[PDF] Step 1: Attempting to parse with PDFTron...');
+          result = await extractPdfTextWithPDFTron(file.fileContent, this.pdfTronBridge);
           items = result.items;
-          console.log('[PDF] Parser result - items count:', items?.length || 0);
-          console.log('[PDF] Parser result - text length:', result.text?.length || 0);
+          console.log('[PDF] PDFTron result - items count:', items?.length || 0);
+          console.log('[PDF] PDFTron result - text length:', result.text?.length || 0);
 
           if (items && items.length > 0) {
-            console.log('[PDF] SUCCESS: Parsed with pdfjs-dist, found', items.length, 'items');
+            console.log('[PDF] SUCCESS: Parsed with PDFTron, found', items.length, 'items');
             console.log('[PDF] Sample items:', items.slice(0, 3).map((item: any) => ({
               text: item.text.substring(0, 50),
               font: item.font,
               page: item.page
             })));
           } else {
-            console.warn('[PDF] WARNING: No text items found with parser, falling back to OCR.');
-            throw new Error("No text found with parser, falling back to OCR.");
+            console.warn('[PDF] WARNING: No text items found with PDFTron, falling back to pdfjs-dist.');
+            throw new Error("No text found with PDFTron, falling back to pdfjs-dist.");
           }
         } catch (err: any) {
-          console.error('[PDF] ERROR: Parser failed:', err?.message || err);
-          console.error('[PDF] Parser error stack:', err?.stack);
+          console.error('[PDF] ERROR: PDFTron failed:', err?.message || err);
+          console.error('[PDF] PDFTron error stack:', err?.stack);
 
-          // 2. Nếu parser lỗi -> Fallback sang OCR.space
+          // 2. Fallback to pdfjs-dist
           try {
-            console.log('[PDF] Step 2: Falling back to OCR.space...');
-            text = await extractTextWithOcrSpace(file.fileContent, apiKey);
-            usedOcr = true;
-            console.log('[PDF] OCR result - text length:', text?.length || 0);
-            console.log('[PDF] OCR result - first 200 chars:', text ? text.substring(0, 200) : '[EMPTY]');
-          } catch (ocrError: any) {
-            console.error('[PDF] ERROR: OCR failed:', ocrError?.message || ocrError);
-            console.error('[PDF] OCR error stack:', ocrError?.stack);
-            throw new Error('Failed to extract text from PDF: ' + (ocrError?.message || ocrError));
+            console.log('[PDF] Step 2: Falling back to pdfjs-dist...');
+            result = await parsePdfWithFonts(file.fileContent);
+            items = result.items;
+            console.log('[PDF] pdfjs-dist result - items count:', items?.length || 0);
+            console.log('[PDF] pdfjs-dist result - text length:', result.text?.length || 0);
+
+            if (items && items.length > 0) {
+              console.log('[PDF] SUCCESS: Parsed with pdfjs-dist, found', items.length, 'items');
+            } else {
+              console.warn('[PDF] WARNING: No text items found with pdfjs-dist, falling back to OCR.');
+              throw new Error("No text found with pdfjs-dist, falling back to OCR.");
+            }
+          } catch (pdfjsError: any) {
+            console.error('[PDF] ERROR: pdfjs-dist failed:', pdfjsError?.message || pdfjsError);
+            console.error('[PDF] pdfjs-dist error stack:', pdfjsError?.stack);
+
+            // 3. Final fallback to OCR.space
+            try {
+              console.log('[PDF] Step 3: Falling back to OCR.space...');
+              text = await extractTextWithOcrSpace(file.fileContent, apiKey);
+              usedOcr = true;
+              console.log('[PDF] OCR result - text length:', text?.length || 0);
+              console.log('[PDF] OCR result - first 200 chars:', text ? text.substring(0, 200) : '[EMPTY]');
+            } catch (ocrError: any) {
+              console.error('[PDF] ERROR: OCR failed:', ocrError?.message || ocrError);
+              console.error('[PDF] OCR error stack:', ocrError?.stack);
+              throw new Error('Failed to extract text from PDF: ' + (ocrError?.message || ocrError));
+            }
           }
         }
 
@@ -804,11 +828,11 @@ export class ManifestService {
 
         // Store images separately for export (not in manifest entries)
         if (result.images && result.images.length > 0) {
-          console.log('[PDF] Step 4: Processing images...');
-          console.log('[PDF] Found', result.images.length, 'images');
+          console.log('[PDF] Step 4: Processing images (basic info only)...');
+          console.log('[PDF] Found', result.images.length, 'images - storing basic info for preview');
 
-          // Store images in a separate property for later export
-          // Don't add to manifestEntries to avoid cluttering the UI
+          // Store basic image info for preview purposes only
+          // Skip detailed image processing to focus on text quality
           const imageData = result.images.map((image: any, i: number) => ({
             index: i + 1,
             data: image.data,
@@ -822,12 +846,9 @@ export class ManifestService {
             }
           }));
 
-          // Store image data in the manifest for later export
-          // This will be used when generating the final document
-          console.log('[PDF] SUCCESS: Stored', result.images.length, 'images for export');
-
-          // Store image data for later use (not as manifest entries)
-          console.log('[PDF] Image data stored for export:', imageData.length, 'images');
+          // Store image data for preview only - not for detailed processing
+          console.log('[PDF] SUCCESS: Stored basic image info for', result.images.length, 'images (preview only)');
+          console.log('[PDF] Image data stored for preview:', imageData.length, 'images');
         }
 
         // Debug: Kiểm tra page distribution
@@ -1048,7 +1069,18 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
     console.log('[PDF] Starting PDF parsing with pdfjs-dist...');
     console.log('[PDF] Buffer size:', buffer.length, 'bytes');
 
-    // Thiết lập worker cho pdfjs-dist - thử nhiều cách khác nhau
+    // Initialize pdfjs if not already done
+    if (!pdfjs) {
+      try {
+        pdfjs = await import('pdfjs-dist');
+        console.log('[PDF] PDF.js imported successfully');
+      } catch (importError) {
+        console.error('[PDF] Failed to import PDF.js:', importError);
+        throw new Error('PDF.js library not available');
+      }
+    }
+
+    // Set up worker for pdfjs-dist
     const possibleWorkerPaths = [
       path.resolve(process.cwd(), 'node_modules/pdfjs-dist/build/pdf.worker.js'),
       path.resolve(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.js'),
@@ -1136,24 +1168,23 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
 
         const tx = item.transform;
         const x = tx[4];
-        const y = viewport.height - tx[5]; // y trong pdfjs tính từ dưới lên
+        const y = viewport.height - tx[5]; // y in pdfjs is calculated from bottom up
         const height = item.height;
         const width = item.width;
         const fontName = item.fontName;
 
-        // Heuristics đơn giản để xác định style từ font name
+        // Simple heuristics to determine style from font name
         const isBold = fontName.toLowerCase().includes('bold');
         const isItalic = fontName.toLowerCase().includes('italic');
 
         // Enhanced text cleaning for better extraction
         let cleanText = item.str;
 
-        // Try multiple encoding approaches
+        // Try multiple encoding approaches - only use supported encodings
         const encodingAttempts = [
           () => cleanText, // Original
           () => Buffer.from(cleanText, 'latin1').toString('utf8'),
-          () => Buffer.from(cleanText, 'latin1').toString('cp1252'),
-          () => Buffer.from(cleanText, 'latin1').toString('iso-8859-1'),
+          () => Buffer.from(cleanText, 'latin1').toString('ascii'),
         ];
 
         let bestText = cleanText;
@@ -1181,7 +1212,7 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
 
         // Less aggressive validation - only skip obviously garbled text
         if (bestText.length > 15) {
-          const charCount = {};
+          const charCount: Record<string, number> = {};
           for (const char of bestText) {
             charCount[char] = (charCount[char] || 0) + 1;
           }
@@ -1203,7 +1234,7 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
           fontSize: height,
           bold: isBold,
           italic: isItalic,
-          color: '#000000', // pdfjs-dist không dễ lấy màu, tạm set default
+          color: '#000000', // pdfjs-dist doesn't easily get colors, set default
           x,
           y,
           width,

@@ -98,6 +98,7 @@ import { SubtaskManagerService } from './service/subtask-manager.service';
 import { SubtaskController } from './controller/subtask.controller';
 import { OverdueCheckerService } from './service/overdue-checker.service';
 import { ExportManagerService } from '#LocalProject/Managers/service/export-manager.service';
+import { PDFTronModule } from '../util/extensions/pdftron.module';
 import { ExportController } from '#LocalProject/Managers/controller/export.controller';
 import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.processor';
 import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-config-checker';
@@ -105,6 +106,7 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
 @Global()
 @Module({
   imports: [
+    PDFTronModule,
     AuthModule,
     MongoModule,
     TypeOrmModule.forFeature([

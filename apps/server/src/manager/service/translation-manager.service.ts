@@ -11,14 +11,10 @@ import { logger } from 'nx/src/utils/logger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { replaceDocxTextWithCount } from '../../util/extensions/docx-utils.extension';
-import { overlayTranslationsOnPdf } from '../../util/extensions/pdf-utils.extension';
+import { overlayTranslationsOnPdf, replacePdfTextWithPDFTron } from '../../util/extensions/pdf-utils.extension';
 import { Buffer } from 'buffer';
 import { ActivityManagerService } from './activity-manager.service';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-// import { spawn } from 'child_process';
-// import { mkdtemp, writeFile, readFile, rm } from 'fs/promises';
-// import * as path from 'path';
-// import { tmpdir } from 'os';
+import { PDFTronBridge, PDFTronReplacementEntry } from '../../util/extensions/pdftron-bridge';
 import { PDFAssembler } from '@prometeia/pdfassembler';
 import * as xliff from 'xliff';
 
@@ -32,6 +28,7 @@ export class TranslationService {
     private readonly githubService: GitHubService,
     @Inject(forwardRef(() => ActivityManagerService))
     private readonly activityManagerService: ActivityManagerService,
+    private readonly pdfTronBridge: PDFTronBridge
   ) {}
 
   async getTranslationProgress(
@@ -157,7 +154,6 @@ export class TranslationService {
       const entries = await this.translationModel
         .find({ fileId, language })
         .lean();
-      // Only handle translated segments; untranslated stay as original
       const translatedEntries = entries
         .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
         .map((e) => ({
@@ -168,24 +164,54 @@ export class TranslationService {
           font: e.font,
         }));
       const originalBuffer = fileEntity.fileContent as Buffer;
-      try {
-        updatedBuffer = await replacePdfUsingPdfLib(originalBuffer, translatedEntries);
-      } catch (err) {
-        logger.error(`[PyMuPDF] Replacement failed: ${err instanceof Error ? err.message : String(err)}`);
-        // Fallback to overlay approach if Python/PyMuPDF not available
-        const overlayEntries = translatedEntries.map((e: any) => ({
-          text: e.translatedText,
-          position: e.position,
+      
+      // Convert to PDFTron format
+      const pdfTronEntries: PDFTronReplacementEntry[] = translatedEntries
+        .filter((e) => e.position && e.position.page) // Only include entries with valid position
+        .map((e) => ({
+          originalText: e.originalText,
+          translatedText: e.translatedText,
+          position: {
+            x: e.position?.x || 0,
+            y: e.position?.y || 0,
+            width: e.position?.width,
+            height: e.position?.height,
+            page: e.position?.page || 1,
+          },
           style: e.style,
-          font: e.font,
         }));
-        logger.log('[PyMuPDF] Falling back to overlay mode for PDF update');
-        const updatedBytes = await overlayTranslationsOnPdf(
-          originalBuffer,
-          overlayEntries,
-          { coverOriginal: true }
-        );
-        updatedBuffer = Buffer.from(updatedBytes);
+
+      try {
+        // Try PDFTron first for better layout preservation
+        logger.log('[PDF] Attempting PDFTron text replacement...');
+        updatedBuffer = await replacePdfTextWithPDFTron(originalBuffer, pdfTronEntries, this.pdfTronBridge);
+        logger.log('[PDF] PDFTron replacement successful');
+      } catch (pdfTronErr) {
+        logger.error(`[PDF] PDFTron replacement failed: ${pdfTronErr instanceof Error ? pdfTronErr.message : String(pdfTronErr)}`);
+        
+        // Fallback to PyMuPDF
+        try {
+          logger.log('[PDF] Falling back to PyMuPDF...');
+          updatedBuffer = await replacePdfUsingPdfAssembler(originalBuffer, translatedEntries);
+          logger.log('[PDF] PyMuPDF replacement successful');
+        } catch (pymupdfErr) {
+          logger.error(`[PDF] PyMuPDF replacement failed: ${pymupdfErr instanceof Error ? pymupdfErr.message : String(pymupdfErr)}`);
+          
+          // Final fallback to overlay approach
+          const overlayEntries = translatedEntries.map((e: any) => ({
+            text: e.translatedText,
+            position: e.position,
+            style: e.style,
+            font: e.font,
+          }));
+          logger.log('[PDF] Falling back to overlay mode for PDF update');
+          const updatedBytes = await overlayTranslationsOnPdf(
+            originalBuffer,
+            overlayEntries,
+            { coverOriginal: true }
+          );
+          updatedBuffer = Buffer.from(updatedBytes);
+        }
       }
     } else {
       updatedBuffer = await this.applyTranslation(fileId, language);
@@ -343,7 +369,7 @@ export class TranslationService {
     fileId: string,
     language: string
   ): Promise<{ githubUrl: string }> {
-    // From now on, export reads from GitHub as the single source of truth
+    // Always rebuild the buffer with latest translations to ensure we have the most up-to-date content
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -359,18 +385,24 @@ export class TranslationService {
     const safeFileName = `${base}.${language}${ext}`.replace(/[\\/:*?"<>|]/g, '_');
     const githubPath = `${language}/${safeFileName}`;
 
-    const existing = await this.githubService.getFileContentOrNull({ repo: repoName, path: githubPath, branch: 'main' });
-    if (!existing) {
-      // Not in GitHub yet → build once and push, then return URL
-      const { buffer } = await this.buildExportBuffer(fileId, language);
-      await this.githubService.commitChange({
-        repo: repoName,
-        branch: 'main',
-        path: githubPath,
-        content: buffer,
-        message: `Exported translation for ${fileEntity.fileName} (${language})`,
-      });
-    }
+    console.log(`[Export] Building export buffer for ${fileEntity.fileName} in ${language}...`);
+    
+    // Always build the buffer with latest translations
+    const { buffer } = await this.buildExportBuffer(fileId, language);
+    
+    console.log(`[Export] Buffer built successfully, size: ${buffer.length} bytes`);
+    console.log(`[Export] Pushing to GitHub: ${repoName}/${githubPath}`);
+
+    // Always commit the latest version to GitHub
+    await this.githubService.commitChange({
+      repo: repoName,
+      branch: 'main',
+      path: githubPath,
+      content: buffer,
+      message: `Update exported translation for ${fileEntity.fileName} (${language}) - ${new Date().toISOString()}`,
+    });
+
+    console.log(`[Export] Successfully pushed to GitHub: ${repoName}/${githubPath}`);
 
     const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${language}/${encodeURIComponent(safeFileName)}`;
     return { githubUrl };
@@ -418,7 +450,7 @@ export class TranslationService {
       return this.buildXliffExport(fileId, language);
     }
 
-    let buffer: Buffer;
+    let buffer: Buffer = Buffer.alloc(0); // Initialize with empty buffer
     if (
       fileEntity.fileType ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -434,37 +466,69 @@ export class TranslationService {
         const entries = await this.translationModel
           .find({ fileId, language })
           .lean();
+        
+        console.log(`[DOCX Export] Found ${entries.length} translation entries for language: ${language}`);
+        
         const translations = new Map<string, string>();
         for (const e of entries) {
           if (e.translatedText && e.translatedText.trim().length > 0) {
             translations.set(e.originalText, e.translatedText);
+            console.log(`[DOCX Export] Translation: "${e.originalText.substring(0, 50)}..." -> "${e.translatedText.substring(0, 50)}..."`);
           }
         }
 
         console.log(`[DOCX Export] Found ${translations.size} translations to apply`);
 
-        const { buffer: replacedBuffer, replacedCount } = await replaceDocxTextWithCount(
-          fileEntity.fileContent as Buffer,
-          translations
-        );
-        if (replacedCount === 0) {
-          console.warn('[DOCX Export] No inline replacements were made; keeping original structure');
+        if (translations.size === 0) {
+          console.warn('[DOCX Export] No translations found, returning original file');
           buffer = fileEntity.fileContent as Buffer;
         } else {
-          buffer = replacedBuffer;
+          const { buffer: replacedBuffer, replacedCount } = await replaceDocxTextWithCount(
+            fileEntity.fileContent as Buffer,
+            translations
+          );
+          
+          console.log(`[DOCX Export] replaceDocxTextWithCount returned: replacedCount=${replacedCount}, buffer size=${replacedBuffer.length}`);
+          
+          if (replacedCount === 0) {
+            console.warn('[DOCX Export] No inline replacements were made; trying alternative approach');
+            // Try alternative approach: rebuild the document with translations
+            buffer = await this.rebuildDocxWithTranslations(fileEntity.fileContent as Buffer, translations);
+          } else {
+            buffer = replacedBuffer;
+            console.log(`[DOCX Export] Successfully applied ${replacedCount} translations`);
+          }
         }
-        console.log(`[DOCX Export] DOCX processed. Replacements: ${replacedCount}`);
       } catch (error) {
         console.error(`[DOCX Export] Error processing DOCX file:`, error);
         
-        // Fallback: return original file if processing fails
-        console.warn(`[DOCX Export] Returning original DOCX file as fallback`);
-        buffer = fileEntity.fileContent as Buffer;
+        // Try to rebuild the document as a last resort
+        try {
+          console.log(`[DOCX Export] Attempting to rebuild DOCX with translations...`);
+          const entries = await this.translationModel.find({ fileId, language }).lean();
+          const translations = new Map<string, string>();
+          for (const e of entries) {
+            if (e.translatedText && e.translatedText.trim().length > 0) {
+              translations.set(e.originalText, e.translatedText);
+            }
+          }
+          buffer = await this.rebuildDocxWithTranslations(fileEntity.fileContent as Buffer, translations);
+        } catch (rebuildError) {
+          console.error(`[DOCX Export] Rebuild also failed:`, rebuildError);
+          // Final fallback: return original file
+          console.warn(`[DOCX Export] Returning original DOCX file as final fallback`);
+          buffer = fileEntity.fileContent as Buffer;
+        }
       }
     } else if (fileEntity.fileType === 'application/pdf') {
+      console.log(`[PDF Export] Processing PDF file: ${fileEntity.fileName}, size: ${fileEntity.fileContent.length} bytes`);
+      
       const entries = await this.translationModel
         .find({ fileId, language })
         .lean();
+      
+      console.log(`[PDF Export] Found ${entries.length} translation entries for language: ${language}`);
+      
       const translatedEntries = entries
         .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
         .map((e) => ({
@@ -474,28 +538,101 @@ export class TranslationService {
           style: e.style,
           font: e.font,
         }));
-      try {
-        // Use PDF Assembler for true text replacement
-        buffer = await replacePdfUsingPdfAssembler(
-          fileEntity.fileContent as Buffer,
-          translatedEntries
-        );
-      } catch (err) {
-        logger.error(`[PDF-lib] Export replacement failed: ${err instanceof Error ? err.message : String(err)}`);
-        // Fallback to overlay if PDF-lib fails
-        const overlayEntries = translatedEntries.map((e: any) => ({
-          text: e.translatedText,
-          position: e.position,
-          style: e.style,
-          font: e.font,
-        }));
-        logger.log('[PDF-lib] Falling back to overlay mode for PDF export');
-        const bytes = await overlayTranslationsOnPdf(
-          fileEntity.fileContent as Buffer,
-          overlayEntries,
-          { coverOriginal: true }
-        );
-        buffer = Buffer.from(bytes);
+      
+      console.log(`[PDF Export] ${translatedEntries.length} entries have translations to apply`);
+      
+      if (translatedEntries.length === 0) {
+        console.warn('[PDF Export] No translations found, returning original file');
+        buffer = fileEntity.fileContent as Buffer;
+      } else {
+        // Try multiple approaches for PDF translation
+        let success = false;
+        
+        // Approach 1: Try PDFTron for best layout preservation
+        try {
+          console.log('[PDF Export] Attempting PDFTron replacement...');
+          const pdfTronEntries: PDFTronReplacementEntry[] = translatedEntries
+            .filter((e) => e.position && e.position.page)
+            .map((e) => ({
+              originalText: e.originalText,
+              translatedText: e.translatedText,
+              position: {
+                x: e.position?.x || 0,
+                y: e.position?.y || 0,
+                width: e.position?.width,
+                height: e.position?.height,
+                page: e.position?.page || 1,
+              },
+              style: e.style,
+            }));
+          
+          buffer = await replacePdfTextWithPDFTron(
+            fileEntity.fileContent as Buffer,
+            pdfTronEntries,
+            this.pdfTronBridge
+          );
+          console.log('[PDF Export] PDFTron replacement successful');
+          success = true;
+        } catch (err) {
+          console.error(`[PDF Export] PDFTron failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        
+        // Approach 2: Try PDF-lib based replacement
+        if (!success) {
+          try {
+            console.log('[PDF Export] Attempting PDF-lib replacement...');
+            buffer = await this.replacePdfUsingPdfLib(
+              fileEntity.fileContent as Buffer,
+              translatedEntries
+            );
+            console.log('[PDF Export] PDF-lib replacement successful');
+            success = true;
+          } catch (err) {
+            console.error(`[PDF Export] PDF-lib failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+        
+        // Approach 2: Try overlay mode if PDF-lib failed
+        if (!success) {
+          try {
+            console.log('[PDF Export] Attempting overlay mode...');
+            const overlayEntries = translatedEntries.map((e: any) => ({
+              text: e.translatedText,
+              position: e.position,
+              style: e.style,
+              font: e.font,
+            }));
+            
+            const bytes = await overlayTranslationsOnPdf(
+              fileEntity.fileContent as Buffer,
+              overlayEntries,
+              { coverOriginal: true }
+            );
+            buffer = Buffer.from(bytes);
+            console.log('[PDF Export] Overlay mode successful');
+            success = true;
+          } catch (overlayErr) {
+            console.error(`[PDF Export] Overlay mode failed: ${overlayErr instanceof Error ? overlayErr.message : String(overlayErr)}`);
+          }
+        }
+        
+        // Approach 3: Create new PDF with translations
+        if (!success) {
+          try {
+            console.log('[PDF Export] Creating new PDF with translations...');
+            buffer = await this.createSimplePdfWithTranslations(translatedEntries);
+            console.log('[PDF Export] New PDF creation successful');
+            success = true;
+          } catch (createErr) {
+            console.error(`[PDF Export] New PDF creation failed: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
+          }
+        }
+        
+        // Final fallback: return original file
+        if (!success) {
+          console.warn('[PDF Export] All PDF translation methods failed, returning original file');
+          buffer = fileEntity.fileContent as Buffer;
+        }
       }
     } else {
       buffer = await this.applyTranslation(fileId, language);
@@ -789,6 +926,215 @@ export class TranslationService {
       return [];
     }
   }
+
+  /**
+   * Create a simple PDF with translated text as a final fallback for PDF export
+   */
+  private async createSimplePdfWithTranslations(translatedEntries: any[]): Promise<Buffer> {
+    try {
+      console.log('[PDF Export] Creating simple PDF with translations as fallback');
+      
+      const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.create();
+      
+      // Group entries by page for better organization
+      const entriesByPage = new Map<number, any[]>();
+      for (const entry of translatedEntries) {
+        const page = entry.position?.page || 1;
+        if (!entriesByPage.has(page)) {
+          entriesByPage.set(page, []);
+        }
+        entriesByPage.get(page)!.push(entry);
+      }
+      
+      // Create pages for each group
+      for (const [pageNum, entries] of entriesByPage) {
+        const page = pdfDoc.addPage();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        
+        let y = page.getHeight() - 50; // Start from top with margin
+        
+        // Add page header
+        page.drawText(`Page ${pageNum}`, {
+          x: 50,
+          y: page.getHeight() - 30,
+          font: font,
+          size: 16,
+          color: rgb(0.5, 0.5, 0.5)
+        });
+        
+        // Add translated text
+        for (const entry of entries) {
+          if (y < 50) {
+            // Add new page if running out of space
+            const newPage = pdfDoc.addPage();
+            y = newPage.getHeight() - 50;
+            
+            // Add page header to new page
+            newPage.drawText(`Page ${pageNum} (continued)`, {
+              x: 50,
+              y: newPage.getHeight() - 30,
+              font: font,
+              size: 16,
+              color: rgb(0.5, 0.5, 0.5)
+            });
+          }
+          
+          const fontSize = entry.style?.fontSize || 12;
+          const text = entry.translatedText || entry.originalText;
+          
+          // Split long text into multiple lines
+          const words = text.split(' ');
+          let currentLine = '';
+          let lineY = y;
+          
+          for (const word of words) {
+            const testLine = currentLine + (currentLine ? ' ' : '') + word;
+            const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+            
+            if (testWidth > page.getWidth() - 100) {
+              // Draw current line and start new line
+              if (currentLine.trim()) {
+                page.drawText(currentLine.trim(), {
+                  x: 50,
+                  y: lineY,
+                  font: font,
+                  size: fontSize,
+                  color: rgb(0, 0, 0)
+                });
+                lineY -= fontSize + 5;
+              }
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          }
+          
+          // Draw the last line
+          if (currentLine.trim()) {
+            page.drawText(currentLine.trim(), {
+              x: 50,
+              y: lineY,
+              font: font,
+              size: fontSize,
+              color: rgb(0, 0, 0)
+            });
+            y = lineY - fontSize - 10;
+          }
+        }
+      }
+      
+      const pdfBytes = await pdfDoc.save();
+      console.log('[PDF Export] Simple PDF created successfully');
+      return Buffer.from(pdfBytes);
+      
+    } catch (error) {
+      console.error('[PDF Export] Error creating simple PDF:', error);
+      throw new Error(`Failed to create PDF with translations: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Rebuild DOCX document with translations using docx library
+   */
+  private async rebuildDocxWithTranslations(originalBuffer: Buffer, translations: Map<string, string>): Promise<Buffer> {
+    try {
+      console.log('[DOCX Export] Rebuilding DOCX with translations...');
+      
+      const { Document, Packer, Paragraph, TextRun } = await import('docx');
+      
+      // Create a new document with translated content
+      const paragraphs: any[] = [];
+      
+      // Process each translation entry
+      for (const [originalText, translatedText] of translations) {
+        // Create paragraph with translated text
+        const paragraph = new Paragraph({
+          children: [
+            new TextRun({
+              text: translatedText,
+              bold: false,
+              italics: false,
+              size: 24, // 12pt * 2
+            }),
+          ],
+        });
+        paragraphs.push(paragraph);
+      }
+      
+      // Create the document
+      const doc = new Document({
+        sections: [
+          {
+            children: paragraphs,
+          },
+        ],
+      });
+      
+      // Generate buffer
+      const buffer = await Packer.toBuffer(doc);
+      console.log('[DOCX Export] DOCX rebuilt successfully');
+      return buffer;
+      
+    } catch (error) {
+      console.error('[DOCX Export] Error rebuilding DOCX:', error);
+      throw new Error(`Failed to rebuild DOCX with translations: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Replace PDF text using PDF-lib (fallback method)
+   */
+  private async replacePdfUsingPdfLib(
+    originalBuffer: Buffer,
+    entries: PdfReplaceEntry[],
+  ): Promise<Buffer> {
+    if (!entries || entries.length === 0) {
+      return originalBuffer;
+    }
+
+    try {
+      const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.load(originalBuffer);
+
+      for (const entry of entries) {
+        if (entry.position && entry.translatedText) {
+          const page = pdfDoc.getPage(entry.position.page ? entry.position.page - 1 : 0);
+          const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+          page.drawText(entry.translatedText, {
+            x: entry.position.x || 50,
+            y: entry.position.y || 50,
+            size: entry.style?.fontSize || 12,
+            font: font,
+            color: entry.style?.color ? this.parseColor(entry.style.color) : rgb(0, 0, 0)
+          });
+        }
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      return Buffer.from(pdfBytes);
+    } catch (error) {
+      console.error(`[PDF-lib] Error during PDF replacement: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse hex color string to RGB values
+   */
+  private parseColor(colorString: string) {
+    const { rgb } = require('pdf-lib');
+    // Parse hex color like "#FF0000" to RGB
+    if (colorString.startsWith('#')) {
+      const hex = colorString.slice(1);
+      const r = parseInt(hex.slice(0, 2), 16) / 255;
+      const g = parseInt(hex.slice(2, 4), 16) / 255;
+      const b = parseInt(hex.slice(4, 6), 16) / 255;
+      return rgb(r, g, b);
+    }
+    return rgb(0, 0, 0); // Default to black
+  }
 }
 
 async function rebuildFileWithManifest(
@@ -1027,51 +1373,4 @@ async function replacePdfUsingPdfAssembler(
     logger.error(`[PDF Assembler] Error during text replacement: ${error instanceof Error ? error.message : String(error)}`);
     throw new Error(`PDF Assembler replacement failed: ${error instanceof Error ? error.message : String(error)}`);
   }
-}
-
-// Helper function for PDF-lib based replacement (fallback)
-async function replacePdfUsingPdfLib(
-  originalBuffer: Buffer,
-  entries: PdfReplaceEntry[],
-): Promise<Buffer> {
-  if (!entries || entries.length === 0) {
-    return originalBuffer;
-  }
-
-  try {
-    const pdfDoc = await PDFDocument.load(originalBuffer);
-
-    for (const entry of entries) {
-      if (entry.position && entry.translatedText) {
-        const page = pdfDoc.getPage(entry.position.page ? entry.position.page - 1 : 0);
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-        page.drawText(entry.translatedText, {
-          x: entry.position.x || 50,
-          y: entry.position.y || 50,
-          size: entry.style?.fontSize || 12,
-          font: font,
-          color: entry.style?.color ? parseColor(entry.style.color) : rgb(0, 0, 0)
-        });
-      }
-    }
-
-    const pdfBytes = await pdfDoc.save();
-    return Buffer.from(pdfBytes);
-  } catch (error) {
-    logger.error(`[PDF-lib] Error during PDF replacement: ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
-  }
-}
-
-function parseColor(colorString: string) {
-  // Parse hex color like "#FF0000" to RGB
-  if (colorString.startsWith('#')) {
-    const hex = colorString.slice(1);
-    const r = parseInt(hex.slice(0, 2), 16) / 255;
-    const g = parseInt(hex.slice(2, 4), 16) / 255;
-    const b = parseInt(hex.slice(4, 6), 16) / 255;
-    return rgb(r, g, b);
-  }
-  return rgb(0, 0, 0); // Default to black
 }

@@ -552,9 +552,8 @@ export class PaypalService {
           requestId: request.id,
         });
 
-        // Update the original requester transaction to ON_HOLD (no new transaction needed)
         transaction.status = TransactionStatus.On_Hold;
-        transaction.paypalEmail = payerWallet?.paypalEmail ?? null;
+        transaction.paypalEmail = payerWallet?.paypalEmail ?? '';
 
         console.log('✅ Updated requester transaction to ON_HOLD:', {
           id: transaction.id,
@@ -741,38 +740,18 @@ export class PaypalService {
 
       transaction.status = TransactionStatus.On_Hold;
 
-      // KHÔNG tạo translator transaction cho cả public và private request
-      // Tiền chỉ cần hold trong admin wallet, không cần phân phối cho translator ngay
-      let translatorTransaction = null;
-      // if (request.assignee && request.assignee.id !== user.id && request.isPublic) {
-      //   // Tạm thời comment lại - không cần translator transaction
-      //   const assigneeWallet =
-      //     await this.walletManagerService.getOrCreateWallet(
-      //       request.assignee.id
-      //     );
 
-      //   translatorTransaction = this.transactionRepo.create({
-      //     user: { id: request.assignee.id },
-      //     request: { id: request.id },
-      //     amount: transaction.amount,
-      //     status: TransactionStatus.On_Hold,
-      //     paypalEmail: assigneeWallet?.paypalEmail ?? null,
-      //   } as DeepPartial<TransactionEntity>);
-      // }
+      const translatorTransaction = null;
+
 
       await this.transactionRepo.save(transaction);
       if (translatorTransaction) {
         await this.transactionRepo.save(translatorTransaction);
       }
 
-      // Do NOT create a separate requester Completed transaction for deposit capture.
-      // The original deposit transaction is transitioned to ON_HOLD and held until completion/refund.
-
       let projectId = null;
       let receiver = null;
-      // Xử lý cả public và private request
       if (request.isPublic && request.status !== RequestStatus.Approved) {
-        // Xử lý public request - tạo project mới
         if (!request.category?.id) {
           console.error(
             '[PayPal] Request public thiếu category khi tạo project:',

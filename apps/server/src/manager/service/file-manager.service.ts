@@ -686,7 +686,7 @@ export class FileService {
 
   private async extractPdfTextSegments(pdfBuffer: Buffer): Promise<any[]> {
     try {
-      this.logger.log('Starting PDF text extraction...');
+      this.logger.log('Starting PDF text extraction (text-focused)...');
       this.logger.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
 
       // Set up PDF.js worker for Node.js environment
@@ -704,16 +704,16 @@ export class FileService {
       const textSegments = [];
       let segmentId = 1;
 
-      // Process each page
+      // Process each page - focus on text extraction
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        this.logger.log(`Processing page ${pageNum}...`);
+        this.logger.log(`Processing page ${pageNum} (text-focused)...`);
         const page = await pdf.getPage(pageNum);
 
         // Use scale that matches iframe display (typically 1.0 for iframe)
         const viewport = page.getViewport({ scale: 1.0 });
         this.logger.log(`Page ${pageNum} viewport: ${viewport.width} x ${viewport.height}`);
 
-        // Extract text content with positions
+        // Extract text content with positions - focus on text quality
         const textContent = await page.getTextContent();
         this.logger.log(`Page ${pageNum} has ${textContent.items.length} text items`);
 
@@ -740,13 +740,31 @@ export class FileService {
             };
 
             textSegments.push(segment);
-            this.logger.log(`Created segment ${segmentId}: "${text.substring(0, 30)}..." at (${x}, ${y})`);
+            this.logger.log(`Created text segment ${segmentId}: "${text.substring(0, 30)}..." at (${x}, ${y})`);
             segmentId++;
           }
         });
+
+        // Skip detailed image extraction - just log basic info for preview
+        try {
+          const operatorList = await page.getOperatorList();
+          let imageCount = 0;
+          
+          for (let j = 0; j < operatorList.fnArray.length; j++) {
+            if (operatorList.fnArray[j] === pdfjsLib.OPS.paintImageXObject) {
+              imageCount++;
+            }
+          }
+          
+          if (imageCount > 0) {
+            this.logger.log(`Page ${pageNum} has ${imageCount} images (basic info only - skipping detailed extraction)`);
+          }
+        } catch (error) {
+          this.logger.log(`Page ${pageNum}: Skipping image extraction to focus on text`);
+        }
       }
 
-      this.logger.log(`Extracted ${textSegments.length} text segments from PDF`);
+      this.logger.log(`Text-focused extraction completed. Total text segments: ${textSegments.length}`);
       return textSegments;
 
     } catch (error) {

@@ -565,28 +565,8 @@ export class PaypalService {
           note: 'Money is held in request until project completion'
         });
 
-        // Generate manifest for each file associated with the request
-        if (request.files && request.files.length > 0) {
-          console.log(
-            `🔄 Generating manifests for ${request.files.length} files...`
-          );
-          for (const file of request.files) {
-            try {
-              await this.manifestService.generateManifest(file);
-              console.log(`✅ Generated manifest for file: ${file.fileName}`);
-            } catch (error) {
-              console.error(
-                `❌ Failed to generate manifest for file ${file.fileName}:`,
-                error
-              );
-              // Continue with other files even if one fails
-            }
-          }
-        } else {
-          console.log(
-            'ℹ️ No files found for request, skipping manifest generation'
-          );
-        }
+        // Manifest extraction for copied files is now enqueued in background
+        // inside createProjectFromRequest. Nothing to do here.
 
         console.log('🔄 Saving request and updated transaction to database...');
         await queryRunner.manager.save([

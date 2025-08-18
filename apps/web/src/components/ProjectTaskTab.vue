@@ -3206,7 +3206,7 @@ function closeAllDropdowns() {
                 class="clear-filter-btn"
                 @click="clearFilters"
               >
-                <i class="pi pi-times" />
+                <span>✕</span>
                 Clear
               </button>
             </div>
@@ -3879,7 +3879,7 @@ function closeAllDropdowns() {
               class="clear-filter-btn"
               @click="clearFilters"
             >
-              <i class="pi pi-times" />
+              <span>✕</span>
               Clear
             </button>
           </div>

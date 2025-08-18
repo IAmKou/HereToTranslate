@@ -27,10 +27,6 @@
           <span class="material-icons">people</span>
           <span class="menu-text">Users</span>
         </router-link>
-        <router-link to="/admin/roles" class="menu-item" :title="isCollapsed ? 'Role Management' : ''">
-          <span class="material-icons">admin_panel_settings</span>
-          <span class="menu-text">Roles</span>
-        </router-link>
       </div>
 
       <!-- Content Management Section -->
@@ -46,11 +42,6 @@
       <!-- System Section -->
       <div class="menu-section">
         <h3 class="section-title" v-if="!isCollapsed">System</h3>
-        <router-link to="/admin/settings" class="menu-item" :title="isCollapsed ? 'System Settings' : ''">
-          <span class="material-icons">settings</span>
-          <span class="menu-text">Settings</span>
-        </router-link>
-
         <router-link to="/admin/transactions" class="menu-item" :title="isCollapsed ? 'Transaction History' : ''">
           <span class="material-icons">history</span>
           <span class="menu-text">Transaction History</span>
@@ -62,13 +53,6 @@
         </router-link>
       </div>
     </nav>
-
-    <div class="sidebar-footer">
-      <router-link to="/help" class="menu-item" :title="isCollapsed ? 'Help & Support' : ''">
-        <span class="material-icons">help_outline</span>
-        <span class="menu-text">Help & Support</span>
-      </router-link>
-    </div>
   </aside>
 </template>
 

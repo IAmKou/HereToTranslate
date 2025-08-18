@@ -644,7 +644,7 @@
                 <span v-if="fileError" class="error-message">{{
                     fileError
                   }}</span>
-                <span v-else class="help-text">Upload <b>at least one file</b> related to your translation request. Files will be uploaded with the request.<br/>Supported formats: PDF, DOCX, TXT, JSON. Max 10MB/file. Max 5 files.</span>
+                <span v-else class="help-text">Upload <b>at least one file</b> related to your translation request. Files will be uploaded with the request.<br/>Supported formats: PDF, DOCX, TXT, JSON. Max 10MB/file. Max 5 files. No empty files.</span>
               </div>
             </div>
           </div>
@@ -725,6 +725,12 @@ import { useToast } from 'primevue/usetoast';
 import Multiselect from 'vue-multiselect';
 import 'vue-multiselect/dist/vue-multiselect.min.css';
 import { SUPPORTED_LANGUAGES } from '../utils/languages';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Ensure workerSrc is set (fallback to CDN if not configured elsewhere)
+// This avoids errors when parsing PDFs during validation
+// @ts-ignore
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsLib.GlobalWorkerOptions.workerSrc || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 const emit = defineEmits(['success', 'cancel']);
 
@@ -1114,20 +1120,20 @@ function triggerFileInput() {
   fileInput.value.click();
 }
 
-function handleFileSelect(event) {
+async function handleFileSelect(event) {
   const files = Array.from(event.target.files);
-  addFiles(files);
+  await addFiles(files);
   event.target.value = ''; // Reset input
 }
 
-function handleFileDrop(event) {
+async function handleFileDrop(event) {
   event.preventDefault();
   isDragOver.value = false;
   const files = Array.from(event.dataTransfer.files);
-  addFiles(files);
+  await addFiles(files);
 }
 
-function addFiles(files) {
+async function addFiles(files) {
   fileError.value = '';
   const allowedTypes = ['.pdf', '.docx', '.txt', '.json'];
   for (const file of files) {
@@ -1141,6 +1147,86 @@ function addFiles(files) {
         life: 4000,
       });
       continue;
+    }
+
+    // Reject empty files
+    if (file.size === 0) {
+      fileError.value = `File ${file.name} is empty. Please upload a non-empty file.`;
+      toast.add({
+        severity: 'error',
+        summary: 'Empty file',
+        detail: fileError.value,
+        life: 4000,
+      });
+      continue;
+    }
+
+    // For DOCX: validate that the document actually contains text content
+    if (fileExtension === '.docx') {
+      try {
+        const isEmptyDocx = await isDocxContentEmpty(file);
+        if (isEmptyDocx) {
+          fileError.value = `File ${file.name} has no readable content. Please upload a DOCX with text.`;
+          toast.add({
+            severity: 'error',
+            summary: 'Empty document',
+            detail: fileError.value,
+            life: 4000,
+          });
+          continue;
+        }
+      } catch (err) {
+        // If we cannot read the DOCX, block upload to be safe
+        fileError.value = `Cannot read ${file.name}. Please ensure the DOCX is valid and not corrupted.`;
+        toast.add({
+          severity: 'error',
+          summary: 'Unreadable file',
+          detail: fileError.value,
+          life: 4000,
+        });
+        continue;
+      }
+    }
+
+    // For TXT/JSON: ensure there is non-whitespace content
+    if (fileExtension === '.txt' || fileExtension === '.json') {
+      const text = await file.text();
+      if (!text || text.trim().length === 0) {
+        fileError.value = `File ${file.name} has no content. Please upload a non-empty ${fileExtension.toUpperCase().slice(1)} file.`;
+        toast.add({
+          severity: 'error',
+          summary: 'Empty file',
+          detail: fileError.value,
+          life: 4000,
+        });
+        continue;
+      }
+    }
+
+    // For PDF: check text content presence (up to first few pages)
+    if (fileExtension === '.pdf') {
+      try {
+        const isEmptyPdf = await isPdfContentEmpty(file);
+        if (isEmptyPdf) {
+          fileError.value = `File ${file.name} appears to contain no text. Please upload a PDF with content.`;
+          toast.add({
+            severity: 'error',
+            summary: 'Empty PDF',
+            detail: fileError.value,
+            life: 4000,
+          });
+          continue;
+        }
+      } catch (err) {
+        fileError.value = `Cannot read ${file.name}. Please ensure the PDF is valid and not corrupted.`;
+        toast.add({
+          severity: 'error',
+          summary: 'Unreadable file',
+          detail: fileError.value,
+          life: 4000,
+        });
+        continue;
+      }
     }
 
     // Check if file already exists
@@ -1183,6 +1269,39 @@ function formatFileSize(bytes) {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Helpers
+async function isDocxContentEmpty(file) {
+  const JSZip = (await import('jszip')).default;
+  const zip = await JSZip.loadAsync(file);
+  const docXml = zip.file('word/document.xml');
+  if (!docXml) return true;
+  const xmlText = await docXml.async('text');
+  // Strip XML tags and whitespace to estimate visible text content
+  const plain = xmlText
+    .replace(/<w:tbl[\s\S]*?<\/w:tbl>/g, ' ') // drop tables
+    .replace(/<[^>]+>/g, ' ') // strip tags
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain.length === 0;
+}
+
+async function isPdfContentEmpty(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  const maxPagesToCheck = Math.min(3, pdf.numPages);
+  for (let i = 1; i <= maxPagesToCheck; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const extracted = textContent.items.map((it) => it.str).join(' ').replace(/\s+/g, ' ').trim();
+    if (extracted.length > 0) {
+      return false;
+    }
+  }
+  return true;
 }
 </script>
 

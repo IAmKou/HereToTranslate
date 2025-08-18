@@ -33,6 +33,8 @@ import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.i
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 import { ActivityManagerService } from './activity-manager.service';
+import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
+import { BackgroundExtractService } from './background-extract.service';
 import { StatusManagerService } from '#LocalProject/Managers/service/task-status-manager.service';
 import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
 
@@ -60,7 +62,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly notificationService: NotificationManagerService,
     private readonly activityManagerService: ActivityManagerService,
     private readonly statusManagerService: StatusManagerService,
-    private readonly workflowManagerService: WorkflowManagerService
+    private readonly workflowManagerService: WorkflowManagerService,
+    private readonly manifestService: ManifestService,
+    private readonly backgroundExtract: BackgroundExtractService
   ) {
     super();
   }
@@ -313,6 +317,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     // Copy files from request to project if they exist
     if (request.files && request.files.length > 0) {
       try {
+        const newFileIds: string[] = [];
         for (const file of request.files) {
           // Create a copy of the file for the project
           const projectFile = this.fileRepository.create({
@@ -320,14 +325,25 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
             fileType: file.fileType,
             fileContent: file.fileContent,
             project: { id: projectResult.projectId },
+            // Ensure the file is attached to the project's default branch so manifest generation works
+            branch: { id: projectResult.branchId },
             uploader: { id: uid },
             createdAt: new Date(),
+            // Link the copied file back to the request to prevent deletion
+            request: { id: request.id },
+            isSyncedFromRequest: true,
           });
 
-          await this.fileRepository.save(projectFile);
+          const savedProjectFile = await this.fileRepository.save(projectFile);
+          newFileIds.push(savedProjectFile.id.toString());
         }
 
         this.logger.debug(`Copied ${request.files.length} files from request to project ${projectResult.projectId}`);
+
+        // Enqueue background extraction without Redis/Bull
+        if (newFileIds.length > 0) {
+          this.backgroundExtract.enqueue(newFileIds);
+        }
       } catch (error) {
         this.logger.error('Failed to copy files from request to project', error);
         // Don't fail the entire operation if file copying fails

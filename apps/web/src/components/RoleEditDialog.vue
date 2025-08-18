@@ -3,12 +3,16 @@
     :visible="true"
     modal
     :closable="false"
+    :draggable="false"
     class="role-edit-dialog pro"
-    :style="{ width: '440px', maxWidth: '96vw', minWidth: '340px', borderRadius: '18px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }"
+    :style="{ width: '560px', maxWidth: '96vw', minWidth: '380px', borderRadius: '18px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }"
   >
     <div class="dialog-header-pro">
       <span class="header-icon">🛡️</span>
       <span class="header-title">Edit User Role</span>
+      <button class="close-x" @click="$emit('close')" aria-label="Close">
+        <i class="pi pi-times"></i>
+      </button>
     </div>
     <div class="dialog-content-pro">
       <div class="user-info-pro">
@@ -150,9 +154,10 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: 0.7rem;
+  padding: 0.9rem 1rem 0.7rem 1rem;
   border-bottom: 1px solid #e5e7eb;
   margin-bottom: 1.2rem;
+  position: relative;
 }
 .header-icon {
   font-size: 2.1rem;
@@ -164,11 +169,26 @@ defineExpose({
   color: #1e293b;
   letter-spacing: 0.01em;
 }
+.close-x {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  border: none;
+  background: transparent;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.close-x:hover { background: #eef2ff; }
 .dialog-content-pro {
   display: flex;
   flex-direction: column;
-  gap: 2.2rem;
-  padding: 1.2rem 1.7rem 0.5rem 1.7rem;
+  gap: 1.6rem;
+  padding: 1.2rem 1.7rem 0.8rem 1.7rem;
   align-items: center;
 }
 .user-info-pro {
@@ -240,10 +260,10 @@ defineExpose({
   font-size: 1.01rem;
 }
 .role-dropdown-pro {
-  min-width: 240px;
+  min-width: 260px;
   font-size: 1rem;
   width: 100%;
-  border-radius: 0.5rem;
+  border-radius: 0.7rem;
   box-shadow: 0 1px 4px rgba(59,130,246,0.07);
 }
 .confirm-btn-pro {
@@ -252,9 +272,9 @@ defineExpose({
   border: none;
   color: #fff;
   font-weight: 700;
-  border-radius: 999px;
+  border-radius: 12px;
   box-shadow: 0 2px 8px rgba(34,197,94,0.13);
-  padding: 0.6rem 2.1rem;
+  padding: 0.7rem 2.2rem;
   font-size: 1.08rem;
   transition: background 0.2s, box-shadow 0.2s;
 }
@@ -268,8 +288,8 @@ defineExpose({
   background: #fff;
   border: 2px solid #e2e8f0;
   margin-right: 1.2rem;
-  border-radius: 999px;
-  padding: 0.6rem 1.7rem;
+  border-radius: 12px;
+  padding: 0.7rem 1.8rem;
   font-size: 1.08rem;
   transition: border 0.2s, background 0.2s, color 0.2s;
 }

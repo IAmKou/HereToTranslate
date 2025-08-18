@@ -6,6 +6,7 @@ import AdminSidebar from '../components/AdminSidebar.vue';
 import Footer from '../components/AppFooter.vue';
 import { authService } from '../services/auth.service';
 import { userService, UserProfile, User } from '../services/user.service';
+import { notificationService } from '../services/notification.service';
 import axiosInstance from '../api';
 
 // Interfaces
@@ -15,14 +16,11 @@ interface SystemStats {
   totalProjects: number;
   pendingRequests: number;
   systemHealth: 'excellent' | 'good' | 'warning' | 'critical';
-  lastBackup: string;
-  diskUsage: number;
-  memoryUsage: number;
 }
 
 interface RecentActivity {
   id: string;
-  type: 'user_registration' | 'project_created' | 'user_login' | 'system_alert' | 'backup_completed';
+  type: 'user_registration' | 'project_created' | 'user_login' | 'system_alert' | 'backup_completed' | 'info' | 'warning' | 'error' | 'success';
   title: string;
   description: string;
   timestamp: string;
@@ -55,10 +53,7 @@ const systemStats = ref<SystemStats>({
   activeUsers: 0,
   totalProjects: 0,
   pendingRequests: 0,
-  systemHealth: 'good',
-  lastBackup: '',
-  diskUsage: 0,
-  memoryUsage: 0
+  systemHealth: 'good'
 });
 const recentActivities = ref<RecentActivity[]>([]);
 const isLoadingStats = ref(false);
@@ -75,28 +70,12 @@ const quickActions = ref<QuickAction[]>([
     color: '#2563eb'
   },
   {
-    id: 'system-settings',
-    title: 'System Settings',
-    description: 'Configure system preferences',
-    icon: 'pi pi-cog',
-    route: '/admin/settings',
-    color: '#7c3aed'
-  },
-  {
-    id: 'backup-restore',
-    title: 'Backup & Restore',
-    description: 'Manage system backups',
-    icon: 'pi pi-database',
-    route: '/admin/backup',
-    color: '#059669'
-  },
-  {
-    id: 'logs',
-    title: 'System Logs',
-    description: 'View system activity logs',
-    icon: 'pi pi-file-text',
-    route: '/admin/logs',
-    color: '#dc2626'
+    id: 'notification-management',
+    title: 'Notification Management',
+    description: 'Manage system notifications',
+    icon: 'pi pi-bell',
+    route: '/admin/notifications',
+    color: '#f59e0b'
   }
 ]);
 
@@ -161,10 +140,7 @@ const fetchSystemStats = async () => {
       console.error('Error fetching pending requests count:', error);
       systemStats.value.pendingRequests = 0;
     }
-    // Mock system metrics (replace with real API calls when available)
-    systemStats.value.lastBackup = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    systemStats.value.diskUsage = Math.floor(Math.random() * 30) + 50; // 50-80%
-    systemStats.value.memoryUsage = Math.floor(Math.random() * 40) + 30; // 30-70%
+    // No fake system metrics; only using actual counts available
   } catch (error) {
     console.error('Error fetching system stats:', error);
   } finally {
@@ -178,12 +154,9 @@ const calculateGrowthPercentage = (current: number, previous: number): number =>
   return Math.round(((current - previous) / previous) * 100);
 };
 
-// Add reactive data for previous month stats
+// Add reactive data for previous month stats (only what we can compute reliably)
 const previousMonthStats = ref({
-  totalUsers: 0,
-  activeUsers: 0,
-  totalProjects: 0,
-  pendingRequests: 0
+  totalUsers: 0
 });
 
 // Fetch previous month stats for comparison
@@ -194,39 +167,20 @@ const fetchPreviousMonthStats = async () => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     // Get users created before 30 days ago
-    const oldUsers = users.value.filter(user =>
+    const oldUsers = users.value.filter((user: User) =>
       new Date(user.createdAt) < thirtyDaysAgo
     );
 
     previousMonthStats.value.totalUsers = oldUsers.length;
-    previousMonthStats.value.activeUsers = oldUsers.filter(user => user.isActive).length;
-
-    // For projects, we'll use a simple calculation based on current data
-    // In a real system, you'd fetch this from a historical data table
-    previousMonthStats.value.totalProjects = Math.max(0, systemStats.value.totalProjects - Math.floor(systemStats.value.totalProjects * 0.15));
-    previousMonthStats.value.pendingRequests = Math.max(0, systemStats.value.pendingRequests - 5);
 
   } catch (error) {
     console.error('Error calculating previous month stats:', error);
   }
 };
 
-// Computed properties for growth percentages
+// Computed properties for growth percentages (only for total users based on last 30 days)
 const userGrowthPercentage = computed(() => {
   return calculateGrowthPercentage(systemStats.value.totalUsers, previousMonthStats.value.totalUsers);
-});
-
-const activeUserGrowthPercentage = computed(() => {
-  return calculateGrowthPercentage(systemStats.value.activeUsers, previousMonthStats.value.activeUsers);
-});
-
-const projectGrowthPercentage = computed(() => {
-  return calculateGrowthPercentage(systemStats.value.totalProjects, previousMonthStats.value.totalProjects);
-});
-
-const requestChangePercentage = computed(() => {
-  const change = systemStats.value.pendingRequests - previousMonthStats.value.pendingRequests;
-  return change;
 });
 
 // Update fetchRecentActivities to include more real data
@@ -239,6 +193,7 @@ const fetchRecentActivities = async () => {
 
     // Get recent users (last 5)
     const recentUsers = users.value
+      .filter((u: User) => !(u.role?.id === 1 || u.role?.id === 2))
       .sort((a: User, b: User) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
 
@@ -259,72 +214,46 @@ const fetchRecentActivities = async () => {
       });
     });
 
-    // Add project creation activities if we have project data
-    if (systemStats.value.totalProjects > 0) {
-      // Simulate recent project creation based on total projects
-      const recentProjectCount = Math.min(3, Math.floor(systemStats.value.totalProjects * 0.1));
-      for (let i = 0; i < recentProjectCount; i++) {
+    // Include recent notifications from the system
+    try {
+      const notifRes = await notificationService.getUserNotifications(10, false);
+      notifRes.notifications.forEach((n) => {
+        const rawType = (n.type || '').toString().toLowerCase();
+        let notifType: 'info' | 'warning' | 'error' | 'success';
+        switch (rawType) {
+          case 'warning':
+            notifType = 'warning';
+            break;
+          case 'error':
+            notifType = 'error';
+            break;
+          case 'success':
+            notifType = 'success';
+            break;
+          case 'alert':
+            notifType = 'warning';
+            break;
+          case 'info':
+          default:
+            notifType = 'info';
+        }
         activities.push({
-          id: `project-${i}`,
-          type: 'project_created',
-          title: 'New Project Created',
-          description: `Translation project was created by system`,
-          timestamp: new Date(Date.now() - (i + 1) * 60 * 60 * 1000).toISOString(),
-          severity: 'success'
+          id: `notif-${n.id}`,
+          type: notifType,
+          title: notifType.charAt(0).toUpperCase() + notifType.slice(1),
+          description: n.message,
+          timestamp: n.createdAt,
+          severity: notifType
         });
-      }
-    }
-
-    // Add system activities (mock for now)
-    activities.push({
-      id: 'backup-1',
-      type: 'backup_completed',
-      title: 'Backup Completed',
-      description: 'Daily system backup completed successfully',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      severity: 'success'
-    });
-
-    // Add system health alert if needed
-    if (systemStats.value.systemHealth === 'warning' || systemStats.value.systemHealth === 'critical') {
-      activities.push({
-        id: 'alert-1',
-        type: 'system_alert',
-        title: 'System Alert',
-        description: `System health is ${systemStats.value.systemHealth}. Please check system resources.`,
-        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        severity: systemStats.value.systemHealth === 'critical' ? 'error' : 'warning'
       });
-    }
-
-    // Add disk usage alert if high
-    if (systemStats.value.diskUsage > 80) {
-      activities.push({
-        id: 'disk-alert',
-        type: 'system_alert',
-        title: 'High Disk Usage',
-        description: `Disk usage is at ${systemStats.value.diskUsage}%. Consider cleanup.`,
-        timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        severity: 'warning'
-      });
-    }
-
-    // Add memory usage alert if high
-    if (systemStats.value.memoryUsage > 80) {
-      activities.push({
-        id: 'memory-alert',
-        type: 'system_alert',
-        title: 'High Memory Usage',
-        description: `Memory usage is at ${systemStats.value.memoryUsage}%. Consider optimization.`,
-        timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-        severity: 'warning'
-      });
+    } catch (e) {
+      console.error('Error loading notifications for activities:', e);
     }
 
     // Sort activities by timestamp (newest first)
     activities.sort((a: RecentActivity, b: RecentActivity) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-    recentActivities.value = activities.slice(0, 10); // Keep only 10 most recent
+    recentActivities.value = activities.slice(0, 7); // Keep only 7 most recent
 
   } catch (error) {
     console.error('Error fetching recent activities:', error);
@@ -380,14 +309,18 @@ const getTimeAgo = (date: string) => {
 };
 
 const getActivityIcon = (type: string) => {
-  const icons = {
+  const icons: Record<string, string> = {
     user_registration: 'pi pi-user-plus',
     project_created: 'pi pi-folder-plus',
     user_login: 'pi pi-sign-in',
     system_alert: 'pi pi-exclamation-triangle',
-    backup_completed: 'pi pi-database'
+    backup_completed: 'pi pi-database',
+    info: 'pi pi-info-circle',
+    warning: 'pi pi-exclamation-triangle',
+    error: 'pi pi-times-circle',
+    success: 'pi pi-check-circle'
   };
-  return icons[type as keyof typeof icons] || 'pi pi-info-circle';
+  return icons[type] || 'pi pi-info-circle';
 };
 
 const getSeverityColor = (severity: string) => {
@@ -430,12 +363,7 @@ onMounted(async () => {
                 </h1>
                 <p class="welcome-subtitle">Here's what's happening with your system today</p>
               </div>
-              <div class="header-right">
-                <div class="system-health-indicator" :style="{ borderColor: systemHealthColor }">
-                  <i :class="systemHealthIcon" :style="{ color: systemHealthColor }"></i>
-                  <span class="health-label">{{ systemStats.systemHealth.toUpperCase() }}</span>
-                </div>
-              </div>
+
             </div>
           </div>
 
@@ -463,10 +391,7 @@ onMounted(async () => {
                 <div class="stat-content">
                   <div class="stat-number">{{ systemStats.activeUsers.toLocaleString() }}</div>
                   <div class="stat-label">Active Users</div>
-                  <div class="stat-change" :class="activeUserGrowthPercentage >= 0 ? 'positive' : 'negative'">
-                    <i :class="activeUserGrowthPercentage >= 0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down'"></i>
-                    <span>{{ activeUserGrowthPercentage >= 0 ? '+' : '' }}{{ activeUserGrowthPercentage }}% from last week</span>
-                  </div>
+
                 </div>
               </div>
 
@@ -477,10 +402,7 @@ onMounted(async () => {
                 <div class="stat-content">
                   <div class="stat-number">{{ systemStats.totalProjects.toLocaleString() }}</div>
                   <div class="stat-label">Total Projects</div>
-                  <div class="stat-change" :class="projectGrowthPercentage >= 0 ? 'positive' : 'negative'">
-                    <i :class="projectGrowthPercentage >= 0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down'"></i>
-                    <span>{{ projectGrowthPercentage >= 0 ? '+' : '' }}{{ projectGrowthPercentage }}% from last month</span>
-                  </div>
+
                 </div>
               </div>
 
@@ -491,10 +413,7 @@ onMounted(async () => {
                 <div class="stat-content">
                   <div class="stat-number">{{ systemStats.pendingRequests }}</div>
                   <div class="stat-label">Pending Requests</div>
-                  <div class="stat-change" :class="requestChangePercentage <= 0 ? 'positive' : 'negative'">
-                    <i :class="requestChangePercentage <= 0 ? 'pi pi-arrow-down' : 'pi pi-arrow-up'"></i>
-                    <span>{{ requestChangePercentage > 0 ? '+' : '' }}{{ requestChangePercentage }} from yesterday</span>
-                  </div>
+
                 </div>
               </div>
             </div>
@@ -539,42 +458,26 @@ onMounted(async () => {
               <div class="system-metrics">
                 <div class="metric-card">
                   <div class="metric-header">
-                    <h3>Disk Usage</h3>
-                    <span class="metric-value">{{ systemStats.diskUsage }}%</span>
+                    <h3>Users</h3>
+                    <span class="metric-value">{{ systemStats.totalUsers }}</span>
                   </div>
-                  <div class="progress-bar">
-                    <div
-                      class="progress-fill"
-                      :style="{ width: `${systemStats.diskUsage}%`, backgroundColor: systemStats.diskUsage > 80 ? '#dc2626' : systemStats.diskUsage > 60 ? '#d97706' : '#2563eb' }"
-                    ></div>
-                  </div>
-                  <p class="metric-description">Used space on main storage</p>
+                  <p class="metric-description">Total registered users</p>
                 </div>
 
                 <div class="metric-card">
                   <div class="metric-header">
-                    <h3>Memory Usage</h3>
-                    <span class="metric-value">{{ systemStats.memoryUsage }}%</span>
+                    <h3>Active Users</h3>
+                    <span class="metric-value">{{ systemStats.activeUsers }}</span>
                   </div>
-                  <div class="progress-bar">
-                    <div
-                      class="progress-fill"
-                      :style="{ width: `${systemStats.memoryUsage}%`, backgroundColor: systemStats.memoryUsage > 80 ? '#dc2626' : systemStats.memoryUsage > 60 ? '#d97706' : '#2563eb' }"
-                    ></div>
-                  </div>
-                  <p class="metric-description">RAM utilization</p>
+                  <p class="metric-description">Users currently active</p>
                 </div>
 
                 <div class="metric-card">
                   <div class="metric-header">
-                    <h3>Last Backup</h3>
-                    <span class="metric-value">{{ formatDate(systemStats.lastBackup) }}</span>
+                    <h3>Pending Requests</h3>
+                    <span class="metric-value">{{ systemStats.pendingRequests }}</span>
                   </div>
-                  <div class="backup-status">
-                    <i class="pi pi-check-circle" style="color: #059669;"></i>
-                    <span>Backup completed successfully</span>
-                  </div>
-                  <p class="metric-description">Daily automated backup</p>
+                  <p class="metric-description">Awaiting review/approval</p>
                 </div>
               </div>
             </div>

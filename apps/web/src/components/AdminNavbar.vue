@@ -21,11 +21,6 @@
               <i class="pi pi-bell"></i>
               <span class="notification-badge" v-if="unreadNotificationCount > 0">{{ unreadNotificationCount }}</span>
             </button>
-
-            <button class="action-btn" @click="showSystemStatus = !showSystemStatus" title="System Status">
-              <i class="pi pi-server"></i>
-              <span class="status-indicator" :class="systemStatus"></span>
-            </button>
           </div>
         </div>
 
@@ -88,34 +83,9 @@
                   <router-link to="/admin/notifications" class="menu-item" tabindex="0">
                     <i class="pi pi-bell"></i> Notification Management <span class="shortcut">⌘N</span>
                   </router-link>
-                  <router-link to="/admin/settings" class="menu-item" tabindex="0">
-                    <i class="pi pi-cog"></i> System Settings <span class="shortcut">⌘S</span>
-                  </router-link>
                 </div>
 
                 <div class="menu-divider"></div>
-
-                <div class="menu-section">
-                  <div class="menu-header">Account</div>
-                  <router-link to="/userprofile" class="menu-item" tabindex="0">
-                    <i class="pi pi-user"></i> View Profile <span class="shortcut"></span>
-                  </router-link>
-                  <router-link to="/settings" class="menu-item" tabindex="0">
-                    <i class="pi pi-cog"></i> Settings <span class="shortcut"></span>
-                  </router-link>
-                </div>
-
-                <div class="menu-divider"></div>
-
-                <div class="menu-section">
-                  <div class="menu-header">System</div>
-                  <div class="menu-item" tabindex="0" @click="openSystemLogs">
-                    <i class="pi pi-file-text"></i> System Logs <span class="shortcut">⌘L</span>
-                  </div>
-                  <div class="menu-item" tabindex="0" @click="openBackup">
-                    <i class="pi pi-database"></i> Backup & Restore <span class="shortcut">⌘B</span>
-                  </div>
-                </div>
 
                 <div class="menu-divider"></div>
 
@@ -133,44 +103,7 @@
 
 
 
-    <!-- System Status Panel -->
-    <transition name="slide-down">
-      <div v-if="showSystemStatus" class="system-status-panel">
-        <div class="panel-header">
-          <h3>System Status</h3>
-          <button @click="showSystemStatus = false" class="close-btn">
-            <i class="pi pi-times"></i>
-          </button>
-        </div>
-        <div class="status-grid">
-          <div class="status-item">
-            <div class="status-label">CPU Usage</div>
-            <div class="status-value">{{ systemMetrics.cpu }}%</div>
-            <div class="status-bar">
-              <div class="status-fill" :style="{ width: systemMetrics.cpu + '%' }"></div>
-            </div>
-          </div>
-          <div class="status-item">
-            <div class="status-label">Memory Usage</div>
-            <div class="status-value">{{ systemMetrics.memory }}%</div>
-            <div class="status-bar">
-              <div class="status-fill" :style="{ width: systemMetrics.memory + '%' }"></div>
-            </div>
-          </div>
-          <div class="status-item">
-            <div class="status-label">Disk Usage</div>
-            <div class="status-value">{{ systemMetrics.disk }}%</div>
-            <div class="status-bar">
-              <div class="status-fill" :style="{ width: systemMetrics.disk + '%' }"></div>
-            </div>
-          </div>
-          <div class="status-item">
-            <div class="status-label">Active Users</div>
-            <div class="status-value">{{ systemMetrics.activeUsers }}</div>
-          </div>
-        </div>
-      </div>
-    </transition>
+
 
     <!-- Notifications Modal -->
     <transition name="slide-down">
@@ -232,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import { adminNotificationService } from '../services/admin-notification.service';
@@ -267,16 +200,10 @@ interface SystemNotification {
   isGlobal: boolean;
 }
 
-interface SystemMetrics {
-  cpu: number;
-  memory: number;
-  disk: number;
-  activeUsers: number;
-}
+// Removed SystemMetrics as system status feature was deleted
 
 const router = useRouter();
 const menuVisible = ref(false);
-const showSystemStatus = ref(false);
 const showNotificationsModal = ref(false);
 const currentUser = ref<User | null>(null);
 const notificationCount = ref(0);
@@ -285,12 +212,7 @@ const systemNotifications = ref<SystemNotification[]>([]);
 const loadingNotifications = ref(false);
 let adminSocket: Socket | null = null;
 
-const systemMetrics = ref<SystemMetrics>({
-  cpu: 65,
-  memory: 72,
-  disk: 45,
-  activeUsers: 127
-});
+// Removed system status feature
 
 // Simple notification handling - no real-time complexity
 const setupNotifications = () => {
@@ -317,12 +239,7 @@ const loadNotificationCount = async () => {
     console.error('Error loading notification count:', error);
   }
 };
-const systemStatus = computed(() => {
-  const avgUsage = (systemMetrics.value.cpu + systemMetrics.value.memory) / 2;
-  if (avgUsage > 80) return 'critical';
-  if (avgUsage > 60) return 'warning';
-  return 'normal';
-});
+// System status removed
 
 const signOut = async () => {
   await authService.logout();
@@ -355,15 +272,7 @@ const getRandomColor = (seed: string): string => {
 
 
 
-const openSystemLogs = () => {
-  router.push('/admin/logs');
-  menuVisible.value = false;
-};
-
-const openBackup = () => {
-  router.push('/admin/backup');
-  menuVisible.value = false;
-};
+// Removed system logs and backup handlers
 
 const loadUserInfo = async (): Promise<void> => {
   try {
@@ -907,7 +816,7 @@ onUnmounted(() => {
 }
 
 /* Notifications Panel */
-.notifications-panel, .system-status-panel {
+.notifications-panel {
   position: absolute;
   top: 100%;
   right: 24px;
@@ -1155,45 +1064,6 @@ onUnmounted(() => {
   text-decoration: underline;
 }
 
-/* System Status Panel */
-.status-grid {
-  padding: 16px;
-  display: grid;
-  gap: 16px;
-}
-
-.status-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.status-label {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.status-value {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.status-bar {
-  height: 4px;
-  background: #f3f4f6;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.status-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #059669);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
 /* Transitions */
 .slide-down-enter-active, .slide-down-leave-active {
   transition: all 0.2s ease;
@@ -1204,7 +1074,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .notifications-panel, .system-status-panel {
+  .notifications-panel {
     width: calc(100vw - 48px);
     right: 24px;
   }

@@ -118,6 +118,20 @@ export class MySqlConnection {
     try {
       await this.dataSource.initialize();
       this.logger.log('Connected to MySQL database');
+
+      // Inline-safe migration for shared DBs without direct access
+      // Ensure `file.isSyncedFromRequest` exists and is backfilled
+      try {
+        await this.dataSource.query(
+          'ALTER TABLE `file` ADD COLUMN IF NOT EXISTS `isSyncedFromRequest` TINYINT(1) NOT NULL DEFAULT 0'
+        );
+        await this.dataSource.query(
+          'UPDATE `file` SET `isSyncedFromRequest` = 1 WHERE `requestId` IS NOT NULL'
+        );
+        this.logger.log('Ensured file.isSyncedFromRequest column and backfill completed');
+      } catch (e) {
+        this.logger.warn('Inline migration for isSyncedFromRequest skipped or failed', e as any);
+      }
     } catch (error) {
       this.logger.error('Error connecting to MySQL database', error);
     }

@@ -12,6 +12,7 @@
     "@vue-flow/core": "^1.46.0",
     "@vue-flow/minimap": "^1.5.4",
     "emoji-mart-vue-fast": "^15.0.4",
+    "jszip": "^3.10.1",
     "pdfjs-dist": "^5.4.54",
     "vue": "^3.5.16",
     "vue-router": "^4.5.1"

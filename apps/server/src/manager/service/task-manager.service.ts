@@ -15,6 +15,7 @@ import {
   WorkflowTransitionEntity,
   TaskStatusHistoryEntity,
 } from '#LocalProject/Entities';
+import { TaskHistoryEntity } from '../../db/mysql/entity/task-history.entity';
 import { ProjectManagerService } from '#LocalProject/Managers/service/project-manager.service';
 import { PermissionFlags } from '@here-to-translate/common';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
@@ -42,6 +43,8 @@ export class TaskManagerService {
     private readonly transitionRepository: Repository<WorkflowTransitionEntity>,
     @InjectRepository(TaskStatusHistoryEntity)
     private readonly statusHistoryRepository: Repository<TaskStatusHistoryEntity>,
+    @InjectRepository(TaskHistoryEntity)
+    private readonly taskHistoryRepository: Repository<TaskHistoryEntity>,
     private readonly projectService: ProjectManagerService,
     private readonly translationService: TranslationService,
     private readonly taskGateway: TaskGateway,
@@ -616,34 +619,41 @@ export class TaskManagerService {
   }
 
   async getTaskHistory(id: string) {
-    const history = await this.statusHistoryRepository.find({
+    // Compose unified history timeline from different sources: status changes and task history
+    const statusHistory = await this.statusHistoryRepository.find({
       where: { task: { id: BigInt(id) } },
       relations: ['fromStatus', 'toStatus', 'changedBy'],
       order: { createdAt: 'DESC' },
-      select: {
-        id: true,
-        comment: true,
-        createdAt: true,
-        fromStatus: {
-          id: true,
-          name: true,
-          color: true,
-        },
-        toStatus: {
-          id: true,
-          name: true,
-          color: true,
-        },
-        changedBy: {
-          id: true,
-          username: true,
-          fullName: true,
-          avatarUrl: true,
-        },
-      },
     });
 
-    return history;
+    const taskHistory = await this.taskHistoryRepository.find({
+      where: { task: { id: BigInt(id) } },
+      order: { performedAt: 'DESC' },
+      relations: ['performer'],
+    });
+
+    const normalize = [
+      ...statusHistory.map((h) => ({
+        id: Number(h.id),
+        action: 'status_change' as const,
+        description: h.comment || '',
+        performedAt: h.createdAt,
+        metadata: {
+          fromStatus: h.fromStatus?.name,
+          toStatus: h.toStatus?.name,
+        },
+      })),
+      ...taskHistory.map((h) => ({
+        id: Number(h.id) + 1000000,
+        action: h.action,
+        description: h.description,
+        performedAt: h.performedAt,
+        reason: h.reason,
+        metadata: h.metadata,
+      })),
+    ].sort((a, b) => +new Date(b.performedAt) - +new Date(a.performedAt));
+
+    return normalize;
   }
 
   async getAvailableTransitions(taskId: string, userId: string) {
@@ -745,15 +755,26 @@ export class TaskManagerService {
     }
 
     await this.taskRepository.save(task);
+
+    // Add close history entry
+    await this.taskHistoryRepository.save(
+      this.taskHistoryRepository.create({
+        task,
+        action: 'closed',
+        description: 'Task closed',
+        performedBy: BigInt(userId),
+        metadata: { status: 'closed' },
+      })
+    );
     this.taskGateway.emitTaskUpdate(task);
 
     return this.getTask(id);
   }
 
-  async reopenTask(id: string, userId: string) {
+  async reopenTask(id: string, userId: string, _reason?: string) {
     const task = await this.taskRepository.findOne({
       where: { id: BigInt(id) },
-      relations: ['createdBy', 'assignedTo', 'group'],
+      relations: ['createdBy', 'assignedTo', 'group', 'status'],
     });
 
     if (!task) {
@@ -781,23 +802,30 @@ export class TaskManagerService {
       // In a real app, you'd check project membership here
     }
 
-    // Check if task is actually closed
-    if (task.status.name !== 'closed') {
+    // Check if task is actually closed (by type or flag)
+    if (!task.status || (task.status.type !== StatusType.CLOSED && !task.status.isClosed)) {
       throw new BadRequestException('Task is not closed');
     }
 
-    // Update task status back to pending (To do)
-    const pendingStatus = await this.statusRepository.findOne({
-      where: { name: 'pending' },
-    });
-    if (pendingStatus) {
-      task.status = pendingStatus;
-    }
+    // Do not force a particular target status here.
+    // Frontend may immediately transition to a chosen status after reopen.
 
     // Clear completedAt timestamp since task is reopened
     task.completedAt = undefined;
 
     await this.taskRepository.save(task);
+
+    // Add reopen history entry
+    await this.taskHistoryRepository.save(
+      this.taskHistoryRepository.create({
+        task,
+        action: 'reopened',
+        description: 'Task reopened',
+        performedBy: BigInt(userId),
+        reason: _reason,
+        metadata: { status: 'reopened' },
+      })
+    );
     this.taskGateway.emitTaskUpdate(task);
 
     return this.getTask(id);
@@ -1019,7 +1047,7 @@ export class TaskManagerService {
 
   async checkAndUpdateOverdueStatus() {
     const now = new Date();
-    
+
     const overdueTasks = await this.taskRepository
       .createQueryBuilder('task')
       .leftJoinAndSelect('task.status', 'status')

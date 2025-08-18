@@ -119,12 +119,39 @@ export class NotificationManagerService {
   }
 
   async getAllGlobalNotifications(limit = 50): Promise<NotificationEntity[]> {
-    return await this.notificationRepository.find({
-      where: { isGlobal: true },
-      order: { createdAt: 'DESC' },
-      take: limit,
-      relations: ['creator'],
-    });
+    try {
+      console.log('🔍 [Backend] getAllGlobalNotifications called with limit:', limit);
+
+      // Lấy tất cả global notifications
+      const notifications = await this.notificationRepository.find({
+        where: { isGlobal: true },
+        order: { createdAt: 'DESC' },
+        take: limit,
+        relations: ['creator'],
+      });
+
+      console.log('🔍 [Backend] Found notifications:', notifications.length);
+      console.log('🔍 [Backend] Notification IDs:', notifications.map(n => n.id.toString()));
+
+      return notifications;
+    } catch (error) {
+      console.error('❌ [Backend] Error in getAllGlobalNotifications:', error);
+
+      // Fallback: thử lấy tất cả notifications nếu có lỗi với relations
+      try {
+        console.log('🔄 [Backend] Attempting fallback query...');
+        const fallbackNotifications = await this.notificationRepository.find({
+          where: { isGlobal: true },
+          order: { createdAt: 'DESC' },
+          take: limit,
+        });
+        console.log('🔍 [Backend] Fallback found notifications:', fallbackNotifications.length);
+        return fallbackNotifications;
+      } catch (fallbackError) {
+        console.error('❌ [Backend] Fallback query also failed:', fallbackError);
+        throw error;
+      }
+    }
   }
 
   async getNotificationById(id: bigint): Promise<NotificationEntity> {
@@ -151,47 +178,67 @@ export class NotificationManagerService {
     }
 
     const updatedNotification = await this.notificationRepository.save(notification);
-
-    // TODO: Send realtime update
-    // if (notification.isGlobal) {
-    //   this.notificationGateway.emitToAll({
-    //     id: updatedNotification.id.toString(),
-    //     type: updatedNotification.type,
-    //     message: updatedNotification.message,
-    //     createdAt: updatedNotification.createdAt,
-    //     isGlobal: true,
-    //   });
-    // } else if (notification.userId) {
-    //   this.notificationGateway.emitToUser(notification.userId, {
-    //     id: updatedNotification.id.toString(),
-    //     type: updatedNotification.type,
-    //     message: updatedNotification.message,
-    //     createdAt: updatedNotification.createdAt,
-    //     isGlobal: false,
-    //   });
-    // }
+    if (notification.isGlobal) {
+      this.notificationGateway.emitToAll({
+        id: updatedNotification.id.toString(),
+        type: updatedNotification.type,
+        message: updatedNotification.message,
+        createdAt: updatedNotification.createdAt,
+        isGlobal: true,
+      });
+    } else if (notification.userId) {
+      this.notificationGateway.emitToUser(notification.userId, {
+        id: updatedNotification.id.toString(),
+        type: updatedNotification.type,
+        message: updatedNotification.message,
+        createdAt: updatedNotification.createdAt,
+        isGlobal: false,
+      });
+    }
 
     return updatedNotification;
   }
 
   async deleteNotification(id: bigint): Promise<void> {
-    const notification = await this.getNotificationById(id);
-    const result = await this.notificationRepository.delete(id);
-
-    if (result.affected === 0) {
-      throw new NotFoundException('Notification not found');
-    }
-
-    // Send realtime deletion notification
     try {
-      if (notification.isGlobal) {
-        this.notificationGateway.emitDeletionToAll(id.toString());
-      } else if (notification.userId) {
-        this.notificationGateway.emitDeletionToUser(notification.userId, id.toString());
+      console.log('🗑️ [Backend] deleteNotification called with ID:', id.toString());
+
+      const notification = await this.getNotificationById(id);
+      console.log('🔍 [Backend] Found notification to delete:', {
+        id: notification.id.toString(),
+        type: notification.type,
+        message: notification.message,
+        isGlobal: notification.isGlobal,
+        userId: notification.userId?.toString()
+      });
+
+      // Sử dụng hard delete với transaction
+      const result = await this.notificationRepository.delete({ id: id });
+      console.log('🗑️ [Backend] Delete result:', result);
+
+      if (result.affected === 0) {
+        throw new NotFoundException('Notification not found');
       }
+
+      console.log('✅ [Backend] Notification deleted successfully from database');
+
+      // Send realtime deletion notification
+      try {
+        if (notification.isGlobal) {
+          this.notificationGateway.emitDeletionToAll(id.toString());
+          console.log('📡 [Backend] Emitted deletion to all users');
+        } else if (notification.userId) {
+          this.notificationGateway.emitDeletionToUser(notification.userId, id.toString());
+          console.log('📡 [Backend] Emitted deletion to user:', notification.userId.toString());
+        }
+      } catch (error) {
+        console.error('❌ [Backend] Failed to send realtime deletion notification:', error);
+        // Don't fail the deletion if realtime fails
+      }
+
     } catch (error) {
-      console.error('Failed to send realtime deletion notification:', error);
-      // Don't fail the deletion if realtime fails
+      console.error('❌ [Backend] Error in deleteNotification:', error);
+      throw error;
     }
   }
 

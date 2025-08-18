@@ -13,12 +13,12 @@ import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handleba
 import * as path from 'path';
 import { ChatModule } from './chat/chat.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { PDFTronModule } from './util/extensions/pdftron.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env', '../.env', '../../.env'], 
       validate(config) {
         const instance = plainToInstance(
           EnvConfigs,
@@ -58,7 +58,6 @@ import { PDFTronModule } from './util/extensions/pdftron.module';
     AuthModule,
     ManagersModule,
     ChatModule,
-    PDFTronModule,
     ScheduleModule.forRoot()
 
   ],

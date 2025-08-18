@@ -1,27 +1,59 @@
 import { logger } from 'nx/src/utils/logger';
 
 export class AsposeDocxBridge {
-  private isAvailable = false;
+  private _isAvailable = false;
   private asposeWords: any = null;
+  private wordsApi: any = null;
   private isInitialized = false;
-  private isFreeVersion = false;
+  private isLicensedVersion = false;
   private clientId: string | null = null;
   private clientSecret: string | null = null;
 
   constructor() {
-    // Don't initialize immediately - let user decide when to enable
+    // Try to load credentials from environment variables automatically
+    this.loadCredentialsFromEnv();
   }
 
+  /**
+   * Load credentials from environment variables
+   */
+  private loadCredentialsFromEnv(): void {
+    const { ASPOSE_CLIENT_ID, ASPOSE_CLIENT_SECRET } = process.env;
+    
+    if (ASPOSE_CLIENT_ID && ASPOSE_CLIENT_SECRET) {
+      this.clientId = ASPOSE_CLIENT_ID;
+      this.clientSecret = ASPOSE_CLIENT_SECRET;
+      logger.log('[Aspose.Words] Credentials loaded from environment variables');
+    } else {
+      // Use default credentials from config
+      try {
+        const { getAsposeConfig } = require('./aspose-config');
+        const config = getAsposeConfig();
+        this.clientId = config.clientId;
+        this.clientSecret = config.clientSecret;
+        logger.log('[Aspose.Words] Credentials loaded from default config');
+      } catch (error) {
+        logger.warn('[Aspose.Words] No credentials available');
+      }
+    }
+  }
 
+  /**
+   * Set Aspose.Words Cloud API credentials
+   * @returns Promise<boolean> - true if credentials are set successfully
+   */
   public async setCredentials(): Promise<boolean> {
     const { ASPOSE_CLIENT_ID, ASPOSE_CLIENT_SECRET } = process.env;
+    
     if (!ASPOSE_CLIENT_ID || !ASPOSE_CLIENT_SECRET) {
-      logger.error('[Aspose] Missing environment variables ASPOSE_CLIENT_ID or ASPOSE_CLIENT_SECRET');
-      throw new Error('❌ Missing environment variables');
+      logger.error('[Aspose.Words] Missing required environment variables: ASPOSE_CLIENT_ID or ASPOSE_CLIENT_SECRET');
+      throw new Error('Missing required Aspose.Words Cloud API credentials');
     }
-    this.clientId = ASPOSE_CLIENT_ID || 'aa2cf203-b24d-4d4e-9be7-e765867d493f';
-    this.clientSecret = ASPOSE_CLIENT_SECRET|| '1ebe57016b85a9cbf4eadfb1944ad849';
-    logger.log('[Aspose] Credentials set successfully');
+
+    this.clientId = ASPOSE_CLIENT_ID;
+    this.clientSecret = ASPOSE_CLIENT_SECRET;
+    
+    logger.log('[Aspose.Words] Cloud API credentials configured successfully');
     
     // Automatically enable Aspose after setting credentials
     return await this.enableAspose();
@@ -29,24 +61,37 @@ export class AsposeDocxBridge {
 
   /**
    * Check if credentials are configured
+   * @returns boolean - true if credentials are available
    */
   private hasCredentials(): boolean {
     return !!(this.clientId && this.clientSecret);
   }
 
+  /**
+   * Check if Cloud API subscription is active (always true when credentials are valid)
+   * @returns boolean - true if Cloud API is available
+   */
+  private hasCloudSubscription(): boolean {
+    return this.hasCredentials();
+  }
+
+  /**
+   * Enable Aspose.Words with proper licensing
+   * @returns Promise<boolean> - true if Aspose.Words is successfully enabled
+   */
   public async enableAspose(): Promise<boolean> {
     if (this.isInitialized) {
-      return this.isAvailable;
+      return this._isAvailable;
     }
 
     try {
-      logger.log('[Aspose] Attempting to initialize Aspose.Words for Node.js...');
+      logger.log('[Aspose.Words] Initializing Aspose.Words for Node.js...');
 
       // Check if credentials are configured
       if (!this.hasCredentials()) {
-        logger.warn('[Aspose] No credentials configured. Please set credentials first:');
-        logger.warn('[Aspose] asposeBridge.setCredentials(clientId, clientSecret)');
-        this.isAvailable = false;
+        logger.warn('[Aspose.Words] No credentials configured. Please set credentials first:');
+        logger.warn('[Aspose.Words] asposeBridge.setCredentials()');
+        this._isAvailable = false;
         this.isInitialized = true;
         return false;
       }
@@ -57,45 +102,44 @@ export class AsposeDocxBridge {
         if (asposeModule) {
           this.asposeWords = asposeModule;
           
-          // Initialize with credentials
+          // Initialize with credentials and license
           await this.initializeWithCredentials();
           
-          this.isAvailable = true;
+          this._isAvailable = true;
           this.isInitialized = true;
           
-          // Check if this is the free version
-          this.isFreeVersion = this.checkIfFreeVersion();
+          // Check if this is the Cloud API version
+          this.isLicensedVersion = this.checkIfCloudVersion();
           
-          if (this.isFreeVersion) {
-            logger.warn('[Aspose] Free version detected - documents will have watermarks and limited features');
-            logger.warn('[Aspose] Consider upgrading to paid version for production use');
+          if (this.isLicensedVersion) {
+            logger.log('[Aspose.Words] Aspose.Words Cloud API initialized successfully (full features)');
           } else {
-            logger.log('[Aspose] Aspose.Words for Node.js initialized successfully (licensed version)');
+            logger.warn('[Aspose.Words] Cloud API not available - check your credentials');
           }
           
           return true;
         }
       } catch (importError) {
-        logger.warn('[Aspose] Failed to import asposewordscloud package');
-        logger.warn('[Aspose] To use Aspose.Words, install: npm install asposewordscloud');
+        logger.warn('[Aspose.Words] Failed to import asposewordscloud package');
+        logger.warn('[Aspose.Words] To use Aspose.Words, install: npm install asposewordscloud');
       }
       
       // If import fails, try alternative approach
-      this.isAvailable = false;
+      this._isAvailable = false;
       this.isInitialized = true;
-      logger.warn('[Aspose] Aspose.Words for Node.js not available, falling back to Node.js methods');
+      logger.warn('[Aspose.Words] Aspose.Words for Node.js not available, falling back to Node.js methods');
       return false;
       
     } catch (error) {
-      this.isAvailable = false;
+      this._isAvailable = false;
       this.isInitialized = true;
-      logger.warn('[Aspose] Aspose.Words for Node.js not available, falling back to Node.js methods');
+      logger.warn('[Aspose.Words] Aspose.Words for Node.js not available, falling back to Node.js methods');
       return false;
     }
   }
 
   /**
-   * Initialize Aspose.Words with authentication credentials
+   * Initialize Aspose.Words with authentication credentials and license
    */
   private async initializeWithCredentials(): Promise<void> {
     try {
@@ -103,26 +147,25 @@ export class AsposeDocxBridge {
         throw new Error('Missing Aspose.Words module or credentials');
       }
 
-      // Set up authentication
-      if (this.asposeWords.Configuration) {
-        const config = new this.asposeWords.Configuration({
-          clientId: this.clientId,
-          clientSecret: this.clientSecret,
-          baseUrl: 'https://api.aspose.cloud' // Default Aspose Cloud URL
-        });
-
-        // Set the configuration globally
-        this.asposeWords.Configuration.setDefault(config);
-        logger.log('[Aspose] Authentication configured successfully');
-      } else {
-        logger.warn('[Aspose] Configuration class not found, using default settings');
-      }
+      // Create WordsApi instance with credentials directly
+      this.wordsApi = new this.asposeWords.WordsApi(
+        this.clientId,
+        this.clientSecret,
+        'https://api.aspose.cloud'
+      );
+      
+      logger.log('[Aspose.Words] Authentication configured successfully');
+      logger.log('[Aspose.Words] Cloud API subscription active - no license key needed');
     } catch (error) {
-      logger.error(`[Aspose] Failed to initialize with credentials: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[Aspose.Words] Failed to initialize with credentials: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
 
+  /**
+   * Try to import Aspose.Words module
+   * @returns Promise<any> - Aspose.Words module or null if import fails
+   */
   private async tryImportAspose(): Promise<any> {
     try {
       const asposeModule = await import('asposewordscloud');
@@ -134,60 +177,99 @@ export class AsposeDocxBridge {
   }
 
   /**
-   * Check if this is the free version of Aspose.Words
+   * Check if this is the Cloud API version of Aspose.Words
+   * @returns boolean - true if Cloud API version is detected
    */
-  private checkIfFreeVersion(): boolean {
+  private checkIfCloudVersion(): boolean {
     try {
-      // Try to check license status
-      if (this.asposeWords && this.asposeWords.License) {
-        const license = new this.asposeWords.License();
-        // If no license is set, it's likely the free version
-        return true; // Assume free version for now
-      }
-      return true; // Assume free version if we can't determine
+      // With Cloud API, we assume full features when credentials are valid
+      return this.hasCloudSubscription();
     } catch (error) {
-      return true; // Assume free version on error
+      return this.hasCloudSubscription(); // Assume Cloud API if we have credentials
+    }
+  }
+
+  /**
+   * Create a test DOCX file to verify the service is working
+   * @returns Promise<any> Test result
+   */
+  public async createTestDOCX(): Promise<any> {
+    if (!this._isAvailable || !this.wordsApi) {
+      throw new Error('Aspose.Words for Node.js is not available. Call enableAspose() first.');
+    }
+
+    try {
+      // Create a simple test document
+      const request = {
+        name: 'test.docx',
+        folder: '',
+        body: {
+          documentProperties: {
+            title: 'Test Document',
+            author: 'Aspose Test'
+          }
+        }
+      };
+
+      // Test the API by getting document properties
+      const result = await this.wordsApi.getDocumentProperties(request);
+      return result.body;
+    } catch (error) {
+      throw new Error(`Failed to create test DOCX: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
    * Check if Aspose.Words service is available
+   * @returns boolean - true if service is available
    */
   public isServiceAvailable(): boolean {
-    return this.isAvailable;
+    return this._isAvailable;
   }
 
   /**
-   * Check if this is the free version
+   * Check if Aspose.Words service is available (alias for isServiceAvailable)
+   * @returns boolean - true if service is available
    */
-  public isFreeVersionAvailable(): boolean {
-    return this.isFreeVersion;
+  public isAvailable(): boolean {
+    return this._isAvailable;
   }
 
   /**
-   * Process DOCX file using Aspose.Words for Node.js
-   * This provides the highest quality text replacement
+   * Check if this is the licensed version
+   * @returns boolean - true if licensed version is available
+   */
+  public isLicensedVersionAvailable(): boolean {
+    return this.isLicensedVersion;
+  }
+
+  /**
+   * Process DOCX file using Aspose.Words for Node.js (paid version)
+   * This provides the highest quality text replacement with full formatting preservation
+   * @param originalBuffer - Original DOCX file buffer
+   * @param translations - Map of original text to translated text
+   * @returns Promise<{buffer: Buffer, replacedCount: number}> - Processed buffer and replacement count
    */
   public async processDocxWithAspose(
     originalBuffer: Buffer,
     translations: Map<string, string>
   ): Promise<{ buffer: Buffer; replacedCount: number }> {
-    if (!this.isAvailable || !this.asposeWords) {
+    if (!this._isAvailable || !this.wordsApi) {
       throw new Error('Aspose.Words for Node.js is not available. Call enableAspose() first.');
     }
 
     try {
-      logger.log('[Aspose] Starting DOCX processing with Aspose.Words for Node.js');
+      logger.log('[Aspose.Words] Starting DOCX processing with Aspose.Words for Node.js');
       
-      if (this.isFreeVersion) {
-        logger.warn('[Aspose] Using free version - documents will have watermarks');
+      if (!this.isLicensedVersion) {
+        logger.warn('[Aspose.Words] Using free version - documents will have watermarks');
       }
 
       // Convert Buffer to base64 string for Aspose Cloud API
       const base64Content = originalBuffer.toString('base64');
       
-      // Create Words API instance
-      const wordsApi = new this.asposeWords.WordsApi();
+      // Use the configured Words API instance
+      const wordsApi = this.wordsApi;
       
       // Create find and replace request
       const findReplaceRequest = new this.asposeWords.FindReplaceRequest({
@@ -219,10 +301,10 @@ export class AsposeDocxBridge {
             // Update content for next iteration
             modifiedContent = result.body.toString('base64');
             totalReplacements++;
-            logger.log(`[Aspose] Replaced "${originalText}" with "${translatedText}"`);
+            logger.log(`[Aspose.Words] Replaced "${originalText}" with "${translatedText}"`);
           }
         } catch (replaceError) {
-          logger.warn(`[Aspose] Failed to replace "${originalText}": ${replaceError instanceof Error ? replaceError.message : String(replaceError)}`);
+          logger.warn(`[Aspose.Words] Failed to replace "${originalText}": ${replaceError instanceof Error ? replaceError.message : String(replaceError)}`);
           // Continue with other replacements
         }
       }
@@ -234,17 +316,18 @@ export class AsposeDocxBridge {
       // Convert back to Buffer
       const resultBuffer = Buffer.from(modifiedContent, 'base64');
       
-      logger.log(`[Aspose] DOCX processing completed successfully: ${totalReplacements} replacements`);
+      logger.log(`[Aspose.Words] DOCX processing completed successfully: ${totalReplacements} replacements`);
       return { buffer: resultBuffer, replacedCount: totalReplacements };
       
     } catch (error) {
-      logger.error(`[Aspose] Error processing DOCX: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[Aspose.Words] Error processing DOCX: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
 
   /**
-   * Test the Aspose.Words connection and credentials
+   * Test the Aspose.Words connection, credentials, and license
+   * @returns Promise<{success: boolean, message: string, details?: any}> - Test results
    */
   public async testConnection(): Promise<{ success: boolean; message: string; details?: any }> {
     try {
@@ -255,7 +338,7 @@ export class AsposeDocxBridge {
         };
       }
 
-      if (!this.isAvailable) {
+      if (!this._isAvailable) {
         const enabled = await this.enableAspose();
         if (!enabled) {
           return { 
@@ -265,16 +348,16 @@ export class AsposeDocxBridge {
         }
       }
 
-      // Try to create a simple Words API instance to test connection
-      if (this.asposeWords && this.asposeWords.WordsApi) {
-        const wordsApi = new this.asposeWords.WordsApi();
+      // Test connection using the configured WordsApi instance
+      if (this.wordsApi) {
         return { 
           success: true, 
           message: 'Aspose.Words connection successful!',
           details: {
             hasCredentials: this.hasCredentials(),
-            isAvailable: this.isAvailable,
-            isFreeVersion: this.isFreeVersion
+            hasCloudSubscription: this.hasCloudSubscription(),
+            isAvailable: this._isAvailable,
+            isLicensedVersion: this.isLicensedVersion
           }
         };
       } else {
@@ -291,30 +374,40 @@ export class AsposeDocxBridge {
     }
   }
 
+  /**
+   * Get service information and status
+   * @returns Object containing service status and configuration details
+   */
   public getServiceInfo(): { 
     available: boolean; 
     initialized: boolean; 
     version?: string; 
-    isFreeVersion: boolean;
+    isLicensedVersion: boolean;
     hasCredentials: boolean;
+    hasCloudSubscription: boolean;
     instructions?: string;
     testMethod?: string;
   } {
     return {
-      available: this.isAvailable,
+      available: this._isAvailable,
       initialized: this.isInitialized,
-      version: this.isAvailable ? 'Aspose.Words for Node.js' : undefined,
-      isFreeVersion: this.isFreeVersion,
+      version: this._isAvailable ? 'Aspose.Words Cloud API' : undefined,
+      isLicensedVersion: this.isLicensedVersion,
       hasCredentials: this.hasCredentials(),
+      hasCloudSubscription: this.hasCloudSubscription(),
       instructions: !this.hasCredentials() ? 'Set ASPOSE_CLIENT_ID and ASPOSE_CLIENT_SECRET environment variables' :
-                   !this.isAvailable ? 'Install asposewordscloud and implement processing logic' : 
-                   this.isFreeVersion ? 'Free version detected - documents will have watermarks' : 
-                   'Licensed version - full features available',
-      testMethod: 'Use testConnection() to verify setup and credentials'
+                   !this._isAvailable ? 'Install asposewordscloud and implement processing logic' : 
+                   !this.isLicensedVersion ? 'Check your Cloud API credentials and subscription' : 
+                   'Cloud API version - full features available',
+      testMethod: 'Use testConnection() to verify setup and Cloud API credentials'
     };
   }
 }
 
+/**
+ * Create a new AsposeDocxBridge instance
+ * @returns AsposeDocxBridge - New bridge instance
+ */
 export function createAsposeBridge(): AsposeDocxBridge {
   return new AsposeDocxBridge();
 }

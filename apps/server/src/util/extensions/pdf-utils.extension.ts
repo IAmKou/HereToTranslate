@@ -1,4 +1,4 @@
-import { PDFTronBridge, PDFTronReplacementEntry } from './pdftron-bridge';
+import { AsposePDFBridge, AsposePDFReplacementEntry, AsposePDFExtractionResult } from './aspose-pdf-bridge';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -276,6 +276,48 @@ export async function buildTranslatedPdf(
 }
 
 /**
+ * Clean text for PDF compatibility by removing or replacing problematic characters
+ */
+function cleanTextForPdf(text: string): string {
+  if (!text) return '';
+  
+  try {
+    // Replace Vietnamese characters with ASCII equivalents or remove them
+    const vietnameseMap: Record<string, string> = {
+      'ă': 'a', 'â': 'a', 'à': 'a', 'á': 'a', 'ạ': 'a', 'ả': 'a', 'ã': 'a',
+      'ằ': 'a', 'ắ': 'a', 'ặ': 'a', 'ẳ': 'a', 'ẵ': 'a', 'ầ': 'a', 'ấ': 'a',
+      'ậ': 'a', 'ẩ': 'a', 'ẫ': 'a',
+      'ê': 'e', 'è': 'e', 'é': 'e', 'ẹ': 'e', 'ẻ': 'e', 'ẽ': 'e',
+      'ề': 'e', 'ế': 'e', 'ệ': 'e', 'ể': 'e', 'ễ': 'e',
+      'ì': 'i', 'í': 'i', 'ị': 'i', 'ỉ': 'i', 'ĩ': 'i',
+      'ò': 'o', 'ó': 'o', 'ọ': 'o', 'ỏ': 'o', 'õ': 'o', 'ô': 'o', 'ơ': 'o',
+      'ồ': 'o', 'ố': 'o', 'ộ': 'o', 'ổ': 'o', 'ỗ': 'o',
+      'ờ': 'o', 'ớ': 'o', 'ợ': 'o', 'ở': 'o', 'ỡ': 'o',
+      'ù': 'u', 'ú': 'u', 'ụ': 'u', 'ủ': 'u', 'ũ': 'u', 'ư': 'u',
+      'ừ': 'u', 'ứ': 'u', 'ự': 'u', 'ử': 'u', 'ữ': 'u',
+      'ỳ': 'y', 'ý': 'y', 'ỵ': 'y', 'ỷ': 'y', 'ỹ': 'y',
+      'đ': 'd'
+    };
+    
+    let cleanedText = text;
+    
+    // Replace Vietnamese characters
+    for (const [vietnamese, ascii] of Object.entries(vietnameseMap)) {
+      cleanedText = cleanedText.replace(new RegExp(vietnamese, 'g'), ascii);
+      cleanedText = cleanedText.replace(new RegExp(vietnamese.toUpperCase(), 'g'), ascii.toUpperCase());
+    }
+    
+    // Remove any remaining non-ASCII characters that might cause issues
+    cleanedText = cleanedText.replace(/[^\u0020-\u007E]/g, '');
+    
+    return cleanedText.trim();
+  } catch (error) {
+    console.warn('[PDF Utils] Error cleaning text, using original:', error);
+    return text.replace(/[^\u0020-\u007E]/g, '').trim(); // Fallback: remove all non-printable ASCII
+  }
+}
+
+/**
  * Overlay translations onto the original PDF at recorded positions, attempting to preserve layout.
  * If coverOriginal is true, draws a white rectangle behind each translated text to hide the original.
  */
@@ -352,12 +394,19 @@ export async function overlayTranslationsOnPdf(
     const text = entry.text ?? '';
     if (!text) continue;
 
+    // Clean the text to handle Vietnamese characters
+    const cleanText = cleanTextForPdf(text);
+    if (!cleanText.trim()) {
+      console.warn('[PDF Overlay] Skipping empty or problematic text:', text);
+      continue;
+    }
+
     const maxWidth = Math.max(0, entry.position?.width ?? (page.getWidth() - x - 40));
     const lineHeight = (entry.position?.height && entry.position.height > 0)
       ? entry.position.height * 1.05
       : size * 1.2;
 
-    const lines = wrapText(text, font, size, maxWidth);
+    const lines = wrapText(cleanText, font, size, maxWidth);
     const blockHeight = lines.length * lineHeight;
     if (coverOriginal) {
       page.drawRectangle({ x, y: y - (lineHeight * 0.8), width: maxWidth, height: blockHeight, color: makeRgb(1, 1, 1) });
@@ -376,102 +425,47 @@ export async function overlayTranslationsOnPdf(
 }
 
 /**
- * Replace text in PDF using PDFTron for better layout preservation
- * This function provides true text replacement while maintaining formatting
+ * Extract text from PDF using Aspose.PDF Cloud API (highest quality)
+ * This provides the highest quality text extraction with full formatting preservation
+ * @param buffer - PDF file buffer
+ * @param asposePdfBridge - Aspose PDF bridge instance
+ * @returns Promise<AsposePDFExtractionResult> - Extraction result with text, items, images, and metadata
  */
-export async function replacePdfTextWithPDFTron(
-  originalBuffer: Buffer,
-  replacements: PDFTronReplacementEntry[],
-  pdfTronBridge?: PDFTronBridge
-): Promise<Buffer> {
-  // If PDFTron bridge is provided and available, use it
-  if (pdfTronBridge && pdfTronBridge.isAvailable()) {
-    try {
-      console.log('[PDF] Using PDFTron for text replacement...');
-      return await pdfTronBridge.replaceTextWithPDFTron(originalBuffer, replacements);
-    } catch (error) {
-      console.error('[PDF] PDFTron replacement failed, falling back to overlay:', error);
-      // Fall back to overlay method
-    }
+export async function extractPdfTextWithAsposePDF(
+  buffer: Buffer,
+  asposePdfBridge: AsposePDFBridge
+): Promise<AsposePDFExtractionResult> {
+  try {
+    console.log('[PDF] Using Aspose PDF Cloud API for text extraction...');
+    const result = await asposePdfBridge.extractTextWithAsposePDF(buffer);
+    console.log('[PDF] Aspose PDF Cloud API extraction successful');
+    return result;
+  } catch (error) {
+    console.error(`[PDF] Aspose PDF Cloud API extraction failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
   }
-
-  // Fall back to overlay method if PDFTron is not available
-  console.log('[PDF] Using overlay method for text replacement...');
-  const overlayEntries = replacements.map((entry) => ({
-    text: entry.translatedText,
-    position: entry.position,
-    style: entry.style,
-    font: entry.style?.font,
-  }));
-
-  const updatedBytes = await overlayTranslationsOnPdf(
-    originalBuffer,
-    overlayEntries,
-    { coverOriginal: true }
-  );
-  return Buffer.from(updatedBytes);
 }
 
 /**
- * Extract text from PDF using PDFTron for better accuracy - Focused on text extraction
+ * Replace text in PDF using Aspose.PDF Cloud API (highest quality)
+ * This provides true text replacement while maintaining formatting
+ * @param originalBuffer - Original PDF file buffer
+ * @param replacements - Array of text replacement entries
+ * @param asposePdfBridge - Aspose PDF bridge instance
+ * @returns Promise<Buffer> - Updated PDF buffer
  */
-export async function extractPdfTextWithPDFTron(
-  buffer: Buffer,
-  pdfTronBridge?: PDFTronBridge
-): Promise<{
-  text: string;
-  items: any[];
-  images: any[];
-  pageCount: number;
-  metadata?: any;
-}> {
-  // If PDFTron bridge is provided and available, use it
-  if (pdfTronBridge && pdfTronBridge.isAvailable()) {
-    try {
-      console.log('[PDF] Using PDFTron for text extraction...');
-      const result = await pdfTronBridge.extractTextWithPDFTron(buffer);
-      
-      // Convert PDFTron items to the expected format
-      const convertedItems = result.items.map(item => ({
-        text: item.text,
-        font: item.font,
-        fontSize: item.fontSize,
-        bold: item.bold,
-        italic: item.italic,
-        color: item.color,
-        x: item.x,
-        y: item.y,
-        width: item.width,
-        height: item.height,
-        page: item.page,
-      }));
-
-      // Keep basic image info for preview (skip detailed processing)
-      const convertedImages = result.images.map(image => ({
-        data: image.data,
-        x: image.x,
-        y: image.y,
-        width: image.width,
-        height: image.height,
-        page: image.page,
-        type: image.type,
-      }));
-
-      console.log('[PDF] PDFTron extraction successful - focusing on text quality');
-      return {
-        text: result.text,
-        items: convertedItems,
-        images: convertedImages,
-        pageCount: result.pageCount,
-        metadata: result.metadata,
-      };
+export async function replacePdfTextWithAsposePDF(
+  originalBuffer: Buffer,
+  replacements: AsposePDFReplacementEntry[],
+  asposePdfBridge: AsposePDFBridge
+): Promise<Buffer> {
+  try {
+    console.log('[PDF] Using Aspose PDF Cloud API for text replacement...');
+    const result = await asposePdfBridge.replaceTextWithAsposePDF(originalBuffer, replacements);
+    console.log('[PDF] Aspose PDF Cloud API replacement successful');
+    return result;
     } catch (error) {
-      console.error('[PDF] PDFTron extraction failed, falling back to pdfjs-dist:', error);
-      // Fall back to pdfjs-dist method
-    }
+    console.error(`[PDF] Aspose PDF Cloud API replacement failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
   }
-
-  // Fall back to existing pdfjs-dist method (text-focused)
-  console.log('[PDF] Using pdfjs-dist for text extraction...');
-  return await parsePdfWithFonts(buffer);
 }

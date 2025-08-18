@@ -83,6 +83,17 @@ export class TranslationController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('test-aspose-pdf')
+  async testAsposePDF() {
+    return this.translationService.testAsposePDFConnection();
+  }
+
+  @Get('test-aspose-connection')
+  async testAsposeConnection() {
+    return this.translationService.testAsposeConnection();
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('export/download/bulk')
   async downloadBulkExport(
     @Body() body: {

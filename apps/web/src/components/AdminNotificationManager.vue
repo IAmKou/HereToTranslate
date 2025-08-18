@@ -1,36 +1,48 @@
 <template>
   <!-- Global Notification Management Panel -->
   <div class="admin-notification-manager">
-    <h2>Notification Management</h2>
-
-    <!-- Global Notification Creation -->
-    <div class="create-section">
-      <h3>Create Global Notification</h3>
-      <button @click="showCreateModal = true" class="btn-create">
-        Send to All Users
-      </button>
-    </div>
-
-    <!-- Stats Section -->
-    <div class="stats-section">
-      <div class="stat-card">
-        <i class="pi pi-bell"></i>
-        <div>
-          <h4>Total Global Notifications</h4>
-          <p class="stat-number">{{ globalNotificationCount }}</p>
-        </div>
+    <div class="header-section">
+      <h2>Notification Management</h2>
+      <div class="header-actions">
+        <button @click="showCreateModal = true" class="btn-create">
+          <i class="pi pi-plus"></i>Send New Notification
+        </button>
       </div>
     </div>
+
+
 
     <!-- Global Notifications List -->
     <div class="notifications-list">
-      <h3>Global Notifications</h3>
-      <div v-if="globalNotifications.length === 0" class="empty-state">
-        No notifications yet
+      <div class="list-header">
+        <h3>Global Notifications <span class="notification-count">({{ globalNotificationCount }})</span></h3>
+        <div class="list-controls">
+          <div class="search-box">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search notifications..."
+              class="search-input"
+            />
+          </div>
+          <button @click="refreshNotifications" class="btn-refresh" :disabled="loading">
+            <i class="pi pi-refresh" :class="{ 'pi-spin': loading }"></i>
+          </button>
+        </div>
       </div>
+
+      <div v-if="loading" class="loading-state">
+        <i class="pi pi-spinner pi-spin"></i> Loading notifications...
+      </div>
+
+      <div v-else-if="filteredNotifications.length === 0" class="empty-state">
+        <i class="pi pi-inbox"></i>
+        <p>No notifications found</p>
+      </div>
+
       <div v-else>
         <div
-          v-for="notification in globalNotifications"
+          v-for="notification in paginatedNotifications"
           :key="notification.id"
           class="notification-item"
         >
@@ -41,17 +53,54 @@
             </div>
             <p class="notification-message">{{ notification.message }}</p>
             <div class="notification-meta">
-              Created by: {{ notification.createdBy.fullName || notification.createdBy.username }}
+              Created by: {{ notification.createdBy?.fullName || notification.createdBy?.username }}
             </div>
           </div>
           <div class="notification-actions">
-            <button @click="editNotification(notification)" class="btn-edit">
+            <button @click="editNotification(notification)" class="btn-edit" title="Edit">
               <i class="pi pi-pencil"></i>
             </button>
-            <button @click="deleteNotification(notification.id)" class="btn-delete">
-              Delete
+            <button @click="deleteNotification(notification.id)" class="btn-delete" title="Delete">
+              <i class="pi pi-trash"></i>
             </button>
           </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination" v-if="totalPages > 1">
+          <button
+            @click="currentPage = 1"
+            :disabled="currentPage === 1"
+            class="btn-pagination"
+          >
+            <i class="pi pi-angle-double-left"></i>
+          </button>
+          <button
+            @click="currentPage--"
+            :disabled="currentPage === 1"
+            class="btn-pagination"
+          >
+            <i class="pi pi-angle-left"></i>
+          </button>
+
+          <span class="page-info">
+            Page {{ currentPage }} of {{ totalPages }}
+          </span>
+
+          <button
+            @click="currentPage++"
+            :disabled="currentPage === totalPages"
+            class="btn-pagination"
+          >
+            <i class="pi pi-angle-right"></i>
+          </button>
+          <button
+            @click="currentPage = totalPages"
+            :disabled="currentPage === totalPages"
+            class="btn-pagination"
+          >
+            <i class="pi pi-angle-double-right"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -166,6 +215,17 @@
       </div>
     </div>
 
+    <!-- Success Notification -->
+    <div v-if="showSuccessNotification" class="success-notification">
+      <div class="success-content">
+        <i class="pi pi-check-circle"></i>
+        <span>{{ successMessage }}</span>
+      </div>
+      <button @click="closeSuccessNotification" class="success-close-btn">
+        <i class="pi pi-times"></i>
+      </button>
+    </div>
+
     <!-- Delete Confirmation Modal -->
     <div v-if="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
       <div class="modal-content" @click.stop>
@@ -196,8 +256,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { adminNotificationService } from '../services/admin-notification.service'
+import { realtimeNotificationService, type RealtimeNotification } from '../services/realtime-notification.service'
 
 interface Notification {
   id: string
@@ -215,6 +276,9 @@ interface Notification {
 const globalNotifications = ref<Notification[]>([])
 const globalNotificationCount = ref(0)
 const loading = ref(false)
+const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
 
 const showCreateModal = ref(false)
 const showCreateForAllModal = ref(false)
@@ -241,6 +305,36 @@ const editForm = reactive({
 const notificationToDelete = ref<Notification | null>(null)
 const deleting = ref(false)
 
+// Success notification state
+const showSuccessNotification = ref(false)
+const successMessage = ref('')
+
+// Connection status
+const connectionStatus = ref({ isConnected: false, reconnectAttempts: 0, maxReconnectAttempts: 5 })
+
+// Computed properties
+const filteredNotifications = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return globalNotifications.value
+  }
+  const query = searchQuery.value.toLowerCase()
+  return globalNotifications.value.filter((notification: Notification) =>
+    notification.message.toLowerCase().includes(query) ||
+    notification.type.toLowerCase().includes(query) ||
+    (notification.createdBy?.fullName || notification.createdBy?.username || '').toLowerCase().includes(query)
+  )
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredNotifications.value.length / itemsPerPage.value)
+})
+
+const paginatedNotifications = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filteredNotifications.value.slice(start, end)
+})
+
 const canCreateNotification = computed(() => {
   return createForm.type && createForm.message.trim()
 })
@@ -249,13 +343,17 @@ const canCreateNotificationForAll = computed(() => {
   return createAllForm.type && createAllForm.message.trim()
 })
 
+// Methods
 const loadGlobalNotifications = async () => {
   loading.value = true
   try {
     const response = await adminNotificationService.getGlobalNotifications()
-    globalNotifications.value = response.notifications
+    globalNotifications.value = response.notifications || []
+    globalNotificationCount.value = globalNotifications.value.length
   } catch (error) {
     console.error('Error loading notifications:', error)
+    globalNotifications.value = []
+    globalNotificationCount.value = 0
   } finally {
     loading.value = false
   }
@@ -272,19 +370,55 @@ const loadGlobalNotificationCount = async () => {
 
 const createGlobalNotification = async () => {
   try {
-    await adminNotificationService.createGlobalNotification(createForm)
+    console.log('🔄 Creating global notification...', createForm)
+    console.log('🔌 WebSocket connection status:', connectionStatus.value.isConnected)
+
+    const response = await adminNotificationService.createGlobalNotification(createForm)
+    console.log('✅ Notification created successfully:', response)
+
+    // Add new notification to local state for immediate UX
+    const newNotification: Notification = {
+      id: response.id,
+      type: response.type,
+      message: response.message,
+      isGlobal: true, // Global notifications are always true
+      createdAt: response.createdAt,
+      createdBy: {
+        id: 'current-user', // We'll get this from auth store if needed
+        username: 'Admin',
+        fullName: 'Administrator'
+      }
+    }
+
+    console.log('📝 Adding to local state:', newNotification)
+
+    // Add to the beginning of the list
+    globalNotifications.value.unshift(newNotification)
+    globalNotificationCount.value++
+
+    console.log('📊 Updated local state:', {
+      count: globalNotificationCount.value,
+      notifications: globalNotifications.value.length,
+      firstNotification: globalNotifications.value[0]
+    })
 
     // Reset form
     createForm.type = 'announcement'
     createForm.message = ''
     showCreateModal.value = false
 
-    // Refresh list
-    await loadGlobalNotifications()
-    await loadGlobalNotificationCount()
+    // Reset to first page
+    currentPage.value = 1
+
+    showSuccessMessage('Global notification created successfully')
   } catch (error) {
-    console.error('Error creating notification:', error)
-    alert('Error creating notification')
+    console.error('❌ Error creating notification:', error)
+    showSuccessMessage('Error creating notification')
+
+    // Auto-hide error notification after 5 seconds
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 5000)
   }
 }
 
@@ -297,14 +431,22 @@ const createNotificationForAll = async () => {
     createAllForm.message = ''
     showCreateForAllModal.value = false
 
-    alert(`Created ${response.count} notifications for all users`)
+    showSuccessMessage(`Created ${response.count} notifications for all users`)
 
-    // Refresh list
-    await loadGlobalNotifications()
-    await loadGlobalNotificationCount()
-  } catch (error) {
+    // Note: For notifications sent to all users, we don't add them to the global list
+    // since they are user-specific notifications, not global ones
+    // The real-time listeners will handle updates if needed
+
+    // Reset to first page
+    currentPage.value = 1
+  } catch (error: any) {
     console.error('Error creating notification for all:', error)
-    alert('Error creating notification')
+    showSuccessMessage('Error creating notification')
+
+    // Auto-hide error notification after 5 seconds
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 5000)
   }
 }
 
@@ -326,10 +468,23 @@ const updateNotification = async () => {
     editingNotificationId.value = null
     editForm.type = 'announcement'
     editForm.message = ''
-    await loadGlobalNotifications()
-  } catch (error) {
+
+    // Update local state immediately for better UX
+    const notification = globalNotifications.value.find((n: Notification) => n.id === editingNotificationId.value)
+    if (notification) {
+      notification.type = editForm.type
+      notification.message = editForm.message
+    }
+
+    // Don't reload from server - just use local state to avoid issues
+  } catch (error: any) {
     console.error('Error updating notification:', error)
-    alert('Error updating notification')
+    showSuccessMessage('Error updating notification')
+
+    // Auto-hide error notification after 5 seconds
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 5000)
   }
 }
 
@@ -347,13 +502,50 @@ const confirmDeleteNotification = async () => {
   deleting.value = true
   try {
     await adminNotificationService.deleteNotification(notificationToDelete.value.id)
+
+    // Update local state immediately for better UX
+    const index = globalNotifications.value.findIndex((n: Notification) => n.id === notificationToDelete.value!.id)
+    if (index !== -1) {
+      globalNotifications.value.splice(index, 1)
+      globalNotificationCount.value = Math.max(0, globalNotificationCount.value - 1)
+    }
+
+    // Show success notification
+    showSuccessMessage('Notification deleted successfully')
+
+    // Handle pagination edge case
+    const maxPage = Math.ceil(globalNotifications.value.length / itemsPerPage.value)
+    if (currentPage.value > maxPage && maxPage > 0) {
+      currentPage.value = maxPage
+    }
+
+    // If current page is empty and not first page, go to previous page
+    if (paginatedNotifications.value.length === 0 && currentPage.value > 1) {
+      currentPage.value--
+    }
+
     showDeleteModal.value = false
     notificationToDelete.value = null
-    await loadGlobalNotifications()
-    await loadGlobalNotificationCount()
-  } catch (error) {
+
+    // Don't reload from server - just use local state to avoid issues
+  } catch (error: any) {
     console.error('Error deleting notification:', error)
-    alert('Error deleting notification')
+
+    // Show error in success notification
+    if (error.response?.status === 404) {
+      showSuccessMessage('Notification not found. It may have been already deleted.')
+    } else if (error.response?.status === 500) {
+      showSuccessMessage('Server error. Please try again or contact support.')
+    } else {
+      showSuccessMessage('Error deleting notification. Please try again.')
+    }
+
+    // Auto-hide error notification after 5 seconds
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 5000)
+
+    // Don't reload from server - just use local state to avoid issues
   } finally {
     deleting.value = false
   }
@@ -362,15 +554,185 @@ const confirmDeleteNotification = async () => {
 const refreshNotifications = () => {
   loadGlobalNotifications()
   loadGlobalNotificationCount()
+  currentPage.value = 1
+  searchQuery.value = ''
 }
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString('en-US')
+  return new Date(dateString).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
-onMounted(() => {
-  loadGlobalNotifications()
-  loadGlobalNotificationCount()
+const showSuccessMessage = (message: string) => {
+  successMessage.value = message
+  showSuccessNotification.value = true
+
+  // Auto-hide success notification after 3 seconds
+  setTimeout(() => {
+    showSuccessNotification.value = false
+  }, 3000)
+}
+
+const closeSuccessNotification = () => {
+  showSuccessNotification.value = false
+  successMessage.value = ''
+}
+
+// Watch for search query changes to reset pagination
+watch(searchQuery, () => {
+  currentPage.value = 1
+})
+
+// Real-time notification handling
+let unsubscribeNewNotification: (() => void) | null = null
+let unsubscribeGlobalNotification: (() => void) | null = null
+let unsubscribeNotificationDeleted: (() => void) | null = null
+
+const setupRealtimeNotifications = () => {
+  console.log('🔌 Setting up real-time notifications...')
+
+  // Listen for connection status
+  const unsubscribeConnected = realtimeNotificationService.onConnected(() => {
+    console.log('✅ WebSocket connected in AdminNotificationManager')
+    connectionStatus.value.isConnected = true
+    connectionStatus.value.reconnectAttempts = 0
+  })
+
+  const unsubscribeDisconnected = realtimeNotificationService.onDisconnected(() => {
+    console.log('❌ WebSocket disconnected in AdminNotificationManager')
+    connectionStatus.value.isConnected = false
+  })
+
+  // Listen for new notifications
+  unsubscribeNewNotification = realtimeNotificationService.onNewNotification((notification: RealtimeNotification) => {
+    console.log('📨 Real-time new notification received:', notification)
+
+    // Add new notification to the top of the list
+    globalNotifications.value.unshift(notification as any)
+    globalNotificationCount.value++
+
+    console.log('📊 Real-time update - Updated local state:', {
+      count: globalNotificationCount.value,
+      notifications: globalNotifications.value.length,
+      firstNotification: globalNotifications.value[0]
+    })
+
+    // Show success notification
+    showSuccessMessage(`New notification: ${notification.message}`)
+  })
+
+  // Listen for global notifications
+  unsubscribeGlobalNotification = realtimeNotificationService.onGlobalNotification((notification: RealtimeNotification) => {
+    console.log('📢 Real-time global notification received:', notification)
+
+    // Add global notification to the top of the list
+    globalNotifications.value.unshift(notification as any)
+    globalNotificationCount.value++
+
+    // Show success notification
+    showSuccessMessage(`Global notification: ${notification.message}`)
+  })
+
+  // Listen for notification deletions
+  unsubscribeNotificationDeleted = realtimeNotificationService.onNotificationDeleted((event) => {
+    console.log('🗑️ Real-time notification deleted:', event)
+
+    // Remove notification from local state
+    const index = globalNotifications.value.findIndex((n: any) => n.id === event.id)
+    if (index !== -1) {
+      const notification = globalNotifications.value[index]
+      globalNotifications.value.splice(index, 1)
+      globalNotificationCount.value = Math.max(0, globalNotificationCount.value - 1)
+
+      // Handle pagination edge case
+      const maxPage = Math.ceil(globalNotifications.value.length / itemsPerPage.value)
+      if (currentPage.value > maxPage && maxPage > 0) {
+        currentPage.value = maxPage
+      }
+
+      // If current page is empty and not first page, go to previous page
+      if (paginatedNotifications.value.length === 0 && currentPage.value > 1) {
+        currentPage.value--
+      }
+    }
+  })
+
+  console.log('🔌 Real-time notifications setup complete')
+}
+
+const cleanupRealtimeNotifications = () => {
+  if (unsubscribeNewNotification) {
+    unsubscribeNewNotification()
+    unsubscribeNewNotification = null
+  }
+  if (unsubscribeGlobalNotification) {
+    unsubscribeGlobalNotification()
+    unsubscribeGlobalNotification = null
+  }
+  if (unsubscribeNotificationDeleted) {
+    unsubscribeNotificationDeleted()
+    unsubscribeNotificationDeleted = null
+  }
+}
+
+// Test function for real-time notifications
+const testRealtimeNotification = () => {
+  console.log('🧪 Testing real-time notification...')
+
+  // Create a test notification object
+  const testNotification: Notification = {
+    id: `test-${Date.now()}`,
+    type: 'test',
+    message: 'This is a test real-time notification',
+    isGlobal: true,
+    createdAt: new Date().toISOString(),
+    createdBy: {
+      id: 'test-user',
+      username: 'TestUser',
+      fullName: 'Test User'
+    }
+  }
+
+  console.log('🧪 Test notification object:', testNotification)
+
+  // Add to local state to test if the UI updates
+  globalNotifications.value.unshift(testNotification)
+  globalNotificationCount.value++
+
+  console.log('🧪 Added test notification to local state:', {
+    count: globalNotificationCount.value,
+    notifications: globalNotifications.value.length,
+    firstNotification: globalNotifications.value[0]
+  })
+
+  showSuccessMessage('Test notification added to local state')
+
+  // Remove test notification after 5 seconds
+  setTimeout(() => {
+    const index = globalNotifications.value.findIndex((n: Notification) => n.id === testNotification.id)
+    if (index !== -1) {
+      globalNotifications.value.splice(index, 1)
+      globalNotificationCount.value = Math.max(0, globalNotificationCount.value - 1)
+      console.log('🧪 Test notification removed from local state')
+    }
+  }, 5000)
+}
+
+onMounted(async () => {
+  console.log('🚀 AdminNotificationManager mounted, setting up...')
+  await loadGlobalNotifications()
+  await loadGlobalNotificationCount()
+  setupRealtimeNotifications()
+  console.log('🚀 AdminNotificationManager setup complete')
+})
+
+onUnmounted(() => {
+  cleanupRealtimeNotifications()
 })
 </script>
 
@@ -378,139 +740,206 @@ onMounted(() => {
 .admin-notification-manager {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 16px;
   background: transparent;
 }
 
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
 .admin-notification-manager h2 {
-  font-size: 32px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 8px;
-  text-align: center;
-}
-
-/* Create Section */
-.create-section {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.create-section h3 {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
-  color: #475569;
-  margin-bottom: 16px;
+  color: #1e293b;
+  margin: 0;
 }
 
-.btn-create {
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-create, .btn-create-all {
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   color: white;
   border: none;
-  padding: 12px 32px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.btn-create:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+.btn-create-all {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
-/* Stats Section */
-.stats-section {
-  margin-bottom: 32px;
+.btn-create:hover, .btn-create-all:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
-.stat-card {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: none;
-  border-radius: 16px;
-  padding: 32px;
-  text-align: center;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  max-width: 400px;
-  margin: 0 auto;
+.btn-create-all:hover {
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 35px rgba(0, 0, 0, 0.12);
-}
-
-.stat-card i {
-  font-size: 48px;
-  color: #3b82f6;
-  margin-bottom: 16px;
-}
-
-.stat-card h4 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #64748b;
-  margin: 0 0 12px 0;
-}
-
-.stat-number {
-  font-size: 48px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0;
+.notification-count {
+  color: #6b7280;
+  font-size: 16px;
+  font-weight: 400;
+  margin-left: 8px;
 }
 
 /* Notifications List */
 .notifications-list {
   background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
 }
 
-.notifications-list h3 {
-  font-size: 24px;
-  font-weight: 700;
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.list-header h3 {
+  font-size: 18px;
+  font-weight: 600;
   color: #1e293b;
-  margin: 0 0 24px 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-controls {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.notifications-list h3::before {
-  content: "📢";
-  font-size: 28px;
+.connection-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.connection-indicator.connected {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.connection-indicator.disconnected {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.connection-indicator i {
+  font-size: 14px;
+}
+
+.search-box {
+  position: relative;
+}
+
+.search-input {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 200px;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.btn-refresh {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.3s ease;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.loading-state i {
+  margin-right: 8px;
 }
 
 .empty-state {
   text-align: center;
-  padding: 64px 32px;
-  color: #64748b;
+  padding: 40px 20px;
+  color: #6b7280;
+  font-size: 14px;
 }
 
-.empty-state::before {
-  content: "📭";
-  font-size: 64px;
+.empty-state i {
+  font-size: 32px;
+  margin-bottom: 12px;
   display: block;
-  margin-bottom: 16px;
+  color: #d1d5db;
 }
 
 .notification-item {
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .notification-item::before {
@@ -519,71 +948,80 @@ onMounted(() => {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 4px;
+  width: 3px;
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
 }
 
 .notification-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   border-color: #3b82f6;
 }
 
 .notification-content {
   flex: 1;
+  min-width: 0;
 }
 
 .notification-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .notification-type {
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   color: white;
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .notification-date {
-  color: #64748b;
-  font-size: 14px;
-  font-weight: 500;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .notification-message {
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.5;
   color: #374151;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .notification-meta {
-  font-size: 14px;
-  color: #64748b;
+  font-size: 12px;
+  color: #6b7280;
   font-style: italic;
 }
 
 .notification-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .btn-edit, .btn-delete {
   border: none;
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 6px;
+  padding: 6px 8px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
 }
 
 .btn-edit {
@@ -606,6 +1044,50 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-pagination {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-pagination:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-pagination:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 12px;
+  font-weight: 500;
+}
+
 /* Modal Styling */
 .modal-overlay {
   position: fixed;
@@ -623,12 +1105,12 @@ onMounted(() => {
 
 .modal-content {
   background: white;
-  border-radius: 20px;
+  border-radius: 16px;
   width: 90%;
-  max-width: 600px;
+  max-width: 500px;
   max-height: 90vh;
   overflow: hidden;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
   animation: modalSlideIn 0.3s ease-out;
 }
 
@@ -644,36 +1126,36 @@ onMounted(() => {
 }
 
 .modal-content h3 {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   color: #1e293b;
-  margin: 0 0 24px 0;
-  padding: 32px 32px 0 32px;
+  margin: 0 0 20px 0;
+  padding: 24px 24px 0 24px;
 }
 
 .modal-content form {
-  padding: 0 32px;
+  padding: 0 24px;
 }
 
 .form-group {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
+  margin-bottom: 6px;
+  font-weight: 500;
   color: #374151;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 16px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
   transition: all 0.3s ease;
   font-family: inherit;
 }
@@ -682,22 +1164,22 @@ onMounted(() => {
 .form-group textarea:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 .form-group textarea {
   resize: vertical;
-  min-height: 120px;
+  min-height: 100px;
 }
 
 .warning-note {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   border: 1px solid #f59e0b;
-  border-radius: 12px;
-  padding: 16px;
-  margin-top: 20px;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
   color: #92400e;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .warning-note strong {
@@ -708,17 +1190,17 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding: 32px;
+  padding: 24px;
   border-top: 1px solid #e5e7eb;
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .btn-primary, .btn-secondary {
   border: none;
-  border-radius: 12px;
-  padding: 12px 24px;
-  font-size: 16px;
-  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -726,12 +1208,12 @@ onMounted(() => {
 .btn-primary {
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   color: white;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .btn-secondary {
@@ -749,71 +1231,92 @@ onMounted(() => {
   background: #ef4444;
   color: white;
   border: none;
-  padding: 12px 24px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .btn-danger:hover {
   background: #dc2626;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 }
 
 .delete-content {
   text-align: center;
-  padding: 32px;
+  padding: 24px;
 }
 
 .delete-icon {
-  font-size: 64px;
+  font-size: 48px;
   color: #ef4444;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .delete-content h4 {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   color: #1e293b;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .delete-content p {
-  font-size: 16px;
+  font-size: 14px;
   color: #475569;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .notification-preview {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  margin-top: 20px;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+  font-size: 12px;
   color: #374151;
   font-style: italic;
 }
 
 .warning-text {
   color: #92400e;
-  font-size: 14px;
-  margin-top: 20px;
-  font-weight: 600;
+  font-size: 12px;
+  margin-top: 16px;
+  font-weight: 500;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
   .admin-notification-manager {
-    padding: 16px;
+    padding: 12px;
   }
 
-  .admin-notification-manager h2 {
-    font-size: 24px;
+  .header-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .header-actions {
+    justify-content: center;
+  }
+
+  .list-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .list-controls {
+    justify-content: center;
+  }
+
+  .search-input {
+    width: 100%;
+    max-width: 250px;
   }
 
   .modal-content {
@@ -829,11 +1332,85 @@ onMounted(() => {
   }
 
   .notification-item {
-    padding: 16px;
+    padding: 12px;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  .stat-card {
-    padding: 24px;
+  .notification-actions {
+    align-self: flex-end;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+/* Success Notification */
+.success-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #10b981;
+  color: white;
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 400px;
+  animation: notificationSlideIn 0.3s ease-out;
+}
+
+@keyframes notificationSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.success-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.success-content i {
+  font-size: 18px;
+  color: #d1fae5;
+}
+
+.success-close-btn {
+  background: none;
+  border: none;
+  color: #d1fae5;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 16px;
+}
+
+.success-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* Responsive Success Notification */
+@media (max-width: 768px) {
+  .success-notification {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
   }
 }
 </style>

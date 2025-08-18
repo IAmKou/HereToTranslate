@@ -17,10 +17,10 @@
         <div class="navbar-start">
           <!-- Quick Actions -->
           <div class="quick-actions">
-            <router-link to="/admin/notifications" class="action-btn notification-link" title="Notification Management">
+            <button class="action-btn notification-btn" @click="toggleNotificationsModal" title="System Notifications">
               <i class="pi pi-bell"></i>
-              <span class="notification-badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
-            </router-link>
+              <span class="notification-badge" v-if="unreadNotificationCount > 0">{{ unreadNotificationCount }}</span>
+            </button>
 
             <button class="action-btn" @click="showSystemStatus = !showSystemStatus" title="System Status">
               <i class="pi pi-server"></i>
@@ -171,14 +171,71 @@
         </div>
       </div>
     </transition>
+
+    <!-- Notifications Modal -->
+    <transition name="slide-down">
+      <div v-if="showNotificationsModal" class="notifications-panel">
+        <div class="panel-header">
+          <h3>System Notifications</h3>
+          <div class="header-actions">
+            <button @click="markAllAsRead" class="mark-all-read-btn" title="Mark all as read">
+              <i class="pi pi-check-double"></i>
+            </button>
+            <button @click="showNotificationsModal = false" class="close-btn">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="loadingNotifications" class="loading-state">
+          <i class="pi pi-spinner pi-spin"></i> Loading notifications...
+        </div>
+
+        <div v-else-if="systemNotifications.length === 0" class="empty-state">
+          <i class="pi pi-bell-slash"></i>
+          <p>No system notifications</p>
+        </div>
+
+        <div v-else class="notifications-list">
+          <div
+            v-for="notification in systemNotifications"
+            :key="notification.id"
+            class="notification-item"
+            :class="{ 'unread': !notification.isRead }"
+            @click="markAsRead(notification.id)"
+          >
+            <div class="notification-icon" :class="notification.type">
+              <i :class="getNotificationIcon(notification.type)"></i>
+            </div>
+            <div class="notification-content">
+              <div class="notification-title">{{ notification.title }}</div>
+              <div class="notification-message">{{ notification.message }}</div>
+              <div class="notification-time">{{ formatNotificationTime(notification.timestamp) }}</div>
+            </div>
+            <div class="notification-actions">
+              <button @click.stop="deleteNotification(notification.id)" class="delete-btn" title="Delete">
+                <i class="pi pi-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-footer">
+          <router-link to="/admin/notifications" class="view-all-link">
+            <i class="pi pi-external-link"></i>
+            View All Notifications
+          </router-link>
+        </div>
+      </div>
+    </transition>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
-import { adminNotificationService } from '../services/admin-notification.service';
+import { notificationService } from '../services/notification.service';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
 
@@ -197,12 +254,14 @@ interface User {
   avatarUrl?: string;
 }
 
-interface Notification {
+interface SystemNotification {
   id: string;
-  type: 'info' | 'warning' | 'error' | 'success';
+  type: 'info' | 'warning' | 'error' | 'success' | 'system';
   title: string;
   message: string;
   timestamp: string;
+  isRead: boolean;
+  isGlobal: boolean;
 }
 
 interface SystemMetrics {
@@ -215,8 +274,12 @@ interface SystemMetrics {
 const router = useRouter();
 const menuVisible = ref(false);
 const showSystemStatus = ref(false);
+const showNotificationsModal = ref(false);
 const currentUser = ref<User | null>(null);
 const notificationCount = ref(0);
+const unreadNotificationCount = ref(0);
+const systemNotifications = ref<SystemNotification[]>([]);
+const loadingNotifications = ref(false);
 
 const systemMetrics = ref<SystemMetrics>({
   cpu: 65,
@@ -225,10 +288,20 @@ const systemMetrics = ref<SystemMetrics>({
   activeUsers: 127
 });
 
+// Simple notification handling - no real-time complexity
+const setupNotifications = () => {
+  console.log('🔌 Setting up simple system notifications...');
+};
+
+const cleanupNotifications = () => {
+  console.log('🔌 Cleaning up simple system notifications...');
+};
+
 const loadNotificationCount = async () => {
   try {
-    const response = await adminNotificationService.getGlobalNotificationCount();
-    notificationCount.value = response.count;
+    const count = await notificationService.getNotificationCount();
+    notificationCount.value = count.total;
+    unreadNotificationCount.value = count.unread;
   } catch (error) {
     console.error('Error loading notification count:', error);
   }
@@ -302,9 +375,133 @@ const getFullAvatarUrl = (avatarUrl: string) => {
   return base + avatarUrl;
 };
 
+const formatNotificationTime = (timestamp: string): string => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) {
+    return `${diffInSeconds}s ago`;
+  } else if (diffInSeconds < 3600) {
+    return `${Math.floor(diffInSeconds / 60)}m ago`;
+  } else if (diffInSeconds < 86400) {
+    return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  } else {
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  }
+};
+
+const getNotificationIcon = (type: SystemNotification['type']) => {
+  switch (type) {
+    case 'info':
+      return 'pi pi-info-circle';
+    case 'warning':
+      return 'pi pi-exclamation-triangle';
+    case 'error':
+      return 'pi pi-times-circle';
+    case 'success':
+      return 'pi pi-check-circle';
+    case 'system':
+      return 'pi pi-server';
+    default:
+      return 'pi pi-info-circle';
+  }
+};
+
+const markAsRead = async (notificationId: string) => {
+  try {
+    await notificationService.markAsRead(notificationId);
+    // Update local state
+    const notification = systemNotifications.value.find((n: SystemNotification) => n.id === notificationId);
+    if (notification && !notification.isRead) {
+      notification.isRead = true;
+      unreadNotificationCount.value = Math.max(0, unreadNotificationCount.value - 1);
+    }
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+  }
+};
+
+const markAllAsRead = async () => {
+  try {
+    await notificationService.markAllAsRead();
+    // Update local state
+    systemNotifications.value.forEach((n: SystemNotification) => {
+      n.isRead = true;
+    });
+    unreadNotificationCount.value = 0;
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+  }
+};
+
+const deleteNotification = async (notificationId: string) => {
+  try {
+    console.log('🗑️ Deleting notification:', notificationId);
+    console.log('📊 Current notifications count:', systemNotifications.value.length);
+
+    await notificationService.deleteNotification(notificationId);
+
+    console.log('✅ Notification deleted from server successfully');
+
+    // Update local state
+    const notification = systemNotifications.value.find((n: SystemNotification) => n.id === notificationId);
+    if (notification && !notification.isRead) {
+      unreadNotificationCount.value = Math.max(0, unreadNotificationCount.value - 1);
+    }
+
+    systemNotifications.value = systemNotifications.value.filter((n: SystemNotification) => n.id !== notificationId);
+
+    console.log('📊 Updated local state - notifications:', systemNotifications.value.length);
+
+    // Reload notification count
+    await loadNotificationCount();
+
+    // Show success message
+    console.log('Notification deleted successfully');
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    console.error('Failed to delete notification');
+  }
+};
+
+const loadSystemNotifications = async () => {
+  loadingNotifications.value = true;
+
+  try {
+    const response = await notificationService.getUserNotifications(20, false);
+    systemNotifications.value = response.notifications.map(notification => ({
+      id: notification.id,
+      type: notification.type as SystemNotification['type'],
+      title: notification.type.charAt(0).toUpperCase() + notification.type.slice(1),
+      message: notification.message,
+      timestamp: notification.createdAt,
+      isRead: notification.isRead,
+      isGlobal: notification.isGlobal
+    }));
+
+    // Update unread count
+    unreadNotificationCount.value = systemNotifications.value.filter((n: SystemNotification) => !n.isRead).length;
+  } catch (error) {
+    console.error('Error loading system notifications:', error);
+    // Fallback to empty array
+    systemNotifications.value = [];
+  } finally {
+    loadingNotifications.value = false;
+  }
+};
+
+const toggleNotificationsModal = () => {
+  showNotificationsModal.value = !showNotificationsModal.value;
+  if (showNotificationsModal.value) {
+    loadSystemNotifications();
+  }
+};
+
 onMounted(() => {
   loadUserInfo();
   loadNotificationCount();
+  setupNotifications();
 
   // Refresh notification count every 30 seconds
   setInterval(loadNotificationCount, 30000);
@@ -318,6 +515,10 @@ onMounted(() => {
       console.error('Error signing out:', error);
     }
   });
+});
+
+onUnmounted(() => {
+  cleanupNotifications();
 });
 </script>
 
@@ -430,6 +631,42 @@ onMounted(() => {
   border-radius: 8px;
   min-width: 16px;
   text-align: center;
+}
+
+.notification-btn {
+  position: relative;
+}
+
+.notification-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #f8fafc;
+}
+
+.notification-btn .notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .status-indicator {
@@ -615,6 +852,74 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.notifications-panel {
+  width: 450px;
+  max-height: 600px;
+}
+
+.notifications-panel .notifications-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.notifications-panel .notification-item {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.notifications-panel .notification-item:hover {
+  background: #f8fafc;
+  transform: translateX(4px);
+}
+
+.notifications-panel .notification-item.unread {
+  background: #f0f9ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.notifications-panel .notification-item.unread:hover {
+  background: #e0f2fe;
+}
+
+.notifications-panel .notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+.notifications-panel .notification-icon.info {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.notifications-panel .notification-icon.warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.notifications-panel .notification-icon.error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.notifications-panel .notification-icon.success {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.notifications-panel .notification-icon.system {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -631,6 +936,27 @@ onMounted(() => {
   color: #1e293b;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mark-all-read-btn {
+  background: #10b981;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.mark-all-read-btn:hover {
+  background: #059669;
+}
+
 .close-btn {
   background: transparent;
   border: none;
@@ -645,6 +971,23 @@ onMounted(() => {
   background: #f3f4f6;
 }
 
+.loading-state {
+  padding: 16px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-state {
+  padding: 16px;
+  text-align: center;
+  color: #9ca3af;
+}
+
+.empty-state i {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
 .notifications-list {
   max-height: 400px;
   overflow-y: auto;
@@ -656,10 +999,16 @@ onMounted(() => {
   padding: 12px 16px;
   border-bottom: 1px solid #f0f0f0;
   transition: background 0.2s;
+  cursor: pointer;
 }
 
 .notification-item:hover {
   background: #f8fafc;
+}
+
+.notification-item.unread {
+  background: #f3f4f6;
+  font-weight: 600;
 }
 
 .notification-icon {
@@ -697,6 +1046,45 @@ onMounted(() => {
 .notification-time {
   font-size: 11px;
   color: #9ca3af;
+}
+
+.notification-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.delete-btn {
+  background: transparent;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.delete-btn:hover {
+  background: #fee2e2;
+}
+
+.panel-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+}
+
+.view-all-link {
+  text-decoration: none;
+  color: #3b82f6;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.view-all-link:hover {
+  text-decoration: underline;
 }
 
 /* System Status Panel */

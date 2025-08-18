@@ -53,22 +53,32 @@
             </div>
 
             <div class="action-buttons">
-              <button
-                @click="markAllAsRead"
-                :disabled="notificationStats.unread === 0 || markingAllAsRead"
-                class="action-btn secondary"
-              >
-                <i class="pi pi-check"></i>
-                {{ markingAllAsRead ? 'Marking...' : 'Mark All Read' }}
-              </button>
-              <button
-                @click="deleteAllNotifications"
-                :disabled="notifications.length === 0 || deletingAll"
-                class="action-btn danger"
-              >
-                <i class="pi pi-trash"></i>
-                {{ deletingAll ? 'Deleting...' : 'Delete All' }}
-              </button>
+              <div class="sort-controls">
+                <label for="sort-order">Sort by:</label>
+                <select id="sort-order" v-model="sortOrder" class="sort-select">
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                </select>
+              </div>
+
+              <div class="action-buttons-group">
+                <button
+                  @click="markAllAsRead"
+                  :disabled="notificationStats.unread === 0 || markingAllAsRead"
+                  class="action-btn secondary"
+                >
+                  <i class="pi pi-check"></i>
+                  {{ markingAllAsRead ? 'Marking...' : 'Mark All Read' }}
+                </button>
+                <button
+                  @click="deleteAllNotifications"
+                  :disabled="notifications.length === 0 || deletingAll"
+                  class="action-btn danger"
+                >
+                  <i class="pi pi-trash"></i>
+                  {{ deletingAll ? 'Deleting...' : 'Delete All' }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -87,10 +97,59 @@
             <p>{{ activeFilter === 'unread' ? 'All caught up! You have no unread notifications.' : 'You don\'t have any notifications yet.' }}</p>
           </div>
 
+          <!-- No Notifications on Current Page -->
+          <div v-else-if="paginatedNotifications.length === 0 && notifications.length > 0" class="empty-page-container">
+            <div class="empty-icon">
+              <i class="pi pi-search"></i>
+            </div>
+            <h3>No Notifications on This Page</h3>
+            <p>There are {{ notifications.length }} notifications total, but none on page {{ currentPage }}.</p>
+            <button @click="goToPage(1)" class="go-to-first-btn">
+              <i class="pi pi-angle-double-left"></i>
+              Go to First Page
+            </button>
+          </div>
+
+          <!-- Delete Confirmation Modal -->
+          <div v-if="showDeleteModal" class="modal-overlay" @click="closeDeleteModal">
+            <div class="modal-content" @click.stop>
+              <div class="modal-header">
+                <h3>Confirm Delete</h3>
+                <button @click="closeDeleteModal" class="modal-close-btn">
+                  <i class="pi pi-times"></i>
+                </button>
+              </div>
+              <div class="modal-body">
+                <p>Are you sure you want to delete this notification?</p>
+                <p class="notification-preview">{{ notificationToDelete?.message }}</p>
+              </div>
+              <div class="modal-footer">
+                <button @click="closeDeleteModal" class="modal-btn secondary">
+                  Cancel
+                </button>
+                <button @click="confirmDelete" class="modal-btn danger">
+                  <i class="pi pi-trash"></i>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Success Notification -->
+          <div v-if="showSuccessNotification" class="success-notification">
+            <div class="success-content">
+              <i class="pi pi-check-circle"></i>
+              <span>{{ successMessage }}</span>
+            </div>
+            <button @click="closeSuccessNotification" class="success-close-btn">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+
           <!-- Notifications List -->
           <div v-else class="notifications-container">
             <div
-              v-for="notification in notifications"
+              v-for="notification in paginatedNotifications"
               :key="notification.id"
               class="notification-item"
               :class="{
@@ -190,12 +249,78 @@
               </div>
             </div>
 
-            <!-- Load More Button -->
-            <div v-if="hasMore" class="load-more-container">
-              <button @click="loadMoreNotifications" :disabled="loadingMore" class="load-more-btn">
-                <i class="pi pi-plus"></i>
-                {{ loadingMore ? 'Loading...' : 'Load More' }}
-              </button>
+            <!-- Pagination -->
+            <div v-if="totalPages > 1" class="pagination">
+              <div class="pagination-info">
+                <span class="pagination-text">
+                  Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredNotifications.length) }} of {{ filteredNotifications.length }} notifications
+                  <span v-if="activeFilter === 'unread'" class="filter-info">(Unread only)</span>
+                </span>
+              </div>
+
+              <div class="pagination-controls">
+                <button
+                  @click="goToPage(1)"
+                  :disabled="currentPage === 1"
+                  class="pagination-btn"
+                  title="First page"
+                >
+                  <i class="pi pi-angle-double-left"></i>
+                </button>
+
+                <button
+                  @click="goToPage(currentPage - 1)"
+                  :disabled="currentPage === 1"
+                  class="pagination-btn"
+                  title="Previous page"
+                >
+                  <i class="pi pi-chevron-left"></i>
+                </button>
+
+                <div class="page-numbers">
+                  <button
+                    v-for="page in visiblePages"
+                    :key="page"
+                    @click="typeof page === 'number' ? goToPage(page) : null"
+                    :class="['page-btn', { active: page === currentPage }]"
+                    :disabled="page === '...'">
+                    {{ page }}
+                  </button>
+                </div>
+
+                <button
+                  @click="goToPage(currentPage + 1)"
+                  :disabled="currentPage === totalPages"
+                  class="pagination-btn"
+                  title="Next page"
+                >
+                  <i class="pi pi-chevron-right"></i>
+                </button>
+
+                <button
+                  @click="goToPage(totalPages)"
+                  :disabled="currentPage === totalPages"
+                  class="pagination-btn"
+                  title="Last page"
+                >
+                  <i class="pi pi-angle-double-right"></i>
+                </button>
+              </div>
+
+              <div class="pagination-settings">
+                <label for="items-per-page">Items per page:</label>
+                <select
+                  id="items-per-page"
+                  v-model="itemsPerPage"
+                  @change="handleItemsPerPageChange"
+                  class="items-per-page-select"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -205,13 +330,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
 import { notificationService, type Notification, type NotificationCount } from '../services/notification.service'
 import { useNotificationSync } from '../composables/useNotificationSync'
 import { projectInvitationService, type ProjectInvitation } from '../services/project-invitation.service'
+import { realtimeNotificationService, type RealtimeNotification } from '../services/realtime-notification.service'
 
 const router = useRouter()
 const { emitNotificationDeleted, emitNotificationMarkedRead, emitAllNotificationsDeleted, emitAllNotificationsMarkedRead } = useNotificationSync()
@@ -226,11 +352,21 @@ const activeFilter = ref<'all' | 'unread'>('all')
 const notifications = ref<Notification[]>([])
 const notificationStats = ref<NotificationCount>({ total: 0, unread: 0 })
 const loading = ref(true)
-const loadingMore = ref(false)
 const markingAllAsRead = ref(false)
 const deletingAll = ref(false)
-const hasMore = ref(true)
-const currentLimit = ref(20)
+
+// Modal state
+const showDeleteModal = ref(false)
+const notificationToDelete = ref<Notification | null>(null)
+const showSuccessNotification = ref(false)
+const successMessage = ref('')
+
+// Pagination state
+const currentPage = ref(1)
+const itemsPerPage = ref(20)
+
+// Sort state
+const sortOrder = ref<'newest' | 'oldest'>('newest')
 
 // Project invitation state
 const projectInvitations = ref<ProjectInvitation[]>([])
@@ -245,23 +381,15 @@ const loadNotifications = async (reset = true) => {
     if (reset) {
       loading.value = true
       notifications.value = []
-      currentLimit.value = 20
-    } else {
-      loadingMore.value = true
+      currentPage.value = 1
     }
 
     const response = await notificationService.getUserNotifications(
-      currentLimit.value,
+      1000, // Load all notifications for pagination
       unreadOnly.value
     )
 
-    if (reset) {
-      notifications.value = response.notifications
-    } else {
-      notifications.value.push(...response.notifications)
-    }
-
-    hasMore.value = response.notifications.length === currentLimit.value
+    notifications.value = response.notifications
 
     // Load stats
     const stats = await notificationService.getNotificationCount()
@@ -274,7 +402,6 @@ const loadNotifications = async (reset = true) => {
     console.error('Error loading notifications:', error)
   } finally {
     loading.value = false
-    loadingMore.value = false
   }
 }
 
@@ -290,31 +417,88 @@ const loadProjectInvitations = async () => {
   }
 }
 
-const loadMoreNotifications = async () => {
-  currentLimit.value += 20
-  await loadNotifications(false)
+// Pagination methods
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value && page !== currentPage.value) {
+    currentPage.value = page
+  }
 }
+
+const handleItemsPerPageChange = () => {
+  // Ensure current page is valid after changing items per page
+  const maxPage = Math.ceil(notifications.value.length / itemsPerPage.value)
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage
+  }
+  // Don't reload from server, just adjust page
+}
+
+// Computed properties for pagination
+const filteredNotifications = computed(() => {
+  return notifications.value
+})
+
+const paginatedNotifications = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filteredNotifications.value.slice(start, end)
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredNotifications.value.length / itemsPerPage.value)
+})
+
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  const pages = []
+
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) {
+      pages.push(i)
+    }
+  } else {
+    if (current <= 4) {
+      for (let i = 1; i <= 5; i++) {
+        pages.push(i)
+      }
+      pages.push('...')
+      pages.push(total)
+    } else if (current >= total - 3) {
+      pages.push(1)
+      pages.push('...')
+      for (let i = total - 4; i <= total; i++) {
+        pages.push(i)
+      }
+    } else {
+      pages.push(1)
+      pages.push('...')
+      for (let i = current - 1; i <= current + 1; i++) {
+        pages.push(i)
+      }
+      pages.push('...')
+      pages.push(total)
+    }
+  }
+
+  return pages
+})
 
 const markAsRead = async (notificationId: string) => {
   try {
     await notificationService.markAsRead(notificationId)
 
-    // Update local state
-    const notification = notifications.value.find(n => n.id === notificationId)
+    // Update local state immediately for better UX
+    const notification = notifications.value.find((n: Notification) => n.id === notificationId)
     if (notification) {
       notification.isRead = true
       notification.readAt = new Date().toISOString()
-    }
-
-    // Update stats
-    notificationStats.value.unread = Math.max(0, notificationStats.value.unread - 1)
-
-    // If we're showing unread only, remove it from the list
-    if (unreadOnly.value) {
-      notifications.value = notifications.value.filter(n => n.id !== notificationId)
+      notificationStats.value.unread = Math.max(0, notificationStats.value.unread - 1)
     }
 
     emitNotificationMarkedRead(notificationId)
+
+    // Don't reload from server - just use local state to avoid issues
 
   } catch (error) {
     console.error('Error marking notification as read:', error)
@@ -326,23 +510,18 @@ const markAllAsRead = async () => {
     markingAllAsRead.value = true
     await notificationService.markAllAsRead()
 
-    // Update local state
-    notifications.value.forEach(notification => {
+    // Update local state immediately for better UX
+    notifications.value.forEach((notification: Notification) => {
       if (!notification.isRead) {
         notification.isRead = true
         notification.readAt = new Date().toISOString()
       }
     })
-
-    // Update stats
     notificationStats.value.unread = 0
 
-    // If showing unread only, clear the list
-    if (unreadOnly.value) {
-      notifications.value = []
-    }
-
     emitAllNotificationsMarkedRead()
+
+    // Don't reload from server - just use local state to avoid issues
 
   } catch (error) {
     console.error('Error marking all notifications as read:', error)
@@ -352,24 +531,92 @@ const markAllAsRead = async () => {
 }
 
 const deleteNotification = async (notificationId: string) => {
+  // Find the notification to show in modal
+  const notification = notifications.value.find((n: Notification) => n.id === notificationId)
+  if (notification) {
+    notificationToDelete.value = notification
+    showDeleteModal.value = true
+  }
+}
+
+const confirmDelete = async () => {
+  if (!notificationToDelete.value) return
+
   try {
-    await notificationService.deleteNotification(notificationId)
+    await notificationService.deleteNotification(notificationToDelete.value.id)
 
-    // Remove from local state
-    const notification = notifications.value.find(n => n.id === notificationId)
-    notifications.value = notifications.value.filter(n => n.id !== notificationId)
+    // Update local state immediately for better UX
+    const index = notifications.value.findIndex((n: Notification) => n.id === notificationToDelete.value!.id)
+    if (index !== -1) {
+      const notification = notifications.value[index]
+      notifications.value.splice(index, 1)
 
-    // Update stats
-    notificationStats.value.total = Math.max(0, notificationStats.value.total - 1)
-    if (notification && !notification.isRead) {
-      notificationStats.value.unread = Math.max(0, notificationStats.value.unread - 1)
+      // Update stats
+      notificationStats.value.total = Math.max(0, notificationStats.value.total - 1)
+      if (notification && !notification.isRead) {
+        notificationStats.value.unread = Math.max(0, notificationStats.value.unread - 1)
+      }
     }
 
-    emitNotificationDeleted(notificationId)
+    emitNotificationDeleted(notificationToDelete.value.id)
 
-  } catch (error) {
+    // Handle pagination edge case
+    const maxPage = Math.ceil(notifications.value.length / itemsPerPage.value)
+    if (currentPage.value > maxPage && maxPage > 0) {
+      currentPage.value = maxPage
+    }
+
+    // If current page is empty and not first page, go to previous page
+    if (paginatedNotifications.value.length === 0 && currentPage.value > 1) {
+      currentPage.value--
+    }
+
+    // Show success notification
+    successMessage.value = 'Notification deleted successfully'
+    showSuccessNotification.value = true
+
+    // Auto-hide success notification after 3 seconds
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 3000)
+
+    // Close modal
+    closeDeleteModal()
+
+    // Don't reload from server - just use local state to avoid issues
+
+  } catch (error: any) {
     console.error('Error deleting notification:', error)
+
+    // Show error in success notification
+    if (error.response?.status === 404) {
+      successMessage.value = 'Notification not found. It may have been already deleted.'
+    } else if (error.response?.status === 500) {
+      successMessage.value = 'Server error. Please try again or contact support.'
+    } else {
+      successMessage.value = 'Error deleting notification. Please try again.'
+    }
+
+    showSuccessNotification.value = true
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 5000)
+
+    // Close modal
+    closeDeleteModal()
+
+    // Don't reload from server - just use local state to avoid issues
   }
+}
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false
+  notificationToDelete.value = null
+}
+
+const closeSuccessNotification = () => {
+  showSuccessNotification.value = false
+  successMessage.value = ''
 }
 
 const deleteAllNotifications = async () => {
@@ -381,11 +628,14 @@ const deleteAllNotifications = async () => {
     deletingAll.value = true
     await notificationService.deleteAllNotifications()
 
-    // Clear local state
+    // Update local state immediately for better UX
     notifications.value = []
     notificationStats.value = { total: 0, unread: 0 }
+    currentPage.value = 1
 
     emitAllNotificationsDeleted()
+
+    // Don't reload from server - just use local state to avoid issues
 
   } catch (error) {
     console.error('Error deleting all notifications:', error)
@@ -536,15 +786,11 @@ const formatTime = (dateString: string): string => {
   })
 }
 
-// Helper functions to check notification status
-// For now, we'll use a simple approach: if notification is read and is project_invite, consider it processed
 const isNotificationProcessed = (notification: Notification): boolean => {
   return notification.type === 'project_invite' && !!notification.isRead
 }
 
 const isNotificationAccepted = (notification: Notification): boolean => {
-  // For now, we'll assume all processed project_invite notifications are accepted
-  // In a real implementation, you might want to check against a separate status field
   return notification.type === 'project_invite' && !!notification.isRead
 }
 
@@ -593,11 +839,121 @@ const formatExpireTime = (expiresAt: string): string => {
 
 // Watchers
 watch(activeFilter, () => {
-  loadNotifications()
+  currentPage.value = 1
+  // Don't reload from server, just reset page
 })
+
+watch(itemsPerPage, () => {
+  currentPage.value = 1
+  // Don't reload from server, just reset page
+})
+
+// Watch for notifications changes to handle pagination edge cases
+watch(notifications, () => {
+  const maxPage = Math.ceil(notifications.value.length / itemsPerPage.value)
+  if (currentPage.value > maxPage && maxPage > 0) {
+    currentPage.value = maxPage
+  }
+}, { deep: true })
+
+// Real-time notification handling
+let unsubscribeNewNotification: (() => void) | null = null
+let unsubscribeGlobalNotification: (() => void) | null = null
+let unsubscribeNotificationDeleted: (() => void) | null = null
+
+const setupRealtimeNotifications = () => {
+  // Listen for new notifications
+  unsubscribeNewNotification = realtimeNotificationService.onNewNotification((notification: RealtimeNotification) => {
+    console.log('📨 Real-time new notification received:', notification)
+
+    // Add new notification to the top of the list
+    notifications.value.unshift(notification as any)
+
+    // Update stats
+    notificationStats.value.total++
+    // Assume new notifications are unread
+    notificationStats.value.unread++
+
+    // Show success notification
+    successMessage.value = `New notification: ${notification.message}`
+    showSuccessNotification.value = true
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 3000)
+  })
+
+  // Listen for global notifications
+  unsubscribeGlobalNotification = realtimeNotificationService.onGlobalNotification((notification: RealtimeNotification) => {
+    console.log('📢 Real-time global notification received:', notification)
+
+    // Add global notification to the top of the list
+    notifications.value.unshift(notification as any)
+
+    // Update stats
+    notificationStats.value.total++
+    // Assume global notifications are unread
+    notificationStats.value.unread++
+
+    // Show success notification
+    successMessage.value = `Global notification: ${notification.message}`
+    showSuccessNotification.value = true
+    setTimeout(() => {
+      showSuccessNotification.value = false
+    }, 3000)
+  })
+
+  // Listen for notification deletions
+  unsubscribeNotificationDeleted = realtimeNotificationService.onNotificationDeleted((event) => {
+    console.log('🗑️ Real-time notification deleted:', event)
+
+    // Remove notification from local state
+    const index = notifications.value.findIndex((n: any) => n.id === event.id)
+    if (index !== -1) {
+      const notification = notifications.value[index]
+      notifications.value.splice(index, 1)
+
+      // Update stats
+      notificationStats.value.total = Math.max(0, notificationStats.value.total - 1)
+      if (notification && !notification.isRead) {
+        notificationStats.value.unread = Math.max(0, notificationStats.value.unread - 1)
+      }
+
+      // Handle pagination edge case
+      const maxPage = Math.ceil(notifications.value.length / itemsPerPage.value)
+      if (currentPage.value > maxPage && maxPage > 0) {
+        currentPage.value = maxPage
+      }
+
+      // If current page is empty and not first page, go to previous page
+      if (paginatedNotifications.value.length === 0 && currentPage.value > 1) {
+        currentPage.value--
+      }
+    }
+  })
+}
+
+const cleanupRealtimeNotifications = () => {
+  if (unsubscribeNewNotification) {
+    unsubscribeNewNotification()
+    unsubscribeNewNotification = null
+  }
+  if (unsubscribeGlobalNotification) {
+    unsubscribeGlobalNotification()
+    unsubscribeGlobalNotification = null
+  }
+  if (unsubscribeNotificationDeleted) {
+    unsubscribeNotificationDeleted()
+    unsubscribeNotificationDeleted = null
+  }
+}
 
 onMounted(() => {
   loadNotifications()
+  setupRealtimeNotifications()
+})
+
+onUnmounted(() => {
+  cleanupRealtimeNotifications()
 })
 </script>
 
@@ -709,6 +1065,18 @@ onMounted(() => {
   color: #dc2626;
 }
 
+.stat-item.connection-status .stat-number {
+  color: #10b981;
+}
+
+.stat-item.connection-status.disconnected .stat-number {
+  color: #ef4444;
+}
+
+.stat-item.connection-status i {
+  font-size: 20px;
+}
+
 .stat-label {
   display: block;
   font-size: 12px;
@@ -771,6 +1139,40 @@ onMounted(() => {
 }
 
 .action-buttons {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sort-controls label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.sort-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.action-buttons-group {
   display: flex;
   gap: 8px;
 }
@@ -855,6 +1257,47 @@ onMounted(() => {
 .empty-container p {
   color: #64748b;
   margin: 0;
+}
+
+.empty-page-container {
+  text-align: center;
+  padding: 40px 20px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+  margin-bottom: 24px;
+}
+
+.empty-page-container h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.empty-page-container p {
+  color: #64748b;
+  margin: 0 0 16px 0;
+}
+
+.go-to-first-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.go-to-first-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
 }
 
 /* Notifications List */
@@ -1114,36 +1557,124 @@ onMounted(() => {
   border: 1px solid #fca5a5;
 }
 
-/* Load More */
-.load-more-container {
+/* Pagination */
+.pagination {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 32px;
   padding: 24px;
-  text-align: center;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid #e2e8f0;
 }
 
-.load-more-btn {
+
+
+.pagination-info {
+  text-align: center;
+}
+
+.pagination-text {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.filter-info {
+  color: #3b82f6;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.pagination-controls {
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 8px;
-  padding: 12px 24px;
-  background: #f8fafc;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 500;
-  margin: 0 auto;
 }
 
-.load-more-btn:hover:not(:disabled) {
-  background: #e2e8f0;
+.pagination-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
   transform: translateY(-1px);
 }
 
-.load-more-btn:disabled {
+.pagination-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 4px;
+}
+
+.page-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  min-width: 40px;
+  text-align: center;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.page-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.page-btn.active:hover {
+  background: #2563eb;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-settings {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.items-per-page-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.items-per-page-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 /* Responsive Design */
@@ -1194,6 +1725,16 @@ onMounted(() => {
   }
 
   .action-buttons {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .sort-controls {
+    justify-content: center;
+  }
+
+  .action-buttons-group {
     justify-content: center;
   }
 
@@ -1203,6 +1744,240 @@ onMounted(() => {
 
   .notification-actions {
     margin-left: 8px;
+  }
+
+  .pagination-controls {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .pagination-btn {
+    min-width: 36px;
+    padding: 6px 10px;
+  }
+
+  .page-btn {
+    min-width: 36px;
+    padding: 6px 10px;
+  }
+
+  .pagination-settings {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-body p {
+  margin: 0 0 16px 0;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.notification-preview {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 0;
+  font-style: italic;
+  color: #6b7280;
+  max-height: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 24px 24px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.modal-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.modal-btn.secondary {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+}
+
+.modal-btn.secondary:hover {
+  background: #e5e7eb;
+}
+
+.modal-btn.danger {
+  background: #dc2626;
+  color: white;
+}
+
+.modal-btn.danger:hover {
+  background: #b91c1c;
+}
+
+/* Success Notification */
+.success-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #10b981;
+  color: white;
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 400px;
+  animation: notificationSlideIn 0.3s ease-out;
+}
+
+@keyframes notificationSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.success-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.success-content i {
+  font-size: 18px;
+  color: #d1fae5;
+}
+
+.success-close-btn {
+  background: none;
+  border: none;
+  color: #d1fae5;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 16px;
+}
+
+.success-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* Responsive Modal */
+@media (max-width: 768px) {
+  .modal-content {
+    margin: 20px;
+    max-height: calc(100vh - 40px);
+  }
+
+  .modal-footer {
+    flex-direction: column;
+  }
+
+  .modal-btn {
+    justify-content: center;
+  }
+
+  .success-notification {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
   }
 }
 </style>

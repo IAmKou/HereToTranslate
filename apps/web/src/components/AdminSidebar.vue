@@ -55,14 +55,15 @@
           <span class="material-icons">history</span>
           <span class="menu-text">Transaction History</span>
         </router-link>
+
+        <router-link to="/admin/notifications" class="menu-item" :title="isCollapsed ? 'Notification Management' : ''">
+          <span class="material-icons">notifications</span>
+          <span class="menu-text">Notifications</span>
+        </router-link>
       </div>
     </nav>
 
     <div class="sidebar-footer">
-      <router-link to="/userprofile" class="menu-item profile-link" :title="isCollapsed ? 'Profile' : ''">
-        <span class="material-icons">person</span>
-        <span class="menu-text">Profile</span>
-      </router-link>
       <router-link to="/help" class="menu-item" :title="isCollapsed ? 'Help & Support' : ''">
         <span class="material-icons">help_outline</span>
         <span class="menu-text">Help & Support</span>

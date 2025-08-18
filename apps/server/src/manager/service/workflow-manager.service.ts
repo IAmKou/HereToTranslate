@@ -256,9 +256,19 @@ export class WorkflowManagerService {
         id: workflow.id.toString(),
         name: workflow.name,
         description: workflow.description,
+        visualizationData: workflow.visualizationData,
       },
       nodes,
       edges,
     };
+  }
+
+  async updateWorkflowVisualization(workflowId: string, visualizationData: any) {
+    const workflow = await this.workflowRepository.findOneOrFail({
+      where: { id: BigInt(workflowId) },
+    });
+
+    workflow.visualizationData = visualizationData;
+    return await this.workflowRepository.save(workflow);
   }
 }

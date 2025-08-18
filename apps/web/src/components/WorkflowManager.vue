@@ -15,6 +15,8 @@
       </div>
     </div>
 
+
+
     <!-- Workflow List -->
     <div class="workflow-list" v-if="viewMode === 'list'">
       <div v-if="loading" class="loading-state">
@@ -44,8 +46,7 @@
               <p v-if="workflow.description">{{ workflow.description }}</p>
               <div class="workflow-badges">
                 <span v-if="workflow.isDefault" class="badge default">Default</span>
-                <span v-if="workflow.isActive" class="badge active">Active</span>
-                <span v-else class="badge inactive">Inactive</span>
+                <span v-if="workflow.isDefault" class="badge active">Active</span>
               </div>
             </div>
             <div class="workflow-actions">
@@ -86,10 +87,6 @@
               <span class="stat-label">Transitions</span>
               <span class="stat-value">{{ getWorkflowTransitionsCount(workflow.id) }}</span>
             </div>
-            <div class="stat">
-              <span class="stat-label">Tasks using</span>
-              <span class="stat-value">{{ getTasksUsingWorkflow(workflow.id) }}</span>
-            </div>
           </div>
         </div>
       </div>
@@ -103,15 +100,15 @@
           Back
         </button>
         <h3>Manage Transitions - {{ selectedWorkflow?.name }}</h3>
-        <button class="btn-primary" @click="showCreateTransition = true">
-          <i class="pi pi-plus"></i>
-          Add Transition
-        </button>
       </div>
 
       <div class="transitions-content">
         <div class="transitions-header">
           <h4>Current Transitions</h4>
+          <button class="btn-primary" @click="showCreateTransition = true">
+            <i class="pi pi-plus"></i>
+            Add Transition
+          </button>
         </div>
 
         <div class="transitions-list">
@@ -127,9 +124,7 @@
                 <i class="pi pi-arrow-right"></i>
                 <span class="to-status">{{ transition.toStatus.name }}</span>
               </div>
-              <div class="transition-conditions">
-                <span class="condition-badge">{{ transition.conditionType }}</span>
-              </div>
+
             </div>
 
             <div class="transition-actions">
@@ -143,50 +138,83 @@
           </div>
         </div>
 
-        <!-- Inline Create/Edit Transition Form -->
-        <div v-if="showCreateTransition || showEditTransition" class="transition-form">
-          <h4>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h4>
-          <form @submit.prevent="saveTransition" class="form">
-            <div class="form-group">
-              <label for="transitionName">Name *</label>
-              <input id="transitionName" v-model="transitionForm.name" type="text" required placeholder="Enter transition name" />
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="fromStatus">From Status *</label>
-                <select id="fromStatus" v-model="transitionForm.fromStatusId" required>
-                  <option value="">Select from status</option>
-                  <option v-for="status in availableStatuses" :key="status.id" :value="status.id">{{ status.name }}</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="toStatus">To Status *</label>
-                <select id="toStatus" v-model="transitionForm.toStatusId" required>
-                  <option value="">Select to status</option>
-                  <option v-for="status in availableStatuses" :key="status.id" :value="status.id">{{ status.name }}</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="conditionType">Condition Type</label>
-              <select id="conditionType" v-model="transitionForm.conditionType">
-                <option value="anyone">Anyone</option>
-                <option value="role">Role-based</option>
-                <option value="user">User-specific</option>
-                <option value="group">Group-based</option>
-                <option value="assignee_only">Assignee Only</option>
-                <option value="creator_only">Creator Only</option>
-              </select>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn-secondary" @click="closeTransitionForm">Cancel</button>
-              <button type="submit" class="btn-primary" :disabled="savingTransition">
-                <i v-if="savingTransition" class="pi pi-spin pi-spinner"></i>
-                {{ showEditTransition ? 'Update' : 'Create' }}
-              </button>
-            </div>
-          </form>
+
+      </div>
+    </div>
+
+    <!-- Workflow Visualization View -->
+    <div v-else-if="viewMode === 'visualization'" class="visualization-page">
+      <div class="visualization-page-header">
+        <button class="btn-secondary" @click="backToList">
+          <i class="pi pi-arrow-left"></i>
+          Back
+        </button>
+        <h3>Workflow Visualization - {{ selectedWorkflow?.name }}</h3>
+        <div class="header-actions">
+          <button class="btn-secondary" @click="manageTransitionsFromVisualization">
+            <i class="pi pi-cog"></i>
+            Manage Transitions
+          </button>
+          <button class="btn-primary" @click="editWorkflowFromVisualization">
+            <i class="pi pi-pencil"></i>
+            Edit Workflow
+          </button>
         </div>
+      </div>
+
+      <div class="visualization-content">
+        <div v-if="workflowVisualizationLoading" class="loading-state">
+          <i class="pi pi-spin pi-spinner"></i>
+          Loading workflow visualization...
+        </div>
+
+        <div v-else-if="taskStatuses.length > 0" class="workflow-diagram">
+          <!-- New Jira-style Workflow Visualization -->
+          <div class="jira-workflow-diagram">
+            <div class="workflow-canvas-container">
+              <div v-if="workflowNodes.length === 0" class="loading-state">
+                <i class="pi pi-spin pi-spinner"></i>
+                Loading workflow visualization...
+              </div>
+              <WorkflowCanvasVueFlow
+                v-else
+                :nodes="workflowNodes"
+                :edges="workflowEdges"
+                :selected-node="selectedWorkflowNode"
+                @node-select="selectWorkflowNode"
+                @viewport-change="updateWorkflowViewport"
+                @nodes-update="handleNodesUpdate"
+              />
+            </div>
+
+            <!-- Transitions Panel -->
+            <div class="transitions-panel">
+              <h4>Workflow Transitions</h4>
+              <div class="transitions-grid">
+                <div
+                  v-for="transition in workflowTransitions.filter(t => t && t.fromStatus && t.toStatus)"
+                  :key="transition.id"
+                  class="transition-card"
+                >
+                  <div class="transition-header">
+                    <span class="from-status">{{ transition.fromStatus.name }}</span>
+                    <span class="arrow">→</span>
+                    <span class="to-status">{{ transition.toStatus.name }}</span>
+                  </div>
+                  <div class="transition-name">{{ transition.name }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="empty-state">
+          <div class="empty-icon">📊</div>
+          <h3>No statuses available</h3>
+          <p>Create some task statuses to visualize the workflow</p>
+        </div>
+
+
       </div>
     </div>
 
@@ -289,8 +317,6 @@
                     <div class="status-name">{{ status.name }}</div>
                     <div class="status-description">{{ status.description }}</div>
                     <div class="status-badges">
-                      <span v-if="status.isStartStatus" class="badge start">Start</span>
-                      <span v-if="status.isDefault" class="badge default">Default</span>
                       <span v-if="!status.isActive" class="badge inactive">Inactive</span>
                     </div>
                   </div>
@@ -321,7 +347,6 @@
                     <div class="status-name">{{ status.name }}</div>
                     <div class="status-description">{{ status.description }}</div>
                     <div class="status-badges">
-                      <span v-if="status.isDefault" class="badge default">Default</span>
                       <span v-if="!status.isActive" class="badge inactive">Inactive</span>
                     </div>
                   </div>
@@ -353,10 +378,37 @@
                     <div class="status-name">{{ status.name }}</div>
                     <div class="status-description">{{ status.description }}</div>
                     <div class="status-badges">
-                      <span v-if="status.isEndStatus" class="badge end">End</span>
-                      <span v-if="status.isResolved" class="badge resolved">Resolved</span>
-                      <span v-if="status.isClosed" class="badge closed">Closed</span>
-                      <span v-if="status.isDefault" class="badge default">Default</span>
+                      <span v-if="!status.isActive" class="badge inactive">Inactive</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="status-actions">
+                  <button class="btn-icon" @click="editStatus(status)">
+                    <i class="pi pi-pencil"></i>
+                  </button>
+                  <button class="btn-icon danger" @click="deleteStatus(status)">
+                    <i class="pi pi-trash"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="category-section">
+            <h4>Closed</h4>
+            <div class="status-list">
+              <div
+                v-for="status in getStatusesByCategory('closed')"
+                :key="status.id"
+                class="status-item"
+                :class="{ 'end-status': status.isEndStatus, 'resolved-status': status.isResolved }"
+              >
+                <div class="status-info">
+                  <div class="status-color" :style="{ backgroundColor: status.color }"></div>
+                  <div class="status-details">
+                    <div class="status-name">{{ status.name }}</div>
+                    <div class="status-description">{{ status.description }}</div>
+                    <div class="status-badges">
                       <span v-if="!status.isActive" class="badge inactive">Inactive</span>
                     </div>
                   </div>
@@ -392,14 +444,19 @@
 
           <form @submit.prevent="saveWorkflow" class="workflow-form">
             <div class="form-group">
-              <label for="workflowName">Name *</label>
+              <label for="workflowName">Name <span class="required">*</span></label>
               <input
                 id="workflowName"
                 v-model="workflowForm.name"
                 type="text"
                 required
                 placeholder="Enter workflow name"
+                maxlength="50"
+                @input="validateWorkflowForm"
               >
+              <div v-if="workflowNameError" class="form-error">
+                {{ workflowNameError }}
+              </div>
             </div>
 
             <div class="form-group">
@@ -427,7 +484,7 @@
               <button type="button" class="btn-secondary" @click="closeWorkflowModal">
                 Cancel
               </button>
-              <button type="submit" class="btn-primary" :disabled="saving">
+              <button type="submit" class="btn-primary" :disabled="saving || !!workflowNameError || !workflowForm.name.trim()">
                 <i v-if="saving" class="pi pi-spin pi-spinner"></i>
                 {{ showEditWorkflow ? 'Update' : 'Create' }}
               </button>
@@ -437,93 +494,7 @@
       </div>
     </Teleport>
 
-    <!-- Workflow Visualization Modal -->
-    <Teleport to="body">
-      <div v-if="showWorkflowView" class="modal-overlay">
-        <div class="modal workflow-view-modal">
-          <div class="modal-header">
-            <h3>{{ selectedWorkflow?.name }} - Workflow Visualization</h3>
-            <button class="btn-icon" @click="closeWorkflowView" data-close="true">
 
-            </button>
-          </div>
-
-          <div class="workflow-visualization">
-            <div v-if="workflowVisualizationLoading" class="loading-state">
-              <i class="pi pi-spin pi-spinner"></i>
-              Loading workflow visualization...
-            </div>
-
-            <div v-else-if="workflowVisualization" class="workflow-diagram">
-              <!-- Status Nodes -->
-              <div class="status-nodes">
-                <div
-                  v-for="node in workflowVisualization.nodes"
-                  :key="node.id"
-                  class="status-node"
-                  :style="{
-                  backgroundColor: node.color || '#e0e0e0',
-                  left: `${(node.id.charCodeAt(0) % 5) * 20 + 10}%`
-                }"
-                >
-                  <div class="node-content">
-                    <div class="node-name">{{ node.name }}</div>
-                    <div class="node-type">{{ node.type }}</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Transitions -->
-              <svg class="transitions-svg">
-                <defs>
-                  <marker
-                    id="arrowhead"
-                    markerWidth="10"
-                    markerHeight="7"
-                    refX="9"
-                    refY="3.5"
-                    orient="auto"
-                  >
-                    <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
-                  </marker>
-                </defs>
-
-                <g v-for="edge in workflowVisualization.edges" :key="edge.id">
-                  <line
-                    :x1="50"
-                    :y1="50"
-                    :x2="150"
-                    :y2="50"
-                    stroke="#666"
-                    stroke-width="2"
-                    marker-end="url(#arrowhead)"
-                  />
-                  <text
-                    :x="100"
-                    :y="45"
-                    text-anchor="middle"
-                    class="transition-label"
-                  >
-                    {{ edge.name }}
-                  </text>
-                </g>
-              </svg>
-            </div>
-
-            <div class="workflow-actions">
-              <button class="btn-secondary" @click="manageTransitionsFromModal">
-                <i class="pi pi-cog"></i>
-                Manage Transitions
-              </button>
-              <button class="btn-primary" @click="editWorkflowFromModal">
-                <i class="pi pi-pencil"></i>
-                Edit Workflow
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <!-- Transitions Management Modal -->
     <Teleport to="body">
@@ -558,9 +529,7 @@
                     <i class="pi pi-arrow-right"></i>
                     <span class="to-status">{{ transition.toStatus.name }}</span>
                   </div>
-                  <div class="transition-conditions">
-                    <span class="condition-badge">{{ transition.conditionType }}</span>
-                  </div>
+
                 </div>
 
                 <div class="transition-actions">
@@ -575,75 +544,7 @@
             </div>
           </div>
 
-          <!-- Create/Edit Transition Form -->
-          <div v-if="showCreateTransition || showEditTransition" class="transition-form">
-            <h4>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h4>
 
-            <form @submit.prevent="saveTransition" class="form">
-              <div class="form-group">
-                <label for="transitionName">Name *</label>
-                <input
-                  id="transitionName"
-                  v-model="transitionForm.name"
-                  type="text"
-                  required
-                  placeholder="Enter transition name"
-                >
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="fromStatus">From Status *</label>
-                  <select id="fromStatus" v-model="transitionForm.fromStatusId" required>
-                    <option value="">Select from status</option>
-                    <option
-                      v-for="status in availableStatuses"
-                      :key="status.id"
-                      :value="status.id"
-                    >
-                      {{ status.name }}
-                    </option>
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label for="toStatus">To Status *</label>
-                  <select id="toStatus" v-model="transitionForm.toStatusId" required>
-                    <option value="">Select to status</option>
-                    <option
-                      v-for="status in availableStatuses"
-                      :key="status.id"
-                      :value="status.id"
-                    >
-                      {{ status.name }}
-                    </option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="conditionType">Condition Type</label>
-                <select id="conditionType" v-model="transitionForm.conditionType">
-                  <option value="anyone">Anyone</option>
-                  <option value="role">Role-based</option>
-                  <option value="user">User-specific</option>
-                  <option value="group">Group-based</option>
-                  <option value="assignee_only">Assignee Only</option>
-                  <option value="creator_only">Creator Only</option>
-                </select>
-              </div>
-
-              <div class="form-actions">
-                <button type="button" class="btn-secondary" @click="closeTransitionForm">
-                  Cancel
-                </button>
-                <button type="submit" class="btn-primary" :disabled="savingTransition">
-                  <i v-if="savingTransition" class="pi pi-spin pi-spinner"></i>
-                  {{ showEditTransition ? 'Update' : 'Create' }}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       </div>
     </Teleport>
@@ -692,7 +593,7 @@
                 <div class="form-group">
                   <label for="statusColor">Color *</label>
                   <div class="color-input-wrapper">
-                    <div class="color-preview" :style="{ backgroundColor: statusForm.color }" @click="$refs.colorInput.click()"></div>
+                    <div class="color-preview" :style="{ backgroundColor: statusForm.color }" @click="($refs.colorInput as HTMLInputElement)?.click()"></div>
                     <input ref="colorInput" id="statusColor" v-model="statusForm.color" type="color" required class="hidden-color-input" />
                     <span class="color-value">{{ statusForm.color }}</span>
                   </div>
@@ -703,37 +604,12 @@
                     <option value="todo">To Do</option>
                     <option value="in_progress">In Progress</option>
                     <option value="done">Done</option>
+                    <option value="closed">Closed</option>
                   </select>
                 </div>
               </div>
 
-              <div class="form-checkboxes">
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isDefault" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Set as default status
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isStartStatus" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Set as start status
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isEndStatus" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Set as end status
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isResolved" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Mark as resolved
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isClosed" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Mark as closed
-                </label>
-              </div>
+
               <p v-if="statusValidationMessage" class="form-error">{{ statusValidationMessage }}</p>
             </form>
           </div>
@@ -755,35 +631,78 @@
       </div>
     </Teleport>
 
-    <!-- Default Statuses Confirmation Modal -->
+
+
+    <!-- Create/Edit Transition Modal -->
     <Teleport to="body">
-      <div v-if="showDefaultStatusesModal" class="modal-overlay">
+      <div v-if="showCreateTransition || showEditTransition" class="modal-overlay">
         <div class="modal-content">
           <div class="modal-header">
-            <h3>Create Default Statuses</h3>
+            <h3>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h3>
+            <button class="btn-icon" @click="closeTransitionForm" data-close="true">
+              <i class="pi pi-times"></i>
+            </button>
           </div>
 
           <div class="modal-body">
-            <div class="default-statuses-content">
-              <div class="warning-icon">
-                <i class="pi pi-exclamation-triangle"></i>
+            <form @submit.prevent="saveTransition" class="form">
+              <div class="form-group">
+                <label for="transitionName">Name *</label>
+                <input
+                  id="transitionName"
+                  v-model="transitionForm.name"
+                  type="text"
+                  required
+                  placeholder="Enter transition name"
+                  maxlength="50"
+                  @input="validateTransitionForm"
+                />
+                <div v-if="transitionNameError" class="form-error">{{ transitionNameError }}</div>
+                <div class="char-counter">{{ transitionForm.name.length }}/50</div>
               </div>
-              <h4>Default statuses already exist</h4>
-              <p>Do you want to create them again? This may result in duplicates.</p>
-            </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="fromStatus">From Status *</label>
+                  <select id="fromStatus" v-model="transitionForm.fromStatusId" required>
+                    <option value="">Select from status</option>
+                    <option
+                      v-for="status in availableStatuses"
+                      :key="status.id"
+                      :value="status.id"
+                    >
+                      {{ status.name }}
+                    </option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="toStatus">To Status *</label>
+                  <select id="toStatus" v-model="transitionForm.toStatusId" required>
+                    <option value="">Select to status</option>
+                    <option
+                      v-for="status in availableStatuses"
+                      :key="status.id"
+                      :value="status.id"
+                    >
+                      {{ status.name }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+            </form>
           </div>
 
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="closeDefaultStatusesModal">
+            <button class="btn btn-secondary" @click="closeTransitionForm">
               Cancel
             </button>
             <button
               class="btn btn-primary"
-              @click="confirmCreateDefaultStatuses"
-              :disabled="creatingDefaultStatuses"
+              @click="saveTransition"
+              :disabled="savingTransition || !!transitionNameError || !transitionForm.name.trim()"
             >
-              <span v-if="creatingDefaultStatuses" class="loading-spinner"></span>
-              {{ creatingDefaultStatuses ? 'Creating...' : 'Create Default Statuses' }}
+              <span v-if="savingTransition" class="loading-spinner"></span>
+              {{ showEditTransition ? 'Update' : 'Create' }}
             </button>
           </div>
         </div>
@@ -793,11 +712,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
 import { Teleport } from 'vue';
 import { StatusType, TaskStatus } from '../types/status';
+import WorkflowCanvasVueFlow from './WorkflowCanvasVueFlow.vue';
+import type { WorkflowNode, WorkflowEdge } from '../types/workflow';
+// Mermaid.js will be loaded dynamically
+let mermaid: any = null;
+
 
 interface Workflow {
   id: string;
@@ -868,12 +792,12 @@ const savingTransition = ref(false);
 const savingStatus = ref(false);
 // Map to cache transitions count per workflow
 const transitionsCountByWorkflow = ref<Record<string, number>>({});
-const viewMode = ref<'list' | 'transitions' | 'status'>('list');
+const viewMode = ref<'list' | 'transitions' | 'status' | 'visualization'>('list');
 
 // Modal states
 const showCreateWorkflow = ref(false);
 const showEditWorkflow = ref(false);
-const showWorkflowView = ref(false);
+
 const showTransitionsModal = ref(false);
 const showCreateTransition = ref(false);
 const showEditTransition = ref(false);
@@ -887,7 +811,7 @@ const movingTasks = ref(false);
 const selectedNewStatus = ref<string>('');
 
 // Default statuses confirmation modal
-const showDefaultStatusesModal = ref(false);
+
 const creatingDefaultStatuses = ref(false);
 
 // Selected items
@@ -896,6 +820,18 @@ const selectedTransition = ref<WorkflowTransition | null>(null);
 const selectedStatus = ref<TaskStatus | null>(null);
 const workflowVisualization = ref<WorkflowVisualization | null>(null);
 const workflowVisualizationLoading = ref(false);
+const showTransitionLabels = ref(false);
+const zoomLevel = ref(1);
+const arrowsVisible = ref(true);
+
+// Mermaid.js workflow diagram
+const mermaidDiagramDefinition = ref('');
+const mermaidKey = ref(0);
+
+// New workflow visualization properties
+const workflowNodes = ref<WorkflowNode[]>([]);
+const workflowEdges = ref<WorkflowEdge[]>([]);
+const selectedWorkflowNode = ref<WorkflowNode | null>(null);
 
 // Forms
 const workflowForm = ref({
@@ -908,7 +844,6 @@ const transitionForm = ref({
   name: '',
   fromStatusId: '',
   toStatusId: '',
-  conditionType: 'anyone',
   conditionData: null
 });
 
@@ -916,42 +851,19 @@ const statusForm = ref({
   name: '',
   description: '',
   color: '#42526E',
-  type: StatusType.TODO,
-
-  isDefault: false,
-  isStartStatus: false,
-  isEndStatus: false,
-  isResolved: false,
-  isClosed: false,
+  type: StatusType.TODO
 });
 
 // Validation for status form
 const statusValidationMessage = computed(() => {
-  const start = statusForm.value.isStartStatus;
-  const end = statusForm.value.isEndStatus;
-
-  if (start && end) return 'A status cannot be both start and end.';
-
-  // Check for duplicate name
-  const currentName = statusForm.value.name.trim().toLowerCase();
-  if (currentName) {
-    const existingStatus = taskStatuses.value.find((status: TaskStatus) => {
-      // Skip current status when editing
-      if (showEditStatus.value && selectedStatus.value && status.id === selectedStatus.value.id) {
-        return false;
-      }
-      return status.name.toLowerCase() === currentName;
-    });
-
-
-  }
-
   return '';
 });
 
 // Character limit validation
 const nameError = ref('');
 const descriptionError = ref('');
+const transitionNameError = ref('');
+const workflowNameError = ref('');
 
 function validateStatusForm() {
   // Reset errors
@@ -986,6 +898,69 @@ function validateStatusForm() {
 
   // Return true if no errors
   return !nameError.value && !descriptionError.value;
+}
+
+// Validation for transition form
+function validateTransitionForm() {
+  // Reset errors
+  transitionNameError.value = '';
+
+  // Validate name length
+  if (transitionForm.value.name.length > 50) {
+    transitionNameError.value = 'Name cannot exceed 50 characters';
+    return false;
+  }
+
+  // Validate duplicate name
+  const currentName = transitionForm.value.name.trim().toLowerCase();
+  if (currentName) {
+    const existingTransition = workflowTransitions.value.find((transition: WorkflowTransition) => {
+      // Skip current transition when editing
+      if (showEditTransition.value && selectedTransition.value && transition.id === selectedTransition.value.id) {
+        return false;
+      }
+      return transition.name.toLowerCase() === currentName;
+    });
+
+    if (existingTransition) {
+      transitionNameError.value = `A transition with this name already exists`;
+      return false;
+    }
+  }
+
+  // Return true if no errors
+  return !transitionNameError.value;
+}
+
+// Validation for workflow form
+function validateWorkflowForm() {
+  // Reset errors
+  workflowNameError.value = '';
+
+  // Validate name length
+  if (workflowForm.value.name.length > 50) {
+    workflowNameError.value = 'Name cannot exceed 50 characters';
+    return false;
+  }
+
+  // Validate duplicate name
+  const currentName = workflowForm.value.name.trim().toLowerCase();
+  if (currentName) {
+    const existingWorkflow = workflows.value.find((workflow: Workflow) => {
+      // Skip current workflow when editing
+      if (showEditWorkflow.value && selectedWorkflow.value && workflow.id === selectedWorkflow.value.id) {
+        return false;
+      }
+      return workflow.name.toLowerCase() === currentName;
+    });
+
+    if (existingWorkflow) {
+      workflowNameError.value = 'A workflow with this name already exists';
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // Computed
@@ -1029,6 +1004,7 @@ async function loadTaskStatuses() {
   try {
     const { data } = await axiosInstance.get(`/task-statuses/project/${props.projectId}`);
     taskStatuses.value = data;
+    console.log('Loaded task statuses:', data); // Debug log
   } catch (error) {
     console.error('Error loading task statuses:', error);
   }
@@ -1038,11 +1014,17 @@ async function loadWorkflowTransitions(workflowId: string) {
   try {
     const { data } = await axiosInstance.get(`/workflows/${workflowId}/transitions`);
     workflowTransitions.value = data;
+    console.log('Loaded transitions:', data); // Debug log
     // Also refresh count for the card
     transitionsCountByWorkflow.value = {
       ...transitionsCountByWorkflow.value,
       [workflowId]: Array.isArray(data) ? data.length : 0,
     };
+
+    // Force render Mermaid diagram after transitions load
+    if (taskStatuses.value.length > 0) {
+      await regenerateMermaidDiagram();
+    }
   } catch (error) {
     console.error('Error loading workflow transitions:', error);
   }
@@ -1070,10 +1052,7 @@ function getWorkflowTransitionsCount(workflowId: string): number {
   return transitionsCountByWorkflow.value[workflowId] ?? 0;
 }
 
-function getTasksUsingWorkflow(workflowId: string): number {
-  // This would need to be implemented based on your task data structure
-  return 0; // Placeholder
-}
+
 
 
 
@@ -1084,6 +1063,8 @@ function createWorkflow() {
     description: '',
     isDefault: false
   };
+  // Reset validation errors
+  workflowNameError.value = '';
   showCreateWorkflow.value = true;
 }
 
@@ -1094,10 +1075,17 @@ function editWorkflow(workflow: Workflow) {
     isDefault: workflow.isDefault
   };
   selectedWorkflow.value = workflow;
+  // Reset validation errors
+  workflowNameError.value = '';
   showEditWorkflow.value = true;
 }
 
 async function saveWorkflow() {
+  // Validate form before saving
+  if (!validateWorkflowForm()) {
+    return;
+  }
+
   saving.value = true;
   try {
     if (showEditWorkflow.value && selectedWorkflow.value) {
@@ -1158,10 +1146,198 @@ async function deleteWorkflow(workflow: Workflow) {
   }
 }
 
-function viewWorkflow(workflow: Workflow) {
+async function viewWorkflow(workflow: Workflow) {
+  console.log('Viewing workflow:', workflow);
   selectedWorkflow.value = workflow;
-  showWorkflowView.value = true;
-  loadWorkflowVisualization(workflow.id);
+  viewMode.value = 'visualization';
+
+  try {
+    // Load data in parallel for better performance
+    console.log('Loading data for workflow:', workflow.id);
+
+    const [visualizationResult, transitionsResult, statusesResult] = await Promise.allSettled([
+      loadWorkflowVisualization(workflow.id),
+      loadWorkflowTransitions(workflow.id),
+      loadTaskStatuses()
+    ]);
+
+    console.log('Data loading results:', {
+      visualization: visualizationResult.status,
+      transitions: transitionsResult.status,
+      statuses: statusesResult.status
+    });
+
+    // Generate workflow nodes and edges for visualization after data is loaded
+    await generateWorkflowVisualization(workflow.id);
+  } catch (error) {
+    console.error('Error in viewWorkflow:', error);
+    // Still try to generate visualization with whatever data we have
+    await generateWorkflowVisualization(workflow.id);
+  }
+}
+
+// New workflow visualization methods
+async function generateWorkflowVisualization(workflowId: string) {
+  console.log('Generating workflow visualization for:', workflowId);
+  console.log('Task statuses:', taskStatuses.value);
+  console.log('Workflow transitions:', workflowTransitions.value);
+
+  // Try to load saved visualization data first
+  let savedVisualizationData = null;
+  try {
+    const response = await axiosInstance.get(`/workflows/${workflowId}/visualization`);
+    savedVisualizationData = response.data.workflow?.visualizationData;
+    console.log('Loaded saved visualization data:', savedVisualizationData);
+  } catch (error) {
+    console.log('No saved visualization data found, using default positions');
+  }
+
+  // Convert task statuses to workflow nodes
+  console.log('Task statuses for nodes:', taskStatuses.value);
+  if (taskStatuses.value.length > 0) {
+    console.log('Creating nodes from real task statuses');
+
+    // Always start with a START node (black, fixed)
+    const startNode: WorkflowNode = {
+      id: 'start',
+      type: 'start',
+      position: savedVisualizationData?.nodes?.find((n: any) => n.id === 'start')?.position || { x: 100, y: 200 },
+      data: {
+        label: 'START',
+        status: null,
+        category: 'start'
+      },
+      style: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        fillColor: '#000000',
+        strokeColor: '#000000',
+        strokeWidth: 2
+      }
+    };
+
+    // Create status nodes with user-defined colors
+    const otherNodes: WorkflowNode[] = taskStatuses.value.map((status, index) => {
+      console.log('Processing status:', status);
+      const savedNode = savedVisualizationData?.nodes?.find((n: any) => n.id === status.id);
+      return {
+        id: status.id,
+        type: 'status',
+        position: savedNode?.position || { x: 250 + index * 180, y: 200 },
+        data: {
+          label: status.name,
+          status: status,
+          category: status.type
+        },
+        style: {
+          width: 140,
+          height: 60,
+          borderRadius: 8,
+          fillColor: status.color || '#42526E',
+          strokeColor: '#dfe1e6',
+          strokeWidth: 1
+        }
+      };
+    });
+
+    // Combine START node with other nodes
+    workflowNodes.value = [startNode, ...otherNodes];
+  } else {
+    console.log('No task statuses found, creating empty nodes array');
+    workflowNodes.value = [];
+  }
+
+  // Convert transitions to workflow edges
+  console.log('Workflow transitions for edges:', workflowTransitions.value);
+  console.log('Looking for workflow ID:', workflowId);
+
+  if (workflowTransitions.value.length > 0) {
+    console.log('Creating edges from real transitions');
+    const filteredTransitions = workflowTransitions.value.filter(t => {
+      console.log('Checking transition:', t);
+      console.log('t.workflow:', t.workflow);
+      console.log('t.workflow.id:', t.workflow?.id);
+      console.log('workflowId:', workflowId);
+      console.log('t.fromStatus:', t.fromStatus);
+      console.log('t.toStatus:', t.toStatus);
+      // Since workflow property is undefined, just check if fromStatus and toStatus exist
+      return t.fromStatus && t.toStatus;
+    });
+
+    console.log('Filtered transitions:', filteredTransitions);
+
+    const transitionEdges: WorkflowEdge[] = filteredTransitions.map((transition, index) => ({
+      id: `edge-${transition.id}-${index}`, // Unique ID for each edge
+      source: transition.fromStatus.id,
+      target: transition.toStatus.id,
+      label: transition.name || 'Any', // Use transition name if available
+      type: 'default',
+      style: {
+        strokeColor: '#6b778c',
+        strokeWidth: 2
+      }
+    }));
+
+    // Add START edge to first status if we have task statuses
+    if (taskStatuses.value.length > 0) {
+      const firstStatus = taskStatuses.value[0];
+      const startEdge: WorkflowEdge = {
+        id: 'start-to-first',
+        source: 'start',
+        target: firstStatus.id,
+        label: 'Start',
+        type: 'default',
+        style: {
+          strokeColor: '#6b778c',
+          strokeWidth: 2
+        }
+      };
+      workflowEdges.value = [startEdge, ...transitionEdges];
+    } else {
+      workflowEdges.value = transitionEdges;
+    }
+  } else {
+    console.log('No transitions found, creating empty edges array');
+    workflowEdges.value = [];
+  }
+
+  console.log('Generated nodes:', workflowNodes.value);
+  console.log('Generated edges:', workflowEdges.value);
+}
+
+function selectWorkflowNode(node: WorkflowNode | null) {
+  selectedWorkflowNode.value = node;
+}
+
+function updateWorkflowViewport(viewport: any) {
+  // Handle viewport changes if needed
+  console.log('Viewport updated:', viewport);
+}
+
+async function handleNodesUpdate(updatedNodes: WorkflowNode[]) {
+  workflowNodes.value = updatedNodes;
+
+  // Save visualization data to database
+  if (selectedWorkflow.value) {
+    try {
+      const visualizationData = {
+        nodes: updatedNodes.map(node => ({
+          id: node.id,
+          position: node.position,
+          type: node.type,
+          data: node.data
+        })),
+        edges: workflowEdges.value,
+        lastUpdated: new Date().toISOString()
+      };
+
+      await axiosInstance.put(`/workflows/${selectedWorkflow.value.id}/visualization`, visualizationData);
+      console.log('Visualization data saved successfully');
+    } catch (error) {
+      console.error('Failed to save visualization data:', error);
+    }
+  }
 }
 
 function openTransitionsPage(workflow: Workflow) {
@@ -1179,6 +1355,8 @@ function backToList() {
   showEditTransition.value = false;
   showCreateStatus.value = false;
   showEditStatus.value = false;
+  // Clear visualization data when going back to list
+  workflowVisualization.value = null;
 }
 
 function manageTransitions() {
@@ -1189,11 +1367,10 @@ function manageTransitions() {
   }
 }
 
-function manageTransitionsFromModal() {
-  // Close current modal first, then open transitions page
-  showWorkflowView.value = false;
-  workflowVisualization.value = null;
-  // Don't clear selectedWorkflow when going to transitions page
+
+
+function manageTransitionsFromVisualization() {
+  // Switch to transitions page from visualization page
   if (selectedWorkflow.value) {
     viewMode.value = 'transitions';
     loadWorkflowTransitions(selectedWorkflow.value.id);
@@ -1201,13 +1378,14 @@ function manageTransitionsFromModal() {
   }
 }
 
-function editWorkflowFromModal() {
-  // Close current modal first, then open edit modal
-  closeWorkflowView();
+function editWorkflowFromVisualization() {
+  // Open edit modal from visualization page
   if (selectedWorkflow.value) {
     editWorkflow(selectedWorkflow.value);
   }
 }
+
+
 
 // Transition actions
 function createTransition() {
@@ -1215,9 +1393,10 @@ function createTransition() {
     name: '',
     fromStatusId: '',
     toStatusId: '',
-    conditionType: 'anyone',
     conditionData: null
   };
+  // Reset validation errors
+  transitionNameError.value = '';
   showCreateTransition.value = true;
 }
 
@@ -1226,14 +1405,20 @@ function editTransition(transition: WorkflowTransition) {
     name: transition.name,
     fromStatusId: transition.fromStatus.id,
     toStatusId: transition.toStatus.id,
-    conditionType: transition.conditionType,
     conditionData: transition.conditionData
   };
   selectedTransition.value = transition;
+  // Reset validation errors
+  transitionNameError.value = '';
   showEditTransition.value = true;
 }
 
 async function saveTransition() {
+  // Validate form before saving
+  if (!validateTransitionForm()) {
+    return;
+  }
+
   savingTransition.value = true;
   try {
     if (showEditTransition.value && selectedTransition.value) {
@@ -1304,13 +1489,11 @@ function closeWorkflowModal() {
     description: '',
     isDefault: false
   };
+  // Reset validation errors
+  workflowNameError.value = '';
 }
 
-function closeWorkflowView() {
-  showWorkflowView.value = false;
-  selectedWorkflow.value = null;
-  workflowVisualization.value = null;
-}
+
 
 function closeTransitionsModal() {
   showTransitionsModal.value = false;
@@ -1321,9 +1504,10 @@ function closeTransitionsModal() {
     name: '',
     fromStatusId: '',
     toStatusId: '',
-    conditionType: 'anyone',
     conditionData: null
   };
+  // Reset validation errors
+  transitionNameError.value = '';
 }
 
 function closeTransitionForm() {
@@ -1334,9 +1518,10 @@ function closeTransitionForm() {
     name: '',
     fromStatusId: '',
     toStatusId: '',
-    conditionType: 'anyone',
     conditionData: null
   };
+  // Reset validation errors
+  transitionNameError.value = '';
 }
 
 // Status management methods
@@ -1353,13 +1538,7 @@ function editStatus(status: TaskStatus) {
     name: status.name,
     description: status.description || '',
     color: status.color,
-    type: status.type,
-
-    isDefault: status.isDefault,
-    isStartStatus: status.isStartStatus,
-    isEndStatus: status.isEndStatus,
-    isResolved: status.isResolved,
-    isClosed: status.isClosed
+    type: status.type
   };
   selectedStatus.value = status;
   showEditStatus.value = true;
@@ -1503,15 +1682,24 @@ async function confirmMoveAndDelete() {
 
 
 async function createDefaultStatuses() {
-  // Check if default statuses already exist
-  const existingStatuses = taskStatuses.value.filter((status: TaskStatus) => status.isDefault);
-  if (existingStatuses.length > 0) {
-    // Show confirmation modal instead of browser alert
-    showDefaultStatusesModal.value = true;
+  // Check if basic statuses already exist
+  const hasToDoStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.TODO);
+  const hasInProgressStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.IN_PROGRESS);
+  const hasDoneStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.DONE);
+  const hasClosedStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.CLOSED);
+
+  if (hasToDoStatus && hasInProgressStatus && hasDoneStatus && hasClosedStatus) {
+    // Show error message if basic statuses already exist
+    toast.add({
+      severity: 'error',
+      summary: 'Cannot Create',
+      detail: 'Basic statuses already exist. Cannot create duplicates.',
+      life: 5000
+    });
     return;
   }
 
-  // If no existing default statuses, create them directly
+  // If no existing basic statuses, create them directly
   await confirmCreateDefaultStatuses();
 }
 
@@ -1524,11 +1712,6 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is pending and not yet started',
         color: '#ef4444',
         type: StatusType.TODO,
-        isDefault: true,
-        isStartStatus: true,
-        isEndStatus: false,
-        isResolved: false,
-        isClosed: false,
         isActive: true
       },
       {
@@ -1536,11 +1719,6 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is currently being worked on',
         color: '#f59e0b',
         type: StatusType.IN_PROGRESS,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: false,
-        isResolved: false,
-        isClosed: false,
         isActive: true
       },
       {
@@ -1548,11 +1726,6 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is completed and waiting for review',
         color: '#3b82f6',
         type: StatusType.IN_PROGRESS,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: false,
-        isResolved: false,
-        isClosed: false,
         isActive: true
       },
       {
@@ -1560,23 +1733,13 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is completed and approved',
         color: '#10b981',
         type: StatusType.DONE,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: true,
-        isResolved: true,
-        isClosed: false,
         isActive: true
       },
       {
         name: 'Closed',
         description: 'Task is closed and archived',
         color: '#6b7280',
-        type: StatusType.DONE,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: true,
-        isResolved: false,
-        isClosed: true,
+        type: StatusType.CLOSED,
         isActive: true
       }
     ];
@@ -1615,9 +1778,7 @@ async function confirmCreateDefaultStatuses() {
   }
 }
 
-function closeDefaultStatusesModal() {
-  showDefaultStatusesModal.value = false;
-}
+
 
 function closeStatusForm() {
   showCreateStatus.value = false;
@@ -1627,18 +1788,228 @@ function closeStatusForm() {
     name: '',
     description: '',
     color: '#42526E',
-    type: StatusType.TODO,
-
-    isDefault: false,
-    isStartStatus: false,
-    isEndStatus: false,
-    isResolved: false,
-    isClosed: false,
+    type: StatusType.TODO
   };
 }
 
+// Professional Jira-style workflow diagram functions
+function getNodePositionX(index: number): number {
+  // Horizontal layout: nodes spaced evenly across the width
+  const nodeWidth = 120;
+  const spacing = 200;
+  const startX = 100;
+  return startX + (index * spacing);
+}
+
+function getNodePositionY(index: number): number {
+  // All nodes on the same horizontal line
+  return 150;
+}
+
+function getNodeCenterX(nodeId: string): number {
+  // Calculate center X based on fixed positioning
+  const activeStatuses = taskStatuses.value.filter(s => s.isActive);
+  const nodeIndex = activeStatuses.findIndex(n => n.id === nodeId);
+  if (nodeIndex === -1) return 0;
+
+  const nodeWidth = 120;
+  const spacing = 200;
+  const startX = 100;
+  const nodeX = startX + (nodeIndex * spacing);
+  return nodeX + (nodeWidth / 2);
+}
+
+function getNodeCenterY(nodeId: string): number {
+  // All nodes are centered at the same Y position
+  const nodeHeight = 60;
+  const nodeY = 70;
+  return nodeY + (nodeHeight / 2);
+}
+
+function getLabelX(fromId: string, toId: string): number {
+  const fromX = getNodeCenterX(fromId);
+  const toX = getNodeCenterX(toId);
+  return (fromX + toX) / 2;
+}
+
+function getLabelY(fromId: string, toId: string): number {
+  const fromY = getNodeCenterY(fromId);
+  const toY = getNodeCenterY(toId);
+  // Position label slightly above the line
+  return (fromY + toY) / 2 - 20;
+}
+
+// Mermaid.js workflow diagram functions
+function generateMermaidDiagram(): string {
+  if (!taskStatuses.value.length || !workflowTransitions.value.length) {
+    return '';
+  }
+
+  const activeStatuses = taskStatuses.value.filter(s => s.isActive);
+  const activeTransitions = workflowTransitions.value.filter(t => t && t.fromStatus && t.toStatus);
+
+  if (activeStatuses.length === 0 || activeTransitions.length === 0) {
+    return '';
+  }
+
+  // Create Mermaid flowchart definition
+  let mermaidCode = 'graph LR\n';
+
+  // Add nodes
+  activeStatuses.forEach((status, index) => {
+    const nodeId = `node${index}`;
+    const nodeName = status.name.replace(/[^a-zA-Z0-9]/g, '_');
+    mermaidCode += `    ${nodeId}[${status.name}]\n`;
+  });
+
+  // Add edges with labels if enabled
+  activeTransitions.forEach(transition => {
+    const fromIndex = activeStatuses.findIndex(s => s.id === transition.fromStatus.id);
+    const toIndex = activeStatuses.findIndex(s => s.id === transition.toStatus.id);
+
+    if (fromIndex !== -1 && toIndex !== -1) {
+      const fromNode = `node${fromIndex}`;
+      const toNode = `node${toIndex}`;
+
+      if (showTransitionLabels.value) {
+        mermaidCode += `    ${fromNode} -->|${transition.name}| ${toNode}\n`;
+      } else {
+        mermaidCode += `    ${fromNode} --> ${toNode}\n`;
+      }
+    }
+  });
+
+  return mermaidCode;
+}
+
+async function regenerateMermaidDiagram() {
+  mermaidKey.value++;
+  await nextTick();
+
+  const mermaidCode = generateMermaidDiagram();
+  if (mermaidCode) {
+    mermaidDiagramDefinition.value = mermaidCode;
+
+    // Wait for DOM to update, then render Mermaid diagram
+    await nextTick();
+    try {
+      // Ensure Mermaid.js is loaded
+      if (!mermaid) {
+        await loadMermaid();
+      }
+
+      if (mermaid) {
+        // Clear existing diagrams first
+        const existingDiagrams = document.querySelectorAll('.mermaid svg');
+        existingDiagrams.forEach(svg => svg.remove());
+
+        // Initialize new diagram
+        mermaid.init('.mermaid');
+      }
+    } catch (error) {
+      console.error('Failed to render Mermaid diagram:', error);
+    }
+  }
+}
+
+// Zoom functions
+function zoomIn() {
+  if (zoomLevel.value < 2) {
+    zoomLevel.value += 0.1
+  }
+}
+
+function zoomOut() {
+  if (zoomLevel.value > 0.3) {
+    zoomLevel.value -= 0.1
+  }
+}
+
+function resetZoom() {
+  zoomLevel.value = 1
+}
+
+// Initialize Mermaid diagram when data loads
+watch([() => taskStatuses.value, () => workflowTransitions.value], async () => {
+  if (taskStatuses.value.length > 0 && workflowTransitions.value.length > 0) {
+    await regenerateMermaidDiagram();
+  }
+}, { immediate: true })
+
+// Calculate CSS positioning for connections
+function getConnectionStyle(fromId: string, toId: string) {
+  const fromNode = document.getElementById(`workflow-node-${fromId}`)
+  const toNode = document.getElementById(`workflow-node-${toId}`)
+
+  if (!fromNode || !toNode) return {}
+
+  const fromRect = fromNode.getBoundingClientRect()
+  const toRect = toNode.getBoundingClientRect()
+  const container = document.querySelector('.workflow-diagram-container')
+
+  if (!container) return {}
+
+  const containerRect = container.getBoundingClientRect()
+
+  const fromX = fromRect.left - containerRect.left + fromRect.width / 2
+  const fromY = fromRect.top - containerRect.top + fromRect.height / 2
+  const toX = toRect.left - containerRect.left + toRect.width / 2
+  const toY = toRect.top - containerRect.top + toRect.height / 2
+
+  const length = Math.sqrt(Math.pow(toX - fromX, 2) + Math.pow(toY - fromY, 2))
+  const angle = Math.atan2(toY - fromY, toX - fromX) * 180 / Math.PI
+
+  return {
+    left: `${fromX}px`,
+    top: `${fromY}px`,
+    width: `${length}px`,
+    transform: `rotate(${angle}deg)`,
+    transformOrigin: '0 50%'
+  }
+}
+
+// Function to load Mermaid.js dynamically
+async function loadMermaid() {
+  if (typeof mermaid !== 'undefined') return mermaid;
+
+  try {
+    // Load Mermaid.js from CDN
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js';
+    script.async = true;
+
+    return new Promise((resolve, reject) => {
+      script.onload = () => {
+        mermaid = (window as any).mermaid;
+        if (mermaid) {
+          mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+              useMaxWidth: true,
+              htmlLabels: true,
+              curve: 'basis'
+            }
+          });
+          resolve(mermaid);
+        } else {
+          reject(new Error('Mermaid.js failed to load'));
+        }
+      };
+      script.onerror = () => reject(new Error('Failed to load Mermaid.js'));
+      document.head.appendChild(script);
+    });
+  } catch (error) {
+    console.error('Error loading Mermaid.js:', error);
+    return null;
+  }
+}
+
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
+  // Load Mermaid.js first
+  await loadMermaid();
+
   loadWorkflows();
   loadTaskStatuses();
 });
@@ -1922,6 +2293,7 @@ watch(() => props.projectId, () => {
 
 .workflow-view-modal {
   max-width: 900px;
+  width: 90vw;
 }
 
 .transitions-modal {
@@ -2016,67 +2388,288 @@ watch(() => props.projectId, () => {
 /* Workflow Visualization */
 .workflow-visualization {
   padding: 20px;
+  overflow-x: auto;
+  max-width: 100%;
+  min-height: 600px;
 }
 
 .workflow-diagram {
   position: relative;
-  height: 200px;
+  min-height: 600px;
   margin: 20px 0;
+  width: 100%;
+  overflow: visible;
+  background: transparent;
+  border-radius: 12px;
+  padding: 20px;
+  border: none;
 }
 
-.status-nodes {
-  position: relative;
-  height: 100px;
+.jira-workflow-diagram {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.status-node {
-  position: absolute;
-  top: 20px;
-  width: 120px;
-  height: 60px;
+.workflow-controls {
+  background: white;
   border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-item input[type="checkbox"] {
+  margin: 0;
+}
+
+.control-item label {
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-btn {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: 500;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  min-width: 32px;
 }
 
-.node-content {
-  padding: 8px;
+.zoom-btn:hover {
+  background: #e9ecef;
+  border-color: #dee2e6;
 }
 
-.node-name {
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.node-type {
+.zoom-btn i {
   font-size: 12px;
-  opacity: 0.8;
+  color: #666;
 }
 
-.transitions-svg {
+.zoom-level {
+  font-size: 12px;
+  color: #666;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: center;
+}
+
+.workflow-diagram-container {
+  position: relative;
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+  min-height: 400px;
+  overflow: auto;
+}
+
+.mermaid-diagram {
+  width: 100%;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.mermaid {
+  width: 100%;
+  text-align: center;
+}
+
+.loading-mermaid {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #666;
+  font-size: 14px;
+}
+
+.diagram-controls {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.workflow-svg {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.workflow-connections {
+  pointer-events: none;
+}
+
+.connection-line {
+  stroke-dasharray: none;
+  transition: stroke 0.2s ease;
+}
+
+.connection-line:hover {
+  stroke: #007bff;
+  stroke-width: 3;
 }
 
 .transition-label {
-  font-size: 12px;
-  fill: #666;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
 }
+
+.workflow-nodes {
+  position: relative;
+  z-index: 2;
+  transform-origin: center center;
+  transition: transform 0.2s ease;
+}
+
+.workflow-node {
+  min-width: 80px;
+  max-width: 100px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  color: white;
+  font-weight: 600;
+}
+
+.workflow-node:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.node-label {
+  font-size: 14px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+
+
+.transition-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: #333;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.transitions-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+  margin-top: 20px;
+}
+
+.transitions-panel h4 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.transitions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.transition-card {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.transition-card:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.transition-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.from-status, .to-status {
+  background: #007bff;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.arrow {
+  font-size: 16px;
+  color: #666;
+  font-weight: bold;
+}
+
+.transition-name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+
 
 .workflow-actions {
   display: flex;
   gap: 12px;
   justify-content: center;
   margin-top: 20px;
+  padding: 20px 0;
+  border-top: 1px solid #e0e0e0;
 }
 
 /* Transitions Management */
@@ -2155,6 +2748,30 @@ watch(() => props.projectId, () => {
 .transition-form h4 {
   margin: 0 0 20px 0;
   color: #333;
+}
+
+/* Workflow Visualization Page */
+.visualization-page {
+  padding: 20px;
+}
+
+.visualization-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.visualization-page-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.visualization-content {
+  min-height: 500px;
 }
 
 /* Status Management */
@@ -2312,6 +2929,49 @@ watch(() => props.projectId, () => {
     width: 95%;
     margin: 20px;
   }
+}
+
+/* View Toggle Styles */
+.view-toggle-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+  gap: 4px;
+  background: #f4f5f7;
+  border-radius: 6px;
+  padding: 4px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.toggle-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #6b778c;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  color: #172b4d;
+}
+
+.toggle-btn.active {
+  background: white;
+  color: #172b4d;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.visual-editor {
+  height: 100vh;
+  width: 100%;
 }
 
 /* Delete Status Modal Styles - Updated to use modal-overlay */
@@ -2536,6 +3196,17 @@ watch(() => props.projectId, () => {
   z-index: 10001 !important;
 }
 
+/* Workflow Canvas Container Styles */
+.workflow-canvas-container {
+  width: 100%;
+  height: 600px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  overflow: visible;
+  position: relative;
+}
+
 /* Global toast z-index fix */
 .p-toast {
   z-index: 10001 !important;
@@ -2622,24 +3293,7 @@ watch(() => props.projectId, () => {
   text-align: center;
 }
 
-/* Default Statuses Modal Styles */
-.default-statuses-content {
-  text-align: center;
-  padding: 20px 0;
-}
 
-.default-statuses-content h4 {
-  margin: 0 0 10px 0;
-  color: #dc2626;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.default-statuses-content p {
-  margin: 0 0 20px 0;
-  color: #666;
-  font-size: 0.875rem;
-}
 
 
 
@@ -2665,5 +3319,10 @@ watch(() => props.projectId, () => {
 .btn-primary:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.required {
+  color: #dc2626;
+  font-weight: bold;
 }
 </style>

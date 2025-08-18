@@ -98,15 +98,15 @@ import { SubtaskManagerService } from './service/subtask-manager.service';
 import { SubtaskController } from './controller/subtask.controller';
 import { OverdueCheckerService } from './service/overdue-checker.service';
 import { ExportManagerService } from '#LocalProject/Managers/service/export-manager.service';
-import { PDFTronModule } from '../util/extensions/pdftron.module';
 import { ExportController } from '#LocalProject/Managers/controller/export.controller';
 import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.processor';
 import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-config-checker';
+import { AsposePDFBridge } from '../util/extensions/aspose-pdf-bridge';
+import { AsposeDocxBridge } from '../util/extensions/aspose-docx-bridge';
 
 @Global()
 @Module({
   imports: [
-    PDFTronModule,
     AuthModule,
     MongoModule,
     TypeOrmModule.forFeature([
@@ -187,6 +187,8 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
     ExportManagerService,
     ExportJobProcessor,
     PaypalConfigChecker,
+    AsposePDFBridge,
+    AsposeDocxBridge,
   ],
   exports: [
     CategoryManagerService,
@@ -223,6 +225,8 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
     TaskAssignmentManagerService,
     ExportManagerService,
     PaypalConfigChecker,
+    AsposePDFBridge,
+    AsposeDocxBridge,
   ],
   controllers: [
     CategoryController,

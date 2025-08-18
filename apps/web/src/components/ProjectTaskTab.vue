@@ -307,6 +307,32 @@ const showReopenTaskModal = ref(false);
 const taskToReopen = ref<Task|null>(null);
 const isReopeningTask = ref(false);
 const reopenReason = ref('');
+// Reopen target status selection
+const reopenTargetStatusId = ref<string>('');
+const showReopenStatusDropdown = ref(false);
+const reopenStatusSearch = ref('');
+
+const reopenStatusOptions = computed(() => {
+  const query = reopenStatusSearch.value.trim().toLowerCase();
+  const notClosed = (s: any) => String(s.type || '').toLowerCase() !== 'closed' && s.isClosed !== true;
+  return orderedStatuses.value
+    .filter((s: any) => notClosed(s))
+    .filter((s: any) => !query || String(s.name || '').toLowerCase().includes(query));
+});
+
+function formatStatusTypeLabel(type: string | undefined) {
+  if (!type) return '';
+  const t = String(type).toLowerCase();
+  const map: Record<string, string> = {
+    open: 'Open',
+    todo: 'To Do',
+    in_progress: 'In Progress',
+    done: 'Done',
+    overdue: 'Overdue',
+    closed: 'Closed',
+  };
+  return map[t] || type;
+}
 
 
 const toast = useToast();
@@ -410,8 +436,26 @@ async function loadTaskHistory(taskId: string) {
   taskHistoryLoading.value = true;
   try {
     const history = await taskService.getTaskHistory(taskId);
-    taskHistory.value = history;
-    console.log('Task history loaded:', history);
+    // Map backend history (createdAt/comment/fromStatus/toStatus) to UI model
+    const mapped = (history as any[]).map((h: any) => {
+      const performedAt = h.performedAt || h.createdAt;
+      const action = h.action || (h.fromStatus || h.toStatus ? 'status_change' : 'created');
+      const description = h.description || h.comment || '';
+      const metadata = h.metadata || {
+        fromStatus: h.fromStatus?.id || h.fromStatus?.type || h.fromStatus?.name || h.fromStatus,
+        toStatus: h.toStatus?.id || h.toStatus?.type || h.toStatus?.name || h.toStatus,
+      };
+      return {
+        id: String(h.id),
+        action,
+        description,
+        performedAt,
+        reason: h.reason,
+        metadata,
+      } as TaskHistory;
+    });
+    taskHistory.value = mapped;
+    console.log('Task history loaded:', mapped);
   } catch (error: unknown) {
     console.error('Error loading task history:', error);
     taskHistory.value = [];
@@ -513,6 +557,13 @@ function getStatusColor(statusId: any): string {
 
   const statusObj = availableStatuses.value.find((s: any) => s.id === id);
   return statusObj ? statusObj.color : '#6b7280';
+}
+
+// Helper: check if a status (by id) has type "closed"
+function isClosedTypeStatus(statusId: string): boolean {
+  const statusObj = availableStatuses.value.find((s: any) => s.id === statusId);
+  if (!statusObj || !statusObj.type) return false;
+  return String(statusObj.type).toLowerCase() === 'closed';
 }
 
 // Function để format time only
@@ -1002,6 +1053,9 @@ function handleDragStart(event: DragEvent, task: Task, index: number) {
   draggedIndex.value = index;
   isDragging.value = true;
   didDrop.value = false;
+  if (!event.dataTransfer) {
+    return;
+  }
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', task.id);
 
@@ -1479,11 +1533,41 @@ function getDaysRemaining(dueDate: string): string {
   }
 }
 
-function getAvatarUrl(url: string) {
-  if (!url) return '';
-  if (url.startsWith('http')) return url;
-  const base = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3000';
-  return base + url;
+function getAvatarUrl(avatarUrl?: string) {
+  // Hosting-safe defaults and URL resolution
+  // 1) Data-URI default avatar to avoid any base-path or asset hosting issues
+  const defaultAvatar =
+    'data:image/svg+xml;utf8,' +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">\n' +
+      '<circle cx="32" cy="32" r="32" fill="#e5e7eb"/>\n' +
+      '<circle cx="32" cy="24" r="12" fill="#cbd5e1"/>\n' +
+      '<path d="M16 54c4-10 28-10 32 0" fill="#cbd5e1"/>\n' +
+      '</svg>'
+    );
+
+  if (!avatarUrl) return defaultAvatar;
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl;
+
+  // 2) Build absolute API base: prefer env, else current origin + /api
+  const baseFromEnv = (import.meta.env.VITE_API_URL as string | undefined) || '';
+  const apiBase = (baseFromEnv || (window.location.origin + '/api')).replace(/\/$/, '');
+
+  // 3) Normalize known backend return formats
+  if (avatarUrl.startsWith('/users/')) return apiBase + avatarUrl;
+  if (avatarUrl.startsWith('/uploads/')) return apiBase + '/users' + avatarUrl;
+  if (avatarUrl.startsWith('users/')) return apiBase + '/' + avatarUrl;
+  if (avatarUrl.startsWith('uploads/')) return apiBase + '/users/' + avatarUrl;
+
+  return defaultAvatar;
+}
+
+function getUserDisplayName(user: any): string {
+  if (!user) return '';
+  const full = (user.fullName || '').toString().trim();
+  if (full.length > 0) return full;
+  return user.username || '';
 }
 
 function closeFilterDropdown() {
@@ -1639,6 +1723,14 @@ onMounted(() => {
     const target = event.target as HTMLElement;
     if (!target.closest('.task-action-menu') && !target.closest('.task-action-menu-btn')) {
       closeTaskActionMenu();
+    }
+  });
+
+  // Close reopen dropdown on outside click
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.status-select-wrapper') && showReopenStatusDropdown.value) {
+      showReopenStatusDropdown.value = false;
     }
   });
 
@@ -1852,6 +1944,9 @@ function cancelCloseTask() {
 function showReopenTaskConfirmation(task: Task) {
   taskToReopen.value = task;
   reopenReason.value = '';
+  // default selected status: first non-closed status or keep empty
+  const firstAvailable = orderedStatuses.value.find((s: any) => !isClosedTypeStatus(s.id));
+  reopenTargetStatusId.value = firstAvailable?.id || '';
   showReopenTaskModal.value = true;
 }
 
@@ -1867,10 +1962,22 @@ async function confirmReopenTask() {
     // Call API to reopen task with reason
     await taskService.reopenTask(taskToReopen.value.id, reopenReason.value);
 
-    // Update task status in local array
+    // If user selected a target status, move the task to that status
+    let updatedLocalTask: Task | null = null;
+    if (reopenTargetStatusId.value) {
+      try {
+        updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, {
+          statusId: reopenTargetStatusId.value
+        } as any);
+      } catch (e) {
+        console.warn('Failed to set target status after reopen; falling back to default status.', e);
+      }
+    }
+
+    // Update task status in local array (use updatedLocalTask if available)
     const taskIndex = tasks.value.findIndex((t: Task) => t.id === taskToReopen.value!.id);
     if (taskIndex !== -1) {
-      tasks.value[taskIndex] = { ...tasks.value[taskIndex], status: 'pending' };
+      tasks.value[taskIndex] = updatedLocalTask || { ...tasks.value[taskIndex], status: 'pending' };
     }
 
     // Reload task detail nếu đang xem task detail
@@ -1916,6 +2023,7 @@ async function confirmReopenTask() {
     taskToReopen.value = null;
     isReopeningTask.value = false;
     reopenReason.value = '';
+    reopenTargetStatusId.value = '';
   }
 }
 
@@ -2062,6 +2170,8 @@ const showAssigneeDropdown = ref(false);
 const showReviewerDropdown = ref(false);
 const isUpdatingAssignee = ref(false);
 const isUpdatingReviewer = ref(false);
+// Swap confirmation state
+const swapPrompt = ref<{ context: 'assignee' | 'reviewer'; memberId: string } | null>(null);
 
 // Function to update task assignee
 async function updateTaskAssignee(newAssigneeId: string) {
@@ -2185,6 +2295,89 @@ async function updateTaskReviewer(newReviewerId: string) {
   }
 }
 
+// Swap roles between current assignee and reviewer in a single update call
+async function swapAssigneeAndReviewer(newAssigneeId: string, newReviewerId: string) {
+  if (!selectedTask.value) return;
+  // Avoid redundant request if ids are the same
+  if (newAssigneeId === newReviewerId) return;
+
+  // Lock both operations
+  isUpdatingAssignee.value = true;
+  isUpdatingReviewer.value = true;
+
+  try {
+    const updatedTask = await taskService.updateTask(selectedTask.value.id, {
+      assignedToId: newAssigneeId,
+      reviewerId: newReviewerId,
+    });
+
+    const taskIndex = tasks.value.findIndex((t: Task) => t.id === selectedTask.value!.id);
+    if (taskIndex !== -1) tasks.value[taskIndex] = updatedTask;
+    selectedTask.value = updatedTask;
+
+    toast.add({
+      severity: 'success',
+      summary: 'Roles Swapped',
+      detail: 'Assignee and reviewer have been swapped successfully.',
+      life: 3000,
+    });
+
+    showAssigneeDropdown.value = false;
+    showReviewerDropdown.value = false;
+  } catch (error: any) {
+    console.error('Failed to swap roles:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Swap Failed',
+      detail: error?.response?.data?.message || 'Failed to swap assignee and reviewer.',
+      life: 4000,
+    });
+  } finally {
+    isUpdatingAssignee.value = false;
+    isUpdatingReviewer.value = false;
+  }
+}
+
+// Wrapper: selecting an assignee; if selecting current reviewer, offer swap
+async function handleSelectAssignee(memberId: string) {
+  if (!selectedTask.value) return;
+  const currentReviewerId = selectedTask.value.reviewer?.id;
+  const currentAssigneeId = selectedTask.value.assignedTo?.id;
+  if (currentReviewerId && memberId === currentReviewerId && currentAssigneeId) {
+    swapPrompt.value = { context: 'assignee', memberId };
+  } else {
+    await updateTaskAssignee(memberId);
+  }
+}
+
+// Wrapper: selecting a reviewer; if selecting current assignee, offer swap
+async function handleSelectReviewer(memberId: string) {
+  if (!selectedTask.value) return;
+  const currentReviewerId = selectedTask.value.reviewer?.id;
+  const currentAssigneeId = selectedTask.value.assignedTo?.id;
+  if (currentAssigneeId && memberId === currentAssigneeId && currentReviewerId) {
+    swapPrompt.value = { context: 'reviewer', memberId };
+  } else {
+    await updateTaskReviewer(memberId);
+  }
+}
+
+async function confirmSwap() {
+  if (!selectedTask.value || !swapPrompt.value) return;
+  const currentAssigneeId = selectedTask.value.assignedTo?.id;
+  const currentReviewerId = selectedTask.value.reviewer?.id;
+  if (swapPrompt.value.context === 'assignee' && currentAssigneeId) {
+    await swapAssigneeAndReviewer(swapPrompt.value.memberId, currentAssigneeId);
+  } else if (swapPrompt.value.context === 'reviewer' && currentReviewerId) {
+    await swapAssigneeAndReviewer(selectedTask.value.assignedTo?.id || '', swapPrompt.value.memberId);
+  }
+  swapPrompt.value = null;
+}
+
+function cancelSwap() {
+  swapPrompt.value = null;
+}
+
 // Function to toggle assignee dropdown
 function toggleAssigneeDropdown() {
   showAssigneeDropdown.value = !showAssigneeDropdown.value;
@@ -2289,15 +2482,8 @@ function closeAllDropdowns() {
             </div>
             <div>Created: {{ formatDate(selectedTask.createdAt) }}</div>
             <div>Modified: {{ formatDate(selectedTask.createdAt) }}</div>
-            <div v-if="selectedTask.startedAt">
-              Started: {{ formatDateTime(selectedTask.startedAt) }}
-            </div>
-            <div v-if="selectedTask.completedAt">
-              Resolved at: {{ formatDateTime(selectedTask.completedAt) }}
-            </div>
-            <div v-else>
-              Not resolved yet
-            </div>
+
+
             <div v-if="selectedTask.dueDate">
               <span>Due date:</span>
               <span :class="{ 'overdue': isOverdue(selectedTask.dueDate) }">
@@ -2380,16 +2566,11 @@ function closeAllDropdowns() {
                     @click="toggleAssigneeDropdown"
                   >
                     <img
-                      v-if="selectedTask.assignedTo.avatarUrl"
                       :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
-                      :alt="selectedTask.assignedTo.fullName"
+                      :alt="getUserDisplayName(selectedTask.assignedTo)"
                       class="assignee-avatar"
                     >
-                    <span
-                      v-else
-                      class="assignee-avatar-placeholder"
-                    >{{ selectedTask.assignedTo.fullName ? selectedTask.assignedTo.fullName[0] : selectedTask.assignedTo.username[0] }}</span>
-                    <span class="assignee-name">{{ selectedTask.assignedTo.fullName || selectedTask.assignedTo.username }}</span>
+                    <span class="assignee-name">{{ getUserDisplayName(selectedTask.assignedTo) }}</span>
                     <i class="pi pi-chevron-down dropdown-arrow" />
                   </div>
 
@@ -2405,20 +2586,15 @@ function closeAllDropdowns() {
                           'current-assignee': member.id === selectedTask.assignedTo?.id,
                           'disabled-option': member.id === selectedTask.reviewer?.id
                         }"
-                        @click="member.id === selectedTask.reviewer?.id ? null : updateTaskAssignee(member.id)"
+                        @click="member.id === selectedTask.reviewer?.id ? handleSelectAssignee(member.id) : updateTaskAssignee(member.id)"
                       >
                         <div class="member-option">
                           <img
-                            v-if="member.avatarUrl"
                             :src="getAvatarUrl(member.avatarUrl)"
-                            :alt="member.fullName"
+                            :alt="getUserDisplayName(member)"
                             class="member-avatar"
                           >
-                          <span
-                            v-else
-                            class="member-avatar-placeholder"
-                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
-                          <span class="member-name">{{ member.fullName || member.username }}</span>
+                          <span class="member-name">{{ getUserDisplayName(member) }}</span>
                           <span v-if="member.id === selectedTask.assignedTo?.id" class="current-badge">Current</span>
                           <span v-if="member.id === selectedTask.reviewer?.id" class="disabled-badge">Already Reviewer</span>
                         </div>
@@ -2449,20 +2625,15 @@ function closeAllDropdowns() {
                         :key="member.id"
                         class="dropdown-option"
                         :class="{ 'disabled-option': member.id === selectedTask.reviewer?.id }"
-                        @click="member.id === selectedTask.reviewer?.id ? null : updateTaskAssignee(member.id)"
+                        @click="member.id === selectedTask.reviewer?.id ? handleSelectAssignee(member.id) : updateTaskAssignee(member.id)"
                       >
                         <div class="member-option">
                           <img
-                            v-if="member.avatarUrl"
                             :src="getAvatarUrl(member.avatarUrl)"
-                            :alt="member.fullName"
+                            :alt="getUserDisplayName(member)"
                             class="member-avatar"
                           >
-                          <span
-                            v-else
-                            class="member-avatar-placeholder"
-                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
-                          <span class="member-name">{{ member.fullName || member.username }}</span>
+                          <span class="member-name">{{ getUserDisplayName(member) }}</span>
                           <span v-if="member.id === selectedTask.reviewer?.id" class="disabled-badge">Already Reviewer</span>
                         </div>
                       </div>
@@ -2480,16 +2651,11 @@ function closeAllDropdowns() {
                     @click="toggleReviewerDropdown"
                   >
                     <img
-                      v-if="selectedTask.reviewer.avatarUrl"
                       :src="getAvatarUrl(selectedTask.reviewer.avatarUrl)"
-                      :alt="selectedTask.reviewer.fullName"
+                      :alt="getUserDisplayName(selectedTask.reviewer)"
                       class="assignee-avatar"
                     >
-                    <span
-                      v-else
-                      class="assignee-avatar-placeholder"
-                    >{{ selectedTask.reviewer.fullName ? selectedTask.reviewer.fullName[0] : selectedTask.reviewer.username[0] }}</span>
-                    <span class="assignee-name">{{ selectedTask.reviewer.fullName || selectedTask.reviewer.username }}</span>
+                    <span class="assignee-name">{{ getUserDisplayName(selectedTask.reviewer) }}</span>
                     <i class="pi pi-chevron-down dropdown-arrow" />
                   </div>
 
@@ -2505,7 +2671,7 @@ function closeAllDropdowns() {
                           'current-reviewer': member.id === selectedTask.reviewer?.id,
                           'disabled-option': member.id === selectedTask.assignedTo?.id
                         }"
-                        @click="member.id === selectedTask.assignedTo?.id ? null : updateTaskReviewer(member.id)"
+                        @click="member.id === selectedTask.assignedTo?.id ? handleSelectReviewer(member.id) : updateTaskReviewer(member.id)"
                       >
                         <div class="member-option">
                           <img
@@ -2549,7 +2715,7 @@ function closeAllDropdowns() {
                         :key="member.id"
                         class="dropdown-option"
                         :class="{ 'disabled-option': member.id === selectedTask.assignedTo?.id }"
-                        @click="member.id === selectedTask.assignedTo?.id ? null : updateTaskReviewer(member.id)"
+                        @click="member.id === selectedTask.assignedTo?.id ? handleSelectReviewer(member.id) : updateTaskReviewer(member.id)"
                       >
                         <div class="member-option">
                           <img
@@ -2580,6 +2746,20 @@ function closeAllDropdowns() {
 
             </tbody>
           </table>
+        </div>
+
+        <!-- Swap Confirm Modal (non-blocking, top-center) -->
+        <div v-if="swapPrompt" class="swap-modal">
+          <div class="modal">
+            <div class="modal-title">Confirm swap</div>
+            <div class="modal-body">
+              This member holds the other role. Swap assignee and reviewer?
+            </div>
+            <div class="modal-actions">
+              <button class="btn btn-secondary" @click="cancelSwap">Cancel</button>
+              <button class="btn btn-primary" @click="confirmSwap">Swap</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3211,7 +3391,7 @@ function closeAllDropdowns() {
                                       class="assignee-avatar-placeholder"
                                       :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
                                     >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
-                                    <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                                    <span class="assignee-name">{{ getUserDisplayName(task.assignedTo) }}</span>
                                   </div>
                                   <!-- File info với icon động và tooltip -->
                                   <div
@@ -3240,9 +3420,9 @@ function closeAllDropdowns() {
                                 </div>
                               </div>
                             </div>
-                            <!-- Close button -->
+                            <!-- Close button shown only when column status type is closed -->
                             <div
-                              v-if="task.status === 'completed'"
+                              v-if="isClosedTypeStatus(status.id) && task.status !== 'closed'"
                               class="crowdin-row-6"
                             >
                               <div class="crowdin-col-right">
@@ -3389,7 +3569,7 @@ function closeAllDropdowns() {
                                         class="assignee-avatar-placeholder"
                                         :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
                                       >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
-                                      <span class="assignee-name">{{ task.assignedTo.fullName || task.assignedTo.username }}</span>
+                                      <span class="assignee-name">{{ getUserDisplayName(task.assignedTo) }}</span>
                                     </div>
                                     <!-- File info với icon động và tooltip -->
                                     <div
@@ -3418,9 +3598,9 @@ function closeAllDropdowns() {
                                   </div>
                                 </div>
                               </div>
-                              <!-- Close button -->
+                              <!-- Close button shown only when column status type is closed -->
                               <div
-                                v-if="task.status === 'completed'"
+                                v-if="isClosedTypeStatus(status.id) && task.status !== 'closed'"
                                 class="crowdin-row-6"
                               >
                                 <div class="crowdin-col-right">
@@ -3972,6 +4152,42 @@ function closeAllDropdowns() {
         </div>
         <div class="modal-body">
           <p>Are you sure you want to reopen task <strong>"{{ taskToReopen?.title }}"</strong>?</p>
+          <div class="reopen-target-status-section">
+            <label class="reopen-reason-label">Target status after reopen:</label>
+            <div class="status-select-wrapper" @click.stop="showReopenStatusDropdown = !showReopenStatusDropdown">
+              <div class="status-select-display">
+                <span
+                  v-if="reopenTargetStatusId"
+                  class="status-chip"
+                  :style="{ borderColor: (availableStatuses.find((s:any)=>s.id===reopenTargetStatusId)?.color) || '#e5e7eb' }"
+                >
+                  <span
+                    class="status-dot"
+                    :style="{ background: (availableStatuses.find((s:any)=>s.id===reopenTargetStatusId)?.color) || '#e5e7eb' }"
+                  />
+                  {{ availableStatuses.find((s:any)=>s.id===reopenTargetStatusId)?.name || 'Select status' }}
+                </span>
+                <span v-else class="status-placeholder">Select status</span>
+                <i class="pi pi-chevron-down select-caret" />
+              </div>
+
+              <div v-if="showReopenStatusDropdown" class="status-dropdown" @click.stop>
+                <div class="status-options">
+                  <div
+                    v-for="s in orderedStatuses.filter((s:any)=>!isClosedTypeStatus(s.id))"
+                    :key="s.id"
+                    class="status-option"
+                    @click="reopenTargetStatusId = s.id; showReopenStatusDropdown = false"
+                  >
+                    <span class="status-dot" :style="{ background: s.color }" />
+                    <span class="status-name">{{ s.name }}</span>
+                    <span class="status-type">{{ formatStatusTypeLabel(s.type) }}</span>
+                    <i v-if="reopenTargetStatusId === s.id" class="pi pi-check selected-icon" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="reopen-reason-section">
             <label
               for="reopen-reason"
@@ -3985,9 +4201,7 @@ function closeAllDropdowns() {
               rows="5"
             />
           </div>
-          <p class="modal-warning">
-            This will change the task status back to "To do".
-          </p>
+
         </div>
         <div class="modal-footer">
           <button
@@ -5755,7 +5969,8 @@ function closeAllDropdowns() {
   height: 100%;
   object-fit: cover;
   object-position: center;
-  border-radius: 50%;
+  border-radius: 50% !important;
+  clip-path: circle(50% at 50% 50%);
   display: block;
 }
 .task-detail-members {
@@ -6434,10 +6649,13 @@ body.modal-open main {
   gap: 0.5em;
 }
 .assignee-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 50% !important;
   object-fit: cover;
+  aspect-ratio: 1 / 1;
+  display: inline-block;
+  clip-path: circle(50% at 50% 50%);
 }
 .assignee-avatar-placeholder {
   width: 24px;
@@ -6455,6 +6673,9 @@ body.modal-open main {
   color: #374151;
   font-size: 0.85em;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .file-info {
   display: flex;
@@ -7228,6 +7449,149 @@ body.modal-open main {
   color: #9ca3af;
 }
 
+/* Reopen target status select */
+.reopen-target-status-section {
+  margin: 1rem 0 0.5rem 0;
+}
+
+.status-select-wrapper {
+  position: relative;
+  max-width: 420px;
+}
+
+.status-select-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.status-placeholder {
+  color: #9ca3af;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.select-caret {
+  color: #6b7280;
+}
+
+.status-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  z-index: 10000;
+}
+
+.status-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.status-search input {
+  flex: 1;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+  outline: none;
+}
+
+.status-options {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.status-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+}
+
+.status-option:hover {
+  background: #f9fafb;
+}
+
+.status-name {
+  font-weight: 600;
+  color: #374151;
+}
+
+.status-type {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.selected-icon {
+  color: #10b981;
+}
+
+.no-status-option {
+  padding: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* Reopen modal font-size adjustments */
+.reopen-modal .modal-header h3 {
+  font-size: 0.85rem;
+}
+
+.reopen-modal .modal-body p {
+  font-size: 0.82rem;
+}
+
+.reopen-modal .reopen-reason-label {
+  font-size: 0.8rem;
+}
+
+.reopen-modal .reopen-reason-input {
+  font-size: 0.85rem;
+}
+
+.reopen-modal .status-select-display,
+.reopen-modal .status-option,
+.reopen-modal .status-type,
+.reopen-modal .status-name,
+.reopen-modal .status-placeholder,
+.reopen-modal .status-chip {
+  font-size: 0.85rem;
+}
+
+.reopen-modal .modal-btn {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+}
+
 .modal-footer {
   display: flex;
   gap: 0.75rem;
@@ -7701,7 +8065,7 @@ body.modal-open main {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  min-width: 280px;
+  min-width: 320px;
   max-height: 320px;
   overflow-y: auto;
   animation: dropdownFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -7768,10 +8132,13 @@ body.modal-open main {
 
 .member-avatar,
 .member-avatar-placeholder {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 50% !important;
   object-fit: cover;
+  aspect-ratio: 1 / 1;
+  display: inline-block;
+  clip-path: circle(50% at 50% 50%);
 }
 
 .member-avatar-placeholder {
@@ -7788,6 +8155,9 @@ body.modal-open main {
   flex: 1;
   font-size: 0.875rem;
   color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .current-badge {
@@ -7862,6 +8232,85 @@ body.modal-open main {
 .dropdown-loading i {
   margin-right: 0.5rem;
 }
+
+.swap-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.22);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  z-index: 999;
+}
+
+/* Ensure the swap modal has a visible border */
+.swap-overlay .modal {
+  border: 1px solid #e5e7eb;
+}
+
+.swap-modal {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+
+  border: 2px solid #4A90E2; /* xanh dương */
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+
+.swap-modal .modal {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+}
+
+.modal-title {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: #111827;
+}
+
+.modal-body {
+  color: #4b5563;
+  font-size: 0.95rem;
+  margin-bottom: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #e5e7eb;
+}
+
+.btn-secondary:hover { background: #e5e7eb; }
+
+.btn-primary {
+  background: #6366f1;
+  color: white;
+}
+
+.btn-primary:hover { background: #4f46e5; }
 
 .empty-assignee,
 .empty-reviewer {

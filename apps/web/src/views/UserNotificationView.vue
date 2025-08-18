@@ -2033,7 +2033,6 @@ onUnmounted(() => {
   color: white;
 }
 
-/* Responsive Modal */
 @media (max-width: 768px) {
   .modal-content {
     margin: 20px;

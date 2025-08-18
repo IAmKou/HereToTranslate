@@ -46,8 +46,7 @@
               <p v-if="workflow.description">{{ workflow.description }}</p>
               <div class="workflow-badges">
                 <span v-if="workflow.isDefault" class="badge default">Default</span>
-                <span v-if="workflow.isActive" class="badge active">Active</span>
-                <span v-else class="badge inactive">Inactive</span>
+                <span v-if="workflow.isDefault" class="badge active">Active</span>
               </div>
             </div>
             <div class="workflow-actions">
@@ -88,10 +87,6 @@
               <span class="stat-label">Transitions</span>
               <span class="stat-value">{{ getWorkflowTransitionsCount(workflow.id) }}</span>
             </div>
-            <div class="stat">
-              <span class="stat-label">Tasks using</span>
-              <span class="stat-value">{{ getTasksUsingWorkflow(workflow.id) }}</span>
-            </div>
           </div>
         </div>
       </div>
@@ -105,15 +100,15 @@
           Back
         </button>
         <h3>Manage Transitions - {{ selectedWorkflow?.name }}</h3>
-        <button class="btn-primary" @click="showCreateTransition = true">
-          <i class="pi pi-plus"></i>
-          Add Transition
-        </button>
       </div>
 
       <div class="transitions-content">
         <div class="transitions-header">
           <h4>Current Transitions</h4>
+          <button class="btn-primary" @click="showCreateTransition = true">
+            <i class="pi pi-plus"></i>
+            Add Transition
+          </button>
         </div>
 
         <div class="transitions-list">
@@ -129,9 +124,7 @@
                 <i class="pi pi-arrow-right"></i>
                 <span class="to-status">{{ transition.toStatus.name }}</span>
               </div>
-              <div class="transition-conditions">
-                <span class="condition-badge">{{ transition.conditionType }}</span>
-              </div>
+
             </div>
 
             <div class="transition-actions">
@@ -145,50 +138,7 @@
           </div>
         </div>
 
-        <!-- Inline Create/Edit Transition Form -->
-        <div v-if="showCreateTransition || showEditTransition" class="transition-form">
-          <h4>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h4>
-          <form @submit.prevent="saveTransition" class="form">
-            <div class="form-group">
-              <label for="transitionName">Name *</label>
-              <input id="transitionName" v-model="transitionForm.name" type="text" required placeholder="Enter transition name" />
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="fromStatus">From Status *</label>
-                <select id="fromStatus" v-model="transitionForm.fromStatusId" required>
-                  <option value="">Select from status</option>
-                  <option v-for="status in availableStatuses" :key="status.id" :value="status.id">{{ status.name }}</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="toStatus">To Status *</label>
-                <select id="toStatus" v-model="transitionForm.toStatusId" required>
-                  <option value="">Select to status</option>
-                  <option v-for="status in availableStatuses" :key="status.id" :value="status.id">{{ status.name }}</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="conditionType">Condition Type</label>
-              <select id="conditionType" v-model="transitionForm.conditionType">
-                <option value="anyone">Anyone</option>
-                <option value="role">Role-based</option>
-                <option value="user">User-specific</option>
-                <option value="group">Group-based</option>
-                <option value="assignee_only">Assignee Only</option>
-                <option value="creator_only">Creator Only</option>
-              </select>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn-secondary" @click="closeTransitionForm">Cancel</button>
-              <button type="submit" class="btn-primary" :disabled="savingTransition">
-                <i v-if="savingTransition" class="pi pi-spin pi-spinner"></i>
-                {{ showEditTransition ? 'Update' : 'Create' }}
-              </button>
-            </div>
-          </form>
-        </div>
+
       </div>
     </div>
 
@@ -367,8 +317,6 @@
                     <div class="status-name">{{ status.name }}</div>
                     <div class="status-description">{{ status.description }}</div>
                     <div class="status-badges">
-                      <span v-if="status.isStartStatus" class="badge start">Start</span>
-                      <span v-if="status.isDefault" class="badge default">Default</span>
                       <span v-if="!status.isActive" class="badge inactive">Inactive</span>
                     </div>
                   </div>
@@ -399,7 +347,6 @@
                     <div class="status-name">{{ status.name }}</div>
                     <div class="status-description">{{ status.description }}</div>
                     <div class="status-badges">
-                      <span v-if="status.isDefault" class="badge default">Default</span>
                       <span v-if="!status.isActive" class="badge inactive">Inactive</span>
                     </div>
                   </div>
@@ -431,10 +378,37 @@
                     <div class="status-name">{{ status.name }}</div>
                     <div class="status-description">{{ status.description }}</div>
                     <div class="status-badges">
-                      <span v-if="status.isEndStatus" class="badge end">End</span>
-                      <span v-if="status.isResolved" class="badge resolved">Resolved</span>
-                      <span v-if="status.isClosed" class="badge closed">Closed</span>
-                      <span v-if="status.isDefault" class="badge default">Default</span>
+                      <span v-if="!status.isActive" class="badge inactive">Inactive</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="status-actions">
+                  <button class="btn-icon" @click="editStatus(status)">
+                    <i class="pi pi-pencil"></i>
+                  </button>
+                  <button class="btn-icon danger" @click="deleteStatus(status)">
+                    <i class="pi pi-trash"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="category-section">
+            <h4>Closed</h4>
+            <div class="status-list">
+              <div
+                v-for="status in getStatusesByCategory('closed')"
+                :key="status.id"
+                class="status-item"
+                :class="{ 'end-status': status.isEndStatus, 'resolved-status': status.isResolved }"
+              >
+                <div class="status-info">
+                  <div class="status-color" :style="{ backgroundColor: status.color }"></div>
+                  <div class="status-details">
+                    <div class="status-name">{{ status.name }}</div>
+                    <div class="status-description">{{ status.description }}</div>
+                    <div class="status-badges">
                       <span v-if="!status.isActive" class="badge inactive">Inactive</span>
                     </div>
                   </div>
@@ -470,14 +444,19 @@
 
           <form @submit.prevent="saveWorkflow" class="workflow-form">
             <div class="form-group">
-              <label for="workflowName">Name *</label>
+              <label for="workflowName">Name <span class="required">*</span></label>
               <input
                 id="workflowName"
                 v-model="workflowForm.name"
                 type="text"
                 required
                 placeholder="Enter workflow name"
+                maxlength="50"
+                @input="validateWorkflowForm"
               >
+              <div v-if="workflowNameError" class="form-error">
+                {{ workflowNameError }}
+              </div>
             </div>
 
             <div class="form-group">
@@ -505,7 +484,7 @@
               <button type="button" class="btn-secondary" @click="closeWorkflowModal">
                 Cancel
               </button>
-              <button type="submit" class="btn-primary" :disabled="saving">
+              <button type="submit" class="btn-primary" :disabled="saving || !!workflowNameError || !workflowForm.name.trim()">
                 <i v-if="saving" class="pi pi-spin pi-spinner"></i>
                 {{ showEditWorkflow ? 'Update' : 'Create' }}
               </button>
@@ -550,9 +529,7 @@
                     <i class="pi pi-arrow-right"></i>
                     <span class="to-status">{{ transition.toStatus.name }}</span>
                   </div>
-                  <div class="transition-conditions">
-                    <span class="condition-badge">{{ transition.conditionType }}</span>
-                  </div>
+
                 </div>
 
                 <div class="transition-actions">
@@ -567,75 +544,7 @@
             </div>
           </div>
 
-          <!-- Create/Edit Transition Form -->
-          <div v-if="showCreateTransition || showEditTransition" class="transition-form">
-            <h4>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h4>
 
-            <form @submit.prevent="saveTransition" class="form">
-              <div class="form-group">
-                <label for="transitionName">Name *</label>
-                <input
-                  id="transitionName"
-                  v-model="transitionForm.name"
-                  type="text"
-                  required
-                  placeholder="Enter transition name"
-                >
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="fromStatus">From Status *</label>
-                  <select id="fromStatus" v-model="transitionForm.fromStatusId" required>
-                    <option value="">Select from status</option>
-                    <option
-                      v-for="status in availableStatuses"
-                      :key="status.id"
-                      :value="status.id"
-                    >
-                      {{ status.name }}
-                    </option>
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label for="toStatus">To Status *</label>
-                  <select id="toStatus" v-model="transitionForm.toStatusId" required>
-                    <option value="">Select to status</option>
-                    <option
-                      v-for="status in availableStatuses"
-                      :key="status.id"
-                      :value="status.id"
-                    >
-                      {{ status.name }}
-                    </option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="conditionType">Condition Type</label>
-                <select id="conditionType" v-model="transitionForm.conditionType">
-                  <option value="anyone">Anyone</option>
-                  <option value="role">Role-based</option>
-                  <option value="user">User-specific</option>
-                  <option value="group">Group-based</option>
-                  <option value="assignee_only">Assignee Only</option>
-                  <option value="creator_only">Creator Only</option>
-                </select>
-              </div>
-
-              <div class="form-actions">
-                <button type="button" class="btn-secondary" @click="closeTransitionForm">
-                  Cancel
-                </button>
-                <button type="submit" class="btn-primary" :disabled="savingTransition">
-                  <i v-if="savingTransition" class="pi pi-spin pi-spinner"></i>
-                  {{ showEditTransition ? 'Update' : 'Create' }}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       </div>
     </Teleport>
@@ -695,37 +604,12 @@
                     <option value="todo">To Do</option>
                     <option value="in_progress">In Progress</option>
                     <option value="done">Done</option>
+                    <option value="closed">Closed</option>
                   </select>
                 </div>
               </div>
 
-              <div class="form-checkboxes">
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isDefault" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Set as default status
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isStartStatus" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Set as start status
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isEndStatus" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Set as end status
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isResolved" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Mark as resolved
-                </label>
-                <label class="checkbox-label">
-                  <input v-model="statusForm.isClosed" type="checkbox" />
-                  <span class="checkmark"></span>
-                  Mark as closed
-                </label>
-              </div>
+
               <p v-if="statusValidationMessage" class="form-error">{{ statusValidationMessage }}</p>
             </form>
           </div>
@@ -747,35 +631,78 @@
       </div>
     </Teleport>
 
-    <!-- Default Statuses Confirmation Modal -->
+
+
+    <!-- Create/Edit Transition Modal -->
     <Teleport to="body">
-      <div v-if="showDefaultStatusesModal" class="modal-overlay">
+      <div v-if="showCreateTransition || showEditTransition" class="modal-overlay">
         <div class="modal-content">
           <div class="modal-header">
-            <h3>Create Default Statuses</h3>
+            <h3>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h3>
+            <button class="btn-icon" @click="closeTransitionForm" data-close="true">
+              <i class="pi pi-times"></i>
+            </button>
           </div>
 
           <div class="modal-body">
-            <div class="default-statuses-content">
-              <div class="warning-icon">
-                <i class="pi pi-exclamation-triangle"></i>
+            <form @submit.prevent="saveTransition" class="form">
+              <div class="form-group">
+                <label for="transitionName">Name *</label>
+                <input
+                  id="transitionName"
+                  v-model="transitionForm.name"
+                  type="text"
+                  required
+                  placeholder="Enter transition name"
+                  maxlength="50"
+                  @input="validateTransitionForm"
+                />
+                <div v-if="transitionNameError" class="form-error">{{ transitionNameError }}</div>
+                <div class="char-counter">{{ transitionForm.name.length }}/50</div>
               </div>
-              <h4>Default statuses already exist</h4>
-              <p>Do you want to create them again? This may result in duplicates.</p>
-            </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="fromStatus">From Status *</label>
+                  <select id="fromStatus" v-model="transitionForm.fromStatusId" required>
+                    <option value="">Select from status</option>
+                    <option
+                      v-for="status in availableStatuses"
+                      :key="status.id"
+                      :value="status.id"
+                    >
+                      {{ status.name }}
+                    </option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="toStatus">To Status *</label>
+                  <select id="toStatus" v-model="transitionForm.toStatusId" required>
+                    <option value="">Select to status</option>
+                    <option
+                      v-for="status in availableStatuses"
+                      :key="status.id"
+                      :value="status.id"
+                    >
+                      {{ status.name }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+            </form>
           </div>
 
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="closeDefaultStatusesModal">
+            <button class="btn btn-secondary" @click="closeTransitionForm">
               Cancel
             </button>
             <button
               class="btn btn-primary"
-              @click="confirmCreateDefaultStatuses"
-              :disabled="creatingDefaultStatuses"
+              @click="saveTransition"
+              :disabled="savingTransition || !!transitionNameError || !transitionForm.name.trim()"
             >
-              <span v-if="creatingDefaultStatuses" class="loading-spinner"></span>
-              {{ creatingDefaultStatuses ? 'Creating...' : 'Create Default Statuses' }}
+              <span v-if="savingTransition" class="loading-spinner"></span>
+              {{ showEditTransition ? 'Update' : 'Create' }}
             </button>
           </div>
         </div>
@@ -884,7 +811,7 @@ const movingTasks = ref(false);
 const selectedNewStatus = ref<string>('');
 
 // Default statuses confirmation modal
-const showDefaultStatusesModal = ref(false);
+
 const creatingDefaultStatuses = ref(false);
 
 // Selected items
@@ -917,7 +844,6 @@ const transitionForm = ref({
   name: '',
   fromStatusId: '',
   toStatusId: '',
-  conditionType: 'anyone',
   conditionData: null
 });
 
@@ -925,42 +851,19 @@ const statusForm = ref({
   name: '',
   description: '',
   color: '#42526E',
-  type: StatusType.TODO,
-
-  isDefault: false,
-  isStartStatus: false,
-  isEndStatus: false,
-  isResolved: false,
-  isClosed: false,
+  type: StatusType.TODO
 });
 
 // Validation for status form
 const statusValidationMessage = computed(() => {
-  const start = statusForm.value.isStartStatus;
-  const end = statusForm.value.isEndStatus;
-
-  if (start && end) return 'A status cannot be both start and end.';
-
-  // Check for duplicate name
-  const currentName = statusForm.value.name.trim().toLowerCase();
-  if (currentName) {
-    const existingStatus = taskStatuses.value.find((status: TaskStatus) => {
-      // Skip current status when editing
-      if (showEditStatus.value && selectedStatus.value && status.id === selectedStatus.value.id) {
-        return false;
-      }
-      return status.name.toLowerCase() === currentName;
-    });
-
-
-  }
-
   return '';
 });
 
 // Character limit validation
 const nameError = ref('');
 const descriptionError = ref('');
+const transitionNameError = ref('');
+const workflowNameError = ref('');
 
 function validateStatusForm() {
   // Reset errors
@@ -995,6 +898,69 @@ function validateStatusForm() {
 
   // Return true if no errors
   return !nameError.value && !descriptionError.value;
+}
+
+// Validation for transition form
+function validateTransitionForm() {
+  // Reset errors
+  transitionNameError.value = '';
+
+  // Validate name length
+  if (transitionForm.value.name.length > 50) {
+    transitionNameError.value = 'Name cannot exceed 50 characters';
+    return false;
+  }
+
+  // Validate duplicate name
+  const currentName = transitionForm.value.name.trim().toLowerCase();
+  if (currentName) {
+    const existingTransition = workflowTransitions.value.find((transition: WorkflowTransition) => {
+      // Skip current transition when editing
+      if (showEditTransition.value && selectedTransition.value && transition.id === selectedTransition.value.id) {
+        return false;
+      }
+      return transition.name.toLowerCase() === currentName;
+    });
+
+    if (existingTransition) {
+      transitionNameError.value = `A transition with this name already exists`;
+      return false;
+    }
+  }
+
+  // Return true if no errors
+  return !transitionNameError.value;
+}
+
+// Validation for workflow form
+function validateWorkflowForm() {
+  // Reset errors
+  workflowNameError.value = '';
+
+  // Validate name length
+  if (workflowForm.value.name.length > 50) {
+    workflowNameError.value = 'Name cannot exceed 50 characters';
+    return false;
+  }
+
+  // Validate duplicate name
+  const currentName = workflowForm.value.name.trim().toLowerCase();
+  if (currentName) {
+    const existingWorkflow = workflows.value.find((workflow: Workflow) => {
+      // Skip current workflow when editing
+      if (showEditWorkflow.value && selectedWorkflow.value && workflow.id === selectedWorkflow.value.id) {
+        return false;
+      }
+      return workflow.name.toLowerCase() === currentName;
+    });
+
+    if (existingWorkflow) {
+      workflowNameError.value = 'A workflow with this name already exists';
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // Computed
@@ -1086,10 +1052,7 @@ function getWorkflowTransitionsCount(workflowId: string): number {
   return transitionsCountByWorkflow.value[workflowId] ?? 0;
 }
 
-function getTasksUsingWorkflow(workflowId: string): number {
-  // This would need to be implemented based on your task data structure
-  return 0; // Placeholder
-}
+
 
 
 
@@ -1100,6 +1063,8 @@ function createWorkflow() {
     description: '',
     isDefault: false
   };
+  // Reset validation errors
+  workflowNameError.value = '';
   showCreateWorkflow.value = true;
 }
 
@@ -1110,10 +1075,17 @@ function editWorkflow(workflow: Workflow) {
     isDefault: workflow.isDefault
   };
   selectedWorkflow.value = workflow;
+  // Reset validation errors
+  workflowNameError.value = '';
   showEditWorkflow.value = true;
 }
 
 async function saveWorkflow() {
+  // Validate form before saving
+  if (!validateWorkflowForm()) {
+    return;
+  }
+
   saving.value = true;
   try {
     if (showEditWorkflow.value && selectedWorkflow.value) {
@@ -1421,9 +1393,10 @@ function createTransition() {
     name: '',
     fromStatusId: '',
     toStatusId: '',
-    conditionType: 'anyone',
     conditionData: null
   };
+  // Reset validation errors
+  transitionNameError.value = '';
   showCreateTransition.value = true;
 }
 
@@ -1432,14 +1405,20 @@ function editTransition(transition: WorkflowTransition) {
     name: transition.name,
     fromStatusId: transition.fromStatus.id,
     toStatusId: transition.toStatus.id,
-    conditionType: transition.conditionType,
     conditionData: transition.conditionData
   };
   selectedTransition.value = transition;
+  // Reset validation errors
+  transitionNameError.value = '';
   showEditTransition.value = true;
 }
 
 async function saveTransition() {
+  // Validate form before saving
+  if (!validateTransitionForm()) {
+    return;
+  }
+
   savingTransition.value = true;
   try {
     if (showEditTransition.value && selectedTransition.value) {
@@ -1510,6 +1489,8 @@ function closeWorkflowModal() {
     description: '',
     isDefault: false
   };
+  // Reset validation errors
+  workflowNameError.value = '';
 }
 
 
@@ -1523,9 +1504,10 @@ function closeTransitionsModal() {
     name: '',
     fromStatusId: '',
     toStatusId: '',
-    conditionType: 'anyone',
     conditionData: null
   };
+  // Reset validation errors
+  transitionNameError.value = '';
 }
 
 function closeTransitionForm() {
@@ -1536,9 +1518,10 @@ function closeTransitionForm() {
     name: '',
     fromStatusId: '',
     toStatusId: '',
-    conditionType: 'anyone',
     conditionData: null
   };
+  // Reset validation errors
+  transitionNameError.value = '';
 }
 
 // Status management methods
@@ -1555,13 +1538,7 @@ function editStatus(status: TaskStatus) {
     name: status.name,
     description: status.description || '',
     color: status.color,
-    type: status.type,
-
-    isDefault: status.isDefault,
-    isStartStatus: status.isStartStatus,
-    isEndStatus: status.isEndStatus,
-    isResolved: status.isResolved,
-    isClosed: status.isClosed
+    type: status.type
   };
   selectedStatus.value = status;
   showEditStatus.value = true;
@@ -1705,15 +1682,24 @@ async function confirmMoveAndDelete() {
 
 
 async function createDefaultStatuses() {
-  // Check if default statuses already exist
-  const existingStatuses = taskStatuses.value.filter((status: TaskStatus) => status.isDefault);
-  if (existingStatuses.length > 0) {
-    // Show confirmation modal instead of browser alert
-    showDefaultStatusesModal.value = true;
+  // Check if basic statuses already exist
+  const hasToDoStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.TODO);
+  const hasInProgressStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.IN_PROGRESS);
+  const hasDoneStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.DONE);
+  const hasClosedStatus = taskStatuses.value.some((status: TaskStatus) => status.type === StatusType.CLOSED);
+
+  if (hasToDoStatus && hasInProgressStatus && hasDoneStatus && hasClosedStatus) {
+    // Show error message if basic statuses already exist
+    toast.add({
+      severity: 'error',
+      summary: 'Cannot Create',
+      detail: 'Basic statuses already exist. Cannot create duplicates.',
+      life: 5000
+    });
     return;
   }
 
-  // If no existing default statuses, create them directly
+  // If no existing basic statuses, create them directly
   await confirmCreateDefaultStatuses();
 }
 
@@ -1726,11 +1712,6 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is pending and not yet started',
         color: '#ef4444',
         type: StatusType.TODO,
-        isDefault: true,
-        isStartStatus: true,
-        isEndStatus: false,
-        isResolved: false,
-        isClosed: false,
         isActive: true
       },
       {
@@ -1738,11 +1719,6 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is currently being worked on',
         color: '#f59e0b',
         type: StatusType.IN_PROGRESS,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: false,
-        isResolved: false,
-        isClosed: false,
         isActive: true
       },
       {
@@ -1750,11 +1726,6 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is completed and waiting for review',
         color: '#3b82f6',
         type: StatusType.IN_PROGRESS,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: false,
-        isResolved: false,
-        isClosed: false,
         isActive: true
       },
       {
@@ -1762,23 +1733,13 @@ async function confirmCreateDefaultStatuses() {
         description: 'Task is completed and approved',
         color: '#10b981',
         type: StatusType.DONE,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: true,
-        isResolved: true,
-        isClosed: false,
         isActive: true
       },
       {
         name: 'Closed',
         description: 'Task is closed and archived',
         color: '#6b7280',
-        type: StatusType.DONE,
-        isDefault: true,
-        isStartStatus: false,
-        isEndStatus: true,
-        isResolved: false,
-        isClosed: true,
+        type: StatusType.CLOSED,
         isActive: true
       }
     ];
@@ -1817,9 +1778,7 @@ async function confirmCreateDefaultStatuses() {
   }
 }
 
-function closeDefaultStatusesModal() {
-  showDefaultStatusesModal.value = false;
-}
+
 
 function closeStatusForm() {
   showCreateStatus.value = false;
@@ -1829,13 +1788,7 @@ function closeStatusForm() {
     name: '',
     description: '',
     color: '#42526E',
-    type: StatusType.TODO,
-
-    isDefault: false,
-    isStartStatus: false,
-    isEndStatus: false,
-    isResolved: false,
-    isClosed: false,
+    type: StatusType.TODO
   };
 }
 
@@ -3340,24 +3293,7 @@ watch(() => props.projectId, () => {
   text-align: center;
 }
 
-/* Default Statuses Modal Styles */
-.default-statuses-content {
-  text-align: center;
-  padding: 20px 0;
-}
 
-.default-statuses-content h4 {
-  margin: 0 0 10px 0;
-  color: #dc2626;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.default-statuses-content p {
-  margin: 0 0 20px 0;
-  color: #666;
-  font-size: 0.875rem;
-}
 
 
 
@@ -3383,5 +3319,10 @@ watch(() => props.projectId, () => {
 .btn-primary:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.required {
+  color: #dc2626;
+  font-weight: bold;
 }
 </style>

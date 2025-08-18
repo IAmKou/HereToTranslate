@@ -26,9 +26,18 @@
                   <span class="stat-number">{{ notificationStats.unread }}</span>
                   <span class="stat-label">Unread</span>
                 </div>
+                <div class="stat-item connection-status" :class="{ 'connected': connectionStatus.isConnected, 'disconnected': !connectionStatus.isConnected }">
+               <span class="stat-number">
+                 <i :class="connectionStatus.isConnected ? 'pi pi-wifi' : 'pi pi-wifi-slash'"></i>
+               </span>
+                  <span class="stat-label">{{ connectionStatus.isConnected ? 'Live' : 'Offline' }}</span>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- Real-time Demo -->
+          <RealtimeNotificationDemo />
 
           <!-- Controls -->
           <div class="controls-section">
@@ -315,8 +324,8 @@
                   @change="handleItemsPerPageChange"
                   class="items-per-page-select"
                 >
-                  <option value="5">5</option>
                   <option value="10">10</option>
+                  <option value="20">20</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
                 </select>
@@ -334,6 +343,7 @@ import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
+import RealtimeNotificationDemo from '../components/RealtimeNotificationDemo.vue'
 import { notificationService, type Notification, type NotificationCount } from '../services/notification.service'
 import { useNotificationSync } from '../composables/useNotificationSync'
 import { projectInvitationService, type ProjectInvitation } from '../services/project-invitation.service'
@@ -360,6 +370,9 @@ const showDeleteModal = ref(false)
 const notificationToDelete = ref<Notification | null>(null)
 const showSuccessNotification = ref(false)
 const successMessage = ref('')
+
+// Connection status
+const connectionStatus = ref({ isConnected: false, reconnectAttempts: 0, maxReconnectAttempts: 5 })
 
 // Pagination state
 const currentPage = ref(1)
@@ -421,7 +434,13 @@ const loadProjectInvitations = async () => {
 const goToPage = (page: number) => {
   if (page >= 1 && page <= totalPages.value && page !== currentPage.value) {
     currentPage.value = page
+    // Don't reload from server, just change page
   }
+}
+
+const resetPagination = () => {
+  currentPage.value = 1
+  // Don't reload from server, just reset page
 }
 
 const handleItemsPerPageChange = () => {
@@ -543,12 +562,21 @@ const confirmDelete = async () => {
   if (!notificationToDelete.value) return
 
   try {
+    console.log('🗑️ Deleting notification:', notificationToDelete.value)
+    console.log('📊 Current notifications count:', notifications.value.length)
+
     await notificationService.deleteNotification(notificationToDelete.value.id)
+
+    console.log('✅ Notification deleted from server successfully')
 
     // Update local state immediately for better UX
     const index = notifications.value.findIndex((n: Notification) => n.id === notificationToDelete.value!.id)
+    console.log('🔍 Found notification at index:', index)
+
     if (index !== -1) {
       const notification = notifications.value[index]
+      console.log('🗑️ Removing notification from local state:', notification)
+
       notifications.value.splice(index, 1)
 
       // Update stats
@@ -556,19 +584,27 @@ const confirmDelete = async () => {
       if (notification && !notification.isRead) {
         notificationStats.value.unread = Math.max(0, notificationStats.value.unread - 1)
       }
+
+      console.log('📊 Updated local state - total:', notificationStats.value.total, 'unread:', notificationStats.value.unread, 'notifications:', notifications.value.length)
+    } else {
+      console.warn('⚠️ Notification not found in local state, this might cause issues')
     }
 
     emitNotificationDeleted(notificationToDelete.value.id)
 
     // Handle pagination edge case
     const maxPage = Math.ceil(notifications.value.length / itemsPerPage.value)
+    console.log('📄 Pagination - current page:', currentPage.value, 'max page:', maxPage)
+
     if (currentPage.value > maxPage && maxPage > 0) {
       currentPage.value = maxPage
+      console.log('📄 Adjusted to max page:', currentPage.value)
     }
 
     // If current page is empty and not first page, go to previous page
     if (paginatedNotifications.value.length === 0 && currentPage.value > 1) {
       currentPage.value--
+      console.log('📄 Moved to previous page:', currentPage.value)
     }
 
     // Show success notification
@@ -583,10 +619,35 @@ const confirmDelete = async () => {
     // Close modal
     closeDeleteModal()
 
-    // Don't reload from server - just use local state to avoid issues
+    // Reload từ server một cách an toàn với fallback
+    console.log('🔄 Reloading notifications from server with safety check...')
+    try {
+      const response = await notificationService.getUserNotifications()
+      const serverNotifications = response.notifications || []
+
+      console.log('🔄 Server returned:', serverNotifications.length, 'notifications')
+
+      if (serverNotifications.length > 0) {
+        // Server có notifications - cập nhật local state
+        notifications.value = serverNotifications
+        notificationStats.value.total = serverNotifications.length
+        notificationStats.value.unread = serverNotifications.filter(n => !n.isRead).length
+        console.log('✅ Server reload successful - updated local state')
+      } else {
+        // Server trả về 0 notifications - giữ nguyên local state
+        console.warn('⚠️ Server returned 0 notifications - keeping current local state')
+        console.warn('⚠️ Current local state has:', notifications.value.length, 'notifications')
+        console.warn('⚠️ This might indicate a server/database issue')
+      }
+    } catch (reloadError) {
+      console.error('❌ Error reloading from server:', reloadError)
+      console.warn('⚠️ Keeping current local state due to reload error')
+    }
+
+    console.log('✅ Final state - total:', notificationStats.value.total, 'unread:', notificationStats.value.unread, 'notifications:', notifications.value.length)
 
   } catch (error: any) {
-    console.error('Error deleting notification:', error)
+    console.error('❌ Error deleting notification:', error)
 
     // Show error in success notification
     if (error.response?.status === 404) {
@@ -605,7 +666,8 @@ const confirmDelete = async () => {
     // Close modal
     closeDeleteModal()
 
-    // Don't reload from server - just use local state to avoid issues
+    // Giữ nguyên local state khi có lỗi
+    console.log('❌ Deletion failed - keeping current local state')
   }
 }
 
@@ -766,19 +828,25 @@ const getTypeLabel = (type: string): string => {
 }
 
 const formatTime = (dateString: string): string => {
+  if (!dateString) return '-'
+
   const date = new Date(dateString)
 
-  // Fix múi giờ - cộng thêm 7 tiếng để khớp với giờ Việt Nam
-  date.setHours(date.getHours() + 7)
+  // Kiểm tra nếu date không hợp lệ
+  if (isNaN(date.getTime())) return '-'
 
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 
+  // Relative time cho notifications gần đây
   if (diff < 60000) return 'Just now'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} minutes ago`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`
 
-  return date.toLocaleDateString('en-US', {
+  // Absolute time cho notifications cũ hơn
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -786,11 +854,15 @@ const formatTime = (dateString: string): string => {
   })
 }
 
+// Helper functions to check notification status
+// For now, we'll use a simple approach: if notification is read and is project_invite, consider it processed
 const isNotificationProcessed = (notification: Notification): boolean => {
   return notification.type === 'project_invite' && !!notification.isRead
 }
 
 const isNotificationAccepted = (notification: Notification): boolean => {
+  // For now, we'll assume all processed project_invite notifications are accepted
+  // In a real implementation, you might want to check against a separate status field
   return notification.type === 'project_invite' && !!notification.isRead
 }
 
@@ -862,6 +934,16 @@ let unsubscribeGlobalNotification: (() => void) | null = null
 let unsubscribeNotificationDeleted: (() => void) | null = null
 
 const setupRealtimeNotifications = () => {
+  // Listen for connection status
+  const unsubscribeConnected = realtimeNotificationService.onConnected(() => {
+    connectionStatus.value.isConnected = true
+    connectionStatus.value.reconnectAttempts = 0
+  })
+
+  const unsubscribeDisconnected = realtimeNotificationService.onDisconnected(() => {
+    connectionStatus.value.isConnected = false
+  })
+
   // Listen for new notifications
   unsubscribeNewNotification = realtimeNotificationService.onNewNotification((notification: RealtimeNotification) => {
     console.log('📨 Real-time new notification received:', notification)

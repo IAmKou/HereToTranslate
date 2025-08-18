@@ -67,40 +67,38 @@
         </div>
 
         <!-- Pagination -->
-        <div class="pagination" v-if="totalPages > 1">
-          <button
-            @click="currentPage = 1"
-            :disabled="currentPage === 1"
-            class="btn-pagination"
-          >
-            <i class="pi pi-angle-double-left"></i>
-          </button>
-          <button
-            @click="currentPage--"
-            :disabled="currentPage === 1"
-            class="btn-pagination"
-          >
-            <i class="pi pi-angle-left"></i>
-          </button>
-
-          <span class="page-info">
-            Page {{ currentPage }} of {{ totalPages }}
-          </span>
-
-          <button
-            @click="currentPage++"
-            :disabled="currentPage === totalPages"
-            class="btn-pagination"
-          >
-            <i class="pi pi-angle-right"></i>
-          </button>
-          <button
-            @click="currentPage = totalPages"
-            :disabled="currentPage === totalPages"
-            class="btn-pagination"
-          >
-            <i class="pi pi-angle-double-right"></i>
-          </button>
+        <div class="pagination-controls">
+          <div class="pagination-info">
+            <span>
+              Showing {{ (currentPage - 1) * itemsPerPage + 1 }}–{{ Math.min(currentPage * itemsPerPage, filteredNotifications.length) }} of {{ filteredNotifications.length }} notifications
+              <span v-if="totalPages > 1">({{ totalPages }} page{{ totalPages > 1 ? 's' : '' }})</span>
+            </span>
+          </div>
+          <div class="pagination-buttons">
+            <button @click="goToPage(1)" :disabled="currentPage === 1" class="btn btn-secondary">
+              <i class="pi pi-angle-double-left"></i> First
+            </button>
+            <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-secondary">
+              <i class="pi pi-chevron-left"></i> Previous
+            </button>
+            <span class="page-info" v-if="totalPages > 1">Page {{ currentPage }} of {{ totalPages }}</span>
+            <button @click="nextPage" :disabled="currentPage === totalPages" class="btn btn-secondary">
+              Next <i class="pi pi-chevron-right"></i>
+            </button>
+            <button @click="goToPage(totalPages)" :disabled="currentPage === totalPages" class="btn btn-secondary">
+              Last <i class="pi pi-angle-double-right"></i>
+            </button>
+          </div>
+          <div class="page-size-selector">
+            <label for="pageSize">Show:</label>
+            <select id="pageSize" v-model="itemsPerPage" @change="currentPage = 1" class="page-size-select">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+            <span>per page</span>
+          </div>
         </div>
       </div>
     </div>
@@ -559,13 +557,47 @@ const refreshNotifications = () => {
 }
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString('en-US', {
+  if (!dateString) return '-'
+
+  const date = new Date(dateString)
+
+  // Kiểm tra nếu date không hợp lệ
+  if (isNaN(date.getTime())) return '-'
+
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+
+  // Relative time cho notifications gần đây
+  if (diff < 60000) return 'Just now'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`
+
+  // Absolute time cho notifications cũ hơn
+  return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// Pagination methods
+const goToPage = (page: number) => {
+  currentPage.value = page
+}
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+  }
+}
+
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
 }
 
 const showSuccessMessage = (message: string) => {
@@ -1045,40 +1077,69 @@ onUnmounted(() => {
 }
 
 /* Pagination */
-.pagination {
+.pagination-controls {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
-.btn-pagination {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
+.pagination-info {
+  font-size: 13px;
   color: #6b7280;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.3s ease;
-  min-width: 36px;
-  height: 36px;
+  font-weight: 500;
+}
+
+.pagination-buttons {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
 }
 
-.btn-pagination:hover:not(:disabled) {
-  background: #e5e7eb;
-  color: #374151;
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.btn-pagination:disabled {
-  opacity: 0.4;
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
+  background: #f3f4f6;
+  color: #9ca3af;
 }
 
 .page-info {
@@ -1086,6 +1147,28 @@ onUnmounted(() => {
   color: #6b7280;
   margin: 0 12px;
   font-weight: 500;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-size-select {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  background-color: #f9fafb;
+  transition: all 0.3s ease;
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 /* Modal Styling */
@@ -1300,10 +1383,6 @@ onUnmounted(() => {
     gap: 12px;
   }
 
-  .header-actions {
-    justify-content: center;
-  }
-
   .list-header {
     flex-direction: column;
     align-items: stretch;
@@ -1341,9 +1420,19 @@ onUnmounted(() => {
     align-self: flex-end;
   }
 
-  .pagination {
+  .pagination-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .pagination-buttons {
+    justify-content: center;
     flex-wrap: wrap;
-    gap: 6px;
+  }
+
+  .page-size-selector {
+    justify-content: center;
   }
 }
 

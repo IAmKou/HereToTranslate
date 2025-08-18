@@ -7,6 +7,7 @@ export enum StatusType {
   IN_PROGRESS = 'in_progress',
   DONE = 'done',
   OVERDUE = 'overdue',
+  CLOSED = 'closed',
 }
 
 

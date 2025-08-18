@@ -2,6 +2,7 @@ export enum StatusType {
   TODO = 'todo',
   IN_PROGRESS = 'in_progress',
   DONE = 'done',
+  CLOSED = 'closed',
 }
 
 export interface TaskStatus {
@@ -10,11 +11,5 @@ export interface TaskStatus {
   description?: string;
   color: string;
   type: StatusType;
-
   isActive: boolean;
-  isDefault: boolean;
-  isStartStatus: boolean;
-  isEndStatus: boolean;
-  isResolved: boolean;
-  isClosed: boolean;
 }

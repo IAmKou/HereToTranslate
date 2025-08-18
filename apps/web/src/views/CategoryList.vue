@@ -613,7 +613,6 @@ const normalizeTagData = (tag: any) => {
   let createdAt = tag.createdAt || tag.created_at || tag.createDate || tag.create_date || tag.createdAt || now;
   let updatedAt = tag.updatedAt || tag.updated_at || tag.updateDate || tag.update_date || tag.updatedAt || now;
 
-  // If dates are strings but not ISO format, try to convert them
   if (typeof createdAt === 'string' && !createdAt.includes('T')) {
     try {
       const date = new Date(createdAt);

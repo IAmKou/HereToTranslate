@@ -12,8 +12,8 @@ import FormData from 'form-data';
 import * as path from 'path';
 import mammoth from 'mammoth';
 import * as fs from 'fs';
-import { PDFTronBridge } from '../../util/extensions/pdftron-bridge';
-import { extractPdfTextWithPDFTron } from '../../util/extensions/pdf-utils.extension';
+import { AsposePDFBridge } from '../../util/extensions/aspose-pdf-bridge';
+import { extractPdfTextWithAsposePDF } from '../../util/extensions/pdf-utils.extension';
 
 // Dynamic import for pdfjs-dist to avoid import issues
 let pdfjs: any = null;
@@ -576,7 +576,7 @@ export class ManifestService {
   constructor(
     @InjectModel(TranslationString.name)
     private readonly translationModel: Model<TranslationStringDocument>,
-    private readonly pdfTronBridge: PDFTronBridge
+    private readonly asposePdfBridge: AsposePDFBridge
   ) {}
 
   async generateManifest(file: FileEntity): Promise<void> {
@@ -619,27 +619,27 @@ export class ManifestService {
 
         let result: any = null;
         try {
-          // 1. Try PDFTron first for better accuracy and layout preservation
-          console.log('[PDF] Step 1: Attempting to parse with PDFTron...');
-          result = await extractPdfTextWithPDFTron(file.fileContent, this.pdfTronBridge);
+          // 1. Try Aspose PDF Cloud API first for better accuracy and layout preservation
+          console.log('[PDF] Step 1: Attempting to parse with Aspose PDF Cloud API...');
+          result = await extractPdfTextWithAsposePDF(file.fileContent, this.asposePdfBridge);
           items = result.items;
-          console.log('[PDF] PDFTron result - items count:', items?.length || 0);
-          console.log('[PDF] PDFTron result - text length:', result.text?.length || 0);
+          console.log('[PDF] Aspose PDF Cloud API result - items count:', items?.length || 0);
+          console.log('[PDF] Aspose PDF Cloud API result - text length:', result.text?.length || 0);
 
           if (items && items.length > 0) {
-            console.log('[PDF] SUCCESS: Parsed with PDFTron, found', items.length, 'items');
+            console.log('[PDF] SUCCESS: Parsed with Aspose PDF Cloud API, found', items.length, 'items');
             console.log('[PDF] Sample items:', items.slice(0, 3).map((item: any) => ({
               text: item.text.substring(0, 50),
               font: item.font,
               page: item.page
             })));
           } else {
-            console.warn('[PDF] WARNING: No text items found with PDFTron, falling back to pdfjs-dist.');
-            throw new Error("No text found with PDFTron, falling back to pdfjs-dist.");
+            console.log('[PDF] WARNING: No text items found with Aspose PDF Cloud API, falling back to pdfjs-dist.');
+            throw new Error("No text found with Aspose PDF Cloud API, falling back to pdfjs-dist.");
           }
         } catch (err: any) {
-          console.error('[PDF] ERROR: PDFTron failed:', err?.message || err);
-          console.error('[PDF] PDFTron error stack:', err?.stack);
+          console.error('[PDF] ERROR: Aspose PDF Cloud API failed:', err?.message || err);
+          console.error('[PDF] Aspose PDF Cloud API error stack:', err?.stack);
 
           // 2. Fallback to pdfjs-dist
           try {

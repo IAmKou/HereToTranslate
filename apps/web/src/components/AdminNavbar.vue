@@ -235,7 +235,10 @@
 import { ref, onMounted, computed, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
-import { notificationService } from '../services/notification.service';
+import { adminNotificationService } from '../services/admin-notification.service';
+import axios from '../utils/axios';
+import { io } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
 
@@ -256,7 +259,7 @@ interface User {
 
 interface SystemNotification {
   id: string;
-  type: 'info' | 'warning' | 'error' | 'success' | 'system';
+  type: 'info' | 'warning' | 'error' | 'success' | 'system' | 'withdrawal' | 'request';
   title: string;
   message: string;
   timestamp: string;
@@ -280,6 +283,7 @@ const notificationCount = ref(0);
 const unreadNotificationCount = ref(0);
 const systemNotifications = ref<SystemNotification[]>([]);
 const loadingNotifications = ref(false);
+let adminSocket: Socket | null = null;
 
 const systemMetrics = ref<SystemMetrics>({
   cpu: 65,
@@ -299,9 +303,16 @@ const cleanupNotifications = () => {
 
 const loadNotificationCount = async () => {
   try {
-    const count = await notificationService.getNotificationCount();
-    notificationCount.value = count.total;
-    unreadNotificationCount.value = count.unread;
+    // Admin bell shows admin alerts: pending requests + pending withdrawals
+    const [reqCountRes, pendingWithdrawalsRes] = await Promise.all([
+      axios.get('/requests/pending/count'),
+      axios.get('/admin/transactions', { params: { status: 'Pending', type: 'WITHDRAWAL' } })
+    ]);
+    const pendingRequests = reqCountRes?.data?.count ?? 0;
+    const pendingWithdrawals = Array.isArray(pendingWithdrawalsRes?.data) ? pendingWithdrawalsRes.data.length : 0;
+    const total = Number(pendingRequests) + Number(pendingWithdrawals);
+    notificationCount.value = total;
+    unreadNotificationCount.value = total;
   } catch (error) {
     console.error('Error loading notification count:', error);
   }
@@ -409,30 +420,20 @@ const getNotificationIcon = (type: SystemNotification['type']) => {
 };
 
 const markAsRead = async (notificationId: string) => {
-  try {
-    await notificationService.markAsRead(notificationId);
-    // Update local state
-    const notification = systemNotifications.value.find((n: SystemNotification) => n.id === notificationId);
-    if (notification && !notification.isRead) {
-      notification.isRead = true;
-      unreadNotificationCount.value = Math.max(0, unreadNotificationCount.value - 1);
-    }
-  } catch (error) {
-    console.error('Error marking notification as read:', error);
+  // Local-only read marker for admin global notifications
+  const notification = systemNotifications.value.find((n: SystemNotification) => n.id === notificationId);
+  if (notification && !notification.isRead) {
+    notification.isRead = true;
+    unreadNotificationCount.value = Math.max(0, unreadNotificationCount.value - 1);
   }
 };
 
 const markAllAsRead = async () => {
-  try {
-    await notificationService.markAllAsRead();
-    // Update local state
-    systemNotifications.value.forEach((n: SystemNotification) => {
-      n.isRead = true;
-    });
-    unreadNotificationCount.value = 0;
-  } catch (error) {
-    console.error('Error marking all notifications as read:', error);
-  }
+  // Local-only read marker for admin global notifications
+  systemNotifications.value.forEach((n: SystemNotification) => {
+    n.isRead = true;
+  });
+  unreadNotificationCount.value = 0;
 };
 
 const deleteNotification = async (notificationId: string) => {
@@ -440,7 +441,7 @@ const deleteNotification = async (notificationId: string) => {
     console.log('🗑️ Deleting notification:', notificationId);
     console.log('📊 Current notifications count:', systemNotifications.value.length);
 
-    await notificationService.deleteNotification(notificationId);
+    await adminNotificationService.deleteNotification(notificationId);
 
     console.log('✅ Notification deleted from server successfully');
 
@@ -469,19 +470,46 @@ const loadSystemNotifications = async () => {
   loadingNotifications.value = true;
 
   try {
-    const response = await notificationService.getUserNotifications(20, false);
-    systemNotifications.value = response.notifications.map(notification => ({
-      id: notification.id,
-      type: notification.type as SystemNotification['type'],
-      title: notification.type.charAt(0).toUpperCase() + notification.type.slice(1),
-      message: notification.message,
-      timestamp: notification.createdAt,
-      isRead: notification.isRead,
-      isGlobal: notification.isGlobal
-    }));
+    // Build admin alerts feed
+    const [reqCountRes, withdrawalsRes] = await Promise.all([
+      axios.get('/requests/pending/count'),
+      axios.get('/admin/transactions', { params: { status: 'Pending', type: 'WITHDRAWAL' } })
+    ]);
 
-    // Update unread count
-    unreadNotificationCount.value = systemNotifications.value.filter((n: SystemNotification) => !n.isRead).length;
+    const alerts: SystemNotification[] = [];
+
+    // Pending requests aggregate alert
+    const pendingRequests = reqCountRes?.data?.count ?? 0;
+    if (pendingRequests > 0) {
+      alerts.push({
+        id: `req-aggregate-${Date.now()}`,
+        type: 'request',
+        title: 'Pending Requests',
+        message: `${pendingRequests} request(s) waiting for action`,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        isGlobal: true
+      });
+    }
+
+    // Pending withdrawals details
+    const withdrawals: any[] = Array.isArray(withdrawalsRes?.data) ? withdrawalsRes.data : [];
+    withdrawals
+      .slice(0, 10)
+      .forEach((w: any) => {
+        alerts.push({
+          id: String(w.id ?? `wd-${Math.random()}`),
+          type: 'withdrawal',
+          title: 'Pending Withdrawal',
+          message: `User ${w.user?.username || w.userId || ''} requested withdrawal of $${Math.abs(w.amount ?? 0)}`,
+          timestamp: w.createdAt || w.date || new Date().toISOString(),
+          isRead: false,
+          isGlobal: true
+        });
+      });
+
+    systemNotifications.value = alerts;
+    unreadNotificationCount.value = alerts.length;
   } catch (error) {
     console.error('Error loading system notifications:', error);
     // Fallback to empty array
@@ -504,7 +532,9 @@ onMounted(() => {
   setupNotifications();
 
   // Refresh notification count every 30 seconds
-  setInterval(loadNotificationCount, 30000);
+  const intervalId = setInterval(() => {
+    loadNotificationCount();
+  }, 30000);
 
   document.addEventListener('sign-out', async () => {
     try {
@@ -515,10 +545,48 @@ onMounted(() => {
       console.error('Error signing out:', error);
     }
   });
+
+  // Realtime: subscribe to task events for admin alerts
+  try {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const serverUrl = apiBase.replace(/\/api$/, '');
+    adminSocket = io(serverUrl, { withCredentials: true, transports: ['websocket', 'polling'] });
+    adminSocket.on('task-updated', (task: any) => {
+      systemNotifications.value.unshift({
+        id: `task-updated-${task.id}-${Date.now()}`,
+        type: 'system',
+        title: 'Task Updated',
+        message: `Task #${task.id} updated to ${task.status}`,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        isGlobal: true
+      });
+      unreadNotificationCount.value++;
+    });
+    adminSocket.on('task-deleted', (task: any) => {
+      systemNotifications.value.unshift({
+        id: `task-deleted-${task.id}-${Date.now()}`,
+        type: 'system',
+        title: 'Task Deleted',
+        message: `Task #${task.id} was deleted`,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        isGlobal: true
+      });
+      unreadNotificationCount.value++;
+    });
+  } catch (e) {
+    console.warn('Admin socket setup failed', e);
+  }
 });
 
 onUnmounted(() => {
   cleanupNotifications();
+  if (adminSocket) {
+    adminSocket.disconnect();
+    adminSocket = null;
+  }
+  // Note: we didn't store intervalId in scope for brevity
 });
 </script>
 

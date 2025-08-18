@@ -143,6 +143,7 @@ interface ToastNotification extends Notification {
 }
 
 const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
 const config = getChatConfig()
 
 const notifications = ref<Notification[]>([])
@@ -200,6 +201,9 @@ let toastIdCounter = 0
 
 const toggleNotificationPanel = async () => {
   showNotificationPanel.value = !showNotificationPanel.value
+  if (isAdmin.value) {
+    return
+  }
   if (showNotificationPanel.value && notifications.value.length === 0) {
     await loadNotifications()
   }
@@ -224,6 +228,7 @@ const closePanel = () => {
 }
 
 const loadNotifications = async () => {
+  if (isAdmin.value) return
   loading.value = true
   try {
     console.log('🔄 Loading notifications from server...')
@@ -271,6 +276,7 @@ const loadProjectInvitations = async () => {
 const loadMoreNotifications = async () => {
   // Implementation for pagination
   try {
+    if (isAdmin.value) return
     const response = await notificationService.getUserNotifications(20)
     // Add to existing notifications...
   } catch (error) {
@@ -281,6 +287,7 @@ const loadMoreNotifications = async () => {
 const markAsRead = async (notification: Notification) => {
   if (!notification.isRead) {
     try {
+      if (isAdmin.value) return
       await notificationService.markAsRead(notification.id)
       notification.isRead = true
       notification.readAt = new Date().toISOString()
@@ -294,6 +301,7 @@ const markAsRead = async (notification: Notification) => {
 
 const markAllAsRead = async () => {
   try {
+    if (isAdmin.value) return
     await notificationService.markAllAsRead()
     notifications.value.forEach(notif => {
       if (!notif.isRead) {
@@ -310,6 +318,7 @@ const markAllAsRead = async () => {
 
 const updateUnreadCount = async () => {
   try {
+    if (isAdmin.value) { unreadCount.value = 0; return }
     const response = await notificationService.getNotificationCount()
     // Note: Removed project invitations count since they're not shown in popup anymore
     unreadCount.value = response.unread
@@ -319,6 +328,7 @@ const updateUnreadCount = async () => {
 }
 
 const addToast = (notification: Notification) => {
+  if (isAdmin.value) return
   const toast: ToastNotification = {
     ...notification,
     id: `toast-${++toastIdCounter}`
@@ -339,7 +349,7 @@ const dismissToast = (toastId: string) => {
 }
 
 const connectToNotificationSocket = () => {
-  if (!authStore.user) return
+  if (!authStore.user || isAdmin.value) return
 
   socket = io(`${config.serverUrl}/notifications`, {
     path: '/api/notifications/socket.io',
@@ -360,6 +370,12 @@ const connectToNotificationSocket = () => {
   socket.on('new_notification', (notification: any) => {
     console.log('🔔 New notification received:', notification)
 
+    // Ignore popups for the sender
+    const currentUserId = authStore.user?.id ? String(authStore.user.id) : null
+    if (currentUserId && notification.createdByUserId === currentUserId) {
+      return
+    }
+
     // Check if this is a project_invite notification and user is in project detail
     const currentRoute = router.currentRoute.value
     if (notification.type === 'project_invite' &&
@@ -369,25 +385,38 @@ const connectToNotificationSocket = () => {
       return
     }
 
-    // Add to notifications list
-    notifications.value.unshift({
-      id: notification.id,
-      type: notification.type,
-      message: notification.message,
-      createdAt: notification.createdAt,
-      isRead: false,
-      isGlobal: notification.isGlobal
-    })
+    // Dedupe by id: update if exists, else insert at top
+    const existingIndex = notifications.value.findIndex(n => n.id === notification.id)
+    if (existingIndex > -1) {
+      const n = notifications.value[existingIndex]
+      n.type = notification.type
+      n.message = notification.message
+      n.createdAt = notification.createdAt
+    } else {
+      notifications.value.unshift({
+        id: notification.id,
+        type: notification.type,
+        message: notification.message,
+        createdAt: notification.createdAt,
+        isRead: false,
+        isGlobal: notification.isGlobal
+      })
+      // Update unread count only when adding new
+      unreadCount.value++
+    }
 
     // Show toast
     addToast(notification)
-
-    // Update unread count
-    unreadCount.value++
   })
 
   socket.on('global_notification', (notification: any) => {
     console.log('📢 Global notification received:', notification)
+
+    // Ignore popups for the sender
+    const currentUserId = authStore.user?.id ? String(authStore.user.id) : null
+    if (currentUserId && notification.createdByUserId === currentUserId) {
+      return
+    }
 
     // Check if this is a project_invite notification and user is in project detail
     const currentRoute = router.currentRoute.value
@@ -398,21 +427,28 @@ const connectToNotificationSocket = () => {
       return
     }
 
-    // Add to notifications list
-    notifications.value.unshift({
-      id: notification.id,
-      type: notification.type,
-      message: notification.message,
-      createdAt: notification.createdAt,
-      isRead: false,
-      isGlobal: true
-    })
+    // Dedupe by id
+    const existingIndex = notifications.value.findIndex(n => n.id === notification.id)
+    if (existingIndex > -1) {
+      const n = notifications.value[existingIndex]
+      n.type = notification.type
+      n.message = notification.message
+      n.createdAt = notification.createdAt
+    } else {
+      notifications.value.unshift({
+        id: notification.id,
+        type: notification.type,
+        message: notification.message,
+        createdAt: notification.createdAt,
+        isRead: false,
+        isGlobal: true
+      })
+      // Update unread count when adding new
+      unreadCount.value++
+    }
 
     // Show toast
     addToast(notification)
-
-    // Update unread count
-    unreadCount.value++
   })
 
   socket.on('notification_deleted', (data: { id: string }) => {

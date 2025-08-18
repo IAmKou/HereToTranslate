@@ -257,6 +257,7 @@
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { adminNotificationService } from '../services/admin-notification.service'
 import { realtimeNotificationService, type RealtimeNotification } from '../services/realtime-notification.service'
+import { useAuthStore } from '../store/auth'
 
 interface Notification {
   id: string
@@ -457,22 +458,29 @@ const editNotification = (notification: Notification) => {
 
 const updateNotification = async () => {
   try {
-    await adminNotificationService.updateNotification(editingNotificationId.value, {
+    // Cache id & new values before we mutate state
+    const idToUpdate = editingNotificationId.value
+    const newType = editForm.type
+    const newMessage = editForm.message
+
+    await adminNotificationService.updateNotification(idToUpdate, {
       type: editForm.type,
       message: editForm.message
     })
 
     showEditModal.value = false
+
+    // Update local state immediately for better UX
+    const notification = globalNotifications.value.find((n: Notification) => n.id === idToUpdate)
+    if (notification) {
+      notification.type = newType
+      notification.message = newMessage
+    }
+
+    // Reset editor state after applying local update
     editingNotificationId.value = null
     editForm.type = 'announcement'
     editForm.message = ''
-
-    // Update local state immediately for better UX
-    const notification = globalNotifications.value.find((n: Notification) => n.id === editingNotificationId.value)
-    if (notification) {
-      notification.type = editForm.type
-      notification.message = editForm.message
-    }
 
     // Don't reload from server - just use local state to avoid issues
   } catch (error: any) {
@@ -627,6 +635,8 @@ let unsubscribeNotificationDeleted: (() => void) | null = null
 
 const setupRealtimeNotifications = () => {
   console.log('🔌 Setting up real-time notifications...')
+  const authStore = useAuthStore()
+  const currentUserId = authStore.user?.id ? String(authStore.user.id) : null
 
   // Listen for connection status
   const unsubscribeConnected = realtimeNotificationService.onConnected(() => {
@@ -644,9 +654,22 @@ const setupRealtimeNotifications = () => {
   unsubscribeNewNotification = realtimeNotificationService.onNewNotification((notification: RealtimeNotification) => {
     console.log('📨 Real-time new notification received:', notification)
 
-    // Add new notification to the top of the list
-    globalNotifications.value.unshift(notification as any)
-    globalNotificationCount.value++
+    // Ignore if it's sent by current admin
+    if (currentUserId && notification.createdByUserId === currentUserId) {
+      return
+    }
+
+    // Dedupe by id: update if exists, else insert at top
+    const idx = globalNotifications.value.findIndex((n: any) => n.id === notification.id)
+    if (idx > -1) {
+      const existing = globalNotifications.value[idx] as any
+      existing.type = (notification as any).type
+      existing.message = (notification as any).message
+      existing.createdAt = (notification as any).createdAt
+    } else {
+      globalNotifications.value.unshift(notification as any)
+      globalNotificationCount.value++
+    }
 
     console.log('📊 Real-time update - Updated local state:', {
       count: globalNotificationCount.value,
@@ -654,7 +677,7 @@ const setupRealtimeNotifications = () => {
       firstNotification: globalNotifications.value[0]
     })
 
-    // Show success notification
+    // Show success notification (already skipped for sender)
     showSuccessMessage(`New notification: ${notification.message}`)
   })
 
@@ -662,9 +685,22 @@ const setupRealtimeNotifications = () => {
   unsubscribeGlobalNotification = realtimeNotificationService.onGlobalNotification((notification: RealtimeNotification) => {
     console.log('📢 Real-time global notification received:', notification)
 
-    // Add global notification to the top of the list
-    globalNotifications.value.unshift(notification as any)
-    globalNotificationCount.value++
+    // Ignore if it's sent by current admin
+    if (currentUserId && notification.createdByUserId === currentUserId) {
+      return
+    }
+
+    // Dedupe by id
+    const idx = globalNotifications.value.findIndex((n: any) => n.id === notification.id)
+    if (idx > -1) {
+      const existing = globalNotifications.value[idx] as any
+      existing.type = (notification as any).type
+      existing.message = (notification as any).message
+      existing.createdAt = (notification as any).createdAt
+    } else {
+      globalNotifications.value.unshift(notification as any)
+      globalNotificationCount.value++
+    }
 
     // Show success notification
     showSuccessMessage(`Global notification: ${notification.message}`)

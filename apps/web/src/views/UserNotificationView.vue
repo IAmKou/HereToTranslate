@@ -26,12 +26,6 @@
                   <span class="stat-number">{{ notificationStats.unread }}</span>
                   <span class="stat-label">Unread</span>
                 </div>
-                <div class="stat-item connection-status" :class="{ 'connected': connectionStatus.isConnected, 'disconnected': !connectionStatus.isConnected }">
-               <span class="stat-number">
-                 <i :class="connectionStatus.isConnected ? 'pi pi-wifi' : 'pi pi-wifi-slash'"></i>
-               </span>
-                  <span class="stat-label">{{ connectionStatus.isConnected ? 'Live' : 'Offline' }}</span>
-                </div>
               </div>
             </div>
           </div>
@@ -259,7 +253,7 @@
             </div>
 
             <!-- Pagination -->
-            <div v-if="totalPages > 1" class="pagination">
+            <div class="pagination">
               <div class="pagination-info">
                 <span class="pagination-text">
                   Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredNotifications.length) }} of {{ filteredNotifications.length }} notifications
@@ -324,10 +318,10 @@
                   @change="handleItemsPerPageChange"
                   class="items-per-page-select"
                 >
+                  <option value="5">5</option>
                   <option value="10">10</option>
                   <option value="20">20</option>
                   <option value="50">50</option>
-                  <option value="100">100</option>
                 </select>
               </div>
             </div>
@@ -343,7 +337,6 @@ import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import Sidebar from '../components/Sidebar.vue'
-import RealtimeNotificationDemo from '../components/RealtimeNotificationDemo.vue'
 import { notificationService, type Notification, type NotificationCount } from '../services/notification.service'
 import { useNotificationSync } from '../composables/useNotificationSync'
 import { projectInvitationService, type ProjectInvitation } from '../services/project-invitation.service'
@@ -376,7 +369,7 @@ const connectionStatus = ref({ isConnected: false, reconnectAttempts: 0, maxReco
 
 // Pagination state
 const currentPage = ref(1)
-const itemsPerPage = ref(20)
+const itemsPerPage = ref(10)
 
 // Sort state
 const sortOrder = ref<'newest' | 'oldest'>('newest')

@@ -515,6 +515,98 @@
           </template>
         </Dialog>
 
+        <!-- Custom Delete Modal -->
+        <Dialog
+          v-model:visible="showDeleteModal"
+          :style="{width: '480px'}"
+          :modal="true"
+          :closable="false"
+          :closeOnEscape="true"
+          class="delete-modal"
+        >
+          <template #header>
+            <div class="delete-modal-header">
+              <div class="delete-icon">
+                <i class="pi pi-trash"></i>
+              </div>
+            </div>
+          </template>
+
+          <template #closeicon>
+            <Button
+              icon="pi pi-times"
+              class="p-button-rounded p-button-text close-btn"
+              @click="showDeleteModal = false"
+              aria-label="Close modal"
+            />
+          </template>
+
+          <div class="delete-modal-content">
+            <p class="delete-message">Are you sure you want to delete the category "{{ currentCategory.name }}"?</p>
+          </div>
+
+          <template #footer>
+            <div class="delete-modal-footer">
+              <Button
+                label="No, cancel"
+                class="p-button-text cancel-btn"
+                @click="showDeleteModal = false"
+              />
+              <Button
+                label="Yes, I'm sure"
+                class="p-button-danger confirm-btn"
+                @click="deleteCategory(currentCategory)"
+              />
+            </div>
+          </template>
+        </Dialog>
+
+        <!-- Custom Delete Tag Modal -->
+        <Dialog
+          v-model:visible="showDeleteTagModal"
+          :style="{width: '480px'}"
+          :modal="true"
+          :closable="false"
+          :closeOnEscape="true"
+          class="delete-modal"
+        >
+          <template #header>
+            <div class="delete-modal-header">
+              <div class="delete-icon">
+                <i class="pi pi-trash"></i>
+              </div>
+            </div>
+          </template>
+
+          <template #closeicon>
+            <Button
+              icon="pi pi-times"
+              class="p-button-rounded p-button-text close-btn"
+              @click="showDeleteTagModal = false"
+              aria-label="Close modal"
+            />
+          </template>
+
+          <div class="delete-modal-content">
+            <p class="delete-message">Are you sure you want to delete the tag "{{ currentTag.name }}"?</p>
+          </div>
+
+          <template #footer>
+            <div class="delete-modal-footer">
+              <Button
+                label="No, cancel"
+                class="p-button-text cancel-btn"
+                @click="showDeleteTagModal = false"
+              />
+              <Button
+                label="Yes, I'm sure"
+                class="p-button-danger confirm-btn"
+                @click="deleteTag(currentTag)"
+              />
+            </div>
+          </template>
+        </Dialog>
+
         <!-- Enhanced Confirm Dialog for Delete -->
         <ConfirmDialog class="enhanced-confirm-dialog"></ConfirmDialog>
       </div>
@@ -524,13 +616,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
+import { useConfirm } from 'primevue/useconfirm';
 import AdminSidebar from '../components/AdminSidebar.vue';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import axiosInstance from '../api';
 
-// PrimeVue Components
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
@@ -561,6 +652,8 @@ const categories = ref<Category[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const showDialog = ref(false);
+const showDeleteModal = ref(false);
+const showDeleteTagModal = ref(false);
 const isEditing = ref(false);
 const submitted = ref(false);
 const currentCategory = ref<Category>({
@@ -613,6 +706,7 @@ const normalizeTagData = (tag: any) => {
   let createdAt = tag.createdAt || tag.created_at || tag.createDate || tag.create_date || tag.createdAt || now;
   let updatedAt = tag.updatedAt || tag.updated_at || tag.updateDate || tag.update_date || tag.updatedAt || now;
 
+  // If dates are strings but not ISO format, try to convert them
   if (typeof createdAt === 'string' && !createdAt.includes('T')) {
     try {
       const date = new Date(createdAt);
@@ -652,9 +746,79 @@ const fetchCategories = async () => {
   loading.value = true;
   try {
     const response = await axiosInstance.get('/categories/all');
-    console.log('API Response:', response.data); // Debug log
-    categories.value = response.data;
-    console.log('Categories after update:', categories.value); // Debug log
+    console.log('API Response:', response.data);
+
+    // Normalize category data to ensure date fields exist
+    categories.value = response.data.map((category: any) => {
+      console.log('Processing category:', category);
+      console.log('Category fields:', Object.keys(category));
+
+      // Handle various possible date field names and convert to Date objects
+      let createdAt = category.createdAt || category.created_at || category.createDate || category.create_date || category.created_at;
+      let updatedAt = category.updatedAt || category.updated_at || category.updateDate || category.update_date || category.updated_at;
+
+      // Convert string dates to Date objects if they exist
+      if (createdAt && typeof createdAt === 'string') {
+        try {
+          createdAt = new Date(createdAt);
+          if (isNaN(createdAt.getTime())) {
+            console.warn('Invalid createdAt date:', category.createdAt);
+            createdAt = undefined;
+          }
+        } catch (e) {
+          console.warn('Error parsing createdAt:', e);
+          createdAt = undefined;
+        }
+      }
+
+      if (updatedAt && typeof updatedAt === 'string') {
+        try {
+          updatedAt = new Date(updatedAt);
+          if (isNaN(updatedAt.getTime())) {
+            console.warn('Invalid updatedAt date:', category.updatedAt);
+            updatedAt = undefined;
+          }
+        } catch (e) {
+          console.warn('Error parsing updatedAt:', e);
+          updatedAt = undefined;
+        }
+      }
+
+      // Additional fallback for createdAt if still undefined
+      if (!createdAt) {
+        // Try to find any date field that might contain creation info
+        const possibleDateFields = Object.keys(category).filter(key =>
+          key.toLowerCase().includes('date') || key.toLowerCase().includes('time')
+        );
+
+        for (const field of possibleDateFields) {
+          const dateValue = category[field];
+          if (dateValue && typeof dateValue === 'string') {
+            try {
+              const parsedDate = new Date(dateValue);
+              if (!isNaN(parsedDate.getTime())) {
+                createdAt = parsedDate;
+                console.log(`Found createdAt from field: ${field}`, createdAt);
+                break;
+              }
+            } catch (e) {
+              console.warn(`Error parsing date from field ${field}:`, e);
+            }
+          }
+        }
+      }
+
+      const normalizedCategory = {
+        ...category,
+        createdAt,
+        updatedAt
+      };
+
+      console.log('Normalized category:', normalizedCategory);
+      return normalizedCategory;
+    });
+
+    console.log('Categories after normalization:', categories.value);
   } catch (error) {
     console.error('Error fetching categories:', error);
     toast.add({
@@ -746,7 +910,54 @@ const openAddModal = () => {
 const editCategory = (category: Category) => {
   isEditing.value = true;
   const { tags, ...rest } = category as any;
-  currentCategory.value = { ...rest };
+
+  // Debug: Log the original category data
+  console.log('Original category data:', category);
+  console.log('Category fields:', Object.keys(category));
+  console.log('Raw createdAt:', rest.createdAt, 'type:', typeof rest.createdAt);
+  console.log('Raw updatedAt:', rest.updatedAt, 'type:', typeof rest.updatedAt);
+
+  // Ensure date fields are properly formatted and handle various field names
+  let createdAt = rest.createdAt || rest.created_at || rest.createDate || rest.create_date;
+  let updatedAt = rest.updatedAt || rest.updated_at || rest.updateDate || rest.update_date;
+
+  // Convert string dates to Date objects if they exist
+  if (createdAt && typeof createdAt === 'string') {
+    try {
+      createdAt = new Date(createdAt);
+      if (isNaN(createdAt.getTime())) {
+        console.warn('Invalid createdAt date:', rest.createdAt);
+        createdAt = undefined;
+      }
+    } catch (e) {
+      console.warn('Error parsing createdAt:', e);
+      createdAt = undefined;
+    }
+  }
+
+  if (updatedAt && typeof updatedAt === 'string') {
+    try {
+      updatedAt = new Date(updatedAt);
+      if (isNaN(updatedAt.getTime())) {
+        console.warn('Invalid updatedAt date:', rest.updatedAt);
+        updatedAt = undefined;
+      }
+    } catch (e) {
+      console.warn('Error parsing updatedAt:', e);
+      updatedAt = undefined;
+    }
+  }
+
+  currentCategory.value = {
+    ...rest,
+    createdAt,
+    updatedAt
+  };
+
+  console.log('Processed category data:', currentCategory.value);
+  console.log('Created at type:', typeof currentCategory.value.createdAt, 'value:', currentCategory.value.createdAt);
+  console.log('Updated at type:', typeof currentCategory.value.updatedAt, 'value:', currentCategory.value.updatedAt);
+
   showDialog.value = true;
   submitted.value = false;
 };
@@ -836,18 +1047,8 @@ const saveCategory = async () => {
 };
 
 const confirmDelete = (category: Category) => {
-  confirm.require({
-    message: 'Are you sure you want to delete this category?',
-    header: 'Delete Confirmation',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => deleteCategory(category),
-    reject: () => {},
-    acceptLabel: 'Yes, Delete',
-    rejectLabel: 'Cancel',
-    acceptIcon: 'pi pi-trash',
-    rejectIcon: 'pi pi-times'
-  });
+  currentCategory.value = { ...category };
+  showDeleteModal.value = true;
 };
 
 const deleteCategory = async (category: Category) => {
@@ -856,6 +1057,7 @@ const deleteCategory = async (category: Category) => {
   try {
     await axiosInstance.delete(`/categories/${category.id}/delete`);
     await fetchCategories();
+    showDeleteModal.value = false;
     toast.add({
       severity: 'success',
       summary: 'Success',
@@ -969,18 +1171,8 @@ const saveTag = async () => {
 };
 
 const confirmDeleteTag = (tag: Tag) => {
-  confirm.require({
-    message: 'Are you sure you want to delete this tag?',
-    header: 'Delete Confirmation',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => deleteTag(tag),
-    reject: () => {},
-    acceptLabel: 'Yes, Delete',
-    rejectLabel: 'Cancel',
-    acceptIcon: 'pi pi-trash',
-    rejectIcon: 'pi pi-times'
-  });
+  currentTag.value = { ...tag };
+  showDeleteTagModal.value = true;
 };
 
 const deleteTag = async (tag: Tag) => {
@@ -988,6 +1180,7 @@ const deleteTag = async (tag: Tag) => {
   try {
     await axiosInstance.delete(`/project-tag/delete/${tag.id}`);
     await fetchTags();
+    showDeleteTagModal.value = false;
     toast.add({ severity: 'success', summary: 'Success', detail: 'Tag deleted successfully', life: 3000 });
   } catch (error) {
     console.error('Error deleting tag:', error);
@@ -1073,10 +1266,10 @@ onMounted(() => {
 
 /* Enhanced Confirm Dialog */
 :deep(.p-confirm-dialog) {
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
-  max-width: 450px;
+  max-width: 500px;
   width: 90% !important;
   border: none;
   margin: 0 auto;
@@ -1084,6 +1277,18 @@ onMounted(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  animation: dialogSlideIn 0.3s ease-out;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
 }
 
 :deep(.p-confirm-dialog .p-dialog-header) {
@@ -1113,13 +1318,15 @@ onMounted(() => {
 
 :deep(.p-confirm-dialog .p-dialog-message) {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   font-size: 1rem;
   color: #374151;
   margin: 0;
   line-height: 1.6;
   font-weight: 500;
+  text-align: left;
+  padding: 8px 0;
 }
 
 :deep(.p-confirm-dialog .p-dialog-message i) {
@@ -1143,17 +1350,29 @@ onMounted(() => {
 
 :deep(.p-confirm-dialog .p-button) {
   min-width: 120px;
-  height: 42px;
+  height: 44px;
   font-size: 0.95rem;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: 10px;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.p-confirm-dialog .p-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-danger:hover) {
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-danger) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
 }
 
 :deep(.p-confirm-dialog .p-button.p-button-danger) {
@@ -1171,13 +1390,13 @@ onMounted(() => {
   background: transparent;
   color: #6b7280;
   border: 2px solid #d1d5db;
+}
 
-  &:hover {
-    background: #f3f4f6;
-    color: #374151;
-    border-color: #9ca3af;
-    transform: translateY(-1px);
-  }
+:deep(.p-confirm-dialog .p-button.p-button-text:hover) {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
 }
 
 /* Clean Page Header */
@@ -2001,6 +2220,98 @@ onMounted(() => {
 .page-header .header-text .page-description {
   text-align: center;
   width: 100%;
+}
+
+/* Delete Modal Styles - Light Theme */
+.delete-modal {
+  :deep(.p-dialog) {
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    border: none;
+    overflow: hidden;
+    background: #ffffff;
+  }
+}
+
+.delete-modal-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 24px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  position: relative;
+}
+
+.delete-icon {
+  width: 48px;
+  height: 48px;
+  background: #f1f5f9;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 1.5rem;
+  border: 2px solid #e2e8f0;
+}
+
+.delete-modal-content {
+  padding: 32px 24px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.delete-message {
+  font-size: 1.1rem;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.delete-modal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 24px 24px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.delete-modal .cancel-btn {
+  background: #ffffff;
+  color: #6b7280;
+  border: 2px solid #d1d5db;
+  min-width: 120px;
+  height: 44px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #374151;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+  }
+}
+
+.delete-modal .confirm-btn {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  min-width: 120px;
+  height: 44px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  }
 }
 
 /* Extend content to use full width */

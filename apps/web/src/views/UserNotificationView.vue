@@ -1055,18 +1055,22 @@ onUnmounted(() => {
 
 /* User Notifications View */
 .user-notifications-view {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 40px 24px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  margin-left: 16.25rem;
+  padding: 40px 32px;
+  transition: margin-left 0.2s;
 }
 
 /* Page Header */
 .page-header {
   background: white;
   border-radius: 16px;
-  padding: 32px;
+  padding: 40px;
   margin-bottom: 24px;
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+  width: 100%;
 }
 
 .header-content {
@@ -1170,6 +1174,7 @@ onUnmounted(() => {
   margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 16px;
+  width: 100%;
 }
 
 .filter-tabs {
@@ -1381,17 +1386,19 @@ onUnmounted(() => {
   border-radius: 16px;
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  width: 100%;
 }
 
 .notification-item {
   display: flex;
   align-items: flex-start;
-  padding: 20px 24px;
+  padding: 24px 32px;
   border-bottom: 1px solid #f1f5f9;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
   background: white;
+  width: 100%;
 }
 
 .notification-item:hover {
@@ -1433,6 +1440,8 @@ onUnmounted(() => {
 .notification-content {
   flex: 1;
   min-width: 0;
+  margin-right: 24px;
+  max-width: none;
 }
 
 .notification-header {
@@ -1638,8 +1647,9 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 16px;
   margin-top: 32px;
-  padding: 24px;
+  padding: 32px;
   border-top: 1px solid #e2e8f0;
+  width: 100%;
 }
 
 
@@ -1753,6 +1763,31 @@ onUnmounted(() => {
 }
 
 /* Responsive Design */
+/* Sidebar collapsed state */
+.layout-wrapper.sidebar-collapsed .user-notifications-view {
+  margin-left: 4.5rem;
+}
+
+/* Large screen optimization */
+@media (min-width: 1200px) {
+  .user-notifications-view {
+    max-width: 1400px;
+    padding: 48px 40px;
+  }
+
+  .page-header {
+    padding: 48px;
+  }
+
+  .notification-item {
+    padding: 24px 32px;
+  }
+
+  .notification-content {
+    margin-right: 24px;
+  }
+}
+
 @media (max-width: 768px) {
   .main-content {
     margin-left: 0;
@@ -1760,6 +1795,7 @@ onUnmounted(() => {
 
   .user-notifications-view {
     padding: 20px 16px;
+    margin-left: 0;
   }
 
   .header-content {
@@ -2033,6 +2069,7 @@ onUnmounted(() => {
   color: white;
 }
 
+/* Responsive Modal */
 @media (max-width: 768px) {
   .modal-content {
     margin: 20px;

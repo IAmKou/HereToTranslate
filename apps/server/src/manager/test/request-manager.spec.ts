@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import { BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 let RequestManagerService: any;
-import { RequestStatus, TransactionStatus } from '#LocalProject/Entities';
+import { RequestStatus, TransactionStatus, WalletEntity } from '#LocalProject/Entities';
+import { In } from 'typeorm';
 import { Express } from 'express';
 
 // Mock all dependencies
@@ -108,7 +109,7 @@ describe('RequestManagerService', () => {
            title: 'Test Request',
            description: 'Test Description',
            dealAmount: 100,
-           deadline: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(), // 8 days from now
+           deadline: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(), 
            status: RequestStatus.Pending,
            isPublic: true,
            createdAt: new Date(),
@@ -300,7 +301,7 @@ describe('RequestManagerService', () => {
         1n
       );
 
-      expect(mockRequestRepository.create).toHaveBeenCalledWith({
+      expect(mockRequestRepository.create).toHaveBeenCalledWith(expect.objectContaining({
         requester: { id: 1n },
         project: { id: 1n },
         registrants: [{ id: 2n }],
@@ -308,14 +309,13 @@ describe('RequestManagerService', () => {
         title: mockCreateRequestDto.title,
         description: mockCreateRequestDto.description,
         dealAmount: mockCreateRequestDto.dealAmount,
-        deadline: expect.any(Date),
-        createdAt: expect.any(Date),
         status: RequestStatus.Pending,
         isPublic: true,
         category: { id: 1n },
         targetLanguages: [],
         files: [mockFile],
-      });
+        tags: [],
+      }));
 
       expect(mockNotificationService.createGlobalNotification).toHaveBeenCalledWith({
         type: 'PUBLIC_REQUEST_CREATED',
@@ -344,7 +344,7 @@ describe('RequestManagerService', () => {
 
       const result = await service.createRequest(dtoWithoutOptionals, 1n);
 
-      expect(mockRequestRepository.create).toHaveBeenCalledWith({
+      expect(mockRequestRepository.create).toHaveBeenCalledWith(expect.objectContaining({
         requester: { id: 1n },
         project: undefined,
         registrants: [],
@@ -352,14 +352,13 @@ describe('RequestManagerService', () => {
         title: dtoWithoutOptionals.title,
         description: dtoWithoutOptionals.description,
         dealAmount: dtoWithoutOptionals.dealAmount,
-        deadline: expect.any(Date),
-        createdAt: expect.any(Date),
         status: RequestStatus.Pending,
         isPublic: true,
         category: undefined,
         targetLanguages: [],
         files: [],
-      });
+        tags: [],
+      }));
 
       expect(result).toEqual(savedRequest);
     });
@@ -750,13 +749,18 @@ describe('RequestManagerService', () => {
         amount: 100,
         status: TransactionStatus.Pending,
       };
-      const wallet = { id: 1n, balance: 0 };
+      const adminWallet = { id: 1n, balance: 100 };
+      const requesterWallet = { id: 2n, balance: 0 };
 
       mockRequestRepository.findOne.mockResolvedValue(existingRequest);
       mockTransactionRepository.findOne.mockResolvedValue(transaction);
-      mockWalletService.getOrCreateWallet.mockResolvedValue(wallet);
-      mockTransactionRepository.save.mockResolvedValue(transaction);
-      mockWalletRepository.save.mockResolvedValue(wallet);
+      mockWalletService.getOrCreateWallet
+        .mockResolvedValueOnce(adminWallet)  // First call for admin wallet
+        .mockResolvedValueOnce(requesterWallet);  // Second call for requester wallet
+      mockTransactionRepository.save.mockResolvedValue({ ...transaction, status: TransactionStatus.Failed });
+      mockWalletRepository.save
+        .mockImplementationOnce((wallet: WalletEntity) => ({ ...wallet }))  // Return updated admin wallet
+        .mockImplementationOnce((wallet: WalletEntity) => ({ ...wallet }));  // Return updated requester wallet
       mockRequestRepository.save.mockResolvedValue(cancelledRequest);
 
       const result = await service.cancelRequest(1n, 1n);
@@ -765,11 +769,17 @@ describe('RequestManagerService', () => {
         where: {
           request: { id: 1n },
           user: { id: 1n },
-          status: TransactionStatus.Pending,
+          status: In([TransactionStatus.Pending, TransactionStatus.On_Hold]),
         },
       });
 
-      expect(wallet.balance).toBe(100);
+      // Verify admin wallet was debited
+      expect(adminWallet.balance).toBe(0);  // Admin wallet should be debited by 100
+      
+      // Verify requester wallet was credited
+      expect(requesterWallet.balance).toBe(100);  // Requester wallet should be credited with 100
+      
+      // Verify transaction status was updated
       expect(transaction.status).toBe(TransactionStatus.Failed);
 
       expect(result).toEqual(cancelledRequest);

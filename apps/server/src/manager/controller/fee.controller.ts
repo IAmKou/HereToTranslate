@@ -1,4 +1,4 @@
-import { Controller, Patch, Body, UseGuards } from '@nestjs/common';
+import { Controller, Patch, Body, UseGuards, Get } from '@nestjs/common';
 import { FeeService } from '../service/fee-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import { ForRoles } from '#LocalProject/Auth/decorators/for-role.decorator';
@@ -13,5 +13,12 @@ export class FeeController {
   async updateFee(@Body('fee') fee: number) {
     const updated = await this.feeService.setDefaultFee(fee);
     return { success: true, fee: updated.value };
+  }
+
+  @Get('get/fee')
+  @ForRoles(2, 1)
+  async getFee() {
+    const fee = await this.feeService.getDefaultFee();
+    return { success: true, fee };
   }
 }

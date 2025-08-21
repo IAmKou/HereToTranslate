@@ -216,8 +216,14 @@ const router = createRouter({
       name: 'translation-editor',
       component: () => import('../views/TranslationEditorView.vue'),
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/settings',
+      name: 'admin-settings',
+      component: () => import('../components/AdminSetting.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
     }
-
+   
   ],
 });
 

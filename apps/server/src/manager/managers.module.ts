@@ -103,6 +103,7 @@ import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.pr
 import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-config-checker';
 import { AsposePDFBridge } from '../util/extensions/aspose-pdf-bridge';
 import { AsposeDocxBridge } from '../util/extensions/aspose-docx-bridge';
+import { FeeController } from './controller/fee.controller';
 
 @Global()
 @Module({
@@ -259,7 +260,8 @@ import { AsposeDocxBridge } from '../util/extensions/aspose-docx-bridge';
     SubtaskController,
     ExportController,
     WorkflowController,
-    StatusController
+    StatusController,
+    FeeController
   ],
 
 })

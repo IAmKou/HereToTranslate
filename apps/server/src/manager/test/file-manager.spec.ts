@@ -638,8 +638,6 @@ describe('FileService', () => {
     });
   });
 
-
-
   describe('getFileMetadata', () => {
     it('should return file metadata', async () => {
       const mockFile = {

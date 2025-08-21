@@ -65,7 +65,7 @@ export class RequestManagerService {
     const { title, description, dealAmount, deadline: deadlineRaw } = dto;
     const deadline = new Date(deadlineRaw);
 
-    if (deadline.getTime() - Date.now() < 2 * DAY) {
+    if (deadline.getTime() - Date.now() < 7 * DAY) {
       throw new BadRequestException('Deadline must be at least 7 days from now');
     }
 
@@ -93,6 +93,7 @@ export class RequestManagerService {
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
       targetLanguages: dto.targetLanguages || [],
       files: fileEntities,
+      tags: [],
     });
 
 
@@ -119,7 +120,15 @@ export class RequestManagerService {
 
     const savedRequest = await this.requestRepository.save(request);
 
-    // No global notification when creating a new request
+    // Send global notification for public requests
+    if (savedRequest.isPublic) {
+      await this.notificationService.createGlobalNotification({
+        type: 'PUBLIC_REQUEST_CREATED',
+        message: `New public request available: "${savedRequest.title}" - $${savedRequest.dealAmount}`,
+        createdBy: uid,
+      });
+    }
+
     return savedRequest;
   }
 
@@ -552,7 +561,7 @@ export class RequestManagerService {
         try {
           // Mark requester's transaction as cancelled
           const oldStatus = requesterTransaction.status;
-          requesterTransaction.status = TransactionStatus.Cancelled;
+          requesterTransaction.status = TransactionStatus.Failed;
 
           logger.log(`[DEBUG] Cancel Request - About to save transaction:`, {
             transactionId: requesterTransaction.id,
@@ -568,18 +577,21 @@ export class RequestManagerService {
             savedType: savedTransaction.type,
           });
 
-          // Money is held in admin wallet, so we need to deduct it from admin wallet
-          // This represents the money being "released" from being held for the request
           const adminWallet = await this.walletService.getOrCreateWallet(BigInt(1)); // Admin user ID
           const adminOldBalance = adminWallet.balance;
           adminWallet.balance = Number(adminWallet.balance) - Math.abs(Number(requesterTransaction.amount));
-          await this.walletRepository.save(adminWallet);
+          const savedAdminWallet = await this.walletRepository.save(adminWallet);
 
-          // REFUND: Cộng tiền vào requester wallet
+          // REFUND: Add money to requester wallet
           const requesterWallet = await this.walletService.getOrCreateWallet(request.requester.id);
           const requesterOldBalance = requesterWallet.balance;
           requesterWallet.balance = Number(requesterWallet.balance) + Math.abs(Number(requesterTransaction.amount));
-          await this.walletRepository.save(requesterWallet);
+          const savedRequesterWallet = await this.walletRepository.save(requesterWallet);
+
+          // Verify the wallet updates were successful
+          if (savedAdminWallet.balance !== adminWallet.balance || savedRequesterWallet.balance !== requesterWallet.balance) {
+            throw new Error('Wallet balance update failed');
+          }
 
           logger.log(`[DEBUG] Cancel Request - Wallet balances updated:`, {
             adminOldBalance: adminOldBalance,
@@ -610,7 +622,7 @@ export class RequestManagerService {
             `Cancelled requester transaction ID ${requesterTransaction.id} for canceled private request ID ${request.id}. Money $${Math.abs(Number(requesterTransaction.amount))} was deducted from admin wallet (released from hold), refunded to requester wallet, and REFUND transaction created.`
           );
         } catch (e) {
-          logger.error('Refund during private cancel failed:', e);
+          logger.error('Refund during private cancel failed:' + e);
         }
       } else {
         logger.warn(
@@ -845,7 +857,7 @@ export class RequestManagerService {
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      logger.error('Accept private request failed:', err);
+      logger.error('Accept private request failed:' + err);
       throw new InternalServerErrorException('Failed to accept private request');
     } finally {
       await queryRunner.release();

@@ -14,7 +14,7 @@ export class FeeService {
 
   async getDefaultFee(): Promise<number> {
     const setting = await this.settingsRepo.findOne({ where: { key: DEFAULT_FEE_KEY } });
-    return setting ? Number(setting.value) : 5.0; // fallback to 5% if not set
+    return setting ? Number(setting.value) : 5.0;
   }
 
   async setDefaultFee(feePercentage: number): Promise<SettingsEntity> {

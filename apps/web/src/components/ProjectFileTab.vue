@@ -23,6 +23,7 @@ interface ProjectFile {
   strings?: number;
   revision?: string;
   status?: 'processing' | 'ready' | 'error';
+  syncedFromRequest?: boolean;
 }
 
 const props = defineProps<{
@@ -107,6 +108,31 @@ onMounted(() => {
 const lastUploadedFileId = ref<string | number | null>(null);
 let pollingTimer: any = null;
 
+// Helpers to validate file content
+function isTextLikeFile(file: File): boolean {
+  if (!file) return false;
+  const ext = (() => {
+    const parts = file.name.toLowerCase().split('.');
+    return parts.length > 1 ? parts.pop() as string : '';
+  })();
+  const textExtensions = new Set(['txt', 'csv', 'json', 'xml', 'html', 'htm', 'md']);
+  return file.type.startsWith('text/') || textExtensions.has(ext);
+}
+
+async function hasMeaningfulContent(file: File): Promise<boolean> {
+  try {
+    if (!isTextLikeFile(file)) {
+      // For non-text types, skip deep client validation
+      return true;
+    }
+    const text = await file.text();
+    // Consider only non-whitespace as meaningful
+    return /\S/.test(text);
+  } catch {
+    return true;
+  }
+}
+
 function startPollingFileStatus(fileId: string | number) {
   if (pollingTimer) clearInterval(pollingTimer);
   pollingTimer = setInterval(async () => {
@@ -145,6 +171,10 @@ const revisionFile = ref<any>(null);
 const deletingFile = ref(false);
 const uploadProgress = ref(0);
 const uploadPhase = ref<'uploading' | 'processing' | null>(null);
+// Set title dialog state
+const showSetTitleDialog = ref(false);
+const editingTitleFileId = ref<string | number | null>(null);
+const editingTitleInput = ref('');
 
 function triggerUpload() {
   uploadError.value = '';
@@ -161,18 +191,47 @@ async function handleFileChange(event: Event) {
   const selected = Array.from(input.files);
   // Validate sizes first
   for (const f of selected) {
+    if (f.size === 0) {
+      uploadError.value = `File ${f.name} is empty. Please choose a file with content.`;
+      toast.add({ severity: 'error', summary: 'Empty file', detail: uploadError.value, life: 4000 });
+      if (uploadInput.value) uploadInput.value.value = '';
+      return;
+    }
     if (f.size > maxSize) {
       uploadError.value = `File ${f.name} is too large. Maximum size is 10MB.`;
       toast.add({ severity: 'error', summary: 'File too large', detail: uploadError.value, life: 4000 });
+      if (uploadInput.value) uploadInput.value.value = '';
       return;
+    }
+  }
+  // For text-like files, ensure they have meaningful (non-whitespace) content
+  for (const f of selected) {
+    if (isTextLikeFile(f)) {
+      const ok = await hasMeaningfulContent(f);
+      if (!ok) {
+        uploadError.value = `File ${f.name} has no text content. Please choose a file with content.`;
+        toast.add({ severity: 'error', summary: 'Empty content', detail: uploadError.value, life: 4000 });
+        if (uploadInput.value) uploadInput.value.value = '';
+        return;
+      }
     }
   }
   filesToUpload.value = selected;
   titles.value = selected.map(() => '');
-  showTitleDialog.value = true;
+  // Upload immediately without requiring titles
+  await uploadFilesImmediately();
 }
 
 async function uploadSingleFile(file: File, title: string) {
+  if (file.size === 0) {
+    throw new Error(`File "${file.name}" is empty. Please choose a non-empty file.`);
+  }
+  if (isTextLikeFile(file)) {
+    const ok = await hasMeaningfulContent(file);
+    if (!ok) {
+      throw new Error(`File "${file.name}" has no content. Please choose a file with text content.`);
+    }
+  }
   const formData = new FormData();
   formData.append('file', file);
   const projectId = props.projectId;
@@ -182,14 +241,26 @@ async function uploadSingleFile(file: File, title: string) {
   formData.append('projectId', projectId.toString());
   formData.append('branchId', branchId.toString());
   formData.append('title', title);
-  const response = await axiosInstance.post('/files/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    onUploadProgress: (progressEvent: ProgressEvent) => {
-      if (progressEvent.lengthComputable) {
-        uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+  let response;
+  try {
+    response = await axiosInstance.post('/files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent: ProgressEvent) => {
+        if (progressEvent.lengthComputable) {
+          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        }
       }
+    });
+  } catch (e: any) {
+    let serverMsg: any = e?.response?.data?.message ?? e?.response?.data?.error;
+    if (Array.isArray(serverMsg)) serverMsg = serverMsg.join(', ');
+    let msg: string = serverMsg || e?.message || 'Upload failed';
+    // Chuyển thông điệp server sang tiếng Việt thân thiện nếu là file rỗng
+    if (/no extractable text content|empty content|empty file/i.test(msg)) {
+      msg = 'File is empty. Please choose a file with content.';
     }
-  });
+    throw new Error(msg);
+  }
   const respData = response.data;
   const isUpdate = respData?.updated;
   const message = isUpdate
@@ -217,6 +288,22 @@ async function uploadFilesWithTitles() {
     toast.add({ severity: 'warn', summary: 'Missing title', detail: 'Please enter a title for each file.', life: 2500 });
     return;
   }
+  // Validate that none of the files are empty before uploading
+  const empty = filesToUpload.value.find((f: File) => f.size === 0);
+  if (empty) {
+    toast.add({ severity: 'error', summary: 'Empty file', detail: `File "${empty.name}" is empty. Please choose a file with content.`, life: 4000 });
+    return;
+  }
+  // Validate text-like files for meaningful content
+  for (const f of filesToUpload.value) {
+    if (isTextLikeFile(f)) {
+      const ok = await hasMeaningfulContent(f);
+      if (!ok) {
+        toast.add({ severity: 'error', summary: 'Empty content', detail: `File "${f.name}" has no text content. Please choose a file with content.`, life: 4000 });
+        return;
+      }
+    }
+  }
   showTitleDialog.value = false;
   uploadError.value = '';
   uploading.value = true;
@@ -227,6 +314,38 @@ async function uploadFilesWithTitles() {
       const file = filesToUpload.value[i];
       const title = titles.value[i];
       await uploadSingleFile(file, title);
+    }
+  } catch (e: any) {
+    const msg = e?.message || 'Upload failed';
+    uploadError.value = msg;
+    toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 3000 });
+  } finally {
+    uploading.value = false;
+    uploadProgress.value = 0;
+    uploadPhase.value = null;
+    filesToUpload.value = [];
+    titles.value = [];
+  }
+}
+
+// New: upload immediately, without title input
+async function uploadFilesImmediately() {
+  if (!props.projectId) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Project ID not found', life: 3000 });
+    return;
+  }
+  if (!props.branchId) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Branch ID not found', life: 3000 });
+    return;
+  }
+  uploadError.value = '';
+  uploading.value = true;
+  uploadProgress.value = 0;
+  uploadPhase.value = 'uploading';
+  try {
+    for (let i = 0; i < filesToUpload.value.length; i++) {
+      const file = filesToUpload.value[i];
+      await uploadSingleFile(file, '');
     }
   } catch (e: any) {
     const msg = e?.message || 'Upload failed';
@@ -368,6 +487,10 @@ function handleAction(action: string, fileId: string | number) {
   } else if (action === 'rename') {
     editingFileId.value = file.id || file.fileId;
     editingFileName.value = file.fileName;
+  } else if (action === 'set-title') {
+    editingTitleFileId.value = file.id || file.fileId;
+    editingTitleInput.value = file.title || '';
+    showSetTitleDialog.value = true;
   } else if (action === 'delete') {
     fileToDelete.value = { ...file };
     showDeleteDialog.value = true;
@@ -427,6 +550,25 @@ function cancelRename() {
 async function confirmDelete() {
   const fileId = fileToDelete.value?.id || fileToDelete.value?.fileId;
   console.log('confirmDelete called', fileToDelete.value, 'id dùng để xóa:', fileId);
+  // Client guard: prevent deleting files synced from request
+  if (fileToDelete.value?.syncedFromRequest) {
+    showDeleteDialog.value = false;
+    isSidebarCollapsed.value = false;
+    toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'This file is synced from a request and cannot be deleted.', life: 3000 });
+    return;
+  }
+  // Re-check from backend in case flag missing
+  try {
+    const { data } = await axiosInstance.get(`/files/${fileId}`);
+    if (data?.syncedFromRequest) {
+      showDeleteDialog.value = false;
+      isSidebarCollapsed.value = false;
+      toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'This file is synced from a request and cannot be deleted.', life: 3000 });
+      return;
+    }
+  } catch (e) {
+    // ignore and let delete flow handle errors
+  }
   if (!fileId) {
     console.warn('No file to delete or missing id');
     return;
@@ -463,6 +605,25 @@ async function confirmDelete() {
 function closeDeleteDialog() {
   showDeleteDialog.value = false;
   isSidebarCollapsed.value = false;
+}
+
+async function saveTitle() {
+  if (!editingTitleFileId.value) {
+    showSetTitleDialog.value = false;
+    return;
+  }
+  try {
+    await axiosInstance.patch(`/files/${editingTitleFileId.value}`, { title: editingTitleInput.value });
+    showSetTitleDialog.value = false;
+    props.loadFiles();
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Title updated successfully!', life: 2500 });
+  } catch (e: any) {
+    let msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Update failed';
+    toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 3000 });
+  } finally {
+    editingTitleFileId.value = null;
+    editingTitleInput.value = '';
+  }
 }
 defineExpose({
   searchValue,
@@ -590,7 +751,8 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
           </div>
           <span v-else class="file-base-name">{{ file.fileName }}</span>
           <span v-if="file.status === 'processing'" class="file-status processing">
-            <i class="pi pi-spin pi-spinner" style="font-size:1em;margin-left:8px;"></i> Processing...
+            <i class="pi pi-spin pi-spinner spinner-inline"></i>
+            Processing...
           </span>
           <span v-else-if="file.status === 'error'" class="file-status error" style="color:#e53e3e;margin-left:8px;">Error extracting strings</span>
         </td>
@@ -610,6 +772,14 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
                 <span>Download</span>
               </button>
               <button class="dropdown-item"
+                      @click="canManageFiles && handleAction('set-title', file.id || file.fileId)"
+                      :disabled="!canManageFiles"
+                      :title="!canManageFiles ? 'You do not have permission to set title (requires ManageFiles permission)' : ''"
+              >
+                <i class="pi pi-tag"></i>
+                <span>Set Title</span>
+              </button>
+              <button class="dropdown-item"
                       @click="canManageFiles && handleAction('rename', file.id || file.fileId)"
                       :disabled="!canManageFiles"
                       :title="!canManageFiles ? 'You do not have permission to rename files (requires ManageFiles permission)' : ''"
@@ -618,9 +788,9 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
                 <span>Rename</span>
               </button>
               <button class="dropdown-item delete"
-                      @click="canManageFiles && handleAction('delete', file.id || file.fileId)"
-                      :disabled="!canManageFiles"
-                      :title="!canManageFiles ? 'You do not have permission to delete files (requires ManageFiles permission)' : ''"
+                      @click="canManageFiles && !file.syncedFromRequest && handleAction('delete', file.id || file.fileId)"
+                      :disabled="!canManageFiles || file.syncedFromRequest"
+                      :title="file.syncedFromRequest ? 'Cannot delete: This file is synced from a request' : (!canManageFiles ? 'You do not have permission to delete files (requires ManageFiles permission)' : '')"
               >
                 <i class="pi pi-trash"></i>
                 <span>Delete</span>
@@ -659,6 +829,26 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
         </div>
       </div>
       <!-- End Custom Modal nhập tiêu đề file -->
+      <!-- Set Title Modal -->
+      <div v-if="showSetTitleDialog" class="delete-dialog-modal">
+        <div class="modal-overlay" @click="showSetTitleDialog=false"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Set Title</h3>
+            <button class="close-btn" @click="showSetTitleDialog=false">
+              <span style="font-size: 1.5rem; color: #6b7280; font-weight: bold;">×</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <input v-model="editingTitleInput" type="text" placeholder="Enter title" class="title-input" style="width:100%;" />
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showSetTitleDialog=false">Cancel</button>
+            <button class="btn btn-primary" @click="saveTitle" :disabled="!canManageFiles">Save</button>
+          </div>
+        </div>
+      </div>
+      <!-- End Set Title Modal -->
       <div v-if="showDeleteDialog" class="delete-dialog-modal">
         <div class="modal-overlay" @click="closeDeleteDialog"></div>
         <div class="modal-content">
@@ -697,8 +887,9 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(49,130,206,0.08), 0 2px 6px rgba(76,34,128,0.06);
   padding: 1.5rem 1.5rem 1rem 1.5rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 3rem;
   position: relative;
+  min-height: 60vh;
 }
 .toolbar {
   display: flex;
@@ -1206,6 +1397,18 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
   color: #6366f1;
   font-weight: 500;
   margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.spinner-inline {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 16px;
+  vertical-align: middle;
+  transform-origin: center center;
 }
 .file-status.error {
   color: #e53e3e;

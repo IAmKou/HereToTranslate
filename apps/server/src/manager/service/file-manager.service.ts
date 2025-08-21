@@ -35,6 +35,55 @@ export class FileService {
   }
   private readonly logger = new Logger(FileService.name);
 
+  private async hasMeaningfulContentForUpload(upload: Express.Multer.File): Promise<boolean> {
+    try {
+      const mime = upload.mimetype || '';
+      const buf = upload.buffer;
+      // Quick text-like check
+      const textLike = (
+        mime.startsWith('text/') ||
+        [
+          'application/json',
+          'text/html',
+          'text/css',
+          'application/javascript',
+          'text/xml',
+        ].includes(mime)
+      );
+      if (textLike) {
+        const text = buf.toString('utf8');
+        return /\S/.test(text);
+      }
+      // PDF check via text extraction
+      if (mime === 'application/pdf') {
+        try {
+          const segments = await this.extractPdfTextSegments(buf);
+          return Array.isArray(segments) && segments.some(seg => typeof seg?.text === 'string' && seg.text.trim().length > 0);
+        } catch (e) {
+          // If extraction fails, do not block by default
+          this.logger.warn('PDF text extraction failed during validation; allowing upload');
+          return true;
+        }
+      }
+      // DOCX raw text extraction using mammoth
+      if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        try {
+          const result = await mammoth.extractRawText({ buffer: buf });
+          const text = result?.value ?? '';
+          return /\S/.test(text);
+        } catch (e) {
+          this.logger.warn('DOCX text extraction failed during validation; allowing upload');
+          return true;
+        }
+      }
+      // Other formats: skip strict validation
+      return true;
+    } catch (error) {
+      this.logger.warn('Content validation encountered an error; allowing upload');
+      return true;
+    }
+  }
+
   async saveFile(params: {
     uid: bigint;
     fileName: string;
@@ -65,6 +114,7 @@ export class FileService {
       project: projectId ? { id: projectId } : undefined,
       branch: branchId ? { id: branchId } : undefined,
       request: requestId ? { id: requestId } : undefined,
+      isSyncedFromRequest: !!requestId,
     });
 
     this.logger.log(`Saving file: ${fileName}, type: ${fileType}, projectId: ${projectId}, branchId: ${branchId}, uploader: ${uid}`);
@@ -136,6 +186,11 @@ export class FileService {
     title?: string,
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
+    // Validate meaningful content for certain formats to catch empty-content files with non-zero size
+    const hasContent = await this.hasMeaningfulContentForUpload(file);
+    if (!hasContent) {
+      throw new BadRequestException('Uploaded file appears to have no extractable text content. Please upload a file with content.');
+    }
 
     // Tìm file trùng tên trong cùng project + branch
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
@@ -183,6 +238,7 @@ export class FileService {
         request: requestId ? { id: requestId } : undefined,
         status: 'processing',
         title: title,
+        isSyncedFromRequest: !!requestId,
       });
       const savedFile = await this.fileRepository.save(fileEntity);
       saved = {
@@ -268,8 +324,8 @@ export class FileService {
   async getProjectFiles(projectId: bigint, uid: bigint) {
     const files = await this.fileRepository.find({
       where: { project: { id: projectId } },
-      relations: ['uploader'],
-      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader', 'status', 'title'],
+      relations: ['uploader', 'request'],
+      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader', 'status', 'title', 'request', 'isSyncedFromRequest'],
       order: { createdAt: 'DESC' }
     });
 
@@ -280,6 +336,7 @@ export class FileService {
       title: file.title ?? null,
       createdAt: file.createdAt,
       status: file.status || 'ready',
+      syncedFromRequest: !!file.request || !!file.isSyncedFromRequest,
       uploader: {
         uploaderId: file.uploader.id.toString(),
         username: file.uploader.username,
@@ -291,6 +348,7 @@ export class FileService {
   async getFileById(fileId: string) {
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
+      relations: ['request'],
       select: ['id', 'fileName', 'fileType', 'fileContent', 'status', 'extractLog', 'title'],
     });
     if (!file) return null;
@@ -302,6 +360,8 @@ export class FileService {
       title: file.title ?? null,
       status: file.status || 'ready',
       extractLog: file.extractLog || '',
+      syncedFromRequest: !!(file as any).request,
+      requestId: (file as any).request?.id ? (file as any).request.id.toString() : undefined,
     };
   }
 
@@ -355,7 +415,7 @@ export class FileService {
 
 
   async deleteFile(fileId: bigint, userId: string | bigint) {
-    const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader', 'project'] });
+    const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader', 'project', 'request'] });
     if (!file) throw new NotFoundException('File not found');
 
     this.logger.log(`Attempting to delete file: ${file.fileName} (ID: ${fileId})`);
@@ -364,6 +424,22 @@ export class FileService {
     const hasAttachFiles = await this.checkUserAttachFilesPermission(userId, file.project?.id);
     if (!hasAttachFiles) {
       throw new ForbiddenException('You do not have permission (AttachFiles) to delete this file');
+    }
+
+    // Chặn xóa nếu file này được đồng bộ/tạo từ một request
+    if (file.request || file.isSyncedFromRequest) {
+      throw new BadRequestException('Cannot delete file: This file is linked to a request.');
+    }
+
+    // Extra safety: re-check via query in case relation wasn't hydrated
+    const linkedCount = await this.fileRepository
+      .createQueryBuilder('f')
+      .leftJoin('f.request', 'req')
+      .where('f.id = :id', { id: file.id })
+      .andWhere('(req.id IS NOT NULL OR f.isSyncedFromRequest = true)')
+      .getCount();
+    if (linkedCount > 0) {
+      throw new BadRequestException('Cannot delete file: This file is linked to a request.');
     }
 
     // Debug: Kiểm tra tất cả commit liên quan đến file này
@@ -583,7 +659,16 @@ export class FileService {
   }
 
   async renameFile(fileId: bigint, newFileName: string, userId: bigint) {
-    this.logger.log(`Renaming file ${fileId} to ${newFileName} by user ${userId}`);
+    // Backward compatibility: delegate to updateFileMetadata
+    return this.updateFileMetadata(fileId, { fileName: newFileName }, userId);
+  }
+
+  async updateFileMetadata(
+    fileId: bigint,
+    payload: { fileName?: string; title?: string },
+    userId: bigint
+  ) {
+    this.logger.log(`Updating file metadata ${fileId} by user ${userId}: ${JSON.stringify(payload)}`);
 
     const file = await this.fileRepository.findOne({
       where: { id: fileId },
@@ -594,30 +679,37 @@ export class FileService {
       throw new NotFoundException(`File with ID ${fileId} not found`);
     }
 
-    // Check if user has permission to rename this file
     const hasPermission = await this.checkUserAttachFilesPermission(userId, file.project?.id);
     if (!hasPermission) {
-      throw new Error('You do not have permission to rename this file');
+      throw new Error('You do not have permission to update this file');
     }
 
-    // Update file name
-    file.fileName = newFileName;
-    file.updatedAt = new Date();
+    let changed = false;
+    if (typeof payload.fileName === 'string' && payload.fileName.trim().length > 0) {
+      file.fileName = payload.fileName.trim();
+      changed = true;
+    }
+    if (typeof payload.title === 'string') {
+      file.title = payload.title.trim();
+      changed = true;
+    }
 
-    const updatedFile = await this.fileRepository.save(file);
-
-    this.logger.log(`File ${fileId} renamed to ${newFileName}`);
+    if (changed) {
+      file.updatedAt = new Date();
+      await this.fileRepository.save(file);
+    }
 
     return {
-      fileId: updatedFile.id.toString(),
-      fileName: updatedFile.fileName,
-      fileType: updatedFile.fileType,
-      createdAt: updatedFile.createdAt,
-      updatedAt: updatedFile.updatedAt,
-      uploaderId: updatedFile.uploader?.id?.toString(),
-      projectId: updatedFile.project?.id?.toString(),
-      branchId: updatedFile.branch?.id?.toString(),
-      requestId: updatedFile.request?.id?.toString(),
+      fileId: file.id.toString(),
+      fileName: file.fileName,
+      fileType: file.fileType,
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+      uploaderId: file.uploader?.id?.toString(),
+      projectId: file.project?.id?.toString(),
+      branchId: file.branch?.id?.toString(),
+      requestId: file.request?.id?.toString(),
+      title: file.title ?? null,
     };
   }
 
@@ -749,13 +841,13 @@ export class FileService {
         try {
           const operatorList = await page.getOperatorList();
           let imageCount = 0;
-          
+
           for (let j = 0; j < operatorList.fnArray.length; j++) {
             if (operatorList.fnArray[j] === pdfjsLib.OPS.paintImageXObject) {
               imageCount++;
             }
           }
-          
+
           if (imageCount > 0) {
             this.logger.log(`Page ${pageNum} has ${imageCount} images (basic info only - skipping detailed extraction)`);
           }

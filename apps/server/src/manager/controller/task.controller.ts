@@ -74,7 +74,7 @@ export class TaskController {
     @Req() req: AuthenticatedRequest
   ) {
     const userId = req.user.id;
-    return await this.taskService.reopenTask(id, userId.toString(), body.reason);
+    return await this.taskService.reopenTask(id, userId.toString(), body?.reason);
   }
 
   @Get('/user/:userId')

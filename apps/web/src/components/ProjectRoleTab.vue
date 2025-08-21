@@ -1054,12 +1054,13 @@ watch([currentMember, currentUserId, canManageRoles], () => {
                       {{ getAvatarText(member) }}
                     </div>
                   </div>
-                  <div
-                    v-else
-                    class="user-avatar-text"
-                    :style="{ backgroundColor: getRandomColor(member.username || member.id) }"
-                  >
-                    {{ getAvatarText(member) }}
+                  <div v-else class="user-avatar-wrapper">
+                    <div
+                      class="user-avatar-text"
+                      :style="{ backgroundColor: getRandomColor(member.username || member.id) }"
+                    >
+                      {{ getAvatarText(member) }}
+                    </div>
                   </div>
                   <div class="user-info">
                     <div class="user-name">{{ member.fullName || member.username }}</div>

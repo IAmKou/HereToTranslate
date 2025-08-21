@@ -72,6 +72,7 @@ import { ManifestService } from '#LocalProject/Managers/service/manifest.service
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 import { NotificationController } from '#LocalProject/Managers/controller/notification.controller';
 import { BullModule } from '@nestjs/bull';
+import { BackgroundExtractService } from './service/background-extract.service';
 import { AiChatService } from '#LocalProject/Managers/service/ai-manager.service';
 import { AiChatController } from '#LocalProject/Managers/controller/ai-chat.controller';
 import { NotificationGateway } from '#LocalProject/Utils/gateway/notification.gateway';
@@ -148,7 +149,7 @@ import { FeeController } from './controller/fee.controller';
       SubtaskEntity,
       SubtaskStatusHistoryEntity,
     ]),
-    BullModule.registerQueue({ name: 'extract', redis: { host: 'localhost', port: 6379 } }),
+    // Restore Bull queue for export jobs (required by ExportManagerService)
     BullModule.registerQueue({ name: 'export', redis: { host: 'localhost', port: 6379 } }),
   ],
   providers: [
@@ -187,6 +188,7 @@ import { FeeController } from './controller/fee.controller';
     TaskManagerService,
     ExportManagerService,
     ExportJobProcessor,
+    BackgroundExtractService,
     PaypalConfigChecker,
     AsposePDFBridge,
     AsposeDocxBridge,
@@ -225,6 +227,7 @@ import { FeeController } from './controller/fee.controller';
     TaskManagerService,
     TaskAssignmentManagerService,
     ExportManagerService,
+    BackgroundExtractService,
     PaypalConfigChecker,
     AsposePDFBridge,
     AsposeDocxBridge,

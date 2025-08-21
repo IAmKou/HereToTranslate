@@ -649,8 +649,30 @@ export class ManifestService {
             console.log('[PDF] pdfjs-dist result - items count:', items?.length || 0);
             console.log('[PDF] pdfjs-dist result - text length:', result.text?.length || 0);
 
+            // If items exist but look garbled (encoding issue), prefer OCR fallback
             if (items && items.length > 0) {
-              console.log('[PDF] SUCCESS: Parsed with pdfjs-dist, found', items.length, 'items');
+              const sample = items.slice(0, Math.min(200, items.length)).map((i: any) => i.text).join(' ');
+              const readable = sample.replace(/[^a-zA-ZÀ-ỹ0-9\s.,!?;:()\[\]{}"'`~@#$%^&*+=|\\/<>-]/g, '');
+              const ratio = readable.length / Math.max(1, sample.length);
+              const suspicious = /[%�]{3,}|\?{3,}/.test(sample);
+              console.log(`[PDF] pdfjs-dist readability ratio: ${ratio.toFixed(2)}, suspicious: ${suspicious}`);
+              if (ratio < 0.35 || suspicious) {
+                console.warn('[PDF] Detected low-quality text extraction from pdfjs (encoding issue). Falling back to OCR...');
+                // Force OCR fallback
+                try {
+                  text = await extractTextWithOcrSpace(file.fileContent, apiKey);
+                  usedOcr = true;
+                  console.log('[PDF] OCR result - text length:', text?.length || 0);
+                  console.log('[PDF] OCR result - first 200 chars:', text ? text.substring(0, 200) : '[EMPTY]');
+                  // Clear items so the OCR path below will be used
+                  items = [] as any[];
+                } catch (ocrError: any) {
+                  console.error('[PDF] ERROR: OCR failed after low-quality pdfjs extraction:', ocrError?.message || ocrError);
+                  // Keep pdfjs items as last resort
+                }
+              } else {
+                console.log('[PDF] SUCCESS: Parsed with pdfjs-dist, found', items.length, 'items');
+              }
             } else {
               console.warn('[PDF] WARNING: No text items found with pdfjs-dist, falling back to OCR.');
               throw new Error("No text found with pdfjs-dist, falling back to OCR.");
@@ -1015,28 +1037,22 @@ export class ManifestService {
     for (const entry of manifestEntries) {
       entry.obsolete = false;
     }
-    // Không insert duplicate: Nếu đã có string cũ (cùng fileId, originalText, language), chỉ update obsolete: false
-    for (const entry of manifestEntries) {
-      const existing = await this.translationModel.findOne({
-        fileId: entry.fileId,
-        originalText: entry.originalText,
-        language: entry.language
-      });
-      if (existing) {
-        // Nếu đã có, update obsolete: false, filePart mới và position (bao gồm page)
-        await this.translationModel.updateOne({ _id: existing._id }, {
+    // Tăng tốc: upsert hàng loạt, hạn chế round-trip
+    const bulkOps = manifestEntries.map((entry) => ({
+      updateOne: {
+        filter: { fileId: entry.fileId, originalText: entry.originalText, language: entry.language },
+        update: {
           $set: {
+            ...entry,
             obsolete: false,
-            filePart: entry.filePart,
-            position: entry.position // Cập nhật position để đảm bảo thông tin page được lưu trữ
-          }
-        });
-      } else {
-        // Nếu chưa có, insert mới
-        await this.translationModel.create(entry);
-      }
+          },
+        },
+        upsert: true,
+      },
+    }));
+    if (bulkOps.length > 0) {
+      await this.translationModel.bulkWrite(bulkOps, { ordered: false });
     }
-    // Không dùng insertMany nữa để tránh duplicate
   }
 }
 

@@ -14,6 +14,7 @@ export interface RealtimeNotification {
     username: string
     fullName?: string
   }
+  createdByUserId?: string
 }
 
 export interface NotificationDeleteEvent {

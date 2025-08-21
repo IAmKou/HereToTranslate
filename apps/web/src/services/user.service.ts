@@ -31,6 +31,7 @@ export interface User {
   fullName: string;
   isActive: boolean;
   createdAt: Date;
+  avatarUrl?: string; // optional avatar path from API
   role: {
     id: number;
     name: string;

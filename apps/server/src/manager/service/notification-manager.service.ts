@@ -47,13 +47,19 @@ export class NotificationManagerService {
     // Send realtime notification
     try {
       if (data.isGlobal) {
-        this.notificationGateway.emitToAll({
+        const payload = {
           id: savedNotification.id.toString(),
           type: savedNotification.type,
           message: savedNotification.message,
           createdAt: savedNotification.createdAt,
           isGlobal: true,
-        });
+          createdByUserId: savedNotification.createdBy?.toString(),
+        } as const;
+        if (savedNotification.createdBy) {
+          this.notificationGateway.emitToAllExcept(savedNotification.createdBy.toString(), payload);
+        } else {
+          this.notificationGateway.emitToAll(payload);
+        }
       } else if (data.userId) {
         this.notificationGateway.emitToUser(data.userId, {
           id: savedNotification.id.toString(),
@@ -61,6 +67,7 @@ export class NotificationManagerService {
           message: savedNotification.message,
           createdAt: savedNotification.createdAt,
           isGlobal: false,
+          createdByUserId: savedNotification.createdBy?.toString(),
         });
       }
     } catch (error) {
@@ -81,11 +88,14 @@ export class NotificationManagerService {
   }
 
   async createNotificationForAllUsers(data: CreateGlobalNotificationDto): Promise<NotificationEntity[]> {
-    // Get all active users
-    const users = await this.userRepository.find({
-      where: { isActive: true },
-      select: ['id'],
-    });
+    // Get all active non-admin users (exclude SuperAdmin=1 and Admin=2)
+    const users = await this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.id'])
+      .leftJoin('user.role', 'role')
+      .where('user.isActive = :active', { active: true })
+      .andWhere('role.id NOT IN (:...excludedRoleIds)', { excludedRoleIds: [1, 2] })
+      .getMany();
 
     const notifications: NotificationEntity[] = [];
 
@@ -110,6 +120,8 @@ export class NotificationManagerService {
       { isGlobal: true, ...(unreadOnly ? { isRead: false } : {}) }
     ];
 
+    // If the requester is admin, don't return anything for navbar usage.
+    // We'll enforce at controller-level filtering here too by checking role via join.
     return await this.notificationRepository.find({
       where: whereConditions,
       order: { createdAt: 'DESC' },
@@ -179,13 +191,19 @@ export class NotificationManagerService {
 
     const updatedNotification = await this.notificationRepository.save(notification);
     if (notification.isGlobal) {
-      this.notificationGateway.emitToAll({
+      const payload = {
         id: updatedNotification.id.toString(),
         type: updatedNotification.type,
         message: updatedNotification.message,
         createdAt: updatedNotification.createdAt,
         isGlobal: true,
-      });
+        createdByUserId: updatedNotification.createdBy?.toString(),
+      } as const;
+      if (updatedNotification.createdBy) {
+        this.notificationGateway.emitToAllExcept(updatedNotification.createdBy.toString(), payload);
+      } else {
+        this.notificationGateway.emitToAll(payload);
+      }
     } else if (notification.userId) {
       this.notificationGateway.emitToUser(notification.userId, {
         id: updatedNotification.id.toString(),
@@ -193,6 +211,7 @@ export class NotificationManagerService {
         message: updatedNotification.message,
         createdAt: updatedNotification.createdAt,
         isGlobal: false,
+        createdByUserId: updatedNotification.createdBy?.toString(),
       });
     }
 

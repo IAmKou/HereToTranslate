@@ -46,6 +46,22 @@
             </div>
           </template>
           <template #content>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-icon info"><i class="pi pi-folder"></i></div>
+                <div class="stat-text">
+                  <div class="stat-label">Total Categories</div>
+                  <div class="stat-value">{{ categories.length }}</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon success"><i class="pi pi-tag"></i></div>
+                <div class="stat-text">
+                  <div class="stat-label">Total Tags</div>
+                  <div class="stat-value">{{ tags.length }}</div>
+                </div>
+              </div>
+            </div>
             <div v-if="activeTab === 'categories'">
               <DataTable
                 :value="categories"
@@ -61,22 +77,31 @@
                 showGridlines
                 responsiveLayout="scroll"
                 :rowHover="true"
+                v-model:selection="selectedCategories"
+                dataKey="id"
                 paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                 :rowsPerPageOptions="[5,10,20,50]"
                 currentPageReportTemplate="Showing {first} to {last} of {totalRecords} categories"
               >
                 <template #header>
-                  <div class="flex justify-between items-center mb-2">
-                    <span class="p-input-icon-left">
-                      <i class="pi pi-search" />
-                      <InputText v-model="filters.global.value" placeholder="Search..." />
-                    </span>
-                    <Button
-                      icon="pi pi-plus"
-                      label="Add Category"
-                      @click="openAddModal"
-                      class="p-button-primary"
-                    />
+                  <div class="toolbar">
+                    <div class="toolbar-left">
+                      <span class="p-input-icon-left">
+                        <i class="pi pi-search" />
+                        <InputText v-model="filters.global.value" placeholder="Search..." />
+                      </span>
+                      <Button icon="pi pi-filter-slash" label="Clear" class="p-button-text" @click="clearCategoryFilters" />
+                    </div>
+                    <div class="toolbar-right">
+                      <Button icon="pi pi-refresh" label="Refresh" class="p-button-secondary" @click="refreshCategories" :loading="loading" />
+                      <Button icon="pi pi-trash" label="Delete Selected" class="p-button-danger" @click="bulkDeleteSelected" :disabled="selectedCategories.length === 0" />
+                      <Button
+                        icon="pi pi-plus"
+                        label="Add Category"
+                        @click="openAddModal"
+                        class="p-button-primary"
+                      />
+                    </div>
                   </div>
                 </template>
                 <template #empty>
@@ -91,6 +116,7 @@
                     <p class="mt-2">Loading categories...</p>
                   </div>
                 </template>
+                <Column selectionMode="multiple" style="width: 3rem" />
                 <Column header="STT" style="width: 60px">
                   <template #body="slotProps">
                     {{ categories.indexOf(slotProps.data) + 1 }}
@@ -181,12 +207,17 @@
                 currentPageReportTemplate="Showing {first} to {last} of {totalRecords} tags"
               >
                 <template #header>
-                  <div class="flex justify-between items-center mb-2">
-                    <span class="p-input-icon-left">
-                      <i class="pi pi-search" />
-                      <InputText v-model="tagFilters.global.value" placeholder="Search..." />
-                    </span>
-                    <Button icon="pi pi-plus" label="Add Tag" @click="openAddTagDialog" class="p-button-primary" />
+                  <div class="toolbar">
+                    <div class="toolbar-left">
+                      <span class="p-input-icon-left">
+                        <i class="pi pi-search" />
+                        <InputText v-model="tagFilters.global.value" placeholder="Search..." />
+                      </span>
+                      <Button icon="pi pi-filter-slash" label="Clear" class="p-button-text" @click="tagFilters.global.value = null" />
+                    </div>
+                    <div class="toolbar-right">
+                      <Button icon="pi pi-plus" label="Add Tag" @click="openAddTagDialog" class="p-button-primary" />
+                    </div>
                   </div>
                 </template>
                 <template #empty>
@@ -218,7 +249,16 @@
                   </template>
                 </Column>
 
-                <Column field="updatedAt" header="Created At" sortable style="min-width: 150px">
+                <Column field="createdAt" header="Created At" sortable style="min-width: 180px">
+                  <template #body="slotProps">
+                    <div class="flex items-center gap-2">
+                      <i class="pi pi-calendar text-gray-400"></i>
+                      <span>{{ formatDate(slotProps.data.createdAt) }}</span>
+                    </div>
+                  </template>
+                </Column>
+
+                <Column field="updatedAt" header="Last Updated" sortable style="min-width: 180px">
                   <template #body="slotProps">
                     <div class="flex items-center gap-2">
                       <i class="pi pi-clock text-gray-400"></i>
@@ -226,7 +266,7 @@
                     </div>
                   </template>
                 </Column>
-                <Column style="min-width: 150px">
+                <Column header="Action" style="min-width: 150px">
                   <template #body="slotProps">
                     <div class="flex gap-2">
                       <Button
@@ -245,156 +285,127 @@
                   </template>
                 </Column>
               </DataTable>
-              <!-- Add/Edit Tag Dialog -->
-              <Dialog
-                v-model:visible="showTagDialog"
-                :header="isEditingTag ? 'Edit Tag' : 'Add New Tag'"
-                :style="{width: '400px'}"
-                :modal="true"
-                :closable="true"
-                :closeOnEscape="true"
-                class="category-dialog"
-              >
-                <div class="p-fluid">
-                  <div class="dialog-content">
-                    <div class="form-section">
-                      <div class="section-header">
-                        <i class="pi pi-tag text-primary"></i>
-                        <h3>Tag Information</h3>
-                      </div>
-                      <div class="field">
-                        <label for="tagName" class="font-medium flex items-center gap-2">
-                          <i class="pi pi-tag text-primary"></i>
-                          Tag Name
-                          <span class="required-mark">*</span>
-                        </label>
-                        <InputText
-                          id="tagName"
-                          v-model="currentTag.name"
-                          required
-                          autofocus
-                          :class="{'p-invalid': tagSubmitted && !currentTag.name}"
-                          placeholder="Enter tag name"
-                          class="w-full"
-                        />
-                        <small class="p-error flex items-center gap-1 mt-1" v-if="tagSubmitted && !currentTag.name">
-                          <i class="pi pi-exclamation-circle"></i>
-                          Name is required
-                        </small>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <template #footer>
-                  <div class="dialog-footer">
-                    <Button
-                      label="Cancel"
-                      icon="pi pi-times"
-                      class="p-button-text p-button-rounded"
-                      @click="closeTagDialog"
-                      :disabled="tagSaving"
-                    />
-                    <Button
-                      :label="isEditingTag ? 'Update Tag' : 'Create Tag'"
-                      :icon="isEditingTag ? 'pi pi-save' : 'pi pi-plus'"
-                      class="p-button-primary p-button-rounded"
-                      @click="saveTag"
-                      :loading="tagSaving"
-                    />
-                  </div>
-                </template>
-              </Dialog>
-              <!-- Confirm Dialog for Delete -->
-              <ConfirmDialog></ConfirmDialog>
             </div>
           </template>
         </Card>
 
-        <!-- Add/Edit Category Dialog -->
+        <!-- Compact Category Dialog -->
         <Dialog
           v-model:visible="showDialog"
-          :header="isEditing ? 'Edit Category' : 'Add New Category'"
-          :style="{width: '600px'}"
+          :style="{width: '800px'}"
           :modal="true"
-          :closable="true"
+          :closable="false"
           :closeOnEscape="true"
-          class="category-dialog"
+          class="compact-dialog"
+          :transition="'dialog'"
         >
-          <div class="p-fluid">
-            <div class="dialog-content">
-              <div class="form-section">
-                <div class="section-header">
-                  <i class="pi pi-folder text-primary"></i>
-                  <h3>Category Information</h3>
+          <template #header>
+            <div class="dialog-header">
+              <div class="header-content">
+                <div class="header-icon">
+                  <i class="pi pi-folder"></i>
                 </div>
-                <div class="field">
-                  <label for="name" class="font-medium flex items-center gap-2">
-                    <i class="pi pi-tag text-primary"></i>
-                    Category Name
-                    <span class="required-mark">*</span>
-                  </label>
+                <div class="header-text">
+                  <h3>{{ isEditing ? 'Edit Category' : 'Create Category' }}</h3>
+                  <p>{{ isEditing ? 'Update category information' : 'Add a new category' }}</p>
+                </div>
+              </div>
+              <Button
+                icon="pi pi-times"
+                class="p-button-rounded p-button-text close-btn"
+                @click="closeDialog"
+                aria-label="Close dialog"
+              />
+            </div>
+          </template>
+
+          <div class="dialog-content">
+            <div class="form-container">
+              <div class="form-group">
+                <label for="name" class="form-label">
+                  <span class="label-text">Category Name</span>
+                  <span class="required">*</span>
+                </label>
+                <div class="input-container">
+                  <i class="pi pi-folder input-icon"></i>
                   <InputText
                     id="name"
                     v-model="currentCategory.name"
                     required
                     autofocus
-                    :class="{'p-invalid': submitted && !currentCategory.name}"
-                    placeholder="Enter category name"
-                    class="w-full"
+                    :class="{'error': submitted && !currentCategory.name}"
+                    placeholder="e.g., Web Development"
+                    class="clean-input"
+                    :maxlength="100"
                   />
-                  <small class="p-error flex items-center gap-1 mt-1" v-if="submitted && !currentCategory.name">
-                    <i class="pi pi-exclamation-circle"></i>
-                    Name is required
-                  </small>
                 </div>
-                <div class="field">
-                  <label for="description" class="font-medium flex items-center gap-2">
-                    <i class="pi pi-info-circle text-primary"></i>
-                    Description
-                    <span class="text-sm text-gray-500">(Optional)</span>
-                  </label>
-                  <Textarea
-                    id="description"
-                    v-model="currentCategory.description"
-                    placeholder="Enter category description"
-                    rows="4"
-                    class="w-full"
-                    autoResize
-                  />
-                  <small class="text-gray-500 mt-1">
-                    <i class="pi pi-info-circle"></i>
-                    Add a brief description to help identify this category
-                  </small>
+                <div class="input-meta">
+                  <span class="char-count">{{ currentCategory.name.length }}/100</span>
+                  <div v-if="submitted && !currentCategory.name" class="error-message">
+                    <i class="pi pi-exclamation-circle"></i>
+                    <span>Category name is required</span>
+                  </div>
                 </div>
               </div>
 
-              <div class="form-section" v-if="isEditing">
-                <div class="section-header">
-                  <i class="pi pi-clock text-primary"></i>
-                  <h3>Category Details</h3>
+              <div class="form-group">
+                <label for="description" class="form-label">
+                  <span class="label-text">Description</span>
+                  <span class="optional">(Optional)</span>
+                </label>
+                <div class="input-container">
+                  <i class="pi pi-info-circle input-icon"></i>
+                  <Textarea
+                    id="description"
+                    v-model="currentCategory.description"
+                    placeholder="Describe what this category is for..."
+                    rows="2"
+                    class="clean-textarea"
+                    autoResize
+                    :maxlength="descriptionMax"
+                  />
                 </div>
-                <div class="details-grid">
-                  <div class="detail-item">
-                    <span class="detail-label">Created At</span>
-                    <span class="detail-value">{{ formatDate(currentCategory.updatedAt) }}</span>
+                <div class="input-meta">
+                  <span class="char-count">{{ descriptionLength }}/{{ descriptionMax }}</span>
+                </div>
+              </div>
+
+              <div v-if="isEditing" class="info-section">
+                <div class="info-header">
+                  <i class="pi pi-clock"></i>
+                  <span>Category Details</span>
+                </div>
+                <div class="info-grid">
+                  <div class="info-item">
+                    <div class="info-label">Created</div>
+                    <div class="info-value">
+                      {{ currentCategory.createdAt ? formatDate(currentCategory.createdAt) : 'N/A' }}
+                    </div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Last Updated</div>
+                    <div class="info-value">
+                      {{ currentCategory.updatedAt ? formatDate(currentCategory.updatedAt) : 'N/A' }}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
           <template #footer>
             <div class="dialog-footer">
               <Button
                 label="Cancel"
                 icon="pi pi-times"
-                class="p-button-text p-button-rounded"
+                class="p-button-text cancel-btn"
                 @click="closeDialog"
                 :disabled="saving"
               />
               <Button
-                :label="isEditing ? 'Update Category' : 'Create Category'"
+                :label="isEditing ? 'Update' : 'Create'"
                 :icon="isEditing ? 'pi pi-save' : 'pi pi-plus'"
-                class="p-button-primary p-button-rounded"
+                class="p-button-primary action-btn"
                 @click="saveCategory"
                 :loading="saving"
               />
@@ -402,23 +413,215 @@
           </template>
         </Dialog>
 
-        <!-- Confirm Dialog for Delete -->
-        <ConfirmDialog></ConfirmDialog>
+        <!-- Compact Tag Dialog -->
+        <Dialog
+          v-model:visible="showTagDialog"
+          :style="{width: '700px'}"
+          :modal="true"
+          :closable="false"
+          :closeOnEscape="true"
+          class="compact-dialog tag-dialog"
+          :transition="'dialog'"
+        >
+          <template #header>
+            <div class="dialog-header">
+              <div class="header-content">
+                <div class="header-icon">
+                  <i class="pi pi-tag"></i>
+                </div>
+                <div class="header-text">
+                  <h3>{{ isEditingTag ? 'Edit Tag' : 'Create Tag' }}</h3>
+                  <p>{{ isEditingTag ? 'Update tag information' : 'Add a new tag' }}</p>
+                </div>
+              </div>
+              <Button
+                icon="pi pi-times"
+                class="p-button-rounded p-button-text close-btn"
+                @click="closeTagDialog"
+                aria-label="Close dialog"
+              />
+            </div>
+          </template>
+
+          <div class="dialog-content">
+            <div class="form-container">
+              <div class="form-group">
+                <label for="tagName" class="form-label">
+                  <span class="label-text">Tag Name</span>
+                  <span class="required">*</span>
+                </label>
+                <div class="input-container">
+                  <i class="pi pi-tag input-icon"></i>
+                  <InputText
+                    id="tagName"
+                    v-model="currentTag.name"
+                    required
+                    autofocus
+                    :class="{'error': tagSubmitted && !currentTag.name}"
+                    placeholder="e.g., Frontend, Backend"
+                    class="clean-input"
+                    :maxlength="50"
+                  />
+                </div>
+                <div class="input-meta">
+                  <span class="char-count">{{ currentTag.name.length }}/50</span>
+                  <div v-if="tagSubmitted && !currentTag.name" class="error-message">
+                    <i class="pi pi-exclamation-circle"></i>
+                    <span>Tag name is required</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="isEditingTag" class="info-section">
+                <div class="info-header">
+                  <i class="pi pi-clock"></i>
+                  <span>Tag Details</span>
+                </div>
+                <div class="info-grid">
+                  <div class="info-item">
+                    <div class="info-label">Created</div>
+                    <div class="info-value">
+                      {{ currentTag.createdAt ? formatDate(currentTag.createdAt) : 'N/A' }}
+                    </div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Last Updated</div>
+                    <div class="info-value">
+                      {{ currentTag.createdAt ? formatDate(currentTag.updatedAt) : 'N/A' }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <template #footer>
+            <div class="dialog-footer">
+              <Button
+                label="Cancel"
+                icon="pi pi-times"
+                class="p-button-text cancel-btn"
+                @click="closeTagDialog"
+                :disabled="tagSaving"
+              />
+              <Button
+                :label="isEditingTag ? 'Update' : 'Create'"
+                :icon="isEditingTag ? 'pi pi-save' : 'pi pi-plus'"
+                class="p-button-primary action-btn"
+                @click="saveTag"
+                :loading="tagSaving"
+              />
+            </div>
+          </template>
+        </Dialog>
+
+        <!-- Custom Delete Modal -->
+        <Dialog
+          v-model:visible="showDeleteModal"
+          :style="{width: '480px'}"
+          :modal="true"
+          :closable="false"
+          :closeOnEscape="true"
+          class="delete-modal"
+        >
+          <template #header>
+            <div class="delete-modal-header">
+              <div class="delete-icon">
+                <i class="pi pi-trash"></i>
+              </div>
+            </div>
+          </template>
+
+          <template #closeicon>
+            <Button
+              icon="pi pi-times"
+              class="p-button-rounded p-button-text close-btn"
+              @click="showDeleteModal = false"
+              aria-label="Close modal"
+            />
+          </template>
+
+          <div class="delete-modal-content">
+            <p class="delete-message">Are you sure you want to delete the category "{{ currentCategory.name }}"?</p>
+          </div>
+
+          <template #footer>
+            <div class="delete-modal-footer">
+              <Button
+                label="No, cancel"
+                class="p-button-text cancel-btn"
+                @click="showDeleteModal = false"
+              />
+              <Button
+                label="Yes, I'm sure"
+                class="p-button-danger confirm-btn"
+                @click="deleteCategory(currentCategory)"
+              />
+            </div>
+          </template>
+        </Dialog>
+
+        <!-- Custom Delete Tag Modal -->
+        <Dialog
+          v-model:visible="showDeleteTagModal"
+          :style="{width: '480px'}"
+          :modal="true"
+          :closable="false"
+          :closeOnEscape="true"
+          class="delete-modal"
+        >
+          <template #header>
+            <div class="delete-modal-header">
+              <div class="delete-icon">
+                <i class="pi pi-trash"></i>
+              </div>
+            </div>
+          </template>
+
+          <template #closeicon>
+            <Button
+              icon="pi pi-times"
+              class="p-button-rounded p-button-text close-btn"
+              @click="showDeleteTagModal = false"
+              aria-label="Close modal"
+            />
+          </template>
+
+          <div class="delete-modal-content">
+            <p class="delete-message">Are you sure you want to delete the tag "{{ currentTag.name }}"?</p>
+          </div>
+
+          <template #footer>
+            <div class="delete-modal-footer">
+              <Button
+                label="No, cancel"
+                class="p-button-text cancel-btn"
+                @click="showDeleteTagModal = false"
+              />
+              <Button
+                label="Yes, I'm sure"
+                class="p-button-danger confirm-btn"
+                @click="deleteTag(currentTag)"
+              />
+            </div>
+          </template>
+        </Dialog>
+
+        <!-- Enhanced Confirm Dialog for Delete -->
+        <ConfirmDialog class="enhanced-confirm-dialog"></ConfirmDialog>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
-import { useConfirm } from 'primevue/useconfirm';
+import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
+import { useConfirm } from 'primevue/useconfirm';
 import AdminSidebar from '../components/AdminSidebar.vue';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import axiosInstance from '../api';
 
-// PrimeVue Components
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
@@ -445,25 +648,32 @@ interface Tag {
   updatedAt?: Date;
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api');
-
 const categories = ref<Category[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const showDialog = ref(false);
+const showDeleteModal = ref(false);
+const showDeleteTagModal = ref(false);
 const isEditing = ref(false);
 const submitted = ref(false);
 const currentCategory = ref<Category>({
   name: '',
   description: ''
 });
+const selectedCategories = ref<Category[]>([]);
+const descriptionMax = 300;
+const descriptionLength = computed(() => (currentCategory.value.description?.length || 0));
+const lastUpdatedPretty = computed(() => {
+  const latest = categories.value
+    .map(c => c.updatedAt ? new Date(c.updatedAt).getTime() : 0)
+    .reduce((a, b) => Math.max(a, b), 0);
+  if (!latest) return '-';
+  const d = new Date(latest);
+  return d.toLocaleString();
+});
 
-const selectedParentCategory = ref<Category | null>(null);
 const tags = ref([]);
 const showTagDialog = ref(false);
-const newTag = ref('');
-const editingTag = ref(null);
-const editTagName = ref('');
 const activeTab = ref<'categories' | 'tags'>('categories');
 
 const confirm = useConfirm();
@@ -488,13 +698,127 @@ const tagSubmitted = ref(false);
 
 const isSidebarCollapsed = ref(false);
 
+const normalizeTagData = (tag: any) => {
+  // Get current timestamp for fallback
+  const now = new Date().toISOString();
+
+  // Try to extract date from various possible field names
+  let createdAt = tag.createdAt || tag.created_at || tag.createDate || tag.create_date || tag.createdAt || now;
+  let updatedAt = tag.updatedAt || tag.updated_at || tag.updateDate || tag.update_date || tag.updatedAt || now;
+
+  // If dates are strings but not ISO format, try to convert them
+  if (typeof createdAt === 'string' && !createdAt.includes('T')) {
+    try {
+      const date = new Date(createdAt);
+      if (!isNaN(date.getTime())) {
+        createdAt = date.toISOString();
+      }
+    } catch (e) {
+      console.warn('Could not parse createdAt:', createdAt);
+      createdAt = now;
+    }
+  }
+
+  if (typeof updatedAt === 'string' && !updatedAt.includes('T')) {
+    try {
+      const date = new Date(updatedAt);
+      if (!isNaN(date.getTime())) {
+        updatedAt = date.toISOString();
+      }
+    } catch (e) {
+      console.warn('Could not parse updatedAt:', updatedAt);
+      updatedAt = now;
+    }
+  }
+
+  const normalizedTag = {
+    id: tag.id,
+    name: tag.name,
+    createdAt: createdAt,
+    updatedAt: updatedAt
+  };
+
+  console.log('Normalizing tag:', tag, '→', normalizedTag);
+  return normalizedTag;
+};
+
 const fetchCategories = async () => {
   loading.value = true;
   try {
     const response = await axiosInstance.get('/categories/all');
-    console.log('API Response:', response.data); // Debug log
-    categories.value = response.data;
-    console.log('Categories after update:', categories.value); // Debug log
+    console.log('API Response:', response.data);
+
+    // Normalize category data to ensure date fields exist
+    categories.value = response.data.map((category: any) => {
+      console.log('Processing category:', category);
+      console.log('Category fields:', Object.keys(category));
+
+      // Handle various possible date field names and convert to Date objects
+      let createdAt = category.createdAt || category.created_at || category.createDate || category.create_date || category.created_at;
+      let updatedAt = category.updatedAt || category.updated_at || category.updateDate || category.update_date || category.updated_at;
+
+      // Convert string dates to Date objects if they exist
+      if (createdAt && typeof createdAt === 'string') {
+        try {
+          createdAt = new Date(createdAt);
+          if (isNaN(createdAt.getTime())) {
+            console.warn('Invalid createdAt date:', category.createdAt);
+            createdAt = undefined;
+          }
+        } catch (e) {
+          console.warn('Error parsing createdAt:', e);
+          createdAt = undefined;
+        }
+      }
+
+      if (updatedAt && typeof updatedAt === 'string') {
+        try {
+          updatedAt = new Date(updatedAt);
+          if (isNaN(updatedAt.getTime())) {
+            console.warn('Invalid updatedAt date:', category.updatedAt);
+            updatedAt = undefined;
+          }
+        } catch (e) {
+          console.warn('Error parsing updatedAt:', e);
+          updatedAt = undefined;
+        }
+      }
+
+      // Additional fallback for createdAt if still undefined
+      if (!createdAt) {
+        // Try to find any date field that might contain creation info
+        const possibleDateFields = Object.keys(category).filter(key =>
+          key.toLowerCase().includes('date') || key.toLowerCase().includes('time')
+        );
+
+        for (const field of possibleDateFields) {
+          const dateValue = category[field];
+          if (dateValue && typeof dateValue === 'string') {
+            try {
+              const parsedDate = new Date(dateValue);
+              if (!isNaN(parsedDate.getTime())) {
+                createdAt = parsedDate;
+                console.log(`Found createdAt from field: ${field}`, createdAt);
+                break;
+              }
+            } catch (e) {
+              console.warn(`Error parsing date from field ${field}:`, e);
+            }
+          }
+        }
+      }
+
+      const normalizedCategory = {
+        ...category,
+        createdAt,
+        updatedAt
+      };
+
+      console.log('Normalized category:', normalizedCategory);
+      return normalizedCategory;
+    });
+
+    console.log('Categories after normalization:', categories.value);
   } catch (error) {
     console.error('Error fetching categories:', error);
     toast.add({
@@ -508,12 +832,65 @@ const fetchCategories = async () => {
   }
 };
 
+const refreshCategories = async () => {
+  await fetchCategories();
+};
+
+const clearCategoryFilters = () => {
+  filters.value = {
+    global: { value: null, matchMode: 'contains' },
+    name: { value: null, matchMode: 'contains' },
+    description: { value: null, matchMode: 'contains' }
+  } as any;
+};
+
+const bulkDeleteSelected = async () => {
+  if (selectedCategories.value.length === 0) return;
+  confirm.require({
+    message: `Delete ${selectedCategories.value.length} selected categor${selectedCategories.value.length > 1 ? 'ies' : 'y'}?`,
+    header: 'Bulk Delete Confirmation',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    acceptLabel: 'Yes, Delete',
+    rejectLabel: 'Cancel',
+    accept: async () => {
+      try {
+        const ids = selectedCategories.value.map(c => c.id).filter((id): id is number => !!id);
+        await Promise.all(ids.map(id => axiosInstance.delete(`/categories/${id}/delete`)));
+        toast.add({ severity: 'success', summary: 'Deleted', detail: 'Selected categories deleted', life: 3000 });
+        selectedCategories.value = [];
+        await fetchCategories();
+      } catch (error) {
+        console.error('Bulk delete error:', error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete selected', life: 3000 });
+      }
+    },
+    reject: () => {}
+  });
+};
+
 const fetchTags = async () => {
   tagLoading.value = true;
   try {
     const res = await axiosInstance.get('/project-tag/all');
-    tags.value = res.data;
+    console.log('Tags API response:', res.data);
+    console.log('Tags data structure:', res.data.map((tag: any) => ({
+      id: tag.id,
+      name: tag.name,
+      createdAt: tag.createdAt,
+      updatedAt: tag.updatedAt,
+      createdAtType: typeof tag.createdAt,
+      updatedAtType: typeof tag.updatedAt,
+      rawCreatedAt: tag.createdAt,
+      rawUpdatedAt: tag.updatedAt
+    })));
+
+    // Normalize tag data to ensure date fields exist
+    tags.value = res.data.map(normalizeTagData);
+
+    console.log('Normalized tags:', tags.value);
   } catch (error) {
+    console.error('Error fetching tags:', error);
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load tags', life: 3000 });
   } finally {
     tagLoading.value = false;
@@ -533,7 +910,54 @@ const openAddModal = () => {
 const editCategory = (category: Category) => {
   isEditing.value = true;
   const { tags, ...rest } = category as any;
-  currentCategory.value = { ...rest };
+
+  // Debug: Log the original category data
+  console.log('Original category data:', category);
+  console.log('Category fields:', Object.keys(category));
+  console.log('Raw createdAt:', rest.createdAt, 'type:', typeof rest.createdAt);
+  console.log('Raw updatedAt:', rest.updatedAt, 'type:', typeof rest.updatedAt);
+
+  // Ensure date fields are properly formatted and handle various field names
+  let createdAt = rest.createdAt || rest.created_at || rest.createDate || rest.create_date;
+  let updatedAt = rest.updatedAt || rest.updated_at || rest.updateDate || rest.update_date;
+
+  // Convert string dates to Date objects if they exist
+  if (createdAt && typeof createdAt === 'string') {
+    try {
+      createdAt = new Date(createdAt);
+      if (isNaN(createdAt.getTime())) {
+        console.warn('Invalid createdAt date:', rest.createdAt);
+        createdAt = undefined;
+      }
+    } catch (e) {
+      console.warn('Error parsing createdAt:', e);
+      createdAt = undefined;
+    }
+  }
+
+  if (updatedAt && typeof updatedAt === 'string') {
+    try {
+      updatedAt = new Date(updatedAt);
+      if (isNaN(updatedAt.getTime())) {
+        console.warn('Invalid updatedAt date:', rest.updatedAt);
+        updatedAt = undefined;
+      }
+    } catch (e) {
+      console.warn('Error parsing updatedAt:', e);
+      updatedAt = undefined;
+    }
+  }
+
+  currentCategory.value = {
+    ...rest,
+    createdAt,
+    updatedAt
+  };
+
+  console.log('Processed category data:', currentCategory.value);
+  console.log('Created at type:', typeof currentCategory.value.createdAt, 'value:', currentCategory.value.createdAt);
+  console.log('Updated at type:', typeof currentCategory.value.updatedAt, 'value:', currentCategory.value.updatedAt);
+
   showDialog.value = true;
   submitted.value = false;
 };
@@ -570,10 +994,11 @@ const saveCategory = async () => {
   saving.value = true;
   try {
     if (isEditing.value && currentCategory.value.id) {
-      await axios.put(`${API_BASE_URL}/categories/${currentCategory.value.id}/update`, {
+      const response = await axiosInstance.put(`/categories/${currentCategory.value.id}/update`, {
         name: currentCategory.value.name,
         description: currentCategory.value.description
       });
+      console.log('Category update response:', response.data);
       toast.add({
         severity: 'success',
         summary: 'Success',
@@ -583,10 +1008,11 @@ const saveCategory = async () => {
       await fetchCategories();
       closeDialog();
     } else {
-      await axios.post(`${API_BASE_URL}/categories/create`, {
+      const response = await axiosInstance.post('/categories/create', {
         name: currentCategory.value.name,
         description: currentCategory.value.description
       });
+      console.log('Category create response:', response.data);
 
       // Show success toast
       toast.add({
@@ -621,26 +1047,17 @@ const saveCategory = async () => {
 };
 
 const confirmDelete = (category: Category) => {
-  confirm.require({
-    message: 'Are you sure you want to delete this category?',
-    header: 'Delete Confirmation',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => deleteCategory(category),
-    reject: () => {},
-    acceptLabel: 'Yes, Delete',
-    rejectLabel: 'Cancel',
-    acceptIcon: 'pi pi-trash',
-    rejectIcon: 'pi pi-times'
-  });
+  currentCategory.value = { ...category };
+  showDeleteModal.value = true;
 };
 
 const deleteCategory = async (category: Category) => {
   if (!category.id) return;
 
   try {
-    await axios.delete(`${API_BASE_URL}/categories/${category.id}/delete`);
+    await axiosInstance.delete(`/categories/${category.id}/delete`);
     await fetchCategories();
+    showDeleteModal.value = false;
     toast.add({
       severity: 'success',
       summary: 'Success',
@@ -649,12 +1066,7 @@ const deleteCategory = async (category: Category) => {
     });
   } catch (error) {
     console.error('Error deleting category:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: 'Failed to delete category',
-      life: 3000
-    });
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete category', life: 3000 });
   }
 };
 
@@ -701,19 +1113,57 @@ const saveTag = async () => {
   tagSaving.value = true;
   try {
     if (isEditingTag.value && currentTag.value.id) {
-      await axios.put(`${API_BASE_URL}/project-tag/update/${currentTag.value.id}`, { name: currentTag.value.name });
+      const response = await axiosInstance.put(`/project-tag/update/${currentTag.value.id}`, {
+        name: currentTag.value.name
+      });
+      console.log('Tag update response:', response.data);
+
+      // Update local tag with response data or current timestamp
+      const updatedTag = response.data || {
+        ...currentTag.value,
+        updatedAt: new Date().toISOString()
+      };
+
+      // Ensure the updated tag has proper date fields
+      const normalizedUpdatedTag = normalizeTagData(updatedTag);
+
+      // Update local state immediately
+      const tagIndex = tags.value.findIndex(t => t.id === currentTag.value.id);
+      if (tagIndex > -1) {
+        tags.value[tagIndex] = normalizedUpdatedTag;
+      }
+
       toast.add({ severity: 'success', summary: 'Success', detail: 'Tag updated successfully', life: 3000 });
-      await fetchTags();
       closeTagDialog();
     } else {
-      await axios.post(`${API_BASE_URL}/project-tag/create`, { name: currentTag.value.name });
+      const response = await axiosInstance.post('/project-tag/create', {
+        name: currentTag.value.name
+      });
+      console.log('Tag create response:', response.data);
+
+      // Create new tag object with proper structure
+      const newTag = {
+        id: response.data?.id || Date.now(), // Use backend ID if available
+        name: currentTag.value.name,
+        createdAt: response.data?.createdAt || new Date().toISOString(),
+        updatedAt: response.data?.updatedAt || new Date().toISOString()
+      };
+
+      // Ensure the new tag has proper date fields
+      const normalizedNewTag = normalizeTagData(newTag);
+
+      // Add to beginning of tags array
+      tags.value.unshift(normalizedNewTag);
+
       toast.add({ severity: 'success', summary: 'Success', detail: 'Tag created successfully', life: 3000 });
+
+      // Reset form and close dialog
       showTagDialog.value = false;
       tagSubmitted.value = false;
       currentTag.value = { name: '' };
-      await fetchTags();
     }
   } catch (error) {
+    console.error('Error saving tag:', error);
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save tag', life: 3000 });
   } finally {
     tagSaving.value = false;
@@ -721,34 +1171,62 @@ const saveTag = async () => {
 };
 
 const confirmDeleteTag = (tag: Tag) => {
-  confirm.require({
-    message: 'Are you sure you want to delete this tag?',
-    header: 'Delete Confirmation',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => deleteTag(tag),
-    reject: () => {},
-    acceptLabel: 'Yes, Delete',
-    rejectLabel: 'Cancel',
-    acceptIcon: 'pi pi-trash',
-    rejectIcon: 'pi pi-times'
-  });
+  currentTag.value = { ...tag };
+  showDeleteTagModal.value = true;
 };
 
 const deleteTag = async (tag: Tag) => {
   if (!tag.id) return;
   try {
-    await axios.delete(`${API_BASE_URL}/project-tag/delete/${tag.id}`);
+    await axiosInstance.delete(`/project-tag/delete/${tag.id}`);
     await fetchTags();
+    showDeleteTagModal.value = false;
     toast.add({ severity: 'success', summary: 'Success', detail: 'Tag deleted successfully', life: 3000 });
   } catch (error) {
+    console.error('Error deleting tag:', error);
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete tag', life: 3000 });
   }
 };
 
 const formatDate = (date: string | Date | undefined) => {
-  if (!date) return '';
-  return new Date(date).toLocaleString();
+  if (!date) return 'N/A';
+
+  try {
+    let dateObj: Date;
+
+    if (typeof date === 'string') {
+      // Handle different date string formats
+      if (date.includes('T') || date.includes('Z')) {
+        // ISO format
+        dateObj = new Date(date);
+      } else if (date.includes('-')) {
+        // Date only format
+        dateObj = new Date(date + 'T00:00:00');
+      } else {
+        // Try parsing as timestamp
+        dateObj = new Date(parseInt(date));
+      }
+    } else {
+      dateObj = date;
+    }
+
+    if (isNaN(dateObj.getTime())) {
+      console.warn('Invalid date value:', date, 'type:', typeof date);
+      return 'Invalid Date';
+    }
+
+    return dateObj.toLocaleString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', date, 'type:', typeof date, 'error:', error);
+    return 'Invalid Date';
+  }
 };
 
 onMounted(() => {
@@ -759,7 +1237,23 @@ onMounted(() => {
 
 <style scoped>
 .category-list {
-  padding: 1.5rem;
+  /* Spacing scale */
+  --s-4: 4px;
+  --s-8: 8px;
+  --s-12: 12px;
+  --s-16: 16px;
+  --s-20: 20px;
+  --s-24: 24px;
+  --s-32: 32px;
+  --s-40: 40px;
+
+  /* Theme tokens */
+  --surface-bg: #ffffff;
+  --surface-muted: #f8f9fa;
+  --border-color: #e9ecef;
+  --text-muted: #64748b;
+
+  padding: var(--s-24);
   max-width: 1400px;
   margin: 0 auto;
   margin-left: 16.25rem;
@@ -770,25 +1264,162 @@ onMounted(() => {
   margin-left: 4.5rem;
 }
 
-.page-header {
-  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
-  border-radius: 12px;
-  padding: 2rem;
+/* Enhanced Confirm Dialog */
+:deep(.p-confirm-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  max-width: 500px;
+  width: 90% !important;
+  border: none;
+  margin: 0 auto;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: dialogSlideIn 0.3s ease-out;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+:deep(.p-confirm-dialog .p-dialog-header) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+  padding: 24px 24px 20px;
+  border: none;
+  position: relative;
+}
+
+:deep(.p-confirm-dialog .p-dialog-title) {
+  font-size: 1.4rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  color: white;
+  letter-spacing: -0.025em;
+}
+
+:deep(.p-confirm-dialog .p-dialog-content) {
+  padding: 24px;
+  background: white;
+  border: none;
+}
+
+:deep(.p-confirm-dialog .p-dialog-message) {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  font-size: 1rem;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+  font-weight: 500;
+  text-align: left;
+  padding: 8px 0;
+}
+
+:deep(.p-confirm-dialog .p-dialog-message i) {
+  font-size: 2rem;
+  color: #ef4444;
+  flex-shrink: 0;
+  background: #fef2f2;
+  padding: 12px;
+  border-radius: 50%;
+  border: 2px solid #fecaca;
+}
+
+:deep(.p-confirm-dialog .p-dialog-footer) {
+  padding: 20px 24px 24px;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+:deep(.p-confirm-dialog .p-button) {
+  min-width: 120px;
+  height: 44px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none;
+}
+
+:deep(.p-confirm-dialog .p-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-danger:hover) {
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-danger) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-danger) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+
+  &:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  }
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-text) {
+  background: transparent;
+  color: #6b7280;
+  border: 2px solid #d1d5db;
+}
+
+:deep(.p-confirm-dialog .p-button.p-button-text:hover) {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
+}
+
+/* Clean Page Header */
+.page-header {
+  background: #1f2937;
+  border-radius: 12px;
+  padding: 32px;
+  color: white;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 24px;
 }
 
 .header-icon {
   width: 64px;
   height: 64px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
+  background: #3b82f6;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -797,661 +1428,1194 @@ onMounted(() => {
 
 .header-text h2 {
   margin: 0;
-  font-size: 1.75rem;
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .page-description {
   margin: 0.5rem 0 0;
   opacity: 0.9;
   font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
-:deep(.p-datatable) {
-  font-size: 0.875rem;
+/* Clean Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2rem;
+}
+
+.stat-icon.info {
+  background: #3b82f6;
+}
+
+.stat-icon.success {
+  background: #10b981;
+}
+
+.stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* Clean Toolbar */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.toolbar-left, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Clean Search Input */
+:deep(.p-inputtext) {
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 10px 14px;
+  transition: all 0.2s ease;
+  background: white;
+  font-size: 0.9rem;
+
+  &:hover {
+    border-color: #9ca3af;
+  }
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+  }
+}
+
+/* Clean DataTable */
+:deep(.p-datatable) {
+  font-size: 0.9rem;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  background: white;
 }
 
 :deep(.p-datatable .p-datatable-thead > tr > th) {
-  background: #f8f9fa;
-  color: #495057;
+  background: #f9fafb;
+  color: #374151;
   font-weight: 600;
-  padding: 1rem;
-  border-bottom: 2px solid #e9ecef;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr > td) {
-  padding: 1rem;
-  border-bottom: 1px solid #e9ecef;
+  padding: 16px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: all 0.2s ease;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr:hover) {
-  background: #f8f9fa;
+  background: #f8fafc;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr.p-highlight) {
-  background: #EFF6FF;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
 }
 
-:deep(.category-dialog) {
-  .p-dialog-header {
-    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
-    color: white;
-    padding: 1.5rem;
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-
-    .p-dialog-title {
-      font-weight: 600;
-      font-size: 1.25rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .p-dialog-header-icon {
-      color: white;
-      opacity: 0.8;
-
-      &:hover {
-        opacity: 1;
-        background: rgba(255, 255, 255, 0.1);
-      }
-    }
+/* Clean Modern Dialog Styles */
+.clean-dialog {
+  :deep(.p-dialog) {
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    border: none;
+    overflow: hidden;
+    background: #ffffff;
   }
 
-  .p-dialog-content {
+  :deep(.p-dialog-header) {
+    background: transparent;
+    border: none;
     padding: 0;
   }
 
-  .p-dialog-footer {
-    padding: 1.5rem;
-    border-top: 1px solid #e9ecef;
-    background: #f8f9fa;
+  :deep(.p-dialog-content) {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  :deep(.p-dialog-footer) {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+}
+
+/* Enhanced Dialog Styling */
+.compact-dialog {
+  :deep(.p-dialog) {
+    border-radius: 12px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+    border: none;
+    overflow: hidden;
+    background: #ffffff;
+    margin: 0 auto;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  :deep(.p-dialog-header) {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    display: none;
+  }
+
+  :deep(.p-dialog-content) {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  :deep(.p-dialog-footer) {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 18px 20px 16px;
+  background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+  color: white;
+  position: relative;
+  border-radius: 12px 12px 0 0;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+}
+
+.header-icon {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.header-text h3 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.header-text p {
+  font-size: 0.85rem;
+  color: #e5e7eb;
+  margin: 0;
+  line-height: 1.4;
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+.close-btn {
+  background: #d1d5db;
+  color: #374151;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+
+  &:hover {
+    background: #9ca3af;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 }
 
 .dialog-content {
-  padding: 2rem;
+  padding: 20px;
+  background: #ffffff;
+  text-align: center;
+  margin-top: 0;
 }
 
-.form-section {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.section-header {
+.form-container {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e9ecef;
-
-  i {
-    font-size: 1.25rem;
-  }
-
-  h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #374151;
-  }
-}
-
-.field {
-  margin-bottom: 1.5rem;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.field label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-  color: #374151;
-  font-size: 0.95rem;
-}
-
-.required-mark {
-  color: #EF4444;
-  font-weight: bold;
-}
-
-:deep(.p-inputtext),
-:deep(.p-textarea) {
+  flex-direction: column;
+  gap: 20px;
+  align-items: stretch;
   width: 100%;
-  padding: 0.75rem 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+  justify-content: flex-start;
+  width: 100%;
+
+  .label-text {
+    color: #111827;
+    font-weight: 600;
+  }
+
+  .required {
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .optional {
+    color: #6b7280;
+    font-size: 0.8rem;
+    font-weight: 400;
+  }
+}
+
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  justify-content: stretch;
+
+  .input-icon {
+    position: absolute;
+    left: 12px;
+    color: #9ca3af;
+    font-size: 0.9rem;
+    z-index: 1;
+  }
+
+  .clean-input,
+  .clean-textarea {
+    padding-left: 36px;
+    width: 100%;
+  }
+}
+
+.clean-input,
+.clean-textarea {
+  width: 100%;
+  padding: 12px 14px 12px 36px;
   border-radius: 8px;
-  border: 1px solid #ced4da;
-  transition: all 0.2s;
-  font-size: 0.95rem;
+  border: 1px solid #d1d5db;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  background: #ffffff;
+  font-weight: 400;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    border-color: #3B82F6;
+    border-color: #9ca3af;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   &:focus {
-    border-color: #3B82F6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+    text-align: left;
   }
 
-  &.p-invalid {
-    border-color: #EF4444;
+  &.error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 
     &:focus {
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
     }
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+    text-align: left;
   }
 }
 
-:deep(.p-textarea) {
+.clean-textarea {
   resize: none;
-  min-height: 120px;
+  min-height: 80px;
+  line-height: 1.5;
 }
 
-.details-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+.input-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 2px;
 }
 
-.detail-item {
-  background: #f8f9fa;
-  padding: 1rem;
+.char-count {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #ef4444;
+  font-weight: 500;
+  background: #fef2f2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #fecaca;
+
+  i {
+    font-size: 0.8rem;
+    color: #ef4444;
+  }
+}
+
+.info-section {
+  background: #f8fafc;
   border-radius: 8px;
-  border: 1px solid #e9ecef;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.detail-label {
-  display: block;
-  font-size: 0.875rem;
-  color: #6B7280;
-  margin-bottom: 0.25rem;
+.info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+  justify-content: flex-start;
+
+  i {
+    color: #6b7280;
+    font-size: 0.9rem;
+  }
 }
 
-.detail-value {
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.info-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-value {
   font-weight: 500;
   color: #374151;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 1rem;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  background: #ffffff;
+  border-top: 1px solid #f3f4f6;
+  border-radius: 0 0 12px 12px;
 }
 
-/* Button Styles */
+/* Enhanced Button Styles */
 :deep(.p-button) {
   font-weight: 600;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   border: none;
-  border-radius: 32px;
-  height: 44px;
-  padding: 0 1.5rem;
-  box-shadow: 0 2px 8px 0 rgba(59,130,246,0.08);
-  transition: all 0.18s cubic-bezier(.4,0,.2,1);
+  border-radius: 6px;
+  height: 38px;
+  padding: 0 16px;
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 6px;
   outline: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 :deep(.p-button-primary) {
-  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  background: #3b82f6;
   color: #fff;
-  box-shadow: 0 4px 16px 0 rgba(59,130,246,0.10);
-}
-:deep(.p-button-primary):hover,
-:deep(.p-button-primary):focus {
-  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
-  box-shadow: 0 8px 24px 0 rgba(59,130,246,0.18);
-  transform: translateY(-2px) scale(1.03);
-}
-:deep(.p-button-primary):active {
-  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
-  box-shadow: 0 2px 8px 0 rgba(59,130,246,0.10);
-  transform: none;
-}
-:deep(.p-button-primary:disabled) {
-  background: #a5b4fc;
-  color: #e0e7ff;
-  box-shadow: none;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
 
-:deep(.p-button-success) {
-  background: linear-gradient(90deg, #10b981 0%, #22d3ee 100%);
-  color: #fff;
-}
-:deep(.p-button-success):hover,
-:deep(.p-button-success):focus {
-  background: linear-gradient(90deg, #059669 0%, #06b6d4 100%);
-  box-shadow: 0 8px 24px 0 rgba(16,185,129,0.18);
-  transform: translateY(-2px) scale(1.03);
-}
-:deep(.p-button-success):active {
-  background: linear-gradient(90deg, #10b981 0%, #22d3ee 100%);
-  box-shadow: 0 2px 8px 0 rgba(16,185,129,0.10);
-  transform: none;
-}
-:deep(.p-button-success:disabled) {
-  background: #6ee7b7;
-  color: #e0f2fe;
-  box-shadow: none;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-:deep(.p-button-danger) {
-  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
-  color: #fff;
-}
-:deep(.p-button-danger):hover,
-:deep(.p-button-danger):focus {
-  background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
-  box-shadow: 0 8px 24px 0 rgba(239,68,68,0.18);
-  transform: translateY(-2px) scale(1.03);
-}
-:deep(.p-button-danger):active {
-  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
-  box-shadow: 0 2px 8px 0 rgba(239,68,68,0.10);
-  transform: none;
-}
-:deep(.p-button-danger:disabled) {
-  background: #fecaca;
-  color: #fee2e2;
-  box-shadow: none;
-  cursor: not-allowed;
-  opacity: 0.7;
+  &:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2);
+  }
 }
 
 :deep(.p-button-text) {
-  background: transparent;
-  color: #2563eb;
-  box-shadow: none;
-  padding: 0 1rem;
-}
-:deep(.p-button-text):hover,
-:deep(.p-button-text):focus {
-  background: #e0e7ff;
-  color: #1d4ed8;
-  transform: translateY(-1px) scale(1.01);
-}
-:deep(.p-button-text):active {
-  background: #dbeafe;
-  color: #2563eb;
-  transform: none;
-}
-:deep(.p-button-text:disabled) {
-  color: #a5b4fc;
-  background: transparent;
-  opacity: 0.6;
-}
-
-:deep(.p-button-cancel) {
   background: #f3f4f6;
-  color: #374151;
-}
-:deep(.p-button-cancel):hover,
-:deep(.p-button-cancel):focus {
-  background: #e5e7eb;
-  color: #111827;
-}
-:deep(.p-button-cancel):active {
-  background: #d1d5db;
-  color: #374151;
-}
-
-:deep(.p-button-sm) {
-  height: 36px;
-  min-width: 36px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-:deep(.p-button .p-button-icon) {
-  font-size: 1.3rem;
-  margin-right: 0.5rem;
-}
-:deep(.p-button-sm .p-button-icon) {
-  margin-right: 0;
-}
-
-:deep(.p-button:disabled) {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.dialog-footer .p-button {
-  min-width: 140px;
-  height: 44px;
-  font-size: 1.05rem;
-}
-
-.page-header .p-button-primary {
-  height: 48px;
-  padding: 0 2rem;
-  font-size: 1.1rem;
-  box-shadow: 0 4px 16px 0 rgba(59,130,246,0.10);
-}
-
-/* Confirm Dialog Styles */
-:deep(.p-confirm-dialog) {
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  max-width: 800px;
-  width: 90% !important;
-}
-
-:deep(.p-confirm-dialog .p-dialog-header) {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-  padding: 2.5rem;
-  border-top-left-radius: 24px;
-  border-top-right-radius: 24px;
-}
-
-:deep(.p-confirm-dialog .p-dialog-title) {
-  font-size: 1.75rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  letter-spacing: -0.025em;
-}
-
-:deep(.p-confirm-dialog .p-dialog-content) {
-  padding: 3rem;
-  background: white;
-}
-
-:deep(.p-confirm-dialog .p-dialog-message) {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-  font-size: 1.5rem;
-  color: #374151;
-  margin: 0;
-  line-height: 1.6;
-  letter-spacing: -0.025em;
-}
-
-:deep(.p-confirm-dialog .p-dialog-message i) {
-  font-size: 3rem;
-  color: #ef4444;
-  flex-shrink: 0;
-}
-
-:deep(.p-confirm-dialog .p-dialog-footer) {
-  padding: 2.5rem;
-  background: #f8f9fa;
-  border-top: 1px solid #e9ecef;
-  display: flex;
-  justify-content: flex-end;
-  gap: 2rem;
-}
-
-:deep(.p-confirm-dialog .p-button) {
-  min-width: 180px;
-  height: 52px;
-  font-size: 1.2rem;
-  font-weight: 600;
-  border-radius: 32px;
-  transition: all 0.2s ease;
-  letter-spacing: -0.025em;
-}
-
-:deep(.p-confirm-dialog .p-button.p-button-danger) {
-  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
-  border: none;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
-}
-
-:deep(.p-confirm-dialog .p-button.p-button-danger:hover) {
-  background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
-}
-
-:deep(.p-confirm-dialog .p-button.p-button-text) {
-  background: transparent;
   color: #6b7280;
-  box-shadow: none;
-}
+  border: 1px solid #d1d5db;
 
-:deep(.p-confirm-dialog .p-button.p-button-text:hover) {
-  background: #f3f4f6;
-  color: #374151;
-  transform: translateY(-1px);
-}
-
-:deep(.p-confirm-dialog .p-button .p-button-icon) {
-  font-size: 1.3rem;
-  margin-right: 1rem;
-}
-
-@media (max-width: 768px) {
-  .category-list {
-    padding: 1rem;
-  }
-
-  .page-header {
-    padding: 1.5rem;
-  }
-
-  .header-content {
-    flex-direction: column;
-    text-align: center;
-  }
-
-  .header-icon {
-    margin: 0 auto;
-  }
-
-  :deep(.category-dialog) {
-    width: 95% !important;
-    max-width: 450px;
-  }
-
-  .dialog-content {
-    padding: 1rem;
-  }
-
-  .form-section {
-    padding: 1rem;
-  }
-
-  .details-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .dialog-footer {
-    flex-direction: column-reverse;
-  }
-
-  .dialog-footer .p-button {
-    width: 100%;
-    height: 48px;
-    font-size: 1.1rem;
-  }
-
-  .page-header .p-button-primary {
-    width: 100%;
-    margin-top: 1rem;
-  }
-
-  :deep(.p-confirm-dialog) {
-    width: 95% !important;
-    max-width: 600px;
-  }
-
-  :deep(.p-confirm-dialog .p-dialog-header) {
-    padding: 2rem;
-  }
-
-  :deep(.p-confirm-dialog .p-dialog-title) {
-    font-size: 1.5rem;
-  }
-
-  :deep(.p-confirm-dialog .p-dialog-content) {
-    padding: 2.5rem;
-  }
-
-  :deep(.p-confirm-dialog .p-dialog-message) {
-    font-size: 1.25rem;
-    gap: 1.5rem;
-  }
-
-  :deep(.p-confirm-dialog .p-dialog-message i) {
-    font-size: 2.5rem;
-  }
-
-  :deep(.p-confirm-dialog .p-dialog-footer) {
-    padding: 2rem;
-    flex-direction: column-reverse;
-    gap: 1rem;
-  }
-
-  :deep(.p-confirm-dialog .p-button) {
-    width: 100%;
-    height: 56px;
-    font-size: 1.2rem;
+  &:hover {
+    background: #e5e7eb;
+    color: #374151;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
   }
 }
 
-:deep(.category-tag) {
-  background: #FEF9C3;
-  color: #CA8A04;
-  border: 1px solid #FDE68A;
-  padding: 0.5rem 1rem;
-  border-radius: 16px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-:deep(.category-tag:hover) {
-  background: #FDE68A;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(202, 138, 4, 0.1);
+.action-btn {
+  min-width: 120px;
 }
 
-.navbar {
-  background: #fff;
-  box-shadow: 0 4px 24px rgba(59,130,246,0.08);
-  border-radius: 0 0 24px 24px;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  padding: 0;
+.cancel-btn {
+  min-width: 100px;
 }
 
-.navbar-container {
-  max-width: 1200px;
+/* Responsive Design */
+/* Remove all mobile media queries - web only */
+
+/* Focus on web layout only */
+.category-list {
+  padding: 20px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 0 32px;
+  margin-left: 16.25rem;
+  transition: margin-left 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: calc(100vw - 16.25rem - 40px);
+}
+
+.layout-wrapper.sidebar-collapsed .category-list {
+  margin-left: 4.5rem;
+  width: calc(100vw - 4.5rem - 40px);
+}
+
+/* Center the main content */
+.main-content {
+  display: flex;
+  width: 100%;
+}
+
+/* Center the page header */
+.page-header {
+  background: #1f2937;
+  border-radius: 10px;
+  padding: 24px;
+  color: white;
+  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Center the stats grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Center the toolbar */
+.toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 64px;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 100%;
 }
 
-.username {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #3b82f6;
-  letter-spacing: 0.01em;
+/* Center the data table */
+:deep(.p-datatable) {
+  font-size: 0.85rem;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  background: white;
+  width: 100%;
+  max-width: 100%;
 }
 
-.navbar-menu {
+/* Center the card content */
+:deep(.p-card) {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+
+:deep(.p-card .p-card-body) {
+  padding: 0;
+  width: 100%;
+}
+
+:deep(.p-card .p-card-content) {
+  padding: 0;
+  width: 100%;
+}
+
+/* Center dialog positioning */
+.compact-dialog {
+  :deep(.p-dialog) {
+    border-radius: 10px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+    border: none;
+    overflow: hidden;
+    background: #ffffff;
+    margin: 0 auto;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  :deep(.p-dialog-header) {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  :deep(.p-dialog-content) {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  :deep(.p-dialog-footer) {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+}
+
+/* Center confirm dialog */
+:deep(.p-confirm-dialog) {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+  max-width: 400px;
+  width: 90% !important;
+  border: none;
+  margin: 0 auto;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Ensure proper centering for all content */
+.category-list > * {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Center the header content */
+.header-content {
   display: flex;
   align-items: center;
-  gap: 2.5rem;
+  gap: 20px;
+  justify-content: center;
+  width: 100%;
 }
 
-.navbar-item {
+/* Center the stats cards */
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+/* Center the toolbar content */
+.toolbar-left, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* Ensure proper table centering */
+:deep(.p-datatable-wrapper) {
+  width: 100%;
+  max-width: 100%;
+}
+
+:deep(.p-datatable-table) {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Center pagination */
+:deep(.p-paginator) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem;
+}
+
+/* Center the page title and description */
+.page-header .header-text {
+  text-align: center;
+  width: 100%;
+}
+
+.page-header .header-text h2,
+.page-header .header-text .page-description {
+  text-align: center;
+  width: 100%;
+}
+
+/* Delete Modal Styles - Light Theme */
+.delete-modal {
+  :deep(.p-dialog) {
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    border: none;
+    overflow: hidden;
+    background: #ffffff;
+  }
+}
+
+.delete-modal-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 24px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  position: relative;
+}
+
+.delete-icon {
+  width: 48px;
+  height: 48px;
+  background: #f1f5f9;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 1.5rem;
+  border: 2px solid #e2e8f0;
+}
+
+.delete-modal-content {
+  padding: 32px 24px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.delete-message {
+  font-size: 1.1rem;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.delete-modal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 24px 24px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.delete-modal .cancel-btn {
+  background: #ffffff;
+  color: #6b7280;
+  border: 2px solid #d1d5db;
+  min-width: 120px;
+  height: 44px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #374151;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+  }
+}
+
+.delete-modal .confirm-btn {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  min-width: 120px;
+  height: 44px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  }
+}
+
+/* Extend content to use full width */
+.stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 24px;
+}
+
+.stat-card {
+  min-height: 80px;
+  padding: 20px;
+}
+
+/* Extend toolbar to use full width */
+.toolbar {
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.toolbar-left {
+  flex: 1;
+  justify-content: flex-start;
+}
+
+.toolbar-right {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+/* Extend table to use full width */
+:deep(.p-datatable) {
+  min-width: 100%;
+}
+
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  padding: 16px 12px;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  padding: 14px 12px;
+}
+
+/* Better use of available space */
+.category-list {
+  margin-right: 20px;
+}
+
+.layout-wrapper.sidebar-collapsed .category-list {
+  margin-right: 20px;
+}
+
+/* Compact Spacing */
+.mb-4 {
+  margin-bottom: 1rem !important;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem !important;
+}
+
+/* Compact Form Elements */
+.form-group {
+  margin-bottom: 0;
+}
+
+/* Compact Info Section */
+.info-section {
+  margin-top: 0;
+}
+
+/* Compact Button Groups */
+.toolbar .p-button {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
+/* Compact Table */
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  padding: 10px 8px;
+}
+
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  padding: 12px 8px;
+}
+
+/* Compact Pagination */
+:deep(.p-paginator) {
+  padding: 0.5rem;
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page) {
+  min-width: 2rem;
+  height: 2rem;
+}
+
+/* Center dialog content */
+.dialog-content {
+  padding: 16px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+  justify-content: flex-start;
+  width: 100%;
+
+  .label-text {
+    color: #111827;
+    font-weight: 600;
+  }
+
+  .required {
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .optional {
+    color: #6b7280;
+    font-size: 0.8rem;
+    font-weight: 400;
+  }
+}
+
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  justify-content: stretch;
+
+  .input-icon {
+    position: absolute;
+    left: 12px;
+    color: #6b7280;
+    font-size: 0.9rem;
+    z-index: 1;
+  }
+
+  .clean-input,
+  .clean-textarea {
+    padding-left: 36px;
+    width: 100%;
+  }
+}
+
+.clean-input,
+.clean-textarea {
+  width: 100%;
+  padding: 12px 14px 12px 36px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  background: #ffffff;
+  font-weight: 400;
+  text-align: left;
+
+  &:hover {
+    border-color: #9ca3af;
+  }
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+    text-align: left;
+  }
+
+  &.error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+
+    &:focus {
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    }
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+    text-align: left;
+  }
+}
+
+.clean-textarea {
+  resize: none;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+.input-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.char-count {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #ef4444;
+  font-weight: 500;
+
+  i {
+    font-size: 0.8rem;
+    color: #ef4444;
+  }
+}
+
+.info-section {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  width: 100%;
+}
+
+.info-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  text-decoration: none;
+  margin-bottom: 12px;
+  font-weight: 600;
   color: #374151;
-  font-size: 1.1rem;
+  font-size: 0.9rem;
+  justify-content: flex-start;
+
+  i {
+    color: #6b7280;
+    font-size: 0.9rem;
+  }
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.info-label {
+  font-size: 0.75rem;
+  color: #6b7280;
   font-weight: 500;
-  padding: 0.5rem 1.2rem;
-  border-radius: 8px;
-  transition: background 0.18s, color 0.18s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.navbar-item:hover {
-  background: #f3f4f6;
-  color: #3b82f6;
+.info-value {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  text-align: left;
 }
 
-.user-menu {
+.dialog-footer {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.avatar-button {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-.avatar-button:hover {
-  background: #f3f4f6;
-}
-
-.menu-items {
-  padding: 1rem;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(59,130,246,0.08);
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  transition: background 0.18s;
-}
-
-.menu-item:hover {
-  background: #f3f4f6;
-}
-
-.menu-item:last-child {
-  margin-top: 0.75rem;
-}
-
-.menu-item:last-child .menu-item {
-  padding-left: 1.5rem;
-}
-
-.menu-item:last-child .menu-item:hover {
-  background: #f3f4f6;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 16px 16px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
 }
 </style>

@@ -88,12 +88,12 @@ export class FileController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':fileId')
-  async renameFile(
+  async updateFileMetadata(
     @Param('fileId', BigIntTransformPipe) fileId: bigint,
-    @Body() body: { fileName: string },
+    @Body() body: { fileName?: string; title?: string },
     @Req() req: AuthenticatedRequest
   ) {
-    return this.fileService.renameFile(fileId, body.fileName, req.user.id);
+    return this.fileService.updateFileMetadata(fileId, body, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)

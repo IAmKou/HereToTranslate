@@ -164,7 +164,7 @@ export class TranslationService {
             font: e.font,
           }));
         const originalBuffer = fileEntity.fileContent as Buffer;
-        
+
         // Convert to Aspose PDF format
         const asposePdfEntries: AsposePDFReplacementEntry[] = translatedEntries
           .filter((e) => e.position && e.position.page) // Only include entries with valid position
@@ -188,7 +188,7 @@ export class TranslationService {
           logger.log('[PDF] Aspose PDF Cloud API replacement successful');
         } catch (asposePdfErr) {
           logger.error(`[PDF] Aspose PDF Cloud API replacement failed: ${asposePdfErr instanceof Error ? asposePdfErr.message : String(asposePdfErr)}`);
-          
+
           // Fallback to PyMuPDF
           try {
             logger.log('[PDF] Falling back to PyMuPDF...');
@@ -196,7 +196,7 @@ export class TranslationService {
             logger.log('[PDF] PyMuPDF replacement successful');
           } catch (pymupdfErr) {
             logger.error(`[PDF] PyMuPDF replacement failed: ${pymupdfErr instanceof Error ? pymupdfErr.message : String(pymupdfErr)}`);
-            
+
             // Final fallback: return original file
             logger.warn('[PDF] All PDF replacement methods failed, returning original file');
             updatedBuffer = originalBuffer;
@@ -375,10 +375,10 @@ export class TranslationService {
     const githubPath = `${language}/${safeFileName}`;
 
     console.log(`[Export] Building export buffer for ${fileEntity.fileName} in ${language}...`);
-    
+
     // Always build the buffer with latest translations
     const { buffer } = await this.buildExportBuffer(fileId, language);
-    
+
     console.log(`[Export] Buffer built successfully, size: ${buffer.length} bytes`);
     console.log(`[Export] Pushing to GitHub: ${repoName}/${githubPath}`);
 
@@ -451,13 +451,13 @@ export class TranslationService {
         }
 
         console.log(`[DOCX Export] Processing DOCX file: ${fileEntity.fileName}, size: ${fileEntity.fileContent.length} bytes`);
-        
+
         const entries = await this.translationModel
           .find({ fileId, language })
           .lean();
-        
+
         console.log(`[DOCX Export] Found ${entries.length} translation entries for language: ${language}`);
-        
+
         const translations = new Map<string, string>();
         for (const e of entries) {
           if (e.translatedText && e.translatedText.trim().length > 0) {
@@ -476,9 +476,9 @@ export class TranslationService {
             fileEntity.fileContent as Buffer,
             translations
           );
-          
+
           console.log(`[DOCX Export] replaceDocxTextWithCount returned: replacedCount=${replacedCount}, buffer size=${replacedBuffer.length}`);
-          
+
           if (replacedCount === 0) {
             console.warn('[DOCX Export] No inline replacements were made; returning original file');
             buffer = fileEntity.fileContent as Buffer;
@@ -489,20 +489,20 @@ export class TranslationService {
         }
       } catch (error) {
         console.error(`[DOCX Export] Error processing DOCX file:`, error);
-        
+
         // Final fallback: return original file
         console.warn(`[DOCX Export] Returning original DOCX file as final fallback`);
         buffer = fileEntity.fileContent as Buffer;
       }
     } else if (fileEntity.fileType === 'application/pdf') {
       console.log(`[PDF Export] Processing PDF file: ${fileEntity.fileName}, size: ${fileEntity.fileContent.length} bytes`);
-      
+
       const entries = await this.translationModel
         .find({ fileId, language })
         .lean();
-      
+
       console.log(`[PDF Export] Found ${entries.length} translation entries for language: ${language}`);
-      
+
       const translatedEntries = entries
         .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
         .map((e) => ({
@@ -512,27 +512,27 @@ export class TranslationService {
           style: e.style,
           font: e.font,
         }));
-      
+
       console.log(`[PDF Export] ${translatedEntries.length} entries have translations to apply`);
-      
+
       // Log each translation entry for debugging
       translatedEntries.forEach((entry, index) => {
         console.log(`[PDF Export] Entry ${index + 1}: "${entry.originalText}" -> "${entry.translatedText}"`);
         console.log(`[PDF Export] Entry ${index + 1} position: ${JSON.stringify(entry.position)}`);
         console.log(`[PDF Export] Entry ${index + 1} style: ${JSON.stringify(entry.style)}`);
       });
-      
+
       if (translatedEntries.length === 0) {
         console.warn('[PDF Export] No translations found, returning original file');
         buffer = fileEntity.fileContent as Buffer;
       } else {
         // Try Aspose PDF Cloud API first
         let success = false;
-        
+
         try {
           console.log('[PDF Export] Attempting Aspose PDF Cloud API replacement...');
           console.log('[PDF Export] Creating AsposePDFReplacementEntry array...');
-          
+
           const asposePdfEntries: AsposePDFReplacementEntry[] = translatedEntries
             .filter((e) => e.position && e.position.page)
             .map((e) => ({
@@ -547,10 +547,10 @@ export class TranslationService {
               },
               style: e.style,
             }));
-          
+
           console.log(`[PDF Export] Created ${asposePdfEntries.length} AsposePDFReplacementEntry objects`);
           console.log(`[PDF Export] AsposePDFReplacementEntry array: ${JSON.stringify(asposePdfEntries, null, 2)}`);
-          
+
           console.log('[PDF Export] Calling replacePdfTextWithAsposePDF...');
           buffer = await replacePdfTextWithAsposePDF(
             fileEntity.fileContent as Buffer,
@@ -566,7 +566,7 @@ export class TranslationService {
           if (err instanceof Error && err.stack) {
             console.error('[PDF Export] Aspose PDF Cloud API error stack:', err.stack);
           }
-          
+
           // Log the specific error details
           if (err instanceof Error) {
             console.error('[PDF Export] Error name:', err.name);
@@ -576,7 +576,7 @@ export class TranslationService {
             console.error('[PDF Export] Non-Error object:', typeof err, err);
           }
         }
-        
+
         // Fallback to PyMuPDF
         if (!success) {
           try {
@@ -596,7 +596,7 @@ export class TranslationService {
             }
           }
         }
-        
+
         // Final fallback: create a simple PDF with translations
         if (!success) {
           try {
@@ -951,16 +951,16 @@ export class TranslationService {
   }> {
     try {
       console.log('[Aspose Connection Test] Starting comprehensive test...');
-      
+
       // Import the test class
       const { AsposeConnectionTest } = await import('../../util/extensions/aspose-connection-test.js');
       const tester = new AsposeConnectionTest();
-      
+
       const results = await tester.runAllTests();
-      
+
       console.log('[Aspose Connection Test] Test completed:', results.summary);
       return results;
-      
+
     } catch (error) {
       console.error('[Aspose Connection Test] Error running test:', error);
       return {
@@ -998,24 +998,24 @@ export class TranslationService {
   ): Promise<Buffer> {
     try {
       logger.info('[Simple PDF] Creating simple PDF with translations as final fallback...');
-      
+
       // Import pdf-lib dynamically to avoid dependency issues
       const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
-      
+
       // Create a new PDF document
       const pdfDoc = await PDFDocument.create();
-      
+
       // Add a page
       const page = pdfDoc.addPage([595, 842]); // A4 size
       const { width, height } = page.getSize();
-      
+
       // Add translations to the page
       for (const entry of translatedEntries) {
         if (entry.translatedText && entry.position) {
           const x = entry.position.x || 50;
           const y = height - (entry.position.y || 50); // Flip Y coordinate for PDF coordinate system
           const fontSize = entry.style?.fontSize || 12;
-          
+
           // Parse color
           let color = rgb(0, 0, 0); // Default black
           if (entry.style?.color) {
@@ -1029,7 +1029,7 @@ export class TranslationService {
               logger.warn(`[Simple PDF] Invalid color format: ${entry.style.color}, using default black`);
             }
           }
-          
+
           // Choose font based on style
           let font = StandardFonts.Helvetica;
           if (entry.style?.bold && entry.style?.italic) {
@@ -1039,10 +1039,10 @@ export class TranslationService {
           } else if (entry.style?.italic) {
             font = StandardFonts.HelveticaOblique;
           }
-          
+
           // Embed the font
           const embeddedFont = await pdfDoc.embedFont(font);
-          
+
           // Add text at the specified position
           page.drawText(entry.translatedText, {
             x: x,
@@ -1051,20 +1051,20 @@ export class TranslationService {
             font: embeddedFont,
             color: color,
           });
-          
+
           logger.debug(`[Simple PDF] Added text: "${entry.translatedText}" at (${x}, ${y})`);
         }
       }
-      
+
       // Save the PDF to bytes
       const pdfBytes = await pdfDoc.save();
-      
+
       // Convert to Buffer
       const buffer = Buffer.from(pdfBytes);
-      
+
       logger.info(`[Simple PDF] Simple PDF created successfully, size: ${buffer.length} bytes`);
       return buffer;
-      
+
     } catch (error) {
       logger.error(`[Simple PDF] Error in createSimplePdfWithTranslations: ${error instanceof Error ? error.message : String(error)}`);
       throw new Error(`Simple PDF creation failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -1154,7 +1154,7 @@ async function replacePdfUsingPdfAssembler(
     logger.info('[PDF Assembler] Starting true text replacement...');
     logger.info(`[PDF Assembler] Original buffer size: ${originalBuffer.length} bytes`);
     logger.info(`[PDF Assembler] Number of replacement entries: ${entries.length}`);
-    
+
     // Log all entries for debugging
     entries.forEach((entry, index) => {
       logger.info(`[PDF Assembler] Entry ${index + 1}: "${entry.translatedText}" -> "${entry.translatedText}" at page ${entry.position?.page || 1}, position (${entry.position?.x || 0}, ${entry.position?.y || 0})`);
@@ -1244,7 +1244,7 @@ async function replacePdfUsingPdfAssembler(
       let pageObj;
       try {
         logger.info(`[PDF Assembler] Creating page object for page ${pageNum}...`);
-        
+
         // Since pdfObject method doesn't exist, we'll create a basic page object
         // In a real implementation, you'd need to properly parse the PDF structure
         pageObj = {
@@ -1252,7 +1252,7 @@ async function replacePdfUsingPdfAssembler(
           Contents: null as any,
           MediaBox: [0, 0, 595, 842] // Default A4 size
         };
-        
+
         logger.log(`[PDF Assembler] Created basic page object for page ${pageNum}`);
         logger.log(`[PDF Assembler] Page object: ${JSON.stringify(pageObj, null, 2)}`);
       } catch (pageError) {
@@ -1318,14 +1318,14 @@ async function replacePdfUsingPdfAssembler(
     // Assemble the modified PDF
     logger.info('[PDF Assembler] Assembling modified PDF...');
     logger.info('[PDF Assembler] Calling assembler.assemblePdf()...');
-    
+
     let assembledPdf;
     try {
       assembledPdf = await assembler.assemblePdf();
       logger.info(`[PDF Assembler] assemblePdf() completed successfully`);
       logger.info(`[PDF Assembler] Assembled PDF type: ${typeof assembledPdf}`);
       logger.info(`[PDF Assembler] Assembled PDF constructor: ${assembledPdf?.constructor?.name || 'Unknown'}`);
-      
+
       if (assembledPdf && typeof assembledPdf === 'object') {
         logger.info(`[PDF Assembler] Assembled PDF keys: ${Object.keys(assembledPdf).join(', ')}`);
         if ('arrayBuffer' in assembledPdf) {
@@ -1344,7 +1344,7 @@ async function replacePdfUsingPdfAssembler(
     // Convert to Buffer based on the type
     let result: Buffer;
     logger.info('[PDF Assembler] Converting assembled PDF to Buffer...');
-    
+
     if (assembledPdf instanceof ArrayBuffer) {
       logger.info('[PDF Assembler] Assembled PDF is ArrayBuffer, converting to Buffer');
       result = Buffer.from(new Uint8Array(assembledPdf));

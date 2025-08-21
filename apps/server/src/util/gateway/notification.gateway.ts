@@ -16,6 +16,7 @@ interface NotificationPayload {
   message: string;
   createdAt: Date;
   isGlobal?: boolean;
+  createdByUserId?: string;
 }
 
 @WebSocketGateway({
@@ -89,6 +90,23 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
   emitToAll(notification: NotificationPayload) {
     this.logger.log(`📢 Broadcasting global notification: ${notification.message}`);
     this.server.emit('global_notification', notification);
+  }
+
+  // Send global notification to everyone EXCEPT a specific user
+  emitToAllExcept(userId: string, notification: NotificationPayload) {
+    try {
+      this.logger.log(`📢 Broadcasting global notification (excluding user_${userId}): ${notification.message}`);
+      this.server.except(`user_${userId}`).emit('global_notification', notification);
+    } catch (error) {
+      // Fallback if except is not supported in env
+      const excludedSockets = this.userSockets.get(userId) || [];
+      const excludedSet = new Set(excludedSockets);
+      for (const [socketId, socket] of this.server.sockets.sockets) {
+        if (!excludedSet.has(socketId)) {
+          socket.emit('global_notification', notification);
+        }
+      }
+    }
   }
 
 // Send deletion notification to specific user

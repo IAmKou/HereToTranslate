@@ -14,8 +14,8 @@
               </div>
             </div>
 
-            <!-- Stats Cards -->
-            <div class="stats-container">
+            <!-- Stats Cards (hidden in compact UI) -->
+            <div class="stats-container minimal-hidden">
               <div class="stat-card stat-card-users">
                 <div class="stat-icon users">
                   <i class="pi pi-users"></i>
@@ -49,7 +49,7 @@
           <!-- Main Content -->
           <div class="main-content">
             <!-- Search and Filter Section -->
-            <div class="search-filter-section">
+            <div class="search-filter-section minimal-toolbar">
               <div class="search-filter-container">
                 <div class="search-box">
                   <span class="p-input-icon-left">
@@ -62,54 +62,26 @@
                   </span>
                 </div>
                 <div class="filter-section">
-                  <Dropdown
-                    v-model="filters.isActive.value"
-                    :options="statusOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="All Status"
-                    class="p-inputtext-lg status-dropdown filter-dropdown"
-                  >
-                    <template #value="slotProps">
-                      <div class="status-option">
-                        <i :class="getStatusIcon(slotProps.value)" class="filter-icon-animated"></i>
-                        <span>{{ getStatusLabel(slotProps.value) }}</span>
-                      </div>
-                    </template>
-                    <template #option="slotProps">
-                      <div class="status-option">
-                        <i :class="getStatusIcon(slotProps.option.value)" class="filter-icon-animated"></i>
-                        <span>{{ slotProps.option.label }}</span>
-                      </div>
-                    </template>
-                  </Dropdown>
-                  <Dropdown
-                    v-model="filters['role.id'].value"
-                    :options="roleOptions"
-                    optionLabel="name"
-                    optionValue="id"
-                    placeholder="All Roles"
-                    class="p-inputtext-lg role-dropdown filter-dropdown"
-                  >
-                    <template #value="slotProps">
-                      <div class="role-option">
-                        <i :class="getRoleIcon(slotProps.value)" class="filter-icon-animated"></i>
-                        <span>{{ getRoleLabel(slotProps.value) }}</span>
-                      </div>
-                    </template>
-                    <template #option="slotProps">
-                      <div class="role-option">
-                        <i :class="getRoleIcon(slotProps.option.id)" class="filter-icon-animated"></i>
-                        <span>{{ slotProps.option.name }}</span>
-                      </div>
-                    </template>
-                  </Dropdown>
-                  <Button
-                    icon="pi pi-filter-slash"
-                    class="p-button-outlined p-button-lg clear-btn enhanced-clear-btn"
-                    @click="clearFilters"
-                    v-tooltip.top="'Clear All Filters'"
-                  />
+                  <!-- Keep original dropdowns for functionality but hide in minimal UI -->
+                  <div class="hidden-on-minimal">
+                    <Dropdown
+                      v-model="filters.isActive.value"
+                      :options="statusOptions"
+                      optionLabel="label"
+                      optionValue="value"
+                      placeholder="All Status"
+                      class="p-inputtext-lg status-dropdown filter-dropdown"
+                    />
+                    <Dropdown
+                      v-model="filters['role.id'].value"
+                      :options="roleOptions"
+                      optionLabel="name"
+                      optionValue="id"
+                      placeholder="All Roles"
+                      class="p-inputtext-lg role-dropdown filter-dropdown"
+                    />
+                  </div>
+
                 </div>
               </div>
             </div>
@@ -120,6 +92,7 @@
                 :value="filteredUsers"
                 :paginator="true"
                 :rows="itemsPerPage"
+                v-model:first="firstIndex"
                 :loading="loading"
                 filterDisplay="menu"
                 :globalFilterFields="['username', 'fullName', 'email', 'phone']"
@@ -166,6 +139,7 @@
                   </div>
                 </template>
 
+                <Column selectionMode="multiple" headerStyle="width:2.5rem" :exportable="false" />
                 <Column header="No">
                   <template #body="{ index }">
                     {{ (currentPage - 1) * itemsPerPage + index + 1 }}
@@ -175,14 +149,16 @@
                   <template #body="{ data }">
                     <div class="user-info">
                       <Avatar
-                        v-if="data.avatarUrl"
-                        :image="getFullAvatarUrl(data.avatarUrl)"
+                        v-if="hasAvatar(data)"
+                        :image="getUserAvatarUrl(data)"
                         size="large"
                         shape="circle"
                         class="user-avatar enhanced-avatar"
                         :style="{ borderColor: getRoleBorderColor(data.role?.id) }"
                         v-tooltip.top="`<b>${data.fullName}</b><br>${data.email}<br><span class='role-tooltip'>${data.role?.name?.toUpperCase()}</span>`"
                         tooltipOptions="{ escape: false, class: 'avatar-tooltip' }"
+                        @error="onAvatarError(data, $event)"
+                        @load="onAvatarLoad(data)"
                       />
                       <Avatar
                         v-else
@@ -206,15 +182,7 @@
                     <div class="fullname-cell">{{ data.fullName }}</div>
                   </template>
                 </Column>
-                <Column field="phone" header="Phone" sortable>
-                  <template #body="{ data }">
-                    <div class="phone-cell">
-                      <i class="pi pi-phone"></i>
-                      <span>{{ data.phone || 'Not provided' }}</span>
-                    </div>
-                  </template>
-                </Column>
-                <Column field="role" header="Role" sortable>
+                <Column field="role" header="Role" sortable headerClass="role-col" bodyClass="role-col">
                   <template #body="{ data }">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                       <Tag
@@ -236,7 +204,7 @@
                     </div>
                   </template>
                 </Column>
-                <Column field="isActive" header="Status" sortable>
+                <Column field="isActive" header="Status" sortable headerClass="status-col" bodyClass="status-col">
                   <template #body="{ data }">
                     <Tag
                       class="status-tag enhanced-status-tag"
@@ -246,15 +214,6 @@
                       {{ data.isActive ? 'Active' : 'Inactive' }}
                     </Tag>
 
-                  </template>
-                </Column>
-
-                <Column field="createdAt" header="Created At" sortable>
-                  <template #body="{ data }">
-                    <div class="date-cell">
-                      <i class="pi pi-calendar"></i>
-                      <span>{{ formatDate(data.createdAt) }}</span>
-                    </div>
                   </template>
                 </Column>
                 <Column header="Action" :exportable="false">
@@ -274,43 +233,41 @@
             </div>
           </div>
 
-          <!-- Pagination Controls -->
-          <div class="pagination-controls">
-            <div class="pagination-buttons">
-              <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-secondary">
-                <i class="pi pi-chevron-left"></i> Previous
-              </button>
-              <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
-              <button @click="nextPage" :disabled="currentPage === totalPages" class="btn btn-secondary">
-                Next <i class="pi pi-chevron-right"></i>
-              </button>
-            </div>
-          </div>
 
           <!-- Confirmation Dialog -->
-          <ConfirmDialog class="enhanced-dialog">
+          <ConfirmDialog class="enhanced-dialog" :draggable="false" :closable="true">
             <template #message="slotProps">
               <div class="confirm-dialog-content animated-dialog">
-                <i :class="['pi', slotProps.message.icon, 'dialog-icon-animated']" style="font-size:2.5rem;color:#f59e0b;"></i>
+                <i :class="['pi', slotProps.message.icon, 'dialog-icon-animated', 'confirm-main-icon']"></i>
                 <span>{{ slotProps.message.message }}</span>
               </div>
             </template>
             <template #accepticon>
-              <i class="pi pi-check-circle" style="color:#22c55e;font-size:1.5rem;"></i>
+              <i class="pi pi-check-circle confirm-icon accept"></i>
             </template>
             <template #rejecticon>
-              <i class="pi pi-times-circle" style="color:#ef4444;font-size:1.5rem;"></i>
+              <i class="pi pi-times-circle confirm-icon reject"></i>
             </template>
           </ConfirmDialog>
 
-          <!-- Add Role Edit Dialog after ConfirmDialog -->
-          <RoleEditDialog
+          <!-- New modern modal for role edit -->
+          <ModernRoleModal
             v-if="showRoleDialog"
-            :user="selectedRoleUser"
-            :roleOptions="filteredRoleOptions"
+            :visible="showRoleDialog"
+            :user="selectedRoleUser as any"
+            :roleOptions="roleOptions as any"
             :loading="loading"
             @close="showRoleDialog = false"
             @confirm="handleRoleEditConfirm"
+          />
+
+          <!-- Custom Confirm Modal -->
+          <ConfirmModal
+            v-model:visible="showCustomConfirm"
+            title="Confirmation"
+            :message="customConfirmMessage"
+            type="warning"
+            @confirm="onCustomConfirm"
           />
         </div>
       </div>
@@ -330,18 +287,60 @@ import Tag from 'primevue/tag';
 import Avatar from 'primevue/avatar';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Tooltip from 'primevue/tooltip';
+import ConfirmModal from '../components/ConfirmModal.vue';
 import { userService, type User } from '../services/user.service';
+import { getEnvironmentConfig } from '../utils/environment';
 import { authService } from '../services/auth.service';
 import { DataTableFilterMetaData } from 'primevue/datatable';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import AdminSidebar from '../components/AdminSidebar.vue';
 import RoleEditDialog from '../components/RoleEditDialog.vue';
+import ModernRoleModal from '../components/ModernRoleModal.vue';
 const getFullAvatarUrl = (avatarUrl: string) => {
   if (!avatarUrl) return '';
   if (avatarUrl.startsWith('http')) return avatarUrl;
-  const base = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3000';
-  return base + avatarUrl;
+  const env = getEnvironmentConfig();
+  const apiBase = env.apiUrl.replace(/\/$/, ''); // includes /api
+  let path = avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`;
+  // Stored value is /uploads/avatars/<file>; backend serves at /api/users/uploads/avatars/<file>
+  if (path.startsWith('/uploads/')) path = `/users${path}`;
+  const result = apiBase + path;
+  console.log('[USER MGMT] getFullAvatarUrl:', { apiUrl: env.apiUrl, avatarUrl, mappedPath: path, result });
+  return result;
 };
+
+// Prefer real avatar if provided; otherwise use name initials
+const hasAvatar = (user: User) => {
+  return Boolean(user && user.avatarUrl);
+};
+
+const getUserAvatarUrl = (user: User) => {
+  if (!user) return '';
+  if (user.avatarUrl) {
+    const url = getFullAvatarUrl(user.avatarUrl as unknown as string);
+    console.log('[USER MGMT] getUserAvatarUrl:', { id: user.id, username: user.username, avatarUrl: user.avatarUrl, resolved: url });
+    return url;
+  }
+  return '';
+};
+
+function onAvatarError(user: User, evt: Event) {
+  console.error('[USER MGMT] Avatar image error:', {
+    id: user.id,
+    username: user.username,
+    avatarUrl: user.avatarUrl,
+    resolvedUrl: getUserAvatarUrl(user),
+    event: (evt as any)?.type
+  });
+}
+
+function onAvatarLoad(user: User) {
+  console.log('[USER MGMT] Avatar image loaded:', {
+    id: user.id,
+    username: user.username,
+    resolvedUrl: getUserAvatarUrl(user)
+  });
+}
 
 // Register directives
 const vTooltip = Tooltip;
@@ -361,6 +360,8 @@ const isSidebarCollapsed = ref(false);
 const showRoleDialog = ref(false);
 const selectedRoleUser = ref<User | null>(null);
 const filteredRoleOptions = ref<Role[]>([]);
+const showCustomConfirm = ref(false);
+const customConfirmMessage = ref('');
 
 const statusOptions = [
   { label: 'All', value: null },
@@ -403,14 +404,9 @@ const adminUsers = computed(() => {
   return users.value.filter(user => Number(user.role.id) === 2).length;
 });
 
-const currentPage = ref(1);
+const firstIndex = ref(0);
 const itemsPerPage = ref(10);
-const totalPages = computed(() => Math.ceil(filteredUsers.value.length / itemsPerPage.value));
-const paginatedUsers = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value;
-  const end = start + itemsPerPage.value;
-  return filteredUsers.value.slice(start, end);
-});
+const currentPage = computed(() => Math.floor(firstIndex.value / itemsPerPage.value) + 1);
 
 const filteredUsers = computed(() => {
   let result = users.value;
@@ -517,12 +513,7 @@ const loadUsers = async () => {
       currentUser?.role == '1';
     console.log('isSuperAdmin:', isSuperAdmin.value, 'currentUser:', currentUser);
 
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Users loaded successfully',
-      life: 3000
-    });
+    // No success toast needed for normal load
   } catch (err) {
     console.error('Error loading users:', err);
     toast.add({
@@ -628,49 +619,43 @@ const canDeactivateUser = (user: User) => {
 };
 
 const confirmStatusChange = (user: User) => {
-  confirm.require({
-    message: `Are you sure you want to ${user.isActive ? 'deactivate' : 'activate'} this user?`,
-    header: 'Confirmation',
-    icon: 'pi pi-exclamation-triangle',
-    accept: async () => {
-      try {
-        loading.value = true;
-        await userService.toggleUserStatus(user.id);
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: `User status updated successfully`,
-          life: 3000
-        });
-        await loadUsers();
-      } catch (err) {
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to update user status',
-          life: 3000
-        });
-        console.error('Error toggling user status:', err);
-      } finally {
-        loading.value = false;
-      }
-    }
-  });
+  customConfirmMessage.value = `Are you sure you want to ${user.isActive ? 'deactivate' : 'activate'} this user?`;
+  pendingToggleUserId.value = user.id;
+  showCustomConfirm.value = true;
 };
+
+const pendingToggleUserId = ref<string | null>(null);
+async function onCustomConfirm() {
+  if (!pendingToggleUserId.value) return;
+  try {
+    loading.value = true;
+    await userService.toggleUserStatus(pendingToggleUserId.value);
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `User status updated successfully`,
+      life: 3000
+    });
+    await loadUsers();
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to update user status',
+      life: 3000
+    });
+    console.error('Error toggling user status:', err);
+  } finally {
+    loading.value = false;
+    pendingToggleUserId.value = null;
+  }
+}
 
 const onRoleFilterChange = (event: any) => {
   filters.value['role.id'].value = Number(event.value);
 };
 
-function nextPage() {
-  if (currentPage.value < totalPages.value) currentPage.value++;
-}
-
-function prevPage() {
-  if (currentPage.value > 1) currentPage.value--;
-}
-
-watch(itemsPerPage, () => { currentPage.value = 1; });
+watch(itemsPerPage, () => { firstIndex.value = 0; });
 
 function openRoleDialog(user: User) {
   console.log('Open dialog for user:', user);
@@ -747,13 +732,13 @@ onMounted(loadUsers);
   }
 }
 
-.layout-wrapper .main-content {
+.layout-wrapper .admin-user-management {
   transition: margin-left 0.2s;
-  margin-left: 9rem;
+  margin-left: 16.25rem; /* match sidebar width when expanded */
 }
 
-.layout-wrapper.sidebar-collapsed .main-content {
-  margin-left: 8rem;
+.layout-wrapper.sidebar-collapsed .admin-user-management {
+  margin-left: 4.5rem; /* compact left offset when sidebar collapsed */
 }
 .admin-user-management {
   min-height: 100vh;
@@ -1016,9 +1001,9 @@ onMounted(loadUsers);
         gap: 0.6rem;
 
         .user-avatar {
-          width: 1.7rem;
-          height: 1.7rem;
-          font-size: 0.9rem;
+          width: 2.6rem;
+          height: 2.6rem;
+          font-size: 1.1rem;
           font-weight: 600;
           border: 2px solid #fff;
           box-shadow: 0 2px 8px rgba(59,130,246,0.10);
@@ -1041,7 +1026,7 @@ onMounted(loadUsers);
         }
       }
 
-      .fullname-cell, .phone-cell, .date-cell {
+      .fullname-cell {
         font-size: 0.97rem;
         i {
           font-size: 0.95rem;
@@ -1064,6 +1049,12 @@ onMounted(loadUsers);
         }
       }
 
+      /* Fix consistent column widths to keep Status aligned even when Role is long */
+      :deep(th.role-col),
+      :deep(td.role-col) {
+        width: 12.5rem;
+      }
+
       .status-tag {
         display: flex;
         align-items: center;
@@ -1071,6 +1062,15 @@ onMounted(loadUsers);
         i {
           font-size: 1rem;
         }
+      }
+
+      /* Align Status column header and cells perfectly centered and consistent width */
+      :deep(th.status-col),
+      :deep(td.status-col) {
+        text-align: center !important;
+        vertical-align: middle !important;
+        width: 9.5rem;
+        white-space: nowrap;
       }
 
       .action-buttons {
@@ -1221,7 +1221,8 @@ onMounted(loadUsers);
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1rem;
+  padding: 0.75rem 1rem; /* tránh chạm viền */
+  margin: 0 0.25rem; /* chút không gian với mép dialog */
 
   i {
     font-size: 2.5rem;
@@ -1303,9 +1304,9 @@ body, .admin-user-management {
     td:last-child { border-radius: 0 0.7rem 0.7rem 0; }
   }
   .user-avatar {
-    width: 2.2rem;
-    height: 2.2rem;
-    font-size: 1.1rem;
+    width: 2.6rem;
+    height: 2.6rem;
+    font-size: 1.2rem;
     font-weight: 700;
     margin-right: 0.7rem;
   }
@@ -1314,24 +1315,24 @@ body, .admin-user-management {
     color: #166534;
     border-radius: 0.5rem;
     font-weight: 600;
-    padding: 0.2rem 0.9rem;
-    font-size: 0.98rem;
+    padding: 0.12rem 0.6rem;
+    font-size: 0.85rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    i { color: #22c55e; }
+    gap: 0.25rem;
+    i { color: #22c55e; font-size: 0.85rem; }
   }
   .role-tag {
     background: #eff6ff;
     color: #2563eb;
     border-radius: 0.5rem;
     font-weight: 600;
-    padding: 0.2rem 0.9rem;
-    font-size: 0.98rem;
+    padding: 0.12rem 0.6rem;
+    font-size: 0.85rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    i { color: #2563eb; }
+    gap: 0.25rem;
+    i { color: #2563eb; font-size: 0.85rem; }
   }
   .action-btns {
     display: flex;
@@ -1396,16 +1397,18 @@ body, .admin-user-management {
     font-size: 0.97rem;
   }
   :deep(.role-tag) {
-    font-size: 1.04rem;
-    font-weight: 800;
-    letter-spacing: 1px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
     color: #3b82f6;
+    padding: 0.12rem 0.6rem;
   }
   :deep(.status-tag) {
-    font-size: 1.04rem;
-    font-weight: 700;
+    font-size: 0.85rem;
+    font-weight: 600;
     color: #22c55e;
+    padding: 0.12rem 0.6rem;
   }
   :deep(.p-datatable-tbody > tr) {
     transition: background 0.2s, border-left 0.2s, box-shadow 0.2s, transform 0.25s, opacity 0.5s;
@@ -1433,8 +1436,8 @@ body, .admin-user-management {
   color: #2563eb;
   border-radius: 0.5rem;
   font-weight: 600;
-  padding: 0.2rem 0.9rem;
-  font-size: 0.98rem;
+  padding: 0.12rem 0.6rem;
+  font-size: 0.85rem;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -1451,12 +1454,12 @@ body, .admin-user-management {
   color: #166534;
   border-radius: 0.5rem;
   font-weight: 600;
-  padding: 0.2rem 0.9rem;
-  font-size: 0.98rem;
+  padding: 0.12rem 0.6rem;
+  font-size: 0.85rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  i { color: #22c55e; }
+  gap: 0.25rem;
+  i { color: #22c55e; font-size: 0.85rem; }
 }
 .ripple-btn {
   position: relative;
@@ -1509,18 +1512,34 @@ body, .admin-user-management {
   :deep(.p-dialog) {
     animation: dialogPopIn 0.4s;
     border-radius: 1.2rem;
+    overflow: hidden;
+    width: 640px !important;
+    max-width: 90vw;
+    .p-dialog-content {
+      padding: 1.25rem 1.5rem !important;
+      background: #fff;
+    }
     .p-dialog-header {
       background: #fef3c7;
       color: #b45309;
       border-radius: 1.2rem 1.2rem 0 0;
     }
     .p-dialog-footer {
+      padding: 1rem 1.25rem !important;
+      background: #fff;
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.8rem;
+      border-top: 1px solid #f1f5f9;
+      border-radius: 0 0 1.2rem 1.2rem;
       .p-confirm-dialog-accept {
         background: linear-gradient(90deg, #10b981, #3b82f6);
         color: #fff;
         font-weight: 700;
         border-radius: 0.7rem;
         font-size: 1.1rem;
+        padding: 0.6rem 1.2rem;
+        min-width: 96px;
         box-shadow: 0 2px 8px rgba(16,185,129,0.10);
         &:hover { background: linear-gradient(90deg, #3b82f6, #10b981); }
       }
@@ -1530,6 +1549,8 @@ body, .admin-user-management {
         font-weight: 700;
         border-radius: 0.7rem;
         font-size: 1.1rem;
+        padding: 0.6rem 1.2rem;
+        min-width: 96px;
         box-shadow: 0 2px 8px rgba(239,68,68,0.10);
         &:hover { background: #b91c1c; }
       }
@@ -1540,6 +1561,16 @@ body, .admin-user-management {
   }
   .dialog-icon-animated {
     animation: iconBounce 0.7s;
+  }
+  .confirm-main-icon {
+    font-size: 2.2rem;
+    color: #f59e0b;
+    flex: 0 0 auto;
+  }
+  .confirm-icon {
+    font-size: 1.25rem;
+    &.accept { color: #22c55e; }
+    &.reject { color: #ef4444; }
   }
 }
 @keyframes dialogPopIn {
@@ -1862,5 +1893,51 @@ body, .admin-user-management {
   }
 }
 
+
+/* Compact scaling for better fit on common screens */
+@media (max-width: 1920px) {
+  .admin-user-management {
+    font-size: 0.95rem;
+  }
+  .admin-user-management .stats-container .stat-card {
+    padding: 1.4rem 1rem;
+    gap: 1rem;
+  }
+  .admin-user-management .stats-container .stat-card .stat-icon i {
+    font-size: 1.6rem;
+  }
+  .admin-user-management .stats-container .stat-card .stat-value {
+    font-size: 2rem;
+  }
+  .admin-user-management .search-filter-section {
+    padding: 1rem 1.5rem;
+  }
+  .admin-user-management .search-input {
+    padding: 0.9rem 1.2rem 0.9rem 2.6rem !important;
+    font-size: 1rem !important;
+  }
+  .admin-user-management :deep(.filter-dropdown) .p-dropdown-label {
+    padding: 0.8rem 1rem !important;
+    font-size: 0.95rem !important;
+  }
+  .admin-user-management :deep(.p-datatable-thead > tr > th),
+  .admin-user-management :deep(.p-datatable-tbody > tr > td) {
+    padding: 0.7rem 0.6rem !important;
+    font-size: 0.95rem !important;
+  }
+  .admin-user-management .action-animated-btn,
+  .admin-user-management :deep(.p-button.p-button-icon-only) {
+    width: 2.2rem;
+    height: 2.2rem;
+    font-size: 1.1rem;
+  }
+  .admin-user-management .pagination-controls .btn {
+    padding: 0.35rem 0.9rem;
+    font-size: 0.95rem;
+  }
+  .admin-user-management .page-header h1 {
+    font-size: 1.6rem;
+  }
+}
 
 </style>

@@ -39,6 +39,9 @@ export class FileEntity {
   @Column({ type: 'varchar', length: 20, default: 'ready', nullable: true })
   status?: 'processing' | 'ready' | 'error';
 
+  @Column({ type: 'boolean', default: false })
+  isSyncedFromRequest: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

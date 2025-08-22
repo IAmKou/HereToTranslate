@@ -4,6 +4,9 @@
       <div class="dialog-header">
         <h3>Request Deadline Extension</h3>
       </div>
+
+
+
       <form @submit.prevent="submit">
         <div class="form-row">
           <label for="newDate">New deadline</label>
@@ -38,6 +41,26 @@ const emit = defineEmits(['close', 'submitted'])
 const newDeadline = ref('')
 const reason = ref('')
 const loading = ref(false)
+
+// Toast notification function
+function showToast(message, type = 'info') {
+  // Create toast element
+  const toast = document.createElement('div')
+  toast.className = `toast toast-${type}`
+  toast.textContent = message
+
+  // Add to body
+  document.body.appendChild(toast)
+
+  // Show toast
+  setTimeout(() => toast.classList.add('show'), 100)
+
+  // Remove toast after 5 seconds
+  setTimeout(() => {
+    toast.classList.remove('show')
+    setTimeout(() => document.body.removeChild(toast), 300)
+  }, 5000)
+}
 
 // Set minimum date to be after current deadline
 const minDate = computed(() => {
@@ -78,8 +101,16 @@ async function submit() {
     emit('close')
   } catch (error) {
     console.error('Failed to submit extension request:', error)
-    // You can add toast notification here if you have a toast system
-    alert('Failed to submit extension request. Please try again.')
+
+    // Show specific error message from backend
+    let errorMessage = 'Failed to submit extension request. Please try again.';
+
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+
+    // Show toast notification with specific error reason
+    showToast(errorMessage, 'error')
   } finally {
     loading.value = false
   }
@@ -117,6 +148,80 @@ input:focus, textarea:focus { outline: none; border-color: #2563eb; box-shadow: 
 .btn { padding: 12px 20px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
 .btn-primary { background: #2563eb; color: #fff; border: none; }
 .btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.extension-rules {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border-left: 4px solid #2563eb;
+}
+
+.extension-rules h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extension-rules ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.extension-rules li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.extension-rules .approved {
+  color: #059669;
+  font-weight: 600;
+  background: #ecfdf5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.extension-rules strong {
+  color: #1f2937;
+}
+
+/* Toast notification styles */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 500;
+  z-index: 10000;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  max-width: 400px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.toast.show {
+  transform: translateX(0);
+}
+
+.toast-error {
+  background: #dc2626;
+}
+
+.toast-info {
+  background: #2563eb;
+}
+
+.toast-success {
+  background: #059669;
+}
 </style>
 
 

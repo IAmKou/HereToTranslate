@@ -1263,6 +1263,47 @@ export class RequestManagerService {
       throw new BadRequestException('Request is not in approved status');
     }
 
+    // Check if there are any pending extension requests that haven't been responded to
+    const pendingExtensions = await this.notificationService.getNotificationsByType(
+      request.requester.id,
+      'EXTENSION_REQUESTED',
+      requestId
+    );
+
+    if (pendingExtensions.length > 0) {
+      throw new BadRequestException('You already have a pending extension request. Please wait for the requester to respond before submitting a new one.');
+    }
+
+    // LOGIC: Check extension request rules
+    // 1. First extension request: Always allowed
+    // 2. Subsequent extension requests: Only allowed if previous one was APPROVED
+    // 3. If previous extension was REJECTED: No new extensions allowed
+    // 4. If previous extension is still PENDING: Wait for response
+
+    const approvedExtensions = await this.notificationService.getNotificationsByType(
+      request.requester.id,
+      'EXTENSION_APPROVED',
+      requestId
+    );
+
+    const rejectedExtensions = await this.notificationService.getNotificationsByType(
+      request.requester.id,
+      'EXTENSION_REJECTED',
+      requestId
+    );
+
+    // Apply extension request rules
+    if (approvedExtensions.length === 0 && rejectedExtensions.length === 0) {
+      // This is the first extension request - allow it
+      console.log('🔍 [SERVICE] First extension request - allowing submission');
+    } else if (rejectedExtensions.length > 0 && approvedExtensions.length === 0) {
+      // Previous extension was rejected - don't allow new extension
+      throw new BadRequestException('Your previous extension request was rejected. You cannot submit a new extension request for this project.');
+    } else if (approvedExtensions.length > 0) {
+      // Previous extension was approved - allow new extension
+      console.log('🔍 [SERVICE] Previous extension was approved - allowing new extension request');
+    }
+
     // Create notification for requester
     // Store extension details in a structured way for internal use
     const extensionData = {

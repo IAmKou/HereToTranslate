@@ -81,7 +81,7 @@
             <div class="activity-avatar">
               <img
                 v-if="activity.user.avatarUrl"
-                :src="activity.user.avatarUrl"
+                :src="getFullAvatarUrl(activity.user.avatarUrl)"
                 :alt="activity.user.fullName || activity.user.username"
                 class="avatar-img"
               />
@@ -142,7 +142,7 @@ const props = defineProps<Props>()
 // Reactive data
 const loading = ref(false)
 const error = ref('')
-const activities = ref<any[]>([])
+const activities = ref<Activity[]>([])
 const showFilters = ref(false)
 const selectedTimeRange = ref('all')
 const selectedActivityTypes = ref<string[]>([])
@@ -244,7 +244,7 @@ const getLanguageName = (languageCode: string): string => {
   return language ? language.name : languageCode
 }
 
-const getActivityDescription = (activity: any) => {
+const getActivityDescription = (activity: Activity) => {
   switch (activity.type) {
     case 'file_upload':
       return `uploaded the file "${activity.details.fileName}" with ${activity.details.stringCount} new strings for translation`
@@ -295,6 +295,17 @@ const formatDate = (dateString: string) => {
 const formatTime = (dateString: string) => {
   return format(parseISO(dateString), 'HH:mm')
 }
+
+const getFullAvatarUrl = (avatarUrl: string) => {
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl; // Data URL từ preview
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const result = base + '/users' + avatarUrl;
+  return result;
+};
 
 // Watchers
 watch(() => props.projectId, () => {
@@ -499,7 +510,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
+  border: 2px solid #e0e7ef;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .activity-content {

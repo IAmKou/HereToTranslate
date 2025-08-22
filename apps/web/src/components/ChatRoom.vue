@@ -366,6 +366,20 @@
               class="message-container"
               :class="{ 'message-mine': message.senderId === currentUserId }"
             >
+              <!-- Message Avatar -->
+              <div v-if="message.senderId !== currentUserId" class="message-avatar">
+                <img
+                  v-if="message.senderAvatarUrl"
+                  :src="getFullAvatarUrl(message.senderAvatarUrl)"
+                  :alt="message.senderUsername"
+                  class="avatar-img"
+                />
+                <div v-else class="avatar-placeholder">
+                  {{ message.senderUsername[0]?.toUpperCase() }}
+                </div>
+              </div>
+              <div v-else class="message-avatar-spacer"></div>
+
               <!-- Reply reference -->
               <div
                 v-if="message.replyTo"
@@ -987,6 +1001,7 @@ interface ChatMessage {
     message: string
   }
   imageError?: boolean
+  senderAvatarUrl?: string
 }
 
 interface Participant {
@@ -1473,6 +1488,17 @@ const retryImage = (message: ChatMessage) => {
     img.src = `${originalSrc}${separator}t=${Date.now()}`
   }
 }
+
+const getFullAvatarUrl = (avatarUrl: string | undefined): string => {
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl; // Data URL từ preview
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const result = base + '/users' + avatarUrl;
+  return result;
+};
 </script>
 
 
@@ -1791,7 +1817,7 @@ const retryImage = (message: ChatMessage) => {
 /* MESSAGE */
 .message-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   max-width: 70%;
   margin-bottom: 8px;
   align-self: flex-start; /* Default: left side */
@@ -1801,6 +1827,7 @@ const retryImage = (message: ChatMessage) => {
     align-items: flex-end; /* Align content to right */
     margin-left: auto; /* Push completely to right */
     margin-right: 0;
+    flex-direction: row-reverse; /* Reverse layout for my messages */
 
     .message-bubble {
       background: #0084ff;
@@ -2794,6 +2821,42 @@ const retryImage = (message: ChatMessage) => {
       background: #4338ca;
     }
   }
+}
+
+.message-avatar {
+  display: flex;
+  align-items: flex-start;
+  margin-right: 8px;
+  margin-top: 4px;
+
+  .avatar-img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e0e7ef;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .avatar-placeholder {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    border: 2px solid #e0e7ef;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+}
+
+.message-avatar-spacer {
+  width: 44px;
+  height: 36px;
 }
 
 </style>

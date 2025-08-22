@@ -12,6 +12,7 @@
             <h1 class="page-title">Request Registrants</h1>
           </div>
         </div>
+
         <div class="info-card">
           <div v-if="loading" class="loading">
             <span class="spinner"></span> Loading...
@@ -38,14 +39,18 @@
                 <td class="stt-td">{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                 <td class="candidate-name-td">
                   <div class="candidate-name-flex">
-                    <Avatar
-                      :image="user.avatar || ''"
-                      :label="getInitial(user.fullName || user.username)"
-                      shape="circle"
-                      size="large"
-                      class="candidate-avatar-table"
-                      :style="!user.avatar ? { background: getAvatarColor(user.fullName || user.username), color: '#fff' } : {}"
-                    />
+                    <div class="candidate-avatar-table" :title="user.fullName || user.username">
+                      <img
+                        v-if="user.avatarUrl && !(user as any)._avatarError"
+                        :src="getFullAvatarUrl(user.avatarUrl)"
+                        :alt="user.fullName || user.username"
+                        style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+                        @error="onUserAvatarError(user, $event)"
+                      />
+                      <div v-else :style="{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'#2563eb',fontWeight:'800',fontSize:'18px'}">
+                        {{ getInitial(user.fullName || user.username) }}
+                      </div>
+                    </div>
                     <div class="candidate-name-email">
                       <span class="candidate-name-link" @click="viewUserProfile(user.id)">
                         {{ user.fullName || user.username }}
@@ -154,7 +159,18 @@
       <div v-if="selectedUser">
         <div class="profile-modal-content-v2">
           <div class="profile-header">
-            <Avatar :image="selectedUser.avatar || ''" :label="getInitial(selectedUser.fullName || selectedUser.username)" shape="circle" size="xxlarge" class="profile-avatar-v2" :style="!selectedUser.avatar ? { background: getAvatarColor(selectedUser.fullName || selectedUser.username) } : {}" />
+            <div class="profile-avatar-v2">
+              <img
+                v-if="selectedUser.avatarUrl"
+                :src="getFullAvatarUrl(selectedUser.avatarUrl)"
+                :alt="selectedUser.fullName || selectedUser.username"
+                style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+                @error="(e: Event) => { const t = e.target as HTMLImageElement; if (t) t.style.display = 'none'; }"
+              />
+              <div v-else :style="{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'#2563eb',fontWeight:'800',fontSize:'44px'}">
+                {{ getInitial(selectedUser.fullName || selectedUser.username) }}
+              </div>
+            </div>
             <div class="profile-main-info">
               <div class="profile-name-v2">{{ selectedUser.fullName }} <span class="profile-username">@{{ selectedUser.username }}</span></div>
               <div class="profile-badges">
@@ -280,6 +296,7 @@ import Avatar from 'primevue/avatar';
 import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
 import Dialog from 'primevue/dialog';
+import { getAvatarUrl as getUserAvatarUrl } from '../services/user.service';
 
 interface Project {
   id: number;
@@ -304,7 +321,7 @@ interface UserInfo {
   fullName?: string;
   email: string;
   phone?: string;
-  avatar?: string;
+  avatarUrl?: string;
   isOwner: boolean;
   verified?: boolean;
   joined: string;
@@ -337,6 +354,7 @@ const router = useRouter();
 const registrants = ref<UserInfo[]>([]);
 const currentPage = ref(1);
 const pageSize = ref(10);
+const requestInfo = ref<{ id: number; title: string; requester?: { id: number; username: string; fullName?: string; email: string; avatarUrl?: string; verified?: boolean } } | null>(null);
 
 const totalPages = computed(() => Math.ceil(registrants.value.length / pageSize.value));
 const pagedRegistrants = computed(() => {
@@ -456,7 +474,7 @@ async function reloadRegistrants() {
   try {
     const requestId = route.params.requestId;
     const res = await axiosInstance.get(`/requests/${requestId}/registrants`);
-    console.log(res.data);
+    console.log('🟣 [DEBUG] Registrants response:', res.data);
     if (Array.isArray(res.data)) {
       registrants.value = res.data;
     } else if (res.data && Array.isArray(res.data.registrants)) {
@@ -466,10 +484,63 @@ async function reloadRegistrants() {
     } else {
       registrants.value = [];
     }
+    // normalize: map legacy avatar -> avatarUrl (fallback to /users/avatar/:id)
+    registrants.value = registrants.value.map((u: any) => {
+      const normalized: any = { ...u };
+      const direct = u?.avatarUrl ?? u?.avatar ?? u?.profileImage ?? u?.avatarPath;
+      if (direct) normalized.avatarUrl = direct;
+      else if (u?.id) normalized.avatarUrl = getUserAvatarUrl(Number(u.id));
+      return normalized;
+    });
+    // Debug: log first registrant to see avatarUrl
+    if (registrants.value.length > 0) {
+      console.log('🟣 [DEBUG] First registrant (normalized):', registrants.value[0]);
+      console.log('🟣 [DEBUG] First registrant avatarUrl:', registrants.value[0].avatarUrl);
+      if (registrants.value[0].avatarUrl) {
+        console.log('🟣 [DEBUG] First registrant resolved URL:', getFullAvatarUrl(registrants.value[0].avatarUrl as string));
+      }
+    }
   } catch (e) {
     registrants.value = [];
   } finally {
     loading.value = false;
+  }
+}
+
+// Get full avatar URL like ProjectMemberTab
+function getFullAvatarUrl(avatarUrl?: string) {
+  console.log('🟣 [DEBUG] getFullAvatarUrl input:', avatarUrl);
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl;
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  // normalize leading slash
+  let path = avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`;
+  // If already under /users, keep; if under /uploads, prefix /users
+  if (path.startsWith('/users/')) {
+    const result = base + path;
+    console.log('🟣 [DEBUG] getFullAvatarUrl result:', result);
+    return result;
+  }
+  if (path.startsWith('/uploads/')) {
+    const result = base + '/users' + path;
+    console.log('🟣 [DEBUG] getFullAvatarUrl result:', result);
+    return result;
+  }
+  // Fallback: just join to base
+  const result = base + path;
+  console.log('🟣 [DEBUG] getFullAvatarUrl result:', result);
+  return result;
+}
+
+// Load request detail to get requester
+async function reloadRequestInfo() {
+  try {
+    const requestId = route.params.requestId;
+    const res = await axiosInstance.get(`/requests/${requestId}/detail`);
+    requestInfo.value = res.data;
+  } catch (e) {
+    requestInfo.value = null;
   }
 }
 
@@ -492,15 +563,11 @@ function copyEmailToClipboard(email: string) {
   setTimeout(() => { showCopyToast.value = false; }, 1500);
 }
 
-// Random color for avatar background
-function getAvatarColor(name: string) {
-  // Simple hash to color
-  const colors = ['#e0e7ff', '#fee2e2', '#fef9c3', '#bbf7d0', '#f0abfc', '#bae6fd', '#fcd34d', '#fca5a5', '#a7f3d0', '#fef3c7'];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
+
+
+// Avatar error handler: mark user to fallback to initials
+function onUserAvatarError(user: UserInfo, _evt: Event) {
+  (user as any)._avatarError = true;
 }
 
 function showToastMsg(msg: string, type: 'success' | 'error' = 'success') {
@@ -515,8 +582,10 @@ onMounted(async () => {
   try {
     const user = await authService.getCurrentUser();
     await reloadRegistrants();
+    await reloadRequestInfo();
   } catch (e) {
     registrants.value = [];
+    requestInfo.value = null;
   } finally {
     loading.value = false;
   }
@@ -737,6 +806,8 @@ onMounted(async () => {
   font-weight: 800;
   color: #fff;
   background-color: #2563eb;
+  border-radius: 50%;
+  overflow: hidden;
 }
 .candidate-name-email {
   display: flex;
@@ -1081,6 +1152,8 @@ onMounted(async () => {
   border: 3px solid #2563eb;
   background: #e0e7ff;
   color: #2563eb;
+  border-radius: 50%;
+  overflow: hidden;
 }
 .profile-main-info {
   display: flex;

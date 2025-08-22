@@ -15,7 +15,13 @@
             <!-- User Profile Section -->
             <div class="user-profile">
               <div class="user-avatar-container">
-                <div class="user-avatar">
+                <img
+                  v-if="currentUser.avatarUrl"
+                  :src="getFullAvatarUrl(currentUser.avatarUrl)"
+                  :alt="currentUser.username"
+                  class="user-avatar-img"
+                />
+                <div v-else class="user-avatar">
                   {{ currentUser.username[0]?.toUpperCase() || '?' }}
                   <div class="online-indicator"></div>
                 </div>
@@ -196,7 +202,13 @@
                   @click="openRoom(room)"
                 >
                   <div class="room-avatar-container">
-                    <div class="room-avatar" :class="{ 'is-group': room.isGroupChat }">
+                    <img
+                      v-if="room.avatarUrl"
+                      :src="getFullAvatarUrl(room.avatarUrl)"
+                      :alt="room.name"
+                      class="room-avatar-img"
+                    />
+                    <div v-else class="room-avatar" :class="{ 'is-group': room.isGroupChat }">
                       {{ room.name[0]?.toUpperCase() || '?' }}
                     </div>
                     <div v-if="!room.isGroupChat" class="online-indicator-small"></div>
@@ -573,6 +585,17 @@ const handleDeleteRoom = async () => {
   }
 };
 
+const getFullAvatarUrl = (avatarUrl: string) => {
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('http')) return avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl; // Data URL từ preview
+
+  // Sử dụng endpoint database với prefix /api/users
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const result = base + '/users' + avatarUrl;
+  return result;
+};
+
 onMounted(async () => {
   await fetchCurrentUser();
   await loadChatRooms();
@@ -645,6 +668,13 @@ onMounted(async () => {
   justify-content: center;
   font-size: 1rem;
   font-weight: 600;
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .online-indicator {
@@ -895,6 +925,13 @@ onMounted(async () => {
   &.is-group {
     background: #42b883;
   }
+}
+
+.room-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .online-indicator-small {

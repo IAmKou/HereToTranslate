@@ -6,33 +6,33 @@
       <div class="content">
         <!-- Page Header -->
         <div class="page-header">
-          <h1><i class="pi pi-check-circle"></i> Sản Phẩm Bản Dịch Đã Hoàn Thành</h1>
-          <p>Xem chi tiết sản phẩm bản dịch đã được bàn giao</p>
+          <h1><i class="pi pi-check-circle"></i> Translation Handover Completed</h1>
+          <p>View details of the completed translation handover</p>
         </div>
 
         <!-- Loading State -->
         <div v-if="loading" class="loading-container">
           <i class="pi pi-spin pi-spinner"></i>
-          <p>Đang tải thông tin dự án...</p>
+          <p>Loading project information...</p>
         </div>
 
         <!-- Error State -->
         <div v-else-if="error" class="error-container">
           <i class="pi pi-exclamation-triangle"></i>
-          <h3>Lỗi</h3>
+          <h3>Error</h3>
           <p>{{ error }}</p>
-          <button @click="loadProjectData" class="btn btn-primary">Thử lại</button>
+          <button @click="loadProjectData" class="btn btn-primary">Try Again</button>
         </div>
 
         <!-- Main Content -->
         <div v-else class="handover-content">
           <!-- Project Overview -->
           <div class="info-card">
-            <h3><i class="pi pi-briefcase"></i> Thông Tin Dự Án</h3>
+            <h3><i class="pi pi-briefcase"></i> Project Information</h3>
             <div class="project-info">
-              <p><strong>Tên dự án:</strong> {{ projectInfo?.name }}</p>
-              <p><strong>Ngày tạo:</strong> {{ formatDate(projectInfo?.createdAt) }}</p>
-              <p><strong>Ngôn ngữ đích:</strong>
+              <p><strong>Project name:</strong> {{ projectInfo?.name }}</p>
+              <p><strong>Created date:</strong> {{ formatDate(projectInfo?.createdAt) }}</p>
+              <p><strong>Target languages:</strong>
                 <span v-for="lang in projectInfo?.targetLanguages" :key="lang" class="language-badge">
                   {{ getLanguageName(lang) }}
                 </span>
@@ -42,36 +42,36 @@
 
           <!-- Progress Overview -->
           <div class="info-card">
-            <h3><i class="pi pi-chart-bar"></i> Tiến Độ Dịch Thuật</h3>
+            <h3><i class="pi pi-chart-bar"></i> Translation Progress</h3>
             <div class="progress-stats">
               <div class="stat-item">
                 <div class="stat-number">{{ totalFiles }}</div>
-                <div class="stat-label">Tổng số file</div>
+                <div class="stat-label">Total files</div>
               </div>
               <div class="stat-item">
                 <div class="stat-number">{{ completedFiles }}</div>
-                <div class="stat-label">File hoàn thành</div>
+                <div class="stat-label">Completed files</div>
               </div>
               <div class="stat-item">
                 <div class="stat-number">{{ totalStrings }}</div>
-                <div class="stat-label">Tổng chuỗi</div>
+                <div class="stat-label">Total strings</div>
               </div>
               <div class="stat-item">
                 <div class="stat-number">{{ completedStrings }}</div>
-                <div class="stat-label">Chuỗi đã dịch</div>
+                <div class="stat-label">Translated strings</div>
               </div>
             </div>
             <div class="overall-progress">
               <div class="progress-bar">
                 <div class="progress-fill" :style="{ width: overallProgress + '%' }"></div>
               </div>
-              <span>{{ overallProgress }}% hoàn thành</span>
+              <span>{{ overallProgress }}% completed</span>
             </div>
           </div>
 
           <!-- Files List -->
           <div class="info-card">
-            <h3><i class="pi pi-file"></i> Danh Sách File</h3>
+            <h3><i class="pi pi-file"></i> Files List</h3>
             <div class="files-list">
               <div v-for="file in files" :key="file.id" class="file-item">
                 <div class="file-info">
@@ -98,49 +98,49 @@
 
           <!-- Handover Information -->
           <div class="info-card">
-            <h3><i class="pi pi-info-circle"></i> Thông Tin Bàn Giao</h3>
+            <h3><i class="pi pi-info-circle"></i> Handover Information</h3>
             <div class="handover-info">
               <div class="info-section">
-                <h4>Trạng thái bàn giao</h4>
+                <h4>Handover status</h4>
                 <div class="status-info">
                   <span class="status-badge completed">
                     <i class="pi pi-check"></i>
-                    Đã bàn giao thành công
+                    Successfully delivered
                   </span>
-                  <p class="handover-date">Ngày bàn giao: {{ formatDate(handoverInfo?.handoverDate) }}</p>
+                  <p class="handover-date">Handover date: {{ formatDate(handoverInfo?.handoverDate) }}</p>
                 </div>
               </div>
 
               <div v-if="handoverInfo?.message" class="info-section">
-                <h4>Ghi chú từ translator</h4>
+                <h4>Notes from translator</h4>
                 <div class="message-box">
                   {{ handoverInfo.message }}
                 </div>
               </div>
 
               <div class="info-section">
-                <h4>Kiểm tra chất lượng</h4>
+                <h4>Quality checks</h4>
                 <div class="quality-checks">
                   <div class="check-item" :class="{ completed: handoverInfo?.qualityChecks?.qualityChecked }">
                     <i :class="handoverInfo?.qualityChecks?.qualityChecked ? 'pi pi-check' : 'pi pi-times'"></i>
-                    <span>Kiểm tra chất lượng bản dịch</span>
+                    <span>Translation quality review</span>
                   </div>
                   <div class="check-item" :class="{ completed: handoverInfo?.qualityChecks?.formatChecked }">
                     <i :class="handoverInfo?.qualityChecks?.formatChecked ? 'pi pi-check' : 'pi pi-times'"></i>
-                    <span>Kiểm tra định dạng file</span>
+                    <span>File format verification</span>
                   </div>
                   <div class="check-item" :class="{ completed: handoverInfo?.qualityChecks?.contentVerified }">
                     <i :class="handoverInfo?.qualityChecks?.contentVerified ? 'pi pi-check' : 'pi pi-times'"></i>
-                    <span>Xác minh nội dung dịch thuật</span>
+                    <span>Translation content verification</span>
                   </div>
                 </div>
               </div>
 
               <div class="info-section">
-                <h4>Phương thức giao hàng</h4>
+                <h4>Delivery method</h4>
                 <p>{{ getDeliveryMethodText(handoverInfo?.deliveryMethod) }}</p>
                 <p v-if="handoverInfo?.deliveryMethod === 'email' && handoverInfo?.recipientEmail">
-                  <strong>Email nhận:</strong> {{ handoverInfo.recipientEmail }}
+                  <strong>Recipient email:</strong> {{ handoverInfo.recipientEmail }}
                 </p>
               </div>
             </div>
@@ -148,24 +148,24 @@
 
           <!-- Download Section -->
           <div class="info-card">
-            <h3><i class="pi pi-download"></i> Tải Xuống Sản Phẩm</h3>
+            <h3><i class="pi pi-download"></i> Download Products</h3>
             <div class="download-section">
               <div class="download-info">
-                <p>Tất cả file đã được dịch và sẵn sàng để tải xuống.</p>
+                <p>All files have been translated and are ready for download.</p>
                 <div class="download-stats">
-                  <span><i class="pi pi-file"></i> {{ totalFiles }} file</span>
-                  <span><i class="pi pi-check-circle"></i> {{ completedStrings }} chuỗi đã dịch</span>
+                  <span><i class="pi pi-file"></i> {{ totalFiles }} files</span>
+                  <span><i class="pi pi-check-circle"></i> {{ completedStrings }} translated strings</span>
                 </div>
               </div>
               <div class="download-actions">
                 <button @click="downloadAllFiles" class="btn btn-primary" :disabled="downloading">
                   <i v-if="downloading" class="pi pi-spin pi-spinner"></i>
                   <i v-else class="pi pi-download"></i>
-                  {{ downloading ? 'Đang tải...' : 'Tải Xuống Tất Cả' }}
+                  {{ downloading ? 'Downloading...' : 'Download All' }}
                 </button>
                 <button @click="downloadIndividualFiles" class="btn btn-secondary">
                   <i class="pi pi-list"></i>
-                  Tải Từng File
+                  Download Individual Files
                 </button>
               </div>
             </div>
@@ -246,7 +246,7 @@ async function loadProjectData() {
     handoverInfo.value = handoverRes.data;
 
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Không thể tải thông tin dự án';
+    error.value = err.response?.data?.message || 'Could not load project information';
   } finally {
     loading.value = false;
   }
@@ -269,10 +269,10 @@ function getFileStatusClass(file: any): string {
 
 function getFileStatusText(file: any): string {
   const progress = getFileProgress(file);
-  if (progress === 100) return 'Hoàn thành';
-  if (progress >= 80) return 'Gần hoàn thành';
-  if (progress >= 50) return 'Đang thực hiện';
-  return 'Chưa bắt đầu';
+  if (progress === 100) return 'Completed';
+  if (progress >= 80) return 'Near completion';
+  if (progress >= 50) return 'In progress';
+  return 'Not started';
 }
 
 function getFileIcon(fileType: string): string {
@@ -304,10 +304,10 @@ function formatDate(date: string): string {
 
 function getDeliveryMethodText(method: string): string {
   switch (method) {
-    case 'download': return 'Tải xuống trực tiếp từ hệ thống';
-    case 'email': return 'Gửi qua email';
-    case 'cloud': return 'Lưu trữ đám mây';
-    default: return 'Không xác định';
+    case 'download': return 'Direct download from the system';
+    case 'email': return 'Send via email';
+    case 'cloud': return 'Cloud storage';
+    default: return 'Undetermined';
   }
 }
 
@@ -330,16 +330,16 @@ async function downloadAllFiles() {
 
     toast.add({
       severity: 'success',
-      summary: 'Thành công',
-      detail: 'Đã tải xuống tất cả file thành công!',
+      summary: 'Success',
+      detail: 'Successfully downloaded all files!',
       life: 3000
     });
 
   } catch (err: any) {
     toast.add({
       severity: 'error',
-      summary: 'Lỗi',
-      detail: err.response?.data?.message || 'Không thể tải xuống file',
+      summary: 'Error',
+      detail: err.response?.data?.message || 'Could not download files',
       life: 3000
     });
   } finally {

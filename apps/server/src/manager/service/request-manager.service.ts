@@ -702,22 +702,76 @@ export class RequestManagerService {
       where: { id: requestId },
       relations: ['registrants'],
     });
+    return request.registrants || [];
+  }
 
-    const registrantIds = request.registrants.map((r) => r.id);
+  async createContactChat(requestId: bigint, currentUserId: bigint) {
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['requester', 'assignee'],
+    });
 
-    if (registrantIds.length === 0) return [];
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
 
-    return this.userRepository
-      .createQueryBuilder('user')
-      .select([
-        'user.id',
-        'user.fullName',
-        'user.email',
-        'user.phone',
-        'user.createdAt',
-      ])
-      .whereInIds(registrantIds)
-      .getMany();
+    const currentUser = await this.userRepository.findOneOrFail({
+      where: { id: currentUserId },
+    });
+
+    // Determine the other party to chat with
+    let otherParty: UserEntity | null = null;
+    let isRequester = false;
+    if (request.requester && request.requester.id === currentUserId) {
+      // Current user is requester, chat with assignee
+      otherParty = request.assignee;
+      isRequester = true;
+    } else if (request.assignee && request.assignee.id === currentUserId) {
+      // Current user is assignee, chat with requester
+      otherParty = request.requester;
+      isRequester = false;
+    } else {
+      // Current user is neither requester nor assignee
+      throw new BadRequestException('You can only contact the other party of this request');
+    }
+
+    if (!otherParty) {
+      throw new BadRequestException('No other party found to contact');
+    }
+
+    // Open chat between current user and other party
+    const chatRoom = await this.chatService.openChatBetween(
+      {
+        id: Number(currentUserId),
+        username: currentUser.username,
+      },
+      {
+        id: Number(otherParty.id),
+        username: otherParty.username,
+      }
+    );
+
+    // Send notification to the request owner (requester)
+    if (request.requester && request.requester.id !== currentUserId) {
+      const contactType = isRequester ? 'ASSIGNEE_CONTACTED' : 'REQUESTER_CONTACTED';
+      const contactName = currentUser.fullName || currentUser.username;
+      const requestTitle = request.title.length > 50 ? request.title.substring(0, 50) + '...' : request.title;
+
+      await this.notificationService.createNotification({
+        userId: request.requester.id,
+        type: contactType,
+        message: `${contactName} has opened a chat for your request: "${requestTitle}"`,
+        createdBy: currentUserId,
+      });
+    }
+
+    return {
+      _id: chatRoom._id,
+      participants: chatRoom.participants,
+      name: chatRoom.name,
+      isGroupChat: chatRoom.isGroupChat,
+      createdBy: chatRoom.createdBy,
+    };
   }
 
   async approveRegistrant(

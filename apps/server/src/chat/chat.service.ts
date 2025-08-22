@@ -10,11 +10,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { UserManagerService } from '#LocalProject/Managers/service/user-manager.service';
 
 @Injectable()
-export class ChatService {
+export class ChatService implements OnModuleInit {
   constructor(
     @InjectModel(ChatMessage.name)
     private chatMessageModel: Model<ChatMessage>,
@@ -24,6 +25,11 @@ export class ChatService {
 
     private readonly userService: UserManagerService
   ) {}
+
+  async onModuleInit() {
+    // Clean up duplicate rooms when service starts
+    await this.cleanupDuplicateRooms();
+  }
 
   async createMessage(data: CreateMessageDto & { fileUrl?: string; fileName?: string }): Promise<ChatMessageDocument> {
     const msg = new this.chatMessageModel({
@@ -127,27 +133,112 @@ export class ChatService {
     userA: { id: number; username: string },
     userB: { id: number; username: string }
   ) {
-    const participantIds = [userA.id, userB.id].sort((a, b) => a - b);
+    const [a, b] = [userA.id, userB.id].map(Number).sort((x, y) => x - y);
+    const participantsKey = `${a}:${b}`;
 
-    let room = await this.chatRoomModel
-      .findOne({ participants: participantIds, isGroupChat: false })
-      .lean()
-      .exec();
+    try {
+      // Atomic upsert: find existing or create if missing
+      const updated = await this.chatRoomModel.findOneAndUpdate(
+        { participantsKey, isGroupChat: false },
+        {
+          $setOnInsert: {
+            participants: [a, b],
+            participantsKey,
+            name: `${userB.username}`,
+            isGroupChat: false,
+            createdBy: userA.id,
+          },
+        },
+        { new: true, upsert: true, lean: true }
+      ).exec();
 
-    if (!room) {
-      const createdRoom = await this.chatRoomModel.create({
-        participants: participantIds,
-        name: `${userB.username}`,
-        isGroupChat: false,
-        createdBy: userA.id,
-      });
-      room = await this.chatRoomModel.findById(createdRoom._id).lean().exec();
+      if (!updated) {
+        throw new BadRequestException('Chat room could not be created or fetched');
+      }
+
+      return {
+        ...updated,
+        _id: (updated as any)?._id?.toString?.() || (updated as any)?._id,
+      };
+    } catch (error: any) {
+      // If duplicate key error, try to find existing room
+      if (error.code === 11000 && error.message.includes('duplicate key')) {
+        console.log('[chat] Duplicate key detected, trying to find existing room');
+        const existing = await this.chatRoomModel.findOne({ participantsKey, isGroupChat: false }).lean().exec();
+        if (existing) {
+          return {
+            ...existing,
+            _id: (existing as any)?._id?.toString?.() || (existing as any)?._id,
+          };
+        }
+      }
+      throw error;
     }
+  }
 
-    return {
-      ...room,
-      _id: room?._id?.toString(),
-    };
+  // Clean up duplicate rooms and ensure participantsKey is set
+  async cleanupDuplicateRooms() {
+    try {
+      // First, drop the old problematic index if it exists
+      try {
+        await this.chatRoomModel.collection.dropIndex('participants_1_isGroupChat_1');
+        console.log('[chat] Dropped old participants index');
+      } catch (e: any) {
+        if (e.code !== 27) { // 27 = IndexNotFound
+          console.log('[chat] Old index not found or already dropped');
+        }
+      }
+
+      // Ensure the new participantsKey index exists
+      try {
+        await this.chatRoomModel.collection.createIndex(
+          { participantsKey: 1 },
+          {
+            unique: true,
+            partialFilterExpression: { isGroupChat: false },
+            name: 'participantsKey_unique_dm'
+          }
+        );
+        console.log('[chat] Created new participantsKey index');
+      } catch (e: any) {
+        if (e.code !== 85) { // 85 = IndexOptionsConflict
+          console.log('[chat] New index already exists or failed to create');
+        }
+      }
+
+      // Find rooms without participantsKey (old format)
+      const roomsToFix = await this.chatRoomModel.find({
+        participantsKey: { $exists: false },
+        isGroupChat: false,
+        participants: { $size: 2 }
+      }).exec();
+
+      for (const room of roomsToFix) {
+        const [a, b] = room.participants.map(Number).sort((x, y) => x - y);
+        const participantsKey = `${a}:${b}`;
+
+        await this.chatRoomModel.updateOne(
+          { _id: room._id },
+          { $set: { participantsKey } }
+        );
+      }
+
+      // Remove duplicate rooms (keep only one per participantsKey)
+      const duplicates = await this.chatRoomModel.aggregate([
+        { $match: { isGroupChat: false, participantsKey: { $exists: true } } },
+        { $group: { _id: '$participantsKey', count: { $sum: 1 }, rooms: { $push: '$_id' } } },
+        { $match: { count: { $gt: 1 } } }
+      ]);
+
+      for (const dup of duplicates) {
+        const [keep, ...remove] = dup.rooms;
+        await this.chatRoomModel.deleteMany({ _id: { $in: remove } });
+      }
+
+      console.log(`[chat] Cleanup completed: fixed ${roomsToFix.length} rooms, removed ${duplicates.reduce((sum, d) => sum + d.count - 1, 0)} duplicates`);
+    } catch (error) {
+      console.error('[chat] Cleanup failed:', error);
+    }
   }
 
   async editMessage(id: string, newContent: string) {

@@ -88,8 +88,10 @@ export class ChatController {
         ...room,
         _id: room._id!.toString(),
       };
-    } catch (error) {
-      throw new BadRequestException('Failed to create chat room');
+    } catch (error: any) {
+      // surface message
+      const message = error?.message || 'Failed to create chat room';
+      throw new BadRequestException(message);
     }
   }
 

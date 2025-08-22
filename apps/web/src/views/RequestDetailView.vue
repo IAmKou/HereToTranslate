@@ -782,86 +782,126 @@ async function downloadFile(file: FileInfo) {
   }
 }
 async function contactRequester() {
-  console.log('Contact Requester - Requester data:', request.value?.requester);
-  console.log('Contact Requester - Requester username:', request.value?.requester?.username);
-
-  if (!request.value?.requester?.username) {
+  const rq = request.value?.requester;
+  if (!rq) {
     toast.add({ severity: 'warn', summary: 'Warning', detail: 'Requester information not available', life: 3000 });
     return;
   }
-
-  try {
-    console.log('Making API call to /chat/open-dm with targetIdentifier:', request.value.requester.username);
-    // Create a direct chat with the requester
-    const response = await axiosInstance.post('/chat/open-dm', {
-      targetIdentifier: request.value.requester.username
-    });
-
-    console.log('API response:', response);
-    console.log('Response data:', response.data);
-
-    if (response.data && response.data._id) {
-      console.log('Chat created successfully, navigating to chat view with chat ID:', response.data._id);
-      // Navigate to the chat view with the chat ID
-      router.push({ name: 'chat', query: { chatId: response.data._id } });
-    } else {
-      console.log('Failed to create chat room - no _id in response');
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create chat room', life: 3000 });
-    }
-  } catch (error: any) {
-    console.error('Error creating chat:', error);
-    console.error('Error response:', error?.response);
-    console.error('Error message:', error?.message);
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error?.response?.data?.message || 'Failed to create chat with requester',
-      life: 3000
-    });
+  if (userId.value != null && rq.id === userId.value) {
+    toast.add({ severity: 'info', summary: 'Info', detail: 'You cannot open a chat with yourself', life: 2500 });
+    return;
   }
+  // Prefer server-side contact endpoint bound to this request
+  const ok = await openContactChatByRequestId();
+  if (!ok) await openContactChatForUser(rq);
 }
-async function contactTranslator() {
-  console.log('Contact Translator - Assignee data:', request.value?.assignee);
-  console.log('Contact Translator - Assignee username:', request.value?.assignee?.username);
 
-  if (!request.value?.assignee) {
+async function contactTranslator() {
+  const tr = request.value?.assignee;
+  if (!tr) {
     toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator information not available', life: 3000 });
     return;
   }
-
-  if (!request.value.assignee.username) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Translator username not available', life: 3000 });
+  if (userId.value != null && tr.id === userId.value) {
+    toast.add({ severity: 'info', summary: 'Info', detail: 'You cannot open a chat with yourself', life: 2500 });
     return;
   }
+  // Prefer server-side contact endpoint bound to this request
+  const ok = await openContactChatByRequestId();
+  if (!ok) await openContactChatForUser(tr);
+}
 
+async function openContactChatByRequestId(): Promise<boolean> {
   try {
-    console.log('Making API call to /chat/open-dm with targetIdentifier:', request.value.assignee.username);
-    // Create a direct chat with the translator
-    const response = await axiosInstance.post('/chat/open-dm', {
-      targetIdentifier: request.value.assignee.username
-    });
-
-    console.log('API response:', response);
-    console.log('Response data:', response.data);
-
-    if (response.data && response.data._id) {
-      console.log('Chat created successfully, navigating to chat view with chat ID:', response.data._id);
-      // Navigate to the chat view with the chat ID
-      router.push({ name: 'chat', query: { chatId: response.data._id } });
-    } else {
-      console.log('Failed to create chat room - no _id in response');
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create chat room', life: 3000 });
-    }
+    const reqId = request.value?.id;
+    if (!reqId) return false;
+    console.log('[chat] opening DM via request contact endpoint:', reqId);
+    const response = await axiosInstance.post(`/requests/${reqId}/contact`);
+    const roomId = response?.data?._id || response?.data?.id || response?.data?.roomId;
+    if (!roomId) return false;
+    toast.add({ severity: 'success', summary: 'Chat ready', detail: 'Direct chat opened. Redirecting to Chat…', life: 1500 });
+    try { window.dispatchEvent(new CustomEvent('chat-room-opened', { detail: { roomId } })); } catch (_) {}
+    router.push({ name: 'chat', query: { chatId: roomId } });
+    return true;
   } catch (error: any) {
-    console.error('Error creating chat:', error);
-    console.error('Error response:', error?.response);
-    console.error('Error message:', error?.message);
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error?.response?.data?.message || 'Failed to create chat with translator',
-      life: 3000
-    });
+    const status = error?.response?.status;
+    const data = error?.response?.data;
+    const message = data?.message || error?.message;
+    console.warn('[chat] /requests/:id/contact failed:', { status, message, data });
+    return false;
+  }
+}
+
+function unique<T>(arr: T[]): T[] { return Array.from(new Set(arr.filter(Boolean) as T[])); }
+
+async function resolveIdentifier(candidate: string): Promise<string | null> {
+  try {
+    const q = candidate.trim();
+    if (!q) return null;
+    const res = await axiosInstance.get('/chat/search', { params: { q } });
+    const found = res?.data;
+    const username = found?.username || null;
+    console.log('[chat] resolved identifier -> username:', { candidate, username });
+    return username;
+  } catch (e: any) {
+    const status = e?.response?.status;
+    const message = e?.response?.data?.message || e?.message;
+    console.warn('[chat] resolveIdentifier failed:', { candidate, status, message });
+    return null;
+  }
+}
+
+async function openContactChatForUser(u: { email?: string; username?: string }) {
+  const candidates = unique([(u.email || '').trim().toLowerCase(), (u.username || '').trim()]);
+  if (candidates.length === 0) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No identifier (email/username) to open chat', life: 3000 });
+    return;
+  }
+  let lastError: any = null;
+  for (const candidate of candidates) {
+    // Try to resolve to a canonical username first
+    const resolved = await resolveIdentifier(candidate);
+    const identifier = resolved || candidate;
+    try {
+      console.log('[chat] trying identifier:', identifier);
+      await openContactChat(identifier);
+      return; // success
+    } catch (err) {
+      lastError = err;
+      const status = (err as any)?.response?.status;
+      const message = (err as any)?.response?.data?.message || (err as any)?.message;
+      console.warn('[chat] identifier failed:', { identifier, status, message });
+      continue;
+    }
+  }
+  const status = lastError?.response?.status;
+  const message = lastError?.response?.data?.message || lastError?.message || 'Failed to create chat';
+  toast.add({ severity: 'error', summary: `Error ${status || ''}`.trim(), detail: message, life: 3500 });
+}
+
+async function openContactChat(targetIdentifier: string) {
+  try {
+    if (!targetIdentifier) {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Missing target identifier', life: 3000 });
+      throw new Error('Missing target identifier');
+    }
+    console.log('[chat] opening DM with identifier:', targetIdentifier);
+    const response = await axiosInstance.post('/chat/open-dm', { targetIdentifier });
+    const roomId = response?.data?._id;
+    if (!roomId) {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create/open chat room', life: 3000 });
+      throw new Error('No roomId returned');
+    }
+    toast.add({ severity: 'success', summary: 'Chat ready', detail: 'Direct chat opened. Redirecting to Chat…', life: 1500 });
+    try { window.dispatchEvent(new CustomEvent('chat-room-opened', { detail: { roomId } })); } catch (_) {}
+    router.push({ name: 'chat', query: { chatId: roomId } });
+  } catch (error: any) {
+    const status = error?.response?.status;
+    const data = error?.response?.data;
+    const message = data?.message || error?.message || 'Failed to create chat';
+    console.error('[chat] open-dm failed:', { status, message, data, identifier: targetIdentifier });
+    // rethrow so caller can try next candidate
+    throw error;
   }
 }
 function viewProfile(userId: number | undefined) {

@@ -636,6 +636,19 @@ const navigateToNotifications = () => {
 
 const handleNotificationClick = (notification: Notification) => {
   const t = notification.type
+
+  // Handle extension request notifications
+  if (t === 'EXTENSION_REQUESTED') {
+    // Extract requestId from message: "... [RequestID:123]"
+    const requestIdMatch = notification.message.match(/\[RequestID:(\d+)\]/)
+    if (requestIdMatch) {
+      const requestId = requestIdMatch[1]
+      router.push(`/my-requests?highlight=${requestId}`)
+      showNotificationPanel.value = false
+      return
+    }
+  }
+
   if (
     t === 'PRIVATE_REQUEST_CREATED' ||
     t === 'PUBLIC_REQUEST_REGISTERED' ||

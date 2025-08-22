@@ -173,6 +173,7 @@
                   <button class="dropdown-action" @click="editProject">
                     <span class="icon">✏️</span> Edit Project
                   </button>
+
                   <button
                     class="dropdown-action danger"
                     @click="openDeleteModal"
@@ -207,6 +208,7 @@
                   <button @click="editProject" class="btn btn-outline" :disabled="!(isProjectOwner || isProjectAdmin)">
                     <span class="icon">✏️</span> Edit Project
                   </button>
+
                   <button @click="openDeleteModal" class="btn btn-danger" :disabled="!isProjectOwner">
                     <span class="icon">🗑️</span> Delete Project
                   </button>
@@ -911,6 +913,8 @@ const formatPermissions = (permissions: string) => {
 const editProject = () => {
   router.push(`/projects/${project.value?.id}/edit`);
 };
+
+
 
 const openDeleteModal = () => {
   showDeleteModal.value = true;

@@ -294,7 +294,6 @@ import { authService } from '../services/auth.service';
 import { DataTableFilterMetaData } from 'primevue/datatable';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import AdminSidebar from '../components/AdminSidebar.vue';
-import RoleEditDialog from '../components/RoleEditDialog.vue';
 import ModernRoleModal from '../components/ModernRoleModal.vue';
 const getFullAvatarUrl = (avatarUrl: string) => {
   if (!avatarUrl) return '';

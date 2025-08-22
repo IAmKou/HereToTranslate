@@ -280,7 +280,34 @@ export class RequestManagerService {
       .leftJoin('requests.category', 'category')
       .leftJoinAndSelect('requests.tags', 'tags');
 
-    return await queryBuilder.getMany();
+    const requests = await queryBuilder.getMany();
+
+    // Count actual pending extension requests for each request
+    const requestsWithExtensions = await Promise.all(
+      requests.map(async (request) => {
+        // Get all extension notifications for this request
+        const allExtensionNotifications = await this.notificationService.getNotificationsByType(
+          uid,
+          'EXTENSION_REQUESTED',
+          request.id
+        );
+
+        // For now, we'll count all EXTENSION_REQUESTED notifications
+        // In a more sophisticated implementation, we would track which extensions
+        // have been responded to and only count pending ones
+        // This requires either:
+        // 1. Adding a status field to extension requests, or
+        // 2. Creating a separate extension_requests table
+        const extensionRequestCount = allExtensionNotifications.length;
+
+        return {
+          ...request,
+          extensionRequestCount
+        };
+      })
+    );
+
+    return requestsWithExtensions;
   }
 
   async fetchRequests(userId: bigint) {
@@ -702,76 +729,22 @@ export class RequestManagerService {
       where: { id: requestId },
       relations: ['registrants'],
     });
-    return request.registrants || [];
-  }
 
-  async createContactChat(requestId: bigint, currentUserId: bigint) {
-    const request = await this.requestRepository.findOneOrFail({
-      where: { id: requestId },
-      relations: ['requester', 'assignee'],
-    });
+    const registrantIds = request.registrants.map((r) => r.id);
 
-    if (!request) {
-      throw new NotFoundException('Request not found');
-    }
+    if (registrantIds.length === 0) return [];
 
-    const currentUser = await this.userRepository.findOneOrFail({
-      where: { id: currentUserId },
-    });
-
-    // Determine the other party to chat with
-    let otherParty: UserEntity | null = null;
-    let isRequester = false;
-    if (request.requester && request.requester.id === currentUserId) {
-      // Current user is requester, chat with assignee
-      otherParty = request.assignee;
-      isRequester = true;
-    } else if (request.assignee && request.assignee.id === currentUserId) {
-      // Current user is assignee, chat with requester
-      otherParty = request.requester;
-      isRequester = false;
-    } else {
-      // Current user is neither requester nor assignee
-      throw new BadRequestException('You can only contact the other party of this request');
-    }
-
-    if (!otherParty) {
-      throw new BadRequestException('No other party found to contact');
-    }
-
-    // Open chat between current user and other party
-    const chatRoom = await this.chatService.openChatBetween(
-      {
-        id: Number(currentUserId),
-        username: currentUser.username,
-      },
-      {
-        id: Number(otherParty.id),
-        username: otherParty.username,
-      }
-    );
-
-    // Send notification to the request owner (requester)
-    if (request.requester && request.requester.id !== currentUserId) {
-      const contactType = isRequester ? 'ASSIGNEE_CONTACTED' : 'REQUESTER_CONTACTED';
-      const contactName = currentUser.fullName || currentUser.username;
-      const requestTitle = request.title.length > 50 ? request.title.substring(0, 50) + '...' : request.title;
-
-      await this.notificationService.createNotification({
-        userId: request.requester.id,
-        type: contactType,
-        message: `${contactName} has opened a chat for your request: "${requestTitle}"`,
-        createdBy: currentUserId,
-      });
-    }
-
-    return {
-      _id: chatRoom._id,
-      participants: chatRoom.participants,
-      name: chatRoom.name,
-      isGroupChat: chatRoom.isGroupChat,
-      createdBy: chatRoom.createdBy,
-    };
+    return this.userRepository
+      .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.fullName',
+        'user.email',
+        'user.phone',
+        'user.createdAt',
+      ])
+      .whereInIds(registrantIds)
+      .getMany();
   }
 
   async approveRegistrant(
@@ -948,6 +921,396 @@ export class RequestManagerService {
       .where('registrants.id = :uid', { uid: BigInt(uid) });
 
     return await queryBuilder.getMany();
+  }
+
+  async getOngoingRequests(uid: bigint) {
+    const qb = this.requestRepository
+      .createQueryBuilder('requests')
+      .select([
+        'requests.id',
+        'requests.title',
+        'requests.dealAmount',
+        'requests.deadline',
+        'requests.status',
+        'requester.id',
+        'requester.fullName',
+        'requester.email',
+      ])
+      .leftJoin('requests.requester', 'requester')
+      .where('requests.assigneeId = :uid', { uid: BigInt(uid) })
+      .andWhere('requests.status = :st', { st: RequestStatus.Approved })
+      .orderBy('requests.deadline', 'ASC');
+
+    const result = await qb.getMany();
+    return result || [];
+  }
+
+  async getRequestExtensions(requestId: bigint, userId: bigint) {
+    // First verify the user is the requester of this request
+    const request = await this.requestRepository.findOne({
+      where: { id: requestId },
+      relations: ['requester'],
+    });
+
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    if (request.requester.id !== userId) {
+      throw new BadRequestException('You are not the requester of this request');
+    }
+
+    // Get extension notifications for this request
+    const extensionNotifications = await this.notificationService.getNotificationsByType(
+      userId,
+      'EXTENSION_REQUESTED',
+      requestId
+    );
+
+    // Convert notifications to extension request format
+    const extensions = await Promise.all(extensionNotifications.map(async notification => {
+      // Extract information from notification message
+      const message = notification.message;
+      console.log('🔍 [SERVICE] Parsing notification message:', message);
+
+      const translatorMatch = message.match(/^([^(]+) has requested/);
+      const translatorName = translatorMatch ? translatorMatch[1].trim() : 'Unknown Translator';
+
+      // Extract new deadline and reason from message
+      const extensionDataMatch = message.match(/\[EXTENSION_DATA:(\{.*?\})\]/);
+      let newDeadline, reason;
+
+      if (extensionDataMatch) {
+        try {
+          const extensionData = JSON.parse(extensionDataMatch[1]);
+          newDeadline = new Date(extensionData.newDeadline);
+          reason = extensionData.reason;
+        } catch (error) {
+          console.error('🔍 [SERVICE] Failed to parse extension data:', error);
+          // Fallback to default values
+          newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
+          reason = 'Deadline extension requested';
+        }
+      } else {
+        // Fallback to default values if no extension data found
+        newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
+        reason = 'Deadline extension requested';
+      }
+
+      console.log('🔍 [SERVICE] Parsed values:', {
+        translatorName,
+        newDeadline: newDeadline.toISOString(),
+        reason: reason,
+        fullMessage: message
+      });
+
+      const currentDeadline = new Date(request.deadline);
+      const newDeadline = newDeadlineMatch ? new Date(parseInt(newDeadlineMatch[1])) : new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      // Decode base64 reason
+      let reason = 'Deadline extension requested';
+      if (reasonMatch && reasonMatch[1]) {
+        try {
+          reason = Buffer.from(reasonMatch[1], 'base64').toString('utf8');
+        } catch (error) {
+          console.error('🔍 [SERVICE] Failed to decode reason:', error);
+          reason = reasonMatch[1]; // Fallback to raw value
+        }
+      }
+
+      // Get translator's real email from user table
+      const translator = await this.userRepository.findOne({
+        where: { id: notification.createdBy },
+        select: ['email']
+      });
+
+      return {
+        id: notification.id,
+        requestId: requestId,
+        translatorId: notification.createdBy,
+        translatorName: translatorName,
+        translatorEmail: translator?.email || 'No email available',
+        currentDeadline: currentDeadline,
+        newDeadline: newDeadline,
+        reason: reason,
+        status: 'PENDING',
+        createdAt: notification.createdAt,
+      };
+    }));
+
+    return extensions;
+  }
+
+  async approveExtension(requestId: bigint, extensionId: bigint, userId: bigint) {
+    console.log('🔍 [SERVICE] approveExtension called:', { requestId, extensionId, userId })
+
+    // Verify user is requester
+    const request = await this.requestRepository.findOne({
+      where: { id: requestId },
+      relations: ['requester', 'assignee'],
+    });
+
+    console.log('🔍 [SERVICE] Found request:', {
+      requestFound: !!request,
+      requestId: request?.id,
+      requesterId: request?.requester?.id,
+      assigneeId: request?.assignee?.id
+    })
+
+    if (!request) {
+      console.error('💥 [SERVICE] Request not found')
+      throw new NotFoundException('Request not found');
+    }
+
+    if (request.requester.id !== userId) {
+      console.error('💥 [SERVICE] User not authorized:', {
+        requesterId: request.requester.id,
+        userId
+      })
+      throw new BadRequestException('You are not the requester of this request');
+    }
+
+    // Get the extension notification to extract new deadline
+    const extensionNotifications = await this.notificationService.getNotificationsByType(
+      userId,
+      'EXTENSION_REQUESTED',
+      requestId
+    );
+
+    console.log('🔍 [SERVICE] Found extension notifications:', {
+      count: extensionNotifications.length,
+      notificationIds: extensionNotifications.map(n => n.id)
+    })
+
+    const extensionNotification = extensionNotifications.find(n => n.id.toString() === extensionId.toString());
+    if (!extensionNotification) {
+      console.error('💥 [SERVICE] Extension notification not found:', {
+        extensionId: extensionId.toString(),
+        availableIds: extensionNotifications.map(n => n.id.toString())
+      })
+      throw new NotFoundException('Extension request not found');
+    }
+
+    console.log('🔍 [SERVICE] Found extension notification:', {
+      notificationId: extensionNotification.id,
+      message: extensionNotification.message
+    })
+
+    // Extract new deadline from notification message
+    const message = extensionNotification.message;
+    const extensionDataMatch = message.match(/\[EXTENSION_DATA:(\{.*?\})\]/);
+
+    if (!extensionDataMatch) {
+      console.error('💥 [SERVICE] Invalid extension request format:', { message })
+      throw new BadRequestException('Invalid extension request format');
+    }
+
+    let newDeadline;
+    try {
+      const extensionData = JSON.parse(extensionDataMatch[1]);
+      newDeadline = new Date(extensionData.newDeadline);
+    } catch (error) {
+      console.error('💥 [SERVICE] Failed to parse extension data:', error);
+      throw new BadRequestException('Invalid extension request format');
+    }
+
+    console.log('🔍 [SERVICE] Extracted new deadline:', {
+      newDeadline: newDeadline.toISOString(),
+      extensionData: extensionDataMatch[1]
+    })
+
+    // Store the old deadline before updating
+    const oldDeadline = request.deadline;
+
+    // Update request deadline
+    request.deadline = newDeadline;
+    await this.requestRepository.save(request);
+    console.log('✅ [SERVICE] Request deadline updated successfully')
+
+    // Send notification to translator
+    await this.notificationService.createNotification({
+      userId: request.assignee.id,
+      type: 'EXTENSION_APPROVED',
+      message: `Your deadline extension request for "${request.title}" has been approved. New deadline: ${newDeadline.toLocaleDateString()}`,
+      createdBy: userId,
+    });
+
+    console.log('✅ [SERVICE] Notification sent to translator')
+
+    // Send email to translator
+    if (request.assignee.email) {
+      await this.mailService.sendExtensionApprovalNotification(
+        request.assignee.email,
+        {
+          translatorName: request.assignee.fullName || request.assignee.username,
+          requestTitle: request.title,
+          currentDeadline: new Date(oldDeadline), // Convert to Date object
+          newDeadline: new Date(newDeadline),     // Convert to Date object
+        }
+      );
+      console.log('✅ [SERVICE] Email sent to translator')
+    }
+
+    // Delete the original extension request notification so it won't be counted anymore
+    await this.notificationService.deleteNotification(extensionNotification.id);
+    console.log('✅ [SERVICE] Original extension notification deleted')
+
+    return {
+      success: true,
+      message: 'Extension approved successfully. Request deadline has been updated.',
+      newDeadline: newDeadline
+    };
+  }
+
+  async rejectExtension(requestId: bigint, extensionId: bigint, userId: bigint) {
+    // Verify user is requester
+    const request = await this.requestRepository.findOne({
+      where: { id: requestId },
+      relations: ['requester', 'assignee'],
+    });
+
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    if (request.requester.id !== userId) {
+      throw new BadRequestException('You are not the requester of this request');
+    }
+
+    // Get the extension notification to extract reason
+    const extensionNotifications = await this.notificationService.getNotificationsByType(
+      userId,
+      'EXTENSION_REQUESTED',
+      requestId
+    );
+
+    const extensionNotification = extensionNotifications.find(n => n.id.toString() === extensionId.toString());
+    if (!extensionNotification) {
+      throw new NotFoundException('Extension request not found');
+    }
+
+    // Extract reason from notification message
+    const message = extensionNotification.message;
+    const extensionDataMatch = message.match(/\[EXTENSION_DATA:(\{.*?\})\]/);
+    let reason = 'No reason provided';
+
+    if (extensionDataMatch) {
+      try {
+        const extensionData = JSON.parse(extensionDataMatch[1]);
+        reason = extensionData.reason;
+      } catch (error) {
+        console.error('🔍 [SERVICE] Failed to parse extension data in rejectExtension:', error);
+        reason = 'Deadline extension requested'; // Fallback to default
+      }
+    }
+
+    // Send notification to translator
+    await this.notificationService.createNotification({
+      userId: request.assignee.id,
+      type: 'EXTENSION_REJECTED',
+      message: `Your deadline extension request for "${request.title}" has been rejected. Original deadline remains unchanged.`,
+      createdBy: userId,
+    });
+
+    // Send email to translator
+    if (request.assignee.email) {
+      await this.mailService.sendExtensionRejectionNotification(
+        request.assignee.email,
+        {
+          translatorName: request.assignee.fullName || request.assignee.username,
+          requestTitle: request.title,
+          currentDeadline: new Date(request.deadline), // Convert to Date object
+          reason: reason,
+        }
+      );
+      console.log('✅ [SERVICE] Email sent to translator for rejection')
+    }
+
+    // Delete the original extension request notification so it won't be counted anymore
+    await this.notificationService.deleteNotification(extensionNotification.id);
+    console.log('✅ [SERVICE] Original extension notification deleted')
+
+    return {
+      success: true,
+      message: 'Extension rejected successfully. Request deadline remains unchanged.'
+    };
+  }
+
+  async submitExtensionRequest(requestId: bigint, translatorId: bigint, newDeadline: Date, reason: string) {
+    console.log('🔍 [SERVICE] submitExtensionRequest called:', {
+      requestId: requestId.toString(),
+      translatorId: translatorId.toString(),
+      newDeadline: newDeadline.toISOString(),
+      reason: reason,
+      reasonLength: reason.length
+    });
+
+    // Verify the request exists and translator is assigned
+    const request = await this.requestRepository.findOne({
+      where: { id: requestId },
+      relations: ['requester', 'assignee'],
+    });
+
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    if (request.assignee?.id !== translatorId) {
+      throw new BadRequestException('You are not the assigned translator for this request');
+    }
+
+    if (request.status !== RequestStatus.Approved) {
+      throw new BadRequestException('Request is not in approved status');
+    }
+
+    // Create notification for requester
+    // Store extension details in a structured way for internal use
+    const extensionData = {
+      requestId: requestId,
+      newDeadline: newDeadline.getTime(),
+      reason: reason
+    };
+
+    // Create a clean notification message for display
+    const notificationMessage = `${request.assignee.fullName || request.assignee.username} has requested a deadline extension for "${request.title}"`;
+
+    // Store extension data in notification metadata or create a separate extension record
+    // For now, we'll append the data to the message but in a cleaner format
+    const fullMessage = `${notificationMessage} [EXTENSION_DATA:${JSON.stringify(extensionData)}]`;
+
+    console.log('🔍 [SERVICE] Creating notification with message:', notificationMessage);
+    console.log('🔍 [SERVICE] Full message with extension data:', fullMessage);
+
+    await this.notificationService.createNotification({
+      userId: request.requester.id,
+      type: 'EXTENSION_REQUESTED',
+      message: fullMessage, // Use full message with extension data
+      createdBy: translatorId,
+    });
+
+    // Send email notification to requester
+    if (request.requester.email) {
+      await this.mailService.sendExtensionRequestNotification(
+        request.requester.email,
+        {
+          requesterName: request.requester.fullName || request.requester.username,
+          translatorName: request.assignee.fullName || request.assignee.username,
+          translatorEmail: request.assignee.email,
+          requestTitle: request.title,
+          currentDeadline: request.deadline,
+          newDeadline: newDeadline,
+          reason: reason,
+          requestId: requestId,
+        }
+      );
+    }
+
+    // Return success response instead of mock data
+    return {
+      success: true,
+      message: 'Extension request submitted successfully',
+      requestId: requestId
+    };
   }
 
   async getPendingRequestsCount(): Promise<number> {

@@ -42,6 +42,14 @@
               <span v-if="assignedRequestsCount > 0" class="badge">{{ assignedRequestsCount }}</span>
             </button>
             <button
+              @click="switchTab('ongoing-requests')"
+              :class="['tab-button', { active: activeTab === 'ongoing-requests' }]"
+            >
+              <span class="material-icons">timelapse</span>
+              On-going Requests
+              <span v-if="ongoingRequestsCount > 0" class="badge">{{ ongoingRequestsCount }}</span>
+            </button>
+            <button
               @click="switchTab('my-registrations')"
               :class="['tab-button', { active: activeTab === 'my-registrations' }]"
             >
@@ -73,7 +81,7 @@
           </div>
 
           <!-- My Requests Tab -->
-          <div v-else-if="activeTab === 'my-requests'">
+          <div v-else-if="activeTab === 'my-requests'" class="tab-content" :key="'my-requests'">
             <!-- Search and Filter Bar for My Requests -->
             <div class="filter-bar">
               <div class="search-container">
@@ -107,6 +115,9 @@
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
+                <label class="filter-toggle" style="display:flex;align-items:center;gap:6px;">
+                  <input type="checkbox" v-model="hideExpired" /> Hide expired
+                </label>
                 <button @click="clearMyRequestsFilters" class="clear-btn">
                   <span class="clear-icon">✕</span>
                   <span class="clear-text">Clear</span>
@@ -132,51 +143,46 @@
                 <table class="requests-table">
                   <thead>
                   <tr>
-                    <th @click="sortTable('id')" class="table-header sortable" width="60">
+                    <th @click="sortTable('id')" class="table-header sortable" width="6%">
                       <div class="header-content">
                         <span>ID</span>
                         <i :class="[ 'sort-icon', sortKey === 'id' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
                       </div>
                     </th>
-                    <th @click="sortTable('title')" class="table-header sortable">
+                    <th @click="sortTable('title')" class="table-header sortable" width="22%">
                       <div class="header-content">
                         <span>Title</span>
                         <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
                       </div>
                     </th>
-                    <th @click="sortTable('project')" class="table-header sortable">
-                      <div class="header-content">
-                        <span>Project</span>
-                        <i :class="[ 'sort-icon', sortKey === 'project' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
-                      </div>
-                    </th>
-                    <th class="table-header">
+
+                    <th class="table-header" width="10%">
                       <span>Category</span>
                     </th>
-                    <th @click="sortTable('dealAmount')" class="table-header sortable" width="120">
+                    <th @click="sortTable('dealAmount')" class="table-header sortable" width="10%">
                       <div class="header-content">
                         <span>Deal Amount</span>
                         <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
                       </div>
                     </th>
-                    <th @click="sortTable('deadline')" class="table-header sortable" width="130">
+                    <th @click="sortTable('deadline')" class="table-header sortable" width="10%">
                       <div class="header-content">
                         <span>Deadline</span>
                         <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
                       </div>
                     </th>
-                    <th class="table-header">Status</th>
-                    <th class="table-header">Visibility</th>
-                    <th class="table-header">Actions</th>
+                    <th class="table-header center" width="8%">Status</th>
+                    <th class="table-header center" width="9%">Visibility</th>
+                    <th class="table-header center" width="16%">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row">
+                  <tr v-for="(req, index) in paginatedMyRequests" :key="req.id" class="request-row" :data-request-id="req.id">
                     <td class="id-cell">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
                     <td class="title-cell">
                       <a href="#" @click.prevent="goToRequestDetail(req.id)" class="request-link">{{ req.title }}</a>
                     </td>
-                    <td class="project-cell">{{ req.project?.name || '-' }}</td>
+
                     <td class="category-cell">{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount-cell">
                       <div class="amount-wrapper">
@@ -188,47 +194,49 @@
                       <div class="deadline-wrapper">
                         <span class="deadline-icon">🗓</span>
                         <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
+                        <span v-if="daysLeft(req.deadline) !== null" class="deadline-remaining">({{ daysLeftText(req.deadline) }})</span>
                       </div>
                     </td>
-                    <td class="status-cell">
-                        <span v-if="req.status === 'APPROVED'" class="status-badge status-approved">
-                          <span class="status-icon">✅</span>
-                          <span class="status-text">Approved</span>
-                        </span>
+                    <td class="status-cell" style="text-align: center; vertical-align: middle;">
+                       <span v-if="req.status === 'APPROVED'" class="status-badge status-approved">
+                         <span class="status-icon">✅</span>
+                         <span class="status-text">Approved</span>
+                       </span>
                       <span v-else-if="req.status === 'PENDING'" class="status-badge status-pending">
-                          <span class="status-icon">⏳</span>
-                          <span class="status-text">Pending</span>
-                        </span>
-                      <span v-else :class="['status-badge', `status-${req.status.toLowerCase()}`]">
-                          {{ formatStatus(req.status) }}
-                        </span>
+                         <span class="status-icon">⏳</span>
+                         <span class="status-text">Pending</span>
+                       </span>
+                      <span v-else :class="['status-badge', req.status === 'EXPIRED' ? 'status-expired' : `status-${req.status.toLowerCase()}`]">
+                         {{ req.status === 'EXPIRED' ? 'Expired' : formatStatus(req.status) }}
+                       </span>
                     </td>
-                    <td class="visibility-cell">
-                      <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
-                        <span class="visibility-icon">🌐</span>
-                        <span class="visibility-text">Public</span>
-                      </span>
+                    <td class="visibility-cell" style="text-align: center; vertical-align: middle;">
+                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
+                         <span class="visibility-icon">🌐</span>
+                         <span class="visibility-text">Public</span>
+                       </span>
                       <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge private-badge">
-                        <span class="visibility-icon">🔒</span>
-                        <span class="visibility-text">Private</span>
-                      </span>
+                         <span class="visibility-icon">🔒</span>
+                         <span class="visibility-text">Private</span>
+                       </span>
                       <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
-                        <span class="visibility-icon">🌐</span>
-                        <span class="visibility-text">Public</span>
-                      </span>
+                         <span class="visibility-icon">🌐</span>
+                         <span class="visibility-text">Public</span>
+                       </span>
                       <span v-else class="visibility-badge private-badge">
-                        <span class="visibility-icon">🔒</span>
-                        <span class="visibility-text">Private</span>
-                      </span>
+                         <span class="visibility-icon">🔒</span>
+                         <span class="visibility-text">Private</span>
+                       </span>
                     </td>
-                    <td class="actions-cell">
+                    <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <!-- Cancel button - only show for PENDING requests without project -->
+                        <!-- Cancel button - show for all requests except COMPLETED and CANCELLED -->
                         <button
                           @click="onCancel(req)"
                           class="action-btn cancel-btn"
-                          v-if="req.status === 'PENDING' && !req.project"
-                          title="Cancel Request"
+                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED'"
+                          :title="`Cancel request: ${req.title}`"
+                          data-tooltip="Cancel this request"
                         >
                           <span class="btn-icon">✕</span>
                         </button>
@@ -238,7 +246,8 @@
                           v-if="canReview(req) && req.status === 'PENDING' && !req.project"
                           @click="onReview(req)"
                           class="action-btn review-btn"
-                          title="Review Request"
+                          :title="`Review request: ${req.title}`"
+                          data-tooltip="Review and approve/reject this request"
                         >
                           <i class="pi pi-eye btn-icon"></i>
                         </button>
@@ -249,7 +258,8 @@
                           :to="{ name: 'request-registrants', params: { requestId: req.id } }"
                           class="action-btn candidates-btn"
                           :class="{ disabled: req.registrantCount === 0 }"
-                          :title="req.registrantCount > 0 ? 'View registered candidates' : 'No candidates yet'"
+                          :title="req.registrantCount > 0 ? `View ${req.registrantCount} registered candidates for: ${req.title}` : `No candidates registered for: ${req.title}`"
+                          :data-tooltip="req.registrantCount > 0 ? `View ${req.registrantCount} candidates` : 'No candidates yet'"
                         >
                           <i class="pi pi-users btn-icon"></i>
                           <span class="btn-text">Candidates</span>
@@ -257,19 +267,44 @@
                         </router-link>
 
                         <!-- Show message for cancelled requests -->
-                        <span v-if="req.status === 'CANCELLED'" class="status-message cancelled">
-                          Request cancelled
-                        </span>
+                        <span v-if="req.status === 'CANCELLED'" class="status-message cancelled" title="This request has been cancelled">
+                           Request cancelled
+                         </span>
 
                         <!-- Show message for completed requests -->
-                        <span v-if="req.status === 'COMPLETED'" class="status-message completed">
-                          ✓ Completed
-                        </span>
+                        <span v-if="req.status === 'COMPLETED'" class="status-message completed" title="This request has been completed successfully">
+                           ✓ Completed
+                         </span>
+
+                        <!-- Handover button for waiting approval requests -->
+                        <button
+                          v-if="req.status === 'WAITING_APPROVAL' && req.project"
+                          @click="viewHandover(req)"
+                          class="action-btn handover-btn"
+                          :title="`View and evaluate translation product for: ${req.title}`"
+                          data-tooltip="View translation product and evaluate quality"
+                        >
+                          <i class="pi pi-eye btn-icon"></i>
+                          <span class="btn-text">Sản phẩm</span>
+                        </button>
+
+                        <!-- View Extensions button for approved requests -->
+                        <button
+                          v-if="req.status === 'APPROVED' && req.extensionRequestCount > 0"
+                          @click="viewExtensions(req)"
+                          class="action-btn extensions-btn"
+                          :title="`View ${req.extensionRequestCount} extension request${req.extensionRequestCount > 1 ? 's' : ''} for: ${req.title}`"
+                          data-tooltip="View and manage deadline extension requests"
+                        >
+                          <i class="pi pi-clock btn-icon"></i>
+                          <span class="btn-text">Extensions</span>
+                          <span v-if="req.extensionRequestCount > 0" class="extension-count">{{ req.extensionRequestCount }}</span>
+                        </button>
 
                         <!-- Show message for rejected requests -->
-                        <span v-if="req.status === 'REJECTED'" class="status-message rejected">
-                          ✗ Rejected
-                        </span>
+                        <span v-if="req.status === 'REJECTED'" class="status-message rejected" title="This request has been rejected">
+                           ✗ Rejected
+                         </span>
                       </div>
                     </td>
                   </tr>
@@ -308,11 +343,13 @@
           </div>
 
           <!-- Assigned Requests Tab -->
-          <div v-else-if="activeTab === 'assigned-requests'">
+          <div v-else-if="activeTab === 'assigned-requests'" class="tab-content" :key="'assigned-requests'">
             <!-- Search and Filter Bar for Assigned Requests -->
             <div class="filter-bar">
               <div class="search-container">
-                <i class="pi pi-search search-icon"></i>
+                <div class="search-icon-wrapper">
+                  <i class="pi pi-search search-icon"></i>
+                </div>
                 <input
                   v-model="assignedRequestsSearch"
                   type="text"
@@ -320,23 +357,31 @@
                   class="search-input"
                 />
               </div>
-              <select v-model="assignedRequestsStatusFilter" class="filter-select">
-                <option value="">All Status</option>
-                <option value="PENDING">Pending</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-              <select v-model="assignedRequestsVisibilityFilter" class="filter-select">
-                <option value="">All Visibility</option>
-                <option value="public">Public</option>
-                <option value="private">Private</option>
-              </select>
-              <button @click="clearAssignedRequestsFilters" class="btn btn-secondary btn-small">
-                ✕
-                Clear
-              </button>
+              <div class="filter-controls">
+                <div class="select-wrapper">
+                  <select v-model="assignedRequestsStatusFilter" class="filter-select">
+                    <option value="">All Status</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                  <i class="pi pi-chevron-down select-arrow"></i>
+                </div>
+                <div class="select-wrapper">
+                  <select v-model="assignedRequestsVisibilityFilter" class="filter-select">
+                    <option value="">All Visibility</option>
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <i class="pi pi-chevron-down select-arrow"></i>
+                </div>
+                <button @click="clearAssignedRequestsFilters" class="clear-btn">
+                  <span class="clear-icon">✕</span>
+                  <span class="clear-text">Clear</span>
+                </button>
+              </div>
             </div>
 
             <!-- Empty State for Assigned Requests -->
@@ -356,80 +401,92 @@
                 <table class="requests-table">
                   <thead>
                   <tr>
-                    <th @click="sortTable('id')" style="cursor: pointer;">
-                      ID
-                      <i :class="['sort-icon',sortKey === 'id'? sortOrder === 1? 'pi pi-sort-amount-up-alt'
-                       : 'pi pi-sort-amount-down'
-                       : 'pi pi-sort-alt']" />
+                    <th @click="sortTable('id')" class="table-header sortable" width="6%">
+                      <div class="header-content">
+                        <span>ID</span>
+                        <i :class="['sort-icon',sortKey === 'id'? sortOrder === 1? 'pi pi-sort-amount-up-alt'
+                           : 'pi pi-sort-amount-down'
+                           : 'pi pi-sort-alt']" />
+                      </div>
                     </th>
-                    <th @click="sortTable('title')" style="cursor: pointer;">
-                      Title
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'title'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                    <th @click="sortTable('title')" class="table-header sortable" width="18%">
+                      <div class="header-content">
+                        <span>Title</span>
+                        <i
+                          :class="[
+        'sort-icon',
+        sortKey === 'title'
+          ? sortOrder === 1
+            ? 'pi pi-sort-amount-up-alt'
+            : 'pi pi-sort-amount-down'
+          : 'pi pi-sort-alt'
+      ]"
+                        />
+                      </div>
                     </th>
-                    <th @click="sortTable('requester')" style="cursor: pointer;">
-                      Requester
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'requester'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                    <th @click="sortTable('requester')" class="table-header sortable" width="12%">
+                      <div class="header-content">
+                        <span>Requester</span>
+                        <i
+                          :class="[
+        'sort-icon',
+        sortKey === 'requester'
+          ? sortOrder === 1
+            ? 'pi pi-sort-amount-up-alt'
+            : 'pi pi-sort-amount-down'
+          : 'pi pi-sort-alt'
+      ]"
+                        />
+                      </div>
                     </th>
-                    <th @click="sortTable('category')" style="cursor: pointer;">
-                      Category
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'category'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                    <th @click="sortTable('category')" class="table-header sortable" width="10%">
+                      <div class="header-content">
+                        <span>Category</span>
+                        <i
+                          :class="[
+        'sort-icon',
+        sortKey === 'category'
+          ? sortOrder === 1
+            ? 'pi pi-sort-amount-up-alt'
+            : 'pi pi-sort-amount-down'
+          : 'pi pi-sort-alt'
+      ]"
+                        />
+                      </div>
                     </th>
-                    <th @click="sortTable('dealAmount')" style="cursor: pointer;">
-                      Deal Amount
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'dealAmount'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                    <th @click="sortTable('dealAmount')" class="table-header sortable" width="10%">
+                      <div class="header-content">
+                        <span>Deal Amount</span>
+                        <i
+                          :class="[
+        'sort-icon',
+        sortKey === 'dealAmount'
+          ? sortOrder === 1
+            ? 'pi pi-sort-amount-up-alt'
+            : 'pi pi-sort-amount-down'
+          : 'pi pi-sort-alt'
+      ]"
+                        />
+                      </div>
                     </th>
-                    <th @click="sortTable('deadline')" style="cursor: pointer;">
-                      Deadline
-                      <i
-                        :class="[
-    'sort-icon',
-    sortKey === 'deadline'
-      ? sortOrder === 1
-        ? 'pi pi-sort-amount-up-alt'
-        : 'pi pi-sort-amount-down'
-      : 'pi pi-sort-alt'
-  ]"
-                      />
+                    <th @click="sortTable('deadline')" class="table-header sortable" width="10%">
+                      <div class="header-content">
+                        <span>Deadline</span>
+                        <i
+                          :class="[
+        'sort-icon',
+        sortKey === 'deadline'
+          ? sortOrder === 1
+            ? 'pi pi-sort-amount-up-alt'
+            : 'pi pi-sort-amount-down'
+          : 'pi pi-sort-alt'
+      ]"
+                        />
+                      </div>
                     </th>
-                    <th>Status</th>
-                    <th>Visibility</th>
-                    <th>Actions</th>
+                    <th class="table-header center" width="8%">Status</th>
+                    <th class="table-header center" width="9%">Visibility</th>
+                    <th class="table-header center" width="17%">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
@@ -438,73 +495,37 @@
                     <td class="request-title">
                       <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
                     </td>
-                    <td>{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
-                    <td>{{ req.category?.name || '-' }}</td>
-                    <td class="deal-amount">${{ formatAmount(req.dealAmount) }}</td>
-                    <td>{{ formatDate(req.deadline) }}</td>
-                    <td>
-                        <span :class="['status-badge', getStatusClass(req.status)]">
-                          {{ formatStatus(req.status) }}
-                        </span>
+                    <td style="vertical-align: middle;">{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
+                    <td style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount" style="text-align: center; vertical-align: middle;">${{ formatAmount(req.dealAmount) }}</td>
+                    <td style="vertical-align: middle;">{{ formatDate(req.deadline) }}</td>
+                    <td style="text-align: center; vertical-align: middle;">
+                         <span :class="['status-badge', getStatusClass(req.status)]">
+                           {{ formatStatus(req.status) }}
+                         </span>
                     </td>
-                    <td>
-                        <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
-                          <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
-                          {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
-                        </span>
+                    <td style="text-align: center; vertical-align: middle;">
+                         <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
+                           <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                           {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                         </span>
                       <span v-else class="visibility-badge visibility-private">
-                          <i class="pi pi-lock"></i>
-                          Private
-                        </span>
+                           <i class="pi pi-lock"></i>
+                           Private
+                         </span>
                     </td>
-                    <td class="actions">
-                      <!-- Accept button - only for PENDING requests -->
-                      <button
-                        v-if="req.status === 'PENDING'"
-                        @click="acceptRequest(req.id)"
-                        class="btn btn-small btn-success"
-                        :disabled="actionLoading"
-                        title="Accept Request"
-                      >
-                        Accept
-                      </button>
-
-                      <!-- Reject button - only for PENDING requests -->
-                      <button
-                        v-if="req.status === 'PENDING'"
-                        @click="rejectRequest(req.id)"
-                        class="btn btn-small btn-danger"
-                        :disabled="actionLoading"
-                        title="Reject Request"
-                      >
-                        Reject
-                      </button>
-
-                      <!-- Mark Complete button - only for APPROVED requests -->
-                      <button
-                        v-if="req.status === 'APPROVED'"
-                        @click="completeRequest(req.id)"
-                        class="btn btn-small btn-primary"
-                        :disabled="actionLoading"
-                        title="Mark as Complete"
-                      >
-                        Mark Complete
-                      </button>
-
-                      <!-- Show message for completed requests -->
-                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
-                        ✓ Completed
-                      </span>
-
-                      <!-- Show message for rejected requests -->
-                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
-                        ✗ Rejected
-                      </span>
-
-                      <!-- Show message for cancelled requests -->
-                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
-                        Request cancelled
-                      </span>
+                    <td class="actions-cell" style="text-align: center; vertical-align: middle;">
+                      <div class="actions-wrapper">
+                        <button
+                          @click="requestExtension(req)"
+                          class="action-btn btn-secondary"
+                          :disabled="actionLoading"
+                          :title="`Request deadline extension for: ${req.title}`"
+                          data-tooltip="Request deadline extension"
+                        >
+                          Request Extension
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   </tbody>
@@ -539,11 +560,13 @@
           </div>
 
           <!-- My Registrations Tab -->
-          <div v-else-if="activeTab === 'my-registrations'">
+          <div v-else-if="activeTab === 'my-registrations'" class="tab-content" :key="'my-registrations'">
             <!-- Search and Filter Bar for My Registrations -->
             <div class="filter-bar">
               <div class="search-container">
-                <i class="pi pi-search search-icon"></i>
+                <div class="search-icon-wrapper">
+                  <i class="pi pi-search search-icon"></i>
+                </div>
                 <input
                   v-model="myRegistrationsSearch"
                   type="text"
@@ -551,23 +574,30 @@
                   class="search-input"
                 />
               </div>
-              <select v-model="myRegistrationsStatusFilter" class="filter-select">
-                <option value="">All Status</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-              <select v-model="myRegistrationsVisibilityFilter" class="filter-select">
-                <option value="">All Visibility</option>
-                <option value="public">Public</option>
-                <option value="private">Private</option>
-              </select>
-              <button @click="clearMyRegistrationsFilters" class="btn btn-secondary btn-small">
-                ✕
-                Clear
-              </button>
-
+              <div class="filter-controls">
+                <div class="select-wrapper">
+                  <select v-model="myRegistrationsStatusFilter" class="filter-select">
+                    <option value="">All Status</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                  <i class="pi pi-chevron-down select-arrow"></i>
+                </div>
+                <div class="select-wrapper">
+                  <select v-model="myRegistrationsVisibilityFilter" class="filter-select">
+                    <option value="">All Visibility</option>
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <i class="pi pi-chevron-down select-arrow"></i>
+                </div>
+                <button @click="clearMyRegistrationsFilters" class="clear-btn">
+                  <span class="clear-icon">✕</span>
+                  <span class="clear-text">Clear</span>
+                </button>
+              </div>
             </div>
 
             <!-- Empty State for My Registrations -->
@@ -589,94 +619,99 @@
                 <table class="requests-table">
                   <thead>
                   <tr>
-                    <th @click="sortTable('id')" style="cursor: pointer;" class="text-xs font-semibold text-center" width="60">
-                      ID
+                    <th @click="sortTable('id')" class="table-header sortable" width="6%">
+                      <div class="header-content">
+                        <span>ID</span>
+                        <i :class="[ 'sort-icon', sortKey === 'id' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('title')" style="cursor: pointer;" class="text-xs font-semibold text-left">
-                      Title
-                      <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    <th @click="sortTable('title')" class="table-header sortable" width="18%">
+                      <div class="header-content">
+                        <span>Title</span>
+                        <i :class="[ 'sort-icon', sortKey === 'title' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('requester')" style="cursor: pointer;" class="text-xs font-semibold text-left">
-                      Requester
-                      <i :class="[ 'sort-icon', sortKey === 'requester' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    <th @click="sortTable('requester')" class="table-header sortable" width="12%">
+                      <div class="header-content">
+                        <span>Requester</span>
+                        <i :class="[ 'sort-icon', sortKey === 'requester' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('category')" style="cursor: pointer;" class="text-xs font-semibold text-left">
-                      Category
+                    <th @click="sortTable('category')" class="table-header sortable" width="10%">
+                      <div class="header-content">
+                        <span>Category</span>
+                        <i :class="[ 'sort-icon', sortKey === 'category' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('dealAmount')" style="cursor: pointer;" class="text-xs font-semibold text-center th-flex" width="120">
-                      <span class="th-flex">Deal Amount <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" /></span>
+                    <th @click="sortTable('dealAmount')" class="table-header sortable" width="10%">
+                      <div class="header-content">
+                        <span>Deal Amount</span>
+                        <i :class="[ 'sort-icon', sortKey === 'dealAmount' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th @click="sortTable('deadline')" style="cursor: pointer;" class="text-xs font-semibold text-left" width="130">
-                      Deadline
-                      <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                    <th @click="sortTable('deadline')" class="table-header sortable" width="10%">
+                      <div class="header-content">
+                        <span>Deadline</span>
+                        <i :class="[ 'sort-icon', sortKey === 'deadline' ? sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down' : 'pi pi-sort-alt' ]" />
+                      </div>
                     </th>
-                    <th class="text-xs font-semibold text-left">Status</th>
-                    <th class="text-xs font-semibold text-left">Visibility</th>
-                    <th class="text-xs font-semibold text-left">Actions</th>
+                    <th class="table-header center" width="8%">Status</th>
+                    <th class="table-header center" width="9%">Visibility</th>
+                    <th class="table-header center" width="17%">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
 
                   <tr v-for="(req, index) in paginatedMyRegistrations" :key="req.id" class="request-row table-row-hover">
-                    <td class="text-center text-sm text-gray-700" width="60">{{ (currentRegistrationsPage - 1) * registrationsItemsPerPage + index + 1 }}</td>
-                    <td class="request-title text-sm text-gray-700 text-left"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
-                    <td class="text-sm text-gray-700 text-left">{{ req.requester?.fullName || req.requester?.email || 'Unknown' }}</td>
-                    <td class="text-sm text-gray-700 text-left">{{ req.category?.name || '-' }}</td>
-                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
-                    <td class="text-sm text-gray-500 italic text-left" width="130"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
-                    <td>
-                        <span v-if="req.registrationStatus === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
-                          ✅ Approved
-                        </span>
+                    <td class="text-center text-sm text-gray-700" width="60" style="vertical-align: middle;">{{ (currentRegistrationsPage - 1) * registrationsItemsPerPage + index + 1 }}</td>
+                    <td class="request-title text-sm text-gray-700 text-left" style="vertical-align: middle;"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
+                    <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.requester?.fullName || req.requester?.email || 'Unknown' }}</td>
+                    <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
+                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120" style="vertical-align: middle;"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
+                    <td class="text-sm text-gray-500 italic text-left" width="130" style="vertical-align: middle;"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
+                    <td style="text-align: center; vertical-align: middle;">
+                         <span v-if="req.registrationStatus === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
+                           ✅ Approved
+                         </span>
                       <span v-else-if="req.registrationStatus === 'PENDING'" class="status-badge status-registered custom-badge registered-badge">
-                          📝 Registered
-                        </span>
+                           📝 Registered
+                         </span>
                       <span v-else-if="req.registrationStatus === 'REJECTED'" class="status-badge status-rejected custom-badge rejected-badge">
-                          ❌ Rejected
-                        </span>
+                           ❌ Rejected
+                         </span>
                       <span v-else :class="['status-badge', `status-${req.registrationStatus?.toLowerCase() || req.status.toLowerCase()}`]">
-                          {{ formatStatus(req.registrationStatus || req.status) }}
-                        </span>
+                           {{ formatStatus(req.registrationStatus || req.status) }}
+                         </span>
                     </td>
-                    <td>
-                      <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
-                        🌐 Public
-                      </span>
+                    <td style="text-align: center; vertical-align: middle;">
+                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                         🌐 Public
+                       </span>
                       <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge custom-badge private-badge">
-                        🔒 Private
-                      </span>
+                         🔒 Private
+                       </span>
                       <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
-                        🌐 Public
-                      </span>
+                         🌐 Public
+                       </span>
                       <span v-else class="visibility-badge custom-badge private-badge">
-                        🔒 Private
-                      </span>
+                         🔒 Private
+                       </span>
                     </td>
-                    <td class="actions text-left">
-                      <!-- View Details button -->
-                      <router-link
-                        :to="{ name: 'request-detail', params: { requestId: req.id } }"
-                        class="btn btn-small btn-primary"
-                        title="View Request Details"
-                      >
-                        <i class="pi pi-eye"></i>
-                        View
-                      </router-link>
-
+                    <td class="actions text-left" style="text-align: center; vertical-align: middle;">
                       <!-- Show message for completed requests -->
-                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium">
-                        ✓ Completed
-                      </span>
+                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium" title="This request has been completed successfully">
+                         ✓ Completed
+                       </span>
 
                       <!-- Show message for rejected requests -->
-                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium">
-                        ✗ Rejected
-                      </span>
+                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium" title="This request has been rejected">
+                         ✗ Rejected
+                       </span>
 
                       <!-- Show message for cancelled requests -->
-                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic">
-                        Request cancelled
-                      </span>
+                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic" title="This request has been cancelled">
+                         Request cancelled
+                       </span>
                     </td>
                   </tr>
                   </tbody>
@@ -716,6 +751,20 @@
           <!-- Dialogs -->
           <ReviewRequestDialog v-if="showReview" :request="selectedRequest" @close="showReview = false" @reviewed="onRequestReviewed" />
           <CancelRequestDialog v-if="showCancel" :request="selectedRequest" @close="showCancel = false" @cancelled="onRequestCancelled" />
+          <DeadlineExtensionDialog
+            v-if="showExtension && selectedRequest"
+            :request-id="selectedRequest.id"
+            :current-deadline="selectedRequest.deadline"
+            @close="showExtension = false"
+            @submitted="onExtensionSubmitted"
+          />
+          <ExtensionRequestsDialog
+            v-if="showExtensions && selectedRequest"
+            :request-id="selectedRequest.id"
+            :request-title="selectedRequest.title"
+            @close="showExtensions = false"
+            @updated="onExtensionsUpdated"
+          />
           <ProjectCancellationDialog
             v-if="showProjectCancel && selectedRequest"
             :request-id="selectedRequest.id"
@@ -728,6 +777,88 @@
             @close="showRespond = false"
             @completed="onRespondCompleted"
           />
+
+          <!-- On-going Requests Tab -->
+          <div v-else-if="activeTab === 'ongoing-requests'" class="tab-content" :key="'ongoing-requests'">
+            <!-- Search Bar for On-going -->
+            <div class="filter-bar">
+              <div class="search-container">
+                <div class="search-icon-wrapper">
+                  <i class="pi pi-search search-icon"></i>
+                </div>
+                <input
+                  v-model="ongoingSearch"
+                  type="text"
+                  placeholder="Search on-going requests..."
+                  class="search-input"
+                />
+              </div>
+              <div class="filter-controls">
+                <button @click="clearOngoingFilters" class="clear-btn">
+                  <span class="clear-icon">✕</span>
+                  <span class="clear-text">Clear</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="filteredOngoingRequests.length === 0" class="empty-container">
+              <div class="empty-content">
+                <div class="empty-icon"><i class="pi pi-clock"></i></div>
+                <h3>No on-going requests</h3>
+                <p>You have no requests in progress.</p>
+              </div>
+            </div>
+            <div v-else class="requests-table-container">
+              <div class="table-wrapper">
+                <table class="requests-table">
+                  <thead>
+                  <tr>
+                    <th class="table-header" width="6%">#</th>
+                    <th class="table-header" width="24%">Title</th>
+                    <th class="table-header" width="12%">Requester</th>
+                    <th class="table-header" width="10%">Deal Amount</th>
+                    <th class="table-header" width="12%">Deadline</th>
+                    <th class="table-header center" width="8%">Status</th>
+                    <th class="table-header center" width="18%">Actions</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <tr v-for="(req, index) in filteredOngoingRequests" :key="req.id" class="request-row">
+                    <td class="id-cell">{{ index + 1 }}</td>
+                    <td class="title-cell">
+                      <a href="#" @click.prevent="goToRequestDetail(req.id)" class="request-link">{{ req.title }}</a>
+                    </td>
+                    <td style="vertical-align: middle;">{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
+                    <td class="deal-amount" style="text-align:center; vertical-align: middle;">
+                      <span class="deal-icon">💵</span>${{ formatAmount(req.dealAmount) }}
+                    </td>
+                    <td style="vertical-align: middle;">
+                      <span class="deadline-icon">🗓</span>
+                      {{ formatDate(req.deadline) }}
+                      <span v-if="daysLeft(req.deadline) !== null" class="deadline-remaining">({{ daysLeftText(req.deadline) }})</span>
+                    </td>
+                    <td style="text-align:center; vertical-align: middle;">
+                      <span :class="['status-badge', getStatusClass(req.status)]">{{ formatStatus(req.status) }}</span>
+                    </td>
+                    <td class="actions-cell" style="text-align: center; vertical-align: middle;">
+                      <div class="actions-wrapper">
+                        <button
+                          @click="requestExtension(req)"
+                          class="action-btn btn-secondary"
+                          :disabled="actionLoading"
+                          :title="`Request deadline extension for: ${req.title}`"
+                          data-tooltip="Request deadline extension"
+                        >
+                          Request Extension
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -737,6 +868,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import axiosInstance from '../api'
 import { useToast } from 'primevue/usetoast'
 import { useRouter } from 'vue-router'
@@ -748,6 +880,8 @@ import ReviewRequestDialog from '../components/ReviewRequestDialog.vue'
 import CancelRequestDialog from '../components/CancelRequestDialog.vue'
 import ProjectCancellationDialog from '../components/ProjectCancellationDialog.vue'
 import CancellationRespondDialog from '../components/CancellationRespondDialog.vue'
+import DeadlineExtensionDialog from '../components/DeadlineExtensionDialog.vue'
+import ExtensionRequestsDialog from '../components/ExtensionRequestsDialog.vue'
 
 const requests = ref([])
 const loading = ref(false)
@@ -757,6 +891,8 @@ const showReview = ref(false)
 const showCancel = ref(false)
 const showProjectCancel = ref(false)
 const showRespond = ref(false)
+const showExtension = ref(false)
+const showExtensions = ref(false)
 const pendingCancellationId = ref(null)
 const selectedRequest = ref(null)
 const sidebarCollapsed = ref(false)
@@ -765,8 +901,10 @@ const activeTab = ref('my-requests')
 const myRequests = ref([])
 const assignedRequests = ref([])
 const myRegistrations = ref([])
+const ongoingRequests = ref([])
 const actionLoading = ref(false)
 const router = useRouter()
+const route = useRoute()
 
 // Pagination state
 const currentPage = ref(1)
@@ -780,17 +918,37 @@ const registrationsItemsPerPage = ref(7)
 const myRequestsSearch = ref('')
 const myRequestsStatusFilter = ref('')
 const myRequestsVisibilityFilter = ref('')
+const hideExpired = ref(false)
 const assignedRequestsSearch = ref('')
 const assignedRequestsStatusFilter = ref('')
 const assignedRequestsVisibilityFilter = ref('')
 const myRegistrationsSearch = ref('')
 const myRegistrationsStatusFilter = ref('')
 const myRegistrationsVisibilityFilter = ref('')
+const ongoingSearch = ref('')
 
 // Computed properties for counts
 const myRequestsCount = computed(() => myRequests.value.filter(req => req.status !== 'CANCELLED').length)
 const assignedRequestsCount = computed(() => assignedRequests.value.length)
 const myRegistrationsCount = computed(() => myRegistrations.value.length)
+const ongoingRequestsCount = computed(() => ongoingRequests.value.length)
+const filteredOngoingRequests = computed(() => {
+  let list = ongoingRequests.value
+  if (ongoingSearch.value) {
+    const s = ongoingSearch.value.toLowerCase()
+    list = list.filter(r =>
+      r.title?.toLowerCase().includes(s) ||
+      r.requester?.name?.toLowerCase().includes(s) ||
+      r.requester?.email?.toLowerCase().includes(s) ||
+      r.id?.toString().includes(s)
+    )
+  }
+  return list
+})
+
+function clearOngoingFilters() {
+  ongoingSearch.value = ''
+}
 
 
 //Sort
@@ -826,7 +984,6 @@ const filteredMyRequests = computed(() => {
     const searchTerm = myRequestsSearch.value.toLowerCase()
     filtered = filtered.filter(req =>
       req.title?.toLowerCase().includes(searchTerm) ||
-      req.project?.name?.toLowerCase().includes(searchTerm) ||
       req.category?.name?.toLowerCase().includes(searchTerm) ||
       req.id?.toString().includes(searchTerm)
     )
@@ -846,7 +1003,32 @@ const filteredMyRequests = computed(() => {
     }
   }
 
+  // Mark expired requests as EXPIRED (for display) and include in list
+  const now = new Date();
+  const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = stripTime(now);
+  filtered = filtered.map((req) => {
+    if (req.deadline) {
+      const d = new Date(req.deadline);
+      const deadlineDate = stripTime(d);
+      if (deadlineDate < today && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
+        return { ...req, status: 'EXPIRED' };
+      }
+    }
+    return req;
+  });
+
+  // Hide expired toggle
+  if (hideExpired.value) {
+    filtered = filtered.filter(req => req.status !== 'EXPIRED')
+  }
+
   // Sort the filtered results
+  // default sort by deadline asc when no sortKey
+  if (!sortKey.value) {
+    sortKey.value = 'deadline'
+    sortOrder.value = 1
+  }
   if (sortKey.value) {
     filtered = [...filtered].sort((a, b) => {
       let aValue, bValue
@@ -860,10 +1042,7 @@ const filteredMyRequests = computed(() => {
           aValue = a.title?.toLowerCase() || ''
           bValue = b.title?.toLowerCase() || ''
           break
-        case 'project':
-          aValue = a.project?.name?.toLowerCase() || ''
-          bValue = b.project?.name?.toLowerCase() || ''
-          break
+
         case 'dealAmount':
           aValue = parseFloat(a.dealAmount) || 0
           bValue = parseFloat(b.dealAmount) || 0
@@ -1221,7 +1400,28 @@ function fetchRequests() {
 
   promises.push(myRequestsPromise, assignedRequestsPromise, myRegistrationsPromise)
 
+  // Try fetch ongoing from backend; fallback to derive from assigned
+  const ongoingPromise = axiosInstance.get('/requests/ongoing')
+    .then(res => {
+      console.log('[ONGOING] /requests/ongoing response:', res.status, res.data)
+      ongoingRequests.value = res.data
+    })
+    .catch(() => {
+      try {
+        console.warn('[ONGOING] Backend endpoint failed. Falling back to derive from assigned.')
+        console.log('[ONGOING] Assigned requests snapshot:', assignedRequests.value.map(r => ({ id: r.id, status: r.status, title: r.title })))
+        ongoingRequests.value = assignedRequests.value.filter(r => r.status === 'APPROVED')
+        console.log('[ONGOING] Derived ongoing:', ongoingRequests.value.map(r => ({ id: r.id, status: r.status })))
+      } catch (e) {
+        console.error('[ONGOING] Derive fallback failed:', e)
+        ongoingRequests.value = []
+      }
+    })
+
+  promises.push(ongoingPromise)
+
   Promise.all(promises).finally(() => {
+    console.log('[FETCH] Finalized. myRequests:', myRequests.value.length, 'assigned:', assignedRequests.value.length, 'registrations:', myRegistrations.value.length, 'ongoing:', ongoingRequests.value.length)
     loading.value = false
   })
 }
@@ -1239,6 +1439,22 @@ function formatDeadline(dateString) {
   if (!dateString) return '-';
   const d = new Date(dateString);
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function daysLeft(dateString) {
+  if (!dateString) return null;
+  const d = new Date(dateString);
+  const today = new Date();
+  const diff = Math.ceil((d.setHours(0,0,0,0) - today.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
+  return diff >= 0 ? diff : 0;
+}
+
+function daysLeftText(dateString) {
+  const n = daysLeft(dateString)
+  if (n === null) return ''
+  if (n === 0) return 'today'
+  if (n === 1) return 'in 1 day'
+  return `in ${n} days`
 }
 
 function onReview(req) {
@@ -1268,6 +1484,25 @@ async function onRequestCancellationCheck(req) {
 function onRespond(cancellationId) {
   pendingCancellationId.value = cancellationId
   showRespond.value = true
+}
+
+function requestExtension(req) {
+  selectedRequest.value = req
+  showExtension.value = true
+}
+
+function viewExtensions(req) {
+  selectedRequest.value = req
+  showExtensions.value = true
+}
+
+function onExtensionSubmitted() {
+  fetchRequests()
+  toast.add({ severity: 'success', summary: 'Submitted', detail: 'Extension request submitted.', life: 3000 })
+}
+
+function onExtensionsUpdated() {
+  fetchRequests()
 }
 
 function canReview(req) {
@@ -1303,6 +1538,14 @@ function onProjectCancellationRequested() {
 function onRespondCompleted() {
   fetchRequests()
   toast.add({ severity: 'success', summary: 'Updated', detail: 'Cancellation response submitted.', life: 3000 })
+}
+
+function viewHandover(request) {
+  // Navigate to handover page for the project
+  if (request.project) {
+    const branchId = request.project.branches?.[0]?.id || 'main';
+    router.push(`/projects/${request.project.id}/branches/${branchId}/handover`);
+  }
 }
 
 function getStatusClass(status) {
@@ -1479,7 +1722,26 @@ async function debugConnection() {
   }
 }
 
-onMounted(fetchRequests)
+onMounted(async () => {
+  await fetchRequests()
+
+  // Handle highlight parameter from URL
+  const highlightId = route.query.highlight
+  if (highlightId) {
+    // Wait a bit for the DOM to be ready
+    setTimeout(() => {
+      const highlightedElement = document.querySelector(`[data-request-id="${highlightId}"]`)
+      if (highlightedElement) {
+        highlightedElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Add highlight effect
+        highlightedElement.classList.add('highlighted-request')
+        setTimeout(() => {
+          highlightedElement.classList.remove('highlighted-request')
+        }, 3000)
+      }
+    }, 500)
+  }
+})
 </script>
 
 <style scoped>
@@ -1603,6 +1865,7 @@ onMounted(fetchRequests)
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
+  table-layout: fixed;
 }
 
 .table-header {
@@ -1613,6 +1876,11 @@ onMounted(fetchRequests)
   color: #374151;
   border-bottom: 1px solid #e5e7eb;
   transition: all 0.2s ease;
+  vertical-align: middle;
+}
+
+.table-header.center {
+  text-align: center;
 }
 
 .table-header.sortable {
@@ -1629,6 +1897,7 @@ onMounted(fetchRequests)
   align-items: center;
   gap: 0.4rem;
   font-size: 0.8rem;
+  justify-content: flex-start;
 }
 
 .requests-table td {
@@ -1677,6 +1946,7 @@ onMounted(fetchRequests)
 
 .deal-amount-cell {
   text-align: center;
+  vertical-align: middle;
 }
 
 .amount-wrapper {
@@ -1698,6 +1968,7 @@ onMounted(fetchRequests)
 
 .deadline-cell {
   color: #64748b;
+  vertical-align: middle;
 }
 
 .deadline-wrapper {
@@ -1768,33 +2039,110 @@ onMounted(fetchRequests)
 
 .actions-wrapper {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
 }
 
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.6rem;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
   border: none;
   border-radius: 6px;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   text-decoration: none;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  min-width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .action-btn:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Tooltip styles */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]:hover::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+[data-tooltip]:hover::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+  margin-bottom: -0.5rem;
+  z-index: 1000;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Tab content animation */
+.tab-content {
+  animation: tabFadeIn 0.3s ease-out;
+}
+
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .cancel-btn {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
 }
 
 .cancel-btn:hover {
@@ -1826,13 +2174,29 @@ onMounted(fetchRequests)
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
+.handover-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.handover-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+}
+
 .btn-icon {
   font-size: 12px;
   font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 .btn-text {
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .candidate-count {
@@ -1844,6 +2208,18 @@ onMounted(fetchRequests)
   font-weight: 600;
   min-width: 18px;
   text-align: center;
+}
+
+.extension-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+  margin-left: 4px;
 }
 
 .status-message {
@@ -1897,6 +2273,12 @@ onMounted(fetchRequests)
   color: #374151;
 }
 
+/* Expired status */
+.status-badge.status-expired {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .visibility-badge {
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
@@ -1930,11 +2312,12 @@ onMounted(fetchRequests)
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   text-decoration: none;
+  transform: translateY(0);
 }
 
 .btn-small {
@@ -1949,6 +2332,8 @@ onMounted(fetchRequests)
 
 .btn-primary:hover {
   background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .btn-secondary {
@@ -1958,6 +2343,8 @@ onMounted(fetchRequests)
 
 .btn-secondary:hover {
   background: #4b5563;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
 }
 
 .btn-danger {
@@ -1967,6 +2354,8 @@ onMounted(fetchRequests)
 
 .btn-danger:hover {
   background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .btn:disabled {
@@ -1989,7 +2378,7 @@ onMounted(fetchRequests)
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1997,17 +2386,21 @@ onMounted(fetchRequests)
   background: #f3f4f6;
   color: #6b7280;
   position: relative;
+  transform: translateY(0);
 }
 
 .tab-button:hover {
   background: #e5e7eb;
   color: #374151;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .tab-button.active {
   background: #3b82f6;
   color: white;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  transform: translateY(-2px);
 }
 
 .tab-button .material-icons {
@@ -2633,5 +3026,38 @@ th:hover .sort-icon {
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+}
+
+.extensions-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.extensions-btn:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-1px);
+}
+
+/* Highlight effect for requests */
+.highlighted-request {
+  animation: highlightPulse 3s ease-in-out;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  border-left: 4px solid #f59e0b !important;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3) !important;
+}
+
+@keyframes highlightPulse {
+  0% {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    transform: scale(1);
+  }
+  50% {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    transform: scale(1.02);
+  }
+  100% {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    transform: scale(1);
+  }
 }
 </style>

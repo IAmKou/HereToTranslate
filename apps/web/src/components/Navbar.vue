@@ -88,24 +88,17 @@
                   </div>
                 </div>
                 <div class="menu-section">
+                  <div class="menu-header">Account</div>
                   <router-link to="/userprofile" class="menu-item" tabindex="0">
                     <i class="pi pi-user"></i> View Profile <span class="shortcut"></span>
                   </router-link>
-                  <router-link to="/settings" class="menu-item" tabindex="0">
-                    <i class="pi pi-cog"></i> Settings <span class="shortcut"></span>
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-section">
+                  <div class="menu-header">Shortcuts</div>
+                  <router-link to="/my-requests" class="menu-item" tabindex="0">
+                    <i class="pi pi-list"></i> My Requests <span class="shortcut"></span>
                   </router-link>
-                </div>
-                <div class="menu-divider"></div>
-                <div class="menu-section">
-                  <div class="menu-header">Team</div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-users"></i> Team <span class="shortcut"></span></div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-user-plus"></i> Invite Member <span class="shortcut"></span></div>
-                </div>
-                <div class="menu-divider"></div>
-                <div class="menu-section">
-                  <div class="menu-header">Help</div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-question-circle"></i> Support <span class="shortcut"></span></div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-comments"></i> Community <span class="shortcut"></span></div>
                 </div>
                 <div class="menu-divider"></div>
                 <div class="menu-section">

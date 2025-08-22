@@ -70,6 +70,58 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get(':requestId/extensions')
+  async getRequestExtensions(@Req() req: AuthenticatedRequest, @Param('requestId') requestId: string) {
+    return this.requests.getRequestExtensions(BigInt(requestId), req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/extensions/:extensionId/approve')
+  async approveExtension(
+    @Req() req: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+    @Param('extensionId') extensionId: string
+  ) {
+    console.log('🔍 [CONTROLLER] approveExtension called:', {
+      requestId,
+      extensionId,
+      userId: req.user.id
+    })
+
+    try {
+      const result = await this.requests.approveExtension(BigInt(requestId), BigInt(extensionId), req.user.id)
+      console.log('✅ [CONTROLLER] approveExtension success:', result)
+      return result
+    } catch (error) {
+      console.error('💥 [CONTROLLER] approveExtension error:', error)
+      throw error
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/extensions/:extensionId/reject')
+  async rejectExtension(
+    @Req() req: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+    @Param('extensionId') extensionId: string
+  ) {
+    console.log('🔍 [CONTROLLER] rejectExtension called:', {
+      requestId,
+      extensionId,
+      userId: req.user.id
+    })
+
+    try {
+      const result = await this.requests.rejectExtension(BigInt(requestId), BigInt(extensionId), req.user.id)
+      console.log('✅ [CONTROLLER] rejectExtension success:', result)
+      return result
+    } catch (error) {
+      console.error('💥 [CONTROLLER] rejectExtension error:', error)
+      throw error
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('myRegistrations')
   async getMyRegisteredRequests(@Req() req: AuthenticatedRequest) {
     return this.requests.getMyRegisteredRequests(req.user.id);
@@ -80,6 +132,22 @@ export class RequestController {
   async getPendingRequestsCount(@Req() req: AuthenticatedRequest) {
     const count = await this.requests.getPendingRequestsCount();
     return { count };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('search')
+  async searchUsers(
+    @Query('keyword') keyword: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    const uid = req.user.id;
+    return this.requests.searchUsers(keyword, uid);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('ongoing')
+  async getOngoingRequests(@Req() req: AuthenticatedRequest) {
+    return this.requests.getOngoingRequests(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -131,16 +199,6 @@ export class RequestController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('search')
-  async searchUsers(
-    @Query('keyword') keyword: string,
-    @Req() req: AuthenticatedRequest
-  ) {
-    const uid = req.user.id;
-    return this.requests.searchUsers(keyword, uid);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Get(':requestId/detail')
   async getDetail(
     @Param('requestId', BigIntTransformPipe) requestId: number,
@@ -166,6 +224,21 @@ export class RequestController {
   async declinePrivateRequest(
     @Param('requestId', BigIntTransformPipe) requestId: bigint) {
     return this.requests.declinePrivateRequest(requestId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':requestId/extension')
+  async submitExtensionRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+    @Body() body: { newDeadline: string; reason: string }
+  ) {
+    return this.requests.submitExtensionRequest(
+      BigInt(requestId),
+      req.user.id,
+      new Date(body.newDeadline),
+      body.reason
+    );
   }
 
 }

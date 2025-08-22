@@ -99,16 +99,31 @@ export class NotificationManagerService {
 
     const notifications: NotificationEntity[] = [];
 
-    // Create individual notifications for each user
     for (const user of users) {
-      const notification = await this.createNotification({
+      const notification = this.notificationRepository.create({
         userId: user.id,
         type: data.type,
         message: data.message,
+        isGlobal: true,
         createdBy: data.createdBy,
-        isGlobal: false,
       });
-      notifications.push(notification);
+
+      const savedNotification = await this.notificationRepository.save(notification);
+      notifications.push(savedNotification);
+
+      // Send realtime notification
+      try {
+        this.notificationGateway.emitToUser(user.id, {
+          id: savedNotification.id.toString(),
+          type: savedNotification.type,
+          message: savedNotification.message,
+          createdAt: savedNotification.createdAt,
+          isGlobal: true,
+          createdByUserId: savedNotification.createdBy?.toString(),
+        });
+      } catch (error) {
+        console.error('Failed to send realtime notification to user:', user.id, error);
+      }
     }
 
     return notifications;
@@ -336,6 +351,22 @@ export class NotificationManagerService {
     return await this.notificationRepository.count({
       where: { isGlobal: true },
     });
+  }
+
+  async getNotificationsByType(userId: bigint, type: string, requestId?: bigint): Promise<NotificationEntity[]> {
+    const queryBuilder = this.notificationRepository
+      .createQueryBuilder('notification')
+      .where('notification.userId = :userId', { userId })
+      .andWhere('notification.type = :type', { type });
+
+    // If requestId is provided, filter by messages containing that requestId
+    if (requestId) {
+      queryBuilder.andWhere('notification.message LIKE :requestIdPattern', {
+        requestIdPattern: `%[RequestID:${requestId}]%`
+      });
+    }
+
+    return queryBuilder.getMany();
   }
 
   // Helper methods for common notification types

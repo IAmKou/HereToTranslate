@@ -1188,6 +1188,8 @@ function goBackToProject() {
   router.push(`/projects/${projectId.value}`);
 }
 
+
+
 // Custom dropdown state
 const isDropdownOpen = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
@@ -1373,6 +1375,7 @@ const focusedString = computed(() => {
             </div>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -1853,6 +1856,8 @@ const focusedString = computed(() => {
   margin: 0;
   padding: 0 1rem;
 }
+
+
 
 .back-btn {
   background: rgba(99, 102, 241, 0.2);

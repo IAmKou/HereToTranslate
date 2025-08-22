@@ -218,12 +218,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/projects/:projectId/branches/:branchId/handover',
+      name: 'translation-handover',
+      component: () => import('../views/TranslationHandoverView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/settings',
       name: 'admin-settings',
       component: () => import('../components/AdminSetting.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
     }
-   
+
   ],
 });
 

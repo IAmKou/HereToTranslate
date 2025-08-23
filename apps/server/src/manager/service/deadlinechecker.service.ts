@@ -23,7 +23,7 @@ export class DeadlineCheckerService {
 
   private cronJob: CronJob;
   private isRunning = false;
-  
+
   // Track sent emails to prevent duplicates
   private sentEmailTracker = new Map<string, Date>();
   private readonly EMAIL_COOLDOWN_HOURS = 24; // Don't send same email type to same user within 24 hours
@@ -94,7 +94,7 @@ export class DeadlineCheckerService {
       await this.performQuickDeadlineChecks(today);
 
       this.logger.log('Minute scan completed, resting for 10 seconds...');
-      await this.sleep(10000); 
+      await this.sleep(10000);
 
       this.logger.log('Rest period completed, ready for next scan');
     } catch (error) {
@@ -120,7 +120,7 @@ export class DeadlineCheckerService {
     const urgentDeadlines = await this.requestRepo.find({
       where: {
         status: RequestStatus.Approved,
-        deadline: Between(today, addDays(today, 1)), 
+        deadline: Between(today, addDays(today, 1)),
       },
       relations: ['project', 'project.createdBy', 'assignee'],
     });
@@ -164,6 +164,17 @@ export class DeadlineCheckerService {
       this.logger.log(`Found ${overdueRequests.length} overdue requests`);
 
       for (const req of overdueRequests) {
+        const progress = await this.translationService.getTranslationProgress(
+          req.project.id.toString(),
+          req.project.defaultBranch?.id.toString() || '1'
+        );
+        if (progress.percentage >= 100)
+        {
+          // Translation is complete - move to waiting approval
+          await this.handleCompleteTranslation(req, today);
+          continue;
+        }
+
         // Mark as failed if not already handled (since Overdue status doesn't exist)
         if (req.status === RequestStatus.Approved) {
           req.status = RequestStatus.Failed;
@@ -226,11 +237,11 @@ export class DeadlineCheckerService {
   private canSendEmail(emailType: string, userId: string): boolean {
     const key = `${emailType}_${userId}`;
     const lastSent = this.sentEmailTracker.get(key);
-    
+
     if (!lastSent) {
       return true;
     }
-    
+
     const hoursSinceLastSent = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
     return hoursSinceLastSent >= this.EMAIL_COOLDOWN_HOURS;
   }
@@ -238,7 +249,7 @@ export class DeadlineCheckerService {
   private markEmailSent(emailType: string, userId: string): void {
     const key = `${emailType}_${userId}`;
     this.sentEmailTracker.set(key, new Date());
-    
+
     // Clean up old entries to prevent memory leaks
     if (this.sentEmailTracker.size > 1000) {
       const cutoff = new Date(Date.now() - (this.EMAIL_COOLDOWN_HOURS * 60 * 60 * 1000));
@@ -288,7 +299,7 @@ export class DeadlineCheckerService {
   getEmailTrackingDetails() {
     const now = new Date();
     const trackingDetails = [];
-    
+
     for (const [key, date] of this.sentEmailTracker.entries()) {
       const hoursSinceSent = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
       trackingDetails.push({
@@ -298,7 +309,7 @@ export class DeadlineCheckerService {
         canSendAgain: hoursSinceSent >= this.EMAIL_COOLDOWN_HOURS
       });
     }
-    
+
     return {
       totalTracked: this.sentEmailTracker.size,
       cooldownHours: this.EMAIL_COOLDOWN_HOURS,
@@ -399,7 +410,7 @@ export class DeadlineCheckerService {
     await this.requestRepo.save(req);
 
     try {
-  
+
       this.logger.log(`Auto-exporting translated files for request ${req.id}`);
       // Export all files of the project (default to English). If request has targetLanguages, export all of them.
       const languages = Array.isArray(req.project?.targetLanguages) && req.project.targetLanguages.length > 0

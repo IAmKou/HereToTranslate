@@ -48,6 +48,7 @@ export class MySqlConnection {
   private readonly logger = new Logger(MySqlConnection.name);
 
   constructor(private readonly config: ConfigService) {
+    const isDev = this.config.get('NODE_ENV') === 'development';
     this._dataSource = new DataSource({
       type: 'mysql',
       host: this.config.get<string>('MYSQL_HOST'),
@@ -58,14 +59,14 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: process.env.NODE_ENV === 'development',
+      synchronize: isDev,
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
 
       migrations:
-        process.env.NODE_ENV === 'production' ? ['dist/migrations/*.js'] : [],
-      migrationsRun: process.env.NODE_ENV === 'production',
+        isDev ? ['dist/migrations/*.js'] : [],
+      migrationsRun: this.config.get<boolean>('MYSQL_MIGRATE_ON_STARTUP') || false,
       entities: [
         UserEntity,
         BranchEntity,

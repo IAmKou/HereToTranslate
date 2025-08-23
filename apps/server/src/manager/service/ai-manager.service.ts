@@ -4,6 +4,7 @@ import fs from 'fs';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { PineconeStore } from '@langchain/community/vectorstores/pinecone';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AiChatService {
@@ -11,18 +12,33 @@ export class AiChatService {
   private openai: OpenAI;
   private pinecone: Pinecone;
 
-  constructor() {
-    const { OPENAI_API_KEY, PINECONE_API_KEY, PINECONE_INDEX, PINECONE_INDEX_HOST } = process.env;
+  private readonly openaiKey: string;
+  private readonly pineconeKey: string;
+  private readonly pineconeIndex: string;
+  private readonly pineconeHost: string;
+
+  constructor(private readonly configService: ConfigService) {
+
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const pineconeKey = this.configService.get<string>('PINECONE_API_KEY');
+    const pineconeIndex = this.configService.get<string>('PINECONE_INDEX');
+    const pineconeHost = this.configService.get<string>('PINECONE_INDEX_HOST');
+
 
     // Check if environment variables are set
-    if (OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_INDEX && PINECONE_INDEX_HOST) {
+    if (openaiKey && pineconeKey && pineconeIndex && pineconeHost) {
       this.openai = new OpenAI({
-        apiKey: OPENAI_API_KEY,
+        apiKey: openaiKey,
       });
 
       this.pinecone = new Pinecone({
-        apiKey: PINECONE_API_KEY,
+        apiKey: pineconeKey,
       });
+
+      this.openaiKey = openaiKey;
+      this.pineconeKey = pineconeKey;
+      this.pineconeIndex = pineconeIndex;
+      this.pineconeHost = pineconeHost;
 
       this.logger.log('✅ AI service initialized with OpenAI and Pinecone');
     } else {
@@ -56,14 +72,10 @@ export class AiChatService {
       content: string;
     }[];
 
-    const indexName = process.env.PINECONE_INDEX!;
-    const indexHost = process.env.PINECONE_INDEX_HOST!;
-    const openaiKey = process.env.OPENAI_API_KEY!;
-
-    const index = this.pinecone.Index(indexName, indexHost);
+    const index = this.pinecone.Index(this.pineconeIndex, this.pineconeHost);
 
     const embeddings = new OpenAIEmbeddings({
-      apiKey: openaiKey,
+      apiKey: this.openaiKey,
       modelName: 'text-embedding-ada-002',
     });
 

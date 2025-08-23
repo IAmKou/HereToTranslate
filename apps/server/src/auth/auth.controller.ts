@@ -15,16 +15,44 @@ import { RolesGuard } from './guards/role.guard';
 import { LoginDto } from '#LocalProject/Dtos';
 import { UserRole } from '#LocalProject/Entities';
 import type { AuthenticatedRequest } from './types';
-import type { Request, Response } from 'express';
+import type { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { logger } from 'nx/src/utils/logger';
+import { DAY, MINUTE } from '#LocalProject/Utils/common';
 
 @Controller('auth')
 export class AuthController {
+
+  private readonly isProduction: boolean;
+  private readonly accessExpiry: string;
+  private readonly refreshExpiry: string;
+  private readonly accessTokenCookieOptions: CookieOptions;
+  private readonly refreshTokenCookieOptions: CookieOptions;
+
+  get commonCookieOptions(): CookieOptions {
+    return {
+      httpOnly: true,
+      secure: this.isProduction,
+      sameSite: 'strict',
+    };
+  }
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService
-  ) {}
+  ) {
+    this.isProduction = this.configService.get('NODE_ENV') === 'production';
+    this.accessExpiry = this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m';
+    this.refreshExpiry = this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d';
+    this.accessTokenCookieOptions = {
+      ...this.commonCookieOptions,
+      expires: this.authService.getExpiryDate(this.accessExpiry),
+    };
+    this.refreshTokenCookieOptions = {
+      ...this.commonCookieOptions,
+      expires: this.authService.getExpiryDate(this.refreshExpiry),
+    };
+  }
 
   @IsPublicEndpoint()
   @Post('login')
@@ -35,24 +63,10 @@ export class AuthController {
     );
 
     // Set access token cookie
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
-      ),
-    });
+    res.cookie('access_token', accessToken, this.accessTokenCookieOptions);
 
     // Set refresh token cookie similarly
-    res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
-      ),
-    });
+    res.cookie('refresh_token', refreshToken, this.refreshTokenCookieOptions);
 
     return res.json({ user });
   }
@@ -67,17 +81,15 @@ export class AuthController {
       await this.authService.loginWithGoogle(idToken);
     logger.log(idToken);
     res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      ...this.commonCookieOptions,
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 15, // 15 mins
+      maxAge: 15 * MINUTE,
     });
 
     res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      ...this.commonCookieOptions,
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 7 * DAY,
     });
     logger.log(user);
     return { user };
@@ -98,24 +110,10 @@ export class AuthController {
     } = await this.authService.refreshTokens(refreshToken);
 
     // Set new access token cookie
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m'
-      ),
-    });
+    res.cookie('access_token', accessToken, this.accessTokenCookieOptions);
 
     // Set new refresh token cookie
-    res.cookie('refresh_token', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      expires: this.authService.getExpiryDate(
-        this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d'
-      ),
-    });
+    res.cookie('refresh_token', newRefreshToken, this.refreshTokenCookieOptions);
 
     return res.json({ user });
   }

@@ -16,12 +16,13 @@ import { PaypalService } from '../service/payment-manager.service';
 import { UserEntity } from '../../db/mysql/entity';
 import { BigIntTransformPipe } from '../../util/pipes/bigint-transform.pipe';
 import type { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Payment')
 @ApiBearerAuth()
 @Controller('payment')
 export class PaymentController {
-  constructor(private readonly paymentService: PaypalService) {}
+  constructor(private readonly paymentService: PaypalService, private readonly configService: ConfigService) { }
 
   @UseGuards(JwtAuthGuard)
   @Post('approve-translation')
@@ -45,7 +46,7 @@ export class PaymentController {
     const result = await this.paymentService.capturePaymentAndCreateProject(orderId);
 
     if (result.success) {
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:4200';
+      const clientUrl = this.configService.get('CLIENT_URL');
       return res.redirect(`${clientUrl}/my-requests`);
     } else {
       return res.redirect('/payment-failed');
@@ -72,7 +73,7 @@ export class PaymentController {
 
   @UseGuards(JwtAuthGuard)
   @Post(':transactionId/approve')
-  async approveTransaction(@Param('transactionId') transactionId: number){
+  async approveTransaction(@Param('transactionId') transactionId: number) {
     return this.paymentService.approveWithdrawal(transactionId);
   }
 

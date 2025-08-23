@@ -39,6 +39,22 @@ export interface Task {
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  commentCount?: number; // Comment count for display
+}
+
+// Add new Comment interface
+export interface Comment {
+  id: string;
+  content: string;
+  taskId: string;
+  author: {
+    id: string;
+    username: string;
+    fullName?: string;
+    avatarUrl?: string;
+  };
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CreateTaskDto {
@@ -392,6 +408,28 @@ export const taskService = {
   async getTaskHistory(taskId: string): Promise<TaskHistory[]> {
     const { data } = await axiosInstance.get(`/tasks/${taskId}/history`);
     return data;
+  },
+
+  // Comment-related methods
+  async getTaskComments(taskId: string): Promise<Comment[]> {
+    const { data } = await axiosInstance.get(`/tasks/${taskId}/comments`);
+    return data;
+  },
+
+  async addTaskComment(taskId: string, content: string): Promise<Comment> {
+    const { data } = await axiosInstance.post(`/tasks/${taskId}/comments`, { content });
+    return data;
+  },
+
+  async updateTaskComment(commentId: string, content: string): Promise<Comment> {
+    console.log('Making API call to update comment:', `/tasks/comments/${commentId}`, { content });
+    const { data } = await axiosInstance.patch(`/tasks/comments/${commentId}`, { content });
+    console.log('Update comment response:', data);
+    return data;
+  },
+
+  async deleteTaskComment(commentId: string): Promise<void> {
+    await axiosInstance.delete(`/tasks/comments/${commentId}`);
   },
 };
 

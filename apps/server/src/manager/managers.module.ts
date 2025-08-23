@@ -28,6 +28,7 @@ import { TranslationPreviewEntity } from '../db/mysql/entity/translation-preview
 import { SubtaskEntity } from '../db/mysql/entity/subtask.entity';
 import { SubtaskStatusHistoryEntity } from '../db/mysql/entity/subtask-status-history.entity';
 import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
+import { TaskCommentEntity } from '../db/mysql/entity/task-comment.entity';
 import { RequestRegistrationEntity } from '../db/mysql/entity/request-registration.entity';
 import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
 import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
@@ -97,6 +98,8 @@ import { ScannerCronController } from './controller/scanner-cron.controller';
 import { DeadlineCheckerController } from './controller/deadline-checker.controller';
 import { SubtaskManagerService } from './service/subtask-manager.service';
 import { SubtaskController } from './controller/subtask.controller';
+import { TaskCommentManagerService } from './service/task-comment-manager.service';
+import { TaskCommentController } from './controller/task-comment.controller';
 import { OverdueCheckerService } from './service/overdue-checker.service';
 import { ExportManagerService } from '#LocalProject/Managers/service/export-manager.service';
 import { ExportController } from '#LocalProject/Managers/controller/export.controller';
@@ -148,6 +151,7 @@ import { FeeController } from './controller/fee.controller';
       TranslationPreviewEntity,
       SubtaskEntity,
       SubtaskStatusHistoryEntity,
+      TaskCommentEntity,
     ]),
     // Restore Bull queue for export jobs (required by ExportManagerService)
     BullModule.registerQueue({ name: 'export', redis: { host: 'localhost', port: 6379 } }),
@@ -184,6 +188,7 @@ import { FeeController } from './controller/fee.controller';
     StatusManagerService,
     WorkflowManagerService,
     SubtaskManagerService,
+    TaskCommentManagerService,
     OverdueCheckerService,
     TaskManagerService,
     ExportManagerService,
@@ -223,6 +228,7 @@ import { FeeController } from './controller/fee.controller';
     StatusManagerService,
     WorkflowManagerService,
     SubtaskManagerService,
+    TaskCommentManagerService,
     OverdueCheckerService,
     TaskManagerService,
     TaskAssignmentManagerService,
@@ -261,6 +267,7 @@ import { FeeController } from './controller/fee.controller';
     ScannerCronController,
     DeadlineCheckerController,
     SubtaskController,
+    TaskCommentController,
     ExportController,
     WorkflowController,
     StatusController,

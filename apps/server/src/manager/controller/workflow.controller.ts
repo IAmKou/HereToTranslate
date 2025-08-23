@@ -16,6 +16,11 @@ export class WorkflowController {
     return this.workflowService.getProjectWorkflows(projectId);
   }
 
+  @Get('project/:projectId/default')
+  async getDefaultWorkflow(@Param('projectId') projectId: string) {
+    return this.workflowService.getDefaultWorkflow(projectId);
+  }
+
   @Post('project/:projectId')
   async createWorkflow(@Param('projectId') projectId: string, @Body() dto: CreateWorkflowDto) {
     return this.workflowService.createWorkflow(projectId, dto);
@@ -61,5 +66,10 @@ export class WorkflowController {
   @Put(':workflowId/visualization')
   async updateWorkflowVisualization(@Param('workflowId') workflowId: string, @Body() visualizationData: any) {
     return this.workflowService.updateWorkflowVisualization(workflowId, visualizationData);
+  }
+
+  @Get('task/:taskId/transitions')
+  async getAvailableTransitionsForTask(@Param('taskId') taskId: string) {
+    return this.workflowService.getAvailableTransitionsForTask(taskId);
   }
 }

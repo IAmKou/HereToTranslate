@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
-import { taskService, Task, ProjectFile, TaskHistory } from '../services/task.service';
+import { taskService, Task, ProjectFile, TaskHistory, Comment } from '../services/task.service';
 import CreateTaskDialog from './CreateTaskDialog.vue';
 import EditTaskDialog from './EditTaskDialog.vue';
 import WorkflowManager from './WorkflowManager.vue';
@@ -9,6 +9,8 @@ import WorkflowManager from './WorkflowManager.vue';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
 import { getLanguageName } from '../utils/languages';
+import { useAuthStore } from '../store/auth';
+import { taskCommentRealtimeService, type TaskCommentEvent, type TaskCommentDeleteEvent } from '../services/task-comment-realtime';
 
 
 
@@ -47,6 +49,9 @@ const props = defineProps({
 const activeTab = ref<'board' | 'all' | 'workflows'>('board');
 const showWorkflowManager = ref(false);
 
+// Default workflow state
+const defaultWorkflow = ref<any>(null);
+
 
 // Add new state for dynamic statuses
 const availableStatuses = ref<any[]>([]);
@@ -69,6 +74,18 @@ async function loadStatuses() {
     ];
   } finally {
     statusesLoading.value = false;
+  }
+}
+
+// Load default workflow
+async function loadDefaultWorkflow() {
+  try {
+    const { data } = await axiosInstance.get(`/workflows/project/${props.projectId}/default`);
+    defaultWorkflow.value = data;
+    console.log('🚀 Loaded default workflow:', defaultWorkflow.value);
+  } catch (error) {
+    console.log('No default workflow found for this project');
+    defaultWorkflow.value = null;
   }
 }
 
@@ -163,6 +180,7 @@ watch(statusOrder, () => {
 onMounted(() => {
   loadStatusOrder();
   loadStatuses();
+  loadDefaultWorkflow();
 });
 
 // Watch for tab changes to refresh statuses when switching from workflows to board
@@ -170,6 +188,7 @@ watch(activeTab, (newTab: 'board' | 'all' | 'workflows', oldTab: 'board' | 'all'
   if (oldTab === 'workflows' && newTab === 'board') {
     console.log('🔄 Switching from workflows to board, refreshing statuses...');
     loadStatuses();
+    loadDefaultWorkflow();
   }
 });
 
@@ -345,7 +364,24 @@ const currentTaskForAction = ref<Task|null>(null);
 // Task history state
 const taskHistory = ref<TaskHistory[]>([]);
 const taskHistoryLoading = ref(false);
-const activeTaskDetailTab = ref<'details' | 'history'>('details');
+const activeTaskDetailTab = ref<'details' | 'history' | 'comments'>('details');
+
+// Task comments state
+const taskComments = ref<Comment[]>([]);
+const commentsLoading = ref(false);
+const newCommentContent = ref('');
+const isAddingComment = ref(false);
+
+// Delete confirmation modal
+const showDeleteConfirmModal = ref(false);
+const commentToDelete = ref<Comment | null>(null);
+
+// Comment dropdown menu
+const activeDropdown = ref<string | null>(null);
+
+// Get auth store
+const authStore = useAuthStore();
+const currentUserId = computed(() => authStore.user?.id ? String(authStore.user.id) : '');
 
 // Search and filter functions
 function toggleFilters() {
@@ -564,6 +600,13 @@ function isClosedTypeStatus(statusId: string): boolean {
   const statusObj = availableStatuses.value.find((s: any) => s.id === statusId);
   if (!statusObj || !statusObj.type) return false;
   return String(statusObj.type).toLowerCase() === 'closed';
+}
+
+// Helper: check if a status (by id) is the last column
+function isLastColumn(statusId: string): boolean {
+  if (!orderedStatuses.value || orderedStatuses.value.length === 0) return false;
+  const lastStatus = orderedStatuses.value[orderedStatuses.value.length - 1];
+  return lastStatus.id === statusId;
 }
 
 // Function để format time only
@@ -1708,6 +1751,15 @@ onMounted(() => {
   loadTasks();
   loadProjectFiles();
 
+  // Setup WebSocket event listeners for real-time comment updates
+  setupRealtimeCommentListeners();
+
+  // Load comment counts for all tasks when component mounts
+  loadAllTaskCommentCounts();
+
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', closeAllDropdowns);
+
   // Add click outside listener for filter dropdown
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
@@ -1770,6 +1822,11 @@ onBeforeUnmount(() => {
   if (progressIntervalId) {
     clearInterval(progressIntervalId);
   }
+
+  // Cleanup WebSocket listeners
+  taskCommentRealtimeService.offCommentAdded(() => {});
+  taskCommentRealtimeService.offCommentUpdated(() => {});
+  taskCommentRealtimeService.offCommentDeleted(() => {});
 });
 
 // Watch cho projectId và branchId thay đổi - giống như ProjectTranslationTab
@@ -1791,8 +1848,11 @@ watch(() => selectedTask.value, async (task: Task | null) => {
   // Load task history khi task thay đổi
   if (task) {
     await loadTaskHistory(task.id);
+    // Load task comments khi task thay đổi
+    await loadTaskComments(task.id);
   } else {
     taskHistory.value = [];
+    taskComments.value = [];
   }
 });
 
@@ -2398,6 +2458,273 @@ function toggleReviewerDropdown() {
 function closeAllDropdowns() {
   showAssigneeDropdown.value = false;
   showReviewerDropdown.value = false;
+  activeDropdown.value = null;
+}
+
+// Comment-related functions
+async function loadTaskComments(taskId: string) {
+  if (!taskId) return;
+
+  commentsLoading.value = true;
+  try {
+    const comments = await taskService.getTaskComments(taskId);
+    taskComments.value = comments.map(comment => ({
+      ...comment,
+      isEditing: false,
+      editContent: comment.content
+    }));
+    console.log('Task comments loaded:', comments);
+  } catch (error: unknown) {
+    console.error('Error loading task comments:', error);
+    taskComments.value = [];
+  } finally {
+    commentsLoading.value = false;
+  }
+}
+
+async function addComment() {
+  if (!selectedTask.value || !newCommentContent.value.trim()) return;
+
+  isAddingComment.value = true;
+  try {
+    const newComment = await taskService.addTaskComment(selectedTask.value.id, newCommentContent.value.trim());
+
+    // Add to local comments array
+    taskComments.value.unshift({
+      ...newComment,
+      isEditing: false,
+      editContent: newComment.content
+    });
+
+    // Update task comment count (we'll need to implement this separately)
+    // For now, just update the local comments array
+
+    // Clear input
+    newCommentContent.value = '';
+
+    // Show success message
+    toast.add({
+      severity: 'success',
+      summary: 'Comment Added',
+      detail: 'Comment has been added successfully.',
+      life: 3000
+    });
+
+    console.log('Comment added successfully:', newComment);
+  } catch (error: any) {
+    console.error('Failed to add comment:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Add Failed',
+      detail: error.response?.data?.message || 'Failed to add comment. Please try again.',
+      life: 4000
+    });
+  } finally {
+    isAddingComment.value = false;
+  }
+}
+
+function editComment(comment: Comment & { isEditing: boolean; editContent: string }) {
+  comment.isEditing = true;
+  comment.editContent = comment.content;
+}
+
+function cancelCommentEdit(comment: Comment & { isEditing: boolean; editContent: string }) {
+  comment.isEditing = false;
+  comment.editContent = comment.content;
+}
+
+async function saveCommentEdit(comment: Comment & { isEditing: boolean; editContent: string }) {
+  if (!comment.editContent.trim()) return;
+
+  try {
+    console.log('Updating comment with ID:', comment.id, 'Content:', comment.editContent.trim());
+    const updatedComment = await taskService.updateTaskComment(comment.id, comment.editContent.trim());
+
+    // Update local comment
+    comment.content = updatedComment.content;
+    comment.isEditing = false;
+
+    // Show success message
+    toast.add({
+      severity: 'success',
+      summary: 'Comment Updated',
+      detail: 'Comment has been updated successfully.',
+      life: 3000
+    });
+
+    console.log('Comment updated successfully:', updatedComment);
+  } catch (error: any) {
+    console.error('Failed to update comment:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Update Failed',
+      detail: error.response?.data?.message || 'Failed to update comment. Please try again.',
+      life: 4000
+    });
+  }
+}
+
+function confirmDeleteComment(comment: Comment) {
+  commentToDelete.value = comment;
+  showDeleteConfirmModal.value = true;
+}
+
+function cancelDeleteComment() {
+  showDeleteConfirmModal.value = false;
+  commentToDelete.value = null;
+}
+
+function toggleCommentDropdown(commentId: string) {
+  console.log('Toggle dropdown clicked for comment:', commentId);
+  if (activeDropdown.value === commentId) {
+    activeDropdown.value = null;
+    console.log('Closing dropdown');
+  } else {
+    activeDropdown.value = commentId;
+    console.log('Opening dropdown for comment:', commentId);
+  }
+}
+
+function getTaskCommentCount(taskId: string): number {
+  // Count comments for the specific task
+  const count = taskComments.value.filter((comment: Comment) => comment.taskId === taskId).length;
+  console.log(`Task ${taskId} has ${count} comments:`, taskComments.value.filter((comment: Comment) => comment.taskId === taskId));
+  return count;
+}
+
+async function loadAllTaskCommentCounts() {
+  try {
+    // Get all tasks in the current project
+    const allTasks = await taskService.getProjectTasks(props.projectId);
+
+    // Load comments for each task
+    for (const task of allTasks) {
+      try {
+        const comments = await taskService.getTaskComments(task.id);
+        // Add comments to taskComments array
+        comments.forEach(comment => {
+          const existingComment = taskComments.value.find(c => c.id === comment.id);
+          if (!existingComment) {
+            taskComments.value.push({
+              ...comment,
+              isEditing: false,
+              editContent: comment.content
+            });
+          }
+        });
+      } catch (error) {
+        console.error(`Failed to load comments for task ${task.id}:`, error);
+      }
+    }
+
+    console.log('Loaded all task comment counts:', taskComments.value);
+  } catch (error) {
+    console.error('Failed to load all task comment counts:', error);
+  }
+}
+
+
+
+async function deleteComment() {
+  if (!commentToDelete.value) return;
+
+  try {
+    await taskService.deleteTaskComment(commentToDelete.value.id);
+
+    // Remove from local comments array
+    const commentIndex = taskComments.value.findIndex((c: Comment) => c.id === commentToDelete.value!.id);
+    if (commentIndex !== -1) {
+      taskComments.value.splice(commentIndex, 1);
+    }
+
+    // Update task comment count (we'll need to implement this separately)
+    // For now, just update the local comments array
+
+    // Show success message
+    toast.add({
+      severity: 'success',
+      summary: 'Comment Deleted',
+      detail: 'Comment has been deleted successfully.',
+      life: 3000
+    });
+
+    console.log('Comment deleted successfully:', commentToDelete.value.id);
+  } catch (error: any) {
+    console.error('Failed to delete comment:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Delete Failed',
+      detail: error.response?.data?.message || 'Failed to delete comment. Please try again.',
+      life: 4000
+    });
+  } finally {
+    showDeleteConfirmModal.value = false;
+    commentToDelete.value = null;
+  }
+}
+
+// Realtime comment event handlers
+function setupRealtimeCommentListeners() {
+  // Handle comment added event
+  taskCommentRealtimeService.onCommentAdded((event: TaskCommentEvent) => {
+    // Only update if we're viewing the same task
+    if (selectedTask.value && selectedTask.value.id === event.comment.taskId) {
+      // Add to local comments array
+      taskComments.value.unshift({
+        ...event.comment,
+        isEditing: false,
+        editContent: event.comment.content
+      });
+
+      // Update task comment count (we'll need to implement this separately)
+      // For now, just update the local comments array
+
+      // Show notification if comment is from another user
+      if (event.comment.author.id !== currentUserId.value) {
+        toast.add({
+          severity: 'info',
+          summary: 'New Comment',
+          detail: `${event.comment.author.fullName || event.comment.author.username} added a comment`,
+          life: 3000
+        });
+      }
+    }
+  });
+
+  // Handle comment updated event
+  taskCommentRealtimeService.onCommentUpdated((event: TaskCommentEvent) => {
+    // Only update if we're viewing the same task
+    if (selectedTask.value && selectedTask.value.id === event.comment.taskId) {
+      // Update in local comments array
+      const commentIndex = taskComments.value.findIndex((c: Comment) => c.id === event.comment.id);
+      if (commentIndex !== -1) {
+        taskComments.value[commentIndex] = {
+          ...event.comment,
+          isEditing: false,
+          editContent: event.comment.content
+        };
+      }
+
+      // Update task comment count (we'll need to implement this separately)
+      // For now, just update the local comments array
+    }
+  });
+
+  // Handle comment deleted event
+  taskCommentRealtimeService.onCommentDeleted((event: TaskCommentDeleteEvent) => {
+    // Only update if we're viewing the same task
+    if (selectedTask.value && selectedTask.value.id === event.taskId) {
+      // Remove from local comments array
+      const commentIndex = taskComments.value.findIndex((c: Comment) => c.id === event.commentId);
+      if (commentIndex !== -1) {
+        taskComments.value.splice(commentIndex, 1);
+      }
+
+      // Update task comment count (we'll need to implement this separately)
+      // For now, just update the local comments array
+    }
+  });
 }
 
 </script>
@@ -2445,6 +2772,15 @@ function closeAllDropdowns() {
           @click="activeTaskDetailTab = 'history'"
         >
           History
+        </button>
+        <button
+          :class="['task-detail-tab-btn', { active: activeTaskDetailTab === 'comments' }]"
+          @click="activeTaskDetailTab = 'comments'"
+        >
+          Comments
+          <span v-if="taskComments.length > 0" class="comment-badge">
+            {{ taskComments.length }}
+          </span>
         </button>
       </div>
 
@@ -2866,6 +3202,153 @@ function closeAllDropdowns() {
           </div>
         </div>
       </div>
+
+      <!-- Comments Tab Content -->
+      <div
+        v-if="activeTaskDetailTab === 'comments'"
+        class="task-detail-content"
+      >
+        <div class="task-comments-container">
+          <div class="comments-header">
+            <h3>Task Comments</h3>
+            <div
+              v-if="commentsLoading"
+              class="comments-loading"
+            >
+              <i class="pi pi-spin pi-spinner" /> Loading comments...
+            </div>
+          </div>
+
+          <!-- Add new comment form -->
+          <div class="add-comment-form">
+            <div class="comment-input-wrapper">
+              <textarea
+                v-model="newCommentContent"
+                placeholder="Write a comment..."
+                class="comment-input"
+                rows="3"
+              />
+            </div>
+            <div class="comment-actions">
+              <button
+                class="btn btn-primary add-comment-btn"
+                :disabled="!newCommentContent.trim() || isAddingComment"
+                @click="addComment"
+              >
+                <i v-if="isAddingComment" class="pi pi-spin pi-spinner" />
+                <span v-else>Add Comment</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Comments list -->
+          <div
+            v-if="!commentsLoading && taskComments.length === 0"
+            class="no-comments"
+          >
+            <p>No comments yet. Be the first to comment!</p>
+          </div>
+
+          <div
+            v-else-if="!commentsLoading"
+            class="comments-list"
+          >
+            <div
+              v-for="comment in taskComments"
+              :key="comment.id"
+              class="comment-item"
+            >
+              <div class="comment-header">
+                <div class="comment-author">
+                  <img
+                    v-if="comment.author.avatarUrl"
+                    :src="getAvatarUrl(comment.author.avatarUrl)"
+                    :alt="getUserDisplayName(comment.author)"
+                    class="comment-author-avatar"
+                  >
+                  <span
+                    v-else
+                    class="comment-author-avatar-placeholder"
+                  >{{ getUserDisplayName(comment.author)[0] }}</span>
+                  <span class="comment-author-name">{{ getUserDisplayName(comment.author) }}</span>
+                </div>
+                <div class="comment-header-right">
+                  <div class="comment-time">
+                    {{ formatDateTime(comment.createdAt) }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Comment actions dropdown below header -->
+              <div
+                v-if="comment.author.id === currentUserId && !comment.isEditing"
+                class="comment-actions-dropdown"
+              >
+                <button
+                  class="comment-dropdown-trigger"
+                  @click.stop="toggleCommentDropdown(comment.id)"
+                >
+                  <i class="pi pi-ellipsis-h" />
+                </button>
+
+                <!-- Dropdown menu -->
+                <div
+                  v-if="activeDropdown === comment.id"
+                  class="comment-dropdown-menu"
+                  @click.stop
+                >
+                  <button
+                    class="dropdown-item edit-item"
+                    @click="editComment(comment)"
+                  >
+                    <i class="pi pi-pencil" />
+                    Edit
+                  </button>
+                  <button
+                    class="dropdown-item delete-item"
+                    @click="confirmDeleteComment(comment)"
+                  >
+                    <i class="pi pi-trash" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              <!-- Comment content - inline edit -->
+              <div class="comment-content">
+                <div v-if="!comment.isEditing">
+                  {{ comment.content }}
+                </div>
+                <div v-else class="edit-comment-inline">
+                  <textarea
+                    v-model="comment.editContent"
+                    class="comment-input"
+                    rows="3"
+                    @keydown.ctrl.enter="saveCommentEdit(comment)"
+                    @keydown.escape="cancelCommentEdit(comment)"
+                  />
+                  <div class="edit-comment-actions">
+                    <button
+                      class="btn btn-primary save-btn"
+                      @click="saveCommentEdit(comment)"
+                    >
+                      Save
+                    </button>
+                    <button
+                      class="btn btn-secondary cancel-btn"
+                      @click="cancelCommentEdit(comment)"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Create Task View -->
@@ -2974,6 +3457,8 @@ function closeAllDropdowns() {
 
       <!-- Board View -->
       <div v-if="activeTab === 'board'">
+
+
         <!-- Dynamic Status Board -->
         <div>
 
@@ -3409,6 +3894,22 @@ function closeAllDropdowns() {
                                   </div>
                                 </div>
                               </div>
+
+                              <!-- Comment icon with count - moved to right side -->
+                              <div class="crowdin-col-right">
+                                <div class="comment-info">
+                                  <button
+                                    class="comment-btn"
+                                    :title="`${getTaskCommentCount(task.id)} comments - Click to view task details`"
+                                    @click.stop="selectTask(task)"
+                                  >
+                                    <i class="pi pi-comments comment-icon" />
+                                    <span v-if="getTaskCommentCount(task.id) > 0" class="comment-count">
+                                      {{ getTaskCommentCount(task.id) }}
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                             <div
                               v-if="task.type"
@@ -3420,9 +3921,9 @@ function closeAllDropdowns() {
                                 </div>
                               </div>
                             </div>
-                            <!-- Close button shown only when column status type is closed -->
+                            <!-- Close button shown when column status type is closed OR when it's the last column -->
                             <div
-                              v-if="isClosedTypeStatus(status.id) && task.status !== 'closed'"
+                              v-if="(isClosedTypeStatus(status.id) || isLastColumn(status.id)) && task.status !== 'closed'"
                               class="crowdin-row-6"
                             >
                               <div class="crowdin-col-right">
@@ -3587,6 +4088,22 @@ function closeAllDropdowns() {
                                     </div>
                                   </div>
                                 </div>
+
+                                <!-- Comment icon with count - moved to right side -->
+                                <div class="crowdin-col-right">
+                                  <div class="comment-info">
+                                    <button
+                                      class="comment-btn"
+                                      :title="`${getTaskCommentCount(task.id)} comments - Click to view task details`"
+                                      @click.stop="selectTask(task)"
+                                    >
+                                      <i class="pi pi-comments comment-icon" />
+                                      <span v-if="getTaskCommentCount(task.id) > 0" class="comment-count">
+                                        {{ getTaskCommentCount(task.id) }}
+                                      </span>
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                               <div
                                 v-if="task.type"
@@ -3598,9 +4115,9 @@ function closeAllDropdowns() {
                                   </div>
                                 </div>
                               </div>
-                              <!-- Close button shown only when column status type is closed -->
+                              <!-- Close button shown when column status type is closed OR when it's the last column -->
                               <div
-                                v-if="isClosedTypeStatus(status.id) && task.status !== 'closed'"
+                                v-if="(isClosedTypeStatus(status.id) || isLastColumn(status.id)) && task.status !== 'closed'"
                                 class="crowdin-row-6"
                               >
                                 <div class="crowdin-col-right">
@@ -4220,6 +4737,25 @@ function closeAllDropdowns() {
               class="loading-spinner"
             />
             {{ isReopeningTask ? 'Reopening...' : 'Reopen Task' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Delete Comment Confirmation Modal -->
+  <Teleport to="body">
+    <div v-if="showDeleteConfirmModal" class="modal-overlay" @click="cancelDeleteComment">
+      <div class="modal" @click.stop>
+        <div class="modal-body">
+          <p class="confirm-text">Are you sure you want to delete this comment?</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="cancelDeleteComment">
+            Cancel
+          </button>
+          <button class="btn btn-danger" @click="deleteComment">
+            Delete
           </button>
         </div>
       </div>
@@ -6577,6 +7113,10 @@ body.modal-open main {
 }
 .crowdin-row-4 {
   margin-bottom: 0.5em;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
 }
 .crowdin-row-5 {
   margin-bottom: 0.2em;
@@ -6592,6 +7132,13 @@ body.modal-open main {
   gap: 0.8em;
   min-width: 0;
   width: 100%;
+}
+
+.crowdin-col-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: 0.5rem;
 }
 .crowdin-title {
   color: #2563eb;
@@ -6693,6 +7240,60 @@ body.modal-open main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.comment-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 40px;
+  justify-content: center;
+  border: 1px solid #e5e7eb;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #f9fafb;
+}
+
+.comment-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  background: none;
+  color: #6366f1;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 0.85em;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.comment-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.comment-icon {
+  font-size: 1em;
+  color: #6366f1;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 16px;
+}
+
+.comment-count {
+  background: #10b981;
+  color: white;
+  font-size: 0.7em;
+  padding: 0.125rem 0.375rem;
+  border-radius: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  text-align: center;
 }
 .crowdin-row-5 {
   margin-bottom: 0.3em;
@@ -7695,6 +8296,16 @@ body.modal-open main {
   color: white;
 }
 
+.task-detail-tab-btn .comment-badge {
+  background: #10b981;
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 10px;
+  margin-left: 0.5rem;
+  font-weight: 600;
+}
+
 /* Task History Styles */
 .task-history-container {
   padding: 0.75rem 0;
@@ -7731,6 +8342,328 @@ body.modal-open main {
   background: #f9fafb;
   border-radius: 8px;
   border: 1px dashed #d1d5db;
+}
+
+/* Task Comments Styles */
+.task-comments-container {
+  padding: 0.75rem 0;
+}
+
+.comments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.comments-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.comments-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.add-comment-form {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.comment-input-wrapper {
+  margin-bottom: 1rem;
+}
+
+.comment-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s ease;
+}
+
+.comment-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.add-comment-btn {
+  padding: 0.5rem 1rem;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.add-comment-btn:hover:not(:disabled) {
+  background: #5855eb;
+}
+
+.add-comment-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.no-comments {
+  text-align: center;
+  padding: 1.5rem;
+  color: #6b7280;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px dashed #d1d5db;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.comment-item {
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.comment-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.comment-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Comment dropdown styles */
+.comment-actions-dropdown {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.comment-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.comment-dropdown-trigger:hover {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.comment-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 99999;
+  min-width: 120px;
+  margin-top: 4px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background: #f9fafb;
+}
+
+.dropdown-item.edit-item:hover {
+  color: #6366f1;
+}
+
+.dropdown-item.delete-item:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.comment-author {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.comment-author-avatar,
+.comment-author-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50% !important;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+  background: #6366f1;
+  font-size: 0.875rem;
+  overflow: hidden;
+  clip-path: circle(50% at 50% 50%);
+}
+
+.comment-author-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 50% !important;
+  clip-path: circle(50% at 50% 50%);
+  display: block;
+}
+
+.comment-author-name {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.comment-time {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.comment-content {
+  color: #374151;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.comment-action-btn {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  background: none;
+  color: #6b7280;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.comment-action-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.comment-action-btn.edit-btn:hover {
+  color: #059669;
+}
+
+.comment-action-btn.delete-btn:hover {
+  color: #dc2626;
+}
+
+.edit-comment-inline {
+  margin-top: 0.5rem;
+}
+
+.edit-comment-form {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.edit-comment-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.save-btn,
+.cancel-btn {
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.save-btn {
+  background: #059669;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #047857;
+}
+
+.cancel-btn {
+  background: #6b7280;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: #4b5563;
 }
 
 /* Timeline Design */
@@ -8312,6 +9245,55 @@ body.modal-open main {
 
 .btn-primary:hover { background: #4f46e5; }
 
+.btn-danger {
+  background: #dc2626;
+  color: white;
+}
+
+.btn-danger:hover { background: #b91c1c; }
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 350px;
+  width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  text-align: center;
+}
+
+.modal-body {
+  margin-bottom: 24px;
+}
+
+.confirm-text {
+  font-size: 1rem;
+  color: #374151;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
 .empty-assignee,
 .empty-reviewer {
   display: flex;
@@ -8346,5 +9328,26 @@ body.modal-open main {
   color: #475569;
 }
 
+.default-workflow-notice {
+  background: #e3f2fd;
+  border: 1px solid #2196f3;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #1976d2;
+}
+
+.default-workflow-notice i {
+  font-size: 16px;
+  color: #2196f3;
+}
+
+.default-workflow-notice strong {
+  color: #1565c0;
+}
 
 </style>

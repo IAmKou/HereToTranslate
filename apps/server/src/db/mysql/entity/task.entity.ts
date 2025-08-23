@@ -5,11 +5,11 @@ import { TaskStatusEntity } from './task-status.entity';
 import { WorkflowEntity } from './workflow.entity';
 import { TaskAssignmentEntity } from './task-assignment.entity';
 import { TaskStatusHistoryEntity } from './task-status-history.entity';
-import type { SubtaskEntity } from './subtask.entity';
+import { SubtaskEntity } from './subtask.entity';
 
 @Entity('task')
 export class TaskEntity {
-  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true }) 
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
   @Column()
@@ -103,11 +103,19 @@ export class TaskEntity {
   statusHistory: TaskStatusHistoryEntity[];
 
   @OneToMany(
-    () => require('./subtask.entity').SubtaskEntity,
+    () => SubtaskEntity,
     (subtask: SubtaskEntity) => subtask.parentTask,
     { cascade: true }
   )
   subtasks: SubtaskEntity[];
+
+  // Comments will be loaded separately via API
+  // @OneToMany(
+  //   'TaskCommentEntity',
+  //   (comment: any) => comment.task,
+  //   { cascade: true }
+  // )
+  // comments: TaskCommentEntity[];
 
   get currentTranslator(): UserEntity | undefined {
     return this.assignments?.find(a => a.role === 'translator' && a.status === 'assigned')?.assignedTo;

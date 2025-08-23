@@ -1,6 +1,7 @@
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import { TaskEntity } from '#LocalProject/Entities';
+import { TaskCommentEntity } from '../../db/mysql/entity/task-comment.entity';
 
 @WebSocketGateway({
   cors: {
@@ -28,6 +29,51 @@ export class TaskGateway {
   emitTaskDelete(taskId: bigint) {
     this.server.emit('task-deleted', {
       id: taskId,
+    });
+  }
+
+  emitCommentAdded(comment: TaskCommentEntity) {
+    this.server.emit('comment-added', {
+      id: comment.id.toString(),
+      content: comment.content,
+      taskId: comment.task.id.toString(),
+      author: {
+        id: comment.author.id.toString(),
+        username: comment.author.username,
+        fullName: comment.author.fullName,
+        avatarUrl: comment.author.avatarUrl,
+      },
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      isEdited: comment.isEdited,
+      attachments: comment.attachments,
+      mentions: comment.mentions,
+    });
+  }
+
+  emitCommentUpdated(comment: TaskCommentEntity) {
+    this.server.emit('comment-updated', {
+      id: comment.id.toString(),
+      content: comment.content,
+      taskId: comment.task.id.toString(),
+      author: {
+        id: comment.author.id.toString(),
+        username: comment.author.username,
+        fullName: comment.author.fullName,
+        avatarUrl: comment.author.avatarUrl,
+      },
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      isEdited: comment.isEdited,
+      attachments: comment.attachments,
+      mentions: comment.mentions,
+    });
+  }
+
+  emitCommentDeleted(commentId: string, taskId: string) {
+    this.server.emit('comment-deleted', {
+      commentId,
+      taskId,
     });
   }
 }

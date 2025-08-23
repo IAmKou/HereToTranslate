@@ -37,6 +37,7 @@ import {
 } from '#LocalProject/Entities';
 import { TaskHistoryEntity } from './entity/task-history.entity';
 import { ProjectActivity } from './entity/project-activity.entity';
+import { TaskCommentEntity } from './entity/task-comment.entity';
 
 @Injectable()
 export class MySqlConnection {
@@ -108,7 +109,8 @@ export class MySqlConnection {
         TaskStatusHistoryEntity,
         AssignmentHistoryEntity,
         TaskAssignmentEntity,
-        RequestRegistrationEntity
+        RequestRegistrationEntity,
+        TaskCommentEntity
       ],
     });
     MySqlConnection.instance = this;

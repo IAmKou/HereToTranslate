@@ -338,15 +338,23 @@ export class TaskManagerService {
     toStatus: TaskStatusEntity,
     user: UserEntity
   ) {
-    if (!task.workflow) {
-      // If no workflow, allow any transition (for backward compatibility)
-      return;
+    // Get the default workflow for the project
+    const defaultWorkflow = await this.workflowRepository.findOne({
+      where: {
+        project: { id: BigInt(task.projectId) },
+        isDefault: true,
+        isActive: true,
+      },
+    });
+
+    if (!defaultWorkflow) {
+      throw new BadRequestException('No default workflow found for this project');
     }
 
-    // Find valid transition
+    // Find valid transition from the default workflow only
     const transition = await this.transitionRepository.findOne({
       where: {
-        workflow: { id: task.workflow.id },
+        workflow: { id: defaultWorkflow.id },
         fromStatus: { id: task.status.id },
         toStatus: { id: toStatus.id },
         isActive: true,
@@ -355,10 +363,9 @@ export class TaskManagerService {
     });
 
     if (!transition) {
-      // If no transition found, check if this is a new status that might not be in workflow yet
-      // Allow transition for new statuses to maintain flexibility
-      console.log(`No transition found from ${task.status.name} to ${toStatus.name}, but allowing for flexibility`);
-      return;
+      throw new BadRequestException(
+        `Transition from "${task.status.name}" to "${toStatus.name}" is not allowed in the default workflow`
+      );
     }
 
     // Check permissions

@@ -19,6 +19,17 @@
 
     <!-- Workflow List -->
     <div class="workflow-list" v-if="viewMode === 'list'">
+      <!-- Default Workflow Info Banner -->
+      <div v-if="defaultWorkflow" class="default-workflow-banner">
+        <div class="banner-content">
+          <i class="pi pi-star"></i>
+          <div class="banner-text">
+            <strong>Default Workflow Active:</strong> {{ defaultWorkflow.name }}
+            <span class="banner-description">All tasks in this project will only be able to transition using this workflow's transitions.</span>
+          </div>
+        </div>
+      </div>
+
       <div v-if="loading" class="loading-state">
         <i class="pi pi-spin pi-spinner"></i>
         Loading workflows...
@@ -478,6 +489,10 @@
                 <span class="checkmark"></span>
                 Set as default workflow for this project
               </label>
+              <div v-if="workflowForm.isDefault" class="default-workflow-info">
+                <i class="pi pi-info-circle"></i>
+                <span>When set as default, all tasks in this project will only be able to transition using this workflow's transitions.</span>
+              </div>
             </div>
 
             <div class="form-actions">
@@ -966,6 +981,10 @@ function validateWorkflowForm() {
 // Computed
 const availableStatuses = computed(() =>
   taskStatuses.value.filter(status => status.isActive)
+);
+
+const defaultWorkflow = computed(() =>
+  workflows.value.find(workflow => workflow.isDefault)
 );
 
 // Methods
@@ -3324,5 +3343,62 @@ watch(() => props.projectId, () => {
 .required {
   color: #dc2626;
   font-weight: bold;
+}
+
+.default-workflow-info {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #e3f2fd;
+  border: 1px solid #2196f3;
+  border-radius: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #1976d2;
+}
+
+.default-workflow-info i {
+  margin-top: 1px;
+  font-size: 14px;
+}
+
+.default-workflow-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.banner-content i {
+  font-size: 20px;
+  color: #ffd700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.banner-text {
+  color: white;
+  flex: 1;
+}
+
+.banner-text strong {
+  font-size: 16px;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.banner-description {
+  font-size: 13px;
+  opacity: 0.9;
+  display: block;
 }
 </style>

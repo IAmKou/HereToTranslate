@@ -87,6 +87,50 @@ export class WorkflowManagerService {
     });
   }
 
+  async getDefaultWorkflow(projectId: string) {
+    const defaultWorkflow = await this.workflowRepository.findOne({
+      where: {
+        project: { id: BigInt(projectId) },
+        isDefault: true,
+        isActive: true
+      },
+    });
+
+    if (!defaultWorkflow) {
+      throw new NotFoundException('No default workflow found for this project');
+    }
+
+    return defaultWorkflow;
+  }
+
+  async getAvailableTransitionsForTask(taskId: string) {
+    // First, get the task with its status and project
+    const task = await this.workflowRepository.manager
+      .createQueryBuilder()
+      .select(['task.id', 'task.statusId', 'task.projectId'])
+      .from('task', 'task')
+      .where('task.id = :taskId', { taskId })
+      .getOne();
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+
+    // Get the default workflow for the project
+    const defaultWorkflow = await this.getDefaultWorkflow(task.projectId);
+
+    // Get transitions from the default workflow only
+    return await this.transitionRepository.find({
+      where: {
+        workflow: { id: defaultWorkflow.id },
+        fromStatus: { id: BigInt(task.statusId) },
+        isActive: true
+      },
+      relations: ['toStatus'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   async createTransition(workflowId: string, dto: CreateTransitionDto) {
     const workflow = await this.workflowRepository.findOneOrFail({
       where: { id: BigInt(workflowId) },

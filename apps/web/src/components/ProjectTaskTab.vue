@@ -609,6 +609,11 @@ function isLastColumn(statusId: string): boolean {
   return lastStatus.id === statusId;
 }
 
+// Helper: check if any status has type "closed"
+function hasClosedTypeStatus(): boolean {
+  return availableStatuses.value.some((s: any) => s.type && String(s.type).toLowerCase() === 'closed');
+}
+
 // Function để format time only
 function formatTimeOnly(dateString: string): string {
   const date = new Date(dateString);
@@ -3921,9 +3926,9 @@ function setupRealtimeCommentListeners() {
                                 </div>
                               </div>
                             </div>
-                            <!-- Close button shown when column status type is closed OR when it's the last column -->
+                            <!-- Close button shown when column status type is closed, OR when it's the last column (if no closed type status exists) -->
                             <div
-                              v-if="(isClosedTypeStatus(status.id) || isLastColumn(status.id)) && task.status !== 'closed'"
+                              v-if="(isClosedTypeStatus(status.id) || (!hasClosedTypeStatus() && isLastColumn(status.id))) && task.status !== 'closed'"
                               class="crowdin-row-6"
                             >
                               <div class="crowdin-col-right">
@@ -4115,9 +4120,9 @@ function setupRealtimeCommentListeners() {
                                   </div>
                                 </div>
                               </div>
-                              <!-- Close button shown when column status type is closed OR when it's the last column -->
+                              <!-- Close button shown when column status type is closed, OR when it's the last column (if no closed type status exists) -->
                               <div
-                                v-if="(isClosedTypeStatus(status.id) || isLastColumn(status.id)) && task.status !== 'closed'"
+                                v-if="(isClosedTypeStatus(status.id) || (!hasClosedTypeStatus() && isLastColumn(status.id))) && task.status !== 'closed'"
                                 class="crowdin-row-6"
                               >
                                 <div class="crowdin-col-right">

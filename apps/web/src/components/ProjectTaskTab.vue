@@ -616,7 +616,26 @@ function hasClosedTypeStatus(): boolean {
 
 // Function để format time only
 function formatTimeOnly(dateString: string): string {
-  const date = new Date(dateString);
+  if (!dateString) return '';
+
+  // Parse the date string and ensure it's treated as UTC if it doesn't have timezone info
+  let date: Date;
+  if (dateString.includes('T') && !dateString.includes('Z') && !dateString.includes('+')) {
+    // If date has time but no timezone, treat as UTC
+    date = new Date(dateString + 'Z');
+  } else {
+    date = new Date(dateString);
+  }
+
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    console.warn('Invalid date:', dateString);
+    return 'Invalid time';
+  }
+
+  // Add 7 hours to convert from UTC to Vietnam time (UTC+07:00)
+  date.setHours(date.getHours() + 7);
+
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
@@ -626,7 +645,26 @@ function formatTimeOnly(dateString: string): string {
 
 // Function để format date only
 function formatDateOnly(dateString: string): string {
-  const date = new Date(dateString);
+  if (!dateString) return '';
+
+  // Parse the date string and ensure it's treated as UTC if it doesn't have timezone info
+  let date: Date;
+  if (dateString.includes('T') && !dateString.includes('Z') && !dateString.includes('+')) {
+    // If date has time but no timezone, treat as UTC
+    date = new Date(dateString + 'Z');
+  } else {
+    date = new Date(dateString);
+  }
+
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    console.warn('Invalid date:', dateString);
+    return 'Invalid date';
+  }
+
+  // Add 7 hours to convert from UTC to Vietnam time (UTC+07:00)
+  date.setHours(date.getHours() + 7);
+
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -1538,7 +1576,27 @@ async function updatePageInfo() {
 }
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('en-US', {
+  if (!date) return '';
+
+  // Parse the date string and ensure it's treated as UTC if it doesn't have timezone info
+  let d: Date;
+  if (date.includes('T') && !date.includes('Z') && !date.includes('+')) {
+    // If date has time but no timezone, treat as UTC
+    d = new Date(date + 'Z');
+  } else {
+    d = new Date(date);
+  }
+
+  // Check if date is valid
+  if (isNaN(d.getTime())) {
+    console.warn('Invalid date:', date);
+    return 'Invalid date';
+  }
+
+  // Add 7 hours to convert from UTC to Vietnam time (UTC+07:00)
+  d.setHours(d.getHours() + 7);
+
+  return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric'
@@ -1547,8 +1605,36 @@ function formatDate(date: string) {
 
 function formatDateTime(date: string) {
   if (!date) return '';
-  const d = new Date(date);
-  return d.toLocaleDateString('en-US', {
+
+  console.log('Original date string:', date);
+
+  // Parse the date string
+  let d: Date;
+
+  // If the date string looks like it's from database (has T but no timezone)
+  if (date.includes('T') && !date.includes('Z') && !date.includes('+')) {
+    // Force UTC parsing by adding Z
+    d = new Date(date + 'Z');
+    console.log('Treated as UTC, added Z:', date + 'Z');
+  } else {
+    d = new Date(date);
+  }
+
+  console.log('Parsed date object:', d);
+  console.log('Date ISO string:', d.toISOString());
+  console.log('Date local string:', d.toString());
+
+  // Check if date is valid
+  if (isNaN(d.getTime())) {
+    console.warn('Invalid date:', date);
+    return 'Invalid date';
+  }
+
+  // Add 7 hours to convert from UTC to Vietnam time (UTC+07:00)
+  d.setHours(d.getHours() + 7);
+
+  // Use toLocaleString without timezone (use adjusted time)
+  const result = d.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -1556,18 +1642,51 @@ function formatDateTime(date: string) {
     minute: '2-digit',
     hour12: false
   });
+
+  console.log('Formatted result:', result);
+  return result;
 }
 
 function isOverdue(dueDate: string): boolean {
   if (!dueDate) return false;
-  const due = new Date(dueDate);
+
+  // Parse the due date and ensure it's treated as UTC if it doesn't have timezone info
+  let due: Date;
+  if (dueDate.includes('T') && !dueDate.includes('Z') && !dueDate.includes('+')) {
+    // If date has time but no timezone, treat as UTC
+    due = new Date(dueDate + 'Z');
+  } else {
+    due = new Date(dueDate);
+  }
+
+  // Add 7 hours to convert from UTC to Vietnam time (UTC+07:00)
+  due.setHours(due.getHours() + 7);
+
   const now = new Date();
+
+  console.log('Due date (UTC):', dueDate);
+  console.log('Due date (Vietnam time):', due);
+  console.log('Current time (Vietnam):', now);
+  console.log('Is overdue:', due < now);
+
   return due < now;
 }
 
 function getDaysRemaining(dueDate: string): string {
   if (!dueDate) return '';
-  const due = new Date(dueDate);
+
+  // Parse the due date and ensure it's treated as UTC if it doesn't have timezone info
+  let due: Date;
+  if (dueDate.includes('T') && !dueDate.includes('Z') && !dueDate.includes('+')) {
+    // If date has time but no timezone, treat as UTC
+    due = new Date(dueDate + 'Z');
+  } else {
+    due = new Date(dueDate);
+  }
+
+  // Add 7 hours to convert from UTC to Vietnam time (UTC+07:00)
+  due.setHours(due.getHours() + 7);
+
   const now = new Date();
   const diffTime = due.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

@@ -311,6 +311,8 @@ export class RequestManagerService {
   }
 
   async fetchRequests(userId: bigint) {
+    const currentDate = new Date();
+
     const query = this.requestRepository
       .createQueryBuilder('requests')
       .select([
@@ -332,6 +334,7 @@ export class RequestManagerService {
         'tags.name',
       ])
       .where('requests.isPublic = true')
+      .andWhere('requests.deadline > :currentDate', { currentDate })
       .leftJoin('requests.requester', 'requester')
       .leftJoin('requests.category', 'category')
       .leftJoinAndSelect('requests.tags', 'tags')
@@ -988,11 +991,13 @@ export class RequestManagerService {
         } catch (error) {
           console.error('🔍 [SERVICE] Failed to parse extension data:', error);
           // Fallback to default values
+          const currentDeadline = new Date(request.deadline);
           newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
           reason = 'Deadline extension requested';
         }
       } else {
         // Fallback to default values if no extension data found
+        const currentDeadline = new Date(request.deadline);
         newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
         reason = 'Deadline extension requested';
       }
@@ -1003,20 +1008,6 @@ export class RequestManagerService {
         reason: reason,
         fullMessage: message
       });
-
-      const currentDeadline = new Date(request.deadline);
-      const newDeadline = newDeadlineMatch ? new Date(parseInt(newDeadlineMatch[1])) : new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-      // Decode base64 reason
-      let reason = 'Deadline extension requested';
-      if (reasonMatch && reasonMatch[1]) {
-        try {
-          reason = Buffer.from(reasonMatch[1], 'base64').toString('utf8');
-        } catch (error) {
-          console.error('🔍 [SERVICE] Failed to decode reason:', error);
-          reason = reasonMatch[1]; // Fallback to raw value
-        }
-      }
 
       // Get translator's real email from user table
       const translator = await this.userRepository.findOne({

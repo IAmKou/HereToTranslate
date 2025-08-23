@@ -501,6 +501,34 @@
       @close="showRespondDialog = false"
       @completed="onCancellationResponded"
     />
+
+    <!-- Register Confirmation Modal -->
+    <div v-if="showRegisterConfirmDialog" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Confirm Registration</h3>
+          <button class="modal-close" @click="showRegisterConfirmDialog = false">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to register for this request?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showRegisterConfirmDialog = false">
+            Cancel
+          </button>
+          <button
+            class="btn-primary"
+            @click="confirmRegister"
+            :disabled="registerLoading"
+          >
+            <i v-if="registerLoading" class="pi pi-spin pi-spinner"></i>
+            <span v-else>Confirm Registration</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -604,6 +632,7 @@ const showEdit = ref(false)
 const showCancelDialog = ref(false);
 const showProjectCancelDialog = ref(false)
 const showRespondDialog = ref(false)
+const showRegisterConfirmDialog = ref(false);
 const pendingCancellationId = ref<number | null>(null)
 const registerLoading = ref<boolean>(false);
 const toast = useToast();
@@ -1015,12 +1044,18 @@ function rejectRequest() {
 }
 
 async function registerForRequest() {
+  // Show confirmation modal instead of directly registering
+  showRegisterConfirmDialog.value = true;
+}
+
+async function confirmRegister() {
   if (!request.value?.id) return;
   registerLoading.value = true;
   try {
     await axiosInstance.post(`/requests/${request.value.id}/register`);
     toast.add({ severity: 'success', summary: 'Success', detail: 'Successfully registered for this request!', life: 3000 });
     await fetchRequestDetail();
+    showRegisterConfirmDialog.value = false; // Close modal on success
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Failed', detail: e?.response?.data?.message || 'Registration failed.', life: 3000 });
   } finally {
@@ -1960,6 +1995,134 @@ body, .request-detail-wrapper {
   color: #6b7280;
 }
 
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Ensure modal covers everything including fixed elements */
+.modal-overlay::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: -1;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 24px 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-body p {
+  margin: 0 0 16px 0;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 24px 24px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  border: 1px solid #3b82f6;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.btn-primary:disabled {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+}
 
 @media (max-width: 1100px) {
   .request-detail-grid {

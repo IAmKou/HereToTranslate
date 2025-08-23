@@ -516,15 +516,8 @@
                     </td>
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <button
-                          @click="requestExtension(req)"
-                          class="action-btn btn-secondary"
-                          :disabled="actionLoading"
-                          :title="`Request deadline extension for: ${req.title}`"
-                          data-tooltip="Request deadline extension"
-                        >
-                          Request Extension
-                        </button>
+                        <!-- No actions available for assigned requests -->
+                        <span class="no-actions-message">No actions available</span>
                       </div>
                     </td>
                   </tr>
@@ -3044,6 +3037,17 @@ th:hover .sort-icon {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
   border-left: 4px solid #f59e0b !important;
   box-shadow: 0 0 20px rgba(245, 158, 11, 0.3) !important;
+}
+
+/* No actions message */
+.no-actions-message {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-style: italic;
+  padding: 0.5rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
 }
 
 @keyframes highlightPulse {

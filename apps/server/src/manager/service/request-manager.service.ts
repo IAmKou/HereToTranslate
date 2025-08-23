@@ -26,6 +26,7 @@ import { FileService } from './file-manager.service';
 import { logger } from 'nx/src/utils/logger';
 import { ProjectManagerService } from './project-manager.service';
 import { NotificationManagerService } from './notification-manager.service';
+import { TranslationService } from './translation-manager.service';
 
 @Injectable()
 export class RequestManagerService {
@@ -54,7 +55,8 @@ export class RequestManagerService {
     private readonly fileService: FileService,
     private readonly projectService: ProjectManagerService,
     private readonly notificationService: NotificationManagerService,
-  ) {}
+    private readonly translationService: TranslationService,
+  ) { }
 
   async createRequest(
     dto: CreateRequestDto,
@@ -89,7 +91,7 @@ export class RequestManagerService {
       deadline,
       createdAt: new Date(),
       status: RequestStatus.Pending,
-      isPublic : true,
+      isPublic: true,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
       targetLanguages: dto.targetLanguages || [],
       files: fileEntities,
@@ -563,11 +565,24 @@ export class RequestManagerService {
     }
 
     if (request.status !== RequestStatus.Pending) {
-      throw new BadRequestException(`Request is not in pending status`);
+      if (request.status === RequestStatus.Approved) {
+        // Check for remaining deadline
+        const now = new Date();
+        const remainingTime = request.deadline.getTime() - now.getTime();
+        const totalTime = request.deadline.getTime() - request.createdAt.getTime();
+        if (remainingTime <= 0 || remainingTime / totalTime < 0.5) {
+          throw new BadRequestException(
+            `Cannot cancel request within 50% of the deadline`
+          );
+        }
+      }
+      else {
+        throw new BadRequestException(`Request is not in pending status`);
+      }
     }
 
     // If it's a private request, refund the deposit
-    if (!request.isPublic) {
+    else if (!request.isPublic) {
       // Find requester's deposit transaction for this request (có thể là Pending hoặc On_Hold)
       const requesterTransaction = await this.transactionRepository.findOne({
         where: {

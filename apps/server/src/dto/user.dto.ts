@@ -46,7 +46,7 @@ export class UpdateUserProfileDto {
   @IsPhoneNumber(undefined, {
     message: 'Phone number must be a valid international format, e.g. +1234567890'
   })
-  phone?: string;
+  phone?: string | null;
 
   @IsOptional()
   @IsString()

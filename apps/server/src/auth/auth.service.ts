@@ -179,6 +179,14 @@ export class AuthService {
     if (!payload) throw new UnauthorizedException('Invalid Google token');
 
     const { email, name } = payload;
+    
+    if (!email) {
+      throw new UnauthorizedException('Email not provided in Google token');
+    }
+    
+    if (!name) {
+      throw new UnauthorizedException('Name not provided in Google token');
+    }
 
     let user = await this.userRepository.findOne({
       where: { email },
@@ -187,15 +195,24 @@ export class AuthService {
 
     console.log('Found user for Google login:', user);
 
+    // If user exists (either from normal registration or previous OAuth), log them in
     // Check if existing user is active
     if (user && !user.isActive) {
       throw new UnauthorizedException('Your account has been deactivated');
     }
 
     if (!user) {
-      const username = email;
-      const existingUser = await this.userRepository.findOne({ where: { username } });
-      if (existingUser) throw new BadRequestException('User with this email already exists');
+      // User doesn't exist, create a new account for them
+      // Generate a unique username based on email
+      const baseUsername = email.split('@')[0]; // Use part before @ as base username
+      let counter = 1;
+      let finalUsername = baseUsername;
+      
+      // Keep trying until we find a unique username
+      while (await this.userRepository.findOne({ where: { username: finalUsername } })) {
+        finalUsername = `${baseUsername}${counter}`;
+        counter++;
+      }
 
       // Find Member role from database
       const memberRole = await this.roleRepository.findOne({
@@ -207,11 +224,11 @@ export class AuthService {
       }
 
       user = this.userRepository.create({
-        username,
+        username: finalUsername,
         email,
         passwordHash: '',
         fullName: name,
-        phone: '',
+        phone: null,
         role: memberRole,
         isActive: true,
       });
@@ -223,6 +240,7 @@ export class AuthService {
       await this.userRepository.save(user);
     }
 
+    // Generate and return tokens for the user (either existing or newly created)
     return this.generateTokenPair(user);
   }
 

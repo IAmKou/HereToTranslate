@@ -2,6 +2,6 @@ export interface IRegisterDto {
   username: string;
   email: string;
   password: string;
-  phone: string;
+  phone: string | null;
   fullName: string;
 }

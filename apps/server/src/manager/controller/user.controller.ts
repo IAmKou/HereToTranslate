@@ -109,6 +109,12 @@ export class UserController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('admin/:id')
+  async getUserById(@Param('id', BigIntTransformPipe) userId: bigint) {
+    return this.users.findUserById(Number(userId));
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Put('admin/:id/role/:rid')
   async updateUserRole(
     @Param('id', BigIntTransformPipe) userId: bigint,

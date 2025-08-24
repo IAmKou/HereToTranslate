@@ -42,7 +42,7 @@ export class AuthController {
     private readonly configService: ConfigService
   ) {
     this.isProduction = this.configService.get('NODE_ENV') === 'production';
-    this.accessExpiry = this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m';
+    this.accessExpiry = this.configService.get('ACCESS_TOKEN_EXPIRY') || '30m';
     this.refreshExpiry = this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d';
     this.accessTokenCookieOptions = {
       ...this.commonCookieOptions,

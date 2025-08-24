@@ -472,6 +472,13 @@ export class RequestManagerService {
         'files.fileType',
         'files.createdAt',
         'files.fileContent',
+
+        'project.id',
+        'project.name',
+        'project.description',
+        'project.createdAt',
+        'defaultBranch.id',
+        'defaultBranch.name',
       ])
       .where('requests.id = :requestId', { requestId })
       .leftJoin('requests.requester', 'requester')
@@ -479,7 +486,9 @@ export class RequestManagerService {
       .leftJoin('requests.category', 'category')
       .leftJoinAndSelect('requests.tags', 'tags')
       .leftJoinAndSelect('requests.registrants', 'registrants')
-      .leftJoinAndSelect('requests.files', 'files');
+      .leftJoinAndSelect('requests.files', 'files')
+      .leftJoin('requests.project', 'project')
+      .leftJoin('project.defaultBranch', 'defaultBranch');
 
     const request = await query.getOne();
 

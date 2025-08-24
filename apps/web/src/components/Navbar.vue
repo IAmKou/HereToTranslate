@@ -86,29 +86,28 @@
                   <div>
                     <div class="user-name">{{ currentUser.fullName }}</div>
                     <div class="user-username">@{{ currentUser.username }}</div>
+                    <div class="user-balance" v-if="wallet">
+                      <i class="pi pi-wallet balance-icon"></i>
+                      <span class="balance-amount">{{ formatCurrency(wallet.balance) }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="menu-section">
                   <router-link to="/userprofile" class="menu-item" tabindex="0">
                     <i class="pi pi-user"></i> View Profile <span class="shortcut"></span>
                   </router-link>
-                  <router-link to="/settings" class="menu-item" tabindex="0">
-                    <i class="pi pi-cog"></i> Settings <span class="shortcut"></span>
+                  <router-link to="/projects" class="menu-item" tabindex="0">
+                    <i class="pi pi-briefcase"></i> My Projects <span class="shortcut"></span>
+                  </router-link>
+                  <router-link to="/my-requests" class="menu-item" tabindex="0">
+                    <i class="pi pi-file-edit"></i> My Requests <span class="shortcut"></span>
+                  </router-link>
+                  <router-link to="/transactions" class="menu-item" tabindex="0">
+                    <i class="pi pi-history"></i> Transaction History <span class="shortcut"></span>
                   </router-link>
                 </div>
                 <div class="menu-divider"></div>
-                <div class="menu-section">
-                  <div class="menu-header">Team</div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-users"></i> Team <span class="shortcut"></span></div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-user-plus"></i> Invite Member <span class="shortcut"></span></div>
-                </div>
-                <div class="menu-divider"></div>
-                <div class="menu-section">
-                  <div class="menu-header">Help</div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-question-circle"></i> Support <span class="shortcut"></span></div>
-                  <div class="menu-item" tabindex="0"><i class="pi pi-comments"></i> Community <span class="shortcut"></span></div>
-                </div>
-                <div class="menu-divider"></div>
+
                 <div class="menu-section">
                   <div class="menu-item sign-out" tabindex="0" @click="signOut">
                     <i class="pi pi-sign-out"></i> Sign Out <span class="shortcut"></span>
@@ -151,6 +150,7 @@ const router = useRouter();
 const menuVisible = ref(false);
 const currentUser = ref<User | null>(null);
 const totalUnreadCount = ref(0);
+const wallet = ref<any>(null);
 let unreadCountInterval: number | null = null;
 
 const signOut = async () => {
@@ -226,6 +226,24 @@ const getFullAvatarUrl = (avatarUrl: string) => {
   return result;
 };
 
+const formatCurrency = (amount: number | string | undefined | null): string => {
+  const num = Number(amount);
+  if (isNaN(num)) return '$0';
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+};
+
+const loadWalletInfo = async (): Promise<void> => {
+  try {
+    if (!currentUser.value) return;
+
+    const response = await axiosInstance.get('/wallet');
+    wallet.value = response.data;
+  } catch (error) {
+    console.error('Failed to load wallet info:', error);
+    wallet.value = null;
+  }
+};
+
 const loadUserInfo = async (): Promise<void> => {
   try {
     const user = await authService.getCurrentUser();
@@ -242,6 +260,7 @@ const loadUserInfo = async (): Promise<void> => {
 
 onMounted(() => {
   loadUserInfo();
+  loadWalletInfo();
 
   // Listen for avatar update events
   window.addEventListener('user-avatar-updated', async () => {
@@ -275,9 +294,11 @@ onMounted(() => {
 watch(currentUser, (newUser: User | null) => {
   if (newUser) {
     startUnreadCountUpdates();
+    loadWalletInfo();
   } else {
     stopUnreadCountUpdates();
     totalUnreadCount.value = 0;
+    wallet.value = null;
   }
 });
 
@@ -577,6 +598,28 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.user-balance {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.balance-icon {
+  color: #10b981;
+  font-size: 12px;
+}
+
+.balance-amount {
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 </style>

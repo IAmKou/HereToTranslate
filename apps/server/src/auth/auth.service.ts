@@ -60,7 +60,7 @@ export class AuthService {
     this.refreshExpiry =
       this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ?? '7d';
     this.accessExpiry =
-      this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '15m';
+      this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '30m';
     this.sessionCleanupInterval = setInterval(
       () => this.cleanupExpiredSessions(),
       60 * 1000
@@ -179,11 +179,11 @@ export class AuthService {
     if (!payload) throw new UnauthorizedException('Invalid Google token');
 
     const { email, name } = payload;
-    
+
     if (!email) {
       throw new UnauthorizedException('Email not provided in Google token');
     }
-    
+
     if (!name) {
       throw new UnauthorizedException('Name not provided in Google token');
     }
@@ -207,7 +207,7 @@ export class AuthService {
       const baseUsername = email.split('@')[0]; // Use part before @ as base username
       let counter = 1;
       let finalUsername = baseUsername;
-      
+
       // Keep trying until we find a unique username
       while (await this.userRepository.findOne({ where: { username: finalUsername } })) {
         finalUsername = `${baseUsername}${counter}`;

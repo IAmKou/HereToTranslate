@@ -301,7 +301,7 @@
                           data-tooltip="View translation product and evaluate quality"
                         >
                           <i class="pi pi-eye btn-icon"></i>
-                          <span class="btn-text">Sản phẩm</span>
+                          <span class="btn-text">Review</span>
                         </button>
 
                         <!-- View Extensions button for approved requests -->

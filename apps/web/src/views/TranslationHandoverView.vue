@@ -25,25 +25,36 @@
         </div>
 
         <!-- No Data State -->
-        <div v-else-if="!loading && !error && (!projectInfo || files.length === 0)" class="no-data-container">
+        <div v-else-if="!loading && !error && !projectInfo" class="no-data-container">
           <i class="pi pi-info-circle"></i>
           <h3>No Data Available</h3>
-          <p>No translation handover data found for this request.</p>
+          <p>No translation handover data found.</p>
           <button @click="loadProjectData" class="btn btn-primary">Refresh</button>
         </div>
 
         <!-- Main Content -->
-        <div v-else-if="!loading && !error" class="handover-content">
-          <!-- Project Overview -->
+        <div v-else-if="!loading && !error && projectInfo" class="handover-content">
+          <!-- Project/Request Overview -->
           <div class="info-card">
-            <h3><i class="pi pi-briefcase"></i> Project Information</h3>
+            <h3><i class="pi pi-briefcase"></i> {{ isRequestBased ? 'Request Information' : 'Project Information' }}</h3>
             <div class="project-info">
-              <p><strong>Project name:</strong> {{ projectInfo?.name }}</p>
+              <p><strong>{{ isRequestBased ? 'Request title:' : 'Project name:' }}</strong> {{ projectInfo?.name }}</p>
               <p><strong>Created date:</strong> {{ formatDate(projectInfo?.createdAt) }}</p>
-              <p><strong>Target languages:</strong>
+              <p v-if="projectInfo?.description"><strong>Description:</strong> {{ projectInfo.description }}</p>
+              <p v-if="projectInfo?.targetLanguages && projectInfo.targetLanguages.length > 0"><strong>Target languages:</strong>
                 <span v-for="lang in projectInfo?.targetLanguages" :key="lang" class="language-badge">
                   {{ getLanguageName(lang) }}
                 </span>
+              </p>
+              <p v-if="isRequestBased && !projectInfo?.project" class="request-note">
+                <i class="pi pi-info-circle"></i>
+                <strong>Note:</strong> This request does not have an associated project yet.
+                Translation handover data will be available once a project is created from this request.
+              </p>
+              <p v-if="isRequestBased && projectInfo?.project" class="request-note">
+                <i class="pi pi-check-circle"></i>
+                <strong>Note:</strong> This request has an associated project.
+                Translation data is loaded from the project.
               </p>
             </div>
           </div>
@@ -75,6 +86,11 @@
               </div>
               <span>{{ overallProgress }}% completed</span>
             </div>
+            <div v-if="isRequestBased && totalFiles === 0" class="progress-note">
+              <i class="pi pi-info-circle"></i>
+              <span v-if="!projectInfo?.project">File statistics will be available once a project is created from this request.</span>
+              <span v-else>No files found in the associated project.</span>
+            </div>
           </div>
 
           <!-- Translated Files List -->
@@ -82,7 +98,9 @@
             <h3><i class="pi pi-file-edit"></i> Translated Files</h3>
             <div v-if="translatedFiles.length === 0" class="no-files">
               <i class="pi pi-info-circle"></i>
-              <p>No translated files available yet.</p>
+              <p v-if="isRequestBased && !projectInfo?.project">File management for requests without projects is not yet implemented. Files will be displayed here once a project is created from this request.</p>
+              <p v-else-if="isRequestBased && projectInfo?.project">No translated files found in the associated project.</p>
+              <p v-else>No translated files available yet.</p>
             </div>
             <div v-else class="files-list">
               <div v-for="file in translatedFiles" :key="file.id" class="file-item">
@@ -100,9 +118,9 @@
                   <span>{{ getFileProgress(file) }}%</span>
                 </div>
                 <div class="file-status">
-                  <span class="status-badge" :class="getFileStatusClass(file)">
-                    {{ getFileStatusText(file) }}
-                  </span>
+                   <span class="status-badge" :class="getFileStatusClass(file)">
+                     {{ getFileStatusText(file) }}
+                   </span>
                 </div>
                 <div class="file-actions">
                   <button @click="downloadFile(file)" class="btn btn-primary">
@@ -123,20 +141,20 @@
                 <div class="status-info">
                   <span class="status-badge completed">
                     <i class="pi pi-check"></i>
-                    Successfully delivered
+                    {{ isRequestBased ? 'Request completed' : 'Successfully delivered' }}
                   </span>
-                  <p class="handover-date">Handover date: {{ formatDate(handoverInfo?.handoverDate) }}</p>
+                  <p class="handover-date">{{ isRequestBased ? 'Completion date:' : 'Handover date:' }} {{ formatDate(handoverInfo?.handoverDate) }}</p>
                 </div>
               </div>
 
               <div v-if="handoverInfo?.message" class="info-section">
-                <h4>Notes from translator</h4>
+                <h4>{{ isRequestBased ? 'Completion notes' : 'Notes from translator' }}</h4>
                 <div class="message-box">
                   {{ handoverInfo.message }}
                 </div>
               </div>
 
-              <div class="info-section">
+              <div v-if="!isRequestBased" class="info-section">
                 <h4>Quality checks</h4>
                 <div class="quality-checks">
                   <div class="check-item" :class="{ completed: handoverInfo?.qualityChecks?.qualityChecked }">
@@ -154,12 +172,20 @@
                 </div>
               </div>
 
-              <div class="info-section">
+              <div v-if="!isRequestBased" class="info-section">
                 <h4>Delivery method</h4>
                 <p>{{ getDeliveryMethodText(handoverInfo?.deliveryMethod) }}</p>
                 <p v-if="handoverInfo?.deliveryMethod === 'email' && handoverInfo?.recipientEmail">
                   <strong>Recipient email:</strong> {{ handoverInfo.recipientEmail }}
                 </p>
+              </div>
+
+              <div v-if="isRequestBased" class="info-section">
+                <h4>Request Status</h4>
+                <div class="request-status-info">
+                  <p><strong>Current status:</strong> <span class="status-badge status-waiting-approval">Waiting Approval</span></p>
+                  <p><strong>Next step:</strong> Review the completed translation and approve or request changes.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -169,7 +195,9 @@
             <h3><i class="pi pi-download"></i> Download Products</h3>
             <div class="download-section">
               <div class="download-info">
-                <p>All files have been translated and are ready for download.</p>
+                <p v-if="isRequestBased && !projectInfo?.project">Download functionality for requests without projects is not yet implemented. Files will be available for download once a project is created from this request.</p>
+                <p v-else-if="isRequestBased && projectInfo?.project">Files from the associated project are available for download.</p>
+                <p v-else>All files have been translated and are ready for download.</p>
                 <div class="download-stats">
                   <span><i class="pi pi-file"></i> {{ totalFiles }} files</span>
                   <span><i class="pi pi-check-circle"></i> {{ completedStrings }} translated strings</span>
@@ -244,15 +272,49 @@ const completedFiles = computed(() => {
 });
 
 const totalStrings = computed(() => {
-  const count = translationStrings.value.length;
-  console.log('=== DEBUG totalStrings ===', count);
-  return count;
+  // Count total strings = unique original strings × number of target languages
+  const uniqueOriginalStrings = translationStrings.value.filter((str: any, index: number, self: any[]) =>
+    index === self.findIndex((s: any) => s.originalText === str.originalText)
+  );
+  const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
+  const totalCount = uniqueOriginalStrings.length * targetLanguages.length;
+
+  console.log('=== DEBUG totalStrings calculation ===');
+  console.log('Unique original strings:', uniqueOriginalStrings.length);
+  console.log('Target languages:', targetLanguages);
+  console.log('Total strings =', uniqueOriginalStrings.length, '×', targetLanguages.length, '=', totalCount);
+  console.log('=== DEBUG targetLanguages ===', targetLanguages);
+  return totalCount;
 });
 
 const completedStrings = computed(() => {
-  const count = translationStrings.value.filter((str: any) => str.translatedText && str.translatedText.trim()).length;
-  console.log('=== DEBUG completedStrings ===', count);
-  return count;
+  // Count total completed strings = unique original strings with ALL languages completed × number of target languages
+  const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
+  const uniqueOriginalStrings = translationStrings.value.filter((str: any, index: number, self: any[]) =>
+    index === self.findIndex((s: any) => s.originalText === str.originalText)
+  );
+
+  const completedOriginalStrings = uniqueOriginalStrings.filter((originalStr: any) => {
+    // Check if this original string has translations for ALL target languages
+    const hasAllTranslations = targetLanguages.every((lang: string) => {
+      const translatedString = translationStrings.value.find((str: any) =>
+        str.originalText === originalStr.originalText &&
+        str.targetLanguage === lang &&
+        str.translatedText &&
+        str.translatedText.trim()
+      );
+      return !!translatedString;
+    });
+    return hasAllTranslations;
+  });
+
+  const totalCompletedCount = completedOriginalStrings.length * targetLanguages.length;
+
+  console.log('=== DEBUG completedStrings calculation ===');
+  console.log('Completed original strings:', completedOriginalStrings.length);
+  console.log('Target languages:', targetLanguages);
+  console.log('Total completed strings =', completedOriginalStrings.length, '×', targetLanguages.length, '=', totalCompletedCount);
+  return totalCompletedCount;
 });
 
 const overallProgress = computed(() => {
@@ -286,10 +348,13 @@ async function loadDataFromRequest() {
   try {
     console.log('Loading data for request:', requestId.value);
 
-    // Load request information
-    const requestRes = await axiosInstance.get(`/requests/${requestId.value}`);
+    // Load request information - use the correct endpoint
+    const requestRes = await axiosInstance.get(`/requests/${requestId.value}/detail`);
     const request = requestRes.data;
     console.log('Request data:', request);
+    console.log('Request project:', request.project);
+    console.log('Request project ID:', request.project?.id);
+    console.log('Request project defaultBranch:', request.project?.defaultBranch);
 
     // Set project info from request
     projectInfo.value = {
@@ -299,27 +364,137 @@ async function loadDataFromRequest() {
       targetLanguages: request.targetLanguages || []
     };
 
-    // Load files from request
-    const filesRes = await axiosInstance.get(`/files/request/${requestId.value}`);
-    console.log('Files response:', filesRes.data);
-    files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
+    // Debug request files
+    console.log('Request files:', request.files);
+    console.log('Request files count:', request.files?.length || 0);
 
-    // Load translation strings from request
-    const stringsRes = await axiosInstance.get('/translation/strings', {
-      params: { requestId: requestId.value }
-    });
-    console.log('Translation strings response:', stringsRes.data);
-    translationStrings.value = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+    // Try to get project data if request has a project
+    if (request.project) {
+      console.log('Request has project, loading project data...');
+      try {
+        const projectId = request.project.id;
+        const branchId = request.project.defaultBranch?.id || '1';
 
-    // Load handover information from request
-    const handoverRes = await axiosInstance.get(`/translation/handover/request/${requestId.value}`);
-    console.log('Handover response:', handoverRes.data);
-    handoverInfo.value = handoverRes.data;
+        // Load files from project
+        const filesRes = await axiosInstance.get(`/files/project/${projectId}?branchId=${branchId}`);
+        files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
+        console.log('Loaded files from project:', files.value.length);
+        console.log('Files data:', files.value);
+        console.log('Files response:', filesRes.data);
+
+        // Load translation strings from project for all target languages
+        console.log('Request targetLanguages:', request.targetLanguages);
+
+        // Load strings for all target languages
+        const allStrings = [];
+        const targetLanguages = request.targetLanguages || ['en'];
+
+        for (const language of targetLanguages) {
+          console.log(`Loading strings for language: ${language}`);
+          try {
+            const stringsRes = await axiosInstance.get('/translation/strings', {
+              params: {
+                projectId: projectId,
+                branchId: branchId,
+                language: language
+              }
+            });
+
+            const languageStrings = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+            console.log(`Loaded ${languageStrings.length} strings for language ${language}`);
+
+            // Add language info to each string for tracking
+            const stringsWithLanguage = languageStrings.map(str => ({
+              ...str,
+              targetLanguage: language
+            }));
+
+            allStrings.push(...stringsWithLanguage);
+          } catch (error) {
+            console.error(`Error loading strings for language ${language}:`, error);
+          }
+        }
+
+        translationStrings.value = allStrings;
+        console.log('Total strings loaded for all languages:', translationStrings.value.length);
+        console.log('Translation strings data:', translationStrings.value);
+
+        // Debug: Check if any strings have translatedText
+        const stringsWithTranslation = translationStrings.value.filter(str => str.translatedText && str.translatedText.trim());
+        console.log('Strings with translation:', stringsWithTranslation.length);
+        console.log('Sample strings with translation:', stringsWithTranslation.slice(0, 3));
+
+        // Load handover information from project
+        try {
+          const handoverRes = await axiosInstance.get(`/translation/handover/${projectId}/${branchId}`);
+          handoverInfo.value = handoverRes.data;
+        } catch (handoverError) {
+          console.log('Handover endpoint not available, using mock data');
+          handoverInfo.value = {
+            handoverDate: new Date().toISOString(),
+            message: 'Translation handover completed successfully.',
+            qualityChecks: {
+              qualityChecked: true,
+              formatChecked: true,
+              contentVerified: true
+            },
+            deliveryMethod: 'download'
+          };
+        }
+      } catch (projectError) {
+        console.error('Error loading project data:', projectError);
+        // Fallback to empty data
+        files.value = [];
+        translationStrings.value = [];
+        handoverInfo.value = {
+          handoverDate: new Date().toISOString(),
+          message: 'Translation handover completed successfully.',
+          qualityChecks: {
+            qualityChecked: true,
+            formatChecked: true,
+            contentVerified: true
+          },
+          deliveryMethod: 'download'
+        };
+      }
+    } else {
+      console.log('Request does not have project, using empty data');
+      // For requests without project, use empty arrays
+      files.value = [];
+      translationStrings.value = [];
+      handoverInfo.value = {
+        handoverDate: new Date().toISOString(),
+        message: 'Translation handover completed successfully.',
+        qualityChecks: {
+          qualityChecked: true,
+          formatChecked: true,
+          contentVerified: true
+        },
+        deliveryMethod: 'download'
+      };
+    }
+
+    // Check if we should use request files instead of project files
+    if (!request.project && request.files && request.files.length > 0) {
+      console.log('Using request files instead of project files');
+      files.value = request.files;
+      // For now, we'll use empty translation strings since we don't have translation data for request files
+      translationStrings.value = [];
+    }
+
+    // Add debug logging to see what data we're working with
+    console.log('=== DEBUG: Final data state ===');
+    console.log('Request has project:', !!request.project);
+    console.log('Project ID:', request.project?.id);
+    console.log('Files count:', files.value.length);
+    console.log('Translation strings count:', translationStrings.value.length);
+    console.log('Translation strings data:', translationStrings.value);
 
     console.log('Final state:', {
       files: files.value,
       translationStrings: translationStrings.value,
-      projectInfo: projectInfo.value
+      projectInfo: projectInfo.value,
+      handoverInfo: handoverInfo.value
     });
   } catch (error) {
     console.error('Error loading request data:', error);
@@ -334,10 +509,38 @@ async function loadDataFromProject() {
   const filesRes = await axiosInstance.get(`/files/project/${projectId.value}?branchId=${branchId.value}`);
   files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
 
-  const stringsRes = await axiosInstance.get('/translation/strings', {
-    params: { projectId: projectId.value, branchId: branchId.value }
-  });
-  translationStrings.value = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+  // Load strings for all target languages from project
+  const allStrings = [];
+  const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
+
+  for (const language of targetLanguages) {
+    console.log(`Loading strings for language: ${language}`);
+    try {
+      const stringsRes = await axiosInstance.get('/translation/strings', {
+        params: {
+          projectId: projectId.value,
+          branchId: branchId.value,
+          language: language
+        }
+      });
+
+      const languageStrings = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+      console.log(`Loaded ${languageStrings.length} strings for language ${language}`);
+
+      // Add language info to each string for tracking
+      const stringsWithLanguage = languageStrings.map(str => ({
+        ...str,
+        targetLanguage: language
+      }));
+
+      allStrings.push(...stringsWithLanguage);
+    } catch (error) {
+      console.error(`Error loading strings for language ${language}:`, error);
+    }
+  }
+
+  translationStrings.value = allStrings;
+  console.log('Total strings loaded for all languages:', translationStrings.value.length);
 
   // Load handover information
   const handoverRes = await axiosInstance.get(`/translation/handover/${projectId.value}/${branchId.value}`);
@@ -366,14 +569,32 @@ function getFileProgress(file: any): number {
     return 0;
   }
 
-  const completed = fileStrings.filter((str: any) => {
-    const hasTranslation = str.translatedText && str.translatedText.trim();
-    console.log(`String ${str.id}: hasTranslation=${hasTranslation}, text="${str.translatedText}"`);
-    return hasTranslation;
+  // Get unique original strings for this file
+  const uniqueOriginalStrings = fileStrings.filter((str: any, index: number, self: any[]) =>
+    index === self.findIndex((s: any) => s.originalText === str.originalText)
+  );
+
+  const totalFileStrings = uniqueOriginalStrings.length;
+  console.log('Unique original strings for this file:', totalFileStrings);
+
+  // Count how many unique original strings have translations in ALL target languages
+  const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
+  const completed = uniqueOriginalStrings.filter((originalStr: any) => {
+    // Check if this original string has translations for ALL target languages
+    const hasAllTranslations = targetLanguages.every((lang: string) => {
+      const translatedString = fileStrings.find((str: any) =>
+        str.originalText === originalStr.originalText &&
+        str.targetLanguage === lang &&
+        str.translatedText &&
+        str.translatedText.trim()
+      );
+      return !!translatedString;
+    });
+    return hasAllTranslations;
   }).length;
 
-  const progress = Math.round((completed / fileStrings.length) * 100);
-  console.log(`File progress: ${completed}/${fileStrings.length} = ${progress}%`);
+  const progress = Math.round((completed / totalFileStrings) * 100);
+  console.log(`File progress: ${completed}/${totalFileStrings} = ${progress}%`);
   return progress;
 }
 
@@ -433,32 +654,64 @@ async function downloadAllFiles() {
   downloading.value = true;
 
   try {
-    let response;
     if (isRequestBased.value) {
-      response = await axiosInstance.get(`/translation/download/request/${requestId.value}`, {
+      // For requests, try to download from project if available
+      const requestRes = await axiosInstance.get(`/requests/${requestId.value}/detail`);
+      const request = requestRes.data;
+
+      if (request.project) {
+        const projectId = request.project.id;
+        const branchId = request.project.defaultBranch?.id || '1';
+
+        const response = await axiosInstance.get(`/translation/download/all/${projectId}/${branchId}`, {
+          responseType: 'blob'
+        });
+
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        toast.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'Successfully downloaded all files!',
+          life: 3000
+        });
+      } else {
+        // For requests without project, show a message that download functionality is not yet implemented
+        toast.add({
+          severity: 'info',
+          summary: 'Info',
+          detail: 'Download functionality for requests without projects is not yet implemented.',
+          life: 3000
+        });
+      }
+    } else {
+      const response = await axiosInstance.get(`/translation/download/all/${projectId.value}/${branchId.value}`, {
         responseType: 'blob'
       });
-    } else {
-      response = await axiosInstance.get(`/translation/download/all/${projectId.value}/${branchId.value}`, {
-        responseType: 'blob'
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Successfully downloaded all files!',
+        life: 3000
       });
     }
-
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Successfully downloaded all files!',
-      life: 3000
-    });
 
   } catch (err: any) {
     toast.add({
@@ -605,6 +858,61 @@ onMounted(() => {
 
 .project-info p {
   margin: 0.5rem 0;
+}
+
+.request-note {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  color: #92400e;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.request-note i {
+  color: #f59e0b;
+  margin-top: 0.125rem;
+}
+
+.request-status-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.request-status-info p {
+  margin: 0.5rem 0;
+}
+
+.status-badge.status-waiting-approval {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.progress-note {
+  background: #f0f9ff;
+  border: 1px solid #0ea5e9;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  color: #0369a1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.progress-note i {
+  color: #0ea5e9;
+  font-size: 1rem;
 }
 
 .language-badge {

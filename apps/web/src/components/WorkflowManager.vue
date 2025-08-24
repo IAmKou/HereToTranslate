@@ -655,7 +655,7 @@
           <div class="modal-header">
             <h3>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h3>
             <button class="btn-icon" @click="closeTransitionForm" data-close="true">
-             
+      
             </button>
           </div>
 
@@ -688,6 +688,7 @@
                       {{ status.name }}
                     </option>
                   </select>
+                  <div v-if="fromStatusError" class="form-error">{{ fromStatusError }}</div>
                 </div>
                 <div class="form-group">
                   <label for="toStatus">To Status *</label>
@@ -701,6 +702,7 @@
                       {{ status.name }}
                     </option>
                   </select>
+
                 </div>
               </div>
 
@@ -714,7 +716,7 @@
             <button
               class="btn btn-primary"
               @click="saveTransition"
-              :disabled="savingTransition || !!transitionNameError || !transitionForm.name.trim()"
+              :disabled="savingTransition || !!transitionNameError || !!fromStatusError || !transitionForm.name.trim()"
             >
               <span v-if="savingTransition" class="loading-spinner"></span>
               {{ showEditTransition ? 'Update' : 'Create' }}
@@ -878,6 +880,8 @@ const statusValidationMessage = computed(() => {
 const nameError = ref('');
 const descriptionError = ref('');
 const transitionNameError = ref('');
+const fromStatusError = ref('');
+const toStatusError = ref('');
 const workflowNameError = ref('');
 
 function validateStatusForm() {
@@ -919,6 +923,7 @@ function validateStatusForm() {
 function validateTransitionForm() {
   // Reset errors
   transitionNameError.value = '';
+  fromStatusError.value = '';
 
   // Validate name length
   if (transitionForm.value.name.length > 50) {
@@ -943,8 +948,25 @@ function validateTransitionForm() {
     }
   }
 
+  // Validate duplicate from status + to status combination
+  if (transitionForm.value.fromStatusId && transitionForm.value.toStatusId) {
+    const existingTransition = workflowTransitions.value.find((transition: WorkflowTransition) => {
+      // Skip current transition when editing
+      if (showEditTransition.value && selectedTransition.value && transition.id === selectedTransition.value.id) {
+        return false;
+      }
+      return transition.fromStatus.id === transitionForm.value.fromStatusId &&
+        transition.toStatus.id === transitionForm.value.toStatusId;
+    });
+
+    if (existingTransition) {
+      fromStatusError.value = `A transition from "${existingTransition.fromStatus.name}" to "${existingTransition.toStatus.name}" already exists`;
+      return false;
+    }
+  }
+
   // Return true if no errors
-  return !transitionNameError.value;
+  return !transitionNameError.value && !fromStatusError.value && !toStatusError.value;
 }
 
 // Validation for workflow form
@@ -1416,6 +1438,7 @@ function createTransition() {
   };
   // Reset validation errors
   transitionNameError.value = '';
+  fromStatusError.value = '';
   showCreateTransition.value = true;
 }
 
@@ -1429,6 +1452,7 @@ function editTransition(transition: WorkflowTransition) {
   selectedTransition.value = transition;
   // Reset validation errors
   transitionNameError.value = '';
+  fromStatusError.value = '';
   showEditTransition.value = true;
 }
 
@@ -1527,6 +1551,7 @@ function closeTransitionsModal() {
   };
   // Reset validation errors
   transitionNameError.value = '';
+  fromStatusError.value = '';
 }
 
 function closeTransitionForm() {
@@ -1541,6 +1566,7 @@ function closeTransitionForm() {
   };
   // Reset validation errors
   transitionNameError.value = '';
+  fromStatusError.value = '';
 }
 
 // Status management methods

@@ -161,6 +161,26 @@ export class MySqlConnection {
         this.logger.error('Inline migration for project.isSyncedFromRequest failed:', e);
         throw e; // Re-throw to prevent connection from proceeding without the column
       }
+
+      // Ensure `requests.rating` exists for star rating functionality
+      try {
+        const ratingColumns = await this.dataSource.query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = 'rating'"
+        );
+
+        if (ratingColumns.length === 0) {
+          // Column doesn't exist, add it
+          await this.dataSource.query(
+            'ALTER TABLE `requests` ADD COLUMN `rating` INT NULL COMMENT "Rating from 1-5 stars given by requester to translator"'
+          );
+          this.logger.log('Added requests.rating column for star rating functionality');
+        } else {
+          this.logger.log('requests.rating column already exists');
+        }
+      } catch (e) {
+        this.logger.warn('Inline migration for requests.rating failed:', e);
+        // Don't throw error for rating column - it's not critical for basic functionality
+      }
     } catch (error) {
       this.logger.error('Error connecting to MySQL database', error);
     }

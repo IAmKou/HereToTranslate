@@ -80,8 +80,10 @@
             </div>
           </div>
 
+
+
           <!-- My Requests Tab -->
-          <div v-else-if="activeTab === 'my-requests'" class="tab-content" :key="'my-requests'">
+          <div v-else-if="activeTab === 'my-requests' && !loading && !error" class="tab-content" :key="'my-requests'">
             <!-- Search and Filter Bar for My Requests -->
             <div class="filter-bar">
               <div class="search-container">
@@ -133,12 +135,11 @@
                 </div>
                 <h3>No requests found</h3>
                 <p>You haven't created any requests yet.</p>
-
               </div>
             </div>
 
             <!-- My Requests Table -->
-            <div v-else class="requests-table-container">
+            <div v-else-if="debugRequests.length > 0" class="requests-table-container">
               <div class="table-wrapper">
                 <table class="requests-table">
                   <thead>
@@ -191,10 +192,9 @@
                       </div>
                     </td>
                     <td class="deadline-cell">
-                      <div class="deadline-wrapper">
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
                         <span class="deadline-icon">🗓</span>
                         <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
-                        <span v-if="daysLeft(req.deadline) !== null" class="deadline-remaining">({{ daysLeftText(req.deadline) }})</span>
                       </div>
                     </td>
                     <td class="status-cell" style="text-align: center; vertical-align: middle;">
@@ -343,7 +343,7 @@
           </div>
 
           <!-- Assigned Requests Tab -->
-          <div v-else-if="activeTab === 'assigned-requests'" class="tab-content" :key="'assigned-requests'">
+          <div v-else-if="activeTab === 'assigned-requests' && !loading && !error" class="tab-content" :key="'assigned-requests'">
             <!-- Search and Filter Bar for Assigned Requests -->
             <div class="filter-bar">
               <div class="search-container">
@@ -498,7 +498,12 @@
                     <td style="vertical-align: middle;">{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
                     <td style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount" style="text-align: center; vertical-align: middle;">${{ formatAmount(req.dealAmount) }}</td>
-                    <td style="vertical-align: middle;">{{ formatDate(req.deadline) }}</td>
+                    <td style="vertical-align: middle;">
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
+                        <span class="deadline-icon">🗓</span>
+                        <span class="deadline-text">{{ formatDate(req.deadline) }}</span>
+                      </div>
+                    </td>
                     <td style="text-align: center; vertical-align: middle;">
                          <span :class="['status-badge', getStatusClass(req.status)]">
                            {{ formatStatus(req.status) }}
@@ -553,7 +558,7 @@
           </div>
 
           <!-- My Registrations Tab -->
-          <div v-else-if="activeTab === 'my-registrations'" class="tab-content" :key="'my-registrations'">
+          <div v-else-if="activeTab === 'my-registrations' && !loading && !error" class="tab-content" :key="'my-registrations'">
             <!-- Search and Filter Bar for My Registrations -->
             <div class="filter-bar">
               <div class="search-container">
@@ -661,7 +666,12 @@
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.requester?.fullName || req.requester?.email || 'Unknown' }}</td>
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120" style="vertical-align: middle;"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
-                    <td class="text-sm text-gray-500 italic text-left" width="130" style="vertical-align: middle;"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
+                    <td class="text-sm text-gray-500 italic text-left" width="130" style="vertical-align: middle;">
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
+                        <span class="deadline-icon">🗓</span>
+                        <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
+                      </div>
+                    </td>
                     <td style="text-align: center; vertical-align: middle;">
                          <span v-if="req.registrationStatus === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
                            ✅ Approved
@@ -772,7 +782,18 @@
           />
 
           <!-- On-going Requests Tab -->
-          <div v-else-if="activeTab === 'ongoing-requests'" class="tab-content" :key="'ongoing-requests'">
+          <div v-else-if="activeTab === 'ongoing-requests' && !loading && !error" class="tab-content" :key="'ongoing-requests'">
+            <!-- Grace Period Info Banner -->
+            <div class="grace-period-banner">
+              <div class="banner-icon">
+                <i class="pi pi-clock"></i>
+              </div>
+              <div class="banner-content">
+                <h4>Deadline Extension Grace Period</h4>
+                <p>After the deadline passes, you have <strong>3 additional days</strong> to request an extension. Use this time wisely to complete your translation or request more time.</p>
+              </div>
+            </div>
+
             <!-- Search Bar for On-going -->
             <div class="filter-bar">
               <div class="search-container">
@@ -826,9 +847,10 @@
                       <span class="deal-icon">💵</span>${{ formatAmount(req.dealAmount) }}
                     </td>
                     <td style="vertical-align: middle;">
-                      <span class="deadline-icon">🗓</span>
-                      {{ formatDate(req.deadline) }}
-                      <span v-if="daysLeft(req.deadline) !== null" class="deadline-remaining">({{ daysLeftText(req.deadline) }})</span>
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
+                        <span class="deadline-icon">🗓</span>
+                        <span class="deadline-text">{{ formatDate(req.deadline) }}</span>
+                      </div>
                     </td>
                     <td style="text-align:center; vertical-align: middle;">
                       <span :class="['status-badge', getStatusClass(req.status)]">{{ formatStatus(req.status) }}</span>
@@ -836,14 +858,29 @@
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
                         <button
+                          v-if="canRequestExtension(req)"
                           @click="requestExtension(req)"
-                          class="action-btn btn-secondary"
+                          class="action-btn extension-btn"
                           :disabled="actionLoading"
                           :title="`Request deadline extension for: ${req.title}`"
-                          data-tooltip="Request deadline extension"
                         >
-                          Request Extension
+                          <span class="btn-text">Request Extension</span>
                         </button>
+
+                        <div v-else-if="isDeadlineExpired(req.deadline) && !isInGracePeriod(req.deadline)" class="deadline-info">
+                          <span v-if="isGracePeriodExpired(req.deadline)" class="grace-expired-message">
+                            <i class="pi pi-exclamation-triangle"></i>
+                            Grace period expired
+                          </span>
+                          <span v-else class="deadline-expired-message">
+                            <i class="pi pi-times-circle"></i>
+                            Deadline expired
+                          </span>
+                        </div>
+
+                        <span v-else class="deadline-info">
+                          {{ getDeadlineStatus(req).text }}
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -926,18 +963,133 @@ const assignedRequestsCount = computed(() => assignedRequests.value.length)
 const myRegistrationsCount = computed(() => myRegistrations.value.length)
 const ongoingRequestsCount = computed(() => ongoingRequests.value.length)
 const filteredOngoingRequests = computed(() => {
-  let list = ongoingRequests.value
-  if (ongoingSearch.value) {
-    const s = ongoingSearch.value.toLowerCase()
-    list = list.filter(r =>
-      r.title?.toLowerCase().includes(s) ||
-      r.requester?.name?.toLowerCase().includes(s) ||
-      r.requester?.email?.toLowerCase().includes(s) ||
-      r.id?.toString().includes(s)
-    )
+  try {
+    let list = ongoingRequests.value
+    if (ongoingSearch.value) {
+      const s = ongoingSearch.value.toLowerCase()
+      list = list.filter(r =>
+        r.title?.toLowerCase().includes(s) ||
+        r.requester?.name?.toLowerCase().includes(s) ||
+        r.requester?.email?.toLowerCase().includes(s) ||
+        r.id?.toString().includes(s)
+      )
+    }
+    return list
+  } catch (error) {
+    console.error('Error in filteredOngoingRequests computed:', error)
+    return []
   }
-  return list
 })
+
+// Helper functions for deadline and extension logic
+function isDeadlineExpired(deadline) {
+  if (!deadline) return false
+
+  try {
+    const now = new Date()
+    const deadlineDate = new Date(deadline)
+
+    if (isNaN(deadlineDate.getTime())) return false // Invalid date
+
+    return deadlineDate < now
+  } catch (error) {
+    console.error('Error in isDeadlineExpired:', error, deadline);
+    return false;
+  }
+}
+
+function isInGracePeriod(deadline) {
+  if (!deadline) return false
+
+  try {
+    const now = new Date()
+    const deadlineDate = new Date(deadline)
+
+    if (isNaN(deadlineDate.getTime())) return false // Invalid date
+
+    const gracePeriodEnd = new Date(deadlineDate)
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 3)
+
+    return deadlineDate < now && now <= gracePeriodEnd
+  } catch (error) {
+    console.error('Error in isInGracePeriod:', error, deadline);
+    return false;
+  }
+}
+
+function isGracePeriodExpired(deadline) {
+  if (!deadline) return false
+
+  try {
+    const now = new Date()
+    const deadlineDate = new Date(deadline)
+
+    if (isNaN(deadlineDate.getTime())) return false // Invalid date
+
+    const gracePeriodEnd = new Date(deadlineDate)
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 3)
+
+    return now > gracePeriodEnd
+  } catch (error) {
+    console.error('Error in isGracePeriodExpired:', error, deadline);
+    return false;
+  }
+}
+
+function canRequestExtension(req) {
+  // Can request extension if:
+  // 1. Status is APPROVED (ongoing request)
+  // 2. Can request extension at any time (before or after deadline)
+  const canExtend = req.status === 'APPROVED'
+
+  return canExtend
+}
+
+function getDeadlineStatus(req) {
+  if (!req.deadline) return { class: '' }
+
+  if (req.status === 'COMPLETED') {
+    return { class: 'deadline-completed' }
+  }
+
+  if (req.status === 'CANCELLED') {
+    return { class: 'deadline-cancelled' }
+  }
+
+  try {
+    if (isGracePeriodExpired(req.deadline)) {
+      return { class: 'deadline-grace-expired' }
+    }
+
+    if (isInGracePeriod(req.deadline)) {
+      return { class: 'deadline-grace-period' }
+    }
+
+    if (isDeadlineExpired(req.deadline)) {
+      return { class: 'deadline-expired' }
+    }
+
+    const daysLeftValue = daysLeft(req.deadline)
+    if (daysLeftValue === null || daysLeftValue === undefined) {
+      return { class: 'deadline-normal' }
+    }
+
+    if (daysLeftValue === 0) {
+      return { class: 'deadline-today' }
+    } else if (daysLeftValue <= 3) {
+      return { class: 'deadline-urgent' }
+    } else if (daysLeftValue <= 7) {
+      return { class: 'deadline-warning' }
+    } else {
+      return { class: 'deadline-normal' }
+    }
+  } catch (error) {
+    console.error('Error in getDeadlineStatus:', error, req)
+    return { class: 'deadline-normal' }
+  }
+}
+
+// ... existing code ...
 
 function clearOngoingFilters() {
   ongoingSearch.value = ''
@@ -959,251 +1111,260 @@ function sortTable(key) {
 
 // Debug computed property
 const debugRequests = computed(() => {
-  console.log('Debug - My requests with isPublic:', myRequests.value.map(req => ({
-    id: req.id,
-    title: req.title,
-    isPublic: req.isPublic,
-    type: typeof req.isPublic
-  })))
   return myRequests.value
 })
 
 // Filtered My Requests
 const filteredMyRequests = computed(() => {
-  let filtered = debugRequests.value
+  try {
+    let filtered = debugRequests.value
 
-  // Search filter
-  if (myRequestsSearch.value) {
-    const searchTerm = myRequestsSearch.value.toLowerCase()
-    filtered = filtered.filter(req =>
-      req.title?.toLowerCase().includes(searchTerm) ||
-      req.category?.name?.toLowerCase().includes(searchTerm) ||
-      req.id?.toString().includes(searchTerm)
-    )
-  }
-
-  // Status filter
-  if (myRequestsStatusFilter.value) {
-    filtered = filtered.filter(req => req.status === myRequestsStatusFilter.value)
-  }
-
-  // Visibility filter
-  if (myRequestsVisibilityFilter.value) {
-    if (myRequestsVisibilityFilter.value === 'public') {
-      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
-    } else if (myRequestsVisibilityFilter.value === 'private') {
-      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    // Search filter
+    if (myRequestsSearch.value) {
+      const searchTerm = myRequestsSearch.value.toLowerCase()
+      filtered = filtered.filter(req =>
+        req.title?.toLowerCase().includes(searchTerm) ||
+        req.category?.name?.toLowerCase().includes(searchTerm) ||
+        req.id?.toString().includes(searchTerm)
+      )
     }
-  }
 
-  // Mark expired requests as EXPIRED (for display) and include in list
-  const now = new Date();
-  const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const today = stripTime(now);
-  filtered = filtered.map((req) => {
-    if (req.deadline) {
-      const d = new Date(req.deadline);
-      const deadlineDate = stripTime(d);
-      if (deadlineDate < today && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
-        return { ...req, status: 'EXPIRED' };
+    // Status filter
+    if (myRequestsStatusFilter.value) {
+      filtered = filtered.filter(req => req.status === myRequestsStatusFilter.value)
+    }
+
+    // Visibility filter
+    if (myRequestsVisibilityFilter.value) {
+      if (myRequestsVisibilityFilter.value === 'public') {
+        filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+      } else if (myRequestsVisibilityFilter.value === 'private') {
+        filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
       }
     }
-    return req;
-  });
 
-  // Hide expired toggle
-  if (hideExpired.value) {
-    filtered = filtered.filter(req => req.status !== 'EXPIRED')
-  }
-
-  // Sort the filtered results
-  // default sort by deadline asc when no sortKey
-  if (!sortKey.value) {
-    sortKey.value = 'deadline'
-    sortOrder.value = 1
-  }
-  if (sortKey.value) {
-    filtered = [...filtered].sort((a, b) => {
-      let aValue, bValue
-
-      switch (sortKey.value) {
-        case 'id':
-          aValue = a.id
-          bValue = b.id
-          break
-        case 'title':
-          aValue = a.title?.toLowerCase() || ''
-          bValue = b.title?.toLowerCase() || ''
-          break
-
-        case 'dealAmount':
-          aValue = parseFloat(a.dealAmount) || 0
-          bValue = parseFloat(b.dealAmount) || 0
-          break
-        case 'deadline':
-          aValue = new Date(a.deadline) || new Date(0)
-          bValue = new Date(b.deadline) || new Date(0)
-          break
-        default:
-          return 0
+    // Mark expired requests as EXPIRED (for display) and include in list
+    const now = new Date();
+    const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = stripTime(now);
+    filtered = filtered.map((req) => {
+      if (req.deadline) {
+        const d = new Date(req.deadline);
+        const deadlineDate = stripTime(d);
+        if (deadlineDate < today && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
+          return { ...req, status: 'EXPIRED' };
+        }
       }
+      return req;
+    });
 
-      if (aValue < bValue) return -1 * sortOrder.value
-      if (aValue > bValue) return 1 * sortOrder.value
-      return 0
-    })
+    // Hide expired toggle
+    if (hideExpired.value) {
+      filtered = filtered.filter(req => req.status !== 'EXPIRED')
+    }
+
+    // Sort the filtered results
+    // default sort by deadline asc when no sortKey
+    if (!sortKey.value) {
+      sortKey.value = 'deadline'
+      sortOrder.value = 1
+    }
+    if (sortKey.value) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue, bValue
+
+        switch (sortKey.value) {
+          case 'id':
+            aValue = a.id
+            bValue = b.id
+            break
+          case 'title':
+            aValue = a.title?.toLowerCase() || ''
+            bValue = b.title?.toLowerCase() || ''
+            break
+
+          case 'dealAmount':
+            aValue = parseFloat(a.dealAmount) || 0
+            bValue = parseFloat(b.dealAmount) || 0
+            break
+          case 'deadline':
+            aValue = new Date(a.deadline) || new Date(0)
+            bValue = new Date(b.deadline) || new Date(0)
+            break
+          default:
+            return 0
+        }
+
+        if (aValue < bValue) return -1 * sortOrder.value
+        if (aValue > bValue) return 1 * sortOrder.value
+        return 0
+      })
+    }
+
+    return filtered
+  } catch (error) {
+    console.error('Error in filteredMyRequests computed:', error)
+    return []
   }
-
-  return filtered
 })
 
 // Filtered Assigned Requests
 const filteredAssignedRequests = computed(() => {
-  let filtered = assignedRequests.value
+  try {
+    let filtered = assignedRequests.value
 
-  // Search filter
-  if (assignedRequestsSearch.value) {
-    const searchTerm = assignedRequestsSearch.value.toLowerCase()
-    filtered = filtered.filter(req =>
-      req.title?.toLowerCase().includes(searchTerm) ||
-      req.requester?.name?.toLowerCase().includes(searchTerm) ||
-      req.requester?.email?.toLowerCase().includes(searchTerm) ||
-      req.category?.name?.toLowerCase().includes(searchTerm) ||
-      req.id?.toString().includes(searchTerm)
-    )
-  }
-
-  // Status filter
-  if (assignedRequestsStatusFilter.value) {
-    filtered = filtered.filter(req => req.status === assignedRequestsStatusFilter.value)
-  }
-
-  // Visibility filter
-  if (assignedRequestsVisibilityFilter.value) {
-    if (assignedRequestsVisibilityFilter.value === 'public') {
-      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
-    } else if (assignedRequestsVisibilityFilter.value === 'private') {
-      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    // Search filter
+    if (assignedRequestsSearch.value) {
+      const searchTerm = assignedRequestsSearch.value.toLowerCase()
+      filtered = filtered.filter(req =>
+        req.title?.toLowerCase().includes(searchTerm) ||
+        req.requester?.name?.toLowerCase().includes(searchTerm) ||
+        req.requester?.email?.toLowerCase().includes(searchTerm) ||
+        req.category?.name?.toLowerCase().includes(searchTerm) ||
+        req.id?.toString().includes(searchTerm)
+      )
     }
-  }
 
-  // Sort the filtered results
-  if (sortKey.value) {
-    filtered = [...filtered].sort((a, b) => {
-      let aValue, bValue
+    // Status filter
+    if (assignedRequestsStatusFilter.value) {
+      filtered = filtered.filter(req => req.status === assignedRequestsStatusFilter.value)
+    }
 
-      switch (sortKey.value) {
-        case 'id':
-          aValue = a.id
-          bValue = b.id
-          break
-        case 'title':
-          aValue = a.title?.toLowerCase() || ''
-          bValue = b.title?.toLowerCase() || ''
-          break
-        case 'requester':
-          aValue = (a.requester?.name || a.requester?.email || '').toLowerCase()
-          bValue = (b.requester?.name || b.requester?.email || '').toLowerCase()
-          break
-        case 'category':
-          aValue = a.category?.name?.toLowerCase() || ''
-          bValue = b.category?.name?.toLowerCase() || ''
-          break
-        case 'dealAmount':
-          aValue = parseFloat(a.dealAmount) || 0
-          bValue = parseFloat(b.dealAmount) || 0
-          break
-        case 'deadline':
-          aValue = new Date(a.deadline) || new Date(0)
-          bValue = new Date(b.deadline) || new Date(0)
-          break
-        default:
-          return 0
+    // Visibility filter
+    if (assignedRequestsVisibilityFilter.value) {
+      if (assignedRequestsVisibilityFilter.value === 'public') {
+        filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+      } else if (assignedRequestsVisibilityFilter.value === 'private') {
+        filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
       }
+    }
 
-      if (aValue < bValue) return -1 * sortOrder.value
-      if (aValue > bValue) return 1 * sortOrder.value
-      return 0
-    })
+    // Sort the filtered results
+    if (sortKey.value) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue, bValue
+
+        switch (sortKey.value) {
+          case 'id':
+            aValue = a.id
+            bValue = b.id
+            break
+          case 'title':
+            aValue = a.title?.toLowerCase() || ''
+            bValue = b.title?.toLowerCase() || ''
+            break
+          case 'requester':
+            aValue = (a.requester?.name || a.requester?.email || '').toLowerCase()
+            bValue = (b.requester?.name || b.requester?.email || '').toLowerCase()
+            break
+          case 'category':
+            aValue = a.category?.name?.toLowerCase() || ''
+            bValue = b.category?.name?.toLowerCase() || ''
+            break
+          case 'dealAmount':
+            aValue = parseFloat(a.dealAmount) || 0
+            bValue = parseFloat(b.dealAmount) || 0
+            break
+          case 'deadline':
+            aValue = new Date(a.deadline) || new Date(0)
+            bValue = new Date(b.deadline) || new Date(0)
+            break
+          default:
+            return 0
+        }
+
+        if (aValue < bValue) return -1 * sortOrder.value
+        if (aValue > bValue) return 1 * sortOrder.value
+        return 0
+      })
+    }
+
+    return filtered.filter(req => req.status !== 'CANCELLED')
+  } catch (error) {
+    console.error('Error in filteredAssignedRequests computed:', error)
+    return []
   }
-
-  return filtered.filter(req => req.status !== 'CANCELLED')
 })
 
 // Filtered My Registrations
 const filteredMyRegistrations = computed(() => {
-  let filtered = myRegistrations.value
+  try {
+    let filtered = myRegistrations.value
 
-  // Search filter
-  if (myRegistrationsSearch.value) {
-    const searchTerm = myRegistrationsSearch.value.toLowerCase()
-    filtered = filtered.filter(req =>
-      req.title?.toLowerCase().includes(searchTerm) ||
-      req.requester?.fullName?.toLowerCase().includes(searchTerm) ||
-      req.requester?.email?.toLowerCase().includes(searchTerm) ||
-      req.category?.name?.toLowerCase().includes(searchTerm) ||
-      req.id?.toString().includes(searchTerm)
-    )
-  }
-
-  // Status filter
-  if (myRegistrationsStatusFilter.value) {
-    filtered = filtered.filter(req => {
-      const status = req.registrationStatus || req.status;
-      return status === myRegistrationsStatusFilter.value;
-    });
-  }
-
-  // Visibility filter
-  if (myRegistrationsVisibilityFilter.value) {
-    if (myRegistrationsVisibilityFilter.value === 'public') {
-      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
-    } else if (myRegistrationsVisibilityFilter.value === 'private') {
-      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    // Search filter
+    if (myRegistrationsSearch.value) {
+      const searchTerm = myRegistrationsSearch.value.toLowerCase()
+      filtered = filtered.filter(req =>
+        req.title?.toLowerCase().includes(searchTerm) ||
+        req.requester?.fullName?.toLowerCase().includes(searchTerm) ||
+        req.requester?.email?.toLowerCase().includes(searchTerm) ||
+        req.category?.name?.toLowerCase().includes(searchTerm) ||
+        req.id?.toString().includes(searchTerm)
+      )
     }
-  }
 
-  // Sort the filtered results
-  if (sortKey.value) {
-    filtered = [...filtered].sort((a, b) => {
-      let aValue, bValue
+    // Status filter
+    if (myRegistrationsStatusFilter.value) {
+      filtered = filtered.filter(req => {
+        const status = req.registrationStatus || req.status;
+        return status === myRegistrationsStatusFilter.value;
+      });
+    }
 
-      switch (sortKey.value) {
-        case 'id':
-          aValue = a.id
-          bValue = b.id
-          break
-        case 'title':
-          aValue = a.title?.toLowerCase() || ''
-          bValue = b.title?.toLowerCase() || ''
-          break
-        case 'requester':
-          aValue = (a.requester?.fullName || a.requester?.email || '').toLowerCase()
-          bValue = (b.requester?.fullName || b.requester?.email || '').toLowerCase()
-          break
-        case 'category':
-          aValue = a.category?.name?.toLowerCase() || ''
-          bValue = b.category?.name?.toLowerCase() || ''
-          break
-        case 'dealAmount':
-          aValue = parseFloat(a.dealAmount) || 0
-          bValue = parseFloat(b.dealAmount) || 0
-          break
-        case 'deadline':
-          aValue = new Date(a.deadline) || new Date(0)
-          bValue = new Date(b.deadline) || new Date(0)
-          break
-        default:
-          return 0
+    // Visibility filter
+    if (myRegistrationsVisibilityFilter.value) {
+      if (myRegistrationsVisibilityFilter.value === 'public') {
+        filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+      } else if (myRegistrationsVisibilityFilter.value === 'private') {
+        filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
       }
+    }
 
-      if (aValue < bValue) return -1 * sortOrder.value
-      if (aValue > bValue) return 1 * sortOrder.value
-      return 0
-    })
+    // Sort the filtered results
+    if (sortKey.value) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue, bValue
+
+        switch (sortKey.value) {
+          case 'id':
+            aValue = a.id
+            bValue = b.id
+            break
+          case 'title':
+            aValue = a.title?.toLowerCase() || ''
+            bValue = b.title?.toLowerCase() || ''
+            break
+          case 'requester':
+            aValue = (a.requester?.fullName || a.requester?.email || '').toLowerCase()
+            bValue = (b.requester?.fullName || b.requester?.email || '').toLowerCase()
+            break
+          case 'category':
+            aValue = a.category?.name?.toLowerCase() || ''
+            bValue = b.category?.name?.toLowerCase() || ''
+            break
+          case 'dealAmount':
+            aValue = parseFloat(a.dealAmount) || 0
+            bValue = parseFloat(b.dealAmount) || 0
+            break
+          case 'deadline':
+            aValue = new Date(a.deadline) || new Date(0)
+            bValue = new Date(b.deadline) || new Date(0)
+            break
+          default:
+            return 0
+        }
+
+        if (aValue < bValue) return -1 * sortOrder.value
+        if (aValue > bValue) return 1 * sortOrder.value
+        return 0
+      })
+    }
+
+    return filtered
+  } catch (error) {
+    console.error('Error in filteredMyRegistrations computed:', error)
+    return []
   }
-
-  return filtered
 })
 
 // Pagination computed properties for My Requests
@@ -1327,8 +1488,7 @@ function fetchRequests() {
   // Fetch my requests
   const myRequestsPromise = axiosInstance.get('/requests/myRequests')
     .then(res => {
-      console.log('My requests data received:', res.data)
-      myRequests.value = res.data
+      myRequests.value = res.data || []
     })
     .catch(err => {
       console.error('Error fetching my requests:', err)
@@ -1336,14 +1496,13 @@ function fetchRequests() {
         error.value = 'Không thể kết nối đến server. Vui lòng kiểm tra server có đang chạy không.'
         return
       }
+      myRequests.value = []
     })
 
   // Fetch assigned requests
-  console.log('Fetching assigned requests from:', '/requests/private')
   const assignedRequestsPromise = axiosInstance.get('/requests/private')
     .then(res => {
-      console.log('Assigned requests data received:', res.data)
-      assignedRequests.value = res.data
+      assignedRequests.value = res.data || []
     })
     .catch(err => {
       console.error('Full error details:', {
@@ -1378,12 +1537,13 @@ function fetchRequests() {
       // Handle the error
       console.error('Error fetching assigned requests:', err)
       error.value = `Lỗi khi tải requests: ${err.response?.status} ${err.response?.statusText || err.message}`
+      assignedRequests.value = []
     })
 
   // Fetch my registrations
   const myRegistrationsPromise = axiosInstance.get('/requests/myRegistrations')
     .then(res => {
-      myRegistrations.value = res.data
+      myRegistrations.value = res.data || []
     })
     .catch(err => {
       console.error('Error fetching my registrations:', err)
@@ -1396,15 +1556,11 @@ function fetchRequests() {
   // Try fetch ongoing from backend; fallback to derive from assigned
   const ongoingPromise = axiosInstance.get('/requests/ongoing')
     .then(res => {
-      console.log('[ONGOING] /requests/ongoing response:', res.status, res.data)
-      ongoingRequests.value = res.data
+      ongoingRequests.value = res.data || []
     })
     .catch(() => {
       try {
-        console.warn('[ONGOING] Backend endpoint failed. Falling back to derive from assigned.')
-        console.log('[ONGOING] Assigned requests snapshot:', assignedRequests.value.map(r => ({ id: r.id, status: r.status, title: r.title })))
         ongoingRequests.value = assignedRequests.value.filter(r => r.status === 'APPROVED')
-        console.log('[ONGOING] Derived ongoing:', ongoingRequests.value.map(r => ({ id: r.id, status: r.status })))
       } catch (e) {
         console.error('[ONGOING] Derive fallback failed:', e)
         ongoingRequests.value = []
@@ -1414,7 +1570,6 @@ function fetchRequests() {
   promises.push(ongoingPromise)
 
   Promise.all(promises).finally(() => {
-    console.log('[FETCH] Finalized. myRequests:', myRequests.value.length, 'assigned:', assignedRequests.value.length, 'registrations:', myRegistrations.value.length, 'ongoing:', ongoingRequests.value.length)
     loading.value = false
   })
 }
@@ -1436,10 +1591,25 @@ function formatDeadline(dateString) {
 
 function daysLeft(dateString) {
   if (!dateString) return null;
-  const d = new Date(dateString);
-  const today = new Date();
-  const diff = Math.ceil((d.setHours(0,0,0,0) - today.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
-  return diff >= 0 ? diff : 0;
+
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return null; // Invalid date
+
+    const today = new Date();
+    const deadlineDate = new Date(d);
+    const todayDate = new Date(today);
+
+    // Reset time to start of day
+    deadlineDate.setHours(0, 0, 0, 0);
+    todayDate.setHours(0, 0, 0, 0);
+
+    const diff = Math.ceil((deadlineDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff : 0;
+  } catch (error) {
+    console.error('Error in daysLeft:', error, dateString);
+    return null;
+  }
 }
 
 function daysLeftText(dateString) {
@@ -1716,7 +1886,11 @@ async function debugConnection() {
 }
 
 onMounted(async () => {
-  await fetchRequests()
+  try {
+    await fetchRequests()
+  } catch (error) {
+    console.error('[MOUNTED] Error fetching requests:', error)
+  }
 
   // Handle highlight parameter from URL
   const highlightId = route.query.highlight
@@ -1811,6 +1985,8 @@ onMounted(async () => {
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
 }
+
+
 
 @keyframes spin {
   to {
@@ -1969,9 +2145,10 @@ onMounted(async () => {
   align-items: center;
   gap: 0.3rem;
   padding: 0.3rem 0.5rem;
-  background: #f8fafc;
   border-radius: 4px;
   border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  transition: all 0.2s ease;
 }
 
 .deadline-text {
@@ -1979,6 +2156,12 @@ onMounted(async () => {
   font-style: italic;
   font-size: 0.8rem;
 }
+
+
+
+
+
+
 
 .request-title {
   font-weight: 500;
@@ -2835,6 +3018,16 @@ onMounted(async () => {
     gap: 0.5rem;
   }
 
+  .grace-period-banner {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .banner-icon {
+    align-self: center;
+  }
+
   .tab-button {
     justify-content: center;
   }
@@ -3029,6 +3222,97 @@ th:hover .sort-icon {
 .extensions-btn:hover {
   background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
   transform: translateY(-1px);
+}
+
+.extension-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  position: relative;
+}
+
+.extension-btn:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-1px);
+}
+
+.grace-period-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+  margin-left: 4px;
+}
+
+.deadline-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.grace-expired-message {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.deadline-expired-message {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+/* Grace Period Banner */
+.grace-period-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #fbbf24;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.1);
+}
+
+.banner-icon {
+  width: 48px;
+  height: 48px;
+  background: #f59e0b;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.banner-content h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.banner-content p {
+  margin: 0;
+  font-size: 14px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.banner-content strong {
+  color: #78350f;
+  font-weight: 700;
 }
 
 /* Highlight effect for requests */

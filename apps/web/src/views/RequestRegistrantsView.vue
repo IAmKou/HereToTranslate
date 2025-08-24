@@ -52,7 +52,7 @@
                       </div>
                     </div>
                     <div class="candidate-name-email">
-                      <span class="candidate-name-link" @click="viewUserProfile(user.id)">
+                      <span class="candidate-name-text">
                         {{ user.fullName || user.username }}
                       </span>
                       <span v-if="user.verified" class="badge verified">Verified</span>
@@ -155,128 +155,173 @@
         <Button label="OK" @click="showDialog = false" autofocus />
       </template>
     </Dialog>
-    <Dialog v-model:visible="showProfileModal" :modal="true" :closable="true" header="Translator Info" :style="{ width: '720px', maxWidth: '98vw', paddingTop: '18px', paddingBottom: '18px' }">
-      <div v-if="selectedUser">
-        <div class="profile-modal-content-v2">
-          <div class="profile-header">
-            <div class="profile-avatar-v2">
+    <!-- Beautiful Custom Profile Modal -->
+    <div v-if="showProfileModal" class="beautiful-profile-modal">
+      <div class="modal-backdrop" @click="showProfileModal = false"></div>
+      <div class="modal-container">
+        <div class="modal-header-section">
+          <div class="modal-header-content">
+            <div class="modal-title-section">
+              <h2 class="modal-title">Translator Profile</h2>
+              <p class="modal-subtitle">Detailed information about this candidate</p>
+            </div>
+            <button class="modal-close-btn" @click="showProfileModal = false">
+              <span style="font-weight: bold; font-size: 20px; line-height: 1;">✕</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-body-section" v-if="selectedUser">
+          <!-- Profile Hero Section -->
+          <div class="profile-hero">
+            <div class="hero-avatar">
               <img
                 v-if="selectedUser.avatarUrl"
                 :src="getFullAvatarUrl(selectedUser.avatarUrl)"
                 :alt="selectedUser.fullName || selectedUser.username"
-                style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
                 @error="(e: Event) => { const t = e.target as HTMLImageElement; if (t) t.style.display = 'none'; }"
               />
-              <div v-else :style="{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'#2563eb',fontWeight:'800',fontSize:'44px'}">
+              <div v-else class="avatar-fallback">
                 {{ getInitial(selectedUser.fullName || selectedUser.username) }}
               </div>
             </div>
-            <div class="profile-main-info">
-              <div class="profile-name-v2">{{ selectedUser.fullName }} <span class="profile-username">@{{ selectedUser.username }}</span></div>
-              <div class="profile-badges">
-                <span v-if="selectedUser.isOwner" class="badge owner">Owner</span>
-                <span v-if="selectedUser.verified" class="badge verified">Verified</span>
-                <span class="badge member">Member since {{ formatDate(selectedUser.joined) }}</span>
+
+            <div class="hero-info">
+              <div class="hero-name-section">
+                <h1 class="hero-name">{{ selectedUser.fullName || selectedUser.username }}</h1>
+                <span class="hero-username">@{{ selectedUser.username }}</span>
               </div>
-              <div class="profile-actions">
-                <Button label="Contact" icon="pi pi-envelope" class="contact-btn" @click="contactUser(selectedUser.email)" />
+
+              <div class="hero-badges">
+                <span v-if="selectedUser.isOwner" class="badge-modern owner-badge">
+                  <i class="pi pi-crown"></i>
+                  Owner
+                </span>
+                <span v-if="selectedUser.verified" class="badge-modern verified-badge">
+                  <i class="pi pi-check-circle"></i>
+                  Verified
+                </span>
+                <span class="badge-modern member-badge">
+                  <i class="pi pi-calendar"></i>
+                  Member since {{ formatDate(selectedUser.joined) }}
+                </span>
               </div>
-              <div class="profile-email-modal">
+
+
+            </div>
+          </div>
+
+          <!-- Contact Information Cards -->
+          <div class="contact-cards">
+            <div class="contact-card">
+              <div class="contact-icon">
                 <i class="pi pi-envelope"></i>
-                <a :href="`mailto:${selectedUser.email}`">{{ selectedUser.email }}</a>
-                <Button icon="pi pi-copy" class="copy-btn" @click="copyEmailToClipboard(selectedUser.email)" v-tooltip="'Copy email'" />
               </div>
-              <div class="profile-phone-modal" v-if="selectedUser.phone">
+              <div class="contact-details">
+                <span class="contact-label">Email</span>
+                <a :href="`mailto:${selectedUser.email}`" class="contact-value">{{ selectedUser.email }}</a>
+              </div>
+            </div>
+
+            <div class="contact-card" v-if="selectedUser.phone">
+              <div class="contact-icon">
                 <i class="pi pi-phone"></i>
-                <span>{{ selectedUser.phone }}</span>
+              </div>
+              <div class="contact-details">
+                <span class="contact-label">Phone</span>
+                <span class="contact-value">{{ selectedUser.phone }}</span>
               </div>
             </div>
           </div>
-          <div class="profile-meta">
-            <div>Last seen: {{ selectedUser.lastSeen || '—' }}</div>
-            <div>Languages: {{ selectedUser.languages?.join(', ') || '—' }}</div>
-            <div>Location: {{ selectedUser.location || '—' }}</div>
+
+          <!-- Average Star Rating -->
+          <div class="stats-section">
+            <h3 class="section-title">
+              <i class="pi pi-star"></i>
+              Average Star Rating
+            </h3>
+            <div class="rating-display">
+              <div class="rating-stars">
+                <i
+                  v-for="star in 5"
+                  :key="star"
+                  :class="[
+                     'pi',
+                     star <= (selectedUser.averageRating || 0) ? 'pi-star-fill' : 'pi-star'
+                   ]"
+                  :style="{ color: star <= (selectedUser.averageRating || 0) ? '#fbbf24' : '#d1d5db' }"
+                ></i>
+              </div>
+              <div class="rating-info">
+                <div class="rating-score">{{ selectedUser.averageRating || 0.0 }}</div>
+                <div class="rating-count">Based on {{ selectedUser.totalRatings || 0 }} completed requests</div>
+              </div>
+            </div>
           </div>
 
-          <div class="profile-section-title">Project History</div>
-          <div class="profile-projects">
-            <div v-if="selectedUser.projects && selectedUser.projects.length > 0" class="projects-list">
-              <div v-for="project in selectedUser.projects" :key="project.id" class="project-item">
-                <div class="project-header">
-                  <span class="project-name">{{ project.name }}</span>
-                  <span class="project-request-name">in request: {{ project.requestName }}</span>
-                  <span class="project-status" :class="project.status">{{ project.status }}</span>
-                </div>
-                <div class="project-details">
-                  <span class="project-role">{{ project.role }}</span>
-                  <span class="project-date">{{ formatDate(project.completedAt) }}</span>
-                </div>
-                <div v-if="project.rating" class="project-rating">
-                  <span class="rating-label">Rating:</span>
-                  <div class="rating-stars">
-                    <i v-for="star in 5" :key="star"
-                       :class="['pi', star <= project.rating ? 'pi-star-fill' : 'pi-star']"
-                       :style="{ color: star <= project.rating ? '#fbbf24' : '#d1d5db' }">
-                    </i>
+          <!-- Request Statistics Section -->
+          <div class="projects-section">
+            <h3 class="section-title">
+              <i class="pi pi-chart-pie"></i>
+              Request Statistics
+            </h3>
+            <div class="projects-container">
+              <div class="request-stats-grid">
+                <div class="request-stat-card">
+                  <div class="request-stat-icon total-icon">
+                    <i class="pi pi-list"></i>
                   </div>
-                  <span class="rating-text">{{ project.rating }}/5</span>
+                  <div class="request-stat-content">
+                    <div class="request-stat-number">{{ selectedUser.requestStats?.total || 0 }}</div>
+                    <div class="request-stat-label">Total Requests</div>
+                  </div>
+                </div>
+
+                <div class="request-stat-card">
+                  <div class="request-stat-icon completed-icon">
+                    <i class="pi pi-check-circle"></i>
+                  </div>
+                  <div class="request-stat-content">
+                    <div class="request-stat-number">{{ selectedUser.requestStats?.completed || 0 }}</div>
+                    <div class="request-stat-label">Completed</div>
+                  </div>
+                </div>
+
+                <div class="request-stat-card">
+                  <div class="request-stat-icon failed-icon">
+                    <i class="pi pi-times-circle"></i>
+                  </div>
+                  <div class="request-stat-content">
+                    <div class="request-stat-number">{{ selectedUser.requestStats?.failed || 0 }}</div>
+                    <div class="request-stat-label">Failed</div>
+                  </div>
+                </div>
+
+                <div class="request-stat-card">
+                  <div class="request-stat-icon pending-icon">
+                    <i class="pi pi-clock"></i>
+                  </div>
+                  <div class="request-stat-content">
+                    <div class="request-stat-number">{{ selectedUser.requestStats?.pending || 0 }}</div>
+                    <div class="request-stat-label">Pending</div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div v-else class="no-projects">
-              <i class="pi pi-folder-open"></i>
-              <span>No projects completed yet</span>
-            </div>
           </div>
 
-          <div class="profile-section-title">Activity History</div>
-          <div class="profile-activity">
-            <div v-if="selectedUser.activities && selectedUser.activities.length > 0" class="activity-list">
-              <div v-for="activity in selectedUser.activities" :key="activity.id" class="activity-item">
-                <div class="activity-icon">
-                  <i :class="getActivityIcon(activity.type)"></i>
-                </div>
-                <div class="activity-content">
-                  <div class="activity-title">{{ activity.title }}</div>
-                  <div class="activity-desc">{{ activity.description }}</div>
-                  <div class="activity-time">{{ formatDate(activity.createdAt) }}</div>
-                </div>
-              </div>
-            </div>
-            <div v-else class="no-activity">
-              <i class="pi pi-clock"></i>
-              <span>No recent activity</span>
-            </div>
-          </div>
 
-          <div class="profile-section-title">Contribution Statistics</div>
-          <div class="profile-stats">
-            <div class="stat-item">
-              <div class="stat-number">{{ selectedUser.contribution?.translated?.strings || 0 }}</div>
-              <div class="stat-label">Strings Translated</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number">{{ selectedUser.contribution?.approved?.strings || 0 }}</div>
-              <div class="stat-label">Strings Approved</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number">{{ selectedUser.contribution?.voted?.strings || 0 }}</div>
-              <div class="stat-label">Votes Cast</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number">{{ selectedUser.contribution?.commented?.strings || 0 }}</div>
-              <div class="stat-label">Comments Made</div>
-            </div>
-          </div>
+
+
         </div>
-        <div v-if="showCopyToast" class="copy-toast">Email copied!</div>
+
+        <!-- Copy Toast -->
+        <div v-if="showCopyToast" class="copy-toast-modern">
+          <i class="pi pi-check"></i>
+          <span>Email copied to clipboard!</span>
+        </div>
       </div>
-      <template #footer>
-        <div style="padding: 10px 0 2px 0; display: flex; justify-content: center;">
-          <Button label="Done" @click="showProfileModal = false" style="min-width: 90px; font-weight: 700; font-size: 16px; border-radius: 8px; padding: 10px 24px;" />
-        </div>
-      </template>
-    </Dialog>
+    </div>
     <div v-if="showToast" :class="['custom-toast', toastType]">
       <i v-if="toastType === 'success'" class="pi pi-check-circle"></i>
       <i v-else class="pi pi-times-circle"></i>
@@ -330,21 +375,13 @@ interface UserInfo {
   languages?: string[];
   projects?: Project[];
   activities?: Activity[];
-  contribution?: {
-    translated?: {
-      strings: number;
-      words: number;
-    };
-    approved?: {
-      strings: number;
-      words: number;
-    };
-    voted?: {
-      strings: number;
-    };
-    commented?: {
-      strings: number;
-    };
+  averageRating?: number;
+  totalRatings?: number;
+  requestStats?: {
+    total: number;
+    completed: number;
+    failed: number;
+    pending: number;
   };
   approved?: boolean; // Added for frontend display
 }
@@ -618,18 +655,18 @@ onMounted(async () => {
 .page-header {
   display: flex;
   align-items: center;
-  gap: 18px;
-  margin-bottom: 24px;
-  margin-top: 6px;
+  gap: 14px;
+  margin-bottom: 20px;
+  margin-top: 4px;
   min-width: 320px;
   width: 100%;
   max-width: 100%;
 }
 .info-card {
   background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px rgba(59,130,246,0.08);
-  padding: 32px 24px 24px 24px;
+  border-radius: 14px;
+  box-shadow: 0 3px 16px rgba(59,130,246,0.08);
+  padding: 24px 20px 20px 20px;
   margin-bottom: 0;
   max-width: 100%;
   width: 100%;
@@ -692,14 +729,14 @@ onMounted(async () => {
   border-collapse: separate;
   border-spacing: 0;
   background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 2px 16px rgba(59,130,246,0.10);
-  font-size: 16px;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(59,130,246,0.10);
+  font-size: 14px;
   margin: 0;
   overflow: hidden;
 }
 .candidates-table th, .candidates-table td {
-  padding: 12px 16px;
+  padding: 8px 12px;
   text-align: center;
   vertical-align: middle;
 }
@@ -731,9 +768,9 @@ onMounted(async () => {
   background: #f1f5f9;
   color: #2563eb;
   font-weight: 700;
-  font-size: 16px;
-  border-bottom: 2.5px solid #e0e7ff;
-  letter-spacing: 1px;
+  font-size: 14px;
+  border-bottom: 2px solid #e0e7ff;
+  letter-spacing: 0.5px;
   text-align: center;
   vertical-align: middle;
 }
@@ -794,15 +831,15 @@ onMounted(async () => {
   gap: 12px;
 }
 .candidate-avatar-table {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border: 2px solid #2563eb;
   color: #2563eb;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: #fff;
   background-color: #2563eb;
@@ -816,22 +853,15 @@ onMounted(async () => {
   gap: 6px;
   justify-content: flex-start;
 }
-.candidate-name-link {
-  cursor: pointer;
-  color: #2563eb;
-  text-decoration: underline;
-  font-weight: 800;
-  font-size: 17px;
-  transition: color 0.18s;
+.candidate-name-text {
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 14px;
   line-height: 1.2;
   white-space: nowrap;
 }
-.candidate-name-link:hover {
-  color: #1746a2;
-  text-decoration: underline wavy;
-}
 .email-text, .phone-text, .joined-text {
-  font-size: 16px;
+  font-size: 13px;
   color: #64748b;
   font-weight: 500;
 }
@@ -871,7 +901,7 @@ onMounted(async () => {
   font-size: 16px;
 }
 .page-title {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   color: #1e293b;
   margin: 0;
@@ -1490,15 +1520,15 @@ onMounted(async () => {
   background: #fff !important;
   color: #2563eb !important;
   border: 2px solid #2563eb !important;
-  border-radius: 10px !important;
+  border-radius: 8px !important;
   font-weight: 600 !important;
-  font-size: 15px !important;
-  padding: 10px 20px !important;
-  min-width: 110px !important;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.08) !important;
+  font-size: 12px !important;
+  padding: 8px 16px !important;
+  min-width: 90px !important;
+  box-shadow: 0 2px 6px rgba(59,130,246,0.08) !important;
   display: flex !important;
   align-items: center !important;
-  gap: 6px !important;
+  gap: 4px !important;
   transition: background 0.18s, color 0.18s, border 0.18s;
 }
 .details-btn:hover:not(:disabled) {
@@ -1559,17 +1589,16 @@ onMounted(async () => {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
   border: none !important;
   color: white !important;
-  padding: 12px 24px !important;
-  border-radius: 12px !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
   font-weight: 700 !important;
-  font-size: 15px !important;
+  font-size: 12px !important;
   transition: all 0.25s !important;
-  min-width: 140px !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25) !important;
+  min-width: 120px !important;
+  box-shadow: 0 3px 8px rgba(59, 130, 246, 0.25) !important;
   margin-right: 8px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
-  font-size: 13px !important;
 }
 
 .approve-candidate-btn:hover:not(:disabled) {
@@ -1613,4 +1642,701 @@ onMounted(async () => {
   color: white;
 }
 
+/* ===== BEAUTIFUL PROFILE MODAL STYLES ===== */
+.beautiful-profile-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  animation: backdropFadeIn 0.3s ease-out;
+}
+
+.modal-container {
+  background: #ffffff;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 25px 100px rgba(0, 0, 0, 0.25);
+  animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Header Section */
+.modal-header-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px 32px 20px 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+.modal-header-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/><circle cx="10" cy="60" r="0.5" fill="white" opacity="0.1"/><circle cx="90" cy="40" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+  opacity: 0.3;
+}
+
+.modal-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: relative;
+  z-index: 2;
+}
+
+.modal-title-section {
+  color: white;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 6px 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  margin: 0;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+.modal-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+/* Body Section */
+.modal-body-section {
+  padding: 24px 32px;
+  overflow-y: auto;
+  max-height: calc(85vh - 100px);
+}
+
+/* Profile Hero Section */
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.hero-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid white;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hero-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  font-size: 32px;
+  font-weight: 800;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.hero-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-name-section {
+  margin-bottom: 16px;
+}
+
+.hero-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0 0 3px 0;
+  line-height: 1.2;
+}
+
+.hero-username {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.hero-badges {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.badge-modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.owner-badge {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+
+.verified-badge {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.member-badge {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.primary-action {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.primary-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.secondary-action {
+  background: white;
+  color: #3b82f6;
+  border: 2px solid #3b82f6;
+}
+
+.secondary-action:hover {
+  background: #3b82f6;
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Contact Cards */
+.contact-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.contact-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.contact-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.contact-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4f46e5;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.contact-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.contact-value {
+  display: block;
+  font-size: 16px;
+  color: #1e293b;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.contact-value:hover {
+  color: #3b82f6;
+}
+
+/* Stats Section */
+.stats-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+}
+
+.section-title i {
+  color: #3b82f6;
+  font-size: 18px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.translated-icon {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.approved-icon {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.voted-icon {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.commented-icon {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+.stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-number {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* Rating Display Styles */
+.rating-display {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 24px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 16px;
+  border: 1px solid #f59e0b;
+}
+
+.rating-stars {
+  display: flex;
+  gap: 4px;
+  font-size: 32px;
+}
+
+.rating-stars i {
+  transition: all 0.2s ease;
+}
+
+.rating-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rating-score {
+  font-size: 28px;
+  font-weight: 800;
+  color: #92400e;
+  line-height: 1;
+}
+
+.rating-count {
+  font-size: 12px;
+  color: #92400e;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* Request Statistics Section */
+.projects-section {
+  margin-bottom: 24px;
+}
+
+.projects-container {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  padding: 20px;
+}
+
+.request-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.request-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.request-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.request-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.total-icon {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+}
+
+.completed-icon {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.failed-icon {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.pending-icon {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.request-stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.request-stat-number {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+
+.request-stat-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* Activity Section */
+
+
+
+
+/* Empty States */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.empty-description {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Copy Toast */
+.copy-toast-modern {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 16px 24px;
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 16px;
+  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toastSlideUp 0.3s ease-out;
+}
+
+@keyframes toastSlideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modal-container {
+    width: 98%;
+    max-height: 95vh;
+    border-radius: 20px;
+  }
+
+  .modal-header-section {
+    padding: 24px 24px 20px 24px;
+  }
+
+  .modal-body-section {
+    padding: 24px;
+  }
+
+  .profile-hero {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+
+  .hero-avatar {
+    width: 100px;
+    height: 100px;
+  }
+
+  .hero-name {
+    font-size: 28px;
+  }
+
+  .hero-badges {
+    justify-content: center;
+  }
+
+  .hero-actions {
+    justify-content: center;
+  }
+
+  .contact-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .project-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
 </style>
+

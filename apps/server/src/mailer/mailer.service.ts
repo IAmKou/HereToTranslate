@@ -5,6 +5,24 @@ import { MailerService } from '@nestjs-modules/mailer';
 export class MailService {
   constructor(private readonly mailerService: MailerService) {}
 
+  // Helper function to format dates for email templates
+  private formatDate(date: Date | string | null): string {
+    if (!date) return 'Not set';
+
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+      if (isNaN(dateObj.getTime())) return 'Invalid date';
+
+      return dateObj.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
+  }
+
   async sendPrivateRequestConfirmation(to: string, requestData: { title: string; deadline: Date; username : string }) {
     await this.mailerService.sendMail({
       to,

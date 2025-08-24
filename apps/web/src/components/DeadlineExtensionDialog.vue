@@ -3,9 +3,22 @@
     <div class="dialog">
       <div class="dialog-header">
         <h3>Request Deadline Extension</h3>
+        <p class="dialog-subtitle">You have 3 days after the deadline to request an extension</p>
       </div>
 
-
+      <!-- Extension Rules Info -->
+      <div class="extension-rules">
+        <h4>
+          <i class="pi pi-info-circle"></i>
+          Extension Rules
+        </h4>
+        <ul>
+          <li><strong>Grace Period:</strong> <span class="approved">3 days after deadline</span></li>
+          <li><strong>Current Deadline:</strong> {{ formatDate(currentDeadline) }}</li>
+          <li><strong>Extension Deadline:</strong> {{ formatExtensionDeadline() }}</li>
+          <li><strong>Note:</strong> After the grace period expires, you cannot request extensions</li>
+        </ul>
+      </div>
 
       <form @submit.prevent="submit">
         <div class="form-row">
@@ -73,6 +86,25 @@ const minDate = computed(() => {
 
 const minDateStr = () => minDate.value.toISOString().slice(0, 10)
 
+// Format extension deadline (3 days after current deadline)
+function formatExtensionDeadline() {
+  const currentDeadlineDate = new Date(props.currentDeadline)
+  const extensionDeadline = new Date(currentDeadlineDate)
+  extensionDeadline.setDate(extensionDeadline.getDate() + 3)
+  return formatDate(extensionDeadline)
+}
+
+// Format date helper
+function formatDate(dateString) {
+  if (!dateString) return '—'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
 // Pre-fill with current deadline when component mounts
 newDeadline.value = props.currentDeadline
 
@@ -138,7 +170,18 @@ async function submit() {
 .dialog-header {
   margin-bottom: 20px;
 }
-.dialog-header h3 { margin: 0; font-size: 1rem; }
+.dialog-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.2rem;
+  color: #1f2937;
+  font-weight: 700;
+}
+.dialog-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #6b7280;
+  font-weight: 500;
+}
 .form-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
 label { font-weight: 600; color: #374151; font-size: 0.85rem; }
 input, textarea { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; font-size: 0.85rem; }
@@ -150,45 +193,54 @@ input:focus, textarea:focus { outline: none; border-color: #2563eb; box-shadow: 
 .btn:disabled { opacity: .6; cursor: not-allowed; }
 
 .extension-rules {
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
-  border-left: 4px solid #2563eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  border-left: 4px solid #f59e0b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .extension-rules h4 {
-  margin: 0 0 12px 0;
-  font-size: 0.9rem;
-  color: #374151;
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+  color: #1f2937;
   display: flex;
   align-items: center;
   gap: 8px;
+  font-weight: 700;
+}
+
+.extension-rules h4 i {
+  color: #f59e0b;
+  font-size: 1.1rem;
 }
 
 .extension-rules ul {
   margin: 0;
   padding-left: 20px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #4b5563;
 }
 
 .extension-rules li {
-  margin-bottom: 8px;
-  line-height: 1.5;
+  margin-bottom: 12px;
+  line-height: 1.6;
 }
 
 .extension-rules .approved {
   color: #059669;
   font-weight: 600;
   background: #ecfdf5;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #bbf7d0;
 }
 
 .extension-rules strong {
   color: #1f2937;
+  font-weight: 700;
 }
 
 /* Toast notification styles */

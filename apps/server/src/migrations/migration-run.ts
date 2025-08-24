@@ -1,4 +1,3 @@
-import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { MySqlConnection } from '../db/mysql/mysql.connection';
 

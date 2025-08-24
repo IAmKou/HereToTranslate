@@ -742,7 +742,7 @@ export class RequestManagerService {
     }
   }
 
-  async getRequestRegistrants(requestId: bigint): Promise<UserEntity[]> {
+  async getRequestRegistrants(requestId: bigint): Promise<any[]> {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
       relations: ['registrants'],
@@ -752,7 +752,7 @@ export class RequestManagerService {
 
     if (registrantIds.length === 0) return [];
 
-    return this.userRepository
+    const users = await this.userRepository
       .createQueryBuilder('user')
       .select([
         'user.id',
@@ -760,9 +760,81 @@ export class RequestManagerService {
         'user.email',
         'user.phone',
         'user.createdAt',
+        'user.username',
+        'user.avatarUrl',
+        'user.isActive',
       ])
       .whereInIds(registrantIds)
       .getMany();
+
+    // Get all requests where registrants are assignees (not requesters)
+    const allRequests = await this.requestRepository
+      .createQueryBuilder('request')
+      .leftJoinAndSelect('request.assignee', 'assignee')
+      .where('assignee.id IN (:...userIds)', {
+        userIds: registrantIds
+      })
+      .getMany();
+
+    // Calculate stats for each user (only as assignee)
+    const userStatsMap = new Map();
+
+    registrantIds.forEach(userId => {
+      const userRequests = allRequests.filter(req =>
+        req.assignee?.id === userId
+      );
+
+      const stats = {
+        total: userRequests.length,
+        completed: 0,
+        failed: 0,
+        pending: 0,
+      };
+
+      userRequests.forEach(req => {
+        switch (req.status) {
+          case RequestStatus.Completed:
+            stats.completed++;
+            break;
+          case RequestStatus.Failed:
+          case RequestStatus.Cancelled:
+          case RequestStatus.Rejected:
+            stats.failed++;
+            break;
+          case RequestStatus.Pending:
+          case RequestStatus.Approved:
+          case RequestStatus.WaitingApproval:
+          case RequestStatus.ExtensionRequested:
+          case RequestStatus.ExtensionApproved:
+            stats.pending++;
+            break;
+        }
+      });
+
+      userStatsMap.set(userId, stats);
+    });
+
+    // Return users with real stats and average rating
+    return users.map((user) => {
+      const userRequests = allRequests.filter(req => req.assignee?.id === user.id);
+      const completedRequests = userRequests.filter(req => req.status === RequestStatus.Completed);
+      const ratings = completedRequests.map(req => req.rating).filter(rating => rating !== null && rating > 0);
+      const averageRating = ratings.length > 0 ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1) : '0.0';
+
+      return {
+        ...user,
+        requestStats: userStatsMap.get(user.id) || {
+          total: 0,
+          completed: 0,
+          failed: 0,
+          pending: 0,
+        },
+        joined: user.createdAt,
+        lastSeen: 'Online',
+        averageRating: parseFloat(averageRating),
+        totalRatings: ratings.length,
+      };
+    });
   }
 
   async approveRegistrant(
@@ -1368,5 +1440,7 @@ export class RequestManagerService {
 
     return count;
   }
+
+
 
 }

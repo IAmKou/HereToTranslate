@@ -61,7 +61,10 @@ export class RequestEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   dealAmount: number;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', nullable: true, transformer: {
+      to: (value: Date) => value,
+      from: (value: string | Date) => value ? new Date(value) : null
+    }})
   deadline: Date;
 
   @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.Pending })
@@ -93,5 +96,8 @@ export class RequestEntity {
 
   @Column({ type: 'json', nullable: true })
   targetLanguages: string[];
+
+  @Column({ type: 'int', nullable: true, comment: 'Rating from 1-5 stars given by requester to translator' })
+  rating: number;
 
 }

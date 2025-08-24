@@ -24,8 +24,16 @@
           <button @click="loadProjectData" class="btn btn-primary">Try Again</button>
         </div>
 
+        <!-- No Data State -->
+        <div v-else-if="!loading && !error && (!projectInfo || files.length === 0)" class="no-data-container">
+          <i class="pi pi-info-circle"></i>
+          <h3>No Data Available</h3>
+          <p>No translation handover data found for this request.</p>
+          <button @click="loadProjectData" class="btn btn-primary">Refresh</button>
+        </div>
+
         <!-- Main Content -->
-        <div v-else class="handover-content">
+        <div v-else-if="!loading && !error" class="handover-content">
           <!-- Project Overview -->
           <div class="info-card">
             <h3><i class="pi pi-briefcase"></i> Project Information</h3>
@@ -69,11 +77,15 @@
             </div>
           </div>
 
-          <!-- Files List -->
+          <!-- Translated Files List -->
           <div class="info-card">
-            <h3><i class="pi pi-file"></i> Files List</h3>
-            <div class="files-list">
-              <div v-for="file in files" :key="file.id" class="file-item">
+            <h3><i class="pi pi-file-edit"></i> Translated Files</h3>
+            <div v-if="translatedFiles.length === 0" class="no-files">
+              <i class="pi pi-info-circle"></i>
+              <p>No translated files available yet.</p>
+            </div>
+            <div v-else class="files-list">
+              <div v-for="file in translatedFiles" :key="file.id" class="file-item">
                 <div class="file-info">
                   <i :class="getFileIcon(file.fileType)"></i>
                   <div>
@@ -91,6 +103,12 @@
                   <span class="status-badge" :class="getFileStatusClass(file)">
                     {{ getFileStatusText(file) }}
                   </span>
+                </div>
+                <div class="file-actions">
+                  <button @click="downloadFile(file)" class="btn btn-primary">
+                    <i class="pi pi-download"></i>
+                    Download
+                  </button>
                 </div>
               </div>
             </div>
@@ -164,8 +182,8 @@
                   {{ downloading ? 'Downloading...' : 'Download All' }}
                 </button>
                 <button @click="downloadIndividualFiles" class="btn btn-secondary">
-                  <i class="pi pi-list"></i>
-                  Download Individual Files
+                  <i class="pi pi-info-circle"></i>
+                  How to Download Individual Files
                 </button>
               </div>
             </div>
@@ -209,15 +227,33 @@ const handoverInfo = ref<any>(null);
 const isRequestBased = computed(() => !!requestId.value);
 
 // Computed
-const totalFiles = computed(() => files.value.length);
-const completedFiles = computed(() =>
-  files.value.filter((file: any) => getFileProgress(file) === 100).length
+const translatedFiles = computed(() =>
+  files.value.filter((file: any) => getFileProgress(file) > 0)
 );
 
-const totalStrings = computed(() => translationStrings.value.length);
-const completedStrings = computed(() =>
-  translationStrings.value.filter((str: any) => str.translatedText && str.translatedText.trim()).length
-);
+const totalFiles = computed(() => {
+  const count = files.value.length;
+  console.log('=== DEBUG totalFiles ===', count);
+  return count;
+});
+
+const completedFiles = computed(() => {
+  const count = files.value.filter((file: any) => getFileProgress(file) === 100).length;
+  console.log('=== DEBUG completedFiles ===', count);
+  return count;
+});
+
+const totalStrings = computed(() => {
+  const count = translationStrings.value.length;
+  console.log('=== DEBUG totalStrings ===', count);
+  return count;
+});
+
+const completedStrings = computed(() => {
+  const count = translationStrings.value.filter((str: any) => str.translatedText && str.translatedText.trim()).length;
+  console.log('=== DEBUG completedStrings ===', count);
+  return count;
+});
 
 const overallProgress = computed(() => {
   if (totalStrings.value === 0) return 0;
@@ -247,31 +283,48 @@ async function loadProjectData() {
 }
 
 async function loadDataFromRequest() {
-  // Load request information
-  const requestRes = await axiosInstance.get(`/requests/${requestId.value}`);
-  const request = requestRes.data;
+  try {
+    console.log('Loading data for request:', requestId.value);
 
-  // Set project info from request
-  projectInfo.value = {
-    name: request.title,
-    description: request.description,
-    createdAt: request.createdAt,
-    targetLanguages: request.targetLanguages || []
-  };
+    // Load request information
+    const requestRes = await axiosInstance.get(`/requests/${requestId.value}`);
+    const request = requestRes.data;
+    console.log('Request data:', request);
 
-  // Load files from request
-  const filesRes = await axiosInstance.get(`/files/request/${requestId.value}`);
-  files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
+    // Set project info from request
+    projectInfo.value = {
+      name: request.title,
+      description: request.description,
+      createdAt: request.createdAt,
+      targetLanguages: request.targetLanguages || []
+    };
 
-  // Load translation strings from request
-  const stringsRes = await axiosInstance.get('/translation/strings', {
-    params: { requestId: requestId.value }
-  });
-  translationStrings.value = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+    // Load files from request
+    const filesRes = await axiosInstance.get(`/files/request/${requestId.value}`);
+    console.log('Files response:', filesRes.data);
+    files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
 
-  // Load handover information from request
-  const handoverRes = await axiosInstance.get(`/translation/handover/request/${requestId.value}`);
-  handoverInfo.value = handoverRes.data;
+    // Load translation strings from request
+    const stringsRes = await axiosInstance.get('/translation/strings', {
+      params: { requestId: requestId.value }
+    });
+    console.log('Translation strings response:', stringsRes.data);
+    translationStrings.value = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+
+    // Load handover information from request
+    const handoverRes = await axiosInstance.get(`/translation/handover/request/${requestId.value}`);
+    console.log('Handover response:', handoverRes.data);
+    handoverInfo.value = handoverRes.data;
+
+    console.log('Final state:', {
+      files: files.value,
+      translationStrings: translationStrings.value,
+      projectInfo: projectInfo.value
+    });
+  } catch (error) {
+    console.error('Error loading request data:', error);
+    throw error;
+  }
 }
 
 async function loadDataFromProject() {
@@ -292,10 +345,36 @@ async function loadDataFromProject() {
 }
 
 function getFileProgress(file: any): number {
-  const fileStrings = translationStrings.value.filter((str: any) => str.fileId === file.id);
-  if (fileStrings.length === 0) return 0;
-  const completed = fileStrings.filter((str: any) => str.translatedText && str.translatedText.trim()).length;
-  return Math.round((completed / fileStrings.length) * 100);
+  console.log('=== DEBUG getFileProgress ===');
+  console.log('File object:', file);
+  console.log('Available translation strings:', translationStrings.value);
+
+  // Try different possible file ID fields
+  const fileId = file.id || file.fileId;
+  console.log('Using fileId:', fileId);
+
+  const fileStrings = translationStrings.value.filter((str: any) => {
+    const match = str.fileId === fileId || str.fileId === fileId?.toString();
+    console.log(`String ${str.id}: fileId=${str.fileId}, match=${match}`);
+    return match;
+  });
+
+  console.log('Found strings for this file:', fileStrings);
+
+  if (fileStrings.length === 0) {
+    console.log('No strings found for this file, returning 0%');
+    return 0;
+  }
+
+  const completed = fileStrings.filter((str: any) => {
+    const hasTranslation = str.translatedText && str.translatedText.trim();
+    console.log(`String ${str.id}: hasTranslation=${hasTranslation}, text="${str.translatedText}"`);
+    return hasTranslation;
+  }).length;
+
+  const progress = Math.round((completed / fileStrings.length) * 100);
+  console.log(`File progress: ${completed}/${fileStrings.length} = ${progress}%`);
+  return progress;
 }
 
 function getFileStatusClass(file: any): string {
@@ -393,14 +472,46 @@ async function downloadAllFiles() {
   }
 }
 
-function downloadIndividualFiles() {
-  if (isRequestBased.value) {
-    // Navigate to individual file download page for request
-    router.push(`/requests/${requestId.value}/files`);
-  } else {
-    // Navigate to individual file download page for project
-    router.push(`/projects/${projectId.value}/branches/${branchId.value}/files`);
+async function downloadFile(file: any) {
+  try {
+    const response = await axiosInstance.get(`/files/${file.fileId || file.id}/download`, {
+      responseType: 'blob'
+    });
+
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', file.fileName);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `Successfully downloaded ${file.fileName}!`,
+      life: 3000
+    });
+
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: err.response?.data?.message || 'Could not download file',
+      life: 3000
+    });
   }
+}
+
+function downloadIndividualFiles() {
+  // Show toast message that individual files can be downloaded directly
+  toast.add({
+    severity: 'info',
+    summary: 'Info',
+    detail: 'You can download individual files using the Download button next to each file above.',
+    life: 5000
+  });
 }
 
 onMounted(() => {
@@ -423,6 +534,7 @@ onMounted(() => {
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
+  margin-left: 250px; /* Add left margin to avoid sidebar overlap */
 }
 
 .page-header {
@@ -456,6 +568,18 @@ onMounted(() => {
 .error-container i {
   font-size: 3rem;
   color: #ff6b6b;
+  margin-bottom: 1rem;
+}
+
+.no-data-container {
+  text-align: center;
+  color: white;
+  padding: 2rem;
+}
+
+.no-data-container i {
+  font-size: 3rem;
+  color: #fbbf24;
   margin-bottom: 1rem;
 }
 
@@ -539,9 +663,26 @@ onMounted(() => {
   gap: 1rem;
 }
 
+.no-files {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
+}
+
+.no-files i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-files p {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
 .file-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto;
   align-items: center;
   gap: 1.5rem;
   padding: 1.5rem;
@@ -708,6 +849,11 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.file-actions .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -750,6 +896,7 @@ onMounted(() => {
 @media (max-width: 768px) {
   .content {
     padding: 1rem;
+    margin-left: 0; /* Remove left margin on mobile */
   }
 
   .page-header h1 {
@@ -759,6 +906,10 @@ onMounted(() => {
   .file-item {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+
+  .file-actions {
+    justify-content: center;
   }
 
   .form-actions {

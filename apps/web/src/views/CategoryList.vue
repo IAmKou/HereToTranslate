@@ -1064,9 +1064,18 @@ const deleteCategory = async (category: Category) => {
       detail: 'Category deleted successfully',
       life: 3000
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting category:', error);
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete category', life: 3000 });
+
+    // Display the specific error message from the backend
+    const errorMessage = error.response?.data?.message || 'Failed to delete category';
+
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: errorMessage,
+      life: 3000
+    });
   }
 };
 

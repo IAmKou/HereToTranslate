@@ -93,8 +93,23 @@ export class CategoryManagerService {
 
   async deleteCategory(id: bigint) {
     try {
+      // Check if there are any requests using this category
+      const requestRepository = this.categoryRepository.manager.getRepository('requests');
+      const existingRequests = await requestRepository.count({
+        where: { category: { id } }
+      });
+
+      if (existingRequests > 0) {
+        throw new BadRequestException(
+          `There already ${existingRequests} project${existingRequests > 1 ? 's' : ''} using this Category, Cannot delete`
+        );
+      }
+
       return this.categoryRepository.delete({ id });
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       console.error('Error deleting category:', error);
       throw new InternalServerErrorException('Failed to delete category');
     }

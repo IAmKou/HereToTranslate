@@ -19,11 +19,11 @@
               </div>
               <div class="header-stats">
                 <div class="stat-item">
-                  <span class="stat-number">{{ notificationStats.total }}</span>
+                  <span class="stat-number">{{ displayStats.total }}</span>
                   <span class="stat-label">Total</span>
                 </div>
                 <div class="stat-item unread">
-                  <span class="stat-number">{{ notificationStats.unread }}</span>
+                  <span class="stat-number">{{ displayStats.unread }}</span>
                   <span class="stat-label">Unread</span>
                 </div>
               </div>
@@ -67,7 +67,7 @@
               <div class="action-buttons-group">
                 <button
                   @click="markAllAsRead"
-                  :disabled="notificationStats.unread === 0 || markingAllAsRead"
+                  :disabled="filteredNotifications.length === 0 || markingAllAsRead"
                   class="action-btn secondary"
                 >
                   <i class="pi pi-check"></i>
@@ -75,7 +75,7 @@
                 </button>
                 <button
                   @click="deleteAllNotifications"
-                  :disabled="notifications.length === 0 || deletingAll"
+                  :disabled="filteredNotifications.length === 0 || deletingAll"
                   class="action-btn danger"
                 >
                   <i class="pi pi-trash"></i>
@@ -92,7 +92,7 @@
           </div>
 
           <!-- Empty State -->
-          <div v-else-if="notifications.length === 0" class="empty-container">
+          <div v-else-if="filteredNotifications.length === 0" class="empty-container">
             <div class="empty-icon">
               <i class="pi pi-bell-slash"></i>
             </div>
@@ -101,12 +101,12 @@
           </div>
 
           <!-- No Notifications on Current Page -->
-          <div v-else-if="paginatedNotifications.length === 0 && notifications.length > 0" class="empty-page-container">
+          <div v-else-if="paginatedNotifications.length === 0 && filteredNotifications.length > 0" class="empty-page-container">
             <div class="empty-icon">
               <i class="pi pi-search"></i>
             </div>
             <h3>No Notifications on This Page</h3>
-            <p>There are {{ notifications.length }} notifications total, but none on page {{ currentPage }}.</p>
+            <p>There are {{ filteredNotifications.length }} {{ activeFilter === 'unread' ? 'unread' : '' }} notifications total, but none on page {{ currentPage }}.</p>
             <button @click="goToPage(1)" class="go-to-first-btn">
               <i class="pi pi-angle-double-left"></i>
               Go to First Page
@@ -381,6 +381,17 @@ const loadingInvitations = ref(false)
 // Computed
 const unreadOnly = computed(() => activeFilter.value === 'unread')
 
+// Computed properties for display counts
+const displayStats = computed(() => {
+  if (activeFilter.value === 'unread') {
+    return {
+      total: filteredNotifications.value.length,
+      unread: filteredNotifications.value.length
+    }
+  }
+  return notificationStats.value
+})
+
 // Methods
 const loadNotifications = async (reset = true) => {
   try {
@@ -392,7 +403,7 @@ const loadNotifications = async (reset = true) => {
 
     const response = await notificationService.getUserNotifications(
       1000, // Load all notifications for pagination
-      unreadOnly.value
+      false // Always load all notifications, let frontend handle filtering
     )
 
     notifications.value = response.notifications
@@ -447,6 +458,9 @@ const handleItemsPerPageChange = () => {
 
 // Computed properties for pagination
 const filteredNotifications = computed(() => {
+  if (activeFilter.value === 'unread') {
+    return notifications.value.filter(notification => !notification.isRead)
+  }
   return notifications.value
 })
 
@@ -520,16 +534,28 @@ const markAsRead = async (notificationId: string) => {
 const markAllAsRead = async () => {
   try {
     markingAllAsRead.value = true
-    await notificationService.markAllAsRead()
 
-    // Update local state immediately for better UX
-    notifications.value.forEach((notification: Notification) => {
-      if (!notification.isRead) {
+    // Only mark filtered notifications as read
+    if (activeFilter.value === 'unread') {
+      // For unread filter, mark all unread notifications as read
+      const unreadNotifications = notifications.value.filter(n => !n.isRead)
+      for (const notification of unreadNotifications) {
+        await notificationService.markAsRead(notification.id)
         notification.isRead = true
         notification.readAt = new Date().toISOString()
       }
-    })
-    notificationStats.value.unread = 0
+      notificationStats.value.unread = 0
+    } else {
+      // For all filter, mark all notifications as read
+      await notificationService.markAllAsRead()
+      notifications.value.forEach((notification: Notification) => {
+        if (!notification.isRead) {
+          notification.isRead = true
+          notification.readAt = new Date().toISOString()
+        }
+      })
+      notificationStats.value.unread = 0
+    }
 
     emitAllNotificationsMarkedRead()
 
@@ -675,17 +701,32 @@ const closeSuccessNotification = () => {
 }
 
 const deleteAllNotifications = async () => {
-  if (!confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
+  const filterText = activeFilter.value === 'unread' ? 'unread ' : ''
+  if (!confirm(`Are you sure you want to delete all ${filterText}notifications? This action cannot be undone.`)) {
     return
   }
 
   try {
     deletingAll.value = true
-    await notificationService.deleteAllNotifications()
 
-    // Update local state immediately for better UX
-    notifications.value = []
-    notificationStats.value = { total: 0, unread: 0 }
+    if (activeFilter.value === 'unread') {
+      // For unread filter, delete only unread notifications
+      const unreadNotifications = notifications.value.filter(n => !n.isRead)
+      for (const notification of unreadNotifications) {
+        await notificationService.deleteNotification(notification.id)
+      }
+
+      // Remove unread notifications from local state
+      notifications.value = notifications.value.filter(n => n.isRead)
+      notificationStats.value.unread = 0
+      notificationStats.value.total = notifications.value.length
+    } else {
+      // For all filter, delete all notifications
+      await notificationService.deleteAllNotifications()
+      notifications.value = []
+      notificationStats.value = { total: 0, unread: 0 }
+    }
+
     currentPage.value = 1
 
     emitAllNotificationsDeleted()

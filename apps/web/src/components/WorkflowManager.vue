@@ -655,7 +655,7 @@
           <div class="modal-header">
             <h3>{{ showEditTransition ? 'Edit Transition' : 'Create Transition' }}</h3>
             <button class="btn-icon" @click="closeTransitionForm" data-close="true">
-              <i class="pi pi-times"></i>
+             
             </button>
           </div>
 

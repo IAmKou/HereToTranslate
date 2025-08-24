@@ -1800,7 +1800,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .big-avatar {
   width: 2.8rem;
   height: 2.8rem;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   border: 2px solid #e2e8f0;
   box-shadow: 0 2px 6px #3182ce22;
 }
@@ -1832,7 +1832,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 }
 
 .avatar-text {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: white;
 }
@@ -2089,7 +2089,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .new-modal-close {
   background: none;
   border: none;
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   color: #a0aec0;
   cursor: pointer;
   padding: 0.5rem;
@@ -2497,7 +2497,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #1e293b;
 }
@@ -2505,7 +2505,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: #6b7280;
   cursor: pointer;
   padding: 0.5rem;
@@ -2630,7 +2630,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 
 .new-modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #2d3748;
 }
@@ -2638,7 +2638,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .new-modal-close {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: #a0aec0;
   cursor: pointer;
   padding: 0.2rem;
@@ -2905,7 +2905,7 @@ select.form-control:disabled {
   color: #2d3748;
   font-weight: 600;
   margin-bottom: 0.8rem;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .label-icon {
@@ -2958,12 +2958,12 @@ select.form-control:disabled {
 }
 
 .btn .icon {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .loading-spinner-small {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border: 1.5px solid #e2e8f0;
   border-radius: 50%;
   border-top-color: #4299e1;
@@ -4283,7 +4283,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .header-icon {
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .header-title {
@@ -4305,7 +4305,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .stat-number {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: #4b5563;
 }
@@ -4339,7 +4339,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   background: #f3f4f6;
   border-radius: 0.5rem;
 }
@@ -4351,7 +4351,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .stats-value {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #111827;
 }
@@ -4386,7 +4386,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .p-toast-message-icon {
-  font-size: 1.5rem !important;
+  font-size: 1.2rem !important;
 }
 
 .p-toast-top-right {

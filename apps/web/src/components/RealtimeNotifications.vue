@@ -50,7 +50,7 @@
                   Join Project
                 </button>
                 <button @click="declineProjectInvitationFromNotification(notification)" class="decline-btn">
-                  <i class="pi pi-times"></i>
+                  <span class="close-icon">×</span>
                   Decline
                 </button>
               </div>
@@ -69,7 +69,7 @@
             </div>
             <div class="notification-actions" @click.stop>
               <button v-if="!notification.isRead" @click="markAsRead(notification)" class="mark-read">
-                <i class="pi pi-check"></i>
+                <i class="pi pi-times"></i>
               </button>
             </div>
           </div>
@@ -81,9 +81,6 @@
       </div>
 
       <div class="panel-footer">
-        <button @click="loadMoreNotifications" v-if="hasMore" class="load-more">
-          Load More
-        </button>
         <div class="view-all-buttons">
           <button @click="navigateToNotifications" class="view-all">
             View All Notifications
@@ -860,12 +857,7 @@ const acceptProjectInvitationFromNotification = async (notification: any) => {
             await notificationService.markAsRead(notification.id)
             console.log('✅ Notification marked as read successfully')
 
-            // Update notification message to show accepted status
-            const updatedMessage = `You have been invited to join project "${projectName}" - ACCEPTED ✅`
-            await notificationService.updateNotification(notification.id, {
-              message: updatedMessage
-            })
-            console.log('📝 Notification message updated to show accepted status')
+
           } catch (markError) {
             console.error('❌ Failed to mark notification as read:', markError)
           }
@@ -1787,6 +1779,12 @@ onUnmounted(() => {
   color: #dc2626;
   border-color: #fca5a5;
   transform: translateY(-1px);
+}
+
+.close-icon {
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1;
 }
 
 /* Status indicators for processed notifications */

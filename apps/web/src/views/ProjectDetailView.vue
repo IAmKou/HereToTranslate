@@ -1201,6 +1201,12 @@ onMounted(async () => {
   await fetchCurrentUser();
   loadProject();
   loadBranches();
+
+  // Handle tab query parameter
+  const tabParam = route.query.tab as string;
+  if (tabParam && ['description', 'members', 'roles', 'groups', 'discussions', 'files', 'translation', 'commits', 'task', 'activity'].includes(tabParam)) {
+    activeTab.value = tabParam as TabType;
+  }
 });
 
 defineExpose({ closeDropdowns });

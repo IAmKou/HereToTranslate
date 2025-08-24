@@ -681,6 +681,9 @@ function getJoinedDate(member: any): string {
 
   const date = new Date(joinedDate);
 
+  // Add 7 hours to fix timezone offset
+  date.setHours(date.getHours() + 7);
+
   // Format: "Dec 15, 2024 at 14:30"
   return date.toLocaleDateString('en-US', {
     year: 'numeric',

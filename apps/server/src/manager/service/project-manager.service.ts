@@ -1404,6 +1404,191 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     }
   }
 
+  async transferProjectOwnership(
+    projectId: bigint,
+    currentOwnerId: bigint,
+    email: string
+  ): Promise<ProjectEntity> {
+    this.logger.debug(`Transferring project ${projectId} ownership from ${currentOwnerId} to user with email ${email}`);
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new BadRequestException('Invalid email format');
+    }
+
+    // Validate email is not empty
+    if (!email || email.trim() === '') {
+      throw new BadRequestException('Email cannot be empty');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Check if project exists and current user is the owner
+      const project = await queryRunner.manager.findOne(ProjectEntity, {
+        where: { id: projectId },
+        relations: ['createdBy', 'members'],
+      });
+
+      if (!project) {
+        throw new NotFoundException(`Project with ID ${projectId} not found`);
+      }
+
+      this.logger.debug(`Debug ownership check: currentOwnerId=${currentOwnerId}, project.createdBy.id=${project.createdBy.id}, types: currentOwnerId=${typeof currentOwnerId}, project.createdBy.id=${typeof project.createdBy.id}`);
+
+      // Convert both to BigInt for proper comparison
+      const currentOwnerBigInt = BigInt(currentOwnerId);
+      const projectOwnerBigInt = BigInt(project.createdBy.id);
+
+      if (projectOwnerBigInt !== currentOwnerBigInt) {
+        throw new ForbiddenException(`Only the project owner can transfer ownership. Current user ID: ${currentOwnerId}, Project owner ID: ${project.createdBy.id}`);
+      }
+
+      // Check if new owner exists by email
+      const newOwner = await queryRunner.manager.findOne(UserEntity, {
+        where: { email: email },
+      });
+
+      if (!newOwner) {
+        throw new NotFoundException(`User with email ${email} not found`);
+      }
+
+      // Prevent self-transfer
+      if (newOwner.id === currentOwnerId) {
+        throw new BadRequestException('Cannot transfer ownership to yourself');
+      }
+
+      // Check if new owner is already a member of the project
+      const isMember = project.members.some(member => member.id === newOwner.id);
+
+      // If new owner is not a member, add them to the project first
+      if (!isMember) {
+        // Add new owner to project members
+        project.members.push(newOwner);
+        await queryRunner.manager.save(ProjectEntity, project);
+
+        this.logger.log(`Added user ${newOwner.email} as project member before ownership transfer`);
+      }
+
+      // Transfer ownership
+      await queryRunner.manager.update(
+        ProjectEntity,
+        { id: projectId },
+        { createdBy: newOwner }
+      );
+
+      // Find all project roles
+      const projectRoles = await queryRunner.manager.find(ProjectRoleEntity, {
+        where: { project: { id: projectId } },
+        relations: ['users'],
+      });
+
+      // Remove current owner from ALL roles first
+      for (const role of projectRoles) {
+        if (role.users.some(user => user.id === currentOwnerId)) {
+          role.users = role.users.filter(user => user.id !== currentOwnerId);
+          await queryRunner.manager.save(ProjectRoleEntity, role);
+        }
+      }
+
+      // Find or create Project Owner role
+      let ownerRole = projectRoles.find(role => role.name === 'Project Owner');
+
+      if (ownerRole) {
+        // Update existing Project Owner role to only have new owner
+        ownerRole.users = [newOwner];
+        ownerRole.permissionFlags = new Permission(PermissionFlags.Owner);
+        await queryRunner.manager.save(ProjectRoleEntity, ownerRole);
+      } else {
+        // Create new Project Owner role for new owner
+        const newOwnerRole = queryRunner.manager.create(ProjectRoleEntity, {
+          project: { id: projectId },
+          name: 'Project Owner',
+          permissionFlags: new Permission(PermissionFlags.Owner),
+          users: [newOwner],
+        });
+        await queryRunner.manager.save(ProjectRoleEntity, newOwnerRole);
+      }
+
+      // Remove any duplicate Project Owner roles
+      const allOwnerRoles = projectRoles.filter(role => role.name === 'Project Owner');
+      if (allOwnerRoles.length > 1) {
+        // Keep only the first one, remove the rest
+        for (let i = 1; i < allOwnerRoles.length; i++) {
+          await queryRunner.manager.remove(ProjectRoleEntity, allOwnerRoles[i]);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Send notifications with separate error handling
+      try {
+        // Notify new owner about receiving ownership
+        await this.notificationService.createNotification({
+          userId: newOwner.id,
+          type: 'PROJECT_OWNERSHIP_RECEIVED',
+          title: 'Project Ownership Transferred',
+          message: `You are now the owner of project "${project.name}"`,
+          data: {
+            projectId: projectId.toString(),
+            projectName: project.name,
+            transferredFrom: project.createdBy.username
+          }
+        });
+
+        // Notify old owner about losing ownership
+        await this.notificationService.createNotification({
+          userId: currentOwnerId,
+          type: 'PROJECT_OWNERSHIP_LOST',
+          title: 'Project Ownership Transferred',
+          message: `Project ownership of "${project.name}" has been transferred to ${newOwner.username}`,
+          data: {
+            projectId: projectId.toString(),
+            projectName: project.name,
+            transferredTo: newOwner.username
+          }
+        });
+      } catch (notifError) {
+        this.logger.warn(`Failed to send notifications but transfer was successful:`, notifError);
+      }
+
+      // Log activity with separate error handling
+      try {
+        await this.activityManagerService.logActivity(
+          projectId,
+          currentOwnerId,
+          'TRANSFER_OWNERSHIP',
+          `Project ownership transferred from ${project.createdBy.username} to ${newOwner.username}`
+        );
+      } catch (logError) {
+        this.logger.warn(`Failed to log activity but transfer was successful:`, logError);
+      }
+
+      this.logger.log(`Project ${projectId} ownership transferred successfully from ${currentOwnerId} to ${newOwner.id}`);
+
+      // Return updated project with separate error handling
+      try {
+        return await this.projectRepository.findOne({
+          where: { id: projectId },
+          relations: ['createdBy'],
+        });
+      } catch (returnError) {
+        this.logger.warn(`Failed to return updated project but transfer was successful:`, returnError);
+        // Return the project we already have
+        return project;
+      }
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to transfer project ownership:`, error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
 }
 function normalizePermission(input: IntoPermission): bigint {
   if (typeof input === 'bigint') return input;

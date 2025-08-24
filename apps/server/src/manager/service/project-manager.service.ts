@@ -423,6 +423,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         'project.name',
         'project.description',
         'project.isPrivate',
+        'project.isSyncedFromRequest',
         'project.targetLanguages',
         'project.createdAt',
         'createdBy.id',
@@ -490,6 +491,12 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       if (!project) {
         this.logger.debug(`Project with ID ${projectId} not found`);
         throw new BadRequestException(`Unknown project`);
+      }
+
+      // Check if project is synced from request and prevent description updates
+      if (project.isSyncedFromRequest && updateData.description !== undefined) {
+        this.logger.debug(`Cannot update description for project synced from request: ${projectId}`);
+        throw new BadRequestException('Description cannot be updated for projects synced from requests');
       }
 
       const newTags = new Map<bigint, string>(

@@ -219,6 +219,9 @@
 
 
             <!-- Project Members + Add User lên ngay sau Stat Cards -->
+
+
+
             <div class="management-sections">
               <!-- Tabs Navigation giữ nguyên -->
               <div class="tabs">
@@ -226,7 +229,7 @@
                   :class="['tab', { active: activeTab === 'description' }]"
                   @click="activeTab = 'description'"
                 >
-                  Description
+                  Dashboard
                 </button>
                 <button
                   :class="['tab', { active: activeTab === 'members' }]"
@@ -375,7 +378,7 @@
                 :current-user="currentUser"
                 key="activity"
               />
-              <div v-else-if="activeTab === 'description'" key="description">
+              <div v-else-if="activeTab === 'description'" key="description" class="dashboard-tab-content">
                 <!-- Project Description Section giữ nguyên như cũ -->
                 <div class="project-section description-section">
                   <div class="section-header">
@@ -437,6 +440,10 @@
                         >
                           <span class="icon">✏️</span>
                         </button>
+                        <div v-else-if="project.isSyncedFromRequest" class="sync-notice">
+                          <span class="sync-icon">🔄</span>
+                          <span class="sync-text">Description cannot be edited for projects synced from requests</span>
+                        </div>
                       </div>
                       <div v-else class="no-description">
                         <span class="no-content-icon">📄</span>
@@ -449,6 +456,10 @@
                         >
                           <span class="icon">✏️</span>
                         </button>
+                        <div v-else-if="project.isSyncedFromRequest" class="sync-notice">
+                          <span class="sync-icon">🔄</span>
+                          <span class="sync-text">Description cannot be edited for projects synced from requests</span>
+                        </div>
                       </div>
                     </template>
                   </div>
@@ -626,11 +637,7 @@
           </div>
         </div>
 
-        <!-- Toast Success -->
-        <div v-if="showSavedSnackbar" class="toast-success">
-          <span class="toast-icon">✅</span>
-          <span>Saved successfully!</span>
-        </div>
+
 
         <ProjectRoleManagementView
           v-if="showRoleModal"
@@ -695,6 +702,7 @@ import { useRoute, useRouter } from 'vue-router';
 import axiosInstance from '../api';
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
 import { SUPPORTED_LANGUAGES, getLanguageByCode, type Language } from '../utils/languages';
+import type { IProjectResponse } from '@here-to-translate/common/interfaces';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import AppFooter from '../components/AppFooter.vue';
@@ -710,30 +718,16 @@ import ProjectRoleTab from '../components/ProjectRoleTab.vue';
 import ProjectActivityTab from '../components/ProjectActivityTab.vue';
 import type { Ref } from 'vue';
 import { useAuthStore } from '../store/auth';
+import { useToast } from 'primevue/usetoast';
 const authStore = useAuthStore();
+const toast = useToast();
 
 const route = useRoute();
 const router = useRouter();
 
 
 // Interfaces
-interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  isPrivate: boolean;
-  createdAt: string;
-  targetLanguages?: string[];
-  createdBy: {
-    id: string;
-    username: string;
-    fullName?: string;
-    avatarUrl?: string;
-  };
-  tags?: Array<{ id: string; name: string }>;
-  projectRoles?: ProjectRole[];
-  // groups?: ProjectGroup[];
-}
+type Project = IProjectResponse;
 
 interface ProjectRole {
   id: string;
@@ -1281,8 +1275,17 @@ const descriptionCharCount = computed(() => editedDescription.value.length);
 const descriptionOverLimit = computed(
   () => descriptionCharCount.value > maxDescriptionLength
 );
-// For demo, allow editing always. Replace with real permission check.
-const canEditDescription = computed(() => true);
+// Check if user can edit description based on permissions and project sync status
+const canEditDescription = computed(() => {
+  // If project is synced from request, don't allow editing description
+  if (project.value?.isSyncedFromRequest) {
+    return false;
+  }
+
+  // TODO: Add proper permission checking based on user roles
+  // For now, allow editing for project owners and admins
+  return isProjectOwner.value || isProjectAdmin.value;
+});
 
 // Target Languages computed property
 const formattedTargetLanguages = computed(() => {
@@ -1319,10 +1322,7 @@ async function saveDescription() {
     });
     project.value.description = editedDescription.value;
     editingDescription.value = false;
-    showSavedSnackbar.value = true;
-    setTimeout(() => {
-      showSavedSnackbar.value = false;
-    }, 2500);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Description saved successfully!', life: 3000 });
   } catch (err: any) {
     alert('Failed to update description: ' + err.message);
   }
@@ -1353,7 +1353,7 @@ function goToManage() {
   showActionsMenu.value = false;
 }
 
-const showSavedSnackbar = ref(false);
+
 
 const inputFocused = ref(false);
 
@@ -1446,8 +1446,7 @@ async function saveUserRoles() {
     }
     showEditUserRoleModal.value = false;
     await loadMembers();
-    showSavedSnackbar.value = true;
-    setTimeout(() => (showSavedSnackbar.value = false), 2000);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'User roles updated successfully!', life: 3000 });
   } catch (err: any) {
     alert('Failed to update roles: ' + (err?.message || err));
   }
@@ -1625,7 +1624,7 @@ const confirmDeleteGroup = async () => {
 // const groupToDelete = ref<ProjectGroup | null>(null);
 // const showDeleteConfirmModal = ref(false);
 
-const toast = ref(null);
+
 
 const translationTabRef = ref(null);
 
@@ -5738,6 +5737,29 @@ const handleFileReady = (fileId: string | number) => {
   overflow-wrap: break-word;
 }
 
+.sync-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.sync-icon {
+  font-size: 1.1rem;
+  opacity: 0.8;
+}
+
+.sync-text {
+  font-size: 0.9rem;
+}
+
 .role-search-box {
   width: 100%;
   padding: 0.7rem 1rem;
@@ -5890,6 +5912,35 @@ const handleFileReady = (fileId: string | number) => {
   margin-left: 0.2em;
   font-size: 0.97em;
   cursor: pointer;
+}
+
+/* Dashboard tab content - chỉ giảm kích cỡ chữ và icon xuống 75% */
+.dashboard-tab-content .section-title {
+  font-size: 0.75rem;
+}
+
+.dashboard-tab-content .title-icon {
+  font-size: 0.8rem;
+  width: 1.9rem;
+  height: 1.9rem;
+}
+
+.dashboard-tab-content .desc-textarea {
+  font-size: 0.75rem;
+}
+
+.dashboard-tab-content .language-badge {
+  font-size: 0.75rem;
+}
+
+.dashboard-tab-content .language-flag {
+  font-size: 0.75rem;
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.dashboard-tab-content .note-text {
+  font-size: 0.65rem;
 }
 .discord-role-tooltip {
   position: absolute;

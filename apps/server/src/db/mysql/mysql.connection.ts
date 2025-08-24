@@ -60,7 +60,7 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: isDev,
+      synchronize: false, // Temporarily disabled to prevent schema conflicts
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
@@ -134,6 +134,32 @@ export class MySqlConnection {
         this.logger.log('Ensured file.isSyncedFromRequest column and backfill completed');
       } catch (e) {
         this.logger.warn('Inline migration for isSyncedFromRequest skipped or failed', e as any);
+      }
+
+      // Ensure `project.isSyncedFromRequest` exists and is backfilled
+      try {
+        // Check if column exists first
+        const columns = await this.dataSource.query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project' AND COLUMN_NAME = 'isSyncedFromRequest'"
+        );
+
+        if (columns.length === 0) {
+          // Column doesn't exist, add it
+          await this.dataSource.query(
+            'ALTER TABLE `project` ADD COLUMN `isSyncedFromRequest` TINYINT(1) NOT NULL DEFAULT 0'
+          );
+          this.logger.log('Added project.isSyncedFromRequest column');
+        } else {
+          this.logger.log('project.isSyncedFromRequest column already exists');
+        }
+
+        // Backfill: projects created from requests should have isSyncedFromRequest = 1
+        // This is a placeholder - you may need to adjust the logic based on your business rules
+        // For example, if you have a requestId field in project table:
+        // await this.dataSource.query('UPDATE `project` SET `isSyncedFromRequest` = 1 WHERE `requestId` IS NOT NULL');
+      } catch (e) {
+        this.logger.error('Inline migration for project.isSyncedFromRequest failed:', e);
+        throw e; // Re-throw to prevent connection from proceeding without the column
       }
     } catch (error) {
       this.logger.error('Error connecting to MySQL database', error);

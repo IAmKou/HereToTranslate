@@ -790,7 +790,7 @@
               </div>
               <div class="banner-content">
                 <h4>Deadline Extension Grace Period</h4>
-                <p>After the deadline passes, you have <strong>3 additional days</strong> to request an extension. Use this time wisely to complete your translation or request more time.</p>
+                <p>After the deadline passes, you still have <strong>3 additional days</strong> to request an extension. Use this time wisely to complete your translation or request more time.</p>
               </div>
             </div>
 

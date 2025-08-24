@@ -178,8 +178,9 @@ export class MySqlConnection {
           this.logger.log('requests.rating column already exists');
         }
       } catch (e) {
-        this.logger.warn('Inline migration for requests.rating failed:', e);
-        // Don't throw error for rating column - it's not critical for basic functionality
+        this.logger.error('Inline migration for requests.rating failed:', e);
+        // This is critical for the application to work, so throw the error
+        throw e;
       }
     } catch (error) {
       this.logger.error('Error connecting to MySQL database', error);

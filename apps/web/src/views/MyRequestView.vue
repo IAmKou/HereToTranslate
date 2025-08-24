@@ -206,6 +206,22 @@
                          <span class="status-icon">⏳</span>
                          <span class="status-text">Pending</span>
                        </span>
+                      <span v-else-if="req.status === 'EXTENSION_REQUESTED'" class="status-badge status-extension-requested">
+                         <span class="status-icon">⏰</span>
+                         <span class="status-text">Extension Requested</span>
+                       </span>
+                      <span v-else-if="req.status === 'EXTENSION_APPROVED'" class="status-badge status-extension-approved">
+                         <span class="status-icon">✅</span>
+                         <span class="status-text">Extension Approved</span>
+                       </span>
+                      <span v-else-if="req.status === 'EXTENSION_REJECTED'" class="status-badge status-extension-rejected">
+                         <span class="status-icon">❌</span>
+                         <span class="status-text">Extension Rejected</span>
+                       </span>
+                      <span v-else-if="req.status === 'WAITING_APPROVAL'" class="status-badge status-waiting-approval">
+                         <span class="status-icon">⏳</span>
+                         <span class="status-text">Waiting Approval</span>
+                       </span>
                       <span v-else :class="['status-badge', req.status === 'EXPIRED' ? 'status-expired' : `status-${req.status.toLowerCase()}`]">
                          {{ req.status === 'EXPIRED' ? 'Expired' : formatStatus(req.status) }}
                        </span>
@@ -290,7 +306,7 @@
 
                         <!-- View Extensions button for approved requests -->
                         <button
-                          v-if="req.status === 'APPROVED' && req.extensionRequestCount > 0"
+                          v-if="(req.status === 'APPROVED' || req.status === 'EXTENSION_REQUESTED') && req.extensionRequestCount > 0"
                           @click="viewExtensions(req)"
                           class="action-btn extensions-btn"
                           :title="`View ${req.extensionRequestCount} extension request${req.extensionRequestCount > 1 ? 's' : ''} for: ${req.title}`"
@@ -758,6 +774,14 @@
             v-if="showExtension && selectedRequest"
             :request-id="selectedRequest.id"
             :current-deadline="selectedRequest.deadline"
+            :existing-extension-request="(() => {
+              // Check if there are existing extension requests
+              return selectedRequest.extensionRequestCount > 0 ? {
+                newDeadline: selectedRequest.deadline,
+                reason: 'Deadline extension requested',
+                status: 'Pending Review'
+              } : null;
+            })()"
             @close="showExtension = false"
             @submitted="onExtensionSubmitted"
           />
@@ -1039,8 +1063,9 @@ function isGracePeriodExpired(deadline) {
 function canRequestExtension(req) {
   // Can request extension if:
   // 1. Status is APPROVED (ongoing request)
-  // 2. Can request extension at any time (before or after deadline)
-  const canExtend = req.status === 'APPROVED'
+  // 2. Cannot request extension if already has EXTENSION_REQUESTED status
+  // 3. Can request extension at any time (before or after deadline)
+  const canExtend = req.status === 'APPROVED' && req.status !== 'EXTENSION_REQUESTED'
 
   return canExtend
 }
@@ -1717,7 +1742,12 @@ function getStatusClass(status) {
     'APPROVED': 'status-approved',
     'REJECTED': 'status-rejected',
     'COMPLETED': 'status-completed',
-    'CANCELLED': 'status-cancelled'
+    'CANCELLED': 'status-cancelled',
+    'EXTENSION_REQUESTED': 'status-extension-requested',
+    'EXTENSION_APPROVED': 'status-extension-approved',
+    'EXTENSION_REJECTED': 'status-extension-rejected',
+    'WAITING_APPROVAL': 'status-waiting-approval',
+    'EXPIRED': 'status-expired'
   }
   return classMap[status] || 'status-pending'
 }
@@ -1728,7 +1758,12 @@ function formatStatus(status) {
     'APPROVED': 'Approved',
     'REJECTED': 'Rejected',
     'COMPLETED': 'Completed',
-    'CANCELLED': 'Cancelled'
+    'CANCELLED': 'Cancelled',
+    'EXTENSION_REQUESTED': 'Extension Requested',
+    'EXTENSION_APPROVED': 'Extension Approved',
+    'EXTENSION_REJECTED': 'Extension Rejected',
+    'WAITING_APPROVAL': 'Waiting Approval',
+    'EXPIRED': 'Expired'
   }
   return statusMap[status] || status
 }
@@ -2453,6 +2488,27 @@ onMounted(async () => {
 .status-badge.status-expired {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+/* Extension statuses */
+.status-badge.status-extension-requested {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-extension-approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-extension-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-waiting-approval {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .visibility-badge {

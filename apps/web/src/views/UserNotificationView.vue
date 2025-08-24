@@ -865,9 +865,10 @@ const isNotificationDeclined = (notification: Notification): boolean => {
   return false
 }
 
-// Helper function to get clean message (no longer needed since we don't modify message)
+// Helper function to get clean message - remove EXTENSION_DATA part
 const getCleanMessage = (notification: Notification): string => {
-  return notification.message
+  // Remove [EXTENSION_DATA:...] part from the message
+  return notification.message.replace(/\[EXTENSION_DATA:\{.*?\}\]/g, '')
 }
 
 // Helper functions for project invitation expire time

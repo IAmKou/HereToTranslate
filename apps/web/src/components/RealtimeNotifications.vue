@@ -41,7 +41,7 @@
                 <span class="notification-type">{{ getTypeLabel(notification.type) }}</span>
                 <span class="notification-time">{{ formatTime(notification.createdAt) }}</span>
               </div>
-              <p class="notification-message">{{ notification.message }}</p>
+              <p class="notification-message">{{ getCleanMessage(notification) }}</p>
 
               <!-- Add action buttons for project_invite notifications -->
               <div v-if="notification.type === 'project_invite' && !isNotificationProcessed(notification)" class="invitation-actions" @click.stop>
@@ -588,6 +588,14 @@ const getTypeLabel = (type: string): string => {
     USER_REMOVED_FROM_PROJECT: 'User Removed from Project'
   }
   return labels[type] || 'Notification'
+}
+
+// Helper function to get clean message - remove EXTENSION_DATA and RequestID parts
+const getCleanMessage = (notification: Notification): string => {
+  // Remove [EXTENSION_DATA:...] and [RequestID:...] parts from the message
+  return notification.message
+    .replace(/\[EXTENSION_DATA:\{.*?\}\]/g, '')
+    .replace(/\[RequestID:\d+\]/g, '')
 }
 
 const formatTime = (dateString: string) => {

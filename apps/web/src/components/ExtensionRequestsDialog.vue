@@ -33,11 +33,14 @@
               <span class="label">Requested deadline:</span>
               <span class="value requested-deadline">{{ formatDate(extension.newDeadline) }}</span>
             </div>
-            <div class="detail-row">
+            <div class="detail-row reason-row">
               <span class="label">Reason:</span>
-              <div class="reason-container">
-                <p class="reason-text">{{ extension.reason }}</p>
-              </div>
+              <input
+                type="text"
+                :value="extension.reason"
+                readonly
+                class="reason-input"
+              />
             </div>
             <div class="detail-row">
               <span class="label">Requested on:</span>
@@ -240,95 +243,118 @@ function formatDate(dateString) {
 }
 
 .dialog {
-  width: 900px;
+  width: 800px;
   max-width: 95vw;
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
-  padding: 36px 40px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 8px 32px rgba(0,0,0,0.1);
+  padding: 32px 36px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 .dialog-header {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   text-align: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .dialog-header h2 {
-  margin: 0 0 8px 0;
-  font-size: 1.5rem;
-  color: #1f2937;
+  margin: 0 0 10px 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.025em;
 }
 
 .subtitle {
   margin: 0;
   color: #6b7280;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .loading, .no-extensions {
   text-align: center;
   padding: 40px;
   color: #6b7280;
+  font-size: 0.9rem;
 }
 
 .extensions-list {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 .extension-item {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 24px;
-  background: #fafafa;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 22px;
+  background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.extension-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .extension-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .translator-info strong {
   display: block;
-  font-size: 1.1rem;
-  color: #1f2937;
-  margin-bottom: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 3px;
+  letter-spacing: -0.01em;
 }
 
 .email {
   color: #6b7280;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .status-badge {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.8rem;
+  padding: 5px 10px;
+  border-radius: 18px;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .status-badge.pending {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   color: #92400e;
+  border: 1px solid #fbbf24;
 }
 
 .extension-details {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+  padding: 8px 0;
 }
 
 .detail-row:last-child {
@@ -338,93 +364,120 @@ function formatDate(dateString) {
 .label {
   font-weight: 600;
   color: #374151;
-  min-width: 120px;
+  min-width: 110px;
   flex-shrink: 0;
+  font-size: 0.8rem;
 }
 
 .value {
   color: #1f2937;
   text-align: right;
   flex: 1;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .value.requested-deadline {
-  color: #059669; /* Green color for requested deadline */
+  color: #059669;
   font-weight: 600;
 }
 
-.reason-container {
-  background-color: #f8fafc;
-  border-radius: 8px;
-  padding: 12px 16px;
-  border: 1px solid #e2e8f0;
-  flex: 1;
-  max-width: 400px;
-  word-wrap: break-word;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.reason-row {
+  align-items: center;
 }
 
-.reason-text {
-  margin: 0;
+.reason-input {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
   color: #374151;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
+  flex: 1;
+  max-width: 380px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.reason-input:hover {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.reason-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 .extension-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
 }
 
 .btn {
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-radius: 8px;
   border: none;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  letter-spacing: 0.02em;
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none !important;
 }
 
 .btn-approve {
-  background: #10b981;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
+  border: 1px solid #059669;
 }
 
 .btn-approve:hover:not(:disabled) {
-  background: #059669;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .btn-reject {
-  background: #ef4444;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
+  border: 1px solid #dc2626;
 }
 
 .btn-reject:hover:not(:disabled) {
-  background: #dc2626;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .btn-close {
-  background: #6b7280;
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
   color: white;
+  border: 1px solid #4b5563;
 }
 
 .btn-close:hover {
-  background: #4b5563;
+  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
 }
 
 .dialog-footer {
-  margin-top: 32px;
+  margin-top: 28px;
   text-align: center;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
 }
 
 /* Confirmation Modal Styles */
@@ -440,44 +493,50 @@ function formatDate(dateString) {
 
 .confirm-modal {
   background: white;
-  border-radius: 12px;
-  padding: 32px;
-  max-width: 500px;
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 480px;
   width: 90vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 8px 32px rgba(0,0,0,0.15);
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 .confirm-header h3 {
-  margin: 0 0 20px 0;
-  color: #1f2937;
-  font-size: 1.3rem;
+  margin: 0 0 18px 0;
+  color: #111827;
+  font-size: 1.2rem;
+  font-weight: 700;
   text-align: center;
+  letter-spacing: -0.025em;
 }
 
 .confirm-content {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
   text-align: center;
 }
 
 .confirm-content p {
   margin: 0;
   color: #4b5563;
-  line-height: 1.6;
+  line-height: 1.5;
+  font-size: 0.85rem;
 }
 
 .confirm-content strong {
-  color: #1f2937;
+  color: #111827;
+  font-weight: 600;
 }
 
 .confirm-actions {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   justify-content: center;
 }
 
 .btn-cancel {
-  background: #6b7280;
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
   color: white;
+  border: 1px solid #4b5563;
 }
 
 .btn-cancel:hover {

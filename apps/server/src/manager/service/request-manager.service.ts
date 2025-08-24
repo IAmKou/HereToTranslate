@@ -1066,6 +1066,9 @@ export class RequestManagerService {
       const translatorMatch = message.match(/^([^(]+) has requested/);
       const translatorName = translatorMatch ? translatorMatch[1].trim() : 'Unknown Translator';
 
+      // Always define currentDeadline from request
+      const currentDeadline = new Date(request.deadline);
+
       // Extract new deadline and reason from message
       const extensionDataMatch = message.match(/\[EXTENSION_DATA:(\{.*?\})\]/);
       let newDeadline, reason;
@@ -1078,13 +1081,11 @@ export class RequestManagerService {
         } catch (error) {
           console.error('🔍 [SERVICE] Failed to parse extension data:', error);
           // Fallback to default values
-          const currentDeadline = new Date(request.deadline);
           newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
           reason = 'Deadline extension requested';
         }
       } else {
         // Fallback to default values if no extension data found
-        const currentDeadline = new Date(request.deadline);
         newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
         reason = 'Deadline extension requested';
       }
@@ -1333,7 +1334,7 @@ export class RequestManagerService {
       throw new NotFoundException('Request not found');
     }
 
-    if (request.assignee?.id !== translatorId) {
+    if (request.assignee?.id.toString() !== translatorId.toString()) {
       throw new BadRequestException('You are not the assigned translator for this request');
     }
 
@@ -1343,9 +1344,9 @@ export class RequestManagerService {
 
     // Check if there are any pending extension requests that haven't been responded to
     const pendingExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id,
+      request.requester.id.toString(), // Convert BigInt to string
       'EXTENSION_REQUESTED',
-      requestId
+      requestId.toString() // Convert BigInt to string
     );
 
     if (pendingExtensions.length > 0) {
@@ -1359,15 +1360,15 @@ export class RequestManagerService {
     // 4. If previous extension is still PENDING: Wait for response
 
     const approvedExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id,
+      request.requester.id.toString(), // Convert BigInt to string
       'EXTENSION_APPROVED',
-      requestId
+      requestId.toString() // Convert BigInt to string
     );
 
     const rejectedExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id,
+      request.requester.id.toString(), // Convert BigInt to string
       'EXTENSION_REJECTED',
-      requestId
+      requestId.toString() // Convert BigInt to string
     );
 
     // Apply extension request rules
@@ -1385,7 +1386,7 @@ export class RequestManagerService {
     // Create notification for requester
     // Store extension details in a structured way for internal use
     const extensionData = {
-      requestId: requestId,
+      requestId: requestId.toString(), // Convert BigInt to string for JSON serialization
       newDeadline: newDeadline.getTime(),
       reason: reason
     };
@@ -1401,10 +1402,10 @@ export class RequestManagerService {
     console.log('🔍 [SERVICE] Full message with extension data:', fullMessage);
 
     await this.notificationService.createNotification({
-      userId: request.requester.id,
+      userId: request.requester.id.toString(), // Convert BigInt to string
       type: 'EXTENSION_REQUESTED',
       message: fullMessage, // Use full message with extension data
-      createdBy: translatorId,
+      createdBy: translatorId.toString(), // Convert BigInt to string
     });
 
     // Send email notification to requester
@@ -1419,7 +1420,7 @@ export class RequestManagerService {
           currentDeadline: request.deadline,
           newDeadline: newDeadline,
           reason: reason,
-          requestId: requestId,
+          requestId: requestId.toString(), // Convert BigInt to string
         }
       );
     }
@@ -1428,7 +1429,7 @@ export class RequestManagerService {
     return {
       success: true,
       message: 'Extension request submitted successfully',
-      requestId: requestId
+      requestId: requestId.toString() // Convert BigInt to string for JSON response
     };
   }
 

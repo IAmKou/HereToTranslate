@@ -203,8 +203,8 @@
                 >
                   <div class="room-avatar-container">
                     <img
-                      v-if="room.avatarUrl"
-                      :src="getFullAvatarUrl(room.avatarUrl)"
+                      v-if="getRoomAvatar(room)"
+                      :src="getRoomAvatar(room)"
                       :alt="room.name"
                       class="room-avatar-img"
                     />
@@ -216,15 +216,17 @@
 
                   <div class="room-info">
                     <div class="room-header">
-                      <span class="room-name">{{ room.name }}</span>
+                      <span class="room-name" :class="{ 'unread': room.unreadCount && room.unreadCount > 0 }">
+                        {{ room.name }}
+                      </span>
                       <span class="room-time">2m</span>
                     </div>
                     <div class="room-preview">
                       <span v-if="room.isGroupChat" class="member-count">
                         {{ room.members?.length || 0 }} members
                       </span>
-                      <span v-else class="last-message">
-                        Last message preview...
+                      <span v-else class="last-message" :class="{ 'unread': room.unreadCount && room.unreadCount > 0 }">
+                        {{ room.unreadCount && room.unreadCount > 0 ? `${room.unreadCount} new message${room.unreadCount > 1 ? 's' : ''}` : 'Last message preview...' }}
                       </span>
                     </div>
                     <div v-if="room.isGroupChat" class="room-type-badge">
@@ -326,7 +328,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, toRaw } from 'vue';
+import { computed, onMounted, ref, toRaw, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import ChatRoom from '../components/ChatRoom.vue';
@@ -341,6 +343,8 @@ interface ChatRoomInfo {
   members: any[];
   createdBy: number;
   oppositeUser?: { id: number; username: string };
+  unreadCount?: number;
+  avatarUrl?: string;
 }
 
 interface UserInfo {
@@ -491,7 +495,7 @@ const loadChatRooms = async () => {
 };
 
 
-const openRoom = (room: ChatRoomInfo) => {
+const openRoom = async (room: ChatRoomInfo) => {
   const id = getRoomId(room);
   if (id && id.length === 24) {
     selectedRoom.value = {
@@ -500,6 +504,25 @@ const openRoom = (room: ChatRoomInfo) => {
       createdBy: room.createdBy ?? 0,
       oppositeUser: room.oppositeUser,
     };
+
+    // Mark room as read when opening
+    try {
+      await axios.post(`/api/chat/rooms/${id}/mark-read`, {}, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+
+      // Update local unread count
+      if (room.unreadCount && room.unreadCount > 0) {
+        room.unreadCount = 0;
+      }
+
+      // Notify navbar to refresh unread count
+      window.dispatchEvent(new CustomEvent('chat-room-opened'));
+
+      console.log('✅ Room marked as read:', id);
+    } catch (error) {
+      console.error('❌ Failed to mark room as read:', error);
+    }
   }
 };
 
@@ -596,33 +619,58 @@ const getFullAvatarUrl = (avatarUrl: string) => {
   return result;
 };
 
+const getRoomAvatar = (room: ChatRoomInfo) => {
+  if (room.avatarUrl) {
+    return getFullAvatarUrl(room.avatarUrl);
+  }
+  return null;
+};
+
+// Function to refresh unread counts for all rooms
+const refreshUnreadCounts = async () => {
+  try {
+    const response = await axios.get('/api/chat/unread-counts', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    const unreadData = response.data;
+
+    // Update local unread counts
+    chatRooms.value.forEach(room => {
+      const unreadInfo = unreadData.find((item: any) => item.roomId === room._id);
+      if (unreadInfo) {
+        room.unreadCount = unreadInfo.count;
+      } else {
+        room.unreadCount = 0;
+      }
+    });
+
+    console.log('✅ Unread counts refreshed for all rooms');
+  } catch (error) {
+    console.error('❌ Failed to refresh unread counts:', error);
+  }
+};
+
 onMounted(async () => {
   await fetchCurrentUser();
   await loadChatRooms();
 
+  // Listen for navbar unread count updates to refresh room unread counts
+  window.addEventListener('chat-room-opened', refreshUnreadCounts);
+
   // Check if there's a chatId in query params to auto-open conversation
   const chatId = route.query.chatId as string;
   if (chatId) {
-    console.log('Auto-opening chat with ID:', chatId);
-    // Find the chat room with this ID
-    const targetRoom = chatRooms.value.find(room => room._id === chatId);
-    if (targetRoom) {
-      console.log('Found target room, selecting it:', targetRoom);
-      selectedRoom.value = targetRoom;
-    } else {
-      console.log('Target room not found in loaded rooms, waiting for rooms to load...');
-      // If rooms haven't loaded yet, wait a bit and try again
-      setTimeout(() => {
-        const targetRoom = chatRooms.value.find(room => room._id === chatId);
-        if (targetRoom) {
-          console.log('Found target room after delay, selecting it:', targetRoom);
-          selectedRoom.value = targetRoom;
-        } else {
-          console.log('Target room still not found after delay');
-        }
-      }, 1000);
+    const room = chatRooms.value.find(r => getRoomId(r) === chatId);
+    if (room) {
+      openRoom(room);
     }
   }
+});
+
+onUnmounted(() => {
+  // Cleanup event listener
+  window.removeEventListener('chat-room-opened', refreshUnreadCounts);
 });
 </script>
 
@@ -964,6 +1012,11 @@ onMounted(async () => {
   overflow: hidden;
   white-space: nowrap;
   font-size: 0.9rem;
+
+  &.unread {
+    font-weight: 700;
+    color: #1a1a1a;
+  }
 }
 
 .room-time {
@@ -973,12 +1026,18 @@ onMounted(async () => {
 }
 
 .room-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 0.8rem;
   color: #65676b;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-  margin-top: 2px;
+
+  .last-message {
+    &.unread {
+      font-weight: 600;
+      color: #0084ff;
+    }
+  }
 }
 
 .room-type-badge {

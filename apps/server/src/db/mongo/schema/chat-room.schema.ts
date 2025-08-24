@@ -30,6 +30,10 @@ export class ChatRoom {
   // Deterministic key for DM uniqueness: sorted participants joined by ':'
   @Prop({ type: String })
   participantsKey?: string;
+
+  // Track unread message count for each participant
+  @Prop({ type: Object, default: {} })
+  unreadCount?: Record<string, number>;
 }
 
 export type ChatRoomDocument = ChatRoom & Document & { _id: Types.ObjectId };

@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-window">
+  <div class="chat-window" tabindex="0">
     <!-- ✅ Notification -->
     <Transition name="notification">
       <div
@@ -1225,6 +1225,10 @@ const sendMessage = () => {
     message: msg.value.trim(),
     replyToId: replyingTo.value?._id
   })
+
+  // Mark room as read when sending a message (active engagement)
+  markRoomAsRead();
+
   msg.value = ''
   replyingTo.value = null
 }
@@ -1408,7 +1412,18 @@ const autoResize = (event: Event) => {
   textarea.style.height = textarea.scrollHeight + 'px'
 }
 
-const handleScroll = () => {
+const handleScroll = async () => {
+  // Check if user has scrolled to bottom (indicating they've seen all messages)
+  if (messageContainer.value) {
+    const { scrollTop, scrollHeight, clientHeight } = messageContainer.value;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10; // 10px threshold
+
+    if (isAtBottom) {
+      // Mark room as read when user scrolls to bottom
+      await markRoomAsRead();
+    }
+  }
+
   // Add scroll handling logic if needed for infinite loading
   // This can be used for loading older messages when scrolling to top
 }
@@ -1422,12 +1437,34 @@ const formatFullTime = (timestamp: string): string => {
 // ======================== Lifecycle ============================
 const messageContainer = ref<HTMLElement | null>(null)
 
+// Function to mark room as read
+const markRoomAsRead = async () => {
+  try {
+    await axios.post(`/api/chat/rooms/${props.roomId}/mark-read`);
+
+    // Notify navbar to refresh unread count
+    window.dispatchEvent(new CustomEvent('chat-room-opened'));
+
+    console.log('✅ Room marked as read:', props.roomId);
+  } catch (error) {
+    console.error('❌ Failed to mark room as read:', error);
+  }
+};
+
+// Function to mark room as read on focus
+const markRoomAsReadOnFocus = async () => {
+  await markRoomAsRead();
+};
+
 const loadMessages = async () => {
   isLoading.value = true
   try {
     const res = await axios.get(`/api/chat/messages/${props.roomId}`)
     messages.value = res.data
     scrollToBottom()
+
+    // Mark room as read when messages are loaded
+    await markRoomAsRead();
   } catch {
     error.value = 'Failed to load messages'
   } finally {
@@ -1452,6 +1489,17 @@ onMounted(() => {
   loadParticipants()
   loadMessages()
 
+  // Mark room as read when chat window gains focus
+  const markRoomAsReadOnFocus = async () => {
+    await markRoomAsRead();
+  };
+
+  // Add focus event listener to the chat window
+  const chatWindow = document.querySelector('.chat-window');
+  if (chatWindow) {
+    chatWindow.addEventListener('focus', markRoomAsReadOnFocus);
+  }
+
   // Only close emoji picker when clicking outside of it
   document.addEventListener('click', (event) => {
     const emojiPicker = document.querySelector('.emoji-picker')
@@ -1470,6 +1518,12 @@ onMounted(() => {
 onUnmounted(() => {
   socket.value?.disconnect()
   if (socket.value) socket.value = null
+
+  // Remove focus event listener
+  const chatWindow = document.querySelector('.chat-window');
+  if (chatWindow) {
+    chatWindow.removeEventListener('focus', markRoomAsReadOnFocus);
+  }
 })
 
 const handleImageError = (message: ChatMessage) => {

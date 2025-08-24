@@ -21,6 +21,7 @@
           </router-link>
           <router-link to="/chat" class="navbar-item" aria-label="Chat" exact>
             <i class="pi pi-comments nav-icon"></i> Chat
+            <span v-if="totalUnreadCount > 0" class="unread-badge">{{ totalUnreadCount > 99 ? '99+' : totalUnreadCount }}</span>
           </router-link>
 
 
@@ -88,17 +89,24 @@
                   </div>
                 </div>
                 <div class="menu-section">
-                  <div class="menu-header">Account</div>
                   <router-link to="/userprofile" class="menu-item" tabindex="0">
                     <i class="pi pi-user"></i> View Profile <span class="shortcut"></span>
+                  </router-link>
+                  <router-link to="/settings" class="menu-item" tabindex="0">
+                    <i class="pi pi-cog"></i> Settings <span class="shortcut"></span>
                   </router-link>
                 </div>
                 <div class="menu-divider"></div>
                 <div class="menu-section">
-                  <div class="menu-header">Shortcuts</div>
-                  <router-link to="/my-requests" class="menu-item" tabindex="0">
-                    <i class="pi pi-list"></i> My Requests <span class="shortcut"></span>
-                  </router-link>
+                  <div class="menu-header">Team</div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-users"></i> Team <span class="shortcut"></span></div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-user-plus"></i> Invite Member <span class="shortcut"></span></div>
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-section">
+                  <div class="menu-header">Help</div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-question-circle"></i> Support <span class="shortcut"></span></div>
+                  <div class="menu-item" tabindex="0"><i class="pi pi-comments"></i> Community <span class="shortcut"></span></div>
                 </div>
                 <div class="menu-divider"></div>
                 <div class="menu-section">
@@ -116,12 +124,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
 import RealtimeNotifications from './RealtimeNotifications.vue';
+import axiosInstance from '../api';
 
 interface User {
   id: string;
@@ -141,12 +150,46 @@ interface User {
 const router = useRouter();
 const menuVisible = ref(false);
 const currentUser = ref<User | null>(null);
+const totalUnreadCount = ref(0);
+let unreadCountInterval: number | null = null;
 
 const signOut = async () => {
   await authService.logout();
   currentUser.value = null;
   router.push('/login');
   menuVisible.value = false;
+};
+
+// Fetch total unread message count
+const fetchUnreadCount = async () => {
+  try {
+    if (!currentUser.value) return;
+
+    const response = await axiosInstance.get('/chat/unread-count/total');
+    totalUnreadCount.value = response.data.totalUnreadCount || 0;
+  } catch (error) {
+    console.error('Failed to fetch unread count:', error);
+    totalUnreadCount.value = 0;
+  }
+};
+
+// Start periodic unread count updates
+const startUnreadCountUpdates = () => {
+  if (unreadCountInterval) return;
+
+  // Fetch immediately
+  fetchUnreadCount();
+
+  // Then update every 30 seconds
+  unreadCountInterval = window.setInterval(fetchUnreadCount, 30000);
+};
+
+// Stop periodic updates
+const stopUnreadCountUpdates = () => {
+  if (unreadCountInterval) {
+    clearInterval(unreadCountInterval);
+    unreadCountInterval = null;
+  }
 };
 
 const getInitials = (name: string): string => {
@@ -215,6 +258,35 @@ onMounted(() => {
       console.error('Error signing out:', error);
     }
   });
+
+  // Listen for chat room updates to refresh unread count
+  window.addEventListener('chat-room-opened', () => {
+    console.log('🟣 [NAVBAR] Chat room opened, refreshing unread count');
+    fetchUnreadCount();
+  });
+
+  // Start unread count updates when user is loaded
+  if (currentUser.value) {
+    startUnreadCountUpdates();
+  }
+});
+
+// Watch for user changes to start/stop unread count updates
+watch(currentUser, (newUser: User | null) => {
+  if (newUser) {
+    startUnreadCountUpdates();
+  } else {
+    stopUnreadCountUpdates();
+    totalUnreadCount.value = 0;
+  }
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopUnreadCountUpdates();
+  window.removeEventListener('user-avatar-updated', loadUserInfo);
+  window.removeEventListener('chat-room-opened', fetchUnreadCount);
+  document.removeEventListener('sign-out', signOut);
 });
 </script>
 
@@ -290,6 +362,7 @@ onMounted(() => {
   padding: 6px 14px;
   border-radius: 6px;
   transition: color 0.2s, background 0.2s;
+  position: relative;
 }
 
 .navbar-item:hover, .navbar-item.router-link-exact-active {
@@ -300,6 +373,37 @@ onMounted(() => {
 .nav-icon {
   font-size: 1.1em;
   margin-right: 2px;
+}
+
+.unread-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .button.is-primary {

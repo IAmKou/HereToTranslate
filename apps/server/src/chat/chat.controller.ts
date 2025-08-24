@@ -353,5 +353,67 @@ export class ChatController {
       throw new BadRequestException('Failed to remove member from room');
     }
   }
+
+  // Get unread message count for a specific room
+  @Get('rooms/:roomId/unread-count')
+  @UseGuards(JwtAuthGuard)
+  async getRoomUnreadCount(
+    @Param('roomId') roomId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!Types.ObjectId.isValid(roomId)) {
+      throw new BadRequestException('Invalid room ID');
+    }
+
+    try {
+      const count = await this.chatService.getUnreadCount(roomId, Number(req.user.id));
+      return { roomId, unreadCount: count };
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch unread count');
+    }
+  }
+
+  // Mark a room as read for the current user
+  @Post('rooms/:roomId/mark-read')
+  @UseGuards(JwtAuthGuard)
+  async markRoomAsRead(
+    @Param('roomId') roomId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!Types.ObjectId.isValid(roomId)) {
+      throw new BadRequestException('Invalid room ID');
+    }
+
+    try {
+      await this.chatService.markRoomAsRead(roomId, Number(req.user.id));
+      return { message: 'Room marked as read successfully' };
+    } catch (error) {
+      throw new BadRequestException('Failed to mark room as read');
+    }
+  }
+
+  // Get total unread count across all rooms for current user
+  @Get('unread-count/total')
+  @UseGuards(JwtAuthGuard)
+  async getTotalUnreadCount(@Req() req: AuthenticatedRequest) {
+    try {
+      const count = await this.chatService.getTotalUnreadCount(Number(req.user.id));
+      return { totalUnreadCount: count };
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch total unread count');
+    }
+  }
+
+  // Get unread counts for all rooms of current user
+  @Get('unread-counts')
+  @UseGuards(JwtAuthGuard)
+  async getUnreadCountsForUser(@Req() req: AuthenticatedRequest) {
+    try {
+      const counts = await this.chatService.getUnreadCountsForUser(Number(req.user.id));
+      return { unreadCounts: counts };
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch unread counts');
+    }
+  }
 }
 

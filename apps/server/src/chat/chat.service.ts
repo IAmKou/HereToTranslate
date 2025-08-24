@@ -40,7 +40,97 @@ export class ChatService implements OnModuleInit {
       fileName: data.fileName,
       replyTo: data.replyToId ? new Types.ObjectId(data.replyToId) : null,
     });
-    return msg.save();
+
+    const savedMessage = await msg.save();
+
+    // Update unread count for all participants except sender
+    await this.updateUnreadCount(data.roomId, data.senderId);
+
+    return savedMessage;
+  }
+
+  // Update unread message count for a chat room
+  private async updateUnreadCount(roomId: string, senderId: number) {
+    try {
+      const room = await this.chatRoomModel.findById(roomId).lean();
+      if (!room) return;
+
+      // Increment unread count for all participants except sender
+      const participantsToUpdate = room.participants.filter(id => id !== senderId);
+
+      await this.chatRoomModel.updateMany(
+        { _id: roomId },
+        {
+          $inc: {
+            [`unreadCount.${senderId}`]: 0, // Reset sender's unread count
+            ...Object.fromEntries(participantsToUpdate.map(id => [`unreadCount.${id}`, 1]))
+          }
+        }
+      );
+    } catch (error) {
+      console.error('[chat] Failed to update unread count:', error);
+    }
+  }
+
+  // Mark messages as read for a user in a specific room
+  async markRoomAsRead(roomId: string, userId: number): Promise<void> {
+    try {
+      await this.chatRoomModel.updateOne(
+        { _id: roomId },
+        { $set: { [`unreadCount.${userId}`]: 0 } }
+      );
+    } catch (error) {
+      console.error('[chat] Failed to mark room as read:', error);
+    }
+  }
+
+  // Get unread message count for a specific user in a room
+  async getUnreadCount(roomId: string, userId: number): Promise<number> {
+    try {
+      const room = await this.chatRoomModel.findById(roomId).lean();
+      if (!room || !room.unreadCount) return 0;
+
+      return room.unreadCount[userId] || 0;
+    } catch (error) {
+      console.error('[chat] Failed to get unread count:', error);
+      return 0;
+    }
+  }
+
+  // Get total unread count across all rooms for a user
+  async getTotalUnreadCount(userId: number): Promise<number> {
+    try {
+      const rooms = await this.chatRoomModel.find({
+        participants: userId,
+        [`unreadCount.${userId}`]: { $gt: 0 }
+      }).lean();
+
+      return rooms.reduce((total, room) => {
+        return total + (room.unreadCount?.[userId] || 0);
+      }, 0);
+    } catch (error) {
+      console.error('[chat] Failed to get total unread count:', error);
+      return 0;
+    }
+  }
+
+  // Get unread counts for all chat rooms of a user
+  async getUnreadCountsForUser(userId: number): Promise<Array<{ roomId: string; count: number; roomName: string }>> {
+    try {
+      const rooms = await this.chatRoomModel.find({
+        participants: userId,
+        [`unreadCount.${userId}`]: { $gt: 0 }
+      }).lean();
+
+      return rooms.map(room => ({
+        roomId: room._id.toString(),
+        count: room.unreadCount?.[userId] || 0,
+        roomName: room.name || 'Chat'
+      }));
+    } catch (error) {
+      console.error('[chat] Failed to get unread counts for user:', error);
+      return [];
+    }
   }
   async getMessages(roomId: Types.ObjectId): Promise<any[]> {
     const messages = await this.chatMessageModel
@@ -124,6 +214,7 @@ export class ChatService implements OnModuleInit {
           participants: room.participants,
           createdBy: room.createdBy,
           oppositeUser,
+          unreadCount: room.unreadCount?.[userId] || 0,
         };
       }),
     );

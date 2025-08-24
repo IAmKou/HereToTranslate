@@ -358,6 +358,51 @@ export class RequestManagerService {
     }));
   }
 
+  async fetchAllRequestsIncludingExpired(userId: bigint) {
+    const query = this.requestRepository
+      .createQueryBuilder('requests')
+      .select([
+        'requests.id',
+        'requests.title',
+        'requests.description',
+        'requests.dealAmount',
+        'requests.deadline',
+        'requests.status',
+        'requests.createdAt',
+        'requests.targetLanguages',
+        'requester.id',
+        'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
+        'category.name',
+        'tags.id',
+        'tags.name',
+        'assignee.id',
+        'assignee.username',
+        'assignee.fullName',
+        'assignee.email',
+      ])
+      .where('requests.isPublic = true')
+      .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.category', 'category')
+      .leftJoin('requests.assignee', 'assignee')
+      .leftJoinAndSelect('requests.tags', 'tags')
+      .leftJoinAndSelect('requests.registrants', 'registrants')
+      .orderBy('requests.id', 'ASC');
+
+    const result = await query.getMany();
+
+    return result.map((r: RequestEntity) => ({
+      ...r,
+      isRegistered: r.registrants
+        ? r.registrants.some(
+          (u: UserEntity) => u.id.toString() === userId.toString()
+        )
+        : false,
+    }));
+  }
+
   async fetchPrivateRequests(uid: bigint) {
     const query = this.requestRepository
       .createQueryBuilder('requests')
@@ -542,6 +587,56 @@ export class RequestManagerService {
           fileContent: file.buffer,
           requestId,
         });
+      }
+    }
+
+    return this.requestRepository.save(request);
+  }
+
+  async updateDeadline(requestId: bigint, deadline: string) {
+    const request = await this.requestRepository.findOne({
+      where: { id: BigInt(requestId) },
+    });
+
+    if (!request) throw new NotFoundException(`Unknown request`);
+
+    const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) {
+      throw new BadRequestException(`Invalid deadline format`);
+    }
+
+    // Update deadline
+    request.deadline = deadlineDate;
+
+    // Auto-update status based on new deadline
+    const now = new Date();
+
+    if (deadlineDate > now) {
+      // Deadline is in the future
+      const timeUntilDeadline = deadlineDate.getTime() - now.getTime();
+      const oneDayInMs = 24 * 60 * 60 * 1000;
+
+      if (timeUntilDeadline <= oneDayInMs) {
+        // Deadline is within 1 day
+        request.status = RequestStatus.WaitingApproval;
+      } else {
+        // Deadline is more than 1 day away
+        if (request.status === RequestStatus.Failed) {
+          // If request was failed due to expired deadline, restore it to approved
+          request.status = RequestStatus.Approved;
+        } else if (request.status === RequestStatus.Pending) {
+          // Keep pending status
+          request.status = RequestStatus.Pending;
+        } else if (request.status === RequestStatus.Approved) {
+          // Keep approved status
+          request.status = RequestStatus.Approved;
+        }
+      }
+    } else {
+      // Deadline has passed
+      if (request.status !== RequestStatus.Completed &&
+        request.status !== RequestStatus.Cancelled) {
+        request.status = RequestStatus.Failed;
       }
     }
 

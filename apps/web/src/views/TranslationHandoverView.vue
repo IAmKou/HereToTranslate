@@ -194,6 +194,7 @@ const toast = useToast();
 // Route params
 const projectId = computed(() => route.params.projectId as string);
 const branchId = computed(() => route.params.branchId as string);
+const requestId = computed(() => route.params.requestId as string);
 
 // State
 const loading = ref(true);
@@ -205,6 +206,7 @@ const projectInfo = ref<any>(null);
 const files = ref<any[]>([]);
 const translationStrings = ref<any[]>([]);
 const handoverInfo = ref<any>(null);
+const isRequestBased = computed(() => !!requestId.value);
 
 // Computed
 const totalFiles = computed(() => files.value.length);
@@ -230,26 +232,63 @@ async function loadProjectData() {
   error.value = '';
 
   try {
-    const projectRes = await axiosInstance.get(`/projects/${projectId.value}`);
-    projectInfo.value = projectRes.data;
-
-    const filesRes = await axiosInstance.get(`/files/project/${projectId.value}?branchId=${branchId.value}`);
-    files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
-
-    const stringsRes = await axiosInstance.get('/translation/strings', {
-      params: { projectId: projectId.value, branchId: branchId.value }
-    });
-    translationStrings.value = Array.isArray(stringsRes.data) ? stringsRes.data : [];
-
-    // Load handover information
-    const handoverRes = await axiosInstance.get(`/translation/handover/${projectId.value}/${branchId.value}`);
-    handoverInfo.value = handoverRes.data;
-
+    if (isRequestBased.value) {
+      // Load data from request instead of project
+      await loadDataFromRequest();
+    } else {
+      // Load data from project (existing logic)
+      await loadDataFromProject();
+    }
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Could not load project information';
+    error.value = err.response?.data?.message || 'Could not load information';
   } finally {
     loading.value = false;
   }
+}
+
+async function loadDataFromRequest() {
+  // Load request information
+  const requestRes = await axiosInstance.get(`/requests/${requestId.value}`);
+  const request = requestRes.data;
+
+  // Set project info from request
+  projectInfo.value = {
+    name: request.title,
+    description: request.description,
+    createdAt: request.createdAt,
+    targetLanguages: request.targetLanguages || []
+  };
+
+  // Load files from request
+  const filesRes = await axiosInstance.get(`/files/request/${requestId.value}`);
+  files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
+
+  // Load translation strings from request
+  const stringsRes = await axiosInstance.get('/translation/strings', {
+    params: { requestId: requestId.value }
+  });
+  translationStrings.value = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+
+  // Load handover information from request
+  const handoverRes = await axiosInstance.get(`/translation/handover/request/${requestId.value}`);
+  handoverInfo.value = handoverRes.data;
+}
+
+async function loadDataFromProject() {
+  const projectRes = await axiosInstance.get(`/projects/${projectId.value}`);
+  projectInfo.value = projectRes.data;
+
+  const filesRes = await axiosInstance.get(`/files/project/${projectId.value}?branchId=${branchId.value}`);
+  files.value = Array.isArray(filesRes.data) ? filesRes.data : [];
+
+  const stringsRes = await axiosInstance.get('/translation/strings', {
+    params: { projectId: projectId.value, branchId: branchId.value }
+  });
+  translationStrings.value = Array.isArray(stringsRes.data) ? stringsRes.data : [];
+
+  // Load handover information
+  const handoverRes = await axiosInstance.get(`/translation/handover/${projectId.value}/${branchId.value}`);
+  handoverInfo.value = handoverRes.data;
 }
 
 function getFileProgress(file: any): number {
@@ -315,9 +354,16 @@ async function downloadAllFiles() {
   downloading.value = true;
 
   try {
-    const response = await axiosInstance.get(`/translation/download/all/${projectId.value}/${branchId.value}`, {
-      responseType: 'blob'
-    });
+    let response;
+    if (isRequestBased.value) {
+      response = await axiosInstance.get(`/translation/download/request/${requestId.value}`, {
+        responseType: 'blob'
+      });
+    } else {
+      response = await axiosInstance.get(`/translation/download/all/${projectId.value}/${branchId.value}`, {
+        responseType: 'blob'
+      });
+    }
 
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
@@ -348,8 +394,13 @@ async function downloadAllFiles() {
 }
 
 function downloadIndividualFiles() {
-  // Navigate to individual file download page or open modal
-  router.push(`/projects/${projectId.value}/branches/${branchId.value}/files`);
+  if (isRequestBased.value) {
+    // Navigate to individual file download page for request
+    router.push(`/requests/${requestId.value}/files`);
+  } else {
+    // Navigate to individual file download page for project
+    router.push(`/projects/${projectId.value}/branches/${branchId.value}/files`);
+  }
 }
 
 onMounted(() => {

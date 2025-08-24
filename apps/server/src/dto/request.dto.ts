@@ -27,7 +27,6 @@ export class CreateRequestDto {
   @Type(() => Number)
   dealAmount: number;
 
-  @MaxLength(10)
   @IsDateString({ strict: true })
   deadline: string;
 
@@ -79,7 +78,6 @@ export class UpdateRequestDto {
 
   @IsOptional()
   @IsDateString({ strict: true })
-  @MaxLength(10)
   deadline?: string;
 
   @IsOptional()

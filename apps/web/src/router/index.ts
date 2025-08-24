@@ -99,6 +99,13 @@ const router = createRouter({
       path: '/admin/withdrawals',
       name: 'admin-withdrawals',
       component: AdminWithdrawals,
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/deadline-checker',
+      name: 'deadline-checker',
+      component: () => import('../components/DeadlineCheckerUI.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
       path: '/admin/notifications',
@@ -220,6 +227,12 @@ const router = createRouter({
     {
       path: '/projects/:projectId/branches/:branchId/handover',
       name: 'translation-handover',
+      component: () => import('../views/TranslationHandoverView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/requests/:requestId/handover',
+      name: 'request-handover',
       component: () => import('../views/TranslationHandoverView.vue'),
       meta: { requiresAuth: true },
     },

@@ -1729,11 +1729,8 @@ function onRespondCompleted() {
 }
 
 function viewHandover(request) {
-  // Navigate to handover page for the project
-  if (request.project) {
-    const branchId = request.project.branches?.[0]?.id || 'main';
-    router.push(`/projects/${request.project.id}/branches/${branchId}/handover`);
-  }
+  // Navigate to handover page for the request instead of project
+  router.push(`/requests/${request.id}/handover`);
 }
 
 function getStatusClass(status) {

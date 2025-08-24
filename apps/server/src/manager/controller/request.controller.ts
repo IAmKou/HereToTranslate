@@ -18,6 +18,8 @@ import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { IsPublicEndpoint } from '#LocalProject/Auth/decorators/is-public-endpoint.decorator';
+import { ForRoles } from '../../auth/decorators/for-role.decorator';
+import { UserRole } from '../../db/mysql/entity/user.entity';
 
 @Controller('requests')
 @UseInterceptors(JsonSerializerInterceptor)
@@ -61,6 +63,15 @@ export class RequestController {
     // that won't match any real user ID
     const userId = req?.user?.id ? BigInt(req.user.id) : BigInt(0);
     return this.requests.fetchRequests(userId);
+  }
+
+  @IsPublicEndpoint()
+  @Get('all-including-expired')
+  async getAllRequestsIncludingExpired(@Req() req?: AuthenticatedRequest) {
+    // If user is authenticated, pass their ID, otherwise pass a special value (0)
+    // that won't match any real user ID
+    const userId = req?.user?.id ? BigInt(req.user.id) : BigInt(0);
+    return this.requests.fetchAllRequestsIncludingExpired(userId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -158,6 +169,17 @@ export class RequestController {
     @Req() req: AuthenticatedRequest
   ) {
     return this.requests.updateRequest(req.user.id, requestId, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ForRoles(UserRole.Admin)
+  @Post(':requestId/update-deadline')
+  async updateDeadline(
+    @Param('requestId', BigIntTransformPipe) requestId: bigint,
+    @Body() body: { deadline: string },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.requests.updateDeadline(requestId, body.deadline);
   }
 
   @UseGuards(JwtAuthGuard)

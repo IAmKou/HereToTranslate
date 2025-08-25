@@ -80,7 +80,6 @@ export class TranslationController {
       const base = dotIdx > -1 ? fileName.slice(0, dotIdx) : fileName;
       const langSuffix = (language || '').toUpperCase();
       const asposeName = `${base.replace(/\.[^.]+$/, '')}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
-      await this.asposeService.uploadFile(asposeName, buffer);
       return this.asposeService.downloadFile(`pdf/${asposeName}`, 'herett');
     }
 
@@ -96,9 +95,12 @@ export class TranslationController {
     @Res() res: Response
   ) {
     const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language, format);
-    const filePath = `pdf/${fileName}`;
     if (fileType === 'application/pdf') {
-      return this.asposeService.downloadFile(filePath, 'herett');
+      const dotIdx = String(fileName).lastIndexOf('.');
+      const base = dotIdx > -1 ? fileName.slice(0, dotIdx) : fileName;
+      const langSuffix = (language || '').toUpperCase();
+      const asposeName = `${base.replace(/\.[^.]+$/, '')}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
+      return this.asposeService.downloadFile(`pdf/${asposeName}`, 'herett');
     }
     res.setHeader('Content-Type', fileType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);

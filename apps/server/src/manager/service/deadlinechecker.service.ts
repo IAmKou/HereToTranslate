@@ -205,6 +205,14 @@ export class DeadlineCheckerService {
       this.logger.log(`Found ${overdueRequests.length} overdue requests`);
 
       for (const req of overdueRequests) {
+        if (
+          req.status === RequestStatus.Failed
+          || req.status === RequestStatus.Completed
+          || req.status === RequestStatus.WaitingApproval
+        ) {
+          continue; // Skip already handled requests
+        }
+
         const progress = await this.translationService.getTranslationProgress(
           req.project.id.toString(),
           req.project.defaultBranch?.id.toString() || '1'

@@ -441,14 +441,14 @@
                   <span class="btn-icon">✕</span> Cancel Project
                 </button>
                 <button
-                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
+                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId && request.status === 'PENDING' && (!request.assignee || request.assignee?.id === userId)"
                   class="action-btn approve"
                   @click="approveRequest"
                 >
-                  <i class="pi pi-check"></i> Approve
+                  <i class="pi pi-check"></i> Accept
                 </button>
                 <button
-                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
+                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId && request.status === 'PENDING' && (!request.assignee || request.assignee?.id === userId)"
                   class="action-btn reject"
                   @click="rejectRequest"
                 >
@@ -1021,7 +1021,8 @@ async function confirmCancelProject() {
   if (!request.value?.id) return;
 
   try {
-    await axiosInstance.post(`/requests/${request.value.id}/cancel-project`);
+    // Backend exposes POST /requests/:id/cancel (no /cancel-project)
+    await axiosInstance.post(`/requests/${request.value.id}/cancel`);
     toast.add({
       severity: 'success',
       summary: 'Success',
@@ -1041,10 +1042,31 @@ async function confirmCancelProject() {
 }
 
 function approveRequest() {
-  alert('Approve request!');
+  (async () => {
+    if (!request.value?.id) return;
+    try {
+      await axiosInstance.post(`/requests/${request.value.id}/private`);
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Accepted private request', life: 3000 });
+      await fetchRequestDetail();
+    } catch (e: any) {
+      toast.add({ severity: 'error', summary: 'Error', detail: e?.response?.data?.message || 'Failed to accept request', life: 3000 });
+    }
+  })();
 }
 function rejectRequest() {
-  alert('Reject request!');
+  (async () => {
+    if (!request.value?.id) return;
+    try {
+      await axiosInstance.post(`/requests/${request.value.id}/decline`);
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Declined private request', life: 3000 });
+      try { await fetchRequestDetail(); } catch (_) {}
+      setTimeout(() => {
+        router.push({ name: 'my-requests' });
+      }, 300);
+    } catch (e: any) {
+      toast.add({ severity: 'error', summary: 'Error', detail: e?.response?.data?.message || 'Failed to decline request', life: 3000 });
+    }
+  })();
 }
 
 async function registerForRequest() {

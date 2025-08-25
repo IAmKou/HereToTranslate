@@ -105,7 +105,10 @@
                     <option value="APPROVED">Approved</option>
                     <option value="REJECTED">Rejected</option>
                     <option value="COMPLETED">Completed</option>
+                    <option value="INCOMPLETED">Incompleted</option>
                     <option value="CANCELLED">Cancelled</option>
+                    <option value="EXPIRED">Expired</option>
+                    <option value="FAILED">Failed</option>
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
@@ -117,9 +120,7 @@
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
-                <label class="filter-toggle" style="display:flex;align-items:center;gap:6px;">
-                  <input type="checkbox" v-model="hideExpired" /> Hide expired
-                </label>
+
                 <button @click="clearMyRequestsFilters" class="clear-btn">
                   <span class="clear-icon">✕</span>
                   <span class="clear-text">Clear</span>
@@ -222,20 +223,20 @@
                          <span class="status-icon">⏳</span>
                          <span class="status-text">Waiting Approval</span>
                        </span>
+                      <span v-else-if="req.status === 'FAILED'" class="status-badge status-failed">
+                         <span class="status-icon">❌</span>
+                         <span class="status-text">Failed</span>
+                       </span>
+                      <span v-else-if="req.status === 'INCOMPLETED'" class="status-badge status-incompleted">
+                         <span class="status-icon">⚠️</span>
+                         <span class="status-text">Incompleted</span>
+                       </span>
                       <span v-else :class="['status-badge', req.status === 'EXPIRED' ? 'status-expired' : `status-${req.status.toLowerCase()}`]">
                          {{ req.status === 'EXPIRED' ? 'Expired' : formatStatus(req.status) }}
                        </span>
                     </td>
                     <td class="visibility-cell" style="text-align: center; vertical-align: middle;">
-                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
-                         <span class="visibility-icon">🌐</span>
-                         <span class="visibility-text">Public</span>
-                       </span>
-                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge private-badge">
-                         <span class="visibility-icon">🔒</span>
-                         <span class="visibility-text">Private</span>
-                       </span>
-                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
+                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee)" class="visibility-badge public-badge">
                          <span class="visibility-icon">🌐</span>
                          <span class="visibility-text">Public</span>
                        </span>
@@ -257,16 +258,7 @@
                           <span class="btn-icon">✕</span>
                         </button>
 
-                        <!-- Review button - only show for PENDING requests without project -->
-                        <button
-                          v-if="canReview(req) && req.status === 'PENDING' && !req.project"
-                          @click="onReview(req)"
-                          class="action-btn review-btn"
-                          :title="`Review request: ${req.title}`"
-                          data-tooltip="Review and approve/reject this request"
-                        >
-                          <i class="pi pi-eye btn-icon"></i>
-                        </button>
+
 
                         <!-- Candidates button - only show for PENDING public requests without project -->
                         <router-link
@@ -292,9 +284,9 @@
                            ✓ Completed
                          </span>
 
-                        <!-- Handover button for waiting approval requests -->
+                        <!-- Handover button for failed and waiting approval requests -->
                         <button
-                          v-if="req.status === 'WAITING_APPROVAL' && req.project"
+                          v-if="(req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && req.project"
                           @click="viewHandover(req)"
                           class="action-btn handover-btn"
                           :title="`View and evaluate translation product for: ${req.title}`"
@@ -303,6 +295,18 @@
                           <i class="pi pi-eye btn-icon"></i>
                           <span class="btn-text">Review</span>
                         </button>
+
+                        <!-- Auto-completion info for WAITING_APPROVAL requests -->
+                        <div v-if="req.status === 'WAITING_APPROVAL' && req.statusChangedAt" class="auto-completion-info">
+                          <span v-if="getWaitingApprovalDaysLeft(req) > 0" class="days-left">
+                            <i class="pi pi-clock"></i>
+                            {{ getWaitingApprovalDaysLeft(req) }} day{{ getWaitingApprovalDaysLeft(req) > 1 ? 's' : '' }} left to review
+                          </span>
+                          <span v-else class="auto-completing">
+                            <i class="pi pi-exclamation-triangle"></i>
+                            Auto-completing today
+                          </span>
+                        </div>
 
                         <!-- View Extensions button for approved requests -->
                         <button
@@ -382,6 +386,7 @@
                     <option value="REJECTED">Rejected</option>
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
+                    <option value="FAILED">Failed</option>
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
@@ -526,9 +531,9 @@
                          </span>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
-                         <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
-                           <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
-                           {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                         <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic, !!req.assignee) ? 'visibility-public' : 'visibility-private']">
+                           <i :class="isRequestPublic(req.isPublic, !!req.assignee) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                           {{ isRequestPublic(req.isPublic, !!req.assignee) ? 'Public' : 'Private' }}
                          </span>
                       <span v-else class="visibility-badge visibility-private">
                            <i class="pi pi-lock"></i>
@@ -596,6 +601,7 @@
                     <option value="REJECTED">Rejected</option>
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
+                    <option value="FAILED">Failed</option>
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
@@ -703,34 +709,30 @@
                          </span>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
-                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
-                         🌐 Public
-                       </span>
-                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge custom-badge private-badge">
-                         🔒 Private
-                       </span>
-                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee)" class="visibility-badge custom-badge public-badge">
                          🌐 Public
                        </span>
                       <span v-else class="visibility-badge custom-badge private-badge">
                          🔒 Private
                        </span>
                     </td>
-                    <td class="actions text-left" style="text-align: center; vertical-align: middle;">
-                      <!-- Show message for completed requests -->
-                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium" title="This request has been completed successfully">
-                         ✓ Completed
-                       </span>
+                    <td class="actions-cell" style="text-align: center; vertical-align: middle;">
+                      <div class="actions-wrapper">
+                        <!-- Show message for completed requests -->
+                        <span v-if="req.status === 'COMPLETED'" class="status-message completed" title="This request has been completed successfully">
+                           ✓ Completed
+                         </span>
 
-                      <!-- Show message for rejected requests -->
-                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium" title="This request has been rejected">
-                         ✗ Rejected
-                       </span>
+                        <!-- Show message for rejected requests -->
+                        <span v-if="req.status === 'REJECTED'" class="status-message rejected" title="This request has been rejected">
+                           ✗ Rejected
+                         </span>
 
-                      <!-- Show message for cancelled requests -->
-                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic" title="This request has been cancelled">
-                         Request cancelled
-                       </span>
+                        <!-- Show message for cancelled requests -->
+                        <span v-if="req.status === 'CANCELLED'" class="status-message cancelled" title="This request has been cancelled">
+                           Request cancelled
+                         </span>
+                      </div>
                     </td>
                   </tr>
                   </tbody>
@@ -921,7 +923,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axiosInstance from '../api'
 import { useToast } from 'primevue/usetoast'
@@ -972,7 +974,7 @@ const registrationsItemsPerPage = ref(7)
 const myRequestsSearch = ref('')
 const myRequestsStatusFilter = ref('')
 const myRequestsVisibilityFilter = ref('')
-const hideExpired = ref(false)
+
 const assignedRequestsSearch = ref('')
 const assignedRequestsStatusFilter = ref('')
 const assignedRequestsVisibilityFilter = ref('')
@@ -1162,31 +1164,103 @@ const filteredMyRequests = computed(() => {
     // Visibility filter
     if (myRequestsVisibilityFilter.value) {
       if (myRequestsVisibilityFilter.value === 'public') {
-        filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+        // Only show public requests if status is PENDING
+        filtered = filtered.filter(req => req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee))
       } else if (myRequestsVisibilityFilter.value === 'private') {
-        filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+        // Show private requests or non-PENDING requests
+        filtered = filtered.filter(req => req.status !== 'PENDING' || !isRequestPublic(req.isPublic, !!req.assignee))
       }
     }
 
-    // Mark expired requests as EXPIRED (for display) and include in list
+    // Mark expired requests as EXPIRED or FAILED based on assignee status
+    // Also auto-complete WAITING_APPROVAL requests after 3 days
     const now = new Date();
     const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const today = stripTime(now);
     filtered = filtered.map((req) => {
-      if (req.deadline) {
+      // Handle WAITING_APPROVAL auto-completion after 3 days (priority over deadline)
+      if (req.status === 'WAITING_APPROVAL' && req.statusChangedAt) {
+        const statusChangeDate = new Date(req.statusChangedAt);
+        const daysSinceStatusChange = Math.ceil((now - statusChangeDate) / (1000 * 60 * 60 * 24));
+
+        if (daysSinceStatusChange >= 3) {
+          return { ...req, status: 'COMPLETED' };
+        }
+        // If still within 3 days, keep WAITING_APPROVAL status regardless of deadline
+        return req;
+      }
+
+      // Handle deadline expiration (only if not WAITING_APPROVAL and not already reviewed
+      // Check multiple conditions to determine if request has been reviewed
+      // Also check if status indicates it has been reviewed (INCOMPLETED, COMPLETED)
+      const hasBeenReviewed = req.reviewedAt || req.reviewDecision || req.reviewRating ||
+        req.status === 'INCOMPLETED' || req.status === 'COMPLETED';
+
+      if (req.deadline && req.status !== 'WAITING_APPROVAL' && !hasBeenReviewed) {
         const d = new Date(req.deadline);
         const deadlineDate = stripTime(d);
         if (deadlineDate < today && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
-          return { ...req, status: 'EXPIRED' };
+          // If request has assignee (project exists) and is overdue, mark as FAILED
+          // If no assignee and overdue, mark as EXPIRED
+          if (req.project) {
+            console.log(`[DEBUG] Overriding status to FAILED for request ${req.id} (deadline expired, has project, not reviewed)`);
+            return { ...req, status: 'FAILED' };
+          } else {
+            console.log(`[DEBUG] Overriding status to EXPIRED for request ${req.id} (deadline expired, no project, not reviewed)`);
+            return { ...req, status: 'EXPIRED' };
+          }
         }
       }
+
+      // Debug: Log if request has been reviewed
+      if (hasBeenReviewed) {
+        console.log(`[DEBUG] Request ${req.id} has been reviewed:`, {
+          status: req.status,
+          reviewedAt: req.reviewedAt,
+          reviewDecision: req.reviewDecision,
+          reviewRating: req.reviewRating,
+          hasBeenReviewed: hasBeenReviewed
+        });
+      } else {
+        console.log(`[DEBUG] Request ${req.id} has NOT been reviewed:`, {
+          status: req.status,
+          reviewedAt: req.reviewedAt,
+          reviewDecision: req.reviewDecision,
+          reviewRating: req.reviewRating,
+          hasBeenReviewed: hasBeenReviewed
+        });
+      }
+
+      // Debug: Log full request object for debugging
+      console.log(`[DEBUG] Full request ${req.id} object:`, {
+        id: req.id,
+        title: req.title,
+        status: req.status,
+        deadline: req.deadline,
+        reviewedAt: req.reviewedAt,
+        reviewDecision: req.reviewDecision,
+        reviewRating: req.reviewRating,
+        reviewComment: req.reviewComment,
+        hasBeenReviewed: hasBeenReviewed,
+        project: req.project
+      });
+
+      // If request has been reviewed, ensure we don't override the status
+      if (hasBeenReviewed) {
+        console.log(`[DEBUG] Request ${req.id} is reviewed, keeping original status: ${req.status}`);
+        return req;
+      }
+
+      // Additional check: if status is INCOMPLETED or COMPLETED, don't override
+      if (req.status === 'INCOMPLETED' || req.status === 'COMPLETED') {
+        console.log(`[DEBUG] Request ${req.id} has final status ${req.status}, not overriding`);
+        return req;
+      }
+
       return req;
     });
 
-    // Hide expired toggle
-    if (hideExpired.value) {
-      filtered = filtered.filter(req => req.status !== 'EXPIRED')
-    }
+
 
     // Sort the filtered results
     // default sort by deadline asc when no sortKey
@@ -1258,9 +1332,11 @@ const filteredAssignedRequests = computed(() => {
     // Visibility filter
     if (assignedRequestsVisibilityFilter.value) {
       if (assignedRequestsVisibilityFilter.value === 'public') {
-        filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+        // Only show public requests if status is PENDING
+        filtered = filtered.filter(req => req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee))
       } else if (assignedRequestsVisibilityFilter.value === 'private') {
-        filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+        // Show private requests or non-PENDING requests
+        filtered = filtered.filter(req => req.status !== 'PENDING' || !isRequestPublic(req.isPublic, !!req.assignee))
       }
     }
 
@@ -1339,9 +1415,11 @@ const filteredMyRegistrations = computed(() => {
     // Visibility filter
     if (myRegistrationsVisibilityFilter.value) {
       if (myRegistrationsVisibilityFilter.value === 'public') {
-        filtered = filtered.filter(req => isRequestPublic(req.isPublic))
+        // Only show public requests if status is PENDING
+        filtered = filtered.filter(req => req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee))
       } else if (myRegistrationsVisibilityFilter.value === 'private') {
-        filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+        // Show private requests or non-PENDING requests
+        filtered = filtered.filter(req => req.status !== 'PENDING' || !isRequestPublic(req.isPublic, !!req.assignee))
       }
     }
 
@@ -1694,8 +1772,22 @@ function onExtensionsUpdated() {
 }
 
 function canReview(req) {
-  // Tùy quyền, ví dụ: return req.status === 'pending' && userIsAdmin
-  return false
+  // Cho phép review nếu:
+  // 1. Status là PENDING (chưa được giao) + không có project
+  // 2. Status là FAILED (translator chưa hoàn thành đúng hạn) + không có project
+  // 3. Status là WAITING_APPROVAL (đang chờ duyệt) + không có project
+  // 4. Có thể thêm logic quyền ở đây nếu cần
+  return (req.status === 'PENDING' || req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && !req.project
+}
+
+function getWaitingApprovalDaysLeft(req) {
+  if (req.status !== 'WAITING_APPROVAL' || !req.statusChangedAt) return 0;
+
+  const now = new Date();
+  const statusChangeDate = new Date(req.statusChangedAt);
+  const daysSinceStatusChange = Math.ceil((now - statusChangeDate) / (1000 * 60 * 60 * 24));
+
+  return Math.max(0, 3 - daysSinceStatusChange);
 }
 
 function onRequestReviewed() {
@@ -1744,7 +1836,8 @@ function getStatusClass(status) {
     'EXTENSION_APPROVED': 'status-extension-approved',
     'EXTENSION_REJECTED': 'status-extension-rejected',
     'WAITING_APPROVAL': 'status-waiting-approval',
-    'EXPIRED': 'status-expired'
+    'EXPIRED': 'status-expired',
+    'FAILED': 'status-failed'
   }
   return classMap[status] || 'status-pending'
 }
@@ -1755,12 +1848,14 @@ function formatStatus(status) {
     'APPROVED': 'Approved',
     'REJECTED': 'Rejected',
     'COMPLETED': 'Completed',
+    'INCOMPLETED': 'Incompleted',
     'CANCELLED': 'Cancelled',
     'EXTENSION_REQUESTED': 'Extension Requested',
     'EXTENSION_APPROVED': 'Extension Approved',
     'EXTENSION_REJECTED': 'Extension Rejected',
     'WAITING_APPROVAL': 'Waiting Approval',
-    'EXPIRED': 'Expired'
+    'EXPIRED': 'Expired',
+    'FAILED': 'Failed'
   }
   return statusMap[status] || status
 }
@@ -1857,7 +1952,11 @@ async function completeRequest(requestId) {
   }
 }
 
-function isRequestPublic(isPublic) {
+function isRequestPublic(isPublic, hasAssignee = false) {
+  // Nếu request có assignee thì phải là private
+  if (hasAssignee) {
+    return false;
+  }
   // Hỗ trợ cả số, string và boolean
   return isPublic == 1 || isPublic === true;
 }
@@ -1941,6 +2040,19 @@ onMounted(async () => {
     }, 500)
   }
 })
+
+// Watch for route changes to refresh data when returning from other pages
+watch(() => route.path, async (newPath, oldPath) => {
+  // If returning from handover page, refresh data to get updated status
+  if (oldPath && oldPath.includes('/handover') && newPath.includes('/my-requests')) {
+    console.log('[DEBUG] Returning from handover page, refreshing requests data...');
+    try {
+      await fetchRequests();
+    } catch (error) {
+      console.error('[DEBUG] Error refreshing requests after handover:', error);
+    }
+  }
+}, { immediate: false });
 </script>
 
 <style scoped>
@@ -2106,6 +2218,8 @@ onMounted(async () => {
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
   transition: all 0.2s ease;
+  height: 60px;
+  box-sizing: border-box;
 }
 
 .request-row {
@@ -2215,6 +2329,8 @@ onMounted(async () => {
   font-weight: 600;
   transition: all 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: 28px;
+  justify-content: center;
 }
 
 .status-icon {
@@ -2245,6 +2361,15 @@ onMounted(async () => {
   font-weight: 600;
 }
 
+.actions-cell {
+  text-align: center;
+  vertical-align: middle;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .actions-wrapper {
   display: flex;
   gap: 0.4rem;
@@ -2253,6 +2378,7 @@ onMounted(async () => {
   justify-content: center;
   min-width: 0;
   width: 100%;
+  height: 100%;
 }
 
 .action-btn {
@@ -2436,6 +2562,10 @@ onMounted(async () => {
   font-size: 0.7rem;
   font-weight: 500;
   font-style: italic;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .status-message.cancelled {
@@ -2487,6 +2617,18 @@ onMounted(async () => {
   color: #b91c1c;
 }
 
+/* Failed status */
+.status-badge.status-failed {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Incompleted status */
+.status-badge.status-incompleted {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 /* Extension statuses */
 .status-badge.status-extension-requested {
   background: #fef3c7;
@@ -2517,6 +2659,8 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
+  height: 28px;
+  justify-content: center;
 }
 
 .visibility-public {
@@ -3374,6 +3518,34 @@ th:hover .sort-icon {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
   border-left: 4px solid #f59e0b !important;
   box-shadow: 0 0 20px rgba(245, 158, 11, 0.3) !important;
+}
+
+/* Auto-completion info styles */
+.auto-completion-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-top: 0.3rem;
+}
+
+.auto-completion-info .days-left {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.auto-completion-info .auto-completing {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.auto-completion-info i {
+  font-size: 0.8rem;
 }
 
 /* No actions message */

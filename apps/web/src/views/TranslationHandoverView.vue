@@ -46,16 +46,7 @@
                   {{ getLanguageName(lang) }}
                 </span>
               </p>
-              <p v-if="isRequestBased && !projectInfo?.project" class="request-note">
-                <i class="pi pi-info-circle"></i>
-                <strong>Note:</strong> This request does not have an associated project yet.
-                Translation handover data will be available once a project is created from this request.
-              </p>
-              <p v-if="isRequestBased && projectInfo?.project" class="request-note">
-                <i class="pi pi-check-circle"></i>
-                <strong>Note:</strong> This request has an associated project.
-                Translation data is loaded from the project.
-              </p>
+
             </div>
           </div>
 
@@ -108,7 +99,7 @@
                   <i :class="getFileIcon(file.fileType)"></i>
                   <div>
                     <div class="file-name">{{ file.fileName }}</div>
-                    <div class="file-meta">{{ formatFileSize(file.fileSize) }} • {{ getFileTypeName(file.fileType) }}</div>
+                    <div class="file-meta">{{ getFileTypeName(file.fileType) }}</div>
                   </div>
                 </div>
                 <div class="file-progress">
@@ -183,8 +174,91 @@
               <div v-if="isRequestBased" class="info-section">
                 <h4>Request Status</h4>
                 <div class="request-status-info">
-                  <p><strong>Current status:</strong> <span class="status-badge status-waiting-approval">Waiting Approval</span></p>
-                  <p><strong>Next step:</strong> Review the completed translation and approve or request changes.</p>
+                  <p><strong>Current status:</strong>
+                    <span :class="['status-badge', getStatusClass(projectInfo?.status || 'WAITING_APPROVAL')]">
+                      {{ formatStatus(projectInfo?.status || 'WAITING_APPROVAL') }}
+                    </span>
+                  </p>
+                  <p><strong>Next step:</strong> {{ getNextStepText(projectInfo?.status || 'WAITING_APPROVAL') }}</p>
+                </div>
+
+                <!-- Review and Rating Section -->
+                <div v-if="!reviewSubmitted && (projectInfo?.status === 'WAITING_APPROVAL' || projectInfo?.status === 'FAILED')" class="review-section">
+                  <h4>Review Translation</h4>
+                  <div class="review-form">
+                    <div class="review-decision">
+                      <label>Decision:</label>
+                      <div class="decision-buttons">
+                        <button
+                          @click="reviewDecision = 'APPROVED'"
+                          :class="['decision-btn', { active: reviewDecision === 'APPROVED' }]"
+                        >
+                          <i class="pi pi-check"></i> Approve
+                        </button>
+                        <button
+                          @click="reviewDecision = 'REJECTED'"
+                          :class="['decision-btn', { active: reviewDecision === 'REJECTED' }]"
+                        >
+                          <i class="pi pi-times"></i> Reject
+                        </button>
+                      </div>
+                    </div>
+
+                    <div v-if="reviewDecision" class="rating-section">
+                      <label>Rate translator quality (1-5 stars):</label>
+                      <div class="star-rating">
+                        <i
+                          v-for="star in 5"
+                          :key="star"
+                          :class="['pi', star <= rating ? 'pi-star-fill' : 'pi-star']"
+                          @click="rating = star"
+                          class="star"
+                        ></i>
+                      </div>
+                      <span class="rating-text">{{ rating }}/5 stars</span>
+                    </div>
+
+                    <div class="review-comment">
+                      <label>Additional comments (optional):</label>
+                      <textarea
+                        v-model="reviewComment"
+                        placeholder="Share your feedback about the translation quality..."
+                        rows="3"
+                      ></textarea>
+                    </div>
+
+                    <div class="review-actions">
+                      <button
+                        @click="submitReview"
+                        :disabled="!reviewDecision || rating === 0"
+                        class="btn btn-primary"
+                      >
+                        <i class="pi pi-check"></i> Submit Review
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Review Submitted -->
+                <div v-else-if="reviewSubmitted" class="review-submitted">
+                  <h4>Review Submitted</h4>
+                  <div class="review-summary">
+                    <p><strong>Decision:</strong>
+                      <span :class="['status-badge', reviewDecision === 'APPROVED' ? 'status-approved' : 'status-rejected']">
+                        {{ reviewDecision === 'APPROVED' ? 'Approved' : 'Rejected' }}
+                      </span>
+                    </p>
+                    <p><strong>Rating:</strong>
+                      <span class="rating-display">
+                        <i v-for="star in 5" :key="star"
+                           :class="['pi', star <= submittedRating ? 'pi-star-fill' : 'pi-star']"
+                           :style="{ color: star <= submittedRating ? '#fbbf24' : '#d1d5db' }">
+                        </i>
+                        {{ submittedRating }}/5
+                      </span>
+                    </p>
+                    <p v-if="submittedComment"><strong>Comment:</strong> {{ submittedComment }}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -221,6 +295,61 @@
 
       </div>
     </div>
+
+    <!-- Confirm Review Modal -->
+    <div v-if="showConfirmModal" class="modal-overlay" @click="showConfirmModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3><i class="pi pi-exclamation-triangle"></i> Confirm Review Submission</h3>
+          <button @click="showConfirmModal = false" class="modal-close">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p>Please confirm your review details before submitting:</p>
+
+          <div class="review-summary-preview">
+            <div class="summary-item">
+              <strong>Decision:</strong>
+              <span :class="['status-badge', confirmReviewData?.decision === 'APPROVED' ? 'status-approved' : 'status-rejected']">
+                {{ confirmReviewData?.decision === 'APPROVED' ? 'Approve' : 'Reject' }}
+              </span>
+            </div>
+
+            <div class="summary-item">
+              <strong>Rating:</strong>
+              <span class="rating-display">
+                <i v-for="star in 5" :key="star"
+                   :class="['pi', star <= confirmReviewData?.rating ? 'pi-star-fill' : 'pi-star']"
+                   :style="{ color: star <= confirmReviewData?.rating ? '#fbbf24' : '#d1d5db' }">
+                </i>
+                {{ confirmReviewData?.rating }}/5
+              </span>
+            </div>
+
+            <div v-if="confirmReviewData?.comment" class="summary-item">
+              <strong>Comment:</strong>
+              <p class="comment-preview">{{ confirmReviewData.comment }}</p>
+            </div>
+          </div>
+
+          <div class="warning-message">
+            <i class="pi pi-info-circle"></i>
+            <p><strong>Note:</strong> Once submitted, this review cannot be changed. Please make sure all information is correct.</p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="showConfirmModal = false" class="btn btn-secondary">
+            <i class="pi pi-times"></i> Cancel
+          </button>
+          <button @click="confirmSubmitReview" class="btn btn-primary">
+            <i class="pi pi-check"></i> Confirm & Submit
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -247,11 +376,24 @@ const loading = ref(true);
 const error = ref('');
 const downloading = ref(false);
 
+// Review state
+const reviewDecision = ref('');
+const rating = ref(0);
+const reviewComment = ref('');
+const reviewSubmitted = ref(false);
+const submittedRating = ref(0);
+const submittedComment = ref('');
+
+// Confirm modal state
+const showConfirmModal = ref(false);
+const confirmReviewData = ref<any>(null);
+
 // Data
 const projectInfo = ref<any>(null);
 const files = ref<any[]>([]);
 const translationStrings = ref<any[]>([]);
 const handoverInfo = ref<any>(null);
+const originalRequestData = ref<any>(null); // Store original request data
 const isRequestBased = computed(() => !!requestId.value);
 
 // Computed
@@ -351,18 +493,35 @@ async function loadDataFromRequest() {
     // Load request information - use the correct endpoint
     const requestRes = await axiosInstance.get(`/requests/${requestId.value}/detail`);
     const request = requestRes.data;
+    originalRequestData.value = request; // Store original request data
     console.log('Request data:', request);
     console.log('Request project:', request.project);
     console.log('Request project ID:', request.project?.id);
     console.log('Request project defaultBranch:', request.project?.defaultBranch);
+    console.log('Request assignee:', request.assignee);
 
     // Set project info from request
     projectInfo.value = {
       name: request.title,
       description: request.description,
       createdAt: request.createdAt,
-      targetLanguages: request.targetLanguages || []
+      targetLanguages: request.targetLanguages || [],
+      status: request.status,
+      project: request.project // Add project object to projectInfo
     };
+
+    // Check if request has been reviewed
+    if (request.reviewedAt && request.reviewDecision && request.reviewRating) {
+      reviewSubmitted.value = true;
+      reviewDecision.value = request.reviewDecision;
+      submittedRating.value = request.reviewRating;
+      submittedComment.value = request.reviewComment || '';
+      console.log('Request has been reviewed:', {
+        decision: request.reviewDecision,
+        rating: request.reviewRating,
+        comment: request.reviewComment
+      });
+    }
 
     // Debug request files
     console.log('Request files:', request.files);
@@ -641,6 +800,39 @@ function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('vi-VN');
 }
 
+function formatStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    'WAITING_APPROVAL': 'Waiting Approval',
+    'COMPLETED': 'Completed',
+    'INCOMPLETED': 'Incompleted',
+    'APPROVED': 'Approved',
+    'REJECTED': 'Rejected'
+  };
+  return statusMap[status] || status;
+}
+
+function getStatusClass(status: string): string {
+  const classMap: Record<string, string> = {
+    'WAITING_APPROVAL': 'status-waiting-approval',
+    'COMPLETED': 'status-completed',
+    'INCOMPLETED': 'status-incompleted',
+    'APPROVED': 'status-approved',
+    'REJECTED': 'status-rejected'
+  };
+  return classMap[status] || 'status-default';
+}
+
+function getNextStepText(status: string): string {
+  const nextStepMap: Record<string, string> = {
+    'WAITING_APPROVAL': 'Review the completed translation and approve or request changes.',
+    'COMPLETED': 'Translation has been approved and completed successfully.',
+    'INCOMPLETED': 'Translation has been rejected. Please contact the translator for corrections.',
+    'APPROVED': 'Translation has been approved and completed successfully.',
+    'REJECTED': 'Translation has been rejected. Please contact the translator for corrections.'
+  };
+  return nextStepMap[status] || 'Review the completed translation and approve or request changes.';
+}
+
 function getDeliveryMethodText(method: string): string {
   switch (method) {
     case 'download': return 'Direct download from the system';
@@ -765,6 +957,98 @@ function downloadIndividualFiles() {
     detail: 'You can download individual files using the Download button next to each file above.',
     life: 5000
   });
+}
+
+async function submitReview() {
+  if (!reviewDecision.value || rating.value === 0) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'Please select a decision and provide a rating.',
+      life: 3000
+    });
+    return;
+  }
+
+  // Debug: Log project info to understand structure
+  console.log('=== DEBUG submitReview ===');
+  console.log('projectInfo.value:', projectInfo.value);
+  console.log('projectInfo.value.assignee:', projectInfo.value?.assignee);
+  console.log('projectInfo.value.project:', projectInfo.value?.project);
+  console.log('projectInfo.value.project?.assignee:', projectInfo.value?.project?.assignee);
+
+  // Get translator ID from request data
+  let translatorId = null;
+
+  // Try to get translator ID from different possible sources
+  if (originalRequestData.value?.assignee?.id) {
+    translatorId = originalRequestData.value.assignee.id.toString();
+  } else if (projectInfo.value?.assignee?.id) {
+    translatorId = projectInfo.value.assignee.id.toString();
+  } else if (projectInfo.value?.project?.assignee?.id) {
+    translatorId = projectInfo.value.project.assignee.id.toString();
+  } else {
+    console.log('Translator ID not found in any source');
+  }
+
+  console.log('Final translatorId:', translatorId);
+
+  // Prepare review data for confirmation
+  confirmReviewData.value = {
+    requestId: requestId.value,
+    decision: reviewDecision.value,
+    rating: rating.value,
+    comment: reviewComment.value,
+    translatorId: translatorId
+  };
+
+  // Show confirmation modal
+  showConfirmModal.value = true;
+}
+
+async function confirmSubmitReview() {
+  try {
+    // Submit review to backend
+    await axiosInstance.post('/requests/review', confirmReviewData.value);
+
+    // Update local state
+    reviewSubmitted.value = true;
+    submittedRating.value = confirmReviewData.value.rating;
+    submittedComment.value = confirmReviewData.value.comment;
+
+    // Close modal
+    showConfirmModal.value = false;
+
+    // Show success message
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `Review submitted successfully! Request ${confirmReviewData.value.decision.toLowerCase()}. Redirecting to My Requests in 2 seconds...`,
+      life: 3000
+    });
+
+    // Update request status in the UI based on review decision
+    if (projectInfo.value) {
+      if (confirmReviewData.value.decision === 'APPROVED') {
+        projectInfo.value.status = 'COMPLETED';
+      } else if (confirmReviewData.value.decision === 'REJECTED') {
+        projectInfo.value.status = 'INCOMPLETED';
+      }
+    }
+
+    // Navigate back to My Requests page after successful submission
+    setTimeout(() => {
+      router.push('/my-requests');
+    }, 2000); // Wait 2 seconds to show success message before redirecting
+
+  } catch (err: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: err.response?.data?.message || 'Failed to submit review',
+      life: 3000
+    });
+  }
 }
 
 onMounted(() => {
@@ -895,6 +1179,183 @@ onMounted(() => {
   border-radius: 20px;
   font-size: 0.875rem;
   font-weight: 600;
+}
+
+.status-badge.status-approved {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-badge.status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-badge.status-completed {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-badge.status-incompleted {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Review Section Styles */
+.review-section {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.review-form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.review-decision label,
+.rating-section label,
+.review-comment label {
+  display: block;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.decision-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.decision-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  color: #6b7280;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.decision-btn:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.decision-btn.active {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: white;
+}
+
+.decision-btn.active i {
+  color: white;
+}
+
+.rating-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.star-rating {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.star {
+  font-size: 1.5rem;
+  color: #d1d5db;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.star:hover {
+  color: #fbbf24;
+}
+
+.star.pi-star-fill {
+  color: #fbbf24;
+}
+
+.rating-text {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.review-comment textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+  transition: border-color 0.2s ease;
+}
+
+.review-comment textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.review-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Review Submitted Styles */
+.review-submitted {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+}
+
+.review-summary {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.review-summary p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rating-display {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.rating-display i {
+  font-size: 1rem;
 }
 
 .progress-note {
@@ -1197,6 +1658,140 @@ onMounted(() => {
 
 .btn-secondary:hover:not(:disabled) {
   background: #cbd5e0;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  z-index: 10000;
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #2d3748;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-header h3 i {
+  color: #f59e0b;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #718096;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: #f7fafc;
+  color: #4a5568;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-body p {
+  margin-bottom: 1.5rem;
+  color: #4a5568;
+}
+
+.review-summary-preview {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.summary-item:last-child {
+  margin-bottom: 0;
+}
+
+.summary-item strong {
+  min-width: 80px;
+  color: #2d3748;
+}
+
+.comment-preview {
+  margin: 0.5rem 0 0 0;
+  padding: 0.75rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #4a5568;
+  font-style: italic;
+}
+
+.warning-message {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  color: #92400e;
+}
+
+.warning-message i {
+  color: #f59e0b;
+  margin-top: 0.125rem;
+}
+
+.warning-message p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  justify-content: flex-end;
 }
 
 

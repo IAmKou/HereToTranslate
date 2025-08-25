@@ -420,7 +420,7 @@
                   <i class="pi pi-envelope"></i> Contact Requester
                 </button>
                 <button
-                  v-if="request && request.requester && userId !== null && request.requester.id === userId && !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.status)"
+                  v-if="request && request.requester && userId !== null && request.requester.id === userId && !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.status) && !request.assignee"
                   class="action-btn edit"
                   @click="showEdit = true"
                 >
@@ -948,13 +948,17 @@ function viewFiles() {
 }
 // const userStore = useUserStore();
 const canEdit = computed(() => {
-  // Chỉ cho phép sửa nếu là requester và trạng thái KHÔNG phải là APPROVED, CANCELLED, COMPLETED
+  // Chỉ cho phép sửa nếu:
+  // 1. Là requester
+  // 2. Trạng thái KHÔNG phải là APPROVED, CANCELLED, COMPLETED
+  // 3. KHÔNG có assignee (chưa được giao cho ai làm)
   return (
     request.value &&
     request.value.requester &&
     userId.value !== null &&
     request.value.requester.id === userId.value &&
-    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.value.status)
+    !['APPROVED', 'CANCELLED', 'COMPLETED'].includes(request.value.status) &&
+    !request.value.assignee
   );
 });
 const canContact = computed(() => !!request.value?.assignee && request.value?.requester?.id !== userId.value);

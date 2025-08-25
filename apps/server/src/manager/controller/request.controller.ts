@@ -1,6 +1,6 @@
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { AuthenticatedRequest } from '#LocalProject/Auth/types';
-import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
+import { CreateRequestDto, UpdateRequestDto, SubmitReviewDto } from '#LocalProject/Dtos';
 import {
   Body,
   Controller,
@@ -263,6 +263,36 @@ export class RequestController {
     );
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('review')
+  async submitReview(
+    @Req() req: AuthenticatedRequest,
+    @Body(ValidationPipe) body: SubmitReviewDto
+  ) {
+    console.log('🔍 [CONTROLLER] submitReview called:', {
+      requestId: body.requestId,
+      decision: body.decision,
+      rating: body.rating,
+      comment: body.comment,
+      translatorId: body.translatorId,
+      userId: req.user.id
+    });
 
+    try {
+      const result = await this.requests.submitReview(
+        BigInt(body.requestId),
+        req.user.id,
+        body.decision,
+        body.rating,
+        body.comment,
+        body.translatorId
+      );
+      console.log('✅ [CONTROLLER] submitReview success:', result);
+      return result;
+    } catch (error) {
+      console.error('💥 [CONTROLLER] submitReview error:', error);
+      throw error;
+    }
+  }
 
 }

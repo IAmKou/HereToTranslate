@@ -285,4 +285,49 @@ export class MailService {
       console.error(`Failed to send extension rejection notification to ${translatorEmail}:`, error);
     }
   }
+
+  async sendReviewNotification(
+    translatorEmail: string,
+    data: {
+      translatorName: string;
+      requesterName: string;
+      requestTitle: string;
+      decision: 'APPROVED' | 'REJECTED';
+      rating: number;
+      comment?: string;
+      requestId: string;
+    }
+  ) {
+    const subject = `Translation Review - ${data.requestTitle}`;
+
+    // Calculate fields needed for template
+    const isApproved = data.decision === 'APPROVED';
+    const ratingStars = Array(data.rating).fill('⭐');
+    const emptyStars = Array(5 - data.rating).fill('☆');
+
+    try {
+      await this.mailerService.sendMail({
+        to: translatorEmail,
+        subject: subject,
+        template: './review-notification',
+        context: {
+          translatorName: data.translatorName,
+          requesterName: data.requesterName,
+          requestTitle: data.requestTitle,
+          decision: data.decision,
+          rating: data.rating,
+          comment: data.comment,
+          requestId: data.requestId,
+          baseUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+          // Add calculated fields for template
+          isApproved: isApproved,
+          ratingStars: ratingStars,
+          emptyStars: emptyStars
+        },
+      });
+      console.log(`Review notification sent to ${translatorEmail}`);
+    } catch (error) {
+      console.error(`Failed to send review notification to ${translatorEmail}:`, error);
+    }
+  }
 }

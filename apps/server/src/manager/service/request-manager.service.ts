@@ -268,6 +268,10 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requests.targetLanguages',
+        'requests.reviewedAt',
+        'requests.reviewDecision',
+        'requests.reviewRating',
+        'requests.reviewComment',
         'requester.id',
         'requester.username',
         'project.id',
@@ -875,6 +879,19 @@ export class RequestManagerService {
     const allRequests = await this.requestRepository
       .createQueryBuilder('request')
       .leftJoinAndSelect('request.assignee', 'assignee')
+      .select([
+        'request.id',
+        'request.status',
+        'request.rating',
+        'request.reviewRating',
+        'request.reviewDecision',
+        'request.reviewedAt',
+        'request.reviewComment',
+        'assignee.id',
+        'assignee.username',
+        'assignee.fullName',
+        'assignee.email'
+      ])
       .where('assignee.id IN (:...userIds)', {
         userIds: registrantIds
       })
@@ -921,9 +938,45 @@ export class RequestManagerService {
     // Return users with real stats and average rating
     return users.map((user) => {
       const userRequests = allRequests.filter(req => req.assignee?.id === user.id);
-      const completedRequests = userRequests.filter(req => req.status === RequestStatus.Completed);
-      const ratings = completedRequests.map(req => req.rating).filter(rating => rating !== null && rating > 0);
-      const averageRating = ratings.length > 0 ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1) : '0.0';
+
+      // Get ALL completed/failed requests for rating calculation (not just reviewed ones)
+      const completedRequests = userRequests.filter(req =>
+        req.status === RequestStatus.Completed ||
+        req.status === RequestStatus.Failed ||
+        req.status === RequestStatus.Incompleted
+      );
+
+      // Get ratings from completed requests (use reviewRating if available, fallback to rating)
+      const ratings = completedRequests
+        .map(req => req.reviewRating || req.rating) // Use reviewRating if available, fallback to rating
+        .filter(rating => rating !== null && rating > 0);
+
+
+
+      // Debug logging
+      console.log(`🔍 [DEBUG] User ${user.username} rating calculation:`, {
+        totalRequests: userRequests.length,
+        completedRequests: completedRequests.length,
+        allRequestsDetails: userRequests.map(req => ({
+          id: req.id,
+          status: req.status,
+          reviewRating: req.reviewRating,
+          rating: req.rating,
+          reviewedAt: req.reviewedAt,
+          reviewDecision: req.reviewDecision
+        })),
+        completedRequestsDetails: completedRequests.map(req => ({
+          id: req.id,
+          status: req.status,
+          reviewRating: req.reviewRating,
+          rating: req.rating,
+          reviewedAt: req.reviewedAt
+        })),
+        ratings: ratings,
+        averageRating: ratings.length > 0 ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1) : '0.0'
+      });
+
+
 
       return {
         ...user,
@@ -935,7 +988,7 @@ export class RequestManagerService {
         },
         joined: user.createdAt,
         lastSeen: 'Online',
-        averageRating: parseFloat(averageRating),
+        averageRating: parseFloat(ratings.length > 0 ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1) : '0.0'),
         totalRatings: ratings.length,
       };
     });
@@ -1546,6 +1599,183 @@ export class RequestManagerService {
     return count;
   }
 
+  async submitReview(
+    requestId: bigint,
+    requesterId: bigint,
+    decision: 'APPROVED' | 'REJECTED',
+    rating: number,
+    comment?: string,
+    translatorId?: string
+  ) {
+    console.log('🔍 [SERVICE] submitReview called:', {
+      requestId: requestId.toString(),
+      requesterId: requesterId.toString(),
+      decision,
+      rating,
+      comment,
+      translatorId
+    });
 
+    try {
+      // 1. Validate request exists and belongs to requester
+      const request = await this.requestRepository.findOne({
+        where: { id: requestId },
+        relations: ['requester', 'assignee', 'project']
+      });
+
+      if (!request) {
+        throw new BadRequestException('Request not found');
+      }
+
+      if (request.requester.id !== requesterId) {
+        throw new BadRequestException('You can only review your own requests');
+      }
+
+      if (request.status !== 'WAITING_APPROVAL' && request.status !== 'FAILED') {
+        throw new BadRequestException('Request is not in WAITING_APPROVAL or FAILED status');
+      }
+
+      // 2. Update request status based on review decision
+      if (decision === 'APPROVED') {
+        request.status = 'COMPLETED';
+      } else if (decision === 'REJECTED') {
+        request.status = 'INCOMPLETED';
+      }
+
+      request.reviewedAt = new Date();
+      request.reviewDecision = decision;
+      request.reviewRating = rating;
+      request.reviewComment = comment;
+
+      console.log('💾 [SERVICE] Saving review data to database:', {
+        requestId: requestId.toString(),
+        status: request.status,
+        reviewedAt: request.reviewedAt,
+        reviewDecision: request.reviewDecision,
+        reviewRating: request.reviewRating,
+        reviewComment: request.reviewComment
+      });
+
+      await this.requestRepository.save(request);
+
+      console.log('✅ [SERVICE] Review data saved successfully to database');
+
+      // 3. If translatorId is provided, update translator rating
+      if (translatorId && request.assignee) {
+        await this.updateTranslatorRating(
+          BigInt(translatorId),
+          rating,
+          comment
+        );
+      }
+
+      // 4. Create notification for translator
+      if (request.assignee) {
+        await this.notificationService.createNotification({
+          userId: request.assignee.id.toString(),
+          type: 'REQUEST_REVIEWED',
+          message: `Your translation for "${request.title}" has been ${decision.toLowerCase()}. Rating: ${rating}/5 stars.`,
+          createdBy: requesterId.toString(),
+        });
+      }
+
+      // 5. Send email notification to translator
+      if (request.assignee?.email) {
+        console.log('📧 [SERVICE] Sending email notification to translator:', {
+          translatorEmail: request.assignee.email,
+          translatorName: request.assignee.fullName || request.assignee.username,
+          decision,
+          rating
+        });
+
+        try {
+          await this.mailService.sendReviewNotification(
+            request.assignee.email,
+            {
+              translatorName: request.assignee.fullName || request.assignee.username,
+              requesterName: request.requester.fullName || request.requester.username,
+              requestTitle: request.title,
+              decision,
+              rating,
+              comment,
+              requestId: requestId.toString()
+            }
+          );
+          console.log('✅ [SERVICE] Email notification sent successfully to translator');
+        } catch (emailError) {
+          console.error('💥 [SERVICE] Failed to send email notification:', emailError);
+          // Don't throw error here to avoid failing the review submission
+        }
+      } else {
+        console.log('⚠️ [SERVICE] No translator email found, skipping email notification');
+      }
+
+      console.log('✅ [SERVICE] submitReview success:', {
+        requestId: requestId.toString(),
+        decision,
+        rating
+      });
+
+      return {
+        success: true,
+        message: `Request ${decision.toLowerCase()} successfully`,
+        requestId: requestId.toString(),
+        decision,
+        rating,
+        comment
+      };
+
+    } catch (error) {
+      console.error('💥 [SERVICE] submitReview error:', error);
+      throw error;
+    }
+  }
+
+  private async updateTranslatorRating(
+    translatorId: bigint,
+    rating: number,
+    comment?: string
+  ) {
+    try {
+      // Get current translator rating data
+      const translator = await this.userRepository.findOne({
+        where: { id: translatorId }
+      });
+
+      if (!translator) {
+        console.warn('Translator not found for rating update:', translatorId.toString());
+        return;
+      }
+
+      // Calculate new average rating
+      const currentRating = translator.rating || 0;
+      const currentReviewCount = translator.reviewCount || 0;
+
+      const newReviewCount = currentReviewCount + 1;
+      const newRating = ((currentRating * currentReviewCount) + rating) / newReviewCount;
+
+      // Update translator rating
+      translator.rating = Math.round(newRating * 10) / 10; // Round to 1 decimal place
+      translator.reviewCount = newReviewCount;
+
+      // Store review details (you might want to create a separate reviews table)
+      if (comment) {
+        translator.lastReviewComment = comment;
+      }
+
+      await this.userRepository.save(translator);
+
+      console.log('✅ [SERVICE] Translator rating updated:', {
+        translatorId: translatorId.toString(),
+        oldRating: currentRating,
+        newRating: translator.rating,
+        reviewCount: newReviewCount
+      });
+
+    } catch (error) {
+      console.error('💥 [SERVICE] Error updating translator rating:', error);
+      // Don't throw error here to avoid failing the main review submission
+    }
+  }
 
 }

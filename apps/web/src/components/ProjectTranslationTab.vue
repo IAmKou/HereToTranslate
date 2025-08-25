@@ -2,12 +2,12 @@
 import { ref, defineProps, watch, onMounted, computed, nextTick, onBeforeUnmount } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import InputText from 'primevue/inputtext';
-import Button from 'primevue/button';
+// import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
 import axiosInstance from '../api';
 import { useProjectPermission } from '../composables/useProjectPermission';
 import { SUPPORTED_LANGUAGES, type Language } from '../utils/languages';
-import BulkExportDialog from './BulkExportDialog.vue';
+// import BulkExportDialog from './BulkExportDialog.vue';
 
 interface TranslationString {
   id: string;
@@ -73,30 +73,14 @@ const focusUntranslated = ref(false);
 
 
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
-const showExportMenu = ref(false); // Control export dropdown menu
-const showBulkExportDialog = ref(false); // Control bulk export dialog
+// Removed bulk export dialog state
 
 // Hàm kiểm tra file đang processing
 function isFileProcessing(file: any): boolean {
   return file.status === 'processing';
 }
 
-// Close export menu when clicking outside
-function handleClickOutside(event: Event) {
-  const target = event.target as HTMLElement;
-  if (!target.closest('.export-dropdown')) {
-    showExportMenu.value = false;
-  }
-}
-
-// Add click outside listener
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside);
-});
+// Removed export dropdown listeners and handlers
 
 // Expose method để component cha có thể gọi reload files
 function reloadFiles() {
@@ -511,30 +495,13 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
 
     </div>
 
-    <!-- Bulk Export Section -->
-    <div v-if="files.length > 0" class="bulk-export-section" style="background: #f0f9ff; padding: 1rem 1.2rem; border-radius: 10px; margin-bottom: 1.2rem; border: 2px solid #0ea5e9; display: flex; align-items: center; justify-content: space-between;">
-      <div class="bulk-export-info" style="display: flex; align-items: center; gap: 0.6rem;">
-        <i class="pi pi-download" style="color: #0ea5e9; font-size: 1.1rem;"></i>
-        <span style="font-weight: 600; color: #0c4a6e; font-size: 0.95rem;">Bulk Export Options</span>
-        <span style="color: #0369a1; font-size: 0.85rem;">({{ files.length }} file{{ files.length > 1 ? 's' : '' }} available)</span>
-      </div>
-      <Button
-        label="Bulk Export"
-        icon="pi pi-download"
-        @click="showBulkExportDialog = true"
-        class="p-button-primary"
-        style="background: #0ea5e9; border-color: #0ea5e9; font-weight: 600;"
-      />
-    </div>
+
 
     <div v-if="loading">Loading translation strings...</div>
     <div v-else-if="error" style="color:red">{{ error }}</div>
     <div v-else>
       <div v-if="files.length === 0">No files found for this branch.</div>
-      <div v-if="files.some(f => f.fileName && f.fileName.toLowerCase().endsWith('.docx'))" class="docx-toc-hint" style="background:#e0e7ff;padding:10px 15px;border-radius:8px;margin-bottom:15px;color:#374151;font-size:0.95rem;display:flex;align-items:center;gap:0.6em;">
-        <i class="pi pi-info-circle" style="color:#6366f1;font-size:1.1rem;"></i>
-        <span><b>Note:</b> After translating, open the DOCX file and right-click on the Table of Contents → select <b>"Update Field"</b> → <b>"Update entire table"</b> to automatically refresh the table of contents formatting.</span>
-      </div>
+
       <div v-for="file in files" :key="file.fileId || file.id" class="file-accordion" style="margin-bottom: 1.5em;">
         <div class="file-header" style="cursor: default; background: #e0e7ff; border-radius: 14px; box-shadow: none;">
           <span class="file-name" style="color: #4f46e5; font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.6em;">
@@ -570,40 +537,13 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
                 <i class="pi pi-download" style="font-size: 0.9rem;"></i>
                 Export
               </button>
-              <button
-                class="export-dropdown-btn"
-                style="background: #6366f1; color: white; border: none; padding: 0.4rem 0.6rem; border-radius: 0 6px 6px 0; font-weight: 600; display: flex; align-items: center; transition: all 0.2s; font-size: 0.9rem; margin-left: -1px;"
-                @mouseenter="$event.target.style.background = '#4f46e5'"
-                @mouseleave="$event.target.style.background = '#6366f1'"
-                title="Export options"
-                @click="showExportMenu = !showExportMenu"
-              >
-                <i class="pi pi-chevron-down" style="font-size: 0.8rem;"></i>
-              </button>
-              <div v-if="showExportMenu" class="export-menu" style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; min-width: 180px; margin-top: 4px;">
-                <div class="export-menu-item" style="padding: 0.6rem 1rem; cursor: pointer; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s;" @click="exportTranslatedFile(file, 'original'); showExportMenu = false">
-                  <i class="pi pi-file" style="font-size: 0.9rem; color: #6b7280;"></i>
-                  <span style="font-size: 0.9rem;">Original Format</span>
-                </div>
-                <div class="export-menu-item" style="padding: 0.6rem 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s;" @click="exportTranslatedFile(file, 'xliff'); showExportMenu = false">
-                  <i class="pi pi-file-edit" style="font-size: 0.9rem; color: #6b7280;"></i>
-                  <span style="font-size: 0.9rem;">XLIFF Format</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Bulk Export Dialog -->
-    <BulkExportDialog
-      v-model:visible="showBulkExportDialog"
-      :project-id="String(props.projectId)"
-      :branch-id="props.branchId ? String(props.branchId) : undefined"
-      :available-languages="projectLanguages"
-      :default-language="defaultLanguage"
-    />
+
   </div>
 </template>
 

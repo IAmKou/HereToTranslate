@@ -19,7 +19,7 @@
             <span>AI Assistant</span>
           </div>
           <button class="close-btn" @click="toggleChat">
-            <i class="pi pi-times"></i>
+            <i class="pi pi-times-circle"></i>
           </button>
         </div>
 
@@ -466,6 +466,9 @@ watch(inputMessage, () => {
   font-size: 14px;
   resize: none;
   max-height: 100px;
+  overflow: hidden; /* hide scrollbar while auto-resizing */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
   outline: none;
   transition: border-color 0.2s;
 
@@ -475,6 +478,10 @@ watch(inputMessage, () => {
 
   &::placeholder {
     color: #6c757d;
+  }
+
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari */
   }
 }
 

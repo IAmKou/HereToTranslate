@@ -1,18 +1,14 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
-import  { Express } from 'express';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
 import { CommitEntity } from '../../db/mysql/entity/commit.entity';
-import * as pdfjsLib from 'pdfjs-dist';
-import mammoth from 'mammoth';
-import { renderAsync } from 'docx-preview';
-import { ActivityManagerService } from './activity-manager.service';
+import { Buffer } from 'buffer';
 
 @Injectable()
 export class FileService {
@@ -27,62 +23,11 @@ export class FileService {
     private readonly manifestService : ManifestService,
     @InjectRepository(CommitEntity)
     private readonly commitRepository: Repository<CommitEntity>,
-    @Inject(forwardRef(() => ActivityManagerService))
-    private readonly activityManagerService: ActivityManagerService,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
   }
   private readonly logger = new Logger(FileService.name);
-
-  private async hasMeaningfulContentForUpload(upload: Express.Multer.File): Promise<boolean> {
-    try {
-      const mime = upload.mimetype || '';
-      const buf = upload.buffer;
-      // Quick text-like check
-      const textLike = (
-        mime.startsWith('text/') ||
-        [
-          'application/json',
-          'text/html',
-          'text/css',
-          'application/javascript',
-          'text/xml',
-        ].includes(mime)
-      );
-      if (textLike) {
-        const text = buf.toString('utf8');
-        return /\S/.test(text);
-      }
-      // PDF check via text extraction
-      if (mime === 'application/pdf') {
-        try {
-          const segments = await this.extractPdfTextSegments(buf);
-          return Array.isArray(segments) && segments.some(seg => typeof seg?.text === 'string' && seg.text.trim().length > 0);
-        } catch (e) {
-          // If extraction fails, do not block by default
-          this.logger.warn('PDF text extraction failed during validation; allowing upload');
-          return true;
-        }
-      }
-      // DOCX raw text extraction using mammoth
-      if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        try {
-          const result = await mammoth.extractRawText({ buffer: buf });
-          const text = result?.value ?? '';
-          return /\S/.test(text);
-        } catch (e) {
-          this.logger.warn('DOCX text extraction failed during validation; allowing upload');
-          return true;
-        }
-      }
-      // Other formats: skip strict validation
-      return true;
-    } catch (error) {
-      this.logger.warn('Content validation encountered an error; allowing upload');
-      return true;
-    }
-  }
 
   async saveFile(params: {
     uid: bigint;
@@ -114,7 +59,6 @@ export class FileService {
       project: projectId ? { id: projectId } : undefined,
       branch: branchId ? { id: branchId } : undefined,
       request: requestId ? { id: requestId } : undefined,
-      isSyncedFromRequest: !!requestId,
     });
 
     this.logger.log(`Saving file: ${fileName}, type: ${fileType}, projectId: ${projectId}, branchId: ${branchId}, uploader: ${uid}`);
@@ -127,28 +71,6 @@ export class FileService {
     const safeFileName = fileName.replace(/[\\/:*?"<>|]/g, '_');
     const timestamped = `${Date.now()}_${safeFileName}`;
     const repoName = `project-${projectId}`;
-
-    // Log activity if this is a project file
-    if (projectId) {
-      try {
-        // Count strings if it's a text-based file
-        let stringCount = 0;
-        if (fileType.includes('text') || fileType.includes('document') || fileType.includes('pdf')) {
-          // This is a simplified count - in a real implementation you'd extract actual strings
-          stringCount = Math.floor(fileContent.length / 100); // Rough estimate
-        }
-
-        await this.activityManagerService.logFileUpload(
-          Number(projectId),
-          Number(uid),
-          fileName,
-          stringCount,
-          branchId ? Number(branchId) : undefined
-        );
-      } catch (error) {
-        this.logger.error('Failed to log file upload activity:', error);
-      }
-    }
 
     try {
       await this.githubService.pushInitialFile({
@@ -183,14 +105,8 @@ export class FileService {
     projectId?: bigint,
     branchId?: bigint,
     requestId?: bigint,
-    title?: string,
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
-    // Validate meaningful content for certain formats to catch empty-content files with non-zero size
-    const hasContent = await this.hasMeaningfulContentForUpload(file);
-    if (!hasContent) {
-      throw new BadRequestException('Uploaded file appears to have no extractable text content. Please upload a file with content.');
-    }
 
     // Tìm file trùng tên trong cùng project + branch
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
@@ -212,7 +128,6 @@ export class FileService {
       existingFile.uploader = { id: uid } as any;
       existingFile.updatedAt = new Date();
       existingFile.status = 'processing';
-      if (title !== undefined) existingFile.title = title;
       await this.fileRepository.save(existingFile);
       saved = {
         fileId: existingFile.id.toString(),
@@ -237,8 +152,6 @@ export class FileService {
         branch: branchId ? { id: branchId } : undefined,
         request: requestId ? { id: requestId } : undefined,
         status: 'processing',
-        title: title,
-        isSyncedFromRequest: !!requestId,
       });
       const savedFile = await this.fileRepository.save(fileEntity);
       saved = {
@@ -251,28 +164,6 @@ export class FileService {
         branchId: savedFile.branch?.id?.toString(),
         requestId: savedFile.request?.id?.toString(),
       };
-    }
-
-    // Log activity if this is a project file
-    if (projectId) {
-      try {
-        // Count strings if it's a text-based file
-        let stringCount = 0;
-        if (file.mimetype.includes('text') || file.mimetype.includes('document') || file.mimetype.includes('pdf')) {
-          // This is a simplified count - in a real implementation you'd extract actual strings
-          stringCount = Math.floor(file.buffer.length / 100); // Rough estimate
-        }
-
-        await this.activityManagerService.logFileUpload(
-          Number(projectId),
-          Number(uid),
-          fileName,
-          stringCount,
-          branchId ? Number(branchId) : undefined
-        );
-      } catch (error) {
-        this.logger.error('Failed to log file upload activity:', error);
-      }
     }
 
     // Chạy extract string ở background, trả về ngay cho client
@@ -300,7 +191,6 @@ export class FileService {
       ...saved,
       updated: isUpdate,
       status: 'processing',
-      title: title ?? undefined,
     };
   }
 
@@ -324,8 +214,8 @@ export class FileService {
   async getProjectFiles(projectId: bigint, uid: bigint) {
     const files = await this.fileRepository.find({
       where: { project: { id: projectId } },
-      relations: ['uploader', 'request'],
-      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader', 'status', 'title', 'request', 'isSyncedFromRequest'],
+      relations: ['uploader'],
+      select: ['id', 'fileName', 'fileType', 'createdAt', 'uploader', 'status'],
       order: { createdAt: 'DESC' }
     });
 
@@ -333,10 +223,8 @@ export class FileService {
       fileId: file.id.toString(),
       fileName: file.fileName,
       fileType: file.fileType,
-      title: file.title ?? null,
       createdAt: file.createdAt,
       status: file.status || 'ready',
-      syncedFromRequest: !!file.request || !!file.isSyncedFromRequest,
       uploader: {
         uploaderId: file.uploader.id.toString(),
         username: file.uploader.username,
@@ -348,8 +236,7 @@ export class FileService {
   async getFileById(fileId: string) {
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['request'],
-      select: ['id', 'fileName', 'fileType', 'fileContent', 'status', 'extractLog', 'title'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'status', 'extractLog'],
     });
     if (!file) return null;
     return {
@@ -357,11 +244,8 @@ export class FileService {
       fileName: file.fileName,
       fileType: file.fileType,
       fileContent: file.fileContent,
-      title: file.title ?? null,
       status: file.status || 'ready',
       extractLog: file.extractLog || '',
-      syncedFromRequest: !!(file as any).request,
-      requestId: (file as any).request?.id ? (file as any).request.id.toString() : undefined,
     };
   }
 
@@ -415,7 +299,7 @@ export class FileService {
 
 
   async deleteFile(fileId: bigint, userId: string | bigint) {
-    const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader', 'project', 'request'] });
+    const file = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['uploader', 'project'] });
     if (!file) throw new NotFoundException('File not found');
 
     this.logger.log(`Attempting to delete file: ${file.fileName} (ID: ${fileId})`);
@@ -424,22 +308,6 @@ export class FileService {
     const hasAttachFiles = await this.checkUserAttachFilesPermission(userId, file.project?.id);
     if (!hasAttachFiles) {
       throw new ForbiddenException('You do not have permission (AttachFiles) to delete this file');
-    }
-
-    // Chặn xóa nếu file này được đồng bộ/tạo từ một request
-    if (file.request || file.isSyncedFromRequest) {
-      throw new BadRequestException('Cannot delete file: This file is linked to a request.');
-    }
-
-    // Extra safety: re-check via query in case relation wasn't hydrated
-    const linkedCount = await this.fileRepository
-      .createQueryBuilder('f')
-      .leftJoin('f.request', 'req')
-      .where('f.id = :id', { id: file.id })
-      .andWhere('(req.id IS NOT NULL OR f.isSyncedFromRequest = true)')
-      .getCount();
-    if (linkedCount > 0) {
-      throw new BadRequestException('Cannot delete file: This file is linked to a request.');
     }
 
     // Debug: Kiểm tra tất cả commit liên quan đến file này
@@ -472,21 +340,6 @@ export class FileService {
 
     await this.fileRepository.delete(String(file.id));
     this.logger.log(`File deleted successfully: ${file.fileName}`);
-
-    // Log activity if this is a project file
-    if (file.project?.id) {
-      try {
-        await this.activityManagerService.logFileDelete(
-          Number(file.project.id),
-          Number(userId),
-          file.fileName,
-          file.branch?.id ? Number(file.branch.id) : undefined
-        );
-      } catch (error) {
-        this.logger.error('Failed to log file delete activity:', error);
-      }
-    }
-
     return { success: true, message: 'File deleted' };
   }
 
@@ -514,9 +367,7 @@ export class FileService {
     let log = '';
     function appendLog(msg: string) {
       log += `[${new Date().toISOString()}] ${msg}\n`;
-      if (file) {
-        file.extractLog = log;
-      }
+      file.extractLog = log;
     }
     try {
       appendLog('Start extracting strings...');
@@ -658,272 +509,141 @@ export class FileService {
     };
   }
 
-  async renameFile(fileId: bigint, newFileName: string, userId: bigint) {
-    // Backward compatibility: delegate to updateFileMetadata
-    return this.updateFileMetadata(fileId, { fileName: newFileName }, userId);
-  }
-
-  async updateFileMetadata(
-    fileId: bigint,
-    payload: { fileName?: string; title?: string },
-    userId: bigint
-  ) {
-    this.logger.log(`Updating file metadata ${fileId} by user ${userId}: ${JSON.stringify(payload)}`);
-
-    const file = await this.fileRepository.findOne({
-      where: { id: fileId },
-      relations: ['project', 'branch'],
+  async getFilePreview(fileId: string, language?: string): Promise<{ content: Buffer; fileName: string; fileType: string }> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+      relations: ['project'],
     });
 
-    if (!file) {
-      throw new NotFoundException(`File with ID ${fileId} not found`);
-    }
-
-    const hasPermission = await this.checkUserAttachFilesPermission(userId, file.project?.id);
-    if (!hasPermission) {
-      throw new Error('You do not have permission to update this file');
-    }
-
-    let changed = false;
-    if (typeof payload.fileName === 'string' && payload.fileName.trim().length > 0) {
-      file.fileName = payload.fileName.trim();
-      changed = true;
-    }
-    if (typeof payload.title === 'string') {
-      file.title = payload.title.trim();
-      changed = true;
-    }
-
-    if (changed) {
-      file.updatedAt = new Date();
-      await this.fileRepository.save(file);
-    }
-
-    return {
-      fileId: file.id.toString(),
-      fileName: file.fileName,
-      fileType: file.fileType,
-      createdAt: file.createdAt,
-      updatedAt: file.updatedAt,
-      uploaderId: file.uploader?.id?.toString(),
-      projectId: file.project?.id?.toString(),
-      branchId: file.branch?.id?.toString(),
-      requestId: file.request?.id?.toString(),
-      title: file.title ?? null,
-    };
-  }
-
-  async getFilePreview(fileId: string): Promise<{ fileType: string; content?: string; url?: string; previewType?: string; textSegments?: any[] }> {
-    this.logger.log(`Getting file preview for fileId: ${fileId}`);
-    const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
     if (!fileEntity) {
       throw new NotFoundException(`File with ID ${fileId} not found`);
     }
 
-    // For PDF files, extract text segments with coordinates
-    if (fileEntity.fileType === 'application/pdf') {
-      try {
-        const textSegments = await this.extractPdfTextSegments(fileEntity.fileContent);
-        return {
-          fileType: fileEntity.fileType,
-          content: fileEntity.fileContent.toString('base64'),
-          previewType: 'pdf',
-          textSegments: textSegments
-        };
-      } catch (error) {
-        this.logger.error(`Error extracting PDF text segments: ${error instanceof Error ? error.message : String(error)}`);
-        return {
-          fileType: fileEntity.fileType,
-          content: fileEntity.fileContent.toString('base64'),
-          previewType: 'pdf'
-        };
-      }
-    }
-
-    switch (fileEntity.fileType) {
-      case 'text/plain': case 'application/json': case 'text/html': case 'text/css': case 'application/javascript': case 'text/xml': {
-        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
-      }
-      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-        try {
-          // Use docx-preview to render DOCX with perfect formatting
-          return {
-            fileType: fileEntity.fileType,
-            content: fileEntity.fileContent.toString('base64'),
-            previewType: 'docx-preview'
-          };
-        } catch (error) {
-          this.logger.error(`Error processing DOCX with docx-preview: ${error instanceof Error ? error.message : String(error)}`);
-          return {
-            fileType: fileEntity.fileType,
-            content: fileEntity.fileContent.toString('base64'),
-            previewType: 'docx-preview'
-          };
-        }
-      }
-      case 'application/vnd.ms-excel':
-      case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-      case 'application/vnd.ms-powerpoint':
-      case 'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
-        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'office-viewer' };
-      }
-      case 'image/jpeg': case 'image/png': case 'image/gif': case 'image/webp': {
-        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'image' };
-      }
-      default: {
-        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
-      }
-    }
-  }
-
-  private async extractPdfTextSegments(pdfBuffer: Buffer): Promise<any[]> {
-    try {
-      this.logger.log('Starting PDF text extraction (text-focused)...');
-      this.logger.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
-
-      // Set up PDF.js worker for Node.js environment
-      pdfjsLib.GlobalWorkerOptions.workerSrc = false; // Disable worker for Node.js
-      this.logger.log('PDF.js worker disabled for Node.js environment');
-
-      // Load PDF document
-      this.logger.log('Loading PDF document...');
-      // Convert Buffer to Uint8Array for PDF.js
-      const uint8Array = new Uint8Array(pdfBuffer);
-      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
-      const pdf = await loadingTask.promise;
-      this.logger.log(`PDF loaded successfully, pages: ${pdf.numPages}`);
-
-      const textSegments = [];
-      let segmentId = 1;
-
-      // Process each page - focus on text extraction
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        this.logger.log(`Processing page ${pageNum} (text-focused)...`);
-        const page = await pdf.getPage(pageNum);
-
-        // Use scale that matches iframe display (typically 1.0 for iframe)
-        const viewport = page.getViewport({ scale: 1.0 });
-        this.logger.log(`Page ${pageNum} viewport: ${viewport.width} x ${viewport.height}`);
-
-        // Extract text content with positions - focus on text quality
-        const textContent = await page.getTextContent();
-        this.logger.log(`Page ${pageNum} has ${textContent.items.length} text items`);
-
-        // Process each text item individually for precise highlighting
-        textContent.items.forEach((item: any, index: number) => {
-          const text = item.str.trim();
-          if (text && text.length > 0) {
-            // Calculate coordinates for iframe display
-            const x = item.transform[4];
-            const y = viewport.height - item.transform[5]; // Flip Y for iframe
-            const width = item.width;
-            const height = item.height;
-
-            const segment = {
-              id: `segment_${segmentId}`,
-              text: text,
-              coordinates: [{
-                x: x,
-                y: y,
-                width: width,
-                height: height
-              }],
-              page: pageNum
-            };
-
-            textSegments.push(segment);
-            this.logger.log(`Created text segment ${segmentId}: "${text.substring(0, 30)}..." at (${x}, ${y})`);
-            segmentId++;
-          }
-        });
-
-        // Skip detailed image extraction - just log basic info for preview
-        try {
-          const operatorList = await page.getOperatorList();
-          let imageCount = 0;
-
-          for (let j = 0; j < operatorList.fnArray.length; j++) {
-            if (operatorList.fnArray[j] === pdfjsLib.OPS.paintImageXObject) {
-              imageCount++;
-            }
-          }
-
-          if (imageCount > 0) {
-            this.logger.log(`Page ${pageNum} has ${imageCount} images (basic info only - skipping detailed extraction)`);
-          }
-        } catch (error) {
-          this.logger.log(`Page ${pageNum}: Skipping image extraction to focus on text`);
-        }
-      }
-
-      this.logger.log(`Text-focused extraction completed. Total text segments: ${textSegments.length}`);
-      return textSegments;
-
-    } catch (error) {
-      this.logger.error(`Error extracting PDF text segments: ${error instanceof Error ? error.message : String(error)}`);
-      this.logger.error(`Error stack: ${error instanceof Error ? error.stack : 'No stack available'}`);
-      throw error;
-    }
-  }
-
-  async highlightTextInPdf(fileId: string, searchText: string): Promise<{ highlights: any[] }> {
-    try {
-      this.logger.log(`Highlighting text in PDF: "${searchText}"`);
-
-      const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(fileId) } });
-      if (!fileEntity) {
-        throw new NotFoundException(`File with ID ${fileId} not found`);
-      }
-
-      if (fileEntity.fileType !== 'application/pdf') {
-        throw new Error('File is not a PDF');
-      }
-
-      // Extract text segments
-      const textSegments = await this.extractPdfTextSegments(fileEntity.fileContent);
-
-      // Find matching segments
-      const matchingSegments = textSegments.filter(segment => {
-        const segmentText = segment.text.toLowerCase();
-        const searchTextLower = searchText.toLowerCase();
-        return segmentText.includes(searchTextLower) || searchTextLower.includes(segmentText);
-      });
-
-      this.logger.log(`Found ${matchingSegments.length} matching segments for "${searchText}"`);
-
+    // Nếu không có language, trả về file gốc
+    if (!language) {
       return {
-        highlights: matchingSegments.map(segment => ({
-          id: segment.id,
-          text: segment.text,
-          coordinates: segment.coordinates,
-          page: segment.page
-        }))
+        content: fileEntity.fileContent as Buffer,
+        fileName: fileEntity.fileName,
+        fileType: fileEntity.fileType,
       };
-
-    } catch (error) {
-      this.logger.error(`Error highlighting text in PDF: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
     }
-  }
 
+    // Sử dụng TranslationService đã inject
 
+    let translatedBuffer: Buffer;
 
-  async getFileMetadata(fileId: string): Promise<{ fileName: string; fileType: string; projectId?: string; branchId?: string }> {
-    const file = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-      relations: ['project', 'branch'],
-      select: ['id', 'fileName', 'fileType', 'project', 'branch'],
-    });
-
-    if (!file) {
-      throw new NotFoundException(`File with ID ${fileId} not found`);
+    if (fileEntity.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
+      const translations = new Map<string, string>();
+      for (const e of entries) {
+        if (e.translatedText && e.translatedText.trim().length > 0) {
+          translations.set(e.originalText, e.translatedText);
+        }
+      }
+      const { replaceDocxText } = await import('../../util/extensions/docx-utils.extension');
+      translatedBuffer = await replaceDocxText(fileEntity.fileContent as Buffer, translations);
+    } else if (fileEntity.fileType === 'application/pdf') {
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
+      const translatedEntries = entries.map((e) => ({
+        text: e.translatedText?.trim() ? e.translatedText : e.originalText,
+      }));
+      const { buildTranslatedPdf } = await import('../../util/extensions/pdf-utils.extension');
+      translatedBuffer = await buildTranslatedPdf(fileEntity.fileContent as Buffer, translatedEntries);
+    } else {
+      translatedBuffer = await this.applyTranslation(fileId, language);
     }
 
     return {
-      fileName: file.fileName,
-      fileType: file.fileType,
-      projectId: file.project?.id?.toString(),
-      branchId: file.branch?.id?.toString(),
+      content: translatedBuffer,
+      fileName: fileEntity.fileName,
+      fileType: fileEntity.fileType,
     };
   }
+
+  async applyTranslation(fileId: string, language: string): Promise<Buffer> {
+    const fileEntity = await this.fileRepository.findOne({
+      where: { id: BigInt(fileId) },
+    });
+    if (!fileEntity) throw new Error('File not found');
+
+    const entriesRaw = await this.translationModel
+      .find({ fileId, language })
+      .lean();
+    const entries = entriesRaw.map((e: any) => ({
+      text:
+        e.translatedText && e.translatedText.trim().length > 0
+          ? e.translatedText
+          : e.originalText,
+      style: e.style,
+      font: e.font,
+    }));
+
+    return this.rebuildFileWithManifest(fileEntity.fileType, entries);
+  }
+
+  private async rebuildFileWithManifest(
+    fileType: string,
+    entries: { text: string; style?: any; font?: string }[]
+  ): Promise<Buffer> {
+    switch (fileType) {
+      case 'text/plain': {
+        const combined = entries.map((e) => e.text).join('\n');
+        return Buffer.from(combined, 'utf8');
+      }
+
+      case 'application/json': {
+        const jsonArray = entries.map((e: any) => e.text);
+        return Buffer.from(JSON.stringify(jsonArray, null, 2), 'utf8');
+      }
+
+      case 'application/pdf': {
+        const { PDFDocument, StandardFonts } = await import('pdf-lib');
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        let y = page.getHeight() - 24;
+        for (const e of entries) {
+          page.drawText(e.text, { x: 50, y, font, size: 12 });
+          y -= 16;
+          if (y < 40) {
+            const newPage = pdfDoc.addPage();
+            y = newPage.getHeight() - 24;
+          }
+        }
+        const pdfBytes = await pdfDoc.save();
+        return Buffer.from(pdfBytes);
+      }
+
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+        const { Document, Packer, Paragraph, TextRun } = await import('docx');
+        const paragraphs = entries.map((e) => {
+          return new Paragraph({
+            children: [
+              new TextRun({
+                text: e.text,
+                bold: e.style?.bold || false,
+                italics: e.style?.italic || false,
+                color: e.style?.color,
+                size: e.style?.fontSize ? e.style.fontSize * 2 : undefined,
+                font: e.font !== 'default' ? e.font : undefined,
+              }),
+            ],
+          });
+        });
+        const doc = new Document({ sections: [{ children: paragraphs }] });
+        const buffer = await Packer.toBuffer(doc);
+        return buffer;
+      }
+
+      default: {
+        const defaultCombined = entries.map((e: any) => e.text).join('\n');
+        return Buffer.from(defaultCombined, 'utf8');
+      }
+    }
+  }
+
 }

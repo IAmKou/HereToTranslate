@@ -624,33 +624,25 @@ export class RequestManagerService {
     // Auto-update status based on new deadline
     const now = new Date();
 
-    if (deadlineDate > now) {
-      // Deadline is in the future
-      const timeUntilDeadline = deadlineDate.getTime() - now.getTime();
-      const oneDayInMs = 24 * 60 * 60 * 1000;
+    if (deadlineDate <= now)
+    {
+      // throw new BadRequestException(`Deadline must be a future date`);
+      return this.requestRepository.save(request);
+    }
 
-      if (timeUntilDeadline <= oneDayInMs) {
-        // Deadline is within 1 day
-        request.status = RequestStatus.WaitingApproval;
-      } else {
-        // Deadline is more than 1 day away
-        if (request.status === RequestStatus.Failed) {
-          // If request was failed due to expired deadline, restore it to approved
-          request.status = RequestStatus.Approved;
-        } else if (request.status === RequestStatus.Pending) {
-          // Keep pending status
-          request.status = RequestStatus.Pending;
-        } else if (request.status === RequestStatus.Approved) {
-          // Keep approved status
-          request.status = RequestStatus.Approved;
-        }
-      }
-    } else {
-      // Deadline has passed
-      if (request.status !== RequestStatus.Completed &&
-        request.status !== RequestStatus.Cancelled) {
-        request.status = RequestStatus.Failed;
-      }
+    if (request.status === RequestStatus.Completed ||
+      request.status === RequestStatus.Cancelled) {
+        throw new BadRequestException(`Cannot update deadline of completed or cancelled requests`);
+    }
+
+    if (request.status === RequestStatus.Rejected) {
+      throw new BadRequestException(`Cannot update deadline of rejected requests`);
+    }
+
+    if (request.status === RequestStatus.Failed ||
+      request.status === RequestStatus.Incompleted) {
+      // If previously failed/incompleted, set to ExtensionApproved if deadline is extended
+      request.status = RequestStatus.ExtensionApproved;
     }
 
     return this.requestRepository.save(request);
@@ -1501,9 +1493,9 @@ export class RequestManagerService {
 
     // Check if there are any pending extension requests that haven't been responded to
     const pendingExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id.toString(), // Convert BigInt to string
+      request.requester.id, // Convert BigInt to string
       'EXTENSION_REQUESTED',
-      requestId.toString() // Convert BigInt to string
+      requestId // Convert BigInt to string
     );
 
     if (pendingExtensions.length > 0) {
@@ -1517,15 +1509,15 @@ export class RequestManagerService {
     // 4. If previous extension is still PENDING: Wait for response
 
     const approvedExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id.toString(), // Convert BigInt to string
+      request.requester.id, // Convert BigInt to string
       'EXTENSION_APPROVED',
-      requestId.toString() // Convert BigInt to string
+      requestId // Convert BigInt to string
     );
 
     const rejectedExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id.toString(), // Convert BigInt to string
+      request.requester.id, // Convert BigInt to string
       'EXTENSION_REJECTED',
-      requestId.toString() // Convert BigInt to string
+      requestId // Convert BigInt to string
     );
 
     // Apply extension request rules
@@ -1559,10 +1551,10 @@ export class RequestManagerService {
     console.log('🔍 [SERVICE] Full message with extension data:', fullMessage);
 
     await this.notificationService.createNotification({
-      userId: request.requester.id.toString(), // Convert BigInt to string
+      userId: request.requester.id,
       type: 'EXTENSION_REQUESTED',
       message: fullMessage, // Use full message with extension data
-      createdBy: translatorId.toString(), // Convert BigInt to string
+      createdBy: translatorId
     });
 
     // Send email notification to requester
@@ -1577,7 +1569,7 @@ export class RequestManagerService {
           currentDeadline: request.deadline,
           newDeadline: newDeadline,
           reason: reason,
-          requestId: requestId.toString(), // Convert BigInt to string
+          requestId: requestId, // Convert BigInt to string
         }
       );
     }
@@ -1637,15 +1629,15 @@ export class RequestManagerService {
 
       // 2. Update request status based on review decision
       if (decision === 'APPROVED') {
-        request.status = 'COMPLETED';
+        request.status = RequestStatus.Completed;
       } else if (decision === 'REJECTED') {
-        request.status = 'INCOMPLETED';
+        request.status = RequestStatus.Incompleted;
       }
 
       request.reviewedAt = new Date();
       request.reviewDecision = decision;
       request.reviewRating = rating;
-      request.reviewComment = comment;
+      request.reviewComment = comment || '';
 
       console.log('💾 [SERVICE] Saving review data to database:', {
         requestId: requestId.toString(),
@@ -1672,10 +1664,10 @@ export class RequestManagerService {
       // 4. Create notification for translator
       if (request.assignee) {
         await this.notificationService.createNotification({
-          userId: request.assignee.id.toString(),
+          userId: request.assignee.id,
           type: 'REQUEST_REVIEWED',
           message: `Your translation for "${request.title}" has been ${decision.toLowerCase()}. Rating: ${rating}/5 stars.`,
-          createdBy: requesterId.toString(),
+          createdBy: requesterId,
         });
       }
 

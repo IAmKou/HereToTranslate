@@ -1,3 +1,34 @@
 {
-    "nxConsole.generateAiAgentRules": true
+    "nxConsole.generateAiAgentRules": true,
+    "sqltools.connections": [
+        {
+            "mssqlOptions": {
+                "appName": "SQLTools",
+                "useUTC": true,
+                "encrypt": true
+            },
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 1433,
+            "driver": "MSSQL",
+            "username": "BookCoffeeStoreSQLClient",
+            "database": "CoffeeBookStore",
+            "name": "BookCoffeeStore",
+            "password": ""
+        },
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "previewLimit": 50,
+            "server": "htt.mysql.database.azure.com",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "HereToTranslate:htt",
+            "username": "shared",
+            "database": "htt",
+            "password": "Long1234@"
+        }
+    ]
 }

@@ -5,6 +5,8 @@ import { BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BranchEntity } from '#LocalProject/Entities';
 import { Repository } from 'typeorm';
+import type { Octokit } from '@octokit/rest';
+
 
 interface CommitChangeOptions {
   repo: string;
@@ -20,10 +22,10 @@ export class GitHubService {
   @InjectRepository(BranchEntity)
   private readonly branchRepository: Repository<BranchEntity>;
 
-  private octokit: any;
+  private octokit: Octokit;
   private username: string;
 
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   private async initOctokit() {
     if (!this.octokit) {
@@ -48,6 +50,30 @@ export class GitHubService {
     }
   }
 
+  async getFileContentOrNull({
+    repo,
+    path,
+    branch = 'main',
+  }: { repo: string; path: string; branch?: string; }): Promise<{ content: Buffer; sha: string } | null> {
+    try {
+      const { data } = await this.octokit.repos.getContent({
+        owner: this.username,
+        repo,
+        path,
+        ref: branch,
+      });
+
+      if (Array.isArray(data)) return null;
+      const file = data as unknown as { content?: string; sha: string };
+      if (!file || !file.content) return null;
+      const buf = Buffer.from(file.content, 'base64');
+      return { content: buf, sha: file.sha };
+    } catch (err: any) {
+      if (err.status === 404) return null;
+      throw err;
+    }
+  }
+
   async createRepository(repoName: string, isPrivate = true) {
     await this.initOctokit();
     const exists = await this.repoExists(repoName);
@@ -63,12 +89,12 @@ export class GitHubService {
   }
 
   async pushInitialFile({
-                          repo,
-                          path,
-                          content,
-                          message,
-                          branch = 'main',
-                        }: {
+    repo,
+    path,
+    content,
+    message,
+    branch = 'main',
+  }: {
     repo: string;
     path: string;
     content: string | Buffer;
@@ -190,11 +216,11 @@ export class GitHubService {
   }
 
   async mergeBranch({
-                      repo,
-                      base,
-                      head,
-                      commitMessage,
-                    }: {
+    repo,
+    base,
+    head,
+    commitMessage,
+  }: {
     repo: string;
     base: string;
     head: string;

@@ -264,6 +264,10 @@ const categoryOptions = computed(() => [
 
 const filteredRequests = computed(() => {
   let list = requests.value;
+
+  // Chỉ hiển thị những request có status là PENDING
+  list = list.filter((r) => (r.status || '').toUpperCase() === 'PENDING');
+
   if (search.value) {
     const s = search.value.toLowerCase();
     list = list.filter((r) => r.title?.toLowerCase().includes(s));
@@ -276,8 +280,6 @@ const filteredRequests = computed(() => {
   if (currentUser.value) {
     list = list.filter((r) => r.requester?.id !== currentUser.value.id);
   }
-  list = list.filter((r) => r.status !== 'APPROVED');
-  list = list.filter((r) => r.status !== 'CANCELLED');
 
   // Add isRegistered calculation if not provided by backend
   return list.map(req => ({

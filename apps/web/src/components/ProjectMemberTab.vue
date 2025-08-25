@@ -681,6 +681,9 @@ function getJoinedDate(member: any): string {
 
   const date = new Date(joinedDate);
 
+  // Add 7 hours to fix timezone offset
+  date.setHours(date.getHours() + 7);
+
   // Format: "Dec 15, 2024 at 14:30"
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -2365,7 +2368,7 @@ watch(() => props.members, (val) => {
   border: 1px solid #e2e8f0;
   padding: 0.6rem;
   text-align: left;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
 }
 
 .members-table th {
@@ -2373,7 +2376,7 @@ watch(() => props.members, (val) => {
   font-weight: 700;
   color: #2d3748;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 
 .members-table td {
@@ -2436,9 +2439,15 @@ watch(() => props.members, (val) => {
   flex-direction: column;
 }
 
+.user-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 0.85rem;
+}
+
 .user-email {
   color: #a0aec0;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   margin-top: 0.1rem;
 }
 
@@ -2449,8 +2458,8 @@ watch(() => props.members, (val) => {
   background: #e2e8f0;
   color: #475569;
   border-radius: 999px;
-  padding: 0.15rem 0.4rem;
-  font-size: 0.7rem;
+  padding: 0.12rem 0.35rem;
+  font-size: 0.6rem;
   font-weight: 500;
   margin-right: 0.2rem;
   margin-bottom: 0.1rem;
@@ -2472,7 +2481,7 @@ watch(() => props.members, (val) => {
 
 .joined-date {
   color: #6b7280;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 500;
 }
 

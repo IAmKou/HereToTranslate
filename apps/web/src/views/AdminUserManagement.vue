@@ -88,6 +88,12 @@
 
             <!-- Data Table Section -->
             <div class="table-section">
+              <div class="table-header">
+                <p class="table-hint">
+                  <i class="pi pi-info-circle"></i>
+                  Click on any user avatar to view their profile
+                </p>
+              </div>
               <DataTable
                 :value="filteredUsers"
                 :paginator="true"
@@ -96,7 +102,6 @@
                 :loading="loading"
                 filterDisplay="menu"
                 :globalFilterFields="['username', 'fullName', 'email', 'phone']"
-
                 class="p-datatable-lg enhanced-table"
                 v-model:filters="filters"
                 dataKey="id"
@@ -107,8 +112,7 @@
                 sortMode="multiple"
                 @row-select="onRowSelect"
                 @row-unselect="onRowUnselect"
-
-
+                @row-click="onUserRowClick"
               >
                 <template #loading>
                   <div class="skeleton-table">
@@ -153,22 +157,24 @@
                         :image="getUserAvatarUrl(data)"
                         size="large"
                         shape="circle"
-                        class="user-avatar enhanced-avatar"
+                        class="user-avatar enhanced-avatar clickable-avatar"
                         :style="{ borderColor: getRoleBorderColor(data.role?.id) }"
-                        v-tooltip.top="`<b>${data.fullName}</b><br>${data.email}<br><span class='role-tooltip'>${data.role?.name?.toUpperCase()}</span>`"
+                        v-tooltip.top="`<b>${data.fullName}</b><br>${data.email}<br><span class='role-tooltip'>${data.role?.name?.toUpperCase()}</span><br><small>Click to view profile</small>`"
                         tooltipOptions="{ escape: false, class: 'avatar-tooltip' }"
                         @error="onAvatarError(data, $event)"
                         @load="onAvatarLoad(data)"
+                        @click.stop="showUserProfileModal(data)"
                       />
                       <Avatar
                         v-else
                         :label="getInitials(data.fullName)"
                         size="large"
                         shape="circle"
-                        class="user-avatar enhanced-avatar"
+                        class="user-avatar enhanced-avatar clickable-avatar"
                         :style="{ backgroundColor: getRandomColor(data.username), borderColor: getRoleBorderColor(data.role?.id) }"
-                        v-tooltip.top="`<b>${data.fullName}</b><br>${data.email}<br><span class='role-tooltip'>${data.role?.name?.toUpperCase()}</span>`"
+                        v-tooltip.top="`<b>${data.fullName}</b><br>${data.email}<br><span class='role-tooltip'>${data.role?.name?.toUpperCase()}</span><br><small>Click to view profile</small>`"
                         tooltipOptions="{ escape: false, class: 'avatar-tooltip' }"
+                        @click.stop="showUserProfileModal(data)"
                       />
                       <div class="user-details">
                         <span class="username">{{ data.username }}</span>
@@ -224,7 +230,7 @@
                         :icon="slotProps.data.isActive ? 'pi pi-ban' : 'pi pi-check'"
                         :class="['p-button-rounded p-button-text', slotProps.data.isActive ? 'p-button-danger action-ban-btn' : 'p-button-success action-activate-btn', 'ripple-btn', 'action-animated-btn']"
                         v-tooltip.top="slotProps.data.isActive ? 'Deactivate User' : 'Activate User'"
-                        @click="confirmStatusChange(slotProps.data)"
+                        @click.stop="confirmStatusChange(slotProps.data)"
                       />
                     </div>
                   </template>
@@ -269,6 +275,121 @@
             type="warning"
             @confirm="onCustomConfirm"
           />
+
+          <!-- User Profile Modal -->
+          <Dialog
+            v-model:visible="showProfileModal"
+            modal
+            :header="selectedProfileUser?.fullName || 'User Profile'"
+            :style="{ width: '650px' }"
+            :closable="true"
+            :closeOnEscape="true"
+            class="user-profile-modal"
+          >
+            <div v-if="selectedProfileUser" class="profile-modal-content">
+              <!-- Header Section with Avatar -->
+              <div class="modal-header-section">
+                <div class="modal-avatar-container">
+                  <Avatar
+                    v-if="hasAvatar(selectedProfileUser)"
+                    :image="getUserAvatarUrl(selectedProfileUser)"
+                    size="xlarge"
+                    shape="circle"
+                    class="modal-avatar"
+                    :style="{ borderColor: getRoleBorderColor(selectedProfileUser.role?.id) }"
+                  />
+                  <Avatar
+                    v-else
+                    :label="getInitials(selectedProfileUser.fullName)"
+                    size="xlarge"
+                    shape="circle"
+                    class="modal-avatar"
+                    :style="{ backgroundColor: getRandomColor(selectedProfileUser.username), borderColor: getRoleBorderColor(selectedProfileUser.role?.id) }"
+                  />
+                </div>
+
+                <div class="modal-user-header">
+                  <h2 class="modal-user-name">{{ selectedProfileUser.fullName }}</h2>
+                  <p class="modal-user-handle">@{{ selectedProfileUser.username }}</p>
+                  <p class="modal-user-email">{{ selectedProfileUser.email }}</p>
+                </div>
+              </div>
+
+              <!-- Status Section -->
+              <div class="modal-status-section">
+                <div class="status-item">
+                  <span class="status-label">Status</span>
+                  <Tag
+                    :severity="selectedProfileUser.isActive ? 'success' : 'danger'"
+                    :value="selectedProfileUser.isActive ? 'Active' : 'Inactive'"
+                    class="modal-status-tag"
+                  />
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Role</span>
+                  <Tag
+                    :severity="getRoleSeverity(selectedProfileUser.role?.id)"
+                    :value="selectedProfileUser.role?.name?.toUpperCase() || 'User'"
+                    class="modal-role-tag"
+                  />
+                </div>
+              </div>
+
+              <!-- Information Grid -->
+              <div class="modal-info-grid">
+                <div class="info-card">
+                  <div class="info-icon">
+                    <i class="pi pi-phone"></i>
+                  </div>
+                  <div class="info-content">
+                    <label>Phone Number</label>
+                    <span>{{ selectedProfileUser.phone || 'Not provided' }}</span>
+                  </div>
+                </div>
+
+                <div class="info-card">
+                  <div class="info-icon">
+                    <i class="pi pi-calendar"></i>
+                  </div>
+                  <div class="info-content">
+                    <label>Member Since</label>
+                    <span>{{ formatDate(selectedProfileUser.createdAt) }}</span>
+                  </div>
+                </div>
+
+                <div class="info-card">
+                  <div class="info-icon">
+                    <i class="pi pi-clock"></i>
+                  </div>
+                  <div class="info-content">
+                    <label>Last Updated</label>
+                    <span>{{ formatDate(selectedProfileUser.updatedAt) }}</span>
+                  </div>
+                </div>
+
+                <div class="info-card">
+                  <div class="info-icon">
+                    <i class="pi pi-id-card"></i>
+                  </div>
+                  <div class="info-content">
+                    <label>User ID</label>
+                    <span>#{{ selectedProfileUser.id }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <template #footer>
+              <div class="modal-footer-actions">
+                <Button
+                  label="Close"
+                  icon="pi pi-times"
+                  class="p-button-text p-button-secondary"
+                  @click="showProfileModal = false"
+                />
+              </div>
+            </template>
+          </Dialog>
         </div>
       </div>
     </div>
@@ -277,6 +398,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import Column from 'primevue/column';
@@ -295,6 +417,7 @@ import { DataTableFilterMetaData } from 'primevue/datatable';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import AdminSidebar from '../components/AdminSidebar.vue';
 import ModernRoleModal from '../components/ModernRoleModal.vue';
+import Dialog from 'primevue/dialog';
 const getFullAvatarUrl = (avatarUrl: string) => {
   if (!avatarUrl) return '';
   if (avatarUrl.startsWith('http')) return avatarUrl;
@@ -349,6 +472,7 @@ interface Role {
   name: string;
 }
 
+const router = useRouter();
 const users = ref<User[]>([]);
 const loading = ref(false);
 const toast = useToast();
@@ -361,6 +485,8 @@ const selectedRoleUser = ref<User | null>(null);
 const filteredRoleOptions = ref<Role[]>([]);
 const showCustomConfirm = ref(false);
 const customConfirmMessage = ref('');
+const showProfileModal = ref(false);
+const selectedProfileUser = ref<User | null>(null);
 
 const statusOptions = [
   { label: 'All', value: null },
@@ -578,6 +704,18 @@ const onRowUnselect = (event: any) => {
   });
 };
 
+const onUserRowClick = (event: any) => {
+  const user = event.data;
+  if (user) {
+    router.push(`/userprofile/${user.id}`);
+  }
+};
+
+const showUserProfileModal = (user: User) => {
+  selectedProfileUser.value = user;
+  showProfileModal.value = true;
+};
+
 const getStatusIcon = (value: boolean | null) => {
   if (value === null) return 'pi pi-filter';
   return value ? 'pi pi-check-circle' : 'pi pi-times-circle';
@@ -706,9 +844,41 @@ watch(() => filters.value['role.id'].value, (val) => {
 });
 
 onMounted(loadUsers);
+
+const getRoleSeverity = (roleId: number | null) => {
+  if (roleId === 1) return 'success';
+  if (roleId === 2) return 'warning';
+  return 'danger';
+};
+
 </script>
 
 <style lang="scss" scoped>
+.action-profile-btn {
+  background: #3b82f6 !important;
+  color: #fff !important;
+  &:hover {
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6) !important;
+    color: #fff !important;
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+  }
+}
+
+.clickable-avatar {
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+    border-color: #3b82f6 !important;
+  }
+
+  &:active {
+    transform: scale(1.05);
+  }
+}
 .table-section {
   overflow-x: hidden !important; /* tắt scroll ngang */
   max-width: 100% !important;   /* giới hạn chiều rộng */
@@ -949,169 +1119,200 @@ onMounted(loadUsers);
 
     .table-section {
       background: white;
-      border-radius: 1rem;
-      padding: 0.5rem 0.7rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      animation: fadeIn 0.7s;
+      border-radius: 16px;
+      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+      width: 100%;
+    }
 
-      :deep(.p-datatable) {
-        .p-datatable-header {
-          background: transparent;
-          border: none;
-          padding: 0 0 1rem 0;
-        }
+    .table-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
 
-        .p-datatable-thead > tr > th {
-          position: sticky;
-          top: 0;
-          z-index: 2;
-          background: #f8fafc;
-          box-shadow: 0 2px 8px rgba(59,130,246,0.04);
-          font-size: 1.05rem;
-          letter-spacing: 0.5px;
-        }
+    .table-hint {
+      margin: 0;
+      font-size: 14px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-        .p-datatable-tbody > tr {
-          transition: background 0.2s, border-left 0.2s, box-shadow 0.2s, transform 0.25s, opacity 0.5s;
-          opacity: 0;
-          transform: translateY(20px) scale(0.98);
-          animation: fadeInRow 0.7s forwards;
-          animation-delay: calc(var(--row-index, 0) * 60ms);
-          &:hover {
-            background: #e0f2fe;
-            border-left: 5px solid #8b5cf6;
-            box-shadow: 0 4px 16px rgba(59,130,246,0.13);
-            transform: scale(1.012);
-          }
-          td:first-child { border-radius: 0.5rem 0 0 0.5rem; }
-          td:last-child { border-radius: 0 0.5rem 0.5rem 0; }
-        }
+    .table-hint i {
+      color: #3b82f6;
+      font-size: 16px;
+    }
 
-        :deep(.p-datatable-thead > tr > th),
-        :deep(.p-datatable-tbody > tr > td) {
-          padding: 0.85rem 0.7rem !important;
-          vertical-align: middle;
-        }
+    :deep(.p-datatable) {
+      .p-datatable-header {
+        background: transparent;
+        border: none;
+        padding: 0 0 1rem 0;
       }
 
-      .user-info {
+      .p-datatable-thead > tr > th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #f8fafc;
+        box-shadow: 0 2px 8px rgba(59,130,246,0.04);
+        font-size: 1.05rem;
+        letter-spacing: 0.5px;
+      }
+
+      .p-datatable-tbody > tr {
+        transition: background 0.2s, border-left 0.2s, box-shadow 0.2s, transform 0.25s, opacity 0.5s;
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+        animation: fadeInRow 0.7s forwards;
+        animation-delay: calc(var(--row-index, 0) * 60ms);
+        &:hover {
+          background: #e0f2fe;
+          border-left: 5px solid #8b5cf6;
+          box-shadow: 0 4px 16px rgba(59,130,246,0.13);
+          transform: scale(1.012);
+        }
+        td:first-child { border-radius: 0.5rem 0 0 0.5rem; }
+        td:last-child { border-radius: 0 0.5rem 0.5rem 0; }
+      }
+
+      :deep(.p-datatable-thead > tr > th),
+      :deep(.p-datatable-tbody > tr > td) {
+        padding: 0.85rem 0.7rem !important;
+        vertical-align: middle;
+      }
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+
+      .user-avatar {
+        width: 2.6rem;
+        height: 2.6rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 8px rgba(59,130,246,0.10);
+      }
+
+      .user-details {
         display: flex;
-        align-items: center;
-        gap: 0.6rem;
+        flex-direction: column;
 
-        .user-avatar {
-          width: 2.6rem;
-          height: 2.6rem;
-          font-size: 1.1rem;
-          font-weight: 600;
-          border: 2px solid #fff;
-          box-shadow: 0 2px 8px rgba(59,130,246,0.10);
-        }
-
-        .user-details {
-          display: flex;
-          flex-direction: column;
-
-          .username {
-            color: #1e293b;
-            font-weight: 500;
-            font-size: 0.97rem;
-          }
-
-          .email {
-            color: #64748b;
-            font-size: 0.85rem;
-          }
-        }
-      }
-
-      .fullname-cell {
-        font-size: 0.97rem;
-        i {
-          font-size: 0.95rem;
-        }
-      }
-
-      .role-cell {
-        :deep(.p-dropdown) {
-          min-width: 140px;
-          border-radius: 1rem;
-          border: none;
-          font-weight: 700;
-          text-transform: uppercase;
-          background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
-          color: #fff;
-          padding: 0.2rem 0.8rem;
-          i {
-            margin-right: 0.3rem;
-          }
-        }
-      }
-
-      /* Fix consistent column widths to keep Status aligned even when Role is long */
-      :deep(th.role-col),
-      :deep(td.role-col) {
-        width: 12.5rem;
-      }
-
-      .status-tag {
-        display: flex;
-        align-items: center;
-        gap: 0.3rem;
-        i {
-          font-size: 1rem;
-        }
-      }
-
-      /* Align Status column header and cells perfectly centered and consistent width */
-      :deep(th.status-col),
-      :deep(td.status-col) {
-        text-align: center !important;
-        vertical-align: middle !important;
-        width: 9.5rem;
-        white-space: nowrap;
-      }
-
-      .action-buttons {
-        display: flex;
-        justify-content: center;
-        gap: 0.5rem;
-
-        :deep(.p-button) {
-          width: 2.5rem;
-          height: 2.5rem;
-          font-size: 1.3rem;
-          border-radius: 50%;
-          box-shadow: 0 2px 8px rgba(59,130,246,0.10);
-          &:hover {
-            background: linear-gradient(135deg, #10b981, #3b82f6);
-            color: #fff;
-          }
-        }
-      }
-
-      .empty-state, .loading-state {
-        padding: 2rem;
-        text-align: center;
-        color: #64748b;
-
-        i {
-          font-size: 2rem;
-          margin-bottom: 1rem;
-          color: #94a3b8;
-        }
-
-        h3 {
+        .username {
           color: #1e293b;
-          font-weight: 700;
-          margin: 0 0 0.5rem;
-          font-size: 1.2rem;
+          font-weight: 500;
+          font-size: 0.97rem;
         }
 
-        p {
-          margin: 0;
-          font-size: 0.95rem;
+        .email {
+          color: #64748b;
+          font-size: 0.85rem;
         }
+      }
+    }
+
+    .fullname-cell {
+      font-size: 0.97rem;
+      i {
+        font-size: 0.95rem;
+      }
+    }
+
+    .role-cell {
+      :deep(.p-dropdown) {
+        min-width: 140px;
+        border-radius: 1rem;
+        border: none;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+        color: #fff;
+        padding: 0.2rem 0.8rem;
+        i {
+          margin-right: 0.3rem;
+        }
+      }
+    }
+
+    /* Fix consistent column widths to keep Status aligned even when Role is long */
+    :deep(th.role-col),
+    :deep(td.role-col) {
+      width: 12.5rem;
+    }
+
+    .status-tag {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      i {
+        font-size: 1rem;
+      }
+    }
+
+    /* Align Status column header and cells perfectly centered and consistent width */
+    :deep(th.status-col),
+    :deep(td.status-col) {
+      text-align: center !important;
+      vertical-align: middle !important;
+      width: 9.5rem;
+      white-space: nowrap;
+    }
+
+    .action-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+
+      :deep(.p-button) {
+        width: 2.5rem;
+        height: 2.5rem;
+        font-size: 1.3rem;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(59,130,246,0.10);
+        &:hover {
+          background: linear-gradient(135deg, #10b981, #3b82f6);
+          color: #fff;
+        }
+      }
+    }
+
+    .action-profile-btn {
+      background: #3b82f6 !important;
+      color: #fff !important;
+      &:hover {
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6) !important;
+        color: #fff !important;
+        transform: scale(1.1);
+        box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+      }
+    }
+
+    .empty-state, .loading-state {
+      padding: 2rem;
+      text-align: center;
+      color: #64748b;
+
+      i {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        color: #94a3b8;
+      }
+
+      h3 {
+        color: #1e293b;
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+        font-size: 1.2rem;
+      }
+
+      p {
+        margin: 0;
+        font-size: 0.95rem;
       }
     }
   }
@@ -1872,7 +2073,25 @@ body, .admin-user-management {
     vertical-align: middle !important;
   }
 }
+
 .enhanced-table {
+  /* Make user rows clickable */
+  :deep(.p-datatable-tbody > tr) {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  :deep(.p-datatable-tbody > tr:hover) {
+    background-color: #f8fafc !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  :deep(.p-datatable-tbody > tr:active) {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  }
+
   /* Áp dụng cho cột Role và Status (th cột 5 và 6) */
   :deep(.p-datatable-tbody > tr > td:nth-child(5)),
   :deep(.p-datatable-tbody > tr > td:nth-child(6)) {
@@ -1939,4 +2158,202 @@ body, .admin-user-management {
   }
 }
 
+/* Profile Modal Styles */
+.user-profile-modal {
+  :deep(.p-dialog) {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+  }
+
+  :deep(.p-dialog-header) {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem;
+    border-bottom: none;
+  }
+
+  :deep(.p-dialog-content) {
+    padding: 0;
+    background: #fafbfc;
+  }
+
+  :deep(.p-dialog-footer) {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid #e2e8f0;
+    background: #ffffff;
+    display: flex;
+    justify-content: center;
+  }
+}
+
+.profile-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.modal-header-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  color: white;
+}
+
+.modal-avatar-container {
+  flex-shrink: 0;
+}
+
+.modal-avatar {
+  width: 100px !important;
+  height: 100px !important;
+  font-size: 40px !important;
+  font-weight: 700;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.modal-user-header {
+  flex: 1;
+
+  .modal-user-name {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0 0 0.5rem 0;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .modal-user-handle {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0 0 0.5rem 0;
+    font-weight: 500;
+  }
+
+  .modal-user-email {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+    font-weight: 400;
+  }
+}
+
+.modal-status-section {
+  background: white;
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+
+  .status-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+.modal-status-tag,
+.modal-role-tag {
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  border-radius: 1rem;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.modal-info-grid {
+  background: white;
+  padding: 2rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.info-card {
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e1;
+  }
+
+  .info-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    i {
+      font-size: 1.5rem;
+      color: white;
+    }
+  }
+
+  .info-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    span {
+      font-size: 1rem;
+      color: #1e293b;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+  }
+}
+
+.modal-footer-actions {
+  display: flex;
+  justify-content: center;
+
+  .p-button {
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+  }
+}
 </style>

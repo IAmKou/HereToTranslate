@@ -79,20 +79,10 @@
                     <div class="action-title">Manage Roles</div>
                     <div class="action-description">Configure user roles and permissions</div>
                   </button>
-                  <button @click="manageGroups" class="action-card">
-                    <div class="action-icon">🏷️</div>
-                    <div class="action-title">Manage Groups</div>
-                    <div class="action-description">Organize users into groups</div>
-                  </button>
                   <button @click="manageFiles" class="action-card">
                     <div class="action-icon">📁</div>
                     <div class="action-title">Manage Files</div>
                     <div class="action-description">Upload and organize project files</div>
-                  </button>
-                  <button @click="viewAnalytics" class="action-card">
-                    <div class="action-icon">📊</div>
-                    <div class="action-title">View Analytics</div>
-                    <div class="action-description">Project statistics and insights</div>
                   </button>
                   <button @click="exportProject" class="action-card">
                     <div class="action-icon">📤</div>
@@ -127,7 +117,7 @@
               <div class="manage-section danger-zone">
                 <h2>Danger Zone</h2>
                 <div class="danger-actions">
-                  <div class="danger-item">
+                  <div v-if="!project.isSyncedFromRequest" class="danger-item">
                     <div class="danger-info">
                       <h3>Delete Project</h3>
                       <p>Permanently delete this project and all its data. This action cannot be undone.</p>
@@ -156,13 +146,100 @@
     <!-- Footer -->
     <AppFooter />
 
-    <!-- Modal xác nhận xóa -->
-    <div v-if="showDeleteConfirm" class="modal-overlay">
-      <div class="modal">
-        <h3>Xác nhận xóa dự án</h3>
-        <p>Bạn có chắc chắn muốn xóa dự án này? Hành động này không thể hoàn tác.</p>
-        <button @click="confirmDelete" class="btn btn-danger">Xóa</button>
-        <button @click="showDeleteConfirm = false" class="btn btn-secondary">Hủy</button>
+    <!-- Modern Delete Confirmation Modal -->
+    <div v-if="showDeleteConfirm" class="modern-modal-overlay">
+      <div class="modern-modal">
+        <div class="modal-header">
+          <div class="modal-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="modal-title">Delete Project</h3>
+          <p class="modal-description">This action cannot be undone. This will permanently delete the project and remove all associated data.</p>
+        </div>
+
+        <div class="modal-content">
+          <div class="warning-box">
+            <div class="warning-icon">⚠️</div>
+            <div class="warning-text">
+              <strong>Warning:</strong> All project files, translations, and team data will be permanently lost.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button @click="showDeleteConfirm = false" class="btn-cancel">
+            Cancel
+          </button>
+          <button @click="confirmDelete" class="btn-delete">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 6H5H21M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Delete Project
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Ownership Modal -->
+    <div v-if="showTransferModal" class="modern-modal-overlay">
+      <div class="modern-modal">
+        <div class="modal-header">
+          <div class="modal-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="modal-title">Transfer Project Ownership</h3>
+          <p class="modal-description">Enter the email address of the new owner for this project.</p>
+        </div>
+
+        <div class="modal-content">
+          <input type="email" v-model="transferToUser" placeholder="Enter email address" class="transfer-input" />
+        </div>
+
+        <div class="modal-actions">
+          <button @click="showTransferModal = false" class="btn-cancel">
+            Cancel
+          </button>
+          <button @click="confirmTransferInput" class="btn-delete">
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Ownership Confirmation Modal -->
+    <div v-if="showTransferConfirm" class="modern-modal-overlay">
+      <div class="modern-modal">
+        <div class="modal-header">
+          <div class="modal-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="modal-title">Confirm Transfer</h3>
+          <p class="modal-description">Are you sure you want to transfer ownership of this project to {{ transferConfirmData?.username }} ({{ transferConfirmData?.email }})?</p>
+        </div>
+
+        <div class="modal-content">
+          <div class="warning-box">
+            <div class="warning-icon">⚠️</div>
+            <div class="warning-text">
+              <strong>Warning:</strong> This action cannot be undone. You will lose admin privileges.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button @click="showTransferConfirm = false" class="btn-cancel">
+            Cancel
+          </button>
+          <button @click="confirmTransfer" :disabled="isTransferring" class="btn-delete">
+            {{ isTransferring ? 'Transferring...' : 'Confirm Transfer' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -196,6 +273,8 @@ interface Project {
   tags?: Array<{ id: string; name: string }>;
   projectRoles?: ProjectRole[];
   groups?: ProjectGroup[];
+  requestId?: string; // ID of the request this project was synced from
+  isSyncedFromRequest?: boolean; // Flag to indicate if project was synced from request
 }
 
 interface ProjectRole {
@@ -215,6 +294,11 @@ const project = ref<Project | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const showDeleteConfirm = ref(false);
+const showTransferModal = ref(false);
+const transferToUser = ref('');
+const isTransferring = ref(false);
+const showTransferConfirm = ref(false);
+const transferConfirmData = ref<{email: string, username: string} | null>(null);
 
 const loadProject = async () => {
   try {
@@ -246,28 +330,15 @@ const editProject = () => {
 }
 
 const manageRoles = () => {
-  // Navigate to roles management or open modal
-  console.log('Manage roles')
-}
-
-const manageGroups = () => {
-  // Navigate to groups management or open modal
-  console.log('Manage groups')
+  router.push(`/projects/${project.value?.id}?tab=roles`)
 }
 
 const manageFiles = () => {
-  // Navigate to file management
-  console.log('Manage files')
-}
-
-const viewAnalytics = () => {
-  // Navigate to analytics view
-  console.log('View analytics')
+  router.push(`/projects/${project.value?.id}?tab=files`)
 }
 
 const exportProject = () => {
-  // Export project data
-  console.log('Export project')
+  router.push(`/projects/${project.value?.id}?tab=translation`)
 }
 
 const deleteProject = () => {
@@ -289,8 +360,60 @@ const confirmDelete = async () => {
 
 const transferOwnership = () => {
   // Open transfer ownership modal
-  console.log('Transfer ownership')
+  showTransferModal.value = true;
 }
+
+const confirmTransferInput = async () => {
+  if (!transferToUser.value) return;
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(transferToUser.value)) {
+    toast.error('Please enter a valid email address');
+    return;
+  }
+
+  // Go directly to confirmation since we can't verify user existence yet
+  transferConfirmData.value = {
+    email: transferToUser.value,
+    username: transferToUser.value.split('@')[0] // Use email prefix as username
+  };
+  showTransferModal.value = false;
+  showTransferConfirm.value = true;
+}
+
+const confirmTransfer = async () => {
+  if (!project.value || !transferConfirmData.value) return;
+
+  isTransferring.value = true;
+
+  try {
+    await axiosInstance.patch(`/projects/${project.value.id}/transfer-ownership`, {
+      email: transferConfirmData.value.email
+    });
+
+    toast.success(`Project ownership transferred successfully to ${transferConfirmData.value.username}`);
+    showTransferConfirm.value = false;
+    transferConfirmData.value = null;
+    transferToUser.value = '';
+
+    // Redirect to dashboard since old owner loses access to the project
+    router.push('/projects');
+  } catch (err: any) {
+    // Extract error message from backend response
+    let errorMessage = 'Failed to transfer ownership';
+
+    if (err.response?.data?.message) {
+      errorMessage = err.response.data.message;
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
+
+    toast.error(errorMessage);
+  } finally {
+    isTransferring.value = false;
+  }
+};
 
 onMounted(() => {
   loadProject()
@@ -315,36 +438,36 @@ onMounted(() => {
 .content-wrapper {
   flex: 1;
   overflow-y: auto;
-  padding: 2rem 2rem 2rem 6rem;
+  padding: 1.2rem;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  margin-left: 11rem;
+  margin-left: 15rem;
 }
 
 .project-manage-view {
   max-width: none;
   margin: 0 auto;
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  margin-bottom: 2rem;
+  margin-bottom: 1.2rem;
 }
 
 /* Loading and Error States */
 .loading,
 .error {
   text-align: center;
-  padding: 3rem 2rem;
+  padding: 1.8rem 1.2rem;
 }
 
 .loading-spinner {
-  width: 2rem;
-  height: 2rem;
-  border: 3px solid #e2e8f0;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1.8px solid #e2e8f0;
   border-radius: 50%;
   border-top-color: #4299e1;
   animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
+  margin: 0 auto 0.6rem;
 }
 
 @keyframes spin {
@@ -357,76 +480,76 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  gap: 2rem;
-  padding: 2rem;
+  margin-bottom: 1.2rem;
+  gap: 1.2rem;
+  padding: 1.2rem;
 }
 
 .header-info h1 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.3rem 0;
   color: #1a202c;
-  font-size: 2rem;
+  font-size: 1.2rem;
   font-weight: 600;
 }
 
 .subtitle {
   color: #718096;
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.66rem;
 }
 
 .manage-sections {
   display: grid;
-  gap: 2rem;
-  padding: 0 2rem 2rem 2rem;
+  gap: 1.2rem;
+  padding: 0 1.2rem 1.2rem 1.2rem;
 }
 
 .manage-section {
   background: white;
-  padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 0.9rem;
+  border-radius: 7.2px;
+  box-shadow: 0 1.2px 4.8px rgba(0, 0, 0, 0.1);
   border: 1px solid #e2e8f0;
 }
 
 .manage-section h2 {
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 0.9rem 0;
   color: #2d3748;
-  font-size: 1.25rem;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
 }
 
 .overview-item {
-  padding: 1rem;
+  padding: 0.6rem;
   background-color: #f7fafc;
-  border-radius: 8px;
+  border-radius: 4.8px;
   border: 1px solid #e2e8f0;
 }
 
 .overview-label {
   color: #718096;
-  font-size: 0.875rem;
+  font-size: 0.525rem;
   font-weight: 500;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 
 .overview-value {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.12rem;
 }
 
 .badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 2.4px;
+  font-size: 0.45rem;
   font-weight: 500;
 }
 
@@ -447,8 +570,8 @@ onMounted(() => {
 
 .actions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
 }
 
 .action-card {
@@ -456,10 +579,10 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 1.5rem;
+  padding: 0.9rem;
   background-color: #f7fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 4.8px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-decoration: none;
@@ -468,45 +591,45 @@ onMounted(() => {
 
 .action-card:hover {
   background-color: #edf2f7;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1.2px);
+  box-shadow: 0 2.4px 7.2px rgba(0, 0, 0, 0.1);
 }
 
 .action-icon {
-  font-size: 2rem;
-  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  margin-bottom: 0.6rem;
 }
 
 .action-title {
   font-weight: 600;
   color: #2d3748;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 
 .action-description {
   color: #718096;
-  font-size: 0.875rem;
+  font-size: 0.525rem;
   line-height: 1.4;
 }
 
 .activity-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.6rem;
 }
 
 .activity-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 0.6rem;
+  padding: 0.6rem;
   background-color: #f7fafc;
-  border-radius: 8px;
+  border-radius: 4.8px;
   border: 1px solid #e2e8f0;
 }
 
 .activity-icon {
-  font-size: 1.5rem;
+  font-size: 0.9rem;
 }
 
 .activity-content {
@@ -516,12 +639,12 @@ onMounted(() => {
 .activity-title {
   font-weight: 500;
   color: #2d3748;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.15rem;
 }
 
 .activity-meta {
   color: #718096;
-  font-size: 0.875rem;
+  font-size: 0.525rem;
 }
 
 .danger-zone {
@@ -536,45 +659,45 @@ onMounted(() => {
 .danger-actions {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.9rem;
 }
 
 .danger-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: 0.9rem;
   background-color: white;
-  border-radius: 8px;
+  border-radius: 4.8px;
   border: 1px solid #fed7d7;
-  gap: 2rem;
+  gap: 1.2rem;
 }
 
 .danger-info h3 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.3rem 0;
   color: #c53030;
-  font-size: 1rem;
+  font-size: 0.6rem;
   font-weight: 600;
 }
 
 .danger-info p {
   margin: 0;
   color: #742a2a;
-  font-size: 0.875rem;
+  font-size: 0.525rem;
   line-height: 1.4;
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.45rem 0.9rem;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: 4.8px;
+  font-size: 0.6rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
   text-decoration: none;
 }
 
@@ -607,24 +730,34 @@ onMounted(() => {
   background-color: #dd6b20;
 }
 
+.btn-delete:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-delete:disabled:hover {
+  background-color: #9ca3af;
+}
+
 @media (max-width: 768px) {
   .content-wrapper {
-    padding: 1rem;
+    padding: 0.6rem;
   }
 
   .manage-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 1rem;
-    padding: 1rem;
+    gap: 0.6rem;
+    padding: 0.6rem;
   }
 
   .manage-sections {
-    padding: 0 1rem 1rem 1rem;
+    padding: 0 0.6rem 0.6rem 0.6rem;
   }
 
   .header-info h1 {
-    font-size: 1.75rem;
+    font-size: 1.05rem;
   }
 
   .overview-grid {
@@ -638,7 +771,7 @@ onMounted(() => {
   .danger-item {
     flex-direction: column;
     align-items: stretch;
-    gap: 1rem;
+    gap: 0.6rem;
   }
 
   .btn {
@@ -647,22 +780,143 @@ onMounted(() => {
   }
 }
 
-.modal-overlay {
+.modern-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
 }
-.modal {
+.modern-modal {
   background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.2);
-  min-width: 300px;
+  padding: 1.2rem;
+  border-radius: 7.2px;
+  box-shadow: 0 1.2px 9.6px rgba(0,0,0,0.2);
+  min-width: 180px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modal-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+.modal-icon {
+  width: 48px;
+  height: 48px;
+  background-color: #fef3f2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.6rem;
+}
+
+.modal-icon svg {
+  fill: #ef4444;
+}
+
+.modal-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.3rem;
+}
+
+.modal-description {
+  font-size: 0.6rem;
+  color: #718096;
+  margin-bottom: 1.2rem;
+}
+
+.modal-content {
+  margin-bottom: 1.2rem;
+  padding: 0.9rem;
+  background-color: #fffbeb;
+  border-radius: 4.8px;
+  border: 1px solid #fcd34d;
+}
+
+.warning-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #92400e;
+}
+
+.warning-icon {
+  font-size: 1.2rem;
+}
+
+.warning-text {
+  font-size: 0.525rem;
+  line-height: 1.4;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.btn-cancel {
+  flex: 1;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4.8px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  color: #4a5568;
+  background-color: #edf2f7;
+}
+
+.btn-cancel:hover {
+  background-color: #e2e8f0;
+  border-color: #cbd5e0;
+}
+
+.btn-delete {
+  flex: 1;
+  padding: 0.45rem 0.9rem;
+  border: none;
+  border-radius: 4.8px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  color: white;
+  background-color: #ef4444;
+}
+
+.btn-delete:hover {
+  background-color: #dc2626;
+}
+
+.btn-delete:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-delete:disabled:hover {
+  background-color: #9ca3af;
 }
 
 .tag-badge {
@@ -670,19 +924,35 @@ onMounted(() => {
   align-items: center;
   background: linear-gradient(90deg, #e2e8f0 60%, #c3cfe2 100%);
   color: #22577a;
-  border-radius: 16px;
-  padding: 0.25rem 1rem 0.25rem 0.7rem;
-  margin: 0.2rem 0.5rem 0.2rem 0;
-  font-size: 0.95rem;
+  border-radius: 9.6px;
+  padding: 0.15rem 0.6rem 0.15rem 0.42rem;
+  margin: 0.12rem 0.3rem 0.12rem 0;
+  font-size: 0.57rem;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(66,153,225,0.07);
-  border: 1.5px solid #b5c7d3;
+  box-shadow: 0 1.2px 4.8px rgba(66,153,225,0.07);
+  border: 0.9px solid #b5c7d3;
   transition: background 0.2s;
 }
 
 .tag-badge .tag-icon {
-  margin-right: 0.4em;
+  margin-right: 0.24em;
   color: #4299e1;
-  font-size: 1.1em;
+  font-size: 0.66em;
+}
+
+.transfer-input {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4.8px;
+  font-size: 0.6rem;
+  margin-bottom: 1.2rem;
+  box-sizing: border-box;
+}
+
+.transfer-input:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 2px #4299e1;
 }
 </style>

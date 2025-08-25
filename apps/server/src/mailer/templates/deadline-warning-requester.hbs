@@ -17,29 +17,29 @@
         <div class="header">
             <h1>⚠️ Deadline Warning</h1>
         </div>
-        
+
         <div class="content">
             <h2>Translation Deadline Approaching</h2>
-            
+
             <div class="warning">
-                <strong>⏰ WARNING:</strong> Your translation request deadline is approaching in {{daysLeft}} day(s)!
+                <strong>⏰ WARNING:</strong> Your translation request deadline is approaching in {{#if daysLeft}}{{daysLeft}}{{else}}a few{{/if}} day(s)!
             </div>
-            
+
             <h3>Request Details:</h3>
             <ul>
-                <li><strong>Request ID:</strong> {{request.id}}</li>
+                <li><strong>Request ID:</strong> {{request.id}}</strong></li>
                 <li><strong>Description:</strong> {{request.description}}</li>
-                <li><strong>Deadline:</strong> {{request.deadline}}</li>
+                <li><strong>Deadline:</strong> {{#if request.deadline}}{{formatDate request.deadline}}{{else}}Not set{{/if}}</li>
                 <li><strong>Status:</strong> {{request.status}}</li>
             </ul>
-            
+
             <p><strong>Information:</strong> Your assigned translator is working on your request and will be notified about the approaching deadline.</p>
-            
+
             <p>The system will automatically check progress when the deadline arrives and handle any necessary extensions or status updates.</p>
-            
+
             <p>You will be notified once the translation is complete and ready for your review.</p>
         </div>
-        
+
         <div class="footer">
             <p>This is an automated message from HereToTranslate</p>
             <p>Please do not reply to this email</p>

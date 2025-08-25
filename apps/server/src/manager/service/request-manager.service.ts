@@ -268,6 +268,10 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requests.targetLanguages',
+        'requests.reviewedAt',
+        'requests.reviewDecision',
+        'requests.reviewRating',
+        'requests.reviewComment',
         'requester.id',
         'requester.username',
         'project.id',
@@ -358,6 +362,51 @@ export class RequestManagerService {
     }));
   }
 
+  async fetchAllRequestsIncludingExpired(userId: bigint) {
+    const query = this.requestRepository
+      .createQueryBuilder('requests')
+      .select([
+        'requests.id',
+        'requests.title',
+        'requests.description',
+        'requests.dealAmount',
+        'requests.deadline',
+        'requests.status',
+        'requests.createdAt',
+        'requests.targetLanguages',
+        'requester.id',
+        'requester.username',
+        'requester.fullName',
+        'requester.email',
+        'requester.phone',
+        'category.name',
+        'tags.id',
+        'tags.name',
+        'assignee.id',
+        'assignee.username',
+        'assignee.fullName',
+        'assignee.email',
+      ])
+      .where('requests.isPublic = true')
+      .leftJoin('requests.requester', 'requester')
+      .leftJoin('requests.category', 'category')
+      .leftJoin('requests.assignee', 'assignee')
+      .leftJoinAndSelect('requests.tags', 'tags')
+      .leftJoinAndSelect('requests.registrants', 'registrants')
+      .orderBy('requests.id', 'ASC');
+
+    const result = await query.getMany();
+
+    return result.map((r: RequestEntity) => ({
+      ...r,
+      isRegistered: r.registrants
+        ? r.registrants.some(
+          (u: UserEntity) => u.id.toString() === userId.toString()
+        )
+        : false,
+    }));
+  }
+
   async fetchPrivateRequests(uid: bigint) {
     const query = this.requestRepository
       .createQueryBuilder('requests')
@@ -427,6 +476,13 @@ export class RequestManagerService {
         'files.fileType',
         'files.createdAt',
         'files.fileContent',
+
+        'project.id',
+        'project.name',
+        'project.description',
+        'project.createdAt',
+        'defaultBranch.id',
+        'defaultBranch.name',
       ])
       .where('requests.id = :requestId', { requestId })
       .leftJoin('requests.requester', 'requester')
@@ -434,7 +490,9 @@ export class RequestManagerService {
       .leftJoin('requests.category', 'category')
       .leftJoinAndSelect('requests.tags', 'tags')
       .leftJoinAndSelect('requests.registrants', 'registrants')
-      .leftJoinAndSelect('requests.files', 'files');
+      .leftJoinAndSelect('requests.files', 'files')
+      .leftJoin('requests.project', 'project')
+      .leftJoin('project.defaultBranch', 'defaultBranch');
 
     const request = await query.getOne();
 
@@ -542,6 +600,56 @@ export class RequestManagerService {
           fileContent: file.buffer,
           requestId,
         });
+      }
+    }
+
+    return this.requestRepository.save(request);
+  }
+
+  async updateDeadline(requestId: bigint, deadline: string) {
+    const request = await this.requestRepository.findOne({
+      where: { id: BigInt(requestId) },
+    });
+
+    if (!request) throw new NotFoundException(`Unknown request`);
+
+    const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) {
+      throw new BadRequestException(`Invalid deadline format`);
+    }
+
+    // Update deadline
+    request.deadline = deadlineDate;
+
+    // Auto-update status based on new deadline
+    const now = new Date();
+
+    if (deadlineDate > now) {
+      // Deadline is in the future
+      const timeUntilDeadline = deadlineDate.getTime() - now.getTime();
+      const oneDayInMs = 24 * 60 * 60 * 1000;
+
+      if (timeUntilDeadline <= oneDayInMs) {
+        // Deadline is within 1 day
+        request.status = RequestStatus.WaitingApproval;
+      } else {
+        // Deadline is more than 1 day away
+        if (request.status === RequestStatus.Failed) {
+          // If request was failed due to expired deadline, restore it to approved
+          request.status = RequestStatus.Approved;
+        } else if (request.status === RequestStatus.Pending) {
+          // Keep pending status
+          request.status = RequestStatus.Pending;
+        } else if (request.status === RequestStatus.Approved) {
+          // Keep approved status
+          request.status = RequestStatus.Approved;
+        }
+      }
+    } else {
+      // Deadline has passed
+      if (request.status !== RequestStatus.Completed &&
+        request.status !== RequestStatus.Cancelled) {
+        request.status = RequestStatus.Failed;
       }
     }
 
@@ -742,7 +850,7 @@ export class RequestManagerService {
     }
   }
 
-  async getRequestRegistrants(requestId: bigint): Promise<UserEntity[]> {
+  async getRequestRegistrants(requestId: bigint): Promise<any[]> {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
       relations: ['registrants'],
@@ -752,7 +860,7 @@ export class RequestManagerService {
 
     if (registrantIds.length === 0) return [];
 
-    return this.userRepository
+    const users = await this.userRepository
       .createQueryBuilder('user')
       .select([
         'user.id',
@@ -760,9 +868,130 @@ export class RequestManagerService {
         'user.email',
         'user.phone',
         'user.createdAt',
+        'user.username',
+        'user.avatarUrl',
+        'user.isActive',
       ])
       .whereInIds(registrantIds)
       .getMany();
+
+    // Get all requests where registrants are assignees (not requesters)
+    const allRequests = await this.requestRepository
+      .createQueryBuilder('request')
+      .leftJoinAndSelect('request.assignee', 'assignee')
+      .select([
+        'request.id',
+        'request.status',
+        'request.rating',
+        'request.reviewRating',
+        'request.reviewDecision',
+        'request.reviewedAt',
+        'request.reviewComment',
+        'assignee.id',
+        'assignee.username',
+        'assignee.fullName',
+        'assignee.email'
+      ])
+      .where('assignee.id IN (:...userIds)', {
+        userIds: registrantIds
+      })
+      .getMany();
+
+    // Calculate stats for each user (only as assignee)
+    const userStatsMap = new Map();
+
+    registrantIds.forEach(userId => {
+      const userRequests = allRequests.filter(req =>
+        req.assignee?.id === userId
+      );
+
+      const stats = {
+        total: userRequests.length,
+        completed: 0,
+        failed: 0,
+        pending: 0,
+      };
+
+      userRequests.forEach(req => {
+        switch (req.status) {
+          case RequestStatus.Completed:
+            stats.completed++;
+            break;
+          case RequestStatus.Failed:
+          case RequestStatus.Cancelled:
+          case RequestStatus.Rejected:
+            stats.failed++;
+            break;
+          case RequestStatus.Pending:
+          case RequestStatus.Approved:
+          case RequestStatus.WaitingApproval:
+          case RequestStatus.ExtensionRequested:
+          case RequestStatus.ExtensionApproved:
+            stats.pending++;
+            break;
+        }
+      });
+
+      userStatsMap.set(userId, stats);
+    });
+
+    // Return users with real stats and average rating
+    return users.map((user) => {
+      const userRequests = allRequests.filter(req => req.assignee?.id === user.id);
+
+      // Get ALL completed/failed requests for rating calculation (not just reviewed ones)
+      const completedRequests = userRequests.filter(req =>
+        req.status === RequestStatus.Completed ||
+        req.status === RequestStatus.Failed ||
+        req.status === RequestStatus.Incompleted
+      );
+
+      // Get ratings from completed requests (use reviewRating if available, fallback to rating)
+      const ratings = completedRequests
+        .map(req => req.reviewRating || req.rating) // Use reviewRating if available, fallback to rating
+        .filter(rating => rating !== null && rating > 0);
+
+
+
+      // Debug logging
+      console.log(`🔍 [DEBUG] User ${user.username} rating calculation:`, {
+        totalRequests: userRequests.length,
+        completedRequests: completedRequests.length,
+        allRequestsDetails: userRequests.map(req => ({
+          id: req.id,
+          status: req.status,
+          reviewRating: req.reviewRating,
+          rating: req.rating,
+          reviewedAt: req.reviewedAt,
+          reviewDecision: req.reviewDecision
+        })),
+        completedRequestsDetails: completedRequests.map(req => ({
+          id: req.id,
+          status: req.status,
+          reviewRating: req.reviewRating,
+          rating: req.rating,
+          reviewedAt: req.reviewedAt
+        })),
+        ratings: ratings,
+        averageRating: ratings.length > 0 ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1) : '0.0'
+      });
+
+
+
+      return {
+        ...user,
+        requestStats: userStatsMap.get(user.id) || {
+          total: 0,
+          completed: 0,
+          failed: 0,
+          pending: 0,
+        },
+        joined: user.createdAt,
+        lastSeen: 'Online',
+        averageRating: parseFloat(ratings.length > 0 ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1) : '0.0'),
+        totalRatings: ratings.length,
+      };
+    });
   }
 
   async approveRegistrant(
@@ -994,6 +1223,9 @@ export class RequestManagerService {
       const translatorMatch = message.match(/^([^(]+) has requested/);
       const translatorName = translatorMatch ? translatorMatch[1].trim() : 'Unknown Translator';
 
+      // Always define currentDeadline from request
+      const currentDeadline = new Date(request.deadline);
+
       // Extract new deadline and reason from message
       const extensionDataMatch = message.match(/\[EXTENSION_DATA:(\{.*?\})\]/);
       let newDeadline, reason;
@@ -1006,13 +1238,11 @@ export class RequestManagerService {
         } catch (error) {
           console.error('🔍 [SERVICE] Failed to parse extension data:', error);
           // Fallback to default values
-          const currentDeadline = new Date(request.deadline);
           newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
           reason = 'Deadline extension requested';
         }
       } else {
         // Fallback to default values if no extension data found
-        const currentDeadline = new Date(request.deadline);
         newDeadline = new Date(currentDeadline.getTime() + 7 * 24 * 60 * 60 * 1000);
         reason = 'Deadline extension requested';
       }
@@ -1261,7 +1491,7 @@ export class RequestManagerService {
       throw new NotFoundException('Request not found');
     }
 
-    if (request.assignee?.id !== translatorId) {
+    if (request.assignee?.id.toString() !== translatorId.toString()) {
       throw new BadRequestException('You are not the assigned translator for this request');
     }
 
@@ -1271,9 +1501,9 @@ export class RequestManagerService {
 
     // Check if there are any pending extension requests that haven't been responded to
     const pendingExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id,
+      request.requester.id.toString(), // Convert BigInt to string
       'EXTENSION_REQUESTED',
-      requestId
+      requestId.toString() // Convert BigInt to string
     );
 
     if (pendingExtensions.length > 0) {
@@ -1287,15 +1517,15 @@ export class RequestManagerService {
     // 4. If previous extension is still PENDING: Wait for response
 
     const approvedExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id,
+      request.requester.id.toString(), // Convert BigInt to string
       'EXTENSION_APPROVED',
-      requestId
+      requestId.toString() // Convert BigInt to string
     );
 
     const rejectedExtensions = await this.notificationService.getNotificationsByType(
-      request.requester.id,
+      request.requester.id.toString(), // Convert BigInt to string
       'EXTENSION_REJECTED',
-      requestId
+      requestId.toString() // Convert BigInt to string
     );
 
     // Apply extension request rules
@@ -1313,7 +1543,7 @@ export class RequestManagerService {
     // Create notification for requester
     // Store extension details in a structured way for internal use
     const extensionData = {
-      requestId: requestId,
+      requestId: requestId.toString(), // Convert BigInt to string for JSON serialization
       newDeadline: newDeadline.getTime(),
       reason: reason
     };
@@ -1329,10 +1559,10 @@ export class RequestManagerService {
     console.log('🔍 [SERVICE] Full message with extension data:', fullMessage);
 
     await this.notificationService.createNotification({
-      userId: request.requester.id,
+      userId: request.requester.id.toString(), // Convert BigInt to string
       type: 'EXTENSION_REQUESTED',
       message: fullMessage, // Use full message with extension data
-      createdBy: translatorId,
+      createdBy: translatorId.toString(), // Convert BigInt to string
     });
 
     // Send email notification to requester
@@ -1347,7 +1577,7 @@ export class RequestManagerService {
           currentDeadline: request.deadline,
           newDeadline: newDeadline,
           reason: reason,
-          requestId: requestId,
+          requestId: requestId.toString(), // Convert BigInt to string
         }
       );
     }
@@ -1356,7 +1586,7 @@ export class RequestManagerService {
     return {
       success: true,
       message: 'Extension request submitted successfully',
-      requestId: requestId
+      requestId: requestId.toString() // Convert BigInt to string for JSON response
     };
   }
 
@@ -1367,6 +1597,185 @@ export class RequestManagerService {
       .getCount();
 
     return count;
+  }
+
+  async submitReview(
+    requestId: bigint,
+    requesterId: bigint,
+    decision: 'APPROVED' | 'REJECTED',
+    rating: number,
+    comment?: string,
+    translatorId?: string
+  ) {
+    console.log('🔍 [SERVICE] submitReview called:', {
+      requestId: requestId.toString(),
+      requesterId: requesterId.toString(),
+      decision,
+      rating,
+      comment,
+      translatorId
+    });
+
+    try {
+      // 1. Validate request exists and belongs to requester
+      const request = await this.requestRepository.findOne({
+        where: { id: requestId },
+        relations: ['requester', 'assignee', 'project']
+      });
+
+      if (!request) {
+        throw new BadRequestException('Request not found');
+      }
+
+      if (request.requester.id !== requesterId) {
+        throw new BadRequestException('You can only review your own requests');
+      }
+
+      if (request.status !== 'WAITING_APPROVAL' && request.status !== 'FAILED') {
+        throw new BadRequestException('Request is not in WAITING_APPROVAL or FAILED status');
+      }
+
+      // 2. Update request status based on review decision
+      if (decision === 'APPROVED') {
+        request.status = 'COMPLETED';
+      } else if (decision === 'REJECTED') {
+        request.status = 'INCOMPLETED';
+      }
+
+      request.reviewedAt = new Date();
+      request.reviewDecision = decision;
+      request.reviewRating = rating;
+      request.reviewComment = comment;
+
+      console.log('💾 [SERVICE] Saving review data to database:', {
+        requestId: requestId.toString(),
+        status: request.status,
+        reviewedAt: request.reviewedAt,
+        reviewDecision: request.reviewDecision,
+        reviewRating: request.reviewRating,
+        reviewComment: request.reviewComment
+      });
+
+      await this.requestRepository.save(request);
+
+      console.log('✅ [SERVICE] Review data saved successfully to database');
+
+      // 3. If translatorId is provided, update translator rating
+      if (translatorId && request.assignee) {
+        await this.updateTranslatorRating(
+          BigInt(translatorId),
+          rating,
+          comment
+        );
+      }
+
+      // 4. Create notification for translator
+      if (request.assignee) {
+        await this.notificationService.createNotification({
+          userId: request.assignee.id.toString(),
+          type: 'REQUEST_REVIEWED',
+          message: `Your translation for "${request.title}" has been ${decision.toLowerCase()}. Rating: ${rating}/5 stars.`,
+          createdBy: requesterId.toString(),
+        });
+      }
+
+      // 5. Send email notification to translator
+      if (request.assignee?.email) {
+        console.log('📧 [SERVICE] Sending email notification to translator:', {
+          translatorEmail: request.assignee.email,
+          translatorName: request.assignee.fullName || request.assignee.username,
+          decision,
+          rating
+        });
+
+        try {
+          await this.mailService.sendReviewNotification(
+            request.assignee.email,
+            {
+              translatorName: request.assignee.fullName || request.assignee.username,
+              requesterName: request.requester.fullName || request.requester.username,
+              requestTitle: request.title,
+              decision,
+              rating,
+              comment,
+              requestId: requestId.toString()
+            }
+          );
+          console.log('✅ [SERVICE] Email notification sent successfully to translator');
+        } catch (emailError) {
+          console.error('💥 [SERVICE] Failed to send email notification:', emailError);
+          // Don't throw error here to avoid failing the review submission
+        }
+      } else {
+        console.log('⚠️ [SERVICE] No translator email found, skipping email notification');
+      }
+
+      console.log('✅ [SERVICE] submitReview success:', {
+        requestId: requestId.toString(),
+        decision,
+        rating
+      });
+
+      return {
+        success: true,
+        message: `Request ${decision.toLowerCase()} successfully`,
+        requestId: requestId.toString(),
+        decision,
+        rating,
+        comment
+      };
+
+    } catch (error) {
+      console.error('💥 [SERVICE] submitReview error:', error);
+      throw error;
+    }
+  }
+
+  private async updateTranslatorRating(
+    translatorId: bigint,
+    rating: number,
+    comment?: string
+  ) {
+    try {
+      // Get current translator rating data
+      const translator = await this.userRepository.findOne({
+        where: { id: translatorId }
+      });
+
+      if (!translator) {
+        console.warn('Translator not found for rating update:', translatorId.toString());
+        return;
+      }
+
+      // Calculate new average rating
+      const currentRating = translator.rating || 0;
+      const currentReviewCount = translator.reviewCount || 0;
+
+      const newReviewCount = currentReviewCount + 1;
+      const newRating = ((currentRating * currentReviewCount) + rating) / newReviewCount;
+
+      // Update translator rating
+      translator.rating = Math.round(newRating * 10) / 10; // Round to 1 decimal place
+      translator.reviewCount = newReviewCount;
+
+      // Store review details (you might want to create a separate reviews table)
+      if (comment) {
+        translator.lastReviewComment = comment;
+      }
+
+      await this.userRepository.save(translator);
+
+      console.log('✅ [SERVICE] Translator rating updated:', {
+        translatorId: translatorId.toString(),
+        oldRating: currentRating,
+        newRating: translator.rating,
+        reviewCount: newReviewCount
+      });
+
+    } catch (error) {
+      console.error('💥 [SERVICE] Error updating translator rating:', error);
+      // Don't throw error here to avoid failing the main review submission
+    }
   }
 
 }

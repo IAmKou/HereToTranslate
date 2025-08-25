@@ -28,6 +28,30 @@ export class DeadlineCheckerService {
   private sentEmailTracker = new Map<string, Date>();
   private readonly EMAIL_COOLDOWN_HOURS = 24; // Don't send same email type to same user within 24 hours
 
+  // Helper function to safely calculate days between dates
+  private calculateDaysBetween(date1: Date, date2: Date): number {
+    try {
+      const timeDiff = date1.getTime() - date2.getTime();
+      const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+      return isNaN(daysDiff) ? 0 : daysDiff;
+    } catch (error) {
+      this.logger.error('Error calculating days between dates:', error);
+      return 0;
+    }
+  }
+
+  // Helper function to safely calculate hours between dates
+  private calculateHoursBetween(date1: Date, date2: Date): number {
+    try {
+      const timeDiff = date1.getTime() - date2.getTime();
+      const hoursDiff = Math.ceil(timeDiff / (1000 * 60 * 60));
+      return isNaN(hoursDiff) ? 0 : hoursDiff;
+    } catch (error) {
+      this.logger.error('Error calculating hours between dates:', error);
+      return 0;
+    }
+  }
+
   constructor(
     @InjectRepository(RequestEntity)
     private readonly requestRepo: Repository<RequestEntity>,
@@ -129,7 +153,24 @@ export class DeadlineCheckerService {
       this.logger.log(`Found ${urgentDeadlines.length} requests with urgent deadlines`);
 
       for (const req of urgentDeadlines) {
-        const hoursLeft = Math.ceil((+req.deadline - +today) / (1000 * 60 * 60));
+        // Ensure deadline is a valid Date object
+        let deadlineDate: Date;
+        if (req.deadline instanceof Date) {
+          deadlineDate = req.deadline;
+        } else if (typeof req.deadline === 'string') {
+          deadlineDate = new Date(req.deadline);
+        } else {
+          this.logger.error(`Invalid deadline format for request ${req.id}: ${req.deadline}`);
+          continue;
+        }
+
+        // Check if the parsed date is valid
+        if (isNaN(deadlineDate.getTime())) {
+          this.logger.error(`Invalid deadline date for request ${req.id}: ${req.deadline}`);
+          continue;
+        }
+
+        const hoursLeft = this.calculateHoursBetween(deadlineDate, today);
 
         if (hoursLeft <= 1) {
           this.logger.warn(`CRITICAL: Request ${req.id} due in ${hoursLeft} hour(s)`);
@@ -164,6 +205,14 @@ export class DeadlineCheckerService {
       this.logger.log(`Found ${overdueRequests.length} overdue requests`);
 
       for (const req of overdueRequests) {
+        if (
+          req.status === RequestStatus.Failed
+          || req.status === RequestStatus.Completed
+          || req.status === RequestStatus.WaitingApproval
+        ) {
+          continue; // Skip already handled requests
+        }
+
         const progress = await this.translationService.getTranslationProgress(
           req.project.id.toString(),
           req.project.defaultBranch?.id.toString() || '1'
@@ -212,6 +261,25 @@ export class DeadlineCheckerService {
       this.logger.log(`Found ${urgentExtensions.length} urgent extension requests`);
 
       for (const extension of urgentExtensions) {
+        // Ensure createdAt is a valid Date object
+        let createdAtDate: Date;
+        if (extension.createdAt instanceof Date) {
+          createdAtDate = extension.createdAt;
+        } else if (typeof extension.createdAt === 'string') {
+          createdAtDate = new Date(extension.createdAt);
+        } else {
+          this.logger.error(`Invalid createdAt format for extension ${extension.id}: ${extension.createdAt}`);
+          continue;
+        }
+
+        // Check if the parsed date is valid
+        if (isNaN(createdAtDate.getTime())) {
+          this.logger.error(`Invalid createdAt date for extension ${extension.id}: ${extension.createdAt}`);
+          continue;
+        }
+
+        const daysPending = this.calculateDaysBetween(today, createdAtDate);
+
         // Send reminder to requester about pending extension
         if (this.canSendEmail('extension-reminder', extension.requester.id.toString())) {
           await this.mailerService.sendMail({
@@ -221,7 +289,7 @@ export class DeadlineCheckerService {
             context: {
               request: extension.request,
               extension,
-              daysPending: Math.ceil((+today - +extension.createdAt) / (1000 * 60 * 60 * 24)),
+              daysPending,
             },
           });
           this.markEmailSent('extension-reminder', extension.requester.id.toString());
@@ -339,7 +407,29 @@ export class DeadlineCheckerService {
     });
 
     for (const req of soonDueRequests) {
-      const daysLeft = Math.ceil((+req.deadline - +today) / (1000 * 60 * 60 * 24));
+      // Debug logging to check deadline value and type
+      this.logger.log(`Request ${req.id}: deadline = ${req.deadline}, type = ${typeof req.deadline}, isDate = ${req.deadline instanceof Date}`);
+
+      // Ensure deadline is a valid Date object
+      let deadlineDate: Date;
+      if (req.deadline instanceof Date) {
+        deadlineDate = req.deadline;
+      } else if (typeof req.deadline === 'string') {
+        deadlineDate = new Date(req.deadline);
+      } else {
+        this.logger.error(`Invalid deadline format for request ${req.id}: ${req.deadline}`);
+        continue;
+      }
+
+      // Check if the parsed date is valid
+      if (isNaN(deadlineDate.getTime())) {
+        this.logger.error(`Invalid deadline date for request ${req.id}: ${req.deadline}`);
+        continue;
+      }
+
+      const daysLeft = this.calculateDaysBetween(deadlineDate, today);
+
+      this.logger.log(`Request ${req.id}: calculated daysLeft = ${daysLeft}`);
 
       if (req.assignee?.email && this.canSendEmail('deadline-warning-translator', req.assignee.id.toString())) {
         await this.mailerService.sendMail({
@@ -451,34 +541,34 @@ export class DeadlineCheckerService {
       req.status = RequestStatus.ExtensionRequested;
       await this.requestRepo.save(req);
 
-              // Send notification to translator about deadline miss and extension option
-        if (req.assignee?.email && this.canSendEmail('deadline-missed-extension-option', req.assignee.id.toString())) {
-          await this.mailerService.sendMail({
-            to: req.assignee.email,
-            subject: '[Action Required] Translation Deadline Missed',
-            template: 'deadline-missed-extension-option',
-            context: {
-              request: req,
-              percentage: percentage.toFixed(1),
-              extensionDeadline: addDays(today, 3),
-            },
-          });
-          this.markEmailSent('deadline-missed-extension-option', req.assignee.id.toString());
-        }
+      // Send notification to translator about deadline miss and extension option
+      if (req.assignee?.email && this.canSendEmail('deadline-missed-extension-option', req.assignee.id.toString())) {
+        await this.mailerService.sendMail({
+          to: req.assignee.email,
+          subject: '[Action Required] Translation Deadline Missed',
+          template: 'deadline-missed-extension-option',
+          context: {
+            request: req,
+            percentage: percentage.toFixed(1),
+            extensionDeadline: addDays(today, 3),
+          },
+        });
+        this.markEmailSent('deadline-missed-extension-option', req.assignee.id.toString());
+      }
 
-        // Notify requester about delay
-        if (this.canSendEmail('translation-delayed', req.requester.id.toString())) {
-          await this.mailerService.sendMail({
-            to: req.requester.email,
-            subject: '[Delay Notice] Translation deadline missed',
-            template: 'translation-delayed',
-            context: {
-              request: req,
-              percentage: percentage.toFixed(1),
-            },
-          });
-          this.markEmailSent('translation-delayed', req.requester.id.toString());
-        }
+      // Notify requester about delay
+      if (this.canSendEmail('translation-delayed', req.requester.id.toString())) {
+        await this.mailerService.sendMail({
+          to: req.requester.email,
+          subject: '[Delay Notice] Translation deadline missed',
+          template: 'translation-delayed',
+          context: {
+            request: req,
+            percentage: percentage.toFixed(1),
+          },
+        });
+        this.markEmailSent('translation-delayed', req.requester.id.toString());
+      }
     }
   }
 

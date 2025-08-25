@@ -98,14 +98,6 @@
 
               <div class="activity-meta">
                 <span class="activity-time">{{ formatTime(activity.createdAt) }}</span>
-                <button
-                  v-if="activity.canUndo"
-                  @click="undoActivity(activity.id)"
-                  class="undo-btn"
-                  :disabled="undoing === activity.id"
-                >
-                  {{ undoing === activity.id ? 'Undoing...' : 'Undo' }}
-                </button>
               </div>
             </div>
           </div>
@@ -147,7 +139,6 @@ const showFilters = ref(false)
 const selectedTimeRange = ref('all')
 const selectedActivityTypes = ref<string[]>([])
 const selectedUser = ref('')
-const undoing = ref<string | null>(null)
 const page = ref(1)
 const hasMoreActivities = ref(true)
 
@@ -223,21 +214,6 @@ const loadMoreActivities = async () => {
   await loadActivities()
 }
 
-const undoActivity = async (activityId: string) => {
-  try {
-    undoing.value = activityId
-
-    const response = await axios.post(`/projects/${props.projectId}/activities/${activityId}/undo`)
-
-    // Reload activities after undo
-    await loadActivities()
-  } catch (err: any) {
-    console.error('Failed to undo activity:', err)
-  } finally {
-    undoing.value = null
-  }
-}
-
 // Helper function to get language name from code
 const getLanguageName = (languageCode: string): string => {
   const language = SUPPORTED_LANGUAGES.find(lang => lang.code === languageCode)
@@ -293,7 +269,10 @@ const formatDate = (dateString: string) => {
 }
 
 const formatTime = (dateString: string) => {
-  return format(parseISO(dateString), 'HH:mm')
+  const date = parseISO(dateString)
+  // Thêm 7 tiếng để sửa múi giờ
+  date.setHours(date.getHours() + 7)
+  return format(date, 'HH:mm')
 }
 
 const getFullAvatarUrl = (avatarUrl: string) => {
@@ -542,26 +521,6 @@ onMounted(() => {
 .activity-time {
   font-size: 10px;
   color: #6b7280;
-}
-
-.undo-btn {
-  font-size: 10px;
-  color: #3b82f6;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-}
-
-.undo-btn:hover {
-  color: #2563eb;
-}
-
-.undo-btn:disabled {
-  color: #9ca3af;
-  cursor: not-allowed;
-  text-decoration: none;
 }
 
 .load-more {

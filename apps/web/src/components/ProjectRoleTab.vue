@@ -1800,7 +1800,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .big-avatar {
   width: 2.8rem;
   height: 2.8rem;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   border: 2px solid #e2e8f0;
   box-shadow: 0 2px 6px #3182ce22;
 }
@@ -1832,7 +1832,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 }
 
 .avatar-text {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: white;
 }
@@ -2024,7 +2024,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   border: 1px solid #e2e8f0;
   padding: 0.5rem 0.6rem;
   text-align: left;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
 }
 
 .badge {
@@ -2032,8 +2032,8 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   background: #e2e8f0;
   color: #4a5568;
   border-radius: 999px;
-  padding: 0.15rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.12rem 0.4rem;
+  font-size: 0.65rem;
   font-weight: 500;
 }
 
@@ -2083,13 +2083,13 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 }
 
 .new-modal-header h3 {
-  font-size: 1rem; /* Giảm font size */
+  font-size: 0.9rem; /* Giảm font size */
 }
 
 .new-modal-close {
   background: none;
   border: none;
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   color: #a0aec0;
   cursor: pointer;
   padding: 0.5rem;
@@ -2131,7 +2131,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   color: #2d3748;
   font-weight: 600;
   margin-bottom: 0.7rem;
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
 .label-icon {
@@ -2144,7 +2144,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   padding: 0.9rem 1.2rem;
   border: 2px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 0.85rem;
   background: white;
   color: #2d3748;
   transition: all 0.2s;
@@ -2201,7 +2201,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 }
 
 .permission-text {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   color: #2d3748;
   font-weight: 500;
   flex: 1;
@@ -2214,8 +2214,8 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   font-weight: 600 !important;
   border-radius: 10px !important;
   border: none !important;
-  padding: 0.8rem 1.5rem !important;
-  font-size: 1rem !important;
+  padding: 0.7rem 1.3rem !important;
+  font-size: 0.9rem !important;
   cursor: pointer !important;
   transition: all 0.18s !important;
   box-shadow: 0 2px 8px #3182ce11 !important;
@@ -2313,8 +2313,8 @@ watch([currentMember, currentUserId, canManageRoles], () => {
   background: #e2e8f0;
   color: #475569;
   border-radius: 999px;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.65rem;
   font-weight: 500;
   white-space: nowrap;
   margin-right: 0.2rem;
@@ -2326,15 +2326,15 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 
 .more-permissions {
   color: #3182ce;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 600;
   cursor: pointer;
-  padding: 0.15rem 0.3rem;
+  padding: 0.12rem 0.25rem;
   border-radius: 4px;
   background: #60a5fa;
   color: white;
   border-radius: 999px;
-  padding: 0.2rem 0.5rem;
+  padding: 0.15rem 0.4rem;
 }
 
 .more-permissions:hover {
@@ -2359,9 +2359,9 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 
 .no-permissions {
   color: #a0aec0;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 500;
-  padding: 0.15rem 0.5rem;
+  padding: 0.12rem 0.4rem;
   border-radius: 999px;
   background: #f0f6ff;
   border: 1px solid #bee3f8;
@@ -2497,7 +2497,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #1e293b;
 }
@@ -2505,7 +2505,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: #6b7280;
   cursor: pointer;
   padding: 0.5rem;
@@ -2540,14 +2540,14 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .warning-message h4 {
   margin: 0 0 0.5rem 0;
   color: #dc2626;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .warning-message p {
   margin: 0;
   color: #7f1d1d;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
 }
 
 .modal-footer {
@@ -2630,7 +2630,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 
 .new-modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #2d3748;
 }
@@ -2638,7 +2638,7 @@ watch([currentMember, currentUserId, canManageRoles], () => {
 .new-modal-close {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: #a0aec0;
   cursor: pointer;
   padding: 0.2rem;
@@ -2829,7 +2829,7 @@ select.form-control:disabled {
   padding: 0.9rem 1.2rem;
   border: 2px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 0.85rem;
   background: white;
   color: #2d3748;
   transition: all 0.2s;
@@ -2849,7 +2849,7 @@ select.form-control:disabled {
   font-weight: 600 !important;
   border-radius: 10px !important;
   padding: 0.8rem 1.5rem !important;
-  font-size: 1rem !important;
+  font-size: 0.85rem !important;
   cursor: pointer !important;
   transition: all 0.2s !important;
 }
@@ -2890,12 +2890,12 @@ select.form-control:disabled {
   gap: 0.6rem;
   margin: 0;
   color: #2d3748;
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .header-icon {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
 }
 
 .form-label {
@@ -2905,11 +2905,11 @@ select.form-control:disabled {
   color: #2d3748;
   font-weight: 600;
   margin-bottom: 0.8rem;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .label-icon {
-  font-size: 1.1rem;
+  font-size: 1rem;
   width: 1.8rem;
   height: 1.8rem;
   display: flex;
@@ -2934,7 +2934,7 @@ select.form-control:disabled {
   background: none;
   border: none;
   color: #718096;
-  font-size: 1rem;
+  font-size: 0.9rem;
   padding: 0.25rem 0.5rem;
   cursor: pointer;
   border-radius: 0 16px 16px 0;
@@ -2958,12 +2958,12 @@ select.form-control:disabled {
 }
 
 .btn .icon {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .loading-spinner-small {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border: 1.5px solid #e2e8f0;
   border-radius: 50%;
   border-top-color: #4299e1;
@@ -4283,7 +4283,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .header-icon {
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .header-title {
@@ -4305,7 +4305,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .stat-number {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: #4b5563;
 }
@@ -4339,7 +4339,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   background: #f3f4f6;
   border-radius: 0.5rem;
 }
@@ -4351,7 +4351,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .stats-value {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #111827;
 }
@@ -4386,7 +4386,7 @@ input[type="checkbox"]:checked ~ .custom-checkbox .checkmark {
 }
 
 .p-toast-message-icon {
-  font-size: 1.5rem !important;
+  font-size: 1.2rem !important;
 }
 
 .p-toast-top-right {

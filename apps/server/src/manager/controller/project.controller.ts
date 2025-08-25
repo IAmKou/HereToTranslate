@@ -264,6 +264,34 @@ export class ProjectController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Patch(':projectId/transfer-ownership')
+  async transferOwnership(
+    @Param('projectId', BigIntTransformPipe) projectId: bigint,
+    @Body('email') email: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    try {
+      const result = await this.projects.transferProjectOwnership(
+        projectId,
+        req.user.id,
+        email
+      );
+      return {
+        message: 'Project ownership transferred successfully',
+        project: result,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(error);
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post(':projectId/files')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadProjectFile(

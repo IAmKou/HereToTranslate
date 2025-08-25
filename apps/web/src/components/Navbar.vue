@@ -21,6 +21,7 @@
           </router-link>
           <router-link to="/chat" class="navbar-item" aria-label="Chat" exact>
             <i class="pi pi-comments nav-icon"></i> Chat
+            <span v-if="totalUnreadCount > 0" class="unread-badge">{{ totalUnreadCount > 99 ? '99+' : totalUnreadCount }}</span>
           </router-link>
 
 
@@ -85,22 +86,28 @@
                   <div>
                     <div class="user-name">{{ currentUser.fullName }}</div>
                     <div class="user-username">@{{ currentUser.username }}</div>
+                    <div class="user-balance" v-if="wallet">
+                      <i class="pi pi-wallet balance-icon"></i>
+                      <span class="balance-amount">{{ formatCurrency(wallet.balance) }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="menu-section">
-                  <div class="menu-header">Account</div>
                   <router-link to="/userprofile" class="menu-item" tabindex="0">
                     <i class="pi pi-user"></i> View Profile <span class="shortcut"></span>
                   </router-link>
-                </div>
-                <div class="menu-divider"></div>
-                <div class="menu-section">
-                  <div class="menu-header">Shortcuts</div>
+                  <router-link to="/projects" class="menu-item" tabindex="0">
+                    <i class="pi pi-briefcase"></i> My Projects <span class="shortcut"></span>
+                  </router-link>
                   <router-link to="/my-requests" class="menu-item" tabindex="0">
-                    <i class="pi pi-list"></i> My Requests <span class="shortcut"></span>
+                    <i class="pi pi-file-edit"></i> My Requests <span class="shortcut"></span>
+                  </router-link>
+                  <router-link to="/transactions" class="menu-item" tabindex="0">
+                    <i class="pi pi-history"></i> Transaction History <span class="shortcut"></span>
                   </router-link>
                 </div>
                 <div class="menu-divider"></div>
+
                 <div class="menu-section">
                   <div class="menu-item sign-out" tabindex="0" @click="signOut">
                     <i class="pi pi-sign-out"></i> Sign Out <span class="shortcut"></span>
@@ -116,12 +123,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/auth.service';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
 import RealtimeNotifications from './RealtimeNotifications.vue';
+import axiosInstance from '../api';
 
 interface User {
   id: string;
@@ -141,12 +149,47 @@ interface User {
 const router = useRouter();
 const menuVisible = ref(false);
 const currentUser = ref<User | null>(null);
+const totalUnreadCount = ref(0);
+const wallet = ref<any>(null);
+let unreadCountInterval: number | null = null;
 
 const signOut = async () => {
   await authService.logout();
   currentUser.value = null;
   router.push('/login');
   menuVisible.value = false;
+};
+
+// Fetch total unread message count
+const fetchUnreadCount = async () => {
+  try {
+    if (!currentUser.value) return;
+
+    const response = await axiosInstance.get('/chat/unread-count/total');
+    totalUnreadCount.value = response.data.totalUnreadCount || 0;
+  } catch (error) {
+    console.error('Failed to fetch unread count:', error);
+    totalUnreadCount.value = 0;
+  }
+};
+
+// Start periodic unread count updates
+const startUnreadCountUpdates = () => {
+  if (unreadCountInterval) return;
+
+  // Fetch immediately
+  fetchUnreadCount();
+
+  // Then update every 30 seconds
+  unreadCountInterval = window.setInterval(fetchUnreadCount, 30000);
+};
+
+// Stop periodic updates
+const stopUnreadCountUpdates = () => {
+  if (unreadCountInterval) {
+    clearInterval(unreadCountInterval);
+    unreadCountInterval = null;
+  }
 };
 
 const getInitials = (name: string): string => {
@@ -183,6 +226,24 @@ const getFullAvatarUrl = (avatarUrl: string) => {
   return result;
 };
 
+const formatCurrency = (amount: number | string | undefined | null): string => {
+  const num = Number(amount);
+  if (isNaN(num)) return '$0';
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+};
+
+const loadWalletInfo = async (): Promise<void> => {
+  try {
+    if (!currentUser.value) return;
+
+    const response = await axiosInstance.get('/wallet');
+    wallet.value = response.data;
+  } catch (error) {
+    console.error('Failed to load wallet info:', error);
+    wallet.value = null;
+  }
+};
+
 const loadUserInfo = async (): Promise<void> => {
   try {
     const user = await authService.getCurrentUser();
@@ -199,6 +260,7 @@ const loadUserInfo = async (): Promise<void> => {
 
 onMounted(() => {
   loadUserInfo();
+  loadWalletInfo();
 
   // Listen for avatar update events
   window.addEventListener('user-avatar-updated', async () => {
@@ -215,6 +277,37 @@ onMounted(() => {
       console.error('Error signing out:', error);
     }
   });
+
+  // Listen for chat room updates to refresh unread count
+  window.addEventListener('chat-room-opened', () => {
+    console.log('🟣 [NAVBAR] Chat room opened, refreshing unread count');
+    fetchUnreadCount();
+  });
+
+  // Start unread count updates when user is loaded
+  if (currentUser.value) {
+    startUnreadCountUpdates();
+  }
+});
+
+// Watch for user changes to start/stop unread count updates
+watch(currentUser, (newUser: User | null) => {
+  if (newUser) {
+    startUnreadCountUpdates();
+    loadWalletInfo();
+  } else {
+    stopUnreadCountUpdates();
+    totalUnreadCount.value = 0;
+    wallet.value = null;
+  }
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopUnreadCountUpdates();
+  window.removeEventListener('user-avatar-updated', loadUserInfo);
+  window.removeEventListener('chat-room-opened', fetchUnreadCount);
+  document.removeEventListener('sign-out', signOut);
 });
 </script>
 
@@ -290,6 +383,7 @@ onMounted(() => {
   padding: 6px 14px;
   border-radius: 6px;
   transition: color 0.2s, background 0.2s;
+  position: relative;
 }
 
 .navbar-item:hover, .navbar-item.router-link-exact-active {
@@ -300,6 +394,37 @@ onMounted(() => {
 .nav-icon {
   font-size: 1.1em;
   margin-right: 2px;
+}
+
+.unread-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .button.is-primary {
@@ -473,6 +598,28 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.user-balance {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.balance-icon {
+  color: #10b981;
+  font-size: 12px;
+}
+
+.balance-amount {
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 </style>

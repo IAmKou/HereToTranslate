@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Translation Review Notification</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin: 0;
+            font-size: 24px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        .status-approved {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-rejected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .rating {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stars {
+            font-size: 24px;
+            color: #ffc107;
+            margin: 10px 0;
+        }
+        .content {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Translation Review Notification</h1>
+        </div>
+
+        <p>Hello <strong>{{translatorName}}</strong>,</p>
+
+        <p>Your translation for the request <strong>"{{requestTitle}}"</strong> has been reviewed by <strong>{{requesterName}}</strong>.</p>
+
+        <div class="status-badge status-{{decision}}">
+            {{#if isApproved}}
+                ✅ APPROVED
+            {{else}}
+                ❌ REJECTED
+            {{/if}}
+        </div>
+
+        <div class="rating">
+            <h3>Your Rating</h3>
+            <div class="stars">
+                {{#each ratingStars}}
+                    ⭐
+                {{/each}}
+                {{#each emptyStars}}
+                    ☆
+                {{/each}}
+            </div>
+            <p><strong>{{rating}}/5 stars</strong></p>
+        </div>
+
+        {{#if comment}}
+        <div class="content">
+            <h3>Feedback from Requester:</h3>
+            <p><em>"{{comment}}"</em></p>
+        </div>
+        {{/if}}
+
+        <div class="content">
+            <h3>Request Details:</h3>
+            <ul>
+                <li><strong>Request ID:</strong> #{{requestId}}</li>
+                <li><strong>Status:</strong> {{decision}}</li>
+                <li><strong>Rating:</strong> {{rating}}/5 stars</li>
+                {{#if comment}}
+                <li><strong>Comment:</strong> {{comment}}</li>
+                {{/if}}
+            </ul>
+        </div>
+
+        <p>
+            {{#if isApproved}}
+                🎉 Congratulations! Your translation has been approved. The requester was satisfied with your work quality.
+            {{else}}
+                📝 Your translation needs some adjustments. Please review the feedback and make the necessary improvements.
+            {{/if}}
+        </p>
+
+        <div style="text-align: center;">
+            <a href="{{baseUrl}}/requests/{{requestId}}" class="button">View Request Details</a>
+        </div>
+
+        <div class="footer">
+            <p>Thank you for your hard work!</p>
+            <p>This is an automated notification from the translation platform.</p>
+        </div>
+    </div>
+</body>
+</html>

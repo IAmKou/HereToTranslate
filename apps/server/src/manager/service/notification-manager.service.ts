@@ -360,10 +360,15 @@ export class NotificationManagerService {
       .andWhere('notification.type = :type', { type });
 
     // If requestId is provided, filter by messages containing that requestId
+    // Check for both [RequestID:...] and [EXTENSION_DATA:...] patterns
     if (requestId) {
-      queryBuilder.andWhere('notification.message LIKE :requestIdPattern', {
-        requestIdPattern: `%[RequestID:${requestId}]%`
-      });
+      queryBuilder.andWhere(
+        '(notification.message LIKE :requestIdPattern OR notification.message LIKE :extensionDataPattern)',
+        {
+          requestIdPattern: `%[RequestID:${requestId}]%`,
+          extensionDataPattern: `%"requestId":"${requestId}"%`
+        }
+      );
     }
 
     return queryBuilder.getMany();

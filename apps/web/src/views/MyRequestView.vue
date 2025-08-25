@@ -80,8 +80,10 @@
             </div>
           </div>
 
+
+
           <!-- My Requests Tab -->
-          <div v-else-if="activeTab === 'my-requests'" class="tab-content" :key="'my-requests'">
+          <div v-else-if="activeTab === 'my-requests' && !loading && !error" class="tab-content" :key="'my-requests'">
             <!-- Search and Filter Bar for My Requests -->
             <div class="filter-bar">
               <div class="search-container">
@@ -103,7 +105,10 @@
                     <option value="APPROVED">Approved</option>
                     <option value="REJECTED">Rejected</option>
                     <option value="COMPLETED">Completed</option>
+                    <option value="INCOMPLETED">Incompleted</option>
                     <option value="CANCELLED">Cancelled</option>
+                    <option value="EXPIRED">Expired</option>
+                    <option value="FAILED">Failed</option>
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
@@ -115,9 +120,7 @@
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
-                <label class="filter-toggle" style="display:flex;align-items:center;gap:6px;">
-                  <input type="checkbox" v-model="hideExpired" /> Hide expired
-                </label>
+
                 <button @click="clearMyRequestsFilters" class="clear-btn">
                   <span class="clear-icon">✕</span>
                   <span class="clear-text">Clear</span>
@@ -133,12 +136,11 @@
                 </div>
                 <h3>No requests found</h3>
                 <p>You haven't created any requests yet.</p>
-
               </div>
             </div>
 
             <!-- My Requests Table -->
-            <div v-else class="requests-table-container">
+            <div v-else-if="debugRequests.length > 0" class="requests-table-container">
               <div class="table-wrapper">
                 <table class="requests-table">
                   <thead>
@@ -173,7 +175,7 @@
                     </th>
                     <th class="table-header center" width="8%">Status</th>
                     <th class="table-header center" width="9%">Visibility</th>
-                    <th class="table-header center" width="16%">Actions</th>
+                    <th class="table-header center" width="17%">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
@@ -191,10 +193,9 @@
                       </div>
                     </td>
                     <td class="deadline-cell">
-                      <div class="deadline-wrapper">
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
                         <span class="deadline-icon">🗓</span>
                         <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
-                        <span v-if="daysLeft(req.deadline) !== null" class="deadline-remaining">({{ daysLeftText(req.deadline) }})</span>
                       </div>
                     </td>
                     <td class="status-cell" style="text-align: center; vertical-align: middle;">
@@ -206,20 +207,36 @@
                          <span class="status-icon">⏳</span>
                          <span class="status-text">Pending</span>
                        </span>
+                      <span v-else-if="req.status === 'EXTENSION_REQUESTED'" class="status-badge status-extension-requested">
+                         <span class="status-icon">⏰</span>
+                         <span class="status-text">Extension Requested</span>
+                       </span>
+                      <span v-else-if="req.status === 'EXTENSION_APPROVED'" class="status-badge status-extension-approved">
+                         <span class="status-icon">✅</span>
+                         <span class="status-text">Extension Approved</span>
+                       </span>
+                      <span v-else-if="req.status === 'EXTENSION_REJECTED'" class="status-badge status-extension-rejected">
+                         <span class="status-icon">❌</span>
+                         <span class="status-text">Extension Rejected</span>
+                       </span>
+                      <span v-else-if="req.status === 'WAITING_APPROVAL'" class="status-badge status-waiting-approval">
+                         <span class="status-icon">⏳</span>
+                         <span class="status-text">Waiting Approval</span>
+                       </span>
+                      <span v-else-if="req.status === 'FAILED'" class="status-badge status-failed">
+                         <span class="status-icon">❌</span>
+                         <span class="status-text">Failed</span>
+                       </span>
+                      <span v-else-if="req.status === 'INCOMPLETED'" class="status-badge status-incompleted">
+                         <span class="status-icon">⚠️</span>
+                         <span class="status-text">Incompleted</span>
+                       </span>
                       <span v-else :class="['status-badge', req.status === 'EXPIRED' ? 'status-expired' : `status-${req.status.toLowerCase()}`]">
                          {{ req.status === 'EXPIRED' ? 'Expired' : formatStatus(req.status) }}
                        </span>
                     </td>
                     <td class="visibility-cell" style="text-align: center; vertical-align: middle;">
-                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
-                         <span class="visibility-icon">🌐</span>
-                         <span class="visibility-text">Public</span>
-                       </span>
-                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge private-badge">
-                         <span class="visibility-icon">🔒</span>
-                         <span class="visibility-text">Private</span>
-                       </span>
-                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge public-badge">
+                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee)" class="visibility-badge public-badge">
                          <span class="visibility-icon">🌐</span>
                          <span class="visibility-text">Public</span>
                        </span>
@@ -230,27 +247,18 @@
                     </td>
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <!-- Cancel button - show for all requests except COMPLETED and CANCELLED -->
+                        <!-- Cancel button - show for all requests except COMPLETED, CANCELLED, and INCOMPLETED -->
                         <button
                           @click="onCancel(req)"
                           class="action-btn cancel-btn"
-                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED'"
+                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED' && req.status !== 'INCOMPLETED'"
                           :title="`Cancel request: ${req.title}`"
                           data-tooltip="Cancel this request"
                         >
                           <span class="btn-icon">✕</span>
                         </button>
 
-                        <!-- Review button - only show for PENDING requests without project -->
-                        <button
-                          v-if="canReview(req) && req.status === 'PENDING' && !req.project"
-                          @click="onReview(req)"
-                          class="action-btn review-btn"
-                          :title="`Review request: ${req.title}`"
-                          data-tooltip="Review and approve/reject this request"
-                        >
-                          <i class="pi pi-eye btn-icon"></i>
-                        </button>
+
 
                         <!-- Candidates button - only show for PENDING public requests without project -->
                         <router-link
@@ -276,21 +284,33 @@
                            ✓ Completed
                          </span>
 
-                        <!-- Handover button for waiting approval requests -->
+                        <!-- Handover button for failed and waiting approval requests -->
                         <button
-                          v-if="req.status === 'WAITING_APPROVAL' && req.project"
+                          v-if="(req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && req.project"
                           @click="viewHandover(req)"
                           class="action-btn handover-btn"
                           :title="`View and evaluate translation product for: ${req.title}`"
                           data-tooltip="View translation product and evaluate quality"
                         >
                           <i class="pi pi-eye btn-icon"></i>
-                          <span class="btn-text">Sản phẩm</span>
+                          <span class="btn-text">Review</span>
                         </button>
+
+                        <!-- Auto-completion info for WAITING_APPROVAL requests -->
+                        <div v-if="req.status === 'WAITING_APPROVAL' && req.statusChangedAt" class="auto-completion-info">
+                          <span v-if="getWaitingApprovalDaysLeft(req) > 0" class="days-left">
+                            <i class="pi pi-clock"></i>
+                            {{ getWaitingApprovalDaysLeft(req) }} day{{ getWaitingApprovalDaysLeft(req) > 1 ? 's' : '' }} left to review
+                          </span>
+                          <span v-else class="auto-completing">
+                            <i class="pi pi-exclamation-triangle"></i>
+                            Auto-completing today
+                          </span>
+                        </div>
 
                         <!-- View Extensions button for approved requests -->
                         <button
-                          v-if="req.status === 'APPROVED' && req.extensionRequestCount > 0"
+                          v-if="(req.status === 'APPROVED' || req.status === 'EXTENSION_REQUESTED') && req.extensionRequestCount > 0"
                           @click="viewExtensions(req)"
                           class="action-btn extensions-btn"
                           :title="`View ${req.extensionRequestCount} extension request${req.extensionRequestCount > 1 ? 's' : ''} for: ${req.title}`"
@@ -343,7 +363,7 @@
           </div>
 
           <!-- Assigned Requests Tab -->
-          <div v-else-if="activeTab === 'assigned-requests'" class="tab-content" :key="'assigned-requests'">
+          <div v-else-if="activeTab === 'assigned-requests' && !loading && !error" class="tab-content" :key="'assigned-requests'">
             <!-- Search and Filter Bar for Assigned Requests -->
             <div class="filter-bar">
               <div class="search-container">
@@ -366,6 +386,7 @@
                     <option value="REJECTED">Rejected</option>
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
+                    <option value="FAILED">Failed</option>
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
@@ -498,16 +519,21 @@
                     <td style="vertical-align: middle;">{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
                     <td style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount" style="text-align: center; vertical-align: middle;">${{ formatAmount(req.dealAmount) }}</td>
-                    <td style="vertical-align: middle;">{{ formatDate(req.deadline) }}</td>
+                    <td style="vertical-align: middle;">
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
+                        <span class="deadline-icon">🗓</span>
+                        <span class="deadline-text">{{ formatDate(req.deadline) }}</span>
+                      </div>
+                    </td>
                     <td style="text-align: center; vertical-align: middle;">
                          <span :class="['status-badge', getStatusClass(req.status)]">
                            {{ formatStatus(req.status) }}
                          </span>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
-                         <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic) ? 'visibility-public' : 'visibility-private']">
-                           <i :class="isRequestPublic(req.isPublic) ? 'pi pi-globe' : 'pi pi-lock'"></i>
-                           {{ isRequestPublic(req.isPublic) ? 'Public' : 'Private' }}
+                         <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic, !!req.assignee) ? 'visibility-public' : 'visibility-private']">
+                           <i :class="isRequestPublic(req.isPublic, !!req.assignee) ? 'pi pi-globe' : 'pi pi-lock'"></i>
+                           {{ isRequestPublic(req.isPublic, !!req.assignee) ? 'Public' : 'Private' }}
                          </span>
                       <span v-else class="visibility-badge visibility-private">
                            <i class="pi pi-lock"></i>
@@ -516,8 +542,25 @@
                     </td>
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <!-- No actions available for assigned requests -->
-                        <span class="no-actions-message">No actions available</span>
+                        <template v-if="req.status === 'PENDING'">
+                          <button
+                            class="action-btn btn btn-primary"
+                            :disabled="actionLoading"
+                            @click="acceptAssignedRequest(req.id)"
+                          >
+                            <i class="pi pi-check" /> Accept
+                          </button>
+                          <button
+                            class="action-btn btn btn-danger"
+                            :disabled="actionLoading"
+                            @click="declineAssignedRequest(req.id)"
+                          >
+                            <i class="pi pi-times" /> Decline
+                          </button>
+                        </template>
+                        <template v-else>
+                          <span class="no-actions-message">No actions available</span>
+                        </template>
                       </div>
                     </td>
                   </tr>
@@ -553,7 +596,7 @@
           </div>
 
           <!-- My Registrations Tab -->
-          <div v-else-if="activeTab === 'my-registrations'" class="tab-content" :key="'my-registrations'">
+          <div v-else-if="activeTab === 'my-registrations' && !loading && !error" class="tab-content" :key="'my-registrations'">
             <!-- Search and Filter Bar for My Registrations -->
             <div class="filter-bar">
               <div class="search-container">
@@ -575,6 +618,7 @@
                     <option value="REJECTED">Rejected</option>
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
+                    <option value="FAILED">Failed</option>
                   </select>
                   <i class="pi pi-chevron-down select-arrow"></i>
                 </div>
@@ -661,7 +705,12 @@
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.requester?.fullName || req.requester?.email || 'Unknown' }}</td>
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120" style="vertical-align: middle;"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
-                    <td class="text-sm text-gray-500 italic text-left" width="130" style="vertical-align: middle;"><span class="deadline-icon">🗓</span> {{ formatDeadline(req.deadline) }}</td>
+                    <td class="text-sm text-gray-500 italic text-left" width="130" style="vertical-align: middle;">
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
+                        <span class="deadline-icon">🗓</span>
+                        <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
+                      </div>
+                    </td>
                     <td style="text-align: center; vertical-align: middle;">
                          <span v-if="req.registrationStatus === 'APPROVED'" class="status-badge status-approved custom-badge approved-badge">
                            ✅ Approved
@@ -677,34 +726,35 @@
                          </span>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
-                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
-                         🌐 Public
-                       </span>
-                      <span v-else-if="req.status === 'PENDING' && !isRequestPublic(req.isPublic)" class="visibility-badge custom-badge private-badge">
-                         🔒 Private
-                       </span>
-                      <span v-else-if="isRequestPublic(req.isPublic)" class="visibility-badge custom-badge public-badge">
+                       <span v-if="req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee)" class="visibility-badge custom-badge public-badge">
                          🌐 Public
                        </span>
                       <span v-else class="visibility-badge custom-badge private-badge">
                          🔒 Private
                        </span>
                     </td>
-                    <td class="actions text-left" style="text-align: center; vertical-align: middle;">
-                      <!-- Show message for completed requests -->
-                      <span v-if="req.status === 'COMPLETED'" class="text-green-600 text-sm font-medium" title="This request has been completed successfully">
-                         ✓ Completed
-                       </span>
+                    <td class="actions-cell" style="text-align: center; vertical-align: middle;">
+                      <div class="actions-wrapper">
+                        <!-- Show message for completed requests -->
+                        <span v-if="req.status === 'COMPLETED'" class="status-message completed" title="This request has been completed successfully">
+                           ✓ Completed
+                         </span>
 
-                      <!-- Show message for rejected requests -->
-                      <span v-if="req.status === 'REJECTED'" class="text-red-600 text-sm font-medium" title="This request has been rejected">
-                         ✗ Rejected
-                       </span>
+                        <!-- Show message for incompleted requests -->
+                        <span v-if="req.status === 'INCOMPLETED'" class="status-message incompleted" title="This request has been marked as incomplete">
+                           ⚠ Incompleted
+                         </span>
 
-                      <!-- Show message for cancelled requests -->
-                      <span v-if="req.status === 'CANCELLED'" class="text-gray-500 text-sm italic" title="This request has been cancelled">
-                         Request cancelled
-                       </span>
+                        <!-- Show message for rejected requests -->
+                        <span v-if="req.status === 'REJECTED'" class="status-message rejected" title="This request has been rejected">
+                           ✗ Rejected
+                         </span>
+
+                        <!-- Show message for cancelled requests -->
+                        <span v-if="req.status === 'CANCELLED'" class="status-message cancelled" title="This request has been cancelled">
+                           Request cancelled
+                         </span>
+                      </div>
                     </td>
                   </tr>
                   </tbody>
@@ -748,6 +798,14 @@
             v-if="showExtension && selectedRequest"
             :request-id="selectedRequest.id"
             :current-deadline="selectedRequest.deadline"
+            :existing-extension-request="(() => {
+              // Check if there are existing extension requests
+              return selectedRequest.extensionRequestCount > 0 ? {
+                newDeadline: selectedRequest.deadline,
+                reason: 'Deadline extension requested',
+                status: 'Pending Review'
+              } : null;
+            })()"
             @close="showExtension = false"
             @submitted="onExtensionSubmitted"
           />
@@ -772,7 +830,18 @@
           />
 
           <!-- On-going Requests Tab -->
-          <div v-else-if="activeTab === 'ongoing-requests'" class="tab-content" :key="'ongoing-requests'">
+          <div v-else-if="activeTab === 'ongoing-requests' && !loading && !error" class="tab-content" :key="'ongoing-requests'">
+            <!-- Grace Period Info Banner -->
+            <div class="grace-period-banner">
+              <div class="banner-icon">
+                <i class="pi pi-clock"></i>
+              </div>
+              <div class="banner-content">
+                <h4>Deadline Extension Grace Period</h4>
+                <p>After the deadline passes, you still have <strong>3 additional days</strong> to request an extension. Use this time wisely to complete your translation or request more time.</p>
+              </div>
+            </div>
+
             <!-- Search Bar for On-going -->
             <div class="filter-bar">
               <div class="search-container">
@@ -812,7 +881,7 @@
                     <th class="table-header" width="10%">Deal Amount</th>
                     <th class="table-header" width="12%">Deadline</th>
                     <th class="table-header center" width="8%">Status</th>
-                    <th class="table-header center" width="18%">Actions</th>
+                    <th class="table-header center" width="17%">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
@@ -826,9 +895,10 @@
                       <span class="deal-icon">💵</span>${{ formatAmount(req.dealAmount) }}
                     </td>
                     <td style="vertical-align: middle;">
-                      <span class="deadline-icon">🗓</span>
-                      {{ formatDate(req.deadline) }}
-                      <span v-if="daysLeft(req.deadline) !== null" class="deadline-remaining">({{ daysLeftText(req.deadline) }})</span>
+                      <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
+                        <span class="deadline-icon">🗓</span>
+                        <span class="deadline-text">{{ formatDate(req.deadline) }}</span>
+                      </div>
                     </td>
                     <td style="text-align:center; vertical-align: middle;">
                       <span :class="['status-badge', getStatusClass(req.status)]">{{ formatStatus(req.status) }}</span>
@@ -836,14 +906,29 @@
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
                         <button
+                          v-if="canRequestExtension(req)"
                           @click="requestExtension(req)"
-                          class="action-btn btn-secondary"
+                          class="action-btn extension-btn"
                           :disabled="actionLoading"
                           :title="`Request deadline extension for: ${req.title}`"
-                          data-tooltip="Request deadline extension"
                         >
-                          Request Extension
+                          <span class="btn-text">Request Extension</span>
                         </button>
+
+                        <div v-else-if="isDeadlineExpired(req.deadline) && !isInGracePeriod(req.deadline)" class="deadline-info">
+                          <span v-if="isGracePeriodExpired(req.deadline)" class="grace-expired-message">
+                            <i class="pi pi-exclamation-triangle"></i>
+                            Grace period expired
+                          </span>
+                          <span v-else class="deadline-expired-message">
+                            <i class="pi pi-times-circle"></i>
+                            Deadline expired
+                          </span>
+                        </div>
+
+                        <span v-else class="deadline-info">
+                          {{ getDeadlineStatus(req).text }}
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -860,7 +945,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axiosInstance from '../api'
 import { useToast } from 'primevue/usetoast'
@@ -911,7 +996,7 @@ const registrationsItemsPerPage = ref(7)
 const myRequestsSearch = ref('')
 const myRequestsStatusFilter = ref('')
 const myRequestsVisibilityFilter = ref('')
-const hideExpired = ref(false)
+
 const assignedRequestsSearch = ref('')
 const assignedRequestsStatusFilter = ref('')
 const assignedRequestsVisibilityFilter = ref('')
@@ -926,18 +1011,134 @@ const assignedRequestsCount = computed(() => assignedRequests.value.length)
 const myRegistrationsCount = computed(() => myRegistrations.value.length)
 const ongoingRequestsCount = computed(() => ongoingRequests.value.length)
 const filteredOngoingRequests = computed(() => {
-  let list = ongoingRequests.value
-  if (ongoingSearch.value) {
-    const s = ongoingSearch.value.toLowerCase()
-    list = list.filter(r =>
-      r.title?.toLowerCase().includes(s) ||
-      r.requester?.name?.toLowerCase().includes(s) ||
-      r.requester?.email?.toLowerCase().includes(s) ||
-      r.id?.toString().includes(s)
-    )
+  try {
+    let list = ongoingRequests.value
+    if (ongoingSearch.value) {
+      const s = ongoingSearch.value.toLowerCase()
+      list = list.filter(r =>
+        r.title?.toLowerCase().includes(s) ||
+        r.requester?.name?.toLowerCase().includes(s) ||
+        r.requester?.email?.toLowerCase().includes(s) ||
+        r.id?.toString().includes(s)
+      )
+    }
+    return list
+  } catch (error) {
+    console.error('Error in filteredOngoingRequests computed:', error)
+    return []
   }
-  return list
 })
+
+// Helper functions for deadline and extension logic
+function isDeadlineExpired(deadline) {
+  if (!deadline) return false
+
+  try {
+    const now = new Date()
+    const deadlineDate = new Date(deadline)
+
+    if (isNaN(deadlineDate.getTime())) return false // Invalid date
+
+    return deadlineDate < now
+  } catch (error) {
+    console.error('Error in isDeadlineExpired:', error, deadline);
+    return false;
+  }
+}
+
+function isInGracePeriod(deadline) {
+  if (!deadline) return false
+
+  try {
+    const now = new Date()
+    const deadlineDate = new Date(deadline)
+
+    if (isNaN(deadlineDate.getTime())) return false // Invalid date
+
+    const gracePeriodEnd = new Date(deadlineDate)
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 3)
+
+    return deadlineDate < now && now <= gracePeriodEnd
+  } catch (error) {
+    console.error('Error in isInGracePeriod:', error, deadline);
+    return false;
+  }
+}
+
+function isGracePeriodExpired(deadline) {
+  if (!deadline) return false
+
+  try {
+    const now = new Date()
+    const deadlineDate = new Date(deadline)
+
+    if (isNaN(deadlineDate.getTime())) return false // Invalid date
+
+    const gracePeriodEnd = new Date(deadlineDate)
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 3)
+
+    return now > gracePeriodEnd
+  } catch (error) {
+    console.error('Error in isGracePeriodExpired:', error, deadline);
+    return false;
+  }
+}
+
+function canRequestExtension(req) {
+  // Can request extension if:
+  // 1. Status is APPROVED (ongoing request)
+  // 2. Cannot request extension if already has EXTENSION_REQUESTED status
+  // 3. Can request extension at any time (before or after deadline)
+  const canExtend = req.status === 'APPROVED' && req.status !== 'EXTENSION_REQUESTED'
+
+  return canExtend
+}
+
+function getDeadlineStatus(req) {
+  if (!req.deadline) return { class: '' }
+
+  if (req.status === 'COMPLETED') {
+    return { class: 'deadline-completed' }
+  }
+
+  if (req.status === 'CANCELLED') {
+    return { class: 'deadline-cancelled' }
+  }
+
+  try {
+    if (isGracePeriodExpired(req.deadline)) {
+      return { class: 'deadline-grace-expired' }
+    }
+
+    if (isInGracePeriod(req.deadline)) {
+      return { class: 'deadline-grace-period' }
+    }
+
+    if (isDeadlineExpired(req.deadline)) {
+      return { class: 'deadline-expired' }
+    }
+
+    const daysLeftValue = daysLeft(req.deadline)
+    if (daysLeftValue === null || daysLeftValue === undefined) {
+      return { class: 'deadline-normal' }
+    }
+
+    if (daysLeftValue === 0) {
+      return { class: 'deadline-today' }
+    } else if (daysLeftValue <= 3) {
+      return { class: 'deadline-urgent' }
+    } else if (daysLeftValue <= 7) {
+      return { class: 'deadline-warning' }
+    } else {
+      return { class: 'deadline-normal' }
+    }
+  } catch (error) {
+    console.error('Error in getDeadlineStatus:', error, req)
+    return { class: 'deadline-normal' }
+  }
+}
+
+// ... existing code ...
 
 function clearOngoingFilters() {
   ongoingSearch.value = ''
@@ -959,251 +1160,336 @@ function sortTable(key) {
 
 // Debug computed property
 const debugRequests = computed(() => {
-  console.log('Debug - My requests with isPublic:', myRequests.value.map(req => ({
-    id: req.id,
-    title: req.title,
-    isPublic: req.isPublic,
-    type: typeof req.isPublic
-  })))
   return myRequests.value
 })
 
 // Filtered My Requests
 const filteredMyRequests = computed(() => {
-  let filtered = debugRequests.value
+  try {
+    let filtered = debugRequests.value
 
-  // Search filter
-  if (myRequestsSearch.value) {
-    const searchTerm = myRequestsSearch.value.toLowerCase()
-    filtered = filtered.filter(req =>
-      req.title?.toLowerCase().includes(searchTerm) ||
-      req.category?.name?.toLowerCase().includes(searchTerm) ||
-      req.id?.toString().includes(searchTerm)
-    )
-  }
-
-  // Status filter
-  if (myRequestsStatusFilter.value) {
-    filtered = filtered.filter(req => req.status === myRequestsStatusFilter.value)
-  }
-
-  // Visibility filter
-  if (myRequestsVisibilityFilter.value) {
-    if (myRequestsVisibilityFilter.value === 'public') {
-      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
-    } else if (myRequestsVisibilityFilter.value === 'private') {
-      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    // Search filter
+    if (myRequestsSearch.value) {
+      const searchTerm = myRequestsSearch.value.toLowerCase()
+      filtered = filtered.filter(req =>
+        req.title?.toLowerCase().includes(searchTerm) ||
+        req.category?.name?.toLowerCase().includes(searchTerm) ||
+        req.id?.toString().includes(searchTerm)
+      )
     }
-  }
 
-  // Mark expired requests as EXPIRED (for display) and include in list
-  const now = new Date();
-  const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const today = stripTime(now);
-  filtered = filtered.map((req) => {
-    if (req.deadline) {
-      const d = new Date(req.deadline);
-      const deadlineDate = stripTime(d);
-      if (deadlineDate < today && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
-        return { ...req, status: 'EXPIRED' };
+    // Status filter
+    if (myRequestsStatusFilter.value) {
+      filtered = filtered.filter(req => req.status === myRequestsStatusFilter.value)
+    }
+
+    // Visibility filter
+    if (myRequestsVisibilityFilter.value) {
+      if (myRequestsVisibilityFilter.value === 'public') {
+        // Only show public requests if status is PENDING
+        filtered = filtered.filter(req => req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee))
+      } else if (myRequestsVisibilityFilter.value === 'private') {
+        // Show private requests or non-PENDING requests
+        filtered = filtered.filter(req => req.status !== 'PENDING' || !isRequestPublic(req.isPublic, !!req.assignee))
       }
     }
-    return req;
-  });
 
-  // Hide expired toggle
-  if (hideExpired.value) {
-    filtered = filtered.filter(req => req.status !== 'EXPIRED')
-  }
+    // Mark expired requests as EXPIRED or FAILED based on assignee status
+    // Also auto-complete WAITING_APPROVAL requests after 3 days
+    const now = new Date();
+    const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = stripTime(now);
+    filtered = filtered.map((req) => {
+      // Handle WAITING_APPROVAL auto-completion after 3 days (priority over deadline)
+      if (req.status === 'WAITING_APPROVAL' && req.statusChangedAt) {
+        const statusChangeDate = new Date(req.statusChangedAt);
+        const daysSinceStatusChange = Math.ceil((now - statusChangeDate) / (1000 * 60 * 60 * 24));
 
-  // Sort the filtered results
-  // default sort by deadline asc when no sortKey
-  if (!sortKey.value) {
-    sortKey.value = 'deadline'
-    sortOrder.value = 1
-  }
-  if (sortKey.value) {
-    filtered = [...filtered].sort((a, b) => {
-      let aValue, bValue
-
-      switch (sortKey.value) {
-        case 'id':
-          aValue = a.id
-          bValue = b.id
-          break
-        case 'title':
-          aValue = a.title?.toLowerCase() || ''
-          bValue = b.title?.toLowerCase() || ''
-          break
-
-        case 'dealAmount':
-          aValue = parseFloat(a.dealAmount) || 0
-          bValue = parseFloat(b.dealAmount) || 0
-          break
-        case 'deadline':
-          aValue = new Date(a.deadline) || new Date(0)
-          bValue = new Date(b.deadline) || new Date(0)
-          break
-        default:
-          return 0
+        if (daysSinceStatusChange >= 3) {
+          return { ...req, status: 'COMPLETED' };
+        }
+        // If still within 3 days, keep WAITING_APPROVAL status regardless of deadline
+        return req;
       }
 
-      if (aValue < bValue) return -1 * sortOrder.value
-      if (aValue > bValue) return 1 * sortOrder.value
-      return 0
-    })
-  }
+      // Handle deadline expiration (only if not WAITING_APPROVAL and not already reviewed
+      // Check multiple conditions to determine if request has been reviewed
+      // Also check if status indicates it has been reviewed (INCOMPLETED, COMPLETED)
+      const hasBeenReviewed = req.reviewedAt || req.reviewDecision || req.reviewRating ||
+        req.status === 'INCOMPLETED' || req.status === 'COMPLETED';
 
-  return filtered
+      if (req.deadline && req.status !== 'WAITING_APPROVAL' && !hasBeenReviewed) {
+        const d = new Date(req.deadline);
+        const deadlineDate = stripTime(d);
+        if (deadlineDate < today && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
+          // If request has assignee (project exists) and is overdue, mark as FAILED
+          // If no assignee and overdue, mark as EXPIRED
+          if (req.project) {
+            console.log(`[DEBUG] Overriding status to FAILED for request ${req.id} (deadline expired, has project, not reviewed)`);
+            return { ...req, status: 'FAILED' };
+          } else {
+            console.log(`[DEBUG] Overriding status to EXPIRED for request ${req.id} (deadline expired, no project, not reviewed)`);
+            return { ...req, status: 'EXPIRED' };
+          }
+        }
+      }
+
+      // Debug: Log if request has been reviewed
+      if (hasBeenReviewed) {
+        console.log(`[DEBUG] Request ${req.id} has been reviewed:`, {
+          status: req.status,
+          reviewedAt: req.reviewedAt,
+          reviewDecision: req.reviewDecision,
+          reviewRating: req.reviewRating,
+          hasBeenReviewed: hasBeenReviewed
+        });
+      } else {
+        console.log(`[DEBUG] Request ${req.id} has NOT been reviewed:`, {
+          status: req.status,
+          reviewedAt: req.reviewedAt,
+          reviewDecision: req.reviewDecision,
+          reviewRating: req.reviewRating,
+          hasBeenReviewed: hasBeenReviewed
+        });
+      }
+
+      // Debug: Log full request object for debugging
+      console.log(`[DEBUG] Full request ${req.id} object:`, {
+        id: req.id,
+        title: req.title,
+        status: req.status,
+        deadline: req.deadline,
+        reviewedAt: req.reviewedAt,
+        reviewDecision: req.reviewDecision,
+        reviewRating: req.reviewRating,
+        reviewComment: req.reviewComment,
+        hasBeenReviewed: hasBeenReviewed,
+        project: req.project
+      });
+
+      // If request has been reviewed, ensure we don't override the status
+      if (hasBeenReviewed) {
+        console.log(`[DEBUG] Request ${req.id} is reviewed, keeping original status: ${req.status}`);
+        return req;
+      }
+
+      // Additional check: if status is INCOMPLETED or COMPLETED, don't override
+      if (req.status === 'INCOMPLETED' || req.status === 'COMPLETED') {
+        console.log(`[DEBUG] Request ${req.id} has final status ${req.status}, not overriding`);
+        return req;
+      }
+
+      return req;
+    });
+
+
+
+    // Sort the filtered results
+    // default sort by deadline asc when no sortKey
+    if (!sortKey.value) {
+      sortKey.value = 'deadline'
+      sortOrder.value = 1
+    }
+    if (sortKey.value) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue, bValue
+
+        switch (sortKey.value) {
+          case 'id':
+            aValue = a.id
+            bValue = b.id
+            break
+          case 'title':
+            aValue = a.title?.toLowerCase() || ''
+            bValue = b.title?.toLowerCase() || ''
+            break
+
+          case 'dealAmount':
+            aValue = parseFloat(a.dealAmount) || 0
+            bValue = parseFloat(b.dealAmount) || 0
+            break
+          case 'deadline':
+            aValue = new Date(a.deadline) || new Date(0)
+            bValue = new Date(b.deadline) || new Date(0)
+            break
+          default:
+            return 0
+        }
+
+        if (aValue < bValue) return -1 * sortOrder.value
+        if (aValue > bValue) return 1 * sortOrder.value
+        return 0
+      })
+    }
+
+    return filtered
+  } catch (error) {
+    console.error('Error in filteredMyRequests computed:', error)
+    return []
+  }
 })
 
 // Filtered Assigned Requests
 const filteredAssignedRequests = computed(() => {
-  let filtered = assignedRequests.value
+  try {
+    let filtered = assignedRequests.value
 
-  // Search filter
-  if (assignedRequestsSearch.value) {
-    const searchTerm = assignedRequestsSearch.value.toLowerCase()
-    filtered = filtered.filter(req =>
-      req.title?.toLowerCase().includes(searchTerm) ||
-      req.requester?.name?.toLowerCase().includes(searchTerm) ||
-      req.requester?.email?.toLowerCase().includes(searchTerm) ||
-      req.category?.name?.toLowerCase().includes(searchTerm) ||
-      req.id?.toString().includes(searchTerm)
-    )
-  }
-
-  // Status filter
-  if (assignedRequestsStatusFilter.value) {
-    filtered = filtered.filter(req => req.status === assignedRequestsStatusFilter.value)
-  }
-
-  // Visibility filter
-  if (assignedRequestsVisibilityFilter.value) {
-    if (assignedRequestsVisibilityFilter.value === 'public') {
-      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
-    } else if (assignedRequestsVisibilityFilter.value === 'private') {
-      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    // Search filter
+    if (assignedRequestsSearch.value) {
+      const searchTerm = assignedRequestsSearch.value.toLowerCase()
+      filtered = filtered.filter(req =>
+        req.title?.toLowerCase().includes(searchTerm) ||
+        req.requester?.name?.toLowerCase().includes(searchTerm) ||
+        req.requester?.email?.toLowerCase().includes(searchTerm) ||
+        req.category?.name?.toLowerCase().includes(searchTerm) ||
+        req.id?.toString().includes(searchTerm)
+      )
     }
-  }
 
-  // Sort the filtered results
-  if (sortKey.value) {
-    filtered = [...filtered].sort((a, b) => {
-      let aValue, bValue
+    // Status filter
+    if (assignedRequestsStatusFilter.value) {
+      filtered = filtered.filter(req => req.status === assignedRequestsStatusFilter.value)
+    }
 
-      switch (sortKey.value) {
-        case 'id':
-          aValue = a.id
-          bValue = b.id
-          break
-        case 'title':
-          aValue = a.title?.toLowerCase() || ''
-          bValue = b.title?.toLowerCase() || ''
-          break
-        case 'requester':
-          aValue = (a.requester?.name || a.requester?.email || '').toLowerCase()
-          bValue = (b.requester?.name || b.requester?.email || '').toLowerCase()
-          break
-        case 'category':
-          aValue = a.category?.name?.toLowerCase() || ''
-          bValue = b.category?.name?.toLowerCase() || ''
-          break
-        case 'dealAmount':
-          aValue = parseFloat(a.dealAmount) || 0
-          bValue = parseFloat(b.dealAmount) || 0
-          break
-        case 'deadline':
-          aValue = new Date(a.deadline) || new Date(0)
-          bValue = new Date(b.deadline) || new Date(0)
-          break
-        default:
-          return 0
+    // Visibility filter
+    if (assignedRequestsVisibilityFilter.value) {
+      if (assignedRequestsVisibilityFilter.value === 'public') {
+        // Only show public requests if status is PENDING
+        filtered = filtered.filter(req => req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee))
+      } else if (assignedRequestsVisibilityFilter.value === 'private') {
+        // Show private requests or non-PENDING requests
+        filtered = filtered.filter(req => req.status !== 'PENDING' || !isRequestPublic(req.isPublic, !!req.assignee))
       }
+    }
 
-      if (aValue < bValue) return -1 * sortOrder.value
-      if (aValue > bValue) return 1 * sortOrder.value
-      return 0
-    })
+    // Sort the filtered results
+    if (sortKey.value) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue, bValue
+
+        switch (sortKey.value) {
+          case 'id':
+            aValue = a.id
+            bValue = b.id
+            break
+          case 'title':
+            aValue = a.title?.toLowerCase() || ''
+            bValue = b.title?.toLowerCase() || ''
+            break
+          case 'requester':
+            aValue = (a.requester?.name || a.requester?.email || '').toLowerCase()
+            bValue = (b.requester?.name || b.requester?.email || '').toLowerCase()
+            break
+          case 'category':
+            aValue = a.category?.name?.toLowerCase() || ''
+            bValue = b.category?.name?.toLowerCase() || ''
+            break
+          case 'dealAmount':
+            aValue = parseFloat(a.dealAmount) || 0
+            bValue = parseFloat(b.dealAmount) || 0
+            break
+          case 'deadline':
+            aValue = new Date(a.deadline) || new Date(0)
+            bValue = new Date(b.deadline) || new Date(0)
+            break
+          default:
+            return 0
+        }
+
+        if (aValue < bValue) return -1 * sortOrder.value
+        if (aValue > bValue) return 1 * sortOrder.value
+        return 0
+      })
+    }
+
+    return filtered.filter(req => req.status !== 'CANCELLED')
+  } catch (error) {
+    console.error('Error in filteredAssignedRequests computed:', error)
+    return []
   }
-
-  return filtered.filter(req => req.status !== 'CANCELLED')
 })
 
 // Filtered My Registrations
 const filteredMyRegistrations = computed(() => {
-  let filtered = myRegistrations.value
+  try {
+    let filtered = myRegistrations.value
 
-  // Search filter
-  if (myRegistrationsSearch.value) {
-    const searchTerm = myRegistrationsSearch.value.toLowerCase()
-    filtered = filtered.filter(req =>
-      req.title?.toLowerCase().includes(searchTerm) ||
-      req.requester?.fullName?.toLowerCase().includes(searchTerm) ||
-      req.requester?.email?.toLowerCase().includes(searchTerm) ||
-      req.category?.name?.toLowerCase().includes(searchTerm) ||
-      req.id?.toString().includes(searchTerm)
-    )
-  }
-
-  // Status filter
-  if (myRegistrationsStatusFilter.value) {
-    filtered = filtered.filter(req => {
-      const status = req.registrationStatus || req.status;
-      return status === myRegistrationsStatusFilter.value;
-    });
-  }
-
-  // Visibility filter
-  if (myRegistrationsVisibilityFilter.value) {
-    if (myRegistrationsVisibilityFilter.value === 'public') {
-      filtered = filtered.filter(req => isRequestPublic(req.isPublic))
-    } else if (myRegistrationsVisibilityFilter.value === 'private') {
-      filtered = filtered.filter(req => !isRequestPublic(req.isPublic))
+    // Search filter
+    if (myRegistrationsSearch.value) {
+      const searchTerm = myRegistrationsSearch.value.toLowerCase()
+      filtered = filtered.filter(req =>
+        req.title?.toLowerCase().includes(searchTerm) ||
+        req.requester?.fullName?.toLowerCase().includes(searchTerm) ||
+        req.requester?.email?.toLowerCase().includes(searchTerm) ||
+        req.category?.name?.toLowerCase().includes(searchTerm) ||
+        req.id?.toString().includes(searchTerm)
+      )
     }
-  }
 
-  // Sort the filtered results
-  if (sortKey.value) {
-    filtered = [...filtered].sort((a, b) => {
-      let aValue, bValue
+    // Status filter
+    if (myRegistrationsStatusFilter.value) {
+      filtered = filtered.filter(req => {
+        const status = req.registrationStatus || req.status;
+        return status === myRegistrationsStatusFilter.value;
+      });
+    }
 
-      switch (sortKey.value) {
-        case 'id':
-          aValue = a.id
-          bValue = b.id
-          break
-        case 'title':
-          aValue = a.title?.toLowerCase() || ''
-          bValue = b.title?.toLowerCase() || ''
-          break
-        case 'requester':
-          aValue = (a.requester?.fullName || a.requester?.email || '').toLowerCase()
-          bValue = (b.requester?.fullName || b.requester?.email || '').toLowerCase()
-          break
-        case 'category':
-          aValue = a.category?.name?.toLowerCase() || ''
-          bValue = b.category?.name?.toLowerCase() || ''
-          break
-        case 'dealAmount':
-          aValue = parseFloat(a.dealAmount) || 0
-          bValue = parseFloat(b.dealAmount) || 0
-          break
-        case 'deadline':
-          aValue = new Date(a.deadline) || new Date(0)
-          bValue = new Date(b.deadline) || new Date(0)
-          break
-        default:
-          return 0
+    // Visibility filter
+    if (myRegistrationsVisibilityFilter.value) {
+      if (myRegistrationsVisibilityFilter.value === 'public') {
+        // Only show public requests if status is PENDING
+        filtered = filtered.filter(req => req.status === 'PENDING' && isRequestPublic(req.isPublic, !!req.assignee))
+      } else if (myRegistrationsVisibilityFilter.value === 'private') {
+        // Show private requests or non-PENDING requests
+        filtered = filtered.filter(req => req.status !== 'PENDING' || !isRequestPublic(req.isPublic, !!req.assignee))
       }
+    }
 
-      if (aValue < bValue) return -1 * sortOrder.value
-      if (aValue > bValue) return 1 * sortOrder.value
-      return 0
-    })
+    // Sort the filtered results
+    if (sortKey.value) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue, bValue
+
+        switch (sortKey.value) {
+          case 'id':
+            aValue = a.id
+            bValue = b.id
+            break
+          case 'title':
+            aValue = a.title?.toLowerCase() || ''
+            bValue = b.title?.toLowerCase() || ''
+            break
+          case 'requester':
+            aValue = (a.requester?.fullName || a.requester?.email || '').toLowerCase()
+            bValue = (b.requester?.fullName || b.requester?.email || '').toLowerCase()
+            break
+          case 'category':
+            aValue = a.category?.name?.toLowerCase() || ''
+            bValue = b.category?.name?.toLowerCase() || ''
+            break
+          case 'dealAmount':
+            aValue = parseFloat(a.dealAmount) || 0
+            bValue = parseFloat(b.dealAmount) || 0
+            break
+          case 'deadline':
+            aValue = new Date(a.deadline) || new Date(0)
+            bValue = new Date(b.deadline) || new Date(0)
+            break
+          default:
+            return 0
+        }
+
+        if (aValue < bValue) return -1 * sortOrder.value
+        if (aValue > bValue) return 1 * sortOrder.value
+        return 0
+      })
+    }
+
+    return filtered
+  } catch (error) {
+    console.error('Error in filteredMyRegistrations computed:', error)
+    return []
   }
-
-  return filtered
 })
 
 // Pagination computed properties for My Requests
@@ -1327,8 +1613,7 @@ function fetchRequests() {
   // Fetch my requests
   const myRequestsPromise = axiosInstance.get('/requests/myRequests')
     .then(res => {
-      console.log('My requests data received:', res.data)
-      myRequests.value = res.data
+      myRequests.value = res.data || []
     })
     .catch(err => {
       console.error('Error fetching my requests:', err)
@@ -1336,14 +1621,13 @@ function fetchRequests() {
         error.value = 'Không thể kết nối đến server. Vui lòng kiểm tra server có đang chạy không.'
         return
       }
+      myRequests.value = []
     })
 
   // Fetch assigned requests
-  console.log('Fetching assigned requests from:', '/requests/private')
   const assignedRequestsPromise = axiosInstance.get('/requests/private')
     .then(res => {
-      console.log('Assigned requests data received:', res.data)
-      assignedRequests.value = res.data
+      assignedRequests.value = res.data || []
     })
     .catch(err => {
       console.error('Full error details:', {
@@ -1378,12 +1662,13 @@ function fetchRequests() {
       // Handle the error
       console.error('Error fetching assigned requests:', err)
       error.value = `Lỗi khi tải requests: ${err.response?.status} ${err.response?.statusText || err.message}`
+      assignedRequests.value = []
     })
 
   // Fetch my registrations
   const myRegistrationsPromise = axiosInstance.get('/requests/myRegistrations')
     .then(res => {
-      myRegistrations.value = res.data
+      myRegistrations.value = res.data || []
     })
     .catch(err => {
       console.error('Error fetching my registrations:', err)
@@ -1396,15 +1681,11 @@ function fetchRequests() {
   // Try fetch ongoing from backend; fallback to derive from assigned
   const ongoingPromise = axiosInstance.get('/requests/ongoing')
     .then(res => {
-      console.log('[ONGOING] /requests/ongoing response:', res.status, res.data)
-      ongoingRequests.value = res.data
+      ongoingRequests.value = res.data || []
     })
     .catch(() => {
       try {
-        console.warn('[ONGOING] Backend endpoint failed. Falling back to derive from assigned.')
-        console.log('[ONGOING] Assigned requests snapshot:', assignedRequests.value.map(r => ({ id: r.id, status: r.status, title: r.title })))
         ongoingRequests.value = assignedRequests.value.filter(r => r.status === 'APPROVED')
-        console.log('[ONGOING] Derived ongoing:', ongoingRequests.value.map(r => ({ id: r.id, status: r.status })))
       } catch (e) {
         console.error('[ONGOING] Derive fallback failed:', e)
         ongoingRequests.value = []
@@ -1414,7 +1695,6 @@ function fetchRequests() {
   promises.push(ongoingPromise)
 
   Promise.all(promises).finally(() => {
-    console.log('[FETCH] Finalized. myRequests:', myRequests.value.length, 'assigned:', assignedRequests.value.length, 'registrations:', myRegistrations.value.length, 'ongoing:', ongoingRequests.value.length)
     loading.value = false
   })
 }
@@ -1436,10 +1716,25 @@ function formatDeadline(dateString) {
 
 function daysLeft(dateString) {
   if (!dateString) return null;
-  const d = new Date(dateString);
-  const today = new Date();
-  const diff = Math.ceil((d.setHours(0,0,0,0) - today.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
-  return diff >= 0 ? diff : 0;
+
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return null; // Invalid date
+
+    const today = new Date();
+    const deadlineDate = new Date(d);
+    const todayDate = new Date(today);
+
+    // Reset time to start of day
+    deadlineDate.setHours(0, 0, 0, 0);
+    todayDate.setHours(0, 0, 0, 0);
+
+    const diff = Math.ceil((deadlineDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff : 0;
+  } catch (error) {
+    console.error('Error in daysLeft:', error, dateString);
+    return null;
+  }
 }
 
 function daysLeftText(dateString) {
@@ -1499,8 +1794,22 @@ function onExtensionsUpdated() {
 }
 
 function canReview(req) {
-  // Tùy quyền, ví dụ: return req.status === 'pending' && userIsAdmin
-  return false
+  // Cho phép review nếu:
+  // 1. Status là PENDING (chưa được giao) + không có project
+  // 2. Status là FAILED (translator chưa hoàn thành đúng hạn) + không có project
+  // 3. Status là WAITING_APPROVAL (đang chờ duyệt) + không có project
+  // 4. Có thể thêm logic quyền ở đây nếu cần
+  return (req.status === 'PENDING' || req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && !req.project
+}
+
+function getWaitingApprovalDaysLeft(req) {
+  if (req.status !== 'WAITING_APPROVAL' || !req.statusChangedAt) return 0;
+
+  const now = new Date();
+  const statusChangeDate = new Date(req.statusChangedAt);
+  const daysSinceStatusChange = Math.ceil((now - statusChangeDate) / (1000 * 60 * 60 * 24));
+
+  return Math.max(0, 3 - daysSinceStatusChange);
 }
 
 function onRequestReviewed() {
@@ -1534,11 +1843,8 @@ function onRespondCompleted() {
 }
 
 function viewHandover(request) {
-  // Navigate to handover page for the project
-  if (request.project) {
-    const branchId = request.project.branches?.[0]?.id || 'main';
-    router.push(`/projects/${request.project.id}/branches/${branchId}/handover`);
-  }
+  // Navigate to handover page for the request instead of project
+  router.push(`/requests/${request.id}/handover`);
 }
 
 function getStatusClass(status) {
@@ -1547,7 +1853,13 @@ function getStatusClass(status) {
     'APPROVED': 'status-approved',
     'REJECTED': 'status-rejected',
     'COMPLETED': 'status-completed',
-    'CANCELLED': 'status-cancelled'
+    'CANCELLED': 'status-cancelled',
+    'EXTENSION_REQUESTED': 'status-extension-requested',
+    'EXTENSION_APPROVED': 'status-extension-approved',
+    'EXTENSION_REJECTED': 'status-extension-rejected',
+    'WAITING_APPROVAL': 'status-waiting-approval',
+    'EXPIRED': 'status-expired',
+    'FAILED': 'status-failed'
   }
   return classMap[status] || 'status-pending'
 }
@@ -1558,7 +1870,14 @@ function formatStatus(status) {
     'APPROVED': 'Approved',
     'REJECTED': 'Rejected',
     'COMPLETED': 'Completed',
-    'CANCELLED': 'Cancelled'
+    'INCOMPLETED': 'Incompleted',
+    'CANCELLED': 'Cancelled',
+    'EXTENSION_REQUESTED': 'Extension Requested',
+    'EXTENSION_APPROVED': 'Extension Approved',
+    'EXTENSION_REJECTED': 'Extension Rejected',
+    'WAITING_APPROVAL': 'Waiting Approval',
+    'EXPIRED': 'Expired',
+    'FAILED': 'Failed'
   }
   return statusMap[status] || status
 }
@@ -1583,13 +1902,11 @@ function formatAmount(amount) {
 async function acceptRequest(requestId) {
   actionLoading.value = true
   try {
-    await axiosInstance.post(`/requests/${requestId}/update`, {
-      status: 'APPROVED'
-    })
+    await axiosInstance.post(`/requests/${requestId}/private`)
     toast.add({
       severity: 'success',
       summary: 'Success',
-      detail: 'Request accepted successfully',
+      detail: 'Accepted private request',
       life: 3000
     })
     fetchRequests()
@@ -1605,16 +1922,23 @@ async function acceptRequest(requestId) {
   }
 }
 
+// Actions for assigned private requests
+async function acceptAssignedRequest(requestId) {
+  return acceptRequest(requestId)
+}
+
+async function declineAssignedRequest(requestId) {
+  return rejectRequest(requestId)
+}
+
 async function rejectRequest(requestId) {
   actionLoading.value = true
   try {
-    await axiosInstance.post(`/requests/${requestId}/update`, {
-      status: 'REJECTED'
-    })
+    await axiosInstance.post(`/requests/${requestId}/decline`)
     toast.add({
       severity: 'success',
       summary: 'Success',
-      detail: 'Request rejected successfully',
+      detail: 'Declined private request',
       life: 3000
     })
     fetchRequests()
@@ -1622,7 +1946,7 @@ async function rejectRequest(requestId) {
     toast.add({
       severity: 'error',
       summary: 'Error',
-      detail: err.response?.data?.message || 'Failed to reject request',
+      detail: err.response?.data?.message || 'Failed to decline request',
       life: 3000
     })
   } finally {
@@ -1655,7 +1979,11 @@ async function completeRequest(requestId) {
   }
 }
 
-function isRequestPublic(isPublic) {
+function isRequestPublic(isPublic, hasAssignee = false) {
+  // Nếu request có assignee thì phải là private
+  if (hasAssignee) {
+    return false;
+  }
   // Hỗ trợ cả số, string và boolean
   return isPublic == 1 || isPublic === true;
 }
@@ -1716,7 +2044,11 @@ async function debugConnection() {
 }
 
 onMounted(async () => {
-  await fetchRequests()
+  try {
+    await fetchRequests()
+  } catch (error) {
+    console.error('[MOUNTED] Error fetching requests:', error)
+  }
 
   // Handle highlight parameter from URL
   const highlightId = route.query.highlight
@@ -1735,6 +2067,19 @@ onMounted(async () => {
     }, 500)
   }
 })
+
+// Watch for route changes to refresh data when returning from other pages
+watch(() => route.path, async (newPath, oldPath) => {
+  // If returning from handover page, refresh data to get updated status
+  if (oldPath && oldPath.includes('/handover') && newPath.includes('/my-requests')) {
+    console.log('[DEBUG] Returning from handover page, refreshing requests data...');
+    try {
+      await fetchRequests();
+    } catch (error) {
+      console.error('[DEBUG] Error refreshing requests after handover:', error);
+    }
+  }
+}, { immediate: false });
 </script>
 
 <style scoped>
@@ -1812,6 +2157,8 @@ onMounted(async () => {
   margin-bottom: 1rem;
 }
 
+
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1848,6 +2195,7 @@ onMounted(async () => {
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  overflow-x: auto;
 }
 
 .table-wrapper {
@@ -1856,14 +2204,15 @@ onMounted(async () => {
 
 .requests-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 0;
   font-size: 0.8rem;
   table-layout: fixed;
 }
 
 .table-header {
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 0.8rem;
+  padding: 1rem 1.2rem;
   text-align: left;
   font-weight: 600;
   color: #374151;
@@ -1894,10 +2243,12 @@ onMounted(async () => {
 }
 
 .requests-table td {
-  padding: 0.8rem;
+  padding: 1rem 1.2rem;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
   transition: all 0.2s ease;
+  height: 60px;
+  box-sizing: border-box;
 }
 
 .request-row {
@@ -1969,9 +2320,10 @@ onMounted(async () => {
   align-items: center;
   gap: 0.3rem;
   padding: 0.3rem 0.5rem;
-  background: #f8fafc;
   border-radius: 4px;
   border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  transition: all 0.2s ease;
 }
 
 .deadline-text {
@@ -1979,6 +2331,12 @@ onMounted(async () => {
   font-style: italic;
   font-size: 0.8rem;
 }
+
+
+
+
+
+
 
 .request-title {
   font-weight: 500;
@@ -1994,12 +2352,19 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.8rem;
   border-radius: 9999px;
   font-size: 0.7rem;
   font-weight: 600;
   transition: all 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: auto;
+  min-height: 28px;
+  justify-content: center;
+  white-space: normal;
+  min-width: 80px;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .status-icon {
@@ -2030,6 +2395,23 @@ onMounted(async () => {
   font-weight: 600;
 }
 
+.actions-cell {
+  text-align: center;
+  vertical-align: middle;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-cell, .visibility-cell, .actions-cell {
+  text-align: center;
+  vertical-align: middle;
+  min-width: 120px;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
 .actions-wrapper {
   display: flex;
   gap: 0.4rem;
@@ -2038,6 +2420,7 @@ onMounted(async () => {
   justify-content: center;
   min-width: 0;
   width: 100%;
+  height: 100%;
 }
 
 .action-btn {
@@ -2221,6 +2604,14 @@ onMounted(async () => {
   font-size: 0.7rem;
   font-weight: 500;
   font-style: italic;
+  height: auto;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .status-message.cancelled {
@@ -2233,6 +2624,12 @@ onMounted(async () => {
   background: #f0fdf4;
   color: #16a34a;
   border: 1px solid #bbf7d0;
+}
+
+.status-message.incompleted {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
 }
 
 .status-message.rejected {
@@ -2272,8 +2669,41 @@ onMounted(async () => {
   color: #b91c1c;
 }
 
+/* Failed status */
+.status-badge.status-failed {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Incompleted status */
+.status-badge.status-incompleted {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Extension statuses */
+.status-badge.status-extension-requested {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-extension-approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-extension-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-waiting-approval {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .visibility-badge {
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.8rem;
   border-radius: 9999px;
   font-size: 0.7rem;
   font-weight: 500;
@@ -2281,6 +2711,13 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
+  height: auto;
+  min-height: 28px;
+  justify-content: center;
+  white-space: normal;
+  min-width: 80px;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .visibility-public {
@@ -2835,6 +3272,16 @@ onMounted(async () => {
     gap: 0.5rem;
   }
 
+  .grace-period-banner {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .banner-icon {
+    align-self: center;
+  }
+
   .tab-button {
     justify-content: center;
   }
@@ -3031,12 +3478,131 @@ th:hover .sort-icon {
   transform: translateY(-1px);
 }
 
+.extension-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  position: relative;
+}
+
+.extension-btn:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-1px);
+}
+
+.grace-period-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+  margin-left: 4px;
+}
+
+.deadline-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.grace-expired-message {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.deadline-expired-message {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+/* Grace Period Banner */
+.grace-period-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #fbbf24;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.1);
+}
+
+.banner-icon {
+  width: 48px;
+  height: 48px;
+  background: #f59e0b;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.banner-content h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.banner-content p {
+  margin: 0;
+  font-size: 14px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.banner-content strong {
+  color: #78350f;
+  font-weight: 700;
+}
+
 /* Highlight effect for requests */
 .highlighted-request {
   animation: highlightPulse 3s ease-in-out;
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
   border-left: 4px solid #f59e0b !important;
   box-shadow: 0 0 20px rgba(245, 158, 11, 0.3) !important;
+}
+
+/* Auto-completion info styles */
+.auto-completion-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-top: 0.3rem;
+}
+
+.auto-completion-info .days-left {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.auto-completion-info .auto-completing {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.auto-completion-info i {
+  font-size: 0.8rem;
 }
 
 /* No actions message */

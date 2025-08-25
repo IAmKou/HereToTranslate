@@ -60,7 +60,7 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: isDev,
+      synchronize: false, // Temporarily disabled to prevent schema conflicts
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
@@ -134,6 +134,191 @@ export class MySqlConnection {
         this.logger.log('Ensured file.isSyncedFromRequest column and backfill completed');
       } catch (e) {
         this.logger.warn('Inline migration for isSyncedFromRequest skipped or failed', e as any);
+      }
+
+      // Ensure `project.isSyncedFromRequest` exists (works on MySQL 5.7/8.0)
+      try {
+        // Try fast-path on newer MySQL
+        try {
+          await this.dataSource.query(
+            'ALTER TABLE `project` ADD COLUMN IF NOT EXISTS `isSyncedFromRequest` TINYINT(1) NOT NULL DEFAULT 0'
+          );
+          this.logger.log('Ensured project.isSyncedFromRequest column exists (IF NOT EXISTS)');
+        } catch (innerErr) {
+          // Fallback for MySQL versions that do not support IF NOT EXISTS
+          const columns = await this.dataSource.query(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project' AND COLUMN_NAME = 'isSyncedFromRequest'"
+          );
+          if (columns.length === 0) {
+            await this.dataSource.query(
+              'ALTER TABLE `project` ADD COLUMN `isSyncedFromRequest` TINYINT(1) NOT NULL DEFAULT 0'
+            );
+            this.logger.log('Added project.isSyncedFromRequest column (fallback path)');
+          } else {
+            this.logger.log('project.isSyncedFromRequest column already exists (fallback path)');
+          }
+        }
+      } catch (e) {
+        this.logger.warn('Inline migration for project.isSyncedFromRequest skipped or failed', e as any);
+      }
+
+      // Ensure `requests.rating` exists for star rating functionality
+      try {
+        const ratingColumns = await this.dataSource.query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = 'rating'"
+        );
+
+        if (ratingColumns.length === 0) {
+          // Column doesn't exist, add it
+          await this.dataSource.query(
+            'ALTER TABLE `requests` ADD COLUMN `rating` INT NULL COMMENT "Rating from 1-5 stars given by requester to translator"'
+          );
+          this.logger.log('Added requests.rating column for star rating functionality');
+        } else {
+          this.logger.log('requests.rating column already exists');
+        }
+      } catch (e) {
+        this.logger.error('Inline migration for requests.rating failed:', e);
+        // This is critical for the application to work, so throw the error
+        throw e;
+      }
+
+      // Ensure review fields exist in requests table
+      try {
+        const reviewFields = [
+          'reviewedAt',
+          'reviewDecision',
+          'reviewRating',
+          'reviewComment'
+        ];
+
+        for (const field of reviewFields) {
+          const columnExists = await this.dataSource.query(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = '${field}'`
+          );
+
+          if (columnExists.length === 0) {
+            let alterQuery = '';
+            switch (field) {
+              case 'reviewedAt':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `reviewedAt` DATETIME NULL COMMENT "When the request was reviewed"';
+                break;
+              case 'reviewDecision':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `reviewDecision` ENUM("APPROVED", "REJECTED") NULL COMMENT "Review decision"';
+                break;
+              case 'reviewRating':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `reviewRating` INT NULL COMMENT "Review rating from 1-5 stars"';
+                break;
+              case 'reviewComment':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `reviewComment` TEXT NULL COMMENT "Review comment from requester"';
+                break;
+            }
+
+            if (alterQuery) {
+              await this.dataSource.query(alterQuery);
+              this.logger.log(`Added requests.${field} column for review functionality`);
+            }
+          } else {
+            this.logger.log(`requests.${field} column already exists`);
+          }
+        }
+      } catch (e) {
+        this.logger.error('Inline migration for requests review fields failed:', e);
+        // This is critical for the application to work, so throw the error
+        throw e;
+      }
+
+      // Ensure status enum includes INCOMPLETED value
+      try {
+        // Check if INCOMPLETED value exists in status enum
+        const statusValues = await this.dataSource.query(
+          "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = 'status'"
+        );
+
+        if (statusValues.length > 0) {
+          const columnType = statusValues[0].COLUMN_TYPE;
+          if (columnType && !columnType.includes('INCOMPLETED')) {
+            // Add INCOMPLETED to the enum
+            await this.dataSource.query(
+              "ALTER TABLE `requests` MODIFY COLUMN `status` ENUM('CANCELLED', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'INCOMPLETED', 'DELIVERYPENDING', 'FAILED', 'WAITING_APPROVAL', 'EXTENSION_REQUESTED', 'EXTENSION_APPROVED', 'EXTENSION_REJECTED', 'CANCELLATION_REQUESTED', 'CANCELLATION_PENDING', 'ARCHIVED') NOT NULL DEFAULT 'PENDING'"
+            );
+            this.logger.log('Added INCOMPLETED value to requests.status enum');
+          } else {
+            this.logger.log('INCOMPLETED value already exists in requests.status enum');
+          }
+        }
+      } catch (e) {
+        this.logger.error('Failed to update requests.status enum:', e);
+        // Don't throw error here as this is not critical for basic functionality
+      }
+
+      // Ensure rating fields exist in user table
+      try {
+        const userRatingFields = [
+          'rating',
+          'reviewCount',
+          'lastReviewComment'
+        ];
+
+        for (const field of userRatingFields) {
+          const columnExists = await this.dataSource.query(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = '${field}'`
+          );
+
+          if (columnExists.length === 0) {
+            let alterQuery = '';
+            switch (field) {
+              case 'rating':
+                alterQuery = 'ALTER TABLE `user` ADD COLUMN `rating` DECIMAL(3,1) NULL COMMENT "Average rating from 1-5 stars"';
+                break;
+              case 'reviewCount':
+                alterQuery = 'ALTER TABLE `user` ADD COLUMN `reviewCount` INT NULL COMMENT "Total number of reviews received"';
+                break;
+              case 'lastReviewComment':
+                alterQuery = 'ALTER TABLE `user` ADD COLUMN `lastReviewComment` TEXT NULL COMMENT "Last review comment received"';
+                break;
+            }
+
+            if (alterQuery) {
+              await this.dataSource.query(alterQuery);
+              this.logger.log(`Added user.${field} column for rating functionality`);
+            }
+          } else {
+            this.logger.log(`user.${field} column already exists`);
+          }
+        }
+      } catch (e) {
+        this.logger.error('Inline migration for user rating fields failed:', e);
+        // This is critical for the application to work, so throw the error
+        throw e;
+      }
+
+      // Create indexes for better performance (if they don't exist)
+      try {
+        const indexesToCreate = [
+          { table: 'requests', column: 'reviewedAt', name: 'idx_requests_reviewed_at' },
+          { table: 'requests', column: 'reviewDecision', name: 'idx_requests_review_decision' },
+          { table: 'user', column: 'rating', name: 'idx_user_rating' },
+          { table: 'user', column: 'reviewCount', name: 'idx_user_review_count' }
+        ];
+
+        for (const index of indexesToCreate) {
+          const indexExists = await this.dataSource.query(
+            `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${index.table}' AND INDEX_NAME = '${index.name}'`
+          );
+
+          if (indexExists.length === 0) {
+            await this.dataSource.query(
+              `CREATE INDEX ${index.name} ON \`${index.table}\`(\`${index.column}\`)`
+            );
+            this.logger.log(`Created index ${index.name} on ${index.table}.${index.column}`);
+          } else {
+            this.logger.log(`Index ${index.name} already exists`);
+          }
+        }
+      } catch (e) {
+        this.logger.warn('Failed to create some indexes, continuing without them:', e);
+        // Don't throw error here as indexes are not critical for basic functionality
       }
     } catch (error) {
       this.logger.error('Error connecting to MySQL database', error);

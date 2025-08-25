@@ -1051,35 +1051,29 @@ export class RequestManagerService {
       },
     });
 
-    // Nếu không có giao dịch đặt cọc chờ xử lý, vẫn cho phép decline và chỉ đổi trạng thái request
     if (!transaction) {
-      request.status = RequestStatus.Rejected;
-      await this.requestRepository.save(request);
-    } else {
-      const wallet = await this.walletService.getOrCreateWallet(
-        request.requester.id
-      );
-      wallet.balance = Number(wallet.balance) + Number(transaction.amount);
-
-      transaction.status = TransactionStatus.Failed;
-      request.status = RequestStatus.Rejected;
-
-      await this.transactionRepository.save(transaction);
-      await this.walletRepository.save(wallet);
-      await this.requestRepository.save(request);
+      throw new NotFoundException('No matching deposit transaction found');
     }
 
-    // Create notification for requester about declined private request (best-effort)
-    try {
-      await this.notificationService.createNotification({
-        userId: request.requester.id,
-        type: 'PRIVATE_REQUEST_DECLINED',
-        message: `Your private request "${request.title}" has been declined by the assigned translator.`,
-        createdBy: request.assignee?.id || BigInt(0),
-      });
-    } catch (e) {
-      // Do not fail decline if notification fails
-    }
+    const wallet = await this.walletService.getOrCreateWallet(
+      request.requester.id
+    );
+    wallet.balance = Number(wallet.balance) + Number(transaction.amount);
+
+    transaction.status = TransactionStatus.Failed;
+    request.status = RequestStatus.Rejected;
+
+    await this.transactionRepository.save(transaction);
+    await this.walletRepository.save(wallet);
+    await this.requestRepository.save(request);
+
+    // Create notification for requester about declined private request
+    await this.notificationService.createNotification({
+      userId: request.requester.id,
+      type: 'PRIVATE_REQUEST_DECLINED',
+      message: `Your private request "${request.title}" has been declined by the assigned translator.`,
+      createdBy: request.assignee?.id || BigInt(0),
+    });
 
     return true;
   }

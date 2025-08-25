@@ -1930,17 +1930,12 @@ async function rejectRequest(requestId) {
   actionLoading.value = true
   try {
     await axiosInstance.post(`/requests/${requestId}/decline`)
-    // Optimistically remove from assigned list so buttons disappear immediately
-    try {
-      assignedRequests.value = (assignedRequests.value || []).filter(r => r && r.id !== requestId)
-    } catch (_) {}
     toast.add({
       severity: 'success',
       summary: 'Success',
       detail: 'Declined private request',
       life: 3000
     })
-    // Background refresh to keep other tabs in sync
     fetchRequests()
   } catch (err) {
     toast.add({

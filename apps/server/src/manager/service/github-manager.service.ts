@@ -266,8 +266,4 @@ export class GitHubService {
     }
     return branch;
   }
-
-  getUsername(): string {
-    return this.username;
-  }
 }

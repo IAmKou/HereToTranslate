@@ -1,37 +1,20 @@
 <template>
-  <div
-    class="file-preview-panel"
-    :class="{ 'collapsed': collapsed, 'resizing': isResizing }"
-    :style="{ width: panelWidth + 'px' }"
-  >
+  <div class="file-preview-panel" :class="{ 'collapsed': collapsed, 'resizing': isResizing }" :style="{ width: panelWidth + 'px' }">
     <!-- Header - Hidden for PDF, DOCX, and Text files -->
-    <div
-      v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'"
-      class="preview-header"
-      @click="toggleCollapse"
-    >
+    <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="preview-header" @click="toggleCollapse">
       <div class="header-content">
         <div class="header-left">
-          <i
-            class="pi pi-eye"
-            :class="{ 'active': !collapsed }"
-          />
+          <i class="pi pi-eye" :class="{ 'active': !collapsed }"></i>
           <span class="header-title">File Preview</span>
-          <span
-            v-if="fileName"
-            class="file-name"
-          >{{ fileName }}</span>
+          <span v-if="fileName" class="file-name">{{ fileName }}</span>
         </div>
         <div class="header-actions">
           <button
             class="action-btn"
-            :title="collapsed ? 'Expand preview' : 'Collapse preview'"
             @click.stop="toggleCollapse"
+            :title="collapsed ? 'Expand preview' : 'Collapse preview'"
           >
-            <i
-              class="pi"
-              :class="collapsed ? 'pi-chevron-right' : 'pi-chevron-left'"
-            />
+            <i class="pi" :class="collapsed ? 'pi-chevron-right' : 'pi-chevron-left'"></i>
           </button>
         </div>
       </div>
@@ -41,403 +24,179 @@
     <div
       v-if="!collapsed"
       class="resize-handle"
-      :title="'Drag to resize preview panel'"
       @mousedown="startResize"
       @touchstart="startResize"
+      :title="'Drag to resize preview panel'"
     >
       <div class="resize-indicator">
-        <i class="pi pi-grip-vertical" />
+        <i class="pi pi-grip-vertical"></i>
       </div>
     </div>
 
     <!-- Preview Content -->
-    <div
-      v-if="!collapsed"
-      class="preview-content"
-    >
+    <div v-if="!collapsed" class="preview-content">
       <!-- Loading State -->
-      <div
-        v-if="loading"
-        class="loading-state"
-      >
-        <i class="pi pi-spin pi-spinner" />
+      <div v-if="loading" class="loading-state">
+        <i class="pi pi-spin pi-spinner"></i>
         <span>Loading file preview...</span>
       </div>
 
       <!-- Error State -->
-      <div
-        v-else-if="error"
-        class="error-state"
-      >
-        <i class="pi pi-exclamation-triangle" />
+      <div v-else-if="error" class="error-state">
+        <i class="pi pi-exclamation-triangle"></i>
         <span>{{ error }}</span>
-        <button
-          class="retry-btn"
-          @click="loadPreview"
-        >
-          Retry
-        </button>
+        <button @click="loadPreview" class="retry-btn">Retry</button>
       </div>
 
       <!-- No File State -->
-      <div
-        v-else-if="!fileId"
-        class="no-file-state"
-      >
-        <i class="pi pi-file" />
+      <div v-else-if="!fileId" class="no-file-state">
+        <i class="pi pi-file"></i>
         <span>No file selected for preview</span>
       </div>
 
       <!-- File Preview -->
-      <div
-        v-else
-        class="file-preview"
-      >
+      <div v-else class="file-preview">
+
+
         <!-- File Info - Hidden for PDF, DOCX, and Text files -->
-        <div
-          v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'"
-          class="file-info"
-        >
+        <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="file-info">
           <div class="file-meta">
             <span class="file-type">{{ getFileType() }}</span>
-            <span
-              v-if="fileSize"
-              class="file-size"
-            >{{ formatFileSize(fileSize) }}</span>
+            <span class="file-size" v-if="fileSize">{{ formatFileSize(fileSize) }}</span>
           </div>
-          <div
-            v-if="filePath"
-            class="file-path"
-          >
-            {{ filePath }}
-          </div>
+          <div class="file-path" v-if="filePath">{{ filePath }}</div>
         </div>
 
         <!-- Preview Container -->
         <div class="preview-container document-viewer-wrapper">
           <!-- Office Online Viewer Preview -->
-          <div
-            v-if="previewType === 'office-viewer'"
-            class="office-viewer-preview"
-          >
-            <iframe
-              v-if="previewUrl"
-              :src="previewUrl"
-              class="office-viewer"
-              frameborder="0"
-              width="100%"
-              height="600px"
-            />
-            <div
-              v-else
-              style="text-align: center; color: #a5b4fc; padding: 2rem;"
-            >
-              <i
-                class="pi pi-file-word"
-                style="font-size: 3rem; margin-bottom: 1rem;"
-              />
+          <div v-if="previewType === 'office-viewer'" class="office-viewer-preview">
+            <iframe v-if="previewUrl" :src="previewUrl" class="office-viewer" frameborder="0" width="100%" height="600px"></iframe>
+            <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
+              <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>Office Online Viewer not available</p>
             </div>
           </div>
 
           <!-- PDF Preview with Direct Highlighting -->
-          <div
-            v-else-if="isPdfType()"
-            class="pdf-preview"
-            style="position: relative;"
-          >
+          <div v-else-if="isPdfType()" class="pdf-preview" style="position: relative;">
             <!-- PDF.js Viewer instead of iframe -->
-            <div
-              v-if="previewUrl && pdfJsLoaded"
-              class="pdf-js-viewer"
-            >
-              <canvas
-                ref="pdfCanvas"
-                class="pdf-canvas"
-                style="width: 100%; height: 100%;"
-              />
-              <div
-                ref="highlightContainer"
-                class="highlight-container"
-                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;"
-              />
+            <div v-if="previewUrl && pdfJsLoaded" class="pdf-js-viewer">
+              <canvas ref="pdfCanvas" class="pdf-canvas" style="width: 100%; height: 100%;"></canvas>
+              <div ref="highlightContainer" class="highlight-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;"></div>
             </div>
 
             <!-- Fallback to iframe if PDF.js not loaded -->
-            <iframe
-              v-else-if="previewUrl"
-              :src="previewUrl"
-              class="pdf-viewer"
-              frameborder="0"
-              style="width: 100%; height: 100%;"
-            />
+            <iframe v-else-if="previewUrl" :src="previewUrl" class="pdf-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
 
             <!-- Controls -->
-            <div
-              v-if="pdfJsLoaded"
-              class="pdf-controls"
-              style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px; z-index: 30;"
-            >
+            <div v-if="pdfJsLoaded" class="pdf-controls" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px; z-index: 30;">
               <span style="color: white; margin: 0 10px;">{{ currentPage }} / {{ totalPages }}</span>
-              <button
-                style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;"
-                @click="pdfZoomOut"
-              >
-                -
-              </button>
+              <button @click="pdfZoomOut" style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">-</button>
               <span style="color: white; margin: 0 10px;">{{ Math.round(pdfZoom * 100) }}%</span>
-              <button
-                style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;"
-                @click="pdfZoomIn"
-              >
-                +
-              </button>
+              <button @click="pdfZoomIn" style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">+</button>
             </div>
 
-            <div
-              v-else-if="!previewUrl"
-              style="text-align: center; color: #a5b4fc; padding: 2rem;"
-            >
-              <i
-                class="pi pi-file-pdf"
-                style="font-size: 3rem; margin-bottom: 1rem;"
-              />
+            <div v-else-if="!previewUrl" style="text-align: center; color: #a5b4fc; padding: 2rem;">
+              <i class="pi pi-file-pdf" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>PDF preview not available</p>
             </div>
           </div>
 
           <!-- DOCX Preview with docx-preview library -->
-          <div
-            v-else-if="previewType === 'docx-preview'"
-            class="docx-preview-container"
-          >
+          <div v-else-if="previewType === 'docx-preview'" class="docx-preview-container">
             <div class="docx-container">
-              <div
-                ref="docxContainer"
-                class="docx-content"
-                :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"
-              />
+              <div ref="docxContainer" class="docx-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"></div>
             </div>
-            <div
-              v-if="!docxRendered"
-              class="docx-loading"
-            >
-              <i class="pi pi-spin pi-spinner" />
+            <div v-if="!docxRendered" class="docx-loading">
+              <i class="pi pi-spin pi-spinner"></i>
               <span>Loading DOCX preview...</span>
             </div>
 
             <!-- Zoom controls for DOCX -->
             <div class="docx-zoom-controls">
-              <button
-                :disabled="zoom <= 0.5"
-                class="control-btn"
-                @click="zoomOut"
-              >
-                -
-              </button>
+              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
               <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
-              <button
-                :disabled="zoom >= 2"
-                class="control-btn"
-                @click="zoomIn"
-              >
-                +
-              </button>
-              <button
-                class="control-btn"
-                @click="resetZoom"
-              >
-                Reset
-              </button>
+              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
+              <button @click="resetZoom" class="control-btn">Reset</button>
             </div>
           </div>
 
           <!-- DOCX Preview -->
-          <div
-            v-else-if="previewType === 'docx'"
-            class="docx-preview"
-          >
-            <iframe
-              v-if="previewUrl"
-              :src="previewUrl"
-              class="docx-viewer"
-              frameborder="0"
-              style="width: 100%; height: 100%;"
-            />
-            <div
-              v-else
-              style="text-align: center; color: #a5b4fc; padding: 2rem;"
-            >
-              <i
-                class="pi pi-file-word"
-                style="font-size: 3rem; margin-bottom: 1rem;"
-              />
+          <div v-else-if="previewType === 'docx'" class="docx-preview">
+            <iframe v-if="previewUrl" :src="previewUrl" class="docx-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
+              <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>DOCX preview not available</p>
             </div>
           </div>
 
           <!-- Google Docs Viewer for DOCX -->
-          <div
-            v-else-if="previewType === 'google-docs-viewer'"
-            class="google-docs-preview"
-          >
-            <iframe
-              v-if="previewUrl"
-              :src="previewUrl"
-              class="google-docs-viewer"
-              frameborder="0"
-              style="width: 100%; height: 100%;"
-            />
-            <div
-              v-else
-              style="text-align: center; color: #a5b4fc; padding: 2rem;"
-            >
-              <i
-                class="pi pi-file-word"
-                style="font-size: 3rem; margin-bottom: 1rem;"
-              />
+          <div v-else-if="previewType === 'google-docs-viewer'" class="google-docs-preview">
+            <iframe v-if="previewUrl" :src="previewUrl" class="google-docs-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
+              <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>Google Docs Viewer not available</p>
             </div>
           </div>
 
           <!-- Document Preview -->
-          <div
-            v-else-if="isDocumentType()"
-            class="document-preview"
-          >
+          <div v-else-if="isDocumentType()" class="document-preview">
             <div class="document-page">
-              <div
-                class="document-content-original"
-                v-html="previewContent || 'No document content available'"
-              />
+              <div class="document-content-original" v-html="previewContent || 'No document content available'"></div>
             </div>
           </div>
 
           <!-- DOCX Preview with PDF-like functionality -->
-          <div
-            v-else-if="previewType === 'document'"
-            class="docx-preview"
-          >
+          <div v-else-if="previewType === 'document'" class="docx-preview">
             <!-- Document container with zoom -->
             <div class="docx-viewer">
-              <div
-                class="docx-content"
-                :style="{ transform: `scale(${zoom})`, transformOrigin: 'top center' }"
-              >
-                <div
-                  class="document-content-original"
-                  v-html="previewContent || 'No document content available'"
-                />
+              <div class="docx-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top center' }">
+                <div class="document-content-original" v-html="previewContent || 'No document content available'"></div>
               </div>
             </div>
 
             <!-- Zoom and navigation controls -->
             <div class="docx-controls">
-              <button
-                :disabled="zoom <= 0.5"
-                class="control-btn"
-                @click="zoomOut"
-              >
-                -
-              </button>
+              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
               <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
-              <button
-                :disabled="zoom >= 2"
-                class="control-btn"
-                @click="zoomIn"
-              >
-                +
-              </button>
-              <button
-                class="control-btn"
-                @click="resetZoom"
-              >
-                Reset
-              </button>
+              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
+              <button @click="resetZoom" class="control-btn">Reset</button>
             </div>
           </div>
 
           <!-- Image Preview -->
-          <div
-            v-else-if="isImageType()"
-            class="image-preview"
-          >
-            <img
-              v-if="previewUrl"
-              :src="previewUrl"
-              :alt="fileName"
-              class="preview-image"
-            >
-            <div
-              v-else
-              style="text-align: center; color: #a5b4fc; padding: 2rem;"
-            >
-              <i
-                class="pi pi-image"
-                style="font-size: 3rem; margin-bottom: 1rem;"
-              />
+          <div v-else-if="isImageType()" class="image-preview">
+            <img v-if="previewUrl" :src="previewUrl" :alt="fileName" class="preview-image" />
+            <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
+              <i class="pi pi-image" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>Image preview not available</p>
             </div>
           </div>
 
           <!-- Text Preview -->
-          <div
-            v-else-if="previewType === 'text'"
-            class="text-preview"
-          >
+          <div v-else-if="isTextType()" class="text-preview">
             <div class="text-container">
-              <pre
-                class="text-content"
-                :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"
-              >{{ previewContent || 'No text content available' }}</pre>
+              <pre class="text-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }">{{ previewContent || 'No text content available' }}</pre>
             </div>
 
             <!-- Zoom controls for Text -->
             <div class="text-zoom-controls">
-              <button
-                :disabled="zoom <= 0.5"
-                class="control-btn"
-                @click="zoomOut"
-              >
-                -
-              </button>
+              <button @click="zoomOut" :disabled="zoom <= 0.5" class="control-btn">-</button>
               <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
-              <button
-                :disabled="zoom >= 2"
-                class="control-btn"
-                @click="zoomIn"
-              >
-                +
-              </button>
-              <button
-                class="control-btn"
-                @click="resetZoom"
-              >
-                Reset
-              </button>
+              <button @click="zoomIn" :disabled="zoom >= 2" class="control-btn">+</button>
+              <button @click="resetZoom" class="control-btn">Reset</button>
             </div>
           </div>
 
           <!-- HTML Preview -->
-          <div
-            v-else-if="isHtmlType()"
-            class="html-preview"
-          >
-            <div
-              class="html-content"
-              v-html="previewContent || 'No HTML content available'"
-            />
+          <div v-else-if="isHtmlType()" class="html-preview">
+            <div class="html-content" v-html="previewContent || 'No HTML content available'"></div>
           </div>
 
           <!-- Default Preview -->
-          <div
-            v-else
-            class="default-preview"
-          >
-            <i
-              class="pi pi-file"
-              style="font-size: 3rem; color: #6366f1;"
-            />
+          <div v-else class="default-preview">
+            <i class="pi pi-file" style="font-size: 3rem; color: #6366f1;"></i>
             <span>Preview not available for this file type</span>
             <div style="margin-top: 1rem; font-size: 0.8rem; color: #64748b;">
               File: {{ fileName || 'Unknown' }}<br>
@@ -448,33 +207,17 @@
         </div>
 
         <!-- Preview Controls - Hidden for PDF, DOCX, and Text files -->
-        <div
-          v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'"
-          class="preview-controls"
-        >
+        <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="preview-controls">
           <div class="zoom-controls">
-            <button
-              class="zoom-btn"
-              :disabled="zoom <= 0.5"
-              @click="zoomOut"
-            >
-              <i class="pi pi-minus" />
+            <button @click="zoomOut" class="zoom-btn" :disabled="zoom <= 0.5">
+              <i class="pi pi-minus"></i>
             </button>
             <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
-            <button
-              class="zoom-btn"
-              :disabled="zoom >= 2"
-              @click="zoomIn"
-            >
-              <i class="pi pi-plus" />
+            <button @click="zoomIn" class="zoom-btn" :disabled="zoom >= 2">
+              <i class="pi pi-plus"></i>
             </button>
           </div>
-          <button
-            class="reset-zoom-btn"
-            @click="resetZoom"
-          >
-            Reset
-          </button>
+          <button @click="resetZoom" class="reset-zoom-btn">Reset</button>
         </div>
       </div>
     </div>
@@ -491,7 +234,6 @@ interface Props {
   filePath?: string;
   fileSize?: number;
   collapsed?: boolean;
-  language?: string; // Thêm prop để chọn ngôn ngữ
   focusedString?: {
     id: string;
     originalText: string;
@@ -594,12 +336,7 @@ async function loadPdfWithPdfJs() {
       throw new Error('No base64 data found');
     }
 
-    // Clean the base64 string first
-    const cleanBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
-    if (cleanBase64.length % 4 !== 0) {
-      throw new Error('Invalid base64 string length');
-    }
-    const uint8Array = new Uint8Array(atob(cleanBase64).split('').map(char => char.charCodeAt(0)));
+    const uint8Array = new Uint8Array(atob(base64Data).split('').map(char => char.charCodeAt(0)));
     console.log('Uint8Array length:', uint8Array.length);
 
     if (uint8Array.length === 0) {
@@ -1017,11 +754,7 @@ async function loadPreview() {
 
   try {
     // Try to get preview content from API
-    const params: any = {};
-    if (props.language) {
-      params.language = props.language;
-    }
-    const response = await axiosInstance.get(`/files/${props.fileId}/preview`, { params });
+    const response = await axiosInstance.get(`/files/${props.fileId}/preview`);
 
     // Store full response data including textSegments
     previewData.value = response.data;
@@ -1032,36 +765,11 @@ async function loadPreview() {
     console.log('Has URL:', !!response.data.url);
 
     if (response.data.content) {
-      // Handle Buffer content from backend
-      let base64Content: string;
-
-      // Check if content is a Buffer object (has type and data properties)
-      if (response.data.content.type === 'Buffer' && response.data.content.data) {
-        // Convert Buffer data to base64
-        const uint8Array = new Uint8Array(response.data.content.data);
-        base64Content = btoa(String.fromCharCode(...uint8Array));
-      } else if (typeof response.data.content === 'string') {
-        // Content is already a string (base64)
-        base64Content = response.data.content;
-      } else if (response.data.content && typeof response.data.content === 'object' && !Array.isArray(response.data.content)) {
-        // Handle case where Buffer is serialized as plain object with numeric keys
-        const bufferData = Object.values(response.data.content) as number[];
-        if (bufferData.length > 0 && typeof bufferData[0] === 'number') {
-          // Convert numeric array to base64
-          const uint8Array = new Uint8Array(bufferData);
-          base64Content = btoa(String.fromCharCode(...uint8Array));
-        } else {
-          console.error('Unexpected content format:', response.data.content);
-          throw new Error('Invalid content format from backend');
-        }
-      } else {
-        console.error('Unexpected content format:', response.data.content);
-        throw new Error('Invalid content format from backend');
-      }
+      previewContent.value = response.data.content;
 
       // Handle PDF content by creating a data URL
       if (response.data.fileType === 'application/pdf') {
-        previewUrl.value = `data:application/pdf;base64,${base64Content}`;
+        previewUrl.value = `data:application/pdf;base64,${response.data.content}`;
         console.log('PDF URL created:', previewUrl.value.substring(0, 50) + '...');
         // Load PDF with PDF.js for accurate highlighting
         nextTick(() => {
@@ -1071,32 +779,8 @@ async function loadPreview() {
 
       // Handle DOCX content by creating a data URL
       if (response.data.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        previewUrl.value = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${base64Content}`;
+        previewUrl.value = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${response.data.content}`;
         console.log('DOCX URL created:', previewUrl.value.substring(0, 50) + '...');
-        console.log('DOCX content from backend length:', base64Content?.length);
-        console.log('DOCX content from backend preview:', base64Content?.substring(0, 100));
-        // Set preview type for DOCX
-        previewType.value = 'docx-preview';
-        // Store content for docx-preview rendering
-        previewContent.value = base64Content;
-        nextTick(() => {
-          renderDocxWithPreview();
-        });
-      }
-
-      // Handle text files
-      if (response.data.fileType === 'text/plain' || response.data.fileType === 'application/json') {
-        previewType.value = 'text';
-        // Decode base64 content for text files
-        try {
-          // Clean the base64 string first
-          const cleanBase64 = base64Content.replace(/[^A-Za-z0-9+/=]/g, '');
-          const decodedContent = atob(cleanBase64);
-          previewContent.value = decodedContent;
-        } catch (err) {
-          console.error('Error decoding base64 content:', err);
-          previewContent.value = base64Content;
-        }
       }
     } else if (response.data.url) {
       previewUrl.value = response.data.url;
@@ -1154,18 +838,7 @@ async function renderDocxWithPreview() {
 
     // Convert base64 to ArrayBuffer
     const base64Data = previewContent.value;
-    console.log('Original base64 data length:', base64Data?.length);
-    console.log('Original base64 data preview:', base64Data?.substring(0, 100));
-
-    // Clean the base64 string first
-    const cleanBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
-    console.log('Cleaned base64 data length:', cleanBase64?.length);
-    console.log('Cleaned base64 data preview:', cleanBase64?.substring(0, 100));
-
-    if (cleanBase64.length % 4 !== 0) {
-      throw new Error('Invalid base64 string length');
-    }
-    const binaryString = atob(cleanBase64);
+    const binaryString = atob(base64Data);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);

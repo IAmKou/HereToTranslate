@@ -175,7 +175,7 @@
                     </th>
                     <th class="table-header center" width="8%">Status</th>
                     <th class="table-header center" width="9%">Visibility</th>
-                    <th class="table-header center" width="16%">Actions</th>
+                    <th class="table-header center" width="17%">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
@@ -247,11 +247,11 @@
                     </td>
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <!-- Cancel button - show for all requests except COMPLETED and CANCELLED -->
+                        <!-- Cancel button - show for all requests except COMPLETED, CANCELLED, and INCOMPLETED -->
                         <button
                           @click="onCancel(req)"
                           class="action-btn cancel-btn"
-                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED'"
+                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED' && req.status !== 'INCOMPLETED'"
                           :title="`Cancel request: ${req.title}`"
                           data-tooltip="Cancel this request"
                         >
@@ -542,8 +542,25 @@
                     </td>
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <!-- No actions available for assigned requests -->
-                        <span class="no-actions-message">No actions available</span>
+                        <template v-if="req.status === 'PENDING'">
+                          <button
+                            class="action-btn btn btn-primary"
+                            :disabled="actionLoading"
+                            @click="acceptAssignedRequest(req.id)"
+                          >
+                            <i class="pi pi-check" /> Accept
+                          </button>
+                          <button
+                            class="action-btn btn btn-danger"
+                            :disabled="actionLoading"
+                            @click="declineAssignedRequest(req.id)"
+                          >
+                            <i class="pi pi-times" /> Decline
+                          </button>
+                        </template>
+                        <template v-else>
+                          <span class="no-actions-message">No actions available</span>
+                        </template>
                       </div>
                     </td>
                   </tr>
@@ -723,6 +740,11 @@
                            ✓ Completed
                          </span>
 
+                        <!-- Show message for incompleted requests -->
+                        <span v-if="req.status === 'INCOMPLETED'" class="status-message incompleted" title="This request has been marked as incomplete">
+                           ⚠ Incompleted
+                         </span>
+
                         <!-- Show message for rejected requests -->
                         <span v-if="req.status === 'REJECTED'" class="status-message rejected" title="This request has been rejected">
                            ✗ Rejected
@@ -859,7 +881,7 @@
                     <th class="table-header" width="10%">Deal Amount</th>
                     <th class="table-header" width="12%">Deadline</th>
                     <th class="table-header center" width="8%">Status</th>
-                    <th class="table-header center" width="18%">Actions</th>
+                    <th class="table-header center" width="17%">Actions</th>
                   </tr>
                   </thead>
                   <tbody>
@@ -1880,13 +1902,11 @@ function formatAmount(amount) {
 async function acceptRequest(requestId) {
   actionLoading.value = true
   try {
-    await axiosInstance.post(`/requests/${requestId}/update`, {
-      status: 'APPROVED'
-    })
+    await axiosInstance.post(`/requests/${requestId}/private`)
     toast.add({
       severity: 'success',
       summary: 'Success',
-      detail: 'Request accepted successfully',
+      detail: 'Accepted private request',
       life: 3000
     })
     fetchRequests()
@@ -1902,16 +1922,23 @@ async function acceptRequest(requestId) {
   }
 }
 
+// Actions for assigned private requests
+async function acceptAssignedRequest(requestId) {
+  return acceptRequest(requestId)
+}
+
+async function declineAssignedRequest(requestId) {
+  return rejectRequest(requestId)
+}
+
 async function rejectRequest(requestId) {
   actionLoading.value = true
   try {
-    await axiosInstance.post(`/requests/${requestId}/update`, {
-      status: 'REJECTED'
-    })
+    await axiosInstance.post(`/requests/${requestId}/decline`)
     toast.add({
       severity: 'success',
       summary: 'Success',
-      detail: 'Request rejected successfully',
+      detail: 'Declined private request',
       life: 3000
     })
     fetchRequests()
@@ -1919,7 +1946,7 @@ async function rejectRequest(requestId) {
     toast.add({
       severity: 'error',
       summary: 'Error',
-      detail: err.response?.data?.message || 'Failed to reject request',
+      detail: err.response?.data?.message || 'Failed to decline request',
       life: 3000
     })
   } finally {
@@ -2168,6 +2195,7 @@ watch(() => route.path, async (newPath, oldPath) => {
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  overflow-x: auto;
 }
 
 .table-wrapper {
@@ -2176,14 +2204,15 @@ watch(() => route.path, async (newPath, oldPath) => {
 
 .requests-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 0;
   font-size: 0.8rem;
   table-layout: fixed;
 }
 
 .table-header {
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 0.8rem;
+  padding: 1rem 1.2rem;
   text-align: left;
   font-weight: 600;
   color: #374151;
@@ -2214,7 +2243,7 @@ watch(() => route.path, async (newPath, oldPath) => {
 }
 
 .requests-table td {
-  padding: 0.8rem;
+  padding: 1rem 1.2rem;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
   transition: all 0.2s ease;
@@ -2323,14 +2352,19 @@ watch(() => route.path, async (newPath, oldPath) => {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.8rem;
   border-radius: 9999px;
   font-size: 0.7rem;
   font-weight: 600;
   transition: all 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  height: 28px;
+  height: auto;
+  min-height: 28px;
   justify-content: center;
+  white-space: normal;
+  min-width: 80px;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .status-icon {
@@ -2368,6 +2402,14 @@ watch(() => route.path, async (newPath, oldPath) => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.status-cell, .visibility-cell, .actions-cell {
+  text-align: center;
+  vertical-align: middle;
+  min-width: 120px;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
 .actions-wrapper {
@@ -2562,10 +2604,14 @@ watch(() => route.path, async (newPath, oldPath) => {
   font-size: 0.7rem;
   font-weight: 500;
   font-style: italic;
-  height: 28px;
+  height: auto;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .status-message.cancelled {
@@ -2578,6 +2624,12 @@ watch(() => route.path, async (newPath, oldPath) => {
   background: #f0fdf4;
   color: #16a34a;
   border: 1px solid #bbf7d0;
+}
+
+.status-message.incompleted {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
 }
 
 .status-message.rejected {
@@ -2651,7 +2703,7 @@ watch(() => route.path, async (newPath, oldPath) => {
 }
 
 .visibility-badge {
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.8rem;
   border-radius: 9999px;
   font-size: 0.7rem;
   font-weight: 500;
@@ -2659,8 +2711,13 @@ watch(() => route.path, async (newPath, oldPath) => {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  height: 28px;
+  height: auto;
+  min-height: 28px;
   justify-content: center;
+  white-space: normal;
+  min-width: 80px;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .visibility-public {

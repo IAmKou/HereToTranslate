@@ -436,16 +436,9 @@
                 <button
                   v-if="request && userId !== null && (request.requester?.id === userId || request.assignee?.id === userId) && ['APPROVED','WAITING_APPROVAL','EXTENSION_REQUESTED','EXTENSION_APPROVED'].includes(request.status)"
                   class="action-btn danger"
-                  @click="openProjectCancelDialog"
+                  @click="cancelProject"
                 >
-                  <span class="btn-icon">✕</span> Request Project Cancellation
-                </button>
-                <button
-                  v-if="canRespondCancellation && pendingCancellationId !== null"
-                  class="action-btn danger"
-                  @click="openRespondDialog"
-                >
-                  <span class="btn-icon">⚠</span> Respond to Cancellation
+                  <span class="btn-icon">✕</span> Cancel Project
                 </button>
                 <button
                   v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
@@ -489,18 +482,7 @@
       @close="showCancelDialog = false"
       @cancelled="onRequestCancelled"
     />
-    <ProjectCancellationDialog
-      v-if="showProjectCancelDialog && request"
-      :request-id="request.id"
-      @close="showProjectCancelDialog = false"
-      @completed="onProjectCancellationRequested"
-    />
-    <CancellationRespondDialog
-      v-if="showRespondDialog && pendingCancellationId !== null"
-      :cancellation-id="pendingCancellationId"
-      @close="showRespondDialog = false"
-      @completed="onCancellationResponded"
-    />
+
 
     <!-- Register Confirmation Modal -->
     <div v-if="showRegisterConfirmDialog" class="modal-overlay">
@@ -529,6 +511,37 @@
         </div>
       </div>
     </div>
+
+    <!-- Cancel Project Confirmation Modal -->
+    <div v-if="showCancelProjectDialog" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Confirm Project Cancellation</h3>
+          <button class="modal-close" @click="showCancelProjectDialog = false">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-message">
+            <i class="pi pi-exclamation-triangle"></i>
+            <p>Are you sure you want to cancel this project?</p>
+            <p class="warning-detail">This action cannot be undone and will terminate the translation project.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showCancelProjectDialog = false">
+            Cancel
+          </button>
+          <button
+            class="btn-danger"
+            @click="confirmCancelProject"
+          >
+            <i class="pi pi-times"></i>
+            Confirm Cancellation
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -545,8 +558,7 @@ import axiosInstance from '../api';
 import { authService } from '../services/auth.service';
 import RequestEditView from './RequestEditView.vue'
 import CancelRequestDialog from '../components/CancelRequestDialog.vue'
-import ProjectCancellationDialog from '../components/ProjectCancellationDialog.vue'
-import CancellationRespondDialog from '../components/CancellationRespondDialog.vue'
+
 import { nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { getEnvironmentConfig } from '../utils/environment';
@@ -630,10 +642,8 @@ const loading = ref<boolean>(true);
 const userId = ref<number | null>(null);
 const showEdit = ref(false)
 const showCancelDialog = ref(false);
-const showProjectCancelDialog = ref(false)
-const showRespondDialog = ref(false)
 const showRegisterConfirmDialog = ref(false);
-const pendingCancellationId = ref<number | null>(null)
+const showCancelProjectDialog = ref(false);
 const registerLoading = ref<boolean>(false);
 const toast = useToast();
 
@@ -1003,41 +1013,31 @@ function onRequestCancelled() {
   }, 1500);
 }
 
-function openProjectCancelDialog() {
-  showProjectCancelDialog.value = true
+function cancelProject() {
+  showCancelProjectDialog.value = true;
 }
 
-function onProjectCancellationRequested() {
-  toast.add({ severity: 'success', summary: 'Submitted', detail: 'Cancellation request submitted.', life: 3000 })
-  fetchRequestDetail()
-}
+async function confirmCancelProject() {
+  if (!request.value?.id) return;
 
-const canRespondCancellation = computed(() => {
-  if (!request.value || userId.value == null) return false
-  if (request.value.status !== 'CANCELLATION_PENDING') return false
-  const isParty = request.value.requester?.id === userId.value || request.value.assignee?.id === userId.value
-  return !!isParty
-})
-
-async function loadPendingCancellation() {
-  if (!request.value?.id) return
   try {
-    const res = await axiosInstance.get(`/project-cancellation/history/${request.value.id}`)
-    const pending = (res.data || []).find((c: any) => c.status === 'PENDING')
-    pendingCancellationId.value = pending ? Number(pending.id) : null
-  } catch (e) {
-    pendingCancellationId.value = null
+    await axiosInstance.post(`/requests/${request.value.id}/cancel-project`);
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Project has been cancelled successfully!',
+      life: 3000
+    });
+    showCancelProjectDialog.value = false;
+    await fetchRequestDetail();
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error?.response?.data?.message || 'Unable to cancel project',
+      life: 3000
+    });
   }
-}
-
-function openRespondDialog() {
-  showRespondDialog.value = true
-}
-
-function onCancellationResponded() {
-  toast.add({ severity: 'success', summary: 'Updated', detail: 'Cancellation response submitted.', life: 3000 })
-  showRespondDialog.value = false
-  fetchRequestDetail()
 }
 
 function approveRequest() {
@@ -1081,9 +1081,6 @@ onMounted(async () => {
   const user = await authService.getCurrentUser();
   userId.value = user?.id ?? null;
   await fetchRequestDetail();
-  if (request.value?.status === 'CANCELLATION_PENDING') {
-    await loadPendingCancellation()
-  }
 });
 
 
@@ -2126,6 +2123,51 @@ body, .request-detail-wrapper {
   background: #9ca3af;
   border-color: #9ca3af;
   cursor: not-allowed;
+}
+
+.btn-danger {
+  background: #dc2626;
+  border: 1px solid #dc2626;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.warning-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.warning-message i {
+  font-size: 48px;
+  color: #f59e0b;
+}
+
+.warning-message p {
+  margin: 0;
+  font-size: 16px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.warning-detail {
+  font-size: 14px !important;
+  color: #6b7280 !important;
+  font-weight: 400 !important;
 }
 
 @media (max-width: 1100px) {

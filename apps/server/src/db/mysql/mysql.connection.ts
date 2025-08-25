@@ -136,30 +136,30 @@ export class MySqlConnection {
         this.logger.warn('Inline migration for isSyncedFromRequest skipped or failed', e as any);
       }
 
-      // Ensure `project.isSyncedFromRequest` exists and is backfilled
+      // Ensure `project.isSyncedFromRequest` exists (works on MySQL 5.7/8.0)
       try {
-        // Check if column exists first
-        const columns = await this.dataSource.query(
-          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project' AND COLUMN_NAME = 'isSyncedFromRequest'"
-        );
-
-        if (columns.length === 0) {
-          // Column doesn't exist, add it
+        // Try fast-path on newer MySQL
+        try {
           await this.dataSource.query(
-            'ALTER TABLE `project` ADD COLUMN `isSyncedFromRequest` TINYINT(1) NOT NULL DEFAULT 0'
+            'ALTER TABLE `project` ADD COLUMN IF NOT EXISTS `isSyncedFromRequest` TINYINT(1) NOT NULL DEFAULT 0'
           );
-          this.logger.log('Added project.isSyncedFromRequest column');
-        } else {
-          this.logger.log('project.isSyncedFromRequest column already exists');
+          this.logger.log('Ensured project.isSyncedFromRequest column exists (IF NOT EXISTS)');
+        } catch (innerErr) {
+          // Fallback for MySQL versions that do not support IF NOT EXISTS
+          const columns = await this.dataSource.query(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project' AND COLUMN_NAME = 'isSyncedFromRequest'"
+          );
+          if (columns.length === 0) {
+            await this.dataSource.query(
+              'ALTER TABLE `project` ADD COLUMN `isSyncedFromRequest` TINYINT(1) NOT NULL DEFAULT 0'
+            );
+            this.logger.log('Added project.isSyncedFromRequest column (fallback path)');
+          } else {
+            this.logger.log('project.isSyncedFromRequest column already exists (fallback path)');
+          }
         }
-
-        // Backfill: projects created from requests should have isSyncedFromRequest = 1
-        // This is a placeholder - you may need to adjust the logic based on your business rules
-        // For example, if you have a requestId field in project table:
-        // await this.dataSource.query('UPDATE `project` SET `isSyncedFromRequest` = 1 WHERE `requestId` IS NOT NULL');
       } catch (e) {
-        this.logger.error('Inline migration for project.isSyncedFromRequest failed:', e);
-        throw e; // Re-throw to prevent connection from proceeding without the column
+        this.logger.warn('Inline migration for project.isSyncedFromRequest skipped or failed', e as any);
       }
 
       // Ensure `requests.rating` exists for star rating functionality

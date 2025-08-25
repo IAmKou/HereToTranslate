@@ -1048,6 +1048,7 @@ function rejectRequest() {
 }
 
 async function registerForRequest() {
+  // Show confirmation modal instead of directly registering
   showRegisterConfirmDialog.value = true;
 }
 

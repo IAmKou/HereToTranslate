@@ -38,11 +38,19 @@ export class AiChatService {
       this.openaiKey = openaiKey;
       this.pineconeKey = pineconeKey;
       this.pineconeIndex = pineconeIndex;
-      this.pineconeHost = pineconeHost;
+      // Ensure the host doesn't have trailing slashes to prevent double slash issues
+      this.pineconeHost = pineconeHost.replace(/\/+$/, '');
 
       this.logger.log('✅ AI service initialized with OpenAI and Pinecone');
+      this.logger.log(`📊 Configuration: index=${pineconeIndex}, host=${pineconeHost}`);
+      
+      // Test Pinecone connection asynchronously
+      this.testPineconeConnection().catch(error => {
+        this.logger.error('❌ Initial Pinecone connection test failed:', error);
+      });
     } else {
       this.logger.warn('⚠️ Missing environment variables for OpenAI or Pinecone. Running in simple mode.');
+      this.logger.warn(`🔍 Environment check: openaiKey=${!!openaiKey}, pineconeKey=${!!pineconeKey}, pineconeIndex=${!!pineconeIndex}, pineconeHost=${!!pineconeHost}`);
     }
   }
 
@@ -65,6 +73,11 @@ export class AiChatService {
    * 🔹 Ingest docs.json into Pinecone with content in metadata
    */
   async ingestDocs(): Promise<{ totalChunks: number }> {
+    // Check if AI services are available
+    if (!this.openai || !this.pinecone || !this.pineconeIndex || !this.pineconeHost || !this.openaiKey) {
+      throw new Error('AI services not properly initialized. Check environment variables.');
+    }
+
     const raw = fs.readFileSync('apps/server/src/util/docs.json', 'utf-8');
     const docs = JSON.parse(raw) as {
       id: string;
@@ -117,15 +130,20 @@ export class AiChatService {
       return this.getSimpleResponse(question);
     }
 
-    try {
-      const indexName = process.env.PINECONE_INDEX!;
-      const indexHost = process.env.PINECONE_INDEX_HOST!;
-      const openaiKey = process.env.OPENAI_API_KEY!;
+    // Validate that all required properties are set
+    if (!this.pineconeIndex || !this.pineconeHost || !this.openaiKey) {
+      this.logger.warn('Missing required AI service configuration');
+      return this.getSimpleResponse(question);
+    }
 
-      const index = this.pinecone.Index(indexName, indexHost);
+    try {
+      // Use class properties instead of process.env
+      this.logger.log(`🔍 Connecting to Pinecone index: ${this.pineconeIndex} at ${this.pineconeHost}`);
+      
+      const index = this.pinecone.Index(this.pineconeIndex, this.pineconeHost);
 
       const embeddings = new OpenAIEmbeddings({
-        apiKey: openaiKey,
+        apiKey: this.openaiKey,
         modelName: 'text-embedding-ada-002',
       });
       const queryEmbedding = await embeddings.embedQuery(question);
@@ -164,7 +182,34 @@ export class AiChatService {
       return completion.choices[0].message.content ?? '';
     } catch (error) {
       this.logger.error('Error in AI service:', error);
+      
+      // Log additional details for Pinecone errors
+      if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message.includes('Pinecone')) {
+        this.logger.error(`Pinecone configuration: index=${this.pineconeIndex}, host=${this.pineconeHost}`);
+        this.logger.error(`Error details: ${error.message}`);
+      }
+      
       return this.getSimpleResponse(question);
+    }
+  }
+
+  /**
+   * 🔹 Test Pinecone connection
+   */
+  async testPineconeConnection(): Promise<boolean> {
+    if (!this.pinecone || !this.pineconeIndex || !this.pineconeHost) {
+      return false;
+    }
+
+    try {
+      const index = this.pinecone.Index(this.pineconeIndex, this.pineconeHost);
+      // Try to get index stats to test connection
+      await index.describeIndexStats();
+      this.logger.log('✅ Pinecone connection test successful');
+      return true;
+    } catch (error) {
+      this.logger.error('❌ Pinecone connection test failed:', error);
+      return false;
     }
   }
 

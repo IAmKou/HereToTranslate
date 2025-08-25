@@ -10,12 +10,12 @@ export class ProjectRoleEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => require('./project.entity').ProjectEntity, project => project.projectRoles,{
+  @ManyToOne(() => require('./project.entity').ProjectEntity, (project: ProjectEntity) => project.projectRoles,{
     onDelete: 'CASCADE',
   })
   project: ProjectEntity;
 
-  @ManyToMany(() => require('./user.entity').UserEntity, user => user.projectRoles, { cascade: true })
+  @ManyToMany(() => require('./user.entity').UserEntity, (user: UserEntity) => user.projectRoles, { cascade: true })
   @JoinTable({
     name: 'user_project_roles',
     joinColumn: { name: 'roleId', referencedColumnName: 'id' },
@@ -34,7 +34,7 @@ export class ProjectRoleEntity {
   })
   permissionFlags: Permission;
 
-  @ManyToMany(() => require('./branch.entity').BranchEntity, branch => branch.visibleToRoles)
+  @ManyToMany(() => require('./branch.entity').BranchEntity, (branch: BranchEntity) => branch.visibleToRoles)
   branch: BranchEntity;
 
   @CreateDateColumn()

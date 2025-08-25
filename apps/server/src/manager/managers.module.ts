@@ -34,6 +34,7 @@ import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
 import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '#LocalProject/Auth/auth.module';
 import { CategoryManagerService } from './service/category-manager.service';
 import { RequestManagerService } from './service/request-manager.service';
@@ -97,6 +98,7 @@ import { WorkflowController } from './controller/workflow.controller';
 import { ScannerCronController } from './controller/scanner-cron.controller';
 import { DeadlineCheckerController } from './controller/deadline-checker.controller';
 import { SubtaskManagerService } from './service/subtask-manager.service';
+import { AsposeService } from './service/aspose.service';
 import { SubtaskController } from './controller/subtask.controller';
 import { TaskCommentManagerService } from './service/task-comment-manager.service';
 import { TaskCommentController } from './controller/task-comment.controller';
@@ -105,13 +107,12 @@ import { ExportManagerService } from '#LocalProject/Managers/service/export-mana
 import { ExportController } from '#LocalProject/Managers/controller/export.controller';
 import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.processor';
 import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-config-checker';
-import { AsposePDFBridge } from '../util/extensions/aspose-pdf-bridge';
-import { AsposeDocxBridge } from '../util/extensions/aspose-docx-bridge';
 import { FeeController } from './controller/fee.controller';
 
 @Global()
 @Module({
   imports: [
+    ConfigModule,
     AuthModule,
     MongoModule,
     TypeOrmModule.forFeature([
@@ -195,8 +196,7 @@ import { FeeController } from './controller/fee.controller';
     ExportJobProcessor,
     BackgroundExtractService,
     PaypalConfigChecker,
-    AsposePDFBridge,
-    AsposeDocxBridge,
+    AsposeService,
   ],
   exports: [
     CategoryManagerService,
@@ -235,8 +235,7 @@ import { FeeController } from './controller/fee.controller';
     ExportManagerService,
     BackgroundExtractService,
     PaypalConfigChecker,
-    AsposePDFBridge,
-    AsposeDocxBridge,
+    AsposeService,
   ],
   controllers: [
     CategoryController,

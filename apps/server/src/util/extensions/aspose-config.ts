@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+
 export interface AsposeConfig {
   clientId: string;
   clientSecret: string;
@@ -18,15 +20,29 @@ export interface AsposeServiceStatus {
   };
 }
 
-/**
- * Get Aspose configuration from environment variables
- * @returns AsposeConfig object with credentials and settings
- */
-export function getAsposeConfig(): AsposeConfig {
+
+export function getAsposeConfig(configService: ConfigService): AsposeConfig {
   const config: AsposeConfig = {
-    clientId: process.env.ASPOSE_CLIENT_ID || 'aa2cf203-b24d-4d4e-9be7-e765867d493f',
-    clientSecret: process.env.ASPOSE_CLIENT_SECRET || '3c8165a61a7ebb4686e4b1de692a8857',
-    baseUrl: process.env.ASPOSE_BASE_URL || 'https://api.aspose.cloud',
+    clientId: configService.get<string>('ASPOSE_CLIENT_ID') || '',
+    clientSecret: configService.get<string>('ASPOSE_CLIENT_SECRET') || '',
+    baseUrl: configService.get<string>('ASPOSE_BASE_URL'),
+    timeout: configService.get<number>('ASPOSE_TIMEOUT') || 30000
+  };
+
+  // Validate required fields
+  if (!config.clientId || !config.clientSecret) {
+    throw new Error('Missing required Aspose Cloud API credentials. Set ASPOSE_CLIENT_ID and ASPOSE_CLIENT_SECRET environment variables.');
+  }
+
+  return config;
+}
+
+
+export function getAsposeConfigFromEnv(): AsposeConfig {
+  const config: AsposeConfig = {
+    clientId: process.env.ASPOSE_CLIENT_ID || '',
+    clientSecret: process.env.ASPOSE_CLIENT_SECRET || '',
+    baseUrl: process.env.ASPOSE_BASE_URL,
     timeout: parseInt(process.env.ASPOSE_TIMEOUT || '30000', 10)
   };
 
@@ -38,43 +54,70 @@ export function getAsposeConfig(): AsposeConfig {
   return config;
 }
 
-/**
- * Validate Aspose configuration
- * @param config - Aspose configuration object
- * @returns boolean - true if configuration is valid
- */
 export function validateAsposeConfig(config: AsposeConfig): boolean {
   return !!(config.clientId && config.clientSecret);
 }
 
-/**
- * Check if Aspose is properly configured for Cloud API
- * @returns boolean - true if Cloud API is configured
- */
-export function isAsposeCloudConfigured(): boolean {
+
+export function isAsposeCloudConfigured(configService: ConfigService): boolean {
   try {
-    const config = getAsposeConfig();
+    const config = getAsposeConfig(configService);
     return validateAsposeConfig(config);
   } catch {
     return false;
   }
 }
 
-/**
- * Get configuration status for debugging
- * @returns Object with configuration status information
- */
-export function getAsposeConfigStatus(): {
+
+export function isAsposeCloudConfiguredFromEnv(): boolean {
+  try {
+    const config = getAsposeConfigFromEnv();
+    return validateAsposeConfig(config);
+  } catch {
+    return false;
+  }
+}
+
+export function getAsposeConfigStatus(configService: ConfigService): {
   hasCredentials: boolean;
   isCloudConfigured: boolean;
   missingFields: string[];
 } {
   const missingFields: string[] = [];
-  
+
+  if (!configService.get<string>('ASPOSE_CLIENT_ID')) {
+    missingFields.push('ASPOSE_CLIENT_ID');
+  }
+
+  if (!configService.get<string>('ASPOSE_CLIENT_SECRET')) {
+    missingFields.push('ASPOSE_CLIENT_SECRET');
+  }
+
+  const hasCredentials = !!(configService.get<string>('ASPOSE_CLIENT_ID') && configService.get<string>('ASPOSE_CLIENT_SECRET'));
+  const isCloudConfigured = hasCredentials;
+
+  return {
+    hasCredentials,
+    isCloudConfigured,
+    missingFields
+  };
+}
+
+/**
+ * Get configuration status for debugging using process.env
+ * @returns Object with configuration status information
+ */
+export function getAsposeConfigStatusFromEnv(): {
+  hasCredentials: boolean;
+  isCloudConfigured: boolean;
+  missingFields: string[];
+} {
+  const missingFields: string[] = [];
+
   if (!process.env.ASPOSE_CLIENT_ID) {
     missingFields.push('ASPOSE_CLIENT_ID');
   }
-  
+
   if (!process.env.ASPOSE_CLIENT_SECRET) {
     missingFields.push('ASPOSE_CLIENT_SECRET');
   }
@@ -88,6 +131,7 @@ export function getAsposeConfigStatus(): {
     missingFields
   };
 }
+
 /**
  * Error messages for common Aspose configuration issues
  */
@@ -100,37 +144,32 @@ export const ASPOSE_ERROR_MESSAGES = {
   SUBSCRIPTION_EXPIRED: 'Aspose Cloud subscription has expired. Please renew your subscription.'
 };
 
-/**
- * Get helpful error message based on error type
- * @param error - Error object or string
- * @returns string - Helpful error message with resolution steps
- */
 export function getAsposeErrorMessage(error: any): string {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  
+
   if (errorMessage.includes('Missing environment variables')) {
     return ASPOSE_ERROR_MESSAGES.MISSING_CREDENTIALS;
   }
-  
+
   if (errorMessage.includes('subscription')) {
     return ASPOSE_ERROR_MESSAGES.SUBSCRIPTION_EXPIRED;
   }
-  
+
   if (errorMessage.includes('credentials')) {
     return ASPOSE_ERROR_MESSAGES.INVALID_CREDENTIALS;
   }
-  
+
   if (errorMessage.includes('network') || errorMessage.includes('connection')) {
     return ASPOSE_ERROR_MESSAGES.NETWORK_ERROR;
   }
-  
+
   if (errorMessage.includes('Cannot find module')) {
     return ASPOSE_ERROR_MESSAGES.PACKAGE_NOT_INSTALLED;
   }
-  
+
   if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
     return ASPOSE_ERROR_MESSAGES.QUOTA_EXCEEDED;
   }
-  
+
   return `Aspose error: ${errorMessage}`;
 }

@@ -12,8 +12,8 @@ import FormData from 'form-data';
 import * as path from 'path';
 import mammoth from 'mammoth';
 import * as fs from 'fs';
-import { AsposePDFBridge } from '../../util/extensions/aspose-pdf-bridge';
-import { extractPdfTextWithAsposePDF } from '../../util/extensions/pdf-utils.extension';
+import { AsposeService } from './aspose.service';
+
 
 // Dynamic import for pdfjs-dist to avoid import issues
 let pdfjs: any = null;
@@ -576,7 +576,7 @@ export class ManifestService {
   constructor(
     @InjectModel(TranslationString.name)
     private readonly translationModel: Model<TranslationStringDocument>,
-    private readonly asposePdfBridge: AsposePDFBridge
+    private readonly asposeService: AsposeService,
   ) {}
 
   async generateManifest(file: FileEntity): Promise<void> {
@@ -619,71 +619,42 @@ export class ManifestService {
 
         let result: any = null;
         try {
-          // 1. Try Aspose PDF Cloud API first for better accuracy and layout preservation
-          console.log('[PDF] Step 1: Attempting to parse with Aspose PDF Cloud API...');
-          result = await extractPdfTextWithAsposePDF(file.fileContent, this.asposePdfBridge);
+          // Use PDF.js directly as primary method
+          console.log('[PDF] Step 1: Parsing with pdfjs-dist...');
+          result = await parsePdfWithFonts(file.fileContent);
           items = result.items;
-          console.log('[PDF] Aspose PDF Cloud API result - items count:', items?.length || 0);
-          console.log('[PDF] Aspose PDF Cloud API result - text length:', result.text?.length || 0);
+          console.log('[PDF] pdfjs-dist result - items count:', items?.length || 0);
+          console.log('[PDF] pdfjs-dist result - text length:', result.text?.length || 0);
 
+          // If items exist but look garbled (encoding issue), prefer OCR fallback
           if (items && items.length > 0) {
-            console.log('[PDF] SUCCESS: Parsed with Aspose PDF Cloud API, found', items.length, 'items');
-            console.log('[PDF] Sample items:', items.slice(0, 3).map((item: any) => ({
-              text: item.text.substring(0, 50),
-              font: item.font,
-              page: item.page
-            })));
-          } else {
-            console.log('[PDF] WARNING: No text items found with Aspose PDF Cloud API, falling back to pdfjs-dist.');
-            throw new Error("No text found with Aspose PDF Cloud API, falling back to pdfjs-dist.");
-          }
-        } catch (err: any) {
-          console.error('[PDF] ERROR: Aspose PDF Cloud API failed:', err?.message || err);
-          console.error('[PDF] Aspose PDF Cloud API error stack:', err?.stack);
-
-          // 2. Fallback to pdfjs-dist
-          try {
-            console.log('[PDF] Step 2: Falling back to pdfjs-dist...');
-            result = await parsePdfWithFonts(file.fileContent);
-            items = result.items;
-            console.log('[PDF] pdfjs-dist result - items count:', items?.length || 0);
-            console.log('[PDF] pdfjs-dist result - text length:', result.text?.length || 0);
-
-            // If items exist but look garbled (encoding issue), prefer OCR fallback
-            if (items && items.length > 0) {
-              const sample = items.slice(0, Math.min(200, items.length)).map((i: any) => i.text).join(' ');
-              const readable = sample.replace(/[^a-zA-ZÀ-ỹ0-9\s.,!?;:()\[\]{}"'`~@#$%^&*+=|\\/<>-]/g, '');
-              const ratio = readable.length / Math.max(1, sample.length);
-              const suspicious = /[%�]{3,}|\?{3,}/.test(sample);
-              console.log(`[PDF] pdfjs-dist readability ratio: ${ratio.toFixed(2)}, suspicious: ${suspicious}`);
-              if (ratio < 0.35 || suspicious) {
-                console.warn('[PDF] Detected low-quality text extraction from pdfjs (encoding issue). Falling back to OCR...');
-                // Force OCR fallback
-                try {
-                  text = await extractTextWithOcrSpace(file.fileContent, apiKey);
-                  usedOcr = true;
-                  console.log('[PDF] OCR result - text length:', text?.length || 0);
-                  console.log('[PDF] OCR result - first 200 chars:', text ? text.substring(0, 200) : '[EMPTY]');
-                  // Clear items so the OCR path below will be used
-                  items = [] as any[];
-                } catch (ocrError: any) {
-                  console.error('[PDF] ERROR: OCR failed after low-quality pdfjs extraction:', ocrError?.message || ocrError);
-                  // Keep pdfjs items as last resort
-                }
-              } else {
-                console.log('[PDF] SUCCESS: Parsed with pdfjs-dist, found', items.length, 'items');
+            const sample = items.slice(0, Math.min(200, items.length)).map((i: any) => i.text).join(' ');
+            const readable = sample.replace(/[^a-zA-ZÀ-ỹ0-9\s.,!?;:()[\]{}"'`~@#$%^&*+=|\\/<>-]/g, '');
+            const ratio = readable.length / Math.max(1, sample.length);
+            const suspicious = /[%�]{3,}|\?{3,}/.test(sample);
+            console.log(`[PDF] pdfjs-dist readability ratio: ${ratio.toFixed(2)}, suspicious: ${suspicious}`);
+            if (ratio < 0.35 || suspicious) {
+              console.warn('[PDF] Detected low-quality text extraction from pdfjs (encoding issue). Falling back to OCR...');
+              // Force OCR fallback
+              try {
+                text = await extractTextWithOcrSpace(file.fileContent, apiKey);
+                usedOcr = true;
+                console.log('[PDF] OCR result - text length:', text?.length || 0);
+                console.log('[PDF] OCR result - first 200 chars:', text ? text.substring(0, 200) : '[EMPTY]');
+                // Clear items so the OCR path below will be used
+                items = [] as any[];
+              } catch (ocrError: any) {
+                console.error('[PDF] ERROR: OCR failed after low-quality pdfjs extraction:', ocrError?.message || ocrError);
+                // Keep pdfjs items as last resort
               }
             } else {
-              console.warn('[PDF] WARNING: No text items found with pdfjs-dist, falling back to OCR.');
-              throw new Error("No text found with pdfjs-dist, falling back to OCR.");
+              console.log('[PDF] SUCCESS: Parsed with pdfjs-dist, found', items.length, 'items');
             }
-          } catch (pdfjsError: any) {
-            console.error('[PDF] ERROR: pdfjs-dist failed:', pdfjsError?.message || pdfjsError);
-            console.error('[PDF] pdfjs-dist error stack:', pdfjsError?.stack);
-
-            // 3. Final fallback to OCR.space
+          } else {
+            console.warn('[PDF] WARNING: No text items found with pdfjs-dist, falling back to OCR.');
+            // Fallback to OCR.space
             try {
-              console.log('[PDF] Step 3: Falling back to OCR.space...');
+              console.log('[PDF] Step 2: Falling back to OCR.space...');
               text = await extractTextWithOcrSpace(file.fileContent, apiKey);
               usedOcr = true;
               console.log('[PDF] OCR result - text length:', text?.length || 0);
@@ -695,7 +666,12 @@ export class ManifestService {
             }
           }
         }
-
+        catch(error: any) {
+          console.error('[PDF] ERROR: Failed to extract text from PDF:', error?.message || error);
+          console.error('[PDF] Error stack:', error?.stack);
+          throw new Error('Failed to extract text from PDF: ' + (error?.message || error));
+        }
+        
         if (items && items.length > 0) {
           // Group các đoạn text lại thành dòng
           console.log('[PDF] Step 3: Grouping text items into lines...');

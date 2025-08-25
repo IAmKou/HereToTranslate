@@ -1,4 +1,5 @@
 import { logger } from 'nx/src/utils/logger';
+import { ConfigService } from '@nestjs/config';
 
 export class AsposeDocxBridge {
   private _isAvailable = false;
@@ -8,16 +9,40 @@ export class AsposeDocxBridge {
   private isLicensedVersion = false;
   private clientId: string | null = null;
   private clientSecret: string | null = null;
+  private configService?: ConfigService;
 
-  constructor() {
-    // Try to load credentials from environment variables automatically
-    this.loadCredentialsFromEnv();
+  constructor(configService?: ConfigService) {
+    this.configService = configService;
+    // Try to load credentials from ConfigService or environment variables
+    this.loadCredentialsFromConfig();
+    
+          // Automatically try to enable the service if credentials are available
+      if (this.hasCredentials()) {
+        // Use setTimeout to avoid constructor async issues
+        setTimeout(() => {
+          this.enableAspose().catch(error => {
+            logger.warn(`[Aspose.Words] Auto-enable failed: ${error instanceof Error ? error.message : String(error)}`);
+          });
+        }, 0);
+      }
   }
 
   /**
-   * Load credentials from environment variables
+   * Load credentials from ConfigService or environment variables
    */
-  private loadCredentialsFromEnv(): void {
+  private loadCredentialsFromConfig(): void {
+    // Try ConfigService first if available
+    if (this.configService) {
+      this.clientId = this.configService.get<string>('ASPOSE_CLIENT_ID') || null;
+      this.clientSecret = this.configService.get<string>('ASPOSE_CLIENT_SECRET') || null;
+      
+      if (this.clientId && this.clientSecret) {
+        logger.log('[Aspose.Words] Credentials loaded from ConfigService');
+        return;
+      }
+    }
+    
+    // Fallback to environment variables
     const { ASPOSE_CLIENT_ID, ASPOSE_CLIENT_SECRET } = process.env;
     
     if (ASPOSE_CLIENT_ID && ASPOSE_CLIENT_SECRET) {
@@ -25,13 +50,13 @@ export class AsposeDocxBridge {
       this.clientSecret = ASPOSE_CLIENT_SECRET;
       logger.log('[Aspose.Words] Credentials loaded from environment variables');
     } else {
-      // Use default credentials from config
+      // Use default credentials from config utility
       try {
-        const { getAsposeConfig } = require('./aspose-config');
-        const config = getAsposeConfig();
+        const { getAsposeConfigFromEnv } = require('./aspose-config');
+        const config = getAsposeConfigFromEnv();
         this.clientId = config.clientId;
         this.clientSecret = config.clientSecret;
-        logger.log('[Aspose.Words] Credentials loaded from default config');
+        logger.log('[Aspose.Words] Credentials loaded from default config utility');
       } catch (error) {
         logger.warn('[Aspose.Words] No credentials available');
       }
@@ -43,6 +68,20 @@ export class AsposeDocxBridge {
    * @returns Promise<boolean> - true if credentials are set successfully
    */
   public async setCredentials(): Promise<boolean> {
+    // Try ConfigService first if available
+    if (this.configService) {
+      const clientId = this.configService.get<string>('ASPOSE_CLIENT_ID');
+      const clientSecret = this.configService.get<string>('ASPOSE_CLIENT_SECRET');
+      
+      if (clientId && clientSecret) {
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+        logger.log('[Aspose.Words] Cloud API credentials configured from ConfigService');
+        return await this.enableAspose();
+      }
+    }
+    
+    // Fallback to environment variables
     const { ASPOSE_CLIENT_ID, ASPOSE_CLIENT_SECRET } = process.env;
     
     if (!ASPOSE_CLIENT_ID || !ASPOSE_CLIENT_SECRET) {
@@ -53,7 +92,7 @@ export class AsposeDocxBridge {
     this.clientId = ASPOSE_CLIENT_ID;
     this.clientSecret = ASPOSE_CLIENT_SECRET;
     
-    logger.log('[Aspose.Words] Cloud API credentials configured successfully');
+    logger.log('[Aspose.Words] Cloud API credentials configured from environment variables');
     
     // Automatically enable Aspose after setting credentials
     return await this.enableAspose();
@@ -153,6 +192,18 @@ export class AsposeDocxBridge {
         this.clientSecret,
         'https://api.aspose.cloud'
       );
+      
+      // Test the connection to ensure credentials are valid
+      try {
+        const testResult = await this.wordsApi.getDocumentProperties({
+          name: 'test.docx',
+          folder: ''
+        });
+        logger.log('[Aspose.Words] Authentication test successful');
+      } catch (authError) {
+        logger.error(`[Aspose.Words] Authentication test failed: ${authError instanceof Error ? authError.message : String(authError)}`);
+        throw new Error('Invalid Aspose Cloud API credentials');
+      }
       
       logger.log('[Aspose.Words] Authentication configured successfully');
       logger.log('[Aspose.Words] Cloud API subscription active - no license key needed');
@@ -391,23 +442,124 @@ export class AsposeDocxBridge {
     return {
       available: this._isAvailable,
       initialized: this.isInitialized,
-      version: this._isAvailable ? 'Aspose.Words Cloud API' : undefined,
+      version: this._isAvailable ? 'Aspose.Words Cloud API v4.0' : undefined,
       isLicensedVersion: this.isLicensedVersion,
       hasCredentials: this.hasCredentials(),
       hasCloudSubscription: this.hasCloudSubscription(),
       instructions: !this.hasCredentials() ? 'Set ASPOSE_CLIENT_ID and ASPOSE_CLIENT_SECRET environment variables' :
                    !this._isAvailable ? 'Install asposewordscloud and implement processing logic' : 
                    !this.isLicensedVersion ? 'Check your Cloud API credentials and subscription' : 
-                   'Cloud API version - full features available',
+                   'Cloud API v4.0 - full features available',
       testMethod: 'Use testConnection() to verify setup and Cloud API credentials'
     };
+  }
+
+  /**
+   * Upload file to Aspose Cloud storage
+   */
+  public async uploadFileToStorage(fileName: string, buffer: Buffer, contentType?: string): Promise<void> {
+    try {
+      if (!this._isAvailable || !this.wordsApi) {
+        throw new Error('Aspose.Words is not available. Call enableAspose() first.');
+      }
+
+      // Get access token for storage operations
+      if (!this.clientId || !this.clientSecret) {
+        throw new Error('Missing Aspose Cloud API credentials');
+      }
+
+      // Get access token
+      const tokenResponse = await fetch('https://api.aspose.cloud/connect/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `grant_type=client_credentials&client_id=${this.clientId}&client_secret=${this.clientSecret}`
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error(`Failed to get access token: ${tokenResponse.status}`);
+      }
+
+      const tokenData = await tokenResponse.json() as { access_token: string };
+      const accessToken = tokenData.access_token;
+
+      const storageName = 'f87eef71-fe5d-45f6-8960-f28afebea66f'; 
+      const uploadResponse = await fetch(`https://api.aspose.cloud/v4.0/storage/file/temp/${fileName}?storageName=${storageName}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': contentType || 'application/octet-stream',
+          'x-aspose-client': 'Containerize.Swagger'
+        },
+        body: buffer
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed with status: ${uploadResponse.status}`);
+      }
+
+      logger.log(`[Aspose.Words] File ${fileName} uploaded successfully to storage: ${storageName}`);
+      logger.log(`[Aspose.Words] File size: ${buffer.length} bytes, Content-Type: ${contentType || 'application/octet-stream'}`);
+      
+    } catch (error) {
+      logger.error(`[Aspose.Words] Failed to upload file ${fileName} to storage: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a file exists in Aspose storage
+   */
+  async fileExists(fileName: string): Promise<boolean> {
+    try {
+      if (!this._isAvailable || !this.clientId || !this.clientSecret) {
+        return false;
+      }
+
+      // Get access token
+      const tokenResponse = await fetch('https://api.aspose.cloud/connect/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `grant_type=client_credentials&client_id=${this.clientId}&client_secret=${this.clientSecret}`
+      });
+
+      if (!tokenResponse.ok) {
+        return false;
+      }
+
+      const tokenData = await tokenResponse.json() as { access_token: string };
+      const accessToken = tokenData.access_token;
+      const storageName = 'f87eef71-fe5d-45f6-8960-f28afebea66f';
+
+      const response = await fetch(`https://api.aspose.cloud/v4.0/storage/exist?path=${fileName}&storageName=${storageName}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'x-aspose-client': 'Containerize.Swagger'
+        }
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json() as { exists?: boolean };
+      return data && data.exists === true;
+    } catch (error) {
+      logger.warn(`[Aspose.Words] Failed to check if file exists: ${fileName} - ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
   }
 }
 
 /**
  * Create a new AsposeDocxBridge instance
+ * @param configService - Optional ConfigService instance for environment variable access
  * @returns AsposeDocxBridge - New bridge instance
  */
-export function createAsposeBridge(): AsposeDocxBridge {
-  return new AsposeDocxBridge();
+export function createAsposeBridge(configService?: ConfigService): AsposeDocxBridge {
+  return new AsposeDocxBridge(configService);
 }

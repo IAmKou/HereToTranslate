@@ -25,11 +25,9 @@ jest.mock('../service/github-manager.service');
 jest.mock('../service/manifest.service');
 jest.mock('../service/activity-manager.service');
 
-// Mock PDF.js
-jest.mock('pdfjs-dist', () => ({
-  GlobalWorkerOptions: { workerSrc: false },
-  getDocument: jest.fn(),
-}));
+// Mock Aspose bridges
+jest.mock('../../util/extensions/aspose-pdf-bridge');
+jest.mock('../../util/extensions/aspose-docx-bridge');
 
 // Mock mammoth
 jest.mock('mammoth', () => ({
@@ -50,6 +48,8 @@ describe('FileService', () => {
   let githubService: any;
   let manifestService: any;
   let activityManagerService: any;
+  let asposePDFBridge: any;
+  let asposeDocxBridge: any;
 
   const mockUser = { id: 1n, username: 'testuser', fullName: 'Test User', email: 'test@example.com' };
   const mockProject = { id: 1n, name: 'Test Project', members: [mockUser], createdBy: mockUser };
@@ -99,6 +99,18 @@ describe('FileService', () => {
       logFileDelete: jest.fn(),
     };
 
+    asposePDFBridge = {
+      isAvailable: jest.fn().mockReturnValue(true),
+      uploadFileToStorage: jest.fn().mockResolvedValue(undefined),
+      getServiceInfo: jest.fn().mockReturnValue({ available: true, initialized: true }),
+    };
+
+    asposeDocxBridge = {
+      isAvailable: jest.fn().mockReturnValue(true),
+      uploadFileToStorage: jest.fn().mockResolvedValue(undefined),
+      getServiceInfo: jest.fn().mockReturnValue({ available: true, initialized: true }),
+    };
+
     service = new FileService(
       fileRepository as any,
       translationModel as any,
@@ -107,6 +119,8 @@ describe('FileService', () => {
       manifestService,
       commitRepository as any,
       activityManagerService,
+      asposePDFBridge,
+      asposeDocxBridge,
     );
   });
 
@@ -663,6 +677,73 @@ describe('FileService', () => {
 
       await expect(service.getFileMetadata('999'))
         .rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('Aspose Storage', () => {
+    it('should check if Aspose storage is available', () => {
+      const status = service.isAsposeStorageAvailable();
+      expect(status).toBe(true);
+    });
+
+    it('should get Aspose storage status', () => {
+      const status = service.getAsposeStorageStatus();
+      
+      expect(status.overallAvailable).toBe(true);
+      expect(status.pdfBridge.available).toBe(true);
+      expect(status.docxBridge.available).toBe(true);
+      expect(status.pdfBridge.info.available).toBe(true);
+      expect(status.docxBridge.info.available).toBe(true);
+    });
+
+    it('should upload PDF files to Aspose storage', async () => {
+      const fileParams = {
+        uid: 1n,
+        fileName: 'test.pdf',
+        fileType: 'application/pdf',
+        fileContent: Buffer.from('fake pdf content'),
+        projectId: 1n,
+      };
+
+      const mockFile = { id: 1n, fileName: 'test.pdf', fileType: 'application/pdf' };
+      (fileRepository.create as jest.Mock).mockReturnValue(mockFile);
+      (fileRepository.save as jest.Mock).mockResolvedValue(mockFile);
+      (activityManagerService.logFileUpload as jest.Mock).mockResolvedValue(undefined);
+      (asposePDFBridge.uploadFileToStorage as jest.Mock).mockResolvedValue(undefined);
+
+      const result = await service.saveFile(fileParams);
+
+      expect(asposePDFBridge.uploadFileToStorage).toHaveBeenCalledWith(
+        expect.stringContaining('test.pdf'),
+        Buffer.from('fake pdf content'),
+        'application/pdf'
+      );
+      expect(result.fileId).toBe('1');
+    });
+
+    it('should fallback to GitHub when Aspose storage fails', async () => {
+      const fileParams = {
+        uid: 1n,
+        fileName: 'test.txt',
+        fileType: 'text/plain',
+        fileContent: Buffer.from('test content'),
+        projectId: 1n,
+      };
+
+      const mockFile = { id: 1n, fileName: 'test.txt', fileType: 'text/plain' };
+      (fileRepository.create as jest.Mock).mockReturnValue(mockFile);
+      (fileRepository.save as jest.Mock).mockResolvedValue(mockFile);
+      (activityManagerService.logFileUpload as jest.Mock).mockResolvedValue(undefined);
+      
+      // Mock Aspose storage to fail
+      (asposePDFBridge.uploadFileToStorage as jest.Mock).mockRejectedValue(new Error('Aspose storage unavailable'));
+      (githubService.pushInitialFile as jest.Mock).mockResolvedValue(undefined);
+
+      const result = await service.saveFile(fileParams);
+
+      expect(asposePDFBridge.uploadFileToStorage).toHaveBeenCalled();
+      expect(githubService.pushInitialFile).toHaveBeenCalled();
+      expect(result.fileId).toBe('1');
     });
   });
 });

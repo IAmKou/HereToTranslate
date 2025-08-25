@@ -2,11 +2,16 @@ import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nest
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { Response } from 'express';
+import { AsposeService } from '#LocalProject/Managers/service/aspose.service';
+import { FileService } from '#LocalProject/Managers/service/file-manager.service';
 
 @Controller('translation')
 export class TranslationController {
-  constructor(private readonly translationService: TranslationService) {
-  }
+  constructor(
+    private readonly translationService: TranslationService,
+    private readonly asposeService: AsposeService,
+    private readonly fileService: FileService
+  ) {}
   @UseGuards(JwtAuthGuard)
   @Get('strings')
   async getAllTranslationStrings(
@@ -40,7 +45,6 @@ export class TranslationController {
       return await this.translationService.addTranslation(id, translatedText, language);
     } catch (err: any) {
       if (err?.message && err.message.includes('DOCX body not found')) {
-        // Trả về lỗi 400 với message rõ ràng cho FE
         return {
           statusCode: 400,
           message: 'DOCX file does not contain editable text. Please check your file content.'
@@ -65,6 +69,21 @@ export class TranslationController {
     @Param('fileId') fileId: string,
     @Body('language') language: string
   ) {
+    const file = await this.fileService.getFileById(fileId);
+    if (!file) {
+      throw new Error('File not found');
+    }
+
+    if (file.fileType === 'application/pdf') {
+      const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language);
+      const dotIdx = String(fileName).lastIndexOf('.');
+      const base = dotIdx > -1 ? fileName.slice(0, dotIdx) : fileName;
+      const langSuffix = (language || '').toUpperCase();
+      const asposeName = `${base.replace(/\.[^.]+$/, '')}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
+      await this.asposeService.uploadFile(asposeName, buffer);
+      return this.asposeService.downloadFile(`pdf/${asposeName}`, 'herett');
+    }
+
     return this.translationService.exportTranslation(fileId, language);
   }
 
@@ -77,20 +96,13 @@ export class TranslationController {
     @Res() res: Response
   ) {
     const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language, format);
+    const filePath = `pdf/${fileName}`;
+    if (fileType === 'application/pdf') {
+      return this.asposeService.downloadFile(filePath, 'herett');
+    }
     res.setHeader('Content-Type', fileType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
     return res.send(buffer);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('test-aspose-pdf')
-  async testAsposePDF() {
-    return this.translationService.testAsposePDFConnection();
-  }
-
-  @Get('test-aspose-connection')
-  async testAsposeConnection() {
-    return this.translationService.testAsposeConnection();
   }
 
   @UseGuards(JwtAuthGuard)
@@ -144,8 +156,8 @@ export class TranslationController {
         // Export tất cả ngôn ngữ có sẵn (cần truy vấn từ database)
         // Thay vì hardcode, lấy từ project thực tế
         try {
-          // Lấy ngôn ngữ thực tế từ project
-          const projectLanguages = await this.translationService.getProjectLanguages(projectId);
+          // Lấy ngôn ngữ thực tế từ poject
+          const projectLanguages = await this.translationService.getProjectLanguages(projectId || '');
           if (projectLanguages && projectLanguages.length > 0) {
             targetLanguages = projectLanguages.map(lang => lang.code);
             console.log(`Using project languages: ${targetLanguages.join(', ')}`);
@@ -193,7 +205,7 @@ export class TranslationController {
             }
 
             console.log(`Exporting file ${fileId} in language ${targetLanguage}`);
-            const { buffer, fileName } = await this.translationService.buildExportBuffer(fileId.toString(), targetLanguage, format);
+            const { buffer, fileName } = await this.translationService.buildExportBuffer(fileId?.toString() || '', targetLanguage, format);
 
             // Validate buffer
             if (!buffer || !Buffer.isBuffer(buffer)) {
@@ -243,7 +255,7 @@ export class TranslationController {
 
         console.log(`ZIP generated successfully, size: ${zipBuffer.length} bytes`);
 
-        const zipFileName = `project-export-${projectId || 'project'}-${targetLanguages.join('-')}-${Date.now()}.zip`;
+        const zipFileName = `project-export-${projectId?.toString() || 'project'}-${targetLanguages.join('-')}-${Date.now()}.zip`;
 
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);

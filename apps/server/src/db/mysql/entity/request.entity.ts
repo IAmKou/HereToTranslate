@@ -21,6 +21,7 @@ export enum RequestStatus {
   Approved = 'APPROVED',
   Rejected = 'REJECTED',
   Completed = 'COMPLETED',
+  Incompleted = 'INCOMPLETED',
   DeliveryPending = 'DELIVERYPENDING',
   Failed = 'FAILED',
   WaitingApproval = 'WAITING_APPROVAL',
@@ -61,7 +62,10 @@ export class RequestEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   dealAmount: number;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', nullable: true, transformer: {
+      to: (value: Date) => value,
+      from: (value: string | Date) => value ? new Date(value) : null
+    }})
   deadline: Date;
 
   @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.Pending })
@@ -93,5 +97,21 @@ export class RequestEntity {
 
   @Column({ type: 'json', nullable: true })
   targetLanguages: string[];
+
+  @Column({ type: 'int', nullable: true, comment: 'Rating from 1-5 stars given by requester to translator' })
+  rating: number;
+
+  // Review fields
+  @Column({ type: 'datetime', nullable: true, comment: 'When the request was reviewed' })
+  reviewedAt: Date;
+
+  @Column({ type: 'enum', enum: ['APPROVED', 'REJECTED'], nullable: true, comment: 'Review decision' })
+  reviewDecision: 'APPROVED' | 'REJECTED';
+
+  @Column({ type: 'int', nullable: true, comment: 'Review rating from 1-5 stars' })
+  reviewRating: number;
+
+  @Column({ type: 'text', nullable: true, comment: 'Review comment from requester' })
+  reviewComment: string;
 
 }

@@ -1794,11 +1794,6 @@ function onExtensionsUpdated() {
 }
 
 function canReview(req) {
-  // Cho phép review nếu:
-  // 1. Status là PENDING (chưa được giao) + không có project
-  // 2. Status là FAILED (translator chưa hoàn thành đúng hạn) + không có project
-  // 3. Status là WAITING_APPROVAL (đang chờ duyệt) + không có project
-  // 4. Có thể thêm logic quyền ở đây nếu cần
   return (req.status === 'PENDING' || req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && !req.project
 }
 

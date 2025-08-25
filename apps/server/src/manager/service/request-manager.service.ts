@@ -1780,7 +1780,6 @@ export class RequestManagerService {
 
     } catch (error) {
       console.error('💥 [SERVICE] Error updating translator rating:', error);
-      // Don't throw error here to avoid failing the main review submission
     }
   }
 

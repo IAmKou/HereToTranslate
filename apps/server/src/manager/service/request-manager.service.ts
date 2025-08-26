@@ -792,7 +792,7 @@ export class RequestManagerService {
   async registerForPublicRequest(requestId: bigint, uid: number) {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
-      relations: ['requester'],
+      relations: ['requester', 'registrants'],
     });
 
     const register = await this.userRepository.findOneOrFail({

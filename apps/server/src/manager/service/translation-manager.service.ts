@@ -51,7 +51,7 @@ export class TranslationService {
     return {
       total,
       completed,
-      percentage: Math.round(percentage * 100) / 100, // Round to 2 decimal places
+      percentage: Math.round(percentage * 100) / 100, 
     };
   }
 

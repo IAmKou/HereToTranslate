@@ -164,7 +164,7 @@ export class FileController {
       const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer);
       
       // No XML extraction available in current AsposeService; return basic info instead
-      const info = await this.asposeService.getPdfInfo(file.originalname);
+      const info = await this.asposeService.getPdfInfo(file.originalname, 'pdf');
       
       return {
         success: true,
@@ -187,6 +187,7 @@ export class FileController {
     @Body() body: {
       replacements: Array<{ oldText: string; newText: string }>;
       outputFileName?: string;
+      folder?: string;
     },
     @Req() req: AuthenticatedRequest
   ) {
@@ -203,10 +204,11 @@ export class FileController {
     }
 
     try {
-      const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer);
+      const folder = body.folder || 'pdf';
+      const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer, folder);
       // Basic implementation: replace on first page; extend to multi-page if needed
-      await this.asposeService.replaceTextInPdf(file.originalname, 1, body.replacements);
-      const finalPdfBuffer = await this.asposeService.downloadFile(`pdf/${file.originalname}`);
+      await this.asposeService.replaceTextInPdf(file.originalname, 1, body.replacements, folder);
+      const finalPdfBuffer = await this.asposeService.downloadFileWithFolder(file.originalname, folder);
 
       return {
         success: true,
@@ -240,7 +242,8 @@ export class FileController {
 
     try {
       const page = body.page && body.page > 0 ? body.page : 1;
-      await this.asposeService.replaceTextInPdf(body.fileName, page, [{ oldText: body.oldText, newText: body.newText }]);
+      const folder = body.folder || 'pdf';
+      await this.asposeService.replaceTextInPdf(body.fileName, page, [{ oldText: body.oldText, newText: body.newText }], folder);
 
       return {
         success: true,

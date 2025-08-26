@@ -945,6 +945,16 @@ async function handleSubmit() {
 
   loading.value = true;
 
+  // Inform user if this is a private request that a payment step will follow
+  if (requestType.value === 'private') {
+    toast.add({
+      severity: 'info',
+      summary: 'Preparing Payment',
+      detail: 'Creating private request and preparing PayPal checkout... Please wait.',
+      life: 3000,
+    });
+  }
+
   try {
     const deadlineDate = new Date(deadline.value);
     const sevenDaysFromNow = new Date();
@@ -1054,9 +1064,29 @@ async function handleSubmit() {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 
-    if (requestType.value === 'private' && response.data?.approvalUrl) {
-      window.location.href = response.data.approvalUrl;
-      return;
+    if (requestType.value === 'private') {
+      const approvalUrl = response.data?.approvalUrl;
+      if (approvalUrl) {
+        // Notify and briefly delay to let the toast render before redirect
+        toast.add({
+          severity: 'info',
+          summary: 'Redirecting to PayPal',
+          detail: 'You will be redirected to PayPal to complete the payment.',
+          life: 4000,
+        });
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        } catch {}
+        window.location.href = approvalUrl;
+        return;
+      } else {
+        toast.add({
+          severity: 'error',
+          summary: 'Payment Error',
+          detail: 'Unable to start PayPal checkout. Please try again later.',
+          life: 4000,
+        });
+      }
     }
 
     console.log('Backend response:', response.data);

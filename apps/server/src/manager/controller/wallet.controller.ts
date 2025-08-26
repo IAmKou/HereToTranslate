@@ -60,7 +60,7 @@ export class WalletController {
     const clientId = process.env.PAYPAL_CLIENT_ID;
     const redirectUri = encodeURIComponent(
       process.env.PAYPAL_REDIRECT_URI ||
-        '${import.meta.env.VITE_API_URL}/wallet/paypal/callback'
+      '${import.meta.env.VITE_API_URL}/wallet/paypal/callback'
     );
     const scope = encodeURIComponent('openid email');
     const state = encodeURIComponent(req.user.id.toString());
@@ -148,7 +148,11 @@ export class WalletController {
 
   @Get('transactions')
   @UseGuards(JwtAuthGuard)
-  async getUserTransactions(@Req() req: { user: UserEntity }) {
-    return this.walletManagerService.getUserTransactions(req.user.id);
+  async getUserTransactions(
+    @Req() req: { user: UserEntity },
+    @Query('limit') limit?: string
+  ) {
+    const parsedLimit = limit ? Math.max(1, Math.min(500, Number(limit))) : undefined;
+    return this.walletManagerService.getUserTransactions(req.user.id, parsedLimit);
   }
 }

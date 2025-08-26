@@ -158,7 +158,7 @@ export class WalletManagerService implements OnModuleInit {
   }
 
   // Lấy lịch sử giao dịch của user bằng queryBuilder để lấy requesterId raw
-  async getUserTransactions(userId: bigint) {
+  async getUserTransactions(userId: bigint, limit?: number) {
     console.log('getUserTransactions userId:', userId, typeof userId);
     const qb = this.transactionRepository.createQueryBuilder('t')
       .leftJoinAndSelect('t.user', 'user')
@@ -169,6 +169,14 @@ export class WalletManagerService implements OnModuleInit {
       .addSelect('request.requesterId', 'request_requesterId')
       .where('user.id = :userId', { userId: Number(userId) })
       .orderBy('t.createdAt', 'DESC');
+
+    // Apply optional limit to reduce payload
+    if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
+      qb.limit(Math.min(500, Math.max(1, Math.floor(limit))));
+    } else {
+      // sensible default to avoid returning very large datasets
+      qb.limit(200);
+    }
     const txnsRaw = await qb.getRawAndEntities();
     const mappedTxns = txnsRaw.entities.map((txn, idx) => {
       const requesterId = String(txnsRaw.raw[idx]['request_requesterId']);

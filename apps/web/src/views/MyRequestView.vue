@@ -445,7 +445,7 @@
                         />
                       </div>
                     </th>
-                    <th @click="sortTable('requester')" class="table-header sortable" width="12%">
+                    <th @click="sortTable('requester')" class="table-header sortable requester-header" width="12%">
                       <div class="header-content">
                         <span>Requester</span>
                         <i
@@ -460,7 +460,7 @@
                         />
                       </div>
                     </th>
-                    <th @click="sortTable('category')" class="table-header sortable" width="10%">
+                    <th @click="sortTable('category')" class="table-header sortable category-header" width="10%">
                       <div class="header-content">
                         <span>Category</span>
                         <i
@@ -516,8 +516,8 @@
                     <td class="request-title">
                       <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a>
                     </td>
-                    <td style="vertical-align: middle;">{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
-                    <td style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
+                    <td class="requester-cell" style="vertical-align: middle;">{{ req.requester?.name || req.requester?.email || 'Unknown' }}</td>
+                    <td class="category-cell" style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
                     <td class="deal-amount" style="text-align: center; vertical-align: middle;">${{ formatAmount(req.dealAmount) }}</td>
                     <td style="vertical-align: middle;">
                       <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
@@ -548,14 +548,18 @@
                             :disabled="actionLoading"
                             @click="acceptAssignedRequest(req.id)"
                           >
-                            <i class="pi pi-check" /> Accept
+                            <i v-if="!actionLoading" class="pi pi-check" />
+                            <i v-else class="pi pi-spinner pi-spin" />
+                            <span>{{ actionLoading ? 'Processing...' : 'Accept' }}</span>
                           </button>
                           <button
                             class="action-btn btn btn-danger"
                             :disabled="actionLoading"
                             @click="declineAssignedRequest(req.id)"
                           >
-                            <i class="pi pi-times" /> Decline
+                            <i v-if="!actionLoading" class="pi pi-times" />
+                            <i v-else class="pi pi-spinner pi-spin" />
+                            <span>{{ actionLoading ? 'Processing...' : 'Decline' }}</span>
                           </button>
                         </template>
                         <template v-else>
@@ -906,6 +910,16 @@
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
                         <button
+                          v-if="canTranslatorCancelOngoing(req)"
+                          @click="openOngoingCancelDialog(req)"
+                          class="action-btn cancel-btn"
+                          :title="`Cancel this project: ${req.title}`"
+                          data-tooltip="Cancel this project"
+                        >
+                          <span class="btn-icon">✕</span>
+                          <span class="btn-text">Cancel</span>
+                        </button>
+                        <button
                           v-if="canRequestExtension(req)"
                           @click="requestExtension(req)"
                           class="action-btn extension-btn"
@@ -941,6 +955,32 @@
       </div>
     </div>
     <Footer />
+    <!-- Ongoing Cancel Confirmation Modal -->
+    <div v-if="showOngoingCancel" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Confirm Project Cancellation</h3>
+          <button class="modal-close" @click="showOngoingCancel = false">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-message">
+            <i class="pi pi-exclamation-triangle"></i>
+            <p>Are you sure you want to cancel this project?</p>
+            <p class="warning-detail">This action cannot be undone. Requester will receive a full refund.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showOngoingCancel = false" :disabled="actionLoading">No, keep</button>
+          <button class="btn-danger" @click="confirmOngoingCancel" :disabled="actionLoading">
+            <i v-if="!actionLoading" class="pi pi-times"></i>
+            <i v-else class="pi pi-spinner pi-spin"></i>
+            <span>{{ actionLoading ? 'Processing...' : 'Confirm' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -971,6 +1011,8 @@ const showProjectCancel = ref(false)
 const showRespond = ref(false)
 const showExtension = ref(false)
 const showExtensions = ref(false)
+const showOngoingCancel = ref(false)
+const ongoingCancelTarget = ref(null)
 const pendingCancellationId = ref(null)
 const selectedRequest = ref(null)
 const sidebarCollapsed = ref(false)
@@ -1092,6 +1134,74 @@ function canRequestExtension(req) {
   const canExtend = req.status === 'APPROVED' && req.status !== 'EXTENSION_REQUESTED'
 
   return canExtend
+}
+
+function elapsedPercent(req) {
+  try {
+    if (!req?.createdAt || !req?.deadline) return 0;
+    const created = new Date(req.createdAt).getTime();
+    const deadline = new Date(req.deadline).getTime();
+    const now = Date.now();
+    const total = Math.max(deadline - created, 1);
+    const elapsed = Math.max(Math.min(now - created, total), 0);
+    return Math.round((elapsed / total) * 100);
+  } catch {
+    return 0;
+  }
+}
+
+function canTranslatorCancelOngoing(req) {
+  try {
+    const statusOk = ['APPROVED','WAITING_APPROVAL','EXTENSION_REQUESTED','EXTENSION_APPROVED'].includes(req?.status);
+    return statusOk && elapsedPercent(req) < 50;
+  } catch {
+    return false;
+  }
+}
+
+function openOngoingCancelDialog(req) {
+  try { console.log('[ONGOING_CANCEL] Open modal for request', req?.id); } catch (_) {}
+  // Gọi summary để xác thực quyền trước khi mở modal
+  axiosInstance.get(`/project-cancellation/summary/${req.id}`)
+    .then(res => {
+      try { console.log('[ONGOING_CANCEL] summary =>', res?.data); } catch (_) {}
+      if (!res?.data?.canCancel) {
+        toast.add({ severity: 'error', summary: 'Error', detail: res?.data?.message || 'You cannot cancel this request.', life: 4000 })
+        return
+      }
+      ongoingCancelTarget.value = req
+      showOngoingCancel.value = true
+    })
+    .catch(err => {
+      const msg = err?.response?.data?.message || err?.message || 'Unable to cancel this request'
+      try { console.log('[ONGOING_CANCEL] summary error =>', err?.response?.status, err?.response?.data); } catch (_) {}
+      toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 4000 })
+    })
+}
+
+async function confirmOngoingCancel() {
+  const req = ongoingCancelTarget.value
+  if (!req?.id) return;
+  try {
+    try { console.log('[ONGOING_CANCEL] Confirm cancel request', req?.id); } catch (_) {}
+    actionLoading.value = true
+    await axiosInstance.post(`/project-cancellation/request`, {
+      requestId: Number(req.id),
+      reason: 'Translator initiated cancellation from ongoing list',
+      action: 'DELETE'
+    });
+    toast.add({ severity: 'success', summary: 'Cancelled', detail: 'Project cancelled successfully.', life: 3000 });
+    showOngoingCancel.value = false
+    ongoingCancelTarget.value = null
+    await fetchRequests();
+  } catch (err) {
+    try { console.log('[ONGOING_CANCEL][ERR]', err?.response?.status, err?.response?.data); } catch (_) {}
+    toast.add({ severity: 'error', summary: 'Error', detail: err?.response?.data?.message || 'Failed to cancel project', life: 4000 });
+    showOngoingCancel.value = false
+    ongoingCancelTarget.value = null
+  } finally {
+    actionLoading.value = false
+  }
 }
 
 function getDeadlineStatus(req) {
@@ -1402,7 +1512,7 @@ const filteredAssignedRequests = computed(() => {
       })
     }
 
-    return filtered.filter(req => req.status !== 'CANCELLED')
+    return filtered
   } catch (error) {
     console.error('Error in filteredAssignedRequests computed:', error)
     return []
@@ -1443,6 +1553,14 @@ const filteredMyRegistrations = computed(() => {
         // Show private requests or non-PENDING requests
         filtered = filtered.filter(req => req.status !== 'PENDING' || !isRequestPublic(req.isPublic, !!req.assignee))
       }
+    }
+
+    // Exclude requests that are currently on-going
+    try {
+      const ongoingIdSet = new Set((ongoingRequests.value || []).map(r => r.id))
+      filtered = filtered.filter(req => !ongoingIdSet.has(req.id))
+    } catch (e) {
+      console.error('Error excluding on-going from my registrations:', e)
     }
 
     // Sort the filtered results
@@ -1794,12 +1912,13 @@ function onExtensionsUpdated() {
 }
 
 function canReview(req) {
-  // Cho phép review nếu:
-  // 1. Status là PENDING (chưa được giao) + không có project
-  // 2. Status là FAILED (translator chưa hoàn thành đúng hạn) + không có project
-  // 3. Status là WAITING_APPROVAL (đang chờ duyệt) + không có project
-  // 4. Có thể thêm logic quyền ở đây nếu cần
-  return (req.status === 'PENDING' || req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && !req.project
+  // Hiển thị review/handover cả khi COMPLETED
+  return (
+    req.status === 'PENDING' ||
+    req.status === 'FAILED' ||
+    req.status === 'WAITING_APPROVAL' ||
+    req.status === 'COMPLETED'
+  ) && !req.project
 }
 
 function getWaitingApprovalDaysLeft(req) {
@@ -2288,6 +2407,20 @@ watch(() => route.path, async (newPath, oldPath) => {
   font-weight: 500;
 }
 
+/* Increase spacing between Requester and Category in Assigned Requests */
+.requester-header {
+  padding-right: 24px;
+}
+.category-header {
+  padding-left: 24px;
+}
+.requester-cell {
+  padding-right: 24px !important;
+}
+.category-cell {
+  padding-left: 24px !important;
+}
+
 .deal-amount-cell {
   text-align: center;
   vertical-align: middle;
@@ -2402,6 +2535,8 @@ watch(() => route.path, async (newPath, oldPath) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
 
 .status-cell, .visibility-cell, .actions-cell {
@@ -2410,6 +2545,15 @@ watch(() => route.path, async (newPath, oldPath) => {
   min-width: 120px;
   padding-left: 0 !important;
   padding-right: 0 !important;
+}
+
+/* Increase spacing between Status and Visibility columns */
+.status-cell {
+  padding-right: 28px !important;
+}
+
+.visibility-cell {
+  padding-left: 28px !important;
 }
 
 .actions-wrapper {
@@ -2421,6 +2565,7 @@ watch(() => route.path, async (newPath, oldPath) => {
   min-width: 0;
   width: 100%;
   height: 100%;
+  min-height: 60px;
 }
 
 .action-btn {
@@ -3630,4 +3775,35 @@ th:hover .sort-icon {
     transform: scale(1);
   }
 }
+</style>
+
+<style scoped>
+/* Modal Styles for Ongoing Cancel */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e5e7eb; }
+.modal-body { padding: 20px; }
+.modal-footer { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 20px; border-top: 1px solid #e5e7eb; }
+.modal-close { background: none; border: none; font-size: 18px; color: #6b7280; cursor: pointer; }
+.warning-message { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.warning-message i { font-size: 36px; color: #f59e0b; }
+.btn-secondary { background: #f3f4f6; border: 1px solid #d1d5db; color: #374151; padding: 8px 16px; border-radius: 8px; }
+.btn-danger { background: #dc2626; border: 1px solid #dc2626; color: #fff; padding: 8px 16px; border-radius: 8px; }
 </style>

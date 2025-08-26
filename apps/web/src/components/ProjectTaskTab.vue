@@ -400,57 +400,73 @@ function clearFilters() {
 // Load tasks function như các tab khác
 async function loadTasks() {
   if (!props.projectId) return;
+  console.log('📥 [LOAD_TASKS] Starting to load tasks for project:', props.projectId);
   loading.value = true;
   error.value = '';
   try {
-    console.log('Call API: /tasks/project/' + props.projectId);
+    console.log('📞 [LOAD_TASKS] Calling API: /tasks/project/' + props.projectId);
     const { data } = await axiosInstance.get(`/tasks/project/${props.projectId}`);
-    console.log('API /tasks/project response:', data);
+    console.log('📥 [LOAD_TASKS] API response received, data type:', typeof data, 'is array:', Array.isArray(data));
     tasks.value = Array.isArray(data) ? [...data] : [];
-    console.log('Tasks loaded for project', props.projectId, ':', tasks.value.length, 'tasks');
+    console.log('✅ [LOAD_TASKS] Tasks loaded for project', props.projectId, ':', tasks.value.length, 'tasks');
 
     // Debug: Check if tasks have language field
-    console.log('🔍 Language Debug - Tasks with languages:');
+    console.log('🔍 [LOAD_TASKS] Language Debug - Tasks with languages:');
     tasks.value.forEach((task: Task) => {
-      console.log(`Task ${task.id}: "${task.title}" -> language: "${task.language}"`);
+      console.log(`🔍 [LOAD_TASKS] Task ${task.id}: "${task.title}" -> language: "${task.language}"`);
     });
 
     // Debug: Check task statuses
-    console.log('🔍 Status Debug - Tasks with statuses:');
+    console.log('🔍 [LOAD_TASKS] Status Debug - Tasks with statuses:');
     tasks.value.forEach((task: Task) => {
-      console.log(`Task ${task.id}: "${task.title}" -> status: "${task.status}" (type: ${typeof task.status})`);
+      console.log(`🔍 [LOAD_TASKS] Task ${task.id}: "${task.title}" -> status: "${task.status}" (type: ${typeof task.status})`);
+      if (typeof task.status === 'object' && task.status !== null) {
+        console.log(`🔍 [LOAD_TASKS] Task ${task.id} status object:`, task.status);
+      }
     });
 
     const languagesFound = new Set();
     tasks.value.forEach((task: Task) => {
       if (task.language) languagesFound.add(task.language);
     });
-    console.log('🌐 Unique languages found:', Array.from(languagesFound));
+    console.log('🌐 [LOAD_TASKS] Unique languages found:', Array.from(languagesFound));
 
     // Reload statuses after loading tasks to ensure we have the latest status data
+    console.log('🔄 [LOAD_TASKS] Reloading statuses...');
     await loadStatuses();
+    console.log('✅ [LOAD_TASKS] Statuses reloaded');
 
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Failed to load tasks';
     error.value = errorMessage;
-    console.error('Error loading tasks:', err);
+    console.error('❌ [LOAD_TASKS] Error loading tasks:', err);
   } finally {
     loading.value = false;
+    console.log('🏁 [LOAD_TASKS] Load tasks completed');
   }
 }
 
 // Function để reload tasks từ server
 async function reloadTasks() {
-  console.log('Reloading tasks from server...');
+  console.log('🔄 [RELOAD_TASKS] Starting reload tasks from server...');
   await loadTasks();
+  console.log('✅ [RELOAD_TASKS] Load tasks completed');
 
   // Clear progress cache to ensure fresh data
+  console.log('🧹 [RELOAD_TASKS] Clearing progress cache...');
   taskProgressData.value.clear();
+  console.log('✅ [RELOAD_TASKS] Progress cache cleared');
 
   // If there's a selected task, refresh its progress
   if (selectedTask.value) {
+    console.log('🔄 [RELOAD_TASKS] Refreshing selected task progress...');
     await updateSelectedTaskProgress();
+    console.log('✅ [RELOAD_TASKS] Selected task progress refreshed');
+  } else {
+    console.log('ℹ️ [RELOAD_TASKS] No selected task to refresh progress');
   }
+
+  console.log('🏁 [RELOAD_TASKS] Reload tasks completed');
 }
 
 // Function để kiểm tra task có tồn tại trên server không
@@ -536,13 +552,19 @@ function getStatusDisplayName(status: any): string {
 
 // Function to get tasks by status
 function getTasksByStatus(statusId: string): Task[] {
-  console.log(`🔍 Getting tasks for status: ${statusId}`);
-  console.log(`🔍 Available tasks:`, filteredTasks.value.length);
-  console.log(`🔍 Task statuses:`, filteredTasks.value.map((t: Task) => ({ id: t.id, status: t.status })));
+  console.log(`🔍 [GET_TASKS_BY_STATUS] Getting tasks for status: ${statusId}`);
+  console.log(`🔍 [GET_TASKS_BY_STATUS] Available tasks:`, filteredTasks.value.length);
+  console.log(`🔍 [GET_TASKS_BY_STATUS] Task statuses:`, filteredTasks.value.map((t: Task) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    statusType: typeof t.status,
+    statusId: (t.status as any)?.id || (t.status as any)?.type || t.status
+  })));
 
   const tasks = filteredTasks.value.filter((task: Task) => {
     if (!task.status) {
-      console.log(`❌ Task ${task.id} has no status`);
+      console.log(`❌ [GET_TASKS_BY_STATUS] Task ${task.id} has no status`);
       return false;
     }
 
@@ -551,26 +573,27 @@ function getTasksByStatus(statusId: string): Task[] {
     // Handle both string and object status
     if (typeof task.status === 'string') {
       taskStatusId = task.status;
+      console.log(`🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has string status: "${taskStatusId}"`);
     } else if (typeof task.status === 'object' && task.status !== null) {
       // If status is an object, try to get the id or type
       taskStatusId = (task.status as any).id || (task.status as any).type || '';
-      console.log(`🔍 Task ${task.id} has object status:`, task.status, '-> extracted ID:', taskStatusId);
+      console.log(`🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has object status:`, task.status, '-> extracted ID:', taskStatusId);
     } else {
-      console.log(`❌ Task ${task.id} has invalid status type:`, typeof task.status, task.status);
+      console.log(`❌ [GET_TASKS_BY_STATUS] Task ${task.id} has invalid status type:`, typeof task.status, task.status);
       return false;
     }
 
     if (!taskStatusId) {
-      console.log(`❌ Task ${task.id} has empty status ID`);
+      console.log(`❌ [GET_TASKS_BY_STATUS] Task ${task.id} has empty status ID`);
       return false;
     }
 
     const matches = taskStatusId === statusId; // Remove toLowerCase() for exact match
-    console.log(`🔍 Task ${task.id}: status="${taskStatusId}" vs "${statusId}" -> ${matches}`);
+    console.log(`🔍 [GET_TASKS_BY_STATUS] Task ${task.id} (${task.title}): status="${taskStatusId}" vs target="${statusId}" -> ${matches ? '✅ MATCH' : '❌ NO MATCH'}`);
     return matches;
   });
 
-  console.log(`✅ Found ${tasks.length} tasks for status ${statusId}`);
+  console.log(`✅ [GET_TASKS_BY_STATUS] Found ${tasks.length} tasks for status ${statusId}:`, tasks.map(t => ({ id: t.id, title: t.title })));
   return tasks;
 }
 
@@ -1148,9 +1171,12 @@ function handleDragStart(event: DragEvent, task: Task, index: number) {
   // Add visual feedback
   if (event.target instanceof HTMLElement) {
     event.target.style.opacity = '0.5';
+    event.target.style.transform = 'rotate(2deg) scale(1.02)';
+    event.target.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+    event.target.style.zIndex = '1000';
   }
 
-  console.log('Drag started successfully for task:', task.id);
+  console.log('🚀 Drag started successfully for task:', task.id);
 }
 
 function handleDragEnd(event: DragEvent) {
@@ -1167,7 +1193,12 @@ function handleDragEnd(event: DragEvent) {
   // Remove visual feedback
   if (event.target instanceof HTMLElement) {
     event.target.style.opacity = '1';
+    event.target.style.transform = 'rotate(0deg) scale(1)';
+    event.target.style.boxShadow = '';
+    event.target.style.zIndex = '';
   }
+
+  console.log('🏁 Drag ended');
 }
 
 function handleDragOver(event: DragEvent, statusId: string) {
@@ -1178,11 +1209,14 @@ function handleDragOver(event: DragEvent, statusId: string) {
   const target = event.currentTarget as HTMLElement;
   if (target && !target.classList.contains('drag-over')) {
     target.classList.add('drag-over');
+    target.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+    target.style.borderColor = '#3b82f6';
+    target.style.transform = 'scale(1.02)';
   }
 
   // Set the column being dragged over
   dragOverColumn.value = statusId;
-  console.log('Drag over status:', statusId);
+  console.log('🎯 Drag over status:', statusId);
 }
 
 function handleDragLeave(event: DragEvent) {
@@ -1190,10 +1224,14 @@ function handleDragLeave(event: DragEvent) {
   const target = event.currentTarget as HTMLElement;
   if (target) {
     target.classList.remove('drag-over');
+    target.style.backgroundColor = '';
+    target.style.borderColor = '';
+    target.style.transform = '';
   }
 
   // Clear the drag over column
   dragOverColumn.value = null;
+  console.log('🚪 Drag left drop zone');
 }
 
 async function handleDrop(event: DragEvent, targetStatusId: string) {
@@ -1203,6 +1241,9 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
   const target = event.currentTarget as HTMLElement;
   if (target) {
     target.classList.remove('drag-over');
+    target.style.backgroundColor = '';
+    target.style.borderColor = '';
+    target.style.transform = '';
   }
 
   // Clear drag over column
@@ -1210,11 +1251,11 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
   didDrop.value = true;
 
   if (!draggedTask.value) {
-    console.log('No dragged task found');
+    console.log('❌ No dragged task found');
     return;
   }
 
-  console.log('Dropping task:', draggedTask.value.id, 'to status:', targetStatusId);
+  console.log('🎯 Dropping task:', draggedTask.value.id, 'to status:', targetStatusId);
 
   // Get drop position (you could enhance this to detect exact position)
   const dropIndex = getDropIndex(event, targetStatusId);
@@ -1223,20 +1264,36 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
   const taskToMove = draggedTask.value;
   await moveTaskToColumn(taskToMove, targetStatusId, dropIndex);
 
-  console.log(`Task ${taskToMove.id} moved to ${targetStatusId} status at position ${dropIndex}`);
+  console.log(`✅ Task ${taskToMove.id} moved to ${targetStatusId} status at position ${dropIndex}`);
 }
 
 async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: number) {
   // Update task status based on target status
-  // When you drag a task to a different column, it changes the status
   const newStatus = targetStatusId;
+
+  // Optimistically update local state first for smooth UX
+  const originalTask = { ...task };
+  const optimisticTask = { ...task, status: newStatus };
+
+  // Update the task in the local array immediately
+  const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
+  if (taskIndex !== -1) {
+    tasks.value[taskIndex] = optimisticTask;
+    console.log('✅ Task updated optimistically in local array');
+  }
+
+  // Update selectedTask if it's the same task
+  if (selectedTask.value?.id === task.id) {
+    selectedTask.value = optimisticTask;
+    console.log('✅ Selected task updated optimistically');
+  }
 
   // Update task status in database
   try {
-    console.log('Sending API request:', { taskId: task.id, statusId: newStatus });
+    console.log('📤 Sending API request:', { taskId: task.id, statusId: newStatus });
     const updatedTask = await taskService.updateTask(task.id, { statusId: newStatus });
 
-    // Force refresh task data from server to ensure we have the latest timestamps
+    // Update with fresh data from server
     const freshTaskData = await taskService.getTask(task.id);
     console.log('🔄 Fresh task data from server:', {
       id: freshTaskData.id,
@@ -1246,23 +1303,15 @@ async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: n
     });
 
     // Update the task in the local array with fresh data from server
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
     if (taskIndex !== -1) {
-      // Replace with fresh data from server
       tasks.value[taskIndex] = freshTaskData;
-      console.log('Task updated in local array with fresh server data');
+      console.log('✅ Task updated in local array with fresh server data');
     }
 
     // Refresh selectedTask if it's the same task with fresh data
     if (selectedTask.value?.id === task.id) {
-      console.log('🔄 Refreshing selectedTask with fresh data from server');
       selectedTask.value = freshTaskData;
-      console.log('🔄 Selected task after refresh:', {
-        id: selectedTask.value.id,
-        status: selectedTask.value.status,
-        startedAt: selectedTask.value.startedAt,
-        completedAt: selectedTask.value.completedAt
-      });
+      console.log('✅ Selected task refreshed with server data');
     }
 
     // Clear cached progress data for this task to force refresh
@@ -1273,23 +1322,34 @@ async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: n
       await updateSelectedTaskProgress();
     }
 
-    console.log('Task moved successfully:', {
+    console.log('🎉 Task moved successfully:', {
       taskId: task.id,
       taskTitle: task.title,
       targetStatus: targetStatusId,
       newStatus: newStatus,
-      dropIndex: dropIndex,
-      startedAt: freshTaskData.startedAt,
-      completedAt: freshTaskData.completedAt
+      dropIndex: dropIndex
     });
   } catch (error) {
-    console.error('Failed to update task status:', error);
-    // If API call fails, revert the local change
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
+    console.error('❌ Failed to update task status:', error);
+
+    // Revert optimistic update on error
     if (taskIndex !== -1) {
-      const originalTask = { ...tasks.value[taskIndex], status: task.status };
       tasks.value[taskIndex] = originalTask;
+      console.log('🔄 Reverted optimistic update due to API error');
     }
+
+    if (selectedTask.value?.id === task.id) {
+      selectedTask.value = originalTask;
+      console.log('🔄 Reverted selected task due to API error');
+    }
+
+    // Show error toast
+    toast.add({
+      severity: 'error',
+      summary: 'Move Failed',
+      detail: 'Failed to move task. Please try again.',
+      life: 3000
+    });
   }
 }
 
@@ -1476,102 +1536,72 @@ async function deleteSelectedTask() {
 
 // Function để update page info khi selectedTask thay đổi
 async function updatePageInfo() {
-  console.log('updatePageInfo called with selectedTask:', selectedTask.value);
+  console.log('🔄 updatePageInfo called with selectedTask:', selectedTask.value);
 
   if (!selectedTask.value?.fileId) {
-    console.log('No fileId, setting currentPageInfo to null');
+    console.log('❌ No fileId, setting currentPageInfo to null');
     currentPageInfo.value = null;
     return;
   }
 
-  console.log('Loading file pages for fileId:', selectedTask.value.fileId);
+  console.log('📁 Loading file pages for fileId:', selectedTask.value.fileId);
   const pages = await loadFilePagesData(selectedTask.value.fileId);
-  console.log('Loaded pages:', pages);
+  console.log('📄 Loaded pages:', pages);
 
   let totalStringCount = 0;
-  let pageNumbers: number[] = [];
 
   // Check if we have multiple pages selected
   if (selectedTask.value?.pages && Array.isArray(selectedTask.value.pages) && selectedTask.value.pages.length > 0) {
-    console.log('Multiple pages selected:', selectedTask.value.pages);
+    console.log('📚 Multiple pages selected:', selectedTask.value.pages);
 
     // Calculate total string count for all selected pages
     for (const pageNum of selectedTask.value.pages) {
-      const page = pages.find((p: any) => {
-        const pageNumber = Number(p.part);
-        const taskPageNumber = Number(pageNum);
-        return pageNumber === taskPageNumber;
-      });
-
+      const page = pages.find((p: any) => Number(p.part) === Number(pageNum));
       if (page) {
         totalStringCount += page.stringCount || 0;
-        pageNumbers.push(page.pageNumber || (Number(pageNum) + 1));
       }
     }
 
-    if (pageNumbers.length > 0) {
+    if (totalStringCount > 0) {
       currentPageInfo.value = {
-        pageNumber: pageNumbers[0], // Show first page number
+        pageNumber: selectedTask.value.pages[0] + 1,
         stringCount: totalStringCount
       };
-      console.log('Set currentPageInfo for multiple pages to:', currentPageInfo.value);
+      console.log('✅ Set currentPageInfo for multiple pages:', currentPageInfo.value);
       return;
     }
   }
 
   // Check for single page
   if (selectedTask.value?.page !== undefined && selectedTask.value?.page !== null) {
-    console.log('Single page selected:', selectedTask.value.page);
+    console.log('📖 Single page selected:', selectedTask.value.page);
 
-    // Try to find the page with multiple fallback strategies
-    let page = pages.find((p: any) => {
-      console.log('Checking page:', p, 'against page:', selectedTask.value?.page);
-      // Convert both to numbers for comparison
-      const pageNumber = Number(p.part);
-      const taskPageNumber = Number(selectedTask.value?.page);
-      console.log('Comparing pageNumber:', pageNumber, 'with taskPageNumber:', taskPageNumber);
-      return pageNumber === taskPageNumber;
-    });
-
-    // If not found, try to find by pageNumber
-    if (!page && selectedTask.value.page !== undefined) {
-      const taskPageNumber = Number(selectedTask.value.page);
-      page = pages.find((p: any) => p.pageNumber === (taskPageNumber + 1));
-      console.log('Trying to find by pageNumber, found:', page);
-    }
-
-    // If still not found, try to find the first page
-    if (!page && pages.length > 0) {
-      page = pages[0];
-      console.log('Using first page as fallback:', page);
-    }
-
-    console.log('Final found page:', page);
+    // Find the specific page
+    const page = pages.find((p: any) => Number(p.part) === Number(selectedTask.value.page));
 
     if (page) {
-      const taskPageNumber = Number(selectedTask.value.page);
       currentPageInfo.value = {
-        pageNumber: page.pageNumber || (taskPageNumber + 1),
-        stringCount: page.stringCount
+        pageNumber: selectedTask.value.page + 1,
+        stringCount: page.stringCount || 0
       };
-      console.log('Set currentPageInfo for single page to:', currentPageInfo.value);
+      console.log('✅ Set currentPageInfo for single page:', currentPageInfo.value);
       return;
     }
   }
 
   // If no specific pages found, calculate total for all pages
   if (pages.length > 0) {
-    console.log('No specific pages found, calculating total for all pages');
+    console.log('📋 No specific pages found, calculating total for all pages');
     totalStringCount = pages.reduce((sum: number, p: any) => sum + (p.stringCount || 0), 0);
     currentPageInfo.value = {
-      pageNumber: pages[0].pageNumber || 1,
+      pageNumber: 1,
       stringCount: totalStringCount
     };
-    console.log('Set currentPageInfo for all pages to:', currentPageInfo.value);
+    console.log('✅ Set currentPageInfo for all pages:', currentPageInfo.value);
     return;
   }
 
-  console.log('No matching pages found, setting currentPageInfo to null');
+  console.log('❌ No matching pages found, setting currentPageInfo to null');
   currentPageInfo.value = null;
 }
 
@@ -2138,40 +2168,141 @@ function showReopenTaskConfirmation(task: Task) {
 async function confirmReopenTask() {
   if (!taskToReopen.value) return;
 
+  console.log('🚀 [REOPEN] Starting reopen process for task:', {
+    id: taskToReopen.value.id,
+    title: taskToReopen.value.title,
+    currentStatus: taskToReopen.value.status,
+    targetStatusId: reopenTargetStatusId.value,
+    reason: reopenReason.value
+  });
+
   isReopeningTask.value = true;
 
   try {
-    console.log('Reopening task:', taskToReopen.value.id, taskToReopen.value.title);
+    // Try a different approach: combine reopen and status update in one operation
+    console.log('🔄 [REOPEN] Trying combined approach...');
 
-    // Call API to reopen task with reason
-    await taskService.reopenTask(taskToReopen.value.id, reopenReason.value);
-
-    // If user selected a target status, move the task to that status
     let updatedLocalTask: Task | null = null;
     if (reopenTargetStatusId.value) {
       try {
-        updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, {
-          statusId: reopenTargetStatusId.value
-        } as any);
-      } catch (e) {
-        console.warn('Failed to set target status after reopen; falling back to default status.', e);
+        console.log('🎯 [REOPEN] Setting target status:', reopenTargetStatusId.value);
+        console.log('🎯 [REOPEN] Target status type:', typeof reopenTargetStatusId.value);
+
+        // Check if statusId exists in available statuses
+        const targetStatus = availableStatuses.value.find((s: any) => s.id === reopenTargetStatusId.value);
+        console.log('🎯 [REOPEN] Target status found in available statuses:', targetStatus);
+
+        if (!targetStatus) {
+          console.warn('⚠️ [REOPEN] Target status not found in available statuses!');
+          console.log('🎯 [REOPEN] Available statuses:', availableStatuses.value.map((s: any) => ({ id: s.id, name: s.name })));
+        }
+
+        // Try to update task status directly (this might reopen the task automatically)
+        console.log('📞 [REOPEN] Trying direct status update...');
+        const statusId = String(reopenTargetStatusId.value);
+
+        // Debug: Check if this statusId is valid for this task
+        console.log('🔍 [REOPEN] Debugging statusId validation...');
+        console.log('🔍 [REOPEN] Current task status before update:', taskToReopen.value.status);
+        console.log('🔍 [REOPEN] Target statusId:', statusId);
+        console.log('🔍 [REOPEN] Available statuses for this project:', availableStatuses.value.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          type: s.type,
+          isClosed: s.isClosed
+        })));
+
+        // Check if statusId is a valid number
+        const statusIdNum = parseInt(statusId);
+        console.log('🔍 [REOPEN] StatusId as number:', statusIdNum, 'isNaN:', isNaN(statusIdNum));
+
+        const updateData = {
+          statusId: statusId
+        };
+        console.log('📤 [REOPEN] Sending update data to API:', updateData);
+
+        updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, updateData);
+        console.log('✅ [REOPEN] Task status updated successfully:', {
+          taskId: updatedLocalTask.id,
+          newStatus: updatedLocalTask.status,
+          statusId: (updatedLocalTask.status as any)?.id || updatedLocalTask.status
+        });
+
+        // If direct update succeeded, we don't need to call reopen API
+        console.log('✅ [REOPEN] Direct update succeeded, skipping reopen API call');
+
+      } catch (e: any) {
+        console.warn('⚠️ [REOPEN] Direct update failed, trying reopen + update approach...', e);
+        console.error('❌ [REOPEN] Error details:', {
+          message: e?.message,
+          response: e?.response?.data,
+          status: e?.response?.status,
+          statusText: e?.response?.statusText
+        });
+
+        // Fallback: try reopen first, then update status
+        try {
+          console.log('📞 [REOPEN] Calling reopen API as fallback...');
+          await taskService.reopenTask(taskToReopen.value.id, reopenReason.value);
+          console.log('✅ [REOPEN] Task reopened successfully via API');
+
+          // Now try to update status again
+          const statusId = String(reopenTargetStatusId.value);
+          const updateData = {
+            statusId: statusId
+          };
+          console.log('📤 [REOPEN] Retrying status update after reopen:', updateData);
+          updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, updateData);
+          console.log('✅ [REOPEN] Status update succeeded after reopen');
+        } catch (fallbackError: any) {
+          console.error('❌ [REOPEN] Fallback approach also failed:', fallbackError);
+        }
       }
+    } else {
+      // No target status selected, just reopen
+      console.log('📞 [REOPEN] No target status selected, calling reopen API only...');
+      await taskService.reopenTask(taskToReopen.value.id, reopenReason.value);
+      console.log('✅ [REOPEN] Task reopened successfully via API');
     }
 
-    // Update task status in local array (use updatedLocalTask if available)
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === taskToReopen.value!.id);
-    if (taskIndex !== -1) {
-      tasks.value[taskIndex] = updatedLocalTask || { ...tasks.value[taskIndex], status: 'pending' };
+    // Reload tasks from server to ensure we have the latest data and task appears in correct column
+    console.log('🔄 [REOPEN] Reloading tasks from server...');
+    await reloadTasks();
+    console.log('✅ [REOPEN] Tasks reloaded from server');
+
+    // Debug: Check if task appears in correct column after reload
+    const reloadedTask = tasks.value.find((t: Task) => t.id === taskToReopen.value!.id);
+    if (reloadedTask) {
+      console.log('🔍 [REOPEN] Task found after reload:', {
+        id: reloadedTask.id,
+        title: reloadedTask.title,
+        status: reloadedTask.status,
+        statusId: (reloadedTask.status as any)?.id || reloadedTask.status
+      });
+
+      // Check which column the task should appear in
+      const targetStatus = availableStatuses.value.find((s: any) => s.id === reopenTargetStatusId.value);
+      console.log('🎯 [REOPEN] Target status info:', targetStatus);
+
+      // Check if task appears in the correct column
+      const tasksInTargetColumn = getTasksByStatus(reopenTargetStatusId.value);
+      const taskInColumn = tasksInTargetColumn.find((t: Task) => t.id === taskToReopen.value!.id);
+      console.log('📊 [REOPEN] Tasks in target column:', tasksInTargetColumn.length);
+      console.log('✅ [REOPEN] Task appears in target column:', !!taskInColumn);
+    } else {
+      console.warn('⚠️ [REOPEN] Task not found after reload!');
     }
 
     // Reload task detail nếu đang xem task detail
     if (selectedTask.value && selectedTask.value.id === taskToReopen.value.id) {
       try {
+        console.log('🔄 [REOPEN] Reloading task detail...');
         const updatedTask = await taskService.getTask(taskToReopen.value.id);
         selectedTask.value = updatedTask;
+        console.log('✅ [REOPEN] Task detail reloaded');
         // Watch function sẽ tự động reload history
       } catch (error) {
-        console.error('Failed to reload task detail:', error);
+        console.error('❌ [REOPEN] Failed to reload task detail:', error);
       }
     }
 
@@ -2190,9 +2321,14 @@ async function confirmReopenTask() {
     selectedTask.value = null;
     activeTab.value = 'board';
 
-    console.log('Task reopened successfully:', taskToReopen.value.id);
+    console.log('🎉 [REOPEN] Reopen process completed successfully for task:', taskToReopen.value.id);
   } catch (error: any) {
-    console.error('Failed to reopen task:', error);
+    console.error('❌ [REOPEN] Failed to reopen task:', error);
+    console.error('❌ [REOPEN] Error details:', {
+      message: error?.message,
+      response: error?.response?.data,
+      status: error?.response?.status
+    });
 
     // Show error message
     toast.add({
@@ -2203,6 +2339,7 @@ async function confirmReopenTask() {
     });
   } finally {
     // Reset modal state
+    console.log('🧹 [REOPEN] Cleaning up modal state');
     showReopenTaskModal.value = false;
     taskToReopen.value = null;
     isReopeningTask.value = false;
@@ -2967,23 +3104,19 @@ function setupRealtimeCommentListeners() {
                 File: <b>{{ selectedTaskTruncatedFileName }}</b>
               </div>
               <div v-if="selectedTask.page !== undefined && selectedTask.page !== null">
-                Page: <b>{{ currentPageInfo?.pageNumber || 'Loading...' }}</b> ({{ currentPageInfo?.stringCount || '0' }} strings)
+                Page: <b>Page {{ selectedTask.page + 1 }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
                 <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.page = {{ selectedTask.page }} -->
-                <!-- Temporary debug info -->
-                <div style="font-size: 10px; color: #666; margin-top: 5px;">
-                  Debug: page={{ selectedTask.page }}, fileId={{ selectedTask.fileId }}, currentPageInfo={{ JSON.stringify(currentPageInfo) }}
-                </div>
               </div>
               <div v-else-if="selectedTask.pages && selectedTask.pages.length > 0">
-                Pages: <b>{{ formatSelectedPages(selectedTask.pages) }}</b>
+                Pages: <b>{{ formatSelectedPages(selectedTask.pages) }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
                 <!-- Debug: pages={{ JSON.stringify(selectedTask.pages) }} -->
               </div>
-              <div v-else-if="selectedTask.page !== undefined && selectedTask.page !== null">
-                Pages: <b>Page {{ selectedTask.page + 1 }}</b>
-                <!-- Debug: page={{ selectedTask.page }} -->
+              <div v-else-if="selectedTask.fileId">
+                Pages: <b>All pages</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
+                <!-- Debug: fileId={{ selectedTask.fileId }}, currentPageInfo={{ JSON.stringify(currentPageInfo) }} -->
               </div>
               <div v-else>
-                Pages: <b>No file</b>
+                Pages: <b>No file assigned</b>
               </div>
             </div>
             <div v-else>
@@ -6208,7 +6341,7 @@ function setupRealtimeCommentListeners() {
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(34,197,94,0.12);
   padding: 0.5em 0.4em 0.4em 0.4em;
-  margin-bottom: 0.5em;
+  margin-bottom: 1.2em;
   display: flex;
   flex-direction: column;
   gap: 0.25em;
@@ -7440,7 +7573,7 @@ body.modal-open main {
   width: 100% !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
-  margin: 0 !important;
+  margin-bottom: 1.2em !important;
   padding-left: 0.1em !important;
   padding-right: 0.1em !important;
 }
@@ -7461,6 +7594,11 @@ body.modal-open main {
 .kanban-column .task-card {
   transform: translateZ(0) !important;
   will-change: transform !important;
+}
+
+/* Remove margin from last task card in column */
+.kanban-column .task-card:last-child {
+  margin-bottom: 0 !important;
 }
 
 .task-status-badge {

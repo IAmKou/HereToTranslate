@@ -53,6 +53,11 @@ export class TaskController {
   ) {
     // Pass userId so service can validate transitions/permissions
     const userId = req.user.id;
+    console.log(`🔍 [CONTROLLER] updateTask called:`, {
+      taskId: id,
+      dto: dto,
+      userId: userId.toString()
+    });
     return await this.taskService.updateTask(id, dto, userId);
   }
 

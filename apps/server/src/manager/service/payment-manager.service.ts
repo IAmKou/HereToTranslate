@@ -1342,36 +1342,113 @@ export class PaypalService {
   async refundDeposit(request: RequestEntity): Promise<void> {
     logger.log(`Starting refund process for request ID: ${request.id}`);
 
-    const depositTransaction = await this.transactionRepo.findOne({
+    // Find the original deposit transaction (prefer ON_HOLD; fallback to PENDING/WAITING_APPROVAL)
+    let depositTransaction = await this.transactionRepo.findOne({
       where: {
         request: { id: request.id },
         user: { id: request.requester.id },
-        status: TransactionStatus.Pending,
+        status: TransactionStatus.On_Hold,
+        type: TransactionType.DEPOSIT,
       },
       relations: ['user'],
     });
 
     if (!depositTransaction) {
+      depositTransaction = await this.transactionRepo.findOne({
+        where: [
+          {
+            request: { id: request.id },
+            user: { id: request.requester.id },
+            status: TransactionStatus.Pending,
+            type: TransactionType.DEPOSIT,
+          },
+          {
+            request: { id: request.id },
+            user: { id: request.requester.id },
+            status: TransactionStatus.WaitingApproval,
+            type: TransactionType.DEPOSIT,
+          },
+        ],
+        relations: ['user'],
+        order: { id: 'DESC' },
+      });
+    }
+
+    if (!depositTransaction) {
+      // Try to find any historical DEPOSIT transaction to get exact deposit amount
+      const anyDepositTx = await this.transactionRepo.findOne({
+        where: {
+          request: { id: request.id },
+          user: { id: request.requester.id },
+          type: TransactionType.DEPOSIT,
+        },
+        order: { id: 'DESC' },
+      });
+
+      // Fallback: refund 100% of the actual deposited amount if found; otherwise 50% of dealAmount
       logger.warn(`No pending deposit transaction found for request ID: ${request.id}`);
+      try {
+        const derivedAmount = anyDepositTx ? Number(anyDepositTx.amount) : Number(request.dealAmount) * 0.5;
+        const amount = Math.abs(derivedAmount);
+
+        // Decrease admin wallet (release held funds logically)
+        const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+        adminWallet.balance = Number(adminWallet.balance) - amount;
+        await this.walletRepository.save(adminWallet);
+
+        // Credit requester wallet
+        const requesterWallet = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+        requesterWallet.balance = Number(requesterWallet.balance) + amount;
+        await this.walletRepository.save(requesterWallet);
+
+        // Create explicit REFUND transaction record for requester
+        const refundTransaction = this.transactionRepo.create({
+          user: { id: request.requester.id } as UserEntity,
+          request: { id: request.id } as RequestEntity,
+          amount: amount as any,
+          status: TransactionStatus.Completed,
+          type: TransactionType.REFUND,
+        });
+        await this.transactionRepo.save(refundTransaction);
+
+        await this.notificationService.createNotification({
+          userId: request.requester.id,
+          type: 'REFUND_PROCESSED',
+          message: `Your deposit of $${amount} has been refunded for request "${request.title}".`,
+          createdBy: this.ADMIN_USER_ID,
+        });
+
+        logger.log(`Fallback refund processed: $${amount} to requester ID ${request.requester.id} for request ID ${request.id}`);
+      } catch (error) {
+        logger.error(`Fallback refund failed for request ID ${request.id}: ${error}`);
+        throw new InternalServerErrorException('Failed to process refund');
+      }
       return;
     }
 
     try {
-      const wallet = await this.walletManagerService.getOrCreateWallet(
-        request.requester.id
-      );
+      // Decrease admin wallet (release held deposit if it was ON_HOLD)
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const amount = Math.abs(Number(depositTransaction.amount));
+      adminWallet.balance = Number(adminWallet.balance) - amount;
+      await this.walletRepository.save(adminWallet);
 
-      wallet.balance = Number(wallet.balance) + Number(depositTransaction.amount);
-      await this.walletRepository.save(wallet);
+      // Credit requester wallet
+      const requesterWallet = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+      requesterWallet.balance = Number(requesterWallet.balance) + amount;
+      await this.walletRepository.save(requesterWallet);
 
+      // Mark original deposit as failed/cancelled
       depositTransaction.status = TransactionStatus.Failed;
       await this.transactionRepo.save(depositTransaction);
 
+      // Create explicit REFUND transaction record for requester
       const refundTransaction = this.transactionRepo.create({
         user: { id: request.requester.id } as UserEntity,
         request: { id: request.id } as RequestEntity,
-        amount: depositTransaction.amount,
+        amount: amount,
         status: TransactionStatus.Completed,
+        type: TransactionType.REFUND,
       });
 
       await this.transactionRepo.save(refundTransaction);
@@ -1390,6 +1467,107 @@ export class PaypalService {
       logger.error(`Failed to process refund for request ID ${request.id}: ${error}`);
       throw new InternalServerErrorException('Failed to process refund');
     }
+  }
+
+  // Pay held deposit to translator when requester cancels an approved project
+  async payoutDepositToTranslator(request: RequestEntity): Promise<void> {
+    // Find the original deposit (prefer ON_HOLD; fallback to PENDING/WAITING_APPROVAL)
+    let depositTx = await this.transactionRepo.findOne({
+      where: {
+        request: { id: request.id },
+        user: { id: request.requester.id },
+        status: TransactionStatus.On_Hold,
+        type: TransactionType.DEPOSIT,
+      },
+    });
+
+    if (!depositTx) {
+      depositTx = await this.transactionRepo.findOne({
+        where: [
+          {
+            request: { id: request.id },
+            user: { id: request.requester.id },
+            status: TransactionStatus.Pending,
+            type: TransactionType.DEPOSIT,
+          },
+          {
+            request: { id: request.id },
+            user: { id: request.requester.id },
+            status: TransactionStatus.WaitingApproval,
+            type: TransactionType.DEPOSIT,
+          },
+        ],
+        order: { id: 'DESC' },
+      });
+    }
+
+    let sourceDepositTx = depositTx;
+    if (!sourceDepositTx) {
+      // Try to use any historical DEPOSIT to get exact amount (100% of what requester actually deposited)
+      const anyDepositTx = await this.transactionRepo.findOne({
+        where: {
+          request: { id: request.id },
+          user: { id: request.requester.id },
+          type: TransactionType.DEPOSIT,
+        },
+        order: { id: 'DESC' },
+      });
+      sourceDepositTx = anyDepositTx ?? undefined;
+      if (!sourceDepositTx) {
+        logger.warn(`[PAYOUT_DEPOSIT] No deposit transaction found at all for request ${request.id}. Skipping payout.`);
+        return;
+      }
+      logger.warn(`[PAYOUT_DEPOSIT] Using historical DEPOSIT tx id=${sourceDepositTx.id} for payout.`);
+    }
+
+    const amount = Math.abs(Number(sourceDepositTx.amount));
+
+    // Move funds from admin wallet to translator wallet
+    const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+    const adminBefore = Number(adminWallet.balance);
+    adminWallet.balance = Number(adminWallet.balance) - amount;
+    await this.walletRepository.save(adminWallet);
+    logger.log(`[PAYOUT_DEPOSIT] Admin wallet: ${adminBefore} -> ${adminWallet.balance}`);
+
+    const translatorId = request.assignee?.id;
+    if (!translatorId) {
+      logger.warn(`[PAYOUT_DEPOSIT] Request ${request.id} has no assignee; skipping payout`);
+      return;
+    }
+
+    const translatorWallet = await this.walletManagerService.getOrCreateWallet(translatorId);
+    const translatorBefore = Number(translatorWallet.balance);
+    translatorWallet.balance = Number(translatorWallet.balance) + amount;
+    await this.walletRepository.save(translatorWallet);
+    logger.log(`[PAYOUT_DEPOSIT] Translator wallet (${translatorId}): ${translatorBefore} -> ${translatorWallet.balance}`);
+
+    // Close the original deposit as Completed if exists
+    if (sourceDepositTx) {
+      sourceDepositTx.status = TransactionStatus.Completed;
+      await this.transactionRepo.save(sourceDepositTx);
+      logger.log(`[PAYOUT_DEPOSIT] Updated DEPOSIT tx ${sourceDepositTx.id} -> Completed`);
+    }
+
+    // Create translator PAYMENT transaction for audit trail
+    const translatorPayment = this.transactionRepo.create({
+      user: { id: translatorId } as UserEntity,
+      request: { id: request.id } as RequestEntity,
+      amount: amount as any,
+      status: TransactionStatus.Completed,
+      type: TransactionType.PAYMENT,
+    });
+    await this.transactionRepo.save(translatorPayment);
+    logger.log(`[PAYOUT_DEPOSIT] Created PAYMENT tx for translator id=${translatorPayment.id} amount=$${amount}`);
+
+    // Notify translator
+    await this.notificationService.createNotification({
+      userId: translatorId,
+      type: 'DEPOSIT_PAID_TO_TRANSLATOR',
+      message: `Deposit $${amount} for request "${request.title}" has been paid to your balance due to requester cancellation.`,
+      createdBy: this.ADMIN_USER_ID,
+    });
+
+    logger.log(`[PAYOUT_DEPOSIT] Paid $${amount} to translator ${translatorId} for request ${request.id}`);
   }
 
   // Create PayPal order for the remaining 50% payment when requester approves

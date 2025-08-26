@@ -19,7 +19,7 @@
             :class="{ 'error': fieldErrors.title }"
             placeholder="Enter task title"
             @blur="validateTitle"
-            @input="validateTitle"
+            @input="onTitleInput"
             required
           />
           <div v-if="fieldErrors.title" class="field-error">
@@ -50,7 +50,7 @@
         </div>
 
         <div class="form-group">
-          <label for="fileSelection">File Selection</label>
+          <label for="fileSelection" class="required">File Selection</label>
           <div class="file-selection-container">
             <select
               id="fileSelection"
@@ -144,7 +144,7 @@
         </div>
 
         <div class="form-group">
-          <label for="language">{{ props.editTask ? 'Language' : 'Target Languages' }}</label>
+          <label for="language" class="required">{{ props.editTask ? 'Language' : 'Target Languages' }}</label>
           <div class="languages-grid" :class="{ 'error': fieldErrors.languages }">
             <label
               v-for="language in availableLanguages"
@@ -217,7 +217,7 @@
         </div>
 
         <div class="form-group">
-          <label for="dueDateTime">Due Date & Time</label>
+          <label for="dueDateTime" class="required">Due Date & Time</label>
           <div class="datetime-picker-container">
             <input
               id="dueDateTime"
@@ -227,6 +227,8 @@
               :class="{ 'error': fieldErrors.dueDateTime }"
               :min="minDateTime"
               @change="validateDueDateTime"
+              @blur="validateDueDateTime"
+              required
             />
 
           </div>
@@ -255,7 +257,7 @@
           <button
             type="submit"
             class="btn btn-primary"
-            :disabled="loading || !formData.title"
+            :disabled="loading || !formData.title || !formData.dueDateTime || !!fieldErrors.title"
           >
             <span v-if="loading">Creating...</span>
             <span v-else>Create Task</span>
@@ -279,7 +281,7 @@
           :class="{ 'error': fieldErrors.title }"
           placeholder="Enter task title"
           @blur="validateTitle"
-          @input="validateTitle"
+          @input="onTitleInput"
           required
         />
         <div v-if="fieldErrors.title" class="field-error">
@@ -310,7 +312,7 @@
       </div>
 
       <div class="form-group">
-        <label for="fileSelection">File Selection</label>
+        <label for="fileSelection" class="required">File Selection</label>
         <select
           id="fileSelection"
           v-model="selectedFileId"
@@ -446,7 +448,7 @@
       </div>
 
       <div class="form-group">
-        <label for="language">Target Languages</label>
+        <label for="language" class="required">Target Languages</label>
         <div class="languages-header">
           <div class="languages-grid" :class="{ 'error': fieldErrors.languages }">
             <label
@@ -536,7 +538,7 @@
       </div>
 
       <div class="form-group">
-        <label for="dueDateTime">Due Date & Time</label>
+        <label for="dueDateTime" class="required">Due Date & Time</label>
         <div class="datetime-picker-container">
           <input
             id="dueDateTime"
@@ -546,6 +548,8 @@
             :class="{ 'error': fieldErrors.dueDateTime }"
             :min="minDateTime"
             @change="validateDueDateTime"
+            @blur="validateDueDateTime"
+            required
           />
 
         </div>
@@ -574,7 +578,7 @@
         <button
           type="submit"
           class="btn btn-primary"
-          :disabled="loading || !formData.title"
+          :disabled="loading || !formData.title || !formData.dueDateTime || !!fieldErrors.title"
         >
           <span v-if="loading">Creating...</span>
           <span v-else>Create Task</span>
@@ -660,6 +664,9 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const error = ref('');
+
+// Cache existing task titles for the current project to validate uniqueness
+const projectTaskTitles = ref<string[]>([]);
 
 // Field validation errors
 const fieldErrors = ref({
@@ -829,6 +836,22 @@ watch(() => props.visible, (newVal: boolean) => {
       console.log('CreateTaskDialog: No projectFiles from props, loading them...');
       // loadProjectFiles(); // This function is removed
     }
+
+    // Load existing task titles for duplicate checking (best-effort)
+    void (async () => {
+      try {
+        const tasks = await taskService.getProjectTasks(props.projectId);
+        projectTaskTitles.value = (tasks || []).map((t: any) => t.title).filter((t: string) => typeof t === 'string');
+        console.log('Loaded project task titles for uniqueness validation:', projectTaskTitles.value.length);
+        // Re-validate title immediately in case the user already typed something
+        if (formData.value.title) {
+          validateTitle();
+        }
+      } catch (e) {
+        console.warn('Could not load project tasks for title uniqueness validation');
+        projectTaskTitles.value = [];
+      }
+    })();
   }
 });
 
@@ -1086,10 +1109,11 @@ function clearAllLanguages() {
 
 // Validate due date time and show warnings
 function validateDueDateTime() {
+  // Check if due date is required
   if (!formData.value.dueDateTime) {
+    fieldErrors.value.dueDateTime = 'Due Date & Time is required';
     dueDateTimeWarning.value = '';
-    fieldErrors.value.dueDateTime = '';
-    return;
+    return false;
   }
 
   const selectedDateTime = new Date(formData.value.dueDateTime);
@@ -1105,20 +1129,22 @@ function validateDueDateTime() {
   if (timeDiff < 0) {
     dueDateTimeWarning.value = '⚠️ Deadline cannot be in the past';
     fieldErrors.value.dueDateTime = 'Deadline cannot be in the past';
-    return;
+    return false;
   }
 
   // Check if deadline is too close (less than 1 hour)
   if (hoursDiff < 1) {
     dueDateTimeWarning.value = '⚠️ Deadline is very close (less than 1 hour)';
-    return;
+    return true;
   }
 
   // Check if deadline is too close (less than 24 hours)
   if (hoursDiff < 24) {
     dueDateTimeWarning.value = '⚠️ Deadline is close (less than 24 hours)';
-    return;
+    return true;
   }
+
+  return true;
 }
 
 // Validate title field
@@ -1131,8 +1157,36 @@ function validateTitle() {
     fieldErrors.value.title = 'Task Title must be at least 3 characters';
     return false;
   }
+  // Check for duplicate title within the same project (case-insensitive)
+  const normalizedInput = formData.value.title.trim().toLowerCase();
+  const isDuplicate = projectTaskTitles.value.some((existing: string) =>
+    typeof existing === 'string' && existing.trim().toLowerCase() === normalizedInput
+  );
+  if (isDuplicate) {
+    fieldErrors.value.title = 'A task with this title already exists in this project';
+    return false;
+  }
   fieldErrors.value.title = '';
   return true;
+}
+
+// Real-time title validation with debouncing
+let titleValidationTimeout: number | null = null;
+function onTitleInput() {
+  // Clear previous timeout
+  if (titleValidationTimeout) {
+    clearTimeout(titleValidationTimeout);
+  }
+
+  // Set new timeout for validation after user stops typing
+  titleValidationTimeout = setTimeout(() => {
+    if (formData.value.title.trim().length >= 3) {
+      validateTitle();
+    } else {
+      // Clear error if title is too short
+      fieldErrors.value.title = '';
+    }
+  }, 300); // Wait 300ms after user stops typing
 }
 
 // Validate file selection
@@ -1180,13 +1234,23 @@ function validateForm() {
   const isDescriptionValid = validateDescription();
   const isFileValid = validateFileSelection();
   const isLanguagesValid = validateLanguages();
+  const isDueDateTimeValid = validateDueDateTime();
 
-  return isTitleValid && isDescriptionValid && isFileValid && isLanguagesValid;
+  return isTitleValid && isDescriptionValid && isFileValid && isLanguagesValid && isDueDateTimeValid;
 }
 
 async function onSubmit() {
   // Validate all fields
   if (!validateForm()) {
+    return;
+  }
+
+  // Final server-safe duplicate check just before creating
+  try {
+    const tasks = await taskService.getProjectTasks(props.projectId);
+    projectTaskTitles.value = (tasks || []).map((t: any) => t.title).filter((t: string) => typeof t === 'string');
+  } catch {}
+  if (!validateTitle()) {
     return;
   }
 

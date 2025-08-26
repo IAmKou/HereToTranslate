@@ -43,16 +43,7 @@
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="reason">Reason for cancellation (Optional)</label>
-            <textarea
-              id="reason"
-              v-model="reason"
-              class="form-control"
-              rows="3"
-              placeholder="Please provide a reason for cancelling this request..."
-            ></textarea>
-          </div>
+          <!-- reason removed as requested -->
         </div>
 
         <div class="modal-footer">
@@ -62,7 +53,7 @@
           <button
             class="btn btn-danger"
             @click="handleCancel"
-            :disabled="loading || request.status !== 'PENDING'"
+            :disabled="loading"
           >
             <span v-if="loading" class="loading-spinner"></span>
             {{ loading ? 'Cancelling...' : 'Cancel Request' }}
@@ -86,7 +77,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'cancelled'])
 
-const reason = ref('')
 const loading = ref(false)
 
 function formatDate(dateString) {
@@ -102,8 +92,10 @@ async function handleCancel() {
   loading.value = true
 
   try {
-    await axiosInstance.post(`/requests/${props.request.id}/cancel`, {
-      reason: reason.value
+    await axiosInstance.post('/project-cancellation/request', {
+      requestId: Number(props.request.id),
+      reason: '',
+      action: 'DELETE'
     })
 
     emit('cancelled')

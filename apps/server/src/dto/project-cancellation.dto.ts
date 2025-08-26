@@ -10,9 +10,9 @@ export class CreateCancellationRequestDto {
   @IsNumber()
   requestId: number;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  reason: string;
+  reason?: string;
 
   @IsNotEmpty()
   @IsEnum(CancellationAction)

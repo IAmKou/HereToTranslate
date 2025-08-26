@@ -412,6 +412,61 @@ export class TaskManagerService {
     }
   }
 
+  private async updateTaskStatusWithoutValidation(
+    taskId: string,
+    statusId: string,
+    userId: string
+  ) {
+    const task = await this.taskRepository.findOne({
+      where: { id: BigInt(taskId) },
+      relations: ['status'],
+    });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+
+    const toStatus = await this.statusRepository.findOneOrFail({
+      where: { id: BigInt(statusId) },
+    });
+
+    const user = await this.userRepository.findOneOrFail({
+      where: { id: BigInt(userId) },
+    });
+
+    const fromStatus = task.status;
+
+    // Update task status without workflow validation
+    task.status = toStatus;
+
+    // Update timestamps based on status type
+    if (toStatus.type === StatusType.OPEN) {
+      task.startedAt = undefined;
+      task.dueDate = undefined;
+    } else if (toStatus.type === StatusType.IN_PROGRESS && !task.startedAt) {
+      task.startedAt = new Date();
+    } else if (toStatus.type === StatusType.DONE && !task.completedAt) {
+      task.completedAt = new Date();
+    } else if (toStatus.type === StatusType.TODO && task.completedAt) {
+      task.completedAt = undefined;
+    }
+
+    await this.taskRepository.save(task);
+
+    // Create status history
+    await this.createStatusHistory(
+      task.id,
+      fromStatus,
+      toStatus,
+      user,
+      'Status updated after reopen (workflow validation skipped)'
+    );
+
+    this.taskGateway.emitTaskUpdate(task);
+
+    return this.getTask(taskId);
+  }
+
   async getTasksByProject(projectId: string) {
     const tasks = await this.taskRepository.find({
       where: { projectId },
@@ -529,6 +584,44 @@ export class TaskManagerService {
     const task = await this.taskRepository.findOne({
       where: { id: BigInt(id) },
       relations: ['status', 'workflow', 'createdBy', 'assignedTo'],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        projectId: true,
+        branchId: true,
+        fileId: true,
+        filePart: true,
+        language: true,
+        dueDate: true,
+        createdAt: true,
+        startedAt: true,
+        completedAt: true, // Important: Load completedAt field
+        priority: true,
+        storyPoints: true,
+        estimatedBusinessHours: true,
+        customFields: true,
+        createdBy: {
+          id: true,
+          username: true,
+          fullName: true,
+        },
+        assignedTo: {
+          id: true,
+          username: true,
+          fullName: true,
+        },
+        status: {
+          id: true,
+          name: true,
+          type: true,
+          isClosed: true,
+        },
+        workflow: {
+          id: true,
+          name: true,
+        },
+      },
     });
 
     if (!task) {
@@ -611,11 +704,9 @@ export class TaskManagerService {
 
     // Handle status transition separately using transitionTask
     if (dto.statusId !== undefined) {
-      await this.transitionTask(
-        id,
-        { toStatusId: dto.statusId },
-        userId.toString()
-      );
+      // Always skip workflow validation for status updates (simplified approach)
+      console.log(`✅ [BACKEND] Task ${id} skipping workflow validation for status update`);
+      await this.updateTaskStatusWithoutValidation(id, dto.statusId, userId.toString());
       return this.getTask(id);
     }
 
@@ -782,6 +873,44 @@ export class TaskManagerService {
     const task = await this.taskRepository.findOne({
       where: { id: BigInt(id) },
       relations: ['createdBy', 'assignedTo', 'group', 'status'],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        projectId: true,
+        branchId: true,
+        fileId: true,
+        filePart: true,
+        language: true,
+        dueDate: true,
+        createdAt: true,
+        startedAt: true,
+        completedAt: true, // Important: Load completedAt field
+        priority: true,
+        storyPoints: true,
+        estimatedBusinessHours: true,
+        customFields: true,
+        createdBy: {
+          id: true,
+          username: true,
+          fullName: true,
+        },
+        assignedTo: {
+          id: true,
+          username: true,
+          fullName: true,
+        },
+        group: {
+          id: true,
+          name: true,
+        },
+        status: {
+          id: true,
+          name: true,
+          type: true,
+          isClosed: true,
+        },
+      },
     });
 
     if (!task) {
@@ -817,10 +946,8 @@ export class TaskManagerService {
     // Do not force a particular target status here.
     // Frontend may immediately transition to a chosen status after reopen.
 
-    // Clear completedAt timestamp since task is reopened
-    task.completedAt = undefined;
-
     await this.taskRepository.save(task);
+    console.log(`🔍 [BACKEND] reopenTask - Task saved successfully`);
 
     // Add reopen history entry
     await this.taskHistoryRepository.save(

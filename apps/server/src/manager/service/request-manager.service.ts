@@ -618,31 +618,31 @@ export class RequestManagerService {
       throw new BadRequestException(`Invalid deadline format`);
     }
 
-    // Update deadline
+    // Always set new deadline
     request.deadline = deadlineDate;
 
-    // Auto-update status based on new deadline
+    // Apply status transitions based on new deadline
+    // NOTE:
+    // - WAITING_APPROVAL is decided by translation progress (100%) elsewhere.
+    // - Do NOT auto-set WAITING_APPROVAL here by time.
+    // - If deadline passes, keep WAITING_APPROVAL if it was already set.
     const now = new Date();
-
-    if (deadlineDate <= now)
-    {
-      // throw new BadRequestException(`Deadline must be a future date`);
-      return this.requestRepository.save(request);
-    }
-
-    if (request.status === RequestStatus.Completed ||
-      request.status === RequestStatus.Cancelled) {
-        throw new BadRequestException(`Cannot update deadline of completed or cancelled requests`);
-    }
-
-    if (request.status === RequestStatus.Rejected) {
-      throw new BadRequestException(`Cannot update deadline of rejected requests`);
-    }
-
-    if (request.status === RequestStatus.Failed ||
-      request.status === RequestStatus.Incompleted) {
-      // If previously failed/incompleted, set to ExtensionApproved if deadline is extended
-      request.status = RequestStatus.ExtensionApproved;
+    if (deadlineDate > now) {
+      // Future deadline
+      if (request.status === RequestStatus.Failed) {
+        // Restore if previously failed and deadline is extended
+        request.status = RequestStatus.Approved;
+      }
+      // Keep Pending/Approved as-is; leave WaitingApproval untouched
+    } else {
+      // Deadline has passed
+      if (
+        request.status !== RequestStatus.Completed &&
+        request.status !== RequestStatus.Cancelled &&
+        request.status !== RequestStatus.WaitingApproval
+      ) {
+        request.status = RequestStatus.Failed;
+      }
     }
 
     return this.requestRepository.save(request);
@@ -1055,9 +1055,16 @@ export class RequestManagerService {
   }
 
   async declinePrivateRequest(requestId: bigint): Promise<boolean> {
+    console.log('[DECLINE_PRIVATE] Start decline flow for requestId:', requestId?.toString());
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
       relations: ['requester'],
+    });
+    console.log('[DECLINE_PRIVATE] Loaded request:', {
+      id: request.id?.toString?.() ?? request.id,
+      status: request.status,
+      isPublic: request.isPublic,
+      requesterId: request.requester?.id?.toString?.() ?? request.requester?.id
     });
 
     if (request.status !== RequestStatus.Pending || request.isPublic) {
@@ -1066,37 +1073,133 @@ export class RequestManagerService {
       );
     }
 
-    const transaction = await this.transactionRepository.findOne({
+    // Find the original deposit transaction (prefer ON_HOLD; fallback to PENDING/WAITING_APPROVAL)
+    let depositTx = await this.transactionRepository.findOne({
       where: {
         request: { id: requestId },
         user: { id: request.requester.id },
-        status: TransactionStatus.Pending,
+        status: TransactionStatus.On_Hold,
+        type: TransactionType.DEPOSIT,
       },
     });
 
-    if (!transaction) {
-      throw new NotFoundException('No matching deposit transaction found');
+    if (!depositTx) {
+      console.warn('[DECLINE_PRIVATE] No ON_HOLD deposit found. Trying fallback statuses...');
+      depositTx = await this.transactionRepository.findOne({
+        where: [
+          {
+            request: { id: requestId },
+            user: { id: request.requester.id },
+            status: TransactionStatus.Pending,
+            type: TransactionType.DEPOSIT,
+          },
+          {
+            request: { id: requestId },
+            user: { id: request.requester.id },
+            status: TransactionStatus.WaitingApproval,
+            type: TransactionType.DEPOSIT,
+          },
+        ],
+        order: { id: 'DESC' },
+      });
     }
 
-    const wallet = await this.walletService.getOrCreateWallet(
-      request.requester.id
-    );
-    wallet.balance = Number(wallet.balance) + Number(transaction.amount);
+    if (!depositTx) {
+      console.warn('[DECLINE_PRIVATE] No deposit transaction found for decline flow');
+      throw new NotFoundException('No deposit transaction found');
+    }
 
-    transaction.status = TransactionStatus.Failed;
-    request.status = RequestStatus.Rejected;
-
-    await this.transactionRepository.save(transaction);
-    await this.walletRepository.save(wallet);
-    await this.requestRepository.save(request);
-
-    // Create notification for requester about declined private request
-    await this.notificationService.createNotification({
-      userId: request.requester.id,
-      type: 'PRIVATE_REQUEST_DECLINED',
-      message: `Your private request "${request.title}" has been declined by the assigned translator.`,
-      createdBy: request.assignee?.id || BigInt(0),
+    // Calculate 100% refund (full deposit)
+    const refundAmount = Number(depositTx.amount);
+    console.log('[DECLINE_PRIVATE] Deposit found (full refund):', {
+      depositId: depositTx.id,
+      depositAmount: Number(depositTx.amount),
+      refundAmount,
     });
+
+    // Mark original deposit (any matching) as CANCELLED (use UPDATE to ensure DB changes even if multiple rows)
+    try {
+      const updateResult = await this.transactionRepository
+        .createQueryBuilder()
+        .update(TransactionEntity)
+        .set({ status: TransactionStatus.Cancelled })
+        .where('requestId = :rid AND userId = :uid AND type = :type AND status IN (:...statuses)', {
+          rid: request.id,
+          uid: request.requester.id,
+          type: TransactionType.DEPOSIT,
+          statuses: [
+            TransactionStatus.On_Hold,
+            TransactionStatus.Pending,
+            TransactionStatus.WaitingApproval,
+          ],
+        })
+        .execute();
+      console.log('[DECLINE_PRIVATE] Marked deposit as CANCELLED. Rows affected:', updateResult.affected);
+    } catch (err) {
+      console.error('[DECLINE_PRIVATE] Failed to update deposit status to CANCELLED:', err);
+      throw err;
+    }
+
+    // Create REFUND transaction for requester
+    const refundTx = this.transactionRepository.create({
+      user: { id: request.requester.id } as any,
+      request: { id: request.id } as any,
+      amount: refundAmount as any,
+      status: TransactionStatus.Completed,
+      type: TransactionType.REFUND,
+    });
+    try {
+      await this.transactionRepository.save(refundTx);
+      console.log('[DECLINE_PRIVATE] Created REFUND transaction:', {
+        refundId: refundTx.id,
+        amount: refundAmount,
+        status: refundTx.status,
+      });
+    } catch (err) {
+      console.error('[DECLINE_PRIVATE] Failed to create REFUND transaction:', err);
+      throw err;
+    }
+
+    // Add money back to requester wallet balance
+    const wallet = await this.walletService.getOrCreateWallet(request.requester.id);
+    const beforeBalance = Number(wallet.balance) || 0;
+    wallet.balance = beforeBalance + refundAmount;
+    try {
+      await this.walletRepository.save(wallet);
+      console.log('[DECLINE_PRIVATE] Updated requester wallet balance:', {
+        beforeBalance,
+        refundAmount,
+        afterBalance: wallet.balance,
+      });
+    } catch (err) {
+      console.error('[DECLINE_PRIVATE] Failed to update wallet balance:', err);
+      throw err;
+    }
+
+    // Update request status to CANCELLED
+    try {
+      request.status = RequestStatus.Cancelled;
+      await this.requestRepository.save(request);
+      console.log('[DECLINE_PRIVATE] Updated request status to CANCELLED');
+    } catch (err) {
+      console.error('[DECLINE_PRIVATE] Failed to set request status to CANCELLED:', err);
+      throw err;
+    }
+
+    // Notify requester
+    try {
+      await this.notificationService.createNotification({
+        userId: request.requester.id,
+        type: 'PRIVATE_REQUEST_DECLINED',
+        message: `Your private request "${request.title}" was declined. 100% of your deposit has been refunded to your wallet.`,
+        // createdBy must reference an existing user; if not available, set null/undefined
+        createdBy: request.assignee?.id ?? null,
+      });
+      console.log('[DECLINE_PRIVATE] Notification created for requester');
+    } catch (err) {
+      console.error('[DECLINE_PRIVATE] Failed to create notification:', err);
+      // non-fatal
+    }
 
     return true;
   }
@@ -1201,6 +1304,7 @@ export class RequestManagerService {
         'requests.title',
         'requests.dealAmount',
         'requests.deadline',
+        'requests.createdAt',
         'requests.status',
         'requester.id',
         'requester.fullName',

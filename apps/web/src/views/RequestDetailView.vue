@@ -433,26 +433,26 @@
                 >
                   <span class="btn-icon">✕</span> Cancel Request
                 </button>
+                <!-- Removed translator cancel on detail view per request -->
                 <button
-                  v-if="request && userId !== null && (request.requester?.id === userId || request.assignee?.id === userId) && ['APPROVED','WAITING_APPROVAL','EXTENSION_REQUESTED','EXTENSION_APPROVED'].includes(request.status)"
-                  class="action-btn danger"
-                  @click="cancelProject"
-                >
-                  <span class="btn-icon">✕</span> Cancel Project
-                </button>
-                <button
-                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
+                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId && request.status === 'PENDING'"
                   class="action-btn approve"
-                  @click="approveRequest"
+                  @click="acceptAssignedRequest"
+                  :disabled="actionLoading"
                 >
-                  <i class="pi pi-check"></i> Approve
+                  <i v-if="!actionLoading" class="pi pi-check"></i>
+                  <i v-else class="pi pi-spinner pi-spin"></i>
+                  <span>{{ actionLoading ? 'Processing...' : 'Accept' }}</span>
                 </button>
                 <button
-                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId"
+                  v-if="request && request.isPublic === false && request.requester && userId !== null && request.requester.id !== userId && request.status === 'PENDING'"
                   class="action-btn reject"
-                  @click="rejectRequest"
+                  @click="declineAssignedRequest"
+                  :disabled="actionLoading"
                 >
-                  <span class="btn-icon">✕</span> Reject
+                  <i v-if="!actionLoading" class="pi pi-times"></i>
+                  <i v-else class="pi pi-spinner pi-spin"></i>
+                  <span>{{ actionLoading ? 'Processing...' : 'Decline' }}</span>
                 </button>
                 <button
                   v-if="request && request.isPublic && !request.assignee && userId !== null && request.requester && request.requester.id !== userId && request.status === 'PENDING'"
@@ -646,6 +646,26 @@ const showRegisterConfirmDialog = ref(false);
 const showCancelProjectDialog = ref(false);
 const registerLoading = ref<boolean>(false);
 const toast = useToast();
+const actionLoading = ref<boolean>(false);
+const isTranslator = computed(() => {
+  return request.value?.assignee?.id && userId.value !== null && request.value.assignee.id === userId.value;
+});
+
+const elapsedPercent = computed(() => {
+  if (!request.value?.createdAt || !request.value?.deadline) return 0;
+  const created = new Date(request.value.createdAt).getTime();
+  const deadline = new Date(request.value.deadline).getTime();
+  const now = Date.now();
+  const total = Math.max(deadline - created, 1);
+  const elapsed = Math.max(Math.min(now - created, total), 0);
+  return Math.round((elapsed / total) * 100);
+});
+
+const canTranslatorCancel = computed(() => {
+  if (!request.value) return false;
+  const statusOk = ['APPROVED','WAITING_APPROVAL','EXTENSION_REQUESTED','EXTENSION_APPROVED'].includes(request.value.status);
+  return isTranslator.value && statusOk && elapsedPercent.value < 50;
+});
 
 const timeRemaining = computed(() => {
   if (!request.value?.deadline) return null;
@@ -1021,7 +1041,11 @@ async function confirmCancelProject() {
   if (!request.value?.id) return;
 
   try {
-    await axiosInstance.post(`/requests/${request.value.id}/cancel-project`);
+    await axiosInstance.post(`/project-cancellation/request`, {
+      requestId: Number(request.value.id),
+      reason: 'Translator initiated cancellation',
+      action: 'DELETE'
+    });
     toast.add({
       severity: 'success',
       summary: 'Success',
@@ -1040,11 +1064,31 @@ async function confirmCancelProject() {
   }
 }
 
-function approveRequest() {
-  alert('Approve request!');
+async function acceptAssignedRequest() {
+  if (!request.value?.id) return;
+  actionLoading.value = true;
+  try {
+    await axiosInstance.post(`/requests/${request.value.id}/private`);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Accepted private request', life: 3000 });
+    await fetchRequestDetail();
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.response?.data?.message || 'Failed to accept request', life: 3000 });
+  } finally {
+    actionLoading.value = false;
+  }
 }
-function rejectRequest() {
-  alert('Reject request!');
+async function declineAssignedRequest() {
+  if (!request.value?.id) return;
+  actionLoading.value = true;
+  try {
+    await axiosInstance.post(`/requests/${request.value.id}/decline`);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Declined private request', life: 3000 });
+    await fetchRequestDetail();
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.response?.data?.message || 'Failed to decline request', life: 3000 });
+  } finally {
+    actionLoading.value = false;
+  }
 }
 
 async function registerForRequest() {

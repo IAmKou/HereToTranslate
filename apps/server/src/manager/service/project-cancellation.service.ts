@@ -54,9 +54,12 @@ export class ProjectCancellationService {
       throw new NotFoundException('Request not found');
     }
 
-    // Validate that the initiator is either requester or translator
-    const isRequester = request.requester.id === initiatorId;
-    const isTranslator = request.assignee?.id === initiatorId;
+    // Validate that the initiator is either requester or translator (use separate id vars to avoid any name confusion)
+    const requesterId = request.requester?.id;
+    const translatorId = request.assignee?.id;
+    this.logger.log(`Auth check -> requesterId=${requesterId?.toString?.() ?? requesterId}, assigneeId=${translatorId?.toString?.() ?? translatorId}, initiatorId=${initiatorId?.toString?.() ?? initiatorId}`);
+    const isRequester = requesterId?.toString?.() === initiatorId?.toString?.();
+    const isTranslator = translatorId?.toString?.() === initiatorId?.toString?.();
 
     if (!isRequester && !isTranslator) {
       throw new ForbiddenException('Only the requester or translator can cancel this request');
@@ -87,12 +90,14 @@ export class ProjectCancellationService {
     }
 
     const cancellationType = isRequester ? CancellationType.REQUESTER_INITIATED : CancellationType.TRANSLATOR_INITIATED;
-    const requiresConfirmation = action === CancellationAction.DELETE;
-    const isArchiveOnly = action === CancellationAction.ARCHIVE;
+    // Cập nhật: cả requester và translator hủy đều xử lý ngay, không cần xác nhận
+    const requiresConfirmation = false;
+    // Always archive instead of hard delete for cancellation safety
+    const isArchiveOnly = true;
 
     // Create cancellation request
     const cancellation = this.cancellationRepo.create({
-      project: request.project,
+      project: request.project || null,
       request,
       initiator: { id: initiatorId },
       cancellationType,
@@ -104,20 +109,8 @@ export class ProjectCancellationService {
 
     const savedCancellation = await this.cancellationRepo.save(cancellation);
 
-    if (requiresConfirmation) {
-      // Send notification to the other party for confirmation
-      const otherPartyId = isRequester ? request.assignee?.id : request.requester.id;
-      if (otherPartyId) {
-        await this.sendCancellationNotification(savedCancellation, otherPartyId);
-      }
-
-      // Update request status
-      request.status = RequestStatus.CancellationPending;
-      await this.requestRepo.save(request);
-    } else {
-      // Process cancellation immediately for archive-only requests
-      await this.processCancellation(savedCancellation);
-    }
+    // Xử lý huỷ ngay
+    await this.processCancellation(savedCancellation);
 
     return savedCancellation;
   }
@@ -143,7 +136,7 @@ export class ProjectCancellationService {
 
     // Validate responder
     const request = cancellation.request;
-    const isValidResponder = 
+    const isValidResponder =
       (cancellation.cancellationType === CancellationType.REQUESTER_INITIATED && request.assignee?.id === responderId) ||
       (cancellation.cancellationType === CancellationType.TRANSLATOR_INITIATED && request.requester.id === responderId);
 
@@ -184,20 +177,18 @@ export class ProjectCancellationService {
         await this.paymentService.refundDeposit(request);
         this.logger.log(`Full refund processed for translator-initiated cancellation`);
       } else {
-        await this.markDepositAsLost(request);
-        this.logger.log(`Deposit marked as lost for requester-initiated cancellation`);
+        // Requester cancels: requester loses deposit -> pay deposit to translator
+        await this.paymentService.payoutDepositToTranslator(request);
+        this.logger.log(`Deposit paid to translator for requester-initiated cancellation`);
       }
 
-      if (cancellation.isArchiveOnly) {
-        request.status = RequestStatus.Archived;
-        await this.requestRepo.save(request);
-        
-        await this.projectService.archive(project);
-      } else {
-        request.status = RequestStatus.Cancelled;
-        await this.requestRepo.save(request);
-        
-        await this.projectService.deleteProject(project.id, cancellation.initiator.id);
+      // Archive project and mark request as CANCELLED to reflect final state in UI
+      request.status = RequestStatus.Cancelled;
+      await this.requestRepo.save(request);
+      if (project) {
+        // Soft-archive project without deleting child rows to avoid FK issues
+        project.isArchived = true as any;
+        await this.projectRepo.save(project);
       }
 
       // Mark cancellation as completed
@@ -237,7 +228,7 @@ export class ProjectCancellationService {
     recipientId: bigint
   ): Promise<void> {
     const isRequesterInitiated = cancellation.cancellationType === CancellationType.REQUESTER_INITIATED;
-    
+
     await this.notificationService.createNotification({
       userId: recipientId,
       type: 'CANCELLATION_REQUEST',
@@ -264,7 +255,7 @@ export class ProjectCancellationService {
   ): Promise<void> {
     const request = cancellation.request;
     const action = cancellation.isArchiveOnly ? 'archived' : 'deleted';
-    
+
     // Notify initiator
     await this.notificationService.createNotification({
       userId: cancellation.initiator.id,
@@ -294,14 +285,19 @@ export class ProjectCancellationService {
       throw new NotFoundException('Request not found');
     }
 
-    const isRequester = request.requester.id === userId;
-    const isTranslator = request.assignee?.id === userId;
+    const isRequester = request.requester.id?.toString?.() === userId?.toString?.();
+    const isTranslator = request.assignee?.id?.toString?.() === userId?.toString?.();
+    this.logger.log(
+      `Summary auth check -> requesterId=${request.requester.id?.toString?.() ?? request.requester.id}, assigneeId=${request.assignee?.id?.toString?.() ?? request.assignee?.id}, userId=${userId?.toString?.() ?? userId}`
+    );
 
     if (!isRequester && !isTranslator) {
-      return {
+      const res = {
         canCancel: false,
         message: 'You are not authorized to cancel this request',
       };
+      this.logger.log(`Summary result:`, res);
+      return res;
     }
 
     // Check if request can be cancelled
@@ -313,10 +309,12 @@ export class ProjectCancellationService {
     ];
 
     if (!cancellableStatuses.includes(request.status)) {
-      return {
+      const res = {
         canCancel: false,
         message: `Request cannot be cancelled in status: ${request.status}`,
       };
+      this.logger.log(`Summary result:`, res);
+      return res;
     }
 
     const cancellationType = isRequester ? 'REQUESTER_INITIATED' : 'TRANSLATOR_INITIATED';
@@ -331,16 +329,21 @@ export class ProjectCancellationService {
       penaltyAmount = request.dealAmount;
     }
 
-    return {
+    // Translator-initiated cancellations do not require confirmation (both ARCHIVE and DELETE)
+    const requiresConfirmation = isRequester; // requester requires confirmation for DELETE
+
+    const res = {
       canCancel: true,
       cancellationType,
       refundAmount,
       penaltyAmount,
-      requiresConfirmation: true, // For delete action
-      message: isTranslator 
+      requiresConfirmation,
+      message: isTranslator
         ? 'If you cancel, the requester will receive a full refund.'
         : 'If you cancel, you will lose your deposit.',
     };
+    this.logger.log(`Summary result:`, res);
+    return res;
   }
 
   async getPendingCancellations(userId: bigint): Promise<ProjectCancellationEntity[]> {

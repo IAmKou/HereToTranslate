@@ -60,7 +60,7 @@ export class AuthService {
     this.refreshExpiry =
       this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ?? '7d';
     this.accessExpiry =
-      this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '30m';
+      this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ?? '7d';
     this.sessionCleanupInterval = setInterval(
       () => this.cleanupExpiredSessions(),
       60 * 1000
@@ -71,9 +71,10 @@ export class AuthService {
   private async cleanupExpiredSessions() {
     const now = new Date();
     await this.authRepository.delete({ accessTokenExpiresAt: LessThan(now) });
-    await this.authRepository.delete({
-      lastActivityAt: LessThan(new Date(now.getTime() - 30 * 60 * 1000)),
-    }); // 30 min inactivity
+    // Removed 30-minute inactivity timeout - sessions will only expire when tokens expire
+    // await this.authRepository.delete({
+    //   lastActivityAt: LessThan(new Date(now.getTime() - 30 * 60 * 1000)),
+    // }); // 30 min inactivity
   }
 
   async refreshTokens(refreshToken: string) {
@@ -89,11 +90,11 @@ export class AuthService {
       await this.authRepository.delete({ refreshToken });
       throw new UnauthorizedException('Refresh token expired');
     }
-    // Inactivity check (30 min)
-    if (meta.lastActivityAt < new Date(now.getTime() - 30 * 60 * 1000)) {
-      await this.authRepository.delete({ refreshToken });
-      throw new UnauthorizedException('Session expired due to inactivity');
-    }
+    // Removed 30-minute inactivity check - sessions will only expire when tokens expire
+    // if (meta.lastActivityAt < new Date(now.getTime() - 30 * 60 * 1000)) {
+    //   await this.authRepository.delete({ refreshToken });
+    //   throw new UnauthorizedException('Session expired due to inactivity');
+    // }
     // Update last activity
     meta.lastActivityAt = now;
     await this.authRepository.save(meta);
@@ -127,11 +128,11 @@ export class AuthService {
       await this.authRepository.delete({ accessToken: token });
       throw new UnauthorizedException('Token expired');
     }
-    // Inactivity check (30 min)
-    if (meta.lastActivityAt < new Date(now.getTime() - 30 * 60 * 1000)) {
-      await this.authRepository.delete({ accessToken: token });
-      throw new UnauthorizedException('Session expired due to inactivity');
-    }
+    // Removed 30-minute inactivity check - sessions will only expire when tokens expire
+    // if (meta.lastActivityAt < new Date(now.getTime() - 30 * 60 * 1000)) {
+    //   await this.authRepository.delete({ accessToken: token });
+    //   throw new UnauthorizedException('Session expired due to inactivity');
+    // }
     // Update last activity
     meta.lastActivityAt = now;
     await this.authRepository.save(meta);

@@ -1526,10 +1526,7 @@ const focusedString = computed(() => {
                       <input type="radio" value="side" v-model="viewMode" :disabled="isFileProcessing(file)" /> Side by Side
                     </label>
                   </div>
-                  <label class="highlight-toggle">
-                    <input type="checkbox" v-model="highlightUntranslated" :disabled="isFileProcessing(file)" />
-                    Highlight untranslated
-                  </label>
+
 
                 </div>
                 <div class="translation-scroll-area">
@@ -1694,10 +1691,7 @@ const focusedString = computed(() => {
         :focused-string="focusedString"
         v-model:collapsed="previewPanelCollapsed"
       />
-      <!-- Debug info -->
-      <div v-if="selectedFileForPreview" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 9999;">
-        Debug: File ID = {{ selectedFileForPreview?.fileId || selectedFileForPreview?.id }}
-      </div>
+
     </div>
   </div>
 

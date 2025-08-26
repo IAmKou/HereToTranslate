@@ -399,7 +399,7 @@ export class FileService {
   async getFileById(fileId: string) {
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['request'],
+      relations: ['request', 'project'],
       select: ['id', 'fileName', 'fileType', 'fileContent', 'status', 'extractLog', 'title'],
     });
     if (!file) return null;
@@ -413,6 +413,10 @@ export class FileService {
       extractLog: file.extractLog || '',
       syncedFromRequest: !!(file as any).request,
       requestId: (file as any).request?.id ? (file as any).request.id.toString() : undefined,
+      project: (file as any).project ? {
+        id: (file as any).project.id.toString(),
+        name: (file as any).project.name
+      } : undefined,
     };
   }
 

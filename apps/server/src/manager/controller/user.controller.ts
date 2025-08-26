@@ -15,6 +15,7 @@ import {
   NotFoundException,
   UploadedFile
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   RegisterDto,
   UpdateUserPasswordDto,
@@ -81,7 +82,7 @@ export class UserController {
     },
     limits: { fileSize: 2 * 1024 * 1024 },
   }))
-  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req) {
+  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req: AuthenticatedRequest) {
     // Tạo filename unique
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const filename = uniqueSuffix + extname(file.originalname);
@@ -91,7 +92,7 @@ export class UserController {
 
     try {
       // Chỉ lưu vào database, không lưu vào disk
-      await this.users.updateAvatarWithData(req.user.id, avatarUrl, file.buffer, file.mimetype);
+      await this.users.updateAvatarWithData(Number(req.user.id), avatarUrl, file.buffer, file.mimetype);
 
       console.log('[UPLOAD AVATAR] File saved to database only');
 
@@ -140,7 +141,7 @@ export class UserController {
   }
 
   @Get('avatar/:userId')
-  async getUserAvatar(@Param('userId', BigIntTransformPipe) userId: bigint, @Res() res) {
+  async getUserAvatar(@Param('userId', BigIntTransformPipe) userId: bigint, @Res() res: Response) {
     const user = await this.users.findUserById(Number(userId));
     if (!user) {
       throw new NotFoundException('User not found');
@@ -149,7 +150,7 @@ export class UserController {
     const userWithAvatar = await this.users.getUserWithAvatar(Number(userId));
     if (!userWithAvatar || !userWithAvatar.avatarData) {
       // Trả về default avatar hoặc 404
-      return res.status(404).send('Avatar not found');
+      return res.status(404).json({ message: 'Avatar not found' });
     }
 
     res.set({
@@ -162,7 +163,7 @@ export class UserController {
 
   // Endpoint để serve avatar từ database theo URL path
   @Get('uploads/avatars/:filename')
-  async getAvatarByFilename(@Param('filename') filename: string, @Res() res) {
+  async getAvatarByFilename(@Param('filename') filename: string, @Res() res: Response) {
     console.log('[GET AVATAR BY FILENAME]', filename);
 
     // Tìm user có avatarUrl match với filename

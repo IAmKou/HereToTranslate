@@ -15,6 +15,19 @@ export class FileController {
     private readonly asposeService: AsposeService
   ) {}
 
+  @Get('test-mongo')
+  async testMongoConnection() {
+    try {
+      const result = await this.asposeService.testMongoConnection();
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        message: `Test failed: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('project/:projectId')
   async getProjectFiles(
@@ -127,8 +140,6 @@ export class FileController {
     if (!file) {
       throw new NotFoundException(`File with ID ${fileId} not found`);
     }
-
-    // Encode filename để tránh lỗi với ký tự đặc biệt (tiếng Việt, dấu cách)
     const encodedFilename = encodeURIComponent(file.fileName).replace(/['()]/g, escape);
     const contentDisposition = `attachment; filename*=UTF-8''${encodedFilename}`;
 
@@ -160,10 +171,8 @@ export class FileController {
     }
 
     try {
-      // Upload PDF to Aspose Cloud
       const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer);
       
-      // No XML extraction available in current AsposeService; return basic info instead
       const info = await this.asposeService.getPdfInfo(file.originalname, 'pdf');
       
       return {
@@ -206,7 +215,6 @@ export class FileController {
     try {
       const folder = body.folder || 'pdf';
       const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer, folder);
-      // Basic implementation: replace on first page; extend to multi-page if needed
       await this.asposeService.replaceTextInPdf(file.originalname, 1, body.replacements, folder);
       const finalPdfBuffer = await this.asposeService.downloadFileWithFolder(file.originalname, folder);
 

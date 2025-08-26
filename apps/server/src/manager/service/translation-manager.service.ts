@@ -152,60 +152,87 @@ export class TranslationService {
       } else {
         updatedBuffer = replacedBuffer;
       }
-    } else if (fileEntity.fileType === 'application/pdf') {
-      const entries = await this.translationModel
-        .find({ fileId, language })
-        .lean();
-      const translatedEntries = entries
-        .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
-        .map((e) => ({
-          originalText: e.originalText as string,
-          translatedText: e.translatedText as string,
-          page: (e as any).filePart || e.position?.page || 1,
-        }));
-      const originalBuffer = fileEntity.fileContent as Buffer;
-      try {
-        logger.log('[PDF] Using AsposeService for text replacement...');
+          } else if (fileEntity.fileType === 'application/pdf') {
+        const entries = await this.translationModel
+          .find({ fileId, language })
+          .lean();
+        const translatedEntries = entries
+          .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
+          .map((e) => ({
+            originalText: e.originalText as string,
+            translatedText: e.translatedText as string,
+            page: (e as any).filePart || e.position?.page || 1,
+          }));
+        const originalBuffer = fileEntity.fileContent as Buffer;
+        try {
+          logger.log('[PDF] Using AsposeService for text replacement...');
 
-        const replacementsByPage = new Map<
-          number,
-          { oldText: string; newText: string }[]
-        >();
-        for (const entry of translatedEntries) {
-          const pageNum = entry.page || 1;
-          if (!replacementsByPage.has(pageNum)) {
-            replacementsByPage.set(pageNum, []);
+          // Determine the correct file name for this language
+          const dotIdx = String(fileEntity.fileName).lastIndexOf('.');
+          const base = dotIdx > -1 ? fileEntity.fileName.slice(0, dotIdx) : fileEntity.fileName;
+          const langSuffix = String(language || '').toUpperCase();
+          const langFileName = `${base}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
+
+          // Determine the correct folder
+          const projectFolder = fileEntity.project?.id 
+            ? `projects/project-${fileEntity.project.id}`
+            : 'pdf';
+
+          const replacementsByPage = new Map<
+            number,
+            { oldText: string; newText: string }[]
+          >();
+          for (const entry of translatedEntries) {
+            const pageNum = entry.page || 1;
+            if (!replacementsByPage.has(pageNum)) {
+              replacementsByPage.set(pageNum, []);
+            }
+            replacementsByPage
+              .get(pageNum)!
+              .push({
+                oldText: entry.originalText,
+                newText: entry.translatedText,
+              });
           }
-          replacementsByPage
-            .get(pageNum)!
-            .push({
-              oldText: entry.originalText,
-              newText: entry.translatedText,
-            });
-        }
 
-        for (const [page, replacements] of replacementsByPage.entries()) {
-          await this.asposeService.replaceTextInPdf(
-            fileEntity.fileName,
-            page,
-            replacements
+          // First, ensure the language-specific file exists by copying from original if needed
+          try {
+            const exists = await this.asposeService.fileExistsWithFolder(langFileName, projectFolder);
+            if (!exists) {
+              logger.log(`[PDF] Language file ${langFileName} doesn't exist, copying from original...`);
+              const originalBuffer = await this.asposeService.downloadFileWithFolder(fileEntity.fileName, projectFolder);
+              await this.asposeService.uploadFile(langFileName, originalBuffer, projectFolder);
+              logger.log(`[PDF] Created language file: ${langFileName}`);
+            }
+          } catch (copyErr) {
+            logger.warn(`[PDF] Failed to ensure language file exists: ${copyErr instanceof Error ? copyErr.message : String(copyErr)}`);
+          }
+
+          // Perform text replacement on the language-specific file
+          for (const [page, replacements] of replacementsByPage.entries()) {
+            logger.log(`[PDF] Replacing ${replacements.length} texts on page ${page} in file ${langFileName}`);
+            await this.asposeService.replaceTextInPdf(
+              langFileName,
+              page,
+              replacements,
+              projectFolder
+            );
+          }
+
+          logger.log('[PDF] AsposeService replacement successful');
+        } catch (asposePdfErr) {
+          logger.error(
+            `[PDF] AsposeService replacement failed: ${
+              asposePdfErr instanceof Error
+                ? asposePdfErr.message
+                : String(asposePdfErr)
+            }`
           );
+          logger.warn(
+            '[PDF] All PDF replacement methods failed, returning original file'
+          );
+          updatedBuffer = originalBuffer;
         }
-
-        logger.log('[PDF] AsposeService replacement successful');
-      } catch (asposePdfErr) {
-        logger.error(
-          `[PDF] AsposeService replacement failed: ${
-            asposePdfErr instanceof Error
-              ? asposePdfErr.message
-              : String(asposePdfErr)
-          }`
-        );
-        logger.warn(
-          '[PDF] All PDF replacement methods failed, returning original file'
-        );
-        updatedBuffer = originalBuffer;
-      }
     } else {
       console.log('Error');
     }

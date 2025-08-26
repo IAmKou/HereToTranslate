@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { Response } from 'express';
@@ -23,6 +23,22 @@ export class TranslationController {
     @Query('fileType') fileType?: string
   ) {
     return this.translationService.getAllString(projectId, branchId, language, fileId, page, fileType);
+  }
+  @Get('progress')
+  async getProgress(
+    @Query('projectId') projectId: string,
+    @Query('branchId') branchId: string,
+    @Query('language') language?: string,
+  ) {
+    if (!projectId || !branchId) {
+      throw new BadRequestException('projectId and branchId are required');
+    }
+
+    return this.translationService.getTranslationProgress(
+      projectId,
+      branchId,
+      language,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -74,8 +90,6 @@ export class TranslationController {
       throw new Error('File not found');
     }
 
-    // For all file types, use the standard exportTranslation method
-    // This ensures consistent behavior and proper GitHub URL generation
     return this.translationService.exportTranslation(fileId, language);
   }
 
@@ -83,30 +97,82 @@ export class TranslationController {
   @Get('export/download/:fileId')
   async downloadExport(
     @Param('fileId') fileId: string,
-    @Query('language') language: string,
-    @Query('format') format: 'original' | 'xliff' = 'original',
-    @Res() res: Response
+    @Res() res: Response,
+    @Query('language') language?: string,
+    @Query('languages') languagesRaw?: string, // comma-separated list
+    @Query('format') format: 'original' | 'xliff' = 'original'
   ) {
     try {
-      console.log(`[downloadExport] Starting export for fileId: ${fileId}, language: ${language}, format: ${format}`);
-      
-      const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language, format);
-      
-      console.log(`[downloadExport] Buffer built successfully, size: ${buffer.length} bytes, fileName: ${fileName}, fileType: ${fileType}`);
-      
-      // Set proper headers for file download
-      res.setHeader('Content-Type', fileType || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
-      res.setHeader('Content-Length', buffer.length);
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Pragma', 'no-cache');
-      
-      console.log(`[downloadExport] Headers set, sending buffer...`);
-      
-      // Send the buffer directly for all file types
-      res.end(buffer);
-      
-      console.log(`[downloadExport] Buffer sent successfully`);
+      // Normalize languages input
+      let languages: string[] = [];
+      if (languagesRaw && typeof languagesRaw === 'string') {
+        languages = languagesRaw
+          .split(',')
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0);
+      } else if (language && typeof language === 'string' && language.trim()) {
+        languages = [language.trim()];
+      }
+
+      if (languages.length <= 1) {
+        const lang = languages[0] || language || '';
+        console.log(`[downloadExport] Single-language export for fileId: ${fileId}, language: ${lang}, format: ${format}`);
+        const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, lang, format);
+
+        res.setHeader('Content-Type', fileType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Pragma', 'no-cache');
+        res.end(buffer);
+        console.log(`[downloadExport] Single file sent successfully`);
+        return;
+      }
+
+      console.log(`[downloadExport] Multi-language export (ZIP) for fileId: ${fileId}, languages: ${languages.join(', ')}, format: ${format}`);
+
+      const JSZip = require('jszip');
+      const zip = new JSZip();
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const lang of languages) {
+        try {
+          const { buffer, fileName } = await this.translationService.buildExportBuffer(fileId, lang, format);
+          if (!buffer || !Buffer.isBuffer(buffer)) {
+            throw new Error('Invalid buffer generated');
+          }
+          zip.file(fileName, buffer);
+          successCount++;
+        } catch (err: any) {
+          const errorFileName = `ERROR_${fileId}_${lang}.txt`;
+          const errorContent = `Failed to export language ${lang} for file ${fileId}:\nError: ${err?.message || 'Unknown error'}`;
+          zip.file(errorFileName, errorContent);
+          errorCount++;
+        }
+      }
+
+      if (successCount === 0) {
+        return res.status(500).json({
+          message: 'No language exports were successful',
+          successCount,
+          errorCount
+        });
+      }
+
+      const zipBuffer = await zip.generateAsync({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      const zipFileName = `file-${fileId}-export-${languages.join('-')}-${Date.now()}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
+      res.setHeader('Content-Length', zipBuffer.length);
+      res.send(zipBuffer);
+      console.log(`[downloadExport] ZIP sent successfully with ${successCount} files, ${errorCount} errors`);
     } catch (error) {
       console.error(`[downloadExport] Error:`, error);
       return res.status(500).json({
@@ -115,210 +181,6 @@ export class TranslationController {
       });
     }
   }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('export/download/bulk')
-  async downloadBulkExport(
-    @Body() body: {
-      fileIds: string[];
-      language?: string;
-      languages?: string[]; // Thêm support cho nhiều ngôn ngữ
-      format: 'original' | 'xliff';
-      projectId?: string;
-      branchId?: string;
-      exportAllLanguages?: boolean; // Flag để export tất cả ngôn ngữ
-    },
-    @Res() res: Response
-  ) {
-    const { fileIds, language, languages, format, projectId, branchId, exportAllLanguages } = body;
-
-    console.log('=== BACKEND: downloadBulkExport called ===');
-    console.log('Received body:', JSON.stringify(body, null, 2));
-    console.log('fileIds:', fileIds);
-    console.log('fileIds type:', typeof fileIds);
-    console.log('fileIds is array:', Array.isArray(fileIds));
-    console.log('fileIds length:', fileIds?.length);
-
-    if (fileIds && Array.isArray(fileIds)) {
-      fileIds.forEach((id, index) => {
-        console.log(`fileIds[${index}]:`, id, 'type:', typeof id, 'isNull:', id === null, 'isUndefined:', id === undefined);
-      });
-    }
-
-    try {
-      // Validate input
-      if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
-        console.log('Validation failed: fileIds is invalid');
-        return res.status(400).json({
-          message: 'Invalid fileIds: must be a non-empty array'
-        });
-      }
-
-      if (!format) {
-        console.log('Validation failed: format is missing');
-        return res.status(400).json({
-          message: 'Format is required'
-        });
-      }
-
-      // Xác định ngôn ngữ cần export
-      let targetLanguages: string[] = [];
-      if (exportAllLanguages) {
-        // Export tất cả ngôn ngữ có sẵn (cần truy vấn từ database)
-        // Thay vì hardcode, lấy từ project thực tế
-        try {
-          // Lấy ngôn ngữ thực tế từ poject
-          const projectLanguages = await this.translationService.getProjectLanguages(projectId || '');
-          if (projectLanguages && projectLanguages.length > 0) {
-            targetLanguages = projectLanguages.map(lang => lang.code);
-            console.log(`Using project languages: ${targetLanguages.join(', ')}`);
-          } else {
-            // Fallback nếu không lấy được
-            targetLanguages = ['en', 'vi'];
-            console.log(`No project languages found, using fallback: ${targetLanguages.join(', ')}`);
-          }
-        } catch (error) {
-          console.error('Failed to get project languages:', error);
-          // Fallback nếu có lỗi
-          targetLanguages = ['en', 'vi'];
-          console.log(`Error getting languages, using fallback: ${targetLanguages.join(', ')}`);
-        }
-      } else if (languages && Array.isArray(languages) && languages.length > 0) {
-        targetLanguages = languages;
-      } else if (language) {
-        targetLanguages = [language];
-      } else {
-        console.log('Validation failed: no language specified');
-        return res.status(400).json({
-          message: 'Either language, languages array, or exportAllLanguages flag is required'
-        });
-      }
-
-      console.log(`Starting bulk export: ${fileIds.length} files, ${targetLanguages.length} languages, format: ${format}`);
-
-      // Tạo ZIP file chứa tất cả các file đã export theo ngôn ngữ
-      const JSZip = require('jszip');
-      const zip = new JSZip();
-
-      let successCount = 0;
-      let errorCount = 0;
-
-      // Tạo cấu trúc thư mục theo ngôn ngữ
-      for (const targetLanguage of targetLanguages) {
-        const languageFolder = zip.folder(targetLanguage);
-
-        for (const fileId of fileIds) {
-          try {
-            // Validate fileId
-            if (!fileId || fileId.toString().trim() === '') {
-              console.warn(`Skipping invalid fileId: ${fileId}`);
-              continue;
-            }
-
-            console.log(`Exporting file ${fileId} in language ${targetLanguage}`);
-            const { buffer, fileName } = await this.translationService.buildExportBuffer(fileId?.toString() || '', targetLanguage, format);
-
-            // Validate buffer
-            if (!buffer || !Buffer.isBuffer(buffer)) {
-              console.error(`Invalid buffer for file ${fileId} in language ${targetLanguage}`);
-              const errorFileName = `ERROR_${fileId || 'unknown'}_${targetLanguage}.txt`;
-              const errorContent = `Failed to export file ${fileId} in language ${targetLanguage}:\nError: Invalid buffer generated`;
-              languageFolder.file(errorFileName, errorContent);
-              errorCount++;
-              continue;
-            }
-
-            // Thêm file vào thư mục ngôn ngữ
-            languageFolder.file(fileName, buffer);
-            successCount++;
-            console.log(`Successfully added file ${fileName} to ZIP`);
-
-          } catch (error: any) {
-            console.error(`Failed to export file ${fileId} in language ${targetLanguage}:`, error);
-            // Thêm file lỗi vào ZIP với nội dung thông báo lỗi
-            const errorFileName = `ERROR_${fileId || 'unknown'}_${targetLanguage}.txt`;
-            const errorContent = `Failed to export file ${fileId} in language ${targetLanguage}:\nError: ${error?.message || 'Unknown error'}`;
-            languageFolder.file(errorFileName, errorContent);
-            errorCount++;
-          }
-        }
-      }
-
-      if (successCount === 0) {
-        console.log('No files were successfully exported');
-        return res.status(500).json({
-          message: 'No files were successfully exported',
-          successCount,
-          errorCount
-        });
-      }
-
-      console.log(`Generating ZIP with ${successCount} successful files and ${errorCount} errors`);
-
-      try {
-        const zipBuffer = await zip.generateAsync({
-          type: 'nodebuffer',
-          compression: 'DEFLATE',
-          compressionOptions: {
-            level: 6
-          }
-        });
-
-        console.log(`ZIP generated successfully, size: ${zipBuffer.length} bytes`);
-
-        const zipFileName = `project-export-${projectId?.toString() || 'project'}-${targetLanguages.join('-')}-${Date.now()}.zip`;
-
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
-        res.setHeader('Content-Length', zipBuffer.length);
-        res.send(zipBuffer);
-
-        console.log(`Bulk export completed: ${successCount} successful, ${errorCount} failed`);
-      } catch (zipError: any) {
-        console.error('Failed to generate ZIP:', zipError);
-        res.status(500).json({
-          message: 'Failed to generate ZIP file',
-          error: zipError?.message || 'Unknown ZIP generation error'
-        });
-      }
-    } catch (error: any) {
-      console.error('Bulk export error:', error);
-      res.status(500).json({
-        message: 'Failed to create bulk export',
-        error: error?.message || 'Unknown error'
-      });
-    }
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('test-pdf/:fileId')
-  async testPdfGeneration(
-    @Param('fileId') fileId: string,
-    @Query('language') language: string,
-    @Res() res: Response
-  ) {
-    try {
-      console.log(`[testPdfGeneration] Testing PDF generation for fileId: ${fileId}, language: ${language}`);
-      
-      const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language, 'original');
-      
-      console.log(`[testPdfGeneration] Test successful - Buffer size: ${buffer.length} bytes, fileName: ${fileName}, fileType: ${fileType}`);
-      
-      return res.json({
-        success: true,
-        bufferSize: buffer.length,
-        fileName,
-        fileType,
-        message: 'PDF generation test successful'
-      });
-    } catch (error) {
-      console.error(`[testPdfGeneration] Test failed:`, error);
-      return res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        message: 'PDF generation test failed'
-      });
-    }
-  }
-
 }
+
+  

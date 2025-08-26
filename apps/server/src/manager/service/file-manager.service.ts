@@ -155,6 +155,17 @@ export class FileService {
       const projectFolder = projectId ? `projects/project-${projectId}` : 'pdf';
       await this.uploadToAsposeStorage(fileContent, safeFileName, fileType, projectFolder);
       this.logger.log(`File uploaded to Aspose storage: ${safeFileName}`);
+      try {
+        const isPdf =
+          (typeof fileType === 'string' && fileType.toLowerCase().includes('pdf')) ||
+          (typeof safeFileName === 'string' && safeFileName.toLowerCase().endsWith('.pdf'));
+        if (isPdf) {
+          await this.asposeService.getPdfDetail(safeFileName, projectFolder);
+          this.logger.log(`[FileService] Stored PDF text details for ${safeFileName}`);
+        }
+      } catch (e) {
+        this.logger.warn(`[FileService] getPdfDetail failed post-upload: ${(e as any)?.message || String(e)}`);
+      }
       // Also upload language-suffixed variants for PDFs
       if (
         projectId && (
@@ -305,6 +316,17 @@ export class FileService {
       const projectFolder = projectId ? `projects/project-${projectId}` : 'pdf';
       await this.uploadToAsposeStorage(file.buffer, fileName, file.mimetype, projectFolder);
       this.logger.log(`File uploaded to Aspose storage: ${fileName}`);
+      try {
+        const isPdf =
+          (typeof file.mimetype === 'string' && file.mimetype.toLowerCase().includes('pdf')) ||
+          (typeof fileName === 'string' && fileName.toLowerCase().endsWith('.pdf'));
+        if (isPdf) {
+          await this.asposeService.getPdfDetail(fileName, projectFolder);
+          this.logger.log(`[FileService] Stored PDF text details for ${fileName}`);
+        }
+      } catch (e) {
+        this.logger.warn(`[FileService] getPdfDetail failed post-upload (local): ${(e as any)?.message || String(e)}`);
+      }
       // Also upload language-suffixed variants for PDFs when project present
       if (
         projectId && (
@@ -451,6 +473,15 @@ export class FileService {
           fullFile.fileType
         );
         this.logger.log(`File uploaded to Aspose storage for fileId: ${fullFile.id}`);
+        try {
+          const isPdf = typeof fullFile.fileName === 'string' && fullFile.fileName.toLowerCase().endsWith('.pdf');
+          if (isPdf) {
+            await this.asposeService.getPdfDetail(fullFile.fileName);
+            this.logger.log(`[FileService] Stored PDF text details for ${fullFile.fileName}`);
+          }
+        } catch (e) {
+          this.logger.warn(`[FileService] getPdfDetail failed post-upload (request): ${(e as any)?.message || String(e)}`);
+        }
       } catch (err) {
         this.logger.error('Error uploading file to Aspose storage', err);
         // Fallback to GitHub
@@ -535,15 +566,16 @@ export class FileService {
     // Attempt to delete from Aspose storage (original and language-suffixed variants)
     try {
       const isPdf = typeof file.fileName === 'string' && file.fileName.toLowerCase().endsWith('.pdf');
-      if (isPdf) {
-        const projectId = file.project?.id;
-        const candidateFolders: string[] = projectId
-          ? [
-              `projects/project-${projectId}`,
-              `projects/projects-${projectId}`,
-            ]
-          : ['pdf'];
+      const isDocx = typeof file.fileName === 'string' && file.fileName.toLowerCase().endsWith('.docx');
+      
+      // Delete from Aspose storage for all file types, not just PDFs
+      const projectId = file.project?.id;
+      const candidateFolders: string[] = projectId
+        ? [`projects/project-${projectId}`]
+        : ['pdf'];
 
+      // For PDFs, also delete language variants
+      if (isPdf) {
         const dotIdx = file.fileName.lastIndexOf('.');
         const base = dotIdx > -1 ? file.fileName.slice(0, dotIdx) : file.fileName;
         const originalName = file.fileName;
@@ -573,6 +605,26 @@ export class FileService {
               this.logger.warn(`[FileService] Aspose delete failed for ${folder}/${name}: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
             }
           }
+        }
+      } else {
+        // For non-PDF files, just delete the original file
+        for (const folder of candidateFolders) {
+          try {
+            await this.asposeService.deleteFileWithFolder(file.fileName, folder);
+            this.logger.log(`[FileService] Deleted from Aspose: ${folder}/${file.fileName}`);
+          } catch (delErr) {
+            this.logger.warn(`[FileService] Aspose delete failed for ${folder}/${file.fileName}: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
+          }
+        }
+      }
+      
+      if (isPdf) {
+        try {
+          const { PdfTextModel } = await import('../../db/mongo/schema/pdf-details.schema.js');
+          await PdfTextModel.deleteOne({ fileName: file.fileName });
+          this.logger.log(`[FileService] Deleted PDF details from MongoDB for: ${file.fileName}`);
+        } catch (mongoErr) {
+          this.logger.warn(`[FileService] Failed to delete PDF details from MongoDB: ${mongoErr instanceof Error ? mongoErr.message : String(mongoErr)}`);
         }
       }
     } catch (asposeCleanupErr) {

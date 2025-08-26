@@ -330,4 +330,60 @@ export class MailService {
       console.error(`Failed to send review notification to ${translatorEmail}:`, error);
     }
   }
+
+  async sendAdminReviewNotification(
+    to: string,
+    data: {
+      translatorName?: string;
+      requesterName?: string;
+      requestTitle: string;
+      decision: string;
+      amount: number;
+      reason: string;
+      adminNotes?: string;
+    }
+  ) {
+    const subject = `Admin Review Decision - ${data.requestTitle}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #dc2626; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
+          Admin Review Decision 📋
+        </h2>
+
+        <p>Hello <strong>${data.translatorName || data.requesterName}</strong>,</p>
+
+        <p>An admin has reviewed your translation request and made a decision.</p>
+
+        <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #0369a1;">Request Details</h3>
+          <p><strong>Request Title:</strong> ${data.requestTitle}</p>
+          <p><strong>Admin Decision:</strong> ${data.decision}</p>
+          <p><strong>Amount:</strong> $${data.amount}</p>
+          <p><strong>Reason:</strong> ${data.reason}</p>
+          ${data.adminNotes ? `<p><strong>Admin Notes:</strong> ${data.adminNotes}</p>` : ''}
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px;">
+          If you have any questions about this decision, please contact our support team.
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+        <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+          This is an automated notification from HereToTranslate.
+        </p>
+      </div>
+    `;
+
+    try {
+      await this.mailerService.sendMail({
+        to: to,
+        subject: subject,
+        html: htmlContent,
+      });
+      console.log(`Admin review notification sent to ${to}`);
+    } catch (error) {
+      console.error(`Failed to send admin review notification to ${to}:`, error);
+    }
+  }
 }

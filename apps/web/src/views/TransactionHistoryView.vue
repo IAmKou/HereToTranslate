@@ -10,6 +10,8 @@
             <p class="subtitle">View all your transaction history</p>
           </div>
 
+
+
           <!-- Summary Section (card) -->
           <div class="card summary-section">
             <div class="summary-cards">
@@ -94,8 +96,8 @@
             </form>
           </div>
 
-          <!-- Loading State -->
-          <div v-if="loading" class="loading-state">
+          <!-- Loading State (only show when there is no data yet) -->
+          <div v-if="loading && transactions.length === 0" class="loading-state">
             <div class="loading-spinner"></div>
             <p>Loading transactions...</p>
           </div>
@@ -390,6 +392,7 @@ interface Transaction {
       id: number;
     };
   }; // Added request object
+  paypalOrderId?: string; // Added paypalOrderId
 }
 
 interface Filters {
@@ -538,6 +541,8 @@ const totalWithdrawals = computed(() => {
     .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
 });
 
+
+
 const wallet = ref(null);
 
 async function reloadWallet() {
@@ -595,7 +600,7 @@ function getTransactionIcon(transaction: Transaction): string {
 function getTransactionTitle(transaction: Transaction): string {
   console.log('Transaction object:', transaction);
 
-  // Ưu tiên type field từ database
+  // 1) Ưu tiên dùng trường type từ DB (chính xác nhất)
   if (transaction.type) {
     const type = transaction.type.toUpperCase();
     if (type === 'REFUND') return 'Refund';
@@ -604,12 +609,22 @@ function getTransactionTitle(transaction: Transaction): string {
     if (type === 'WITHDRAWAL') return 'Withdrawal';
   }
 
-  // Fallback logic cũ
-  if (transaction.amount > 0 && transaction.requestId) {
-    if (transaction.isRequester === true || transaction.isRequester === 'true') return 'Deposit';
-    return 'Payment';
+  // 2) Fallback logic nghiệp vụ
+  if (transaction.amount > 0) {
+    if (transaction.requestId) {
+      // Kiểm tra xem có phải là khoản thanh toán cuối cùng 50% không
+      // Nếu transaction có paypalOrderId và type là PAYMENT → đây là final payment
+      if (transaction.paypalOrderId && transaction.type === 'PAYMENT') {
+        return 'Payment'; // Khoản cuối 50% - hiển thị là Payment
+      }
+      // Nếu không có paypalOrderId hoặc type khác → đây là deposit ban đầu
+      return 'Deposit';
+    }
+    // Không gắn request → coi là Deposit
+    return 'Deposit';
   }
   if (transaction.amount < 0) return 'Withdrawal';
+
   return 'Transfer';
 }
 
@@ -644,7 +659,7 @@ function formatCurrency(amount: number): string {
 function formatDate(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  // Không cộng thêm giờ nữa - để hiển thị đúng giờ từ database
+  date.setHours(date.getHours() + 7);
   return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -657,7 +672,7 @@ function formatDate(dateString: string): string {
 function formatDateRelative(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  // Không cộng thêm giờ nữa - để hiển thị đúng giờ từ database
+  date.setHours(date.getHours() + 7);
   return dayjs(date).fromNow();
 }
 

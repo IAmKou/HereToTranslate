@@ -102,6 +102,18 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
+      path: '/admin/review',
+      name: 'admin-review',
+      component: () => import('../views/AdminReviewView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/review/:id',
+      name: 'admin-review-detail',
+      component: () => import('../views/AdminReviewDetailView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/admin/deadline-checker',
       name: 'deadline-checker',
       component: () => import('../components/DeadlineCheckerUI.vue'),
@@ -168,6 +180,18 @@ const router = createRouter({
       path: '/paypal-success',
       name: 'paypal-success',
       component: () => import('../views/PaypalSuccessView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/paypal-final-success',
+      name: 'paypal-final-success',
+      component: () => import('../views/PayPalFinalSuccessView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/paypal-final-cancel',
+      name: 'paypal-final-cancel',
+      component: () => import('../views/PayPalFinalCancelView.vue'),
       meta: { requiresAuth: false }
     },
     {

@@ -443,31 +443,31 @@ export class FileService {
     });
 
     await this.manifestService.generateManifest(fullFile);
-      if (fullFile.project && fullFile.branch) {
+    if (fullFile.project && fullFile.branch) {
+      try {
+        await this.uploadToAsposeStorage(
+          fullFile.fileContent,
+          fullFile.fileName,
+          fullFile.fileType
+        );
+        this.logger.log(`File uploaded to Aspose storage for fileId: ${fullFile.id}`);
+      } catch (err) {
+        this.logger.error('Error uploading file to Aspose storage', err);
+        // Fallback to GitHub
         try {
-          await this.uploadToAsposeStorage(
-            fullFile.fileContent,
-            fullFile.fileName,
-            fullFile.fileType
-          );
-          this.logger.log(`File uploaded to Aspose storage for fileId: ${fullFile.id}`);
-        } catch (err) {
-          this.logger.error('Error uploading file to Aspose storage', err);
-          // Fallback to GitHub
-          try {
-            await this.githubService.pushInitialFile({
-              repo: `project-${fullFile.project.id}`,
-              path: fullFile.fileName,
-              content: fullFile.fileContent,
-              message: `Upload file: ${fullFile.fileName}`,
-              branch: 'main',
-            });
-            this.logger.log(`Fallback: File pushed to GitHub for fileId: ${fullFile.id}`);
-          } catch (githubErr) {
-            this.logger.error('GitHub fallback also failed:', githubErr);
-          }
+          await this.githubService.pushInitialFile({
+            repo: `project-${fullFile.project.id}`,
+            path: fullFile.fileName,
+            content: fullFile.fileContent,
+            message: `Upload file: ${fullFile.fileName}`,
+            branch: 'main',
+          });
+          this.logger.log(`Fallback: File pushed to GitHub for fileId: ${fullFile.id}`);
+        } catch (githubErr) {
+          this.logger.error('GitHub fallback also failed:', githubErr);
         }
       }
+    }
 
     return {
       message: 'File uploaded and linked to request',
@@ -589,18 +589,18 @@ export class FileService {
       appendLog('Manifest generated.');
       // Upload file to Aspose storage if project/branch info is present
       if (file.project && file.branch) {
-          try {
-            await this.githubService.pushInitialFile({
-              repo: `project-${file.project.id}`,
-              path: file.fileName,
-              content: file.fileContent,
-              message: `Upload file: ${file.fileName}`,
-              branch: 'main',
-            });
-            appendLog('Fallback: File pushed to GitHub.');
-          } catch (githubErr: any) {
-            appendLog('GitHub fallback also failed: ' + (githubErr?.message || githubErr));
-          }
+        try {
+          await this.githubService.pushInitialFile({
+            repo: `project-${file.project.id}`,
+            path: file.fileName,
+            content: file.fileContent,
+            message: `Upload file: ${file.fileName}`,
+            branch: 'main',
+          });
+          appendLog('Fallback: File pushed to GitHub.');
+        } catch (githubErr: any) {
+          appendLog('GitHub fallback also failed: ' + (githubErr?.message || githubErr));
+        }
       }
       appendLog('Successfully generated manifest for file.');
       await this.fileRepository.save(file);
@@ -662,10 +662,48 @@ export class FileService {
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
 
+    // Ensure proper fileType is set for evidence files
+    let fileType = file.mimetype;
+    if (!fileType || fileType === 'application/octet-stream') {
+      const extension = file.originalname.toLowerCase().split('.').pop();
+      switch (extension) {
+        case 'pdf':
+          fileType = 'application/pdf';
+          break;
+        case 'docx':
+          fileType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          break;
+        case 'doc':
+          fileType = 'application/msword';
+          break;
+        case 'png':
+          fileType = 'image/png';
+          break;
+        case 'jpg':
+        case 'jpeg':
+          fileType = 'image/jpeg';
+          break;
+        case 'gif':
+          fileType = 'image/gif';
+          break;
+        case 'txt':
+          fileType = 'text/plain';
+          break;
+        case 'xml':
+          fileType = 'application/xml';
+          break;
+        case 'json':
+          fileType = 'application/json';
+          break;
+        default:
+          fileType = 'application/octet-stream';
+      }
+    }
+
     const saved = await this.saveFileToDB({
       uid,
       fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
-      fileType: file.mimetype,
+      fileType: fileType,
       fileContent: file.buffer,
       projectId,
       branchId,
@@ -850,7 +888,7 @@ export class FileService {
       // Simple text extraction - split by lines
       const text = pdfBuffer.toString('utf8');
       const lines = text.split('\n').filter(line => line.trim().length > 0);
-      
+
       lines.forEach((line, index) => {
         if (line.trim().length > 0) {
           textSegments.push({
@@ -945,7 +983,7 @@ export class FileService {
   private async uploadToAsposeStorage(fileContent: Buffer, fileName: string, fileType: string, folder = 'pdf'): Promise<void> {
     try {
       this.logger.log(`[FileService] Attempting to upload file to Aspose storage: ${fileName} (${fileType})`);
-      
+
       // The new AsposeService handles all file types automatically
       this.logger.log('[FileService] Using AsposeService for file upload...');
 
@@ -968,7 +1006,7 @@ export class FileService {
         this.logger.error(`[FileService] Failed to upload file via AsposeService: ${fileName}`, uploadError);
         throw new Error(`Aspose storage upload failed: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
       }
-      
+
     } catch (error) {
       this.logger.error(`[FileService] Failed to upload file to Aspose storage: ${fileName}`, error);
       throw error;

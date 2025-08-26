@@ -38,7 +38,8 @@ export class PaymentController {
   async finalizeTranslation(
     @Param('requestId', BigIntTransformPipe) requestId: bigint
   ) {
-    return this.paymentService.finalizeTranslation(requestId);
+    // Create PayPal order for final 50% and return approval URL
+    return this.paymentService.createFinalPaymentOrder(requestId);
   }
 
   @Get('/paypal/success')
@@ -46,7 +47,7 @@ export class PaymentController {
     const result = await this.paymentService.capturePaymentAndCreateProject(orderId);
 
     if (result.success) {
-      const clientUrl = this.configService.get('CLIENT_URL');
+      const clientUrl = (this.configService.get('CLIENT_URL') || 'http://localhost:4200').replace(/\/+$/, '');
       return res.redirect(`${clientUrl}/my-requests`);
     } else {
       return res.redirect('/payment-failed');
@@ -58,11 +59,64 @@ export class PaymentController {
     const result = await this.paymentService.capturePayment(orderId);
 
     if (result.success) {
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:4200';
+      const clientUrl = (process.env.CLIENT_URL || 'http://localhost:4200').replace(/\/+$/, '');
       return res.redirect(`${clientUrl}/my-requests`);
     } else {
       return res.redirect('/payment-failed');
     }
+  }
+
+  // Final 50% success callback - redirect to frontend like deposit flow
+  @Get('/paypal/final/success')
+  async handleFinalPayPalSuccess(@Req() req: { query: Record<string, string> }, @Res() res: Response) {
+    try {
+      console.log('🔍 [PAYMENT CONTROLLER] ===========================================');
+      console.log('🔍 [PAYMENT CONTROLLER] FINAL PAYMENT SUCCESS CALLBACK STARTED');
+      console.log('🔍 [PAYMENT CONTROLLER] ===========================================');
+      console.log('🔍 [PAYMENT CONTROLLER] orderId from query:', req.query.token);
+      console.log('🔍 [PAYMENT CONTROLLER] Full query params:', JSON.stringify(req.query, null, 2));
+
+      const result = await this.paymentService.captureFinalPayment(req.query.token);
+      console.log('🔍 [PAYMENT CONTROLLER] captureFinalPayment result:', JSON.stringify(result, null, 2));
+
+      // Redirect to frontend PayPal final success view with payment details
+      const clientUrl = (this.configService.get('CLIENT_URL') || 'http://localhost:4200').replace(/\/+$/, '');
+      console.log('🔍 [PAYMENT CONTROLLER] Client URL:', clientUrl);
+
+      const redirectUrl = `${clientUrl}/paypal-final-success?token=${req.query.token}&requestId=${result.requestId || 'unknown'}&amount=${result.finalAmount || '0'}&currency=USD&depositAmount=${result.depositAmount || '0'}&totalAmount=${result.paidToTranslator || '0'}`;
+
+      console.log('🔍 [PAYMENT CONTROLLER] Constructed redirect URL:', redirectUrl);
+      console.log('🔍 [PAYMENT CONTROLLER] URL parameters breakdown:', {
+        token: req.query.token,
+        requestId: result.requestId || 'unknown',
+        amount: result.finalAmount || '0',
+        currency: 'USD',
+        depositAmount: result.depositAmount || '0',
+        totalAmount: result.paidToTranslator || '0'
+      });
+
+      console.log('🔍 [PAYMENT CONTROLLER] Redirecting to frontend success view...');
+      return res.redirect(redirectUrl);
+
+    } catch (e) {
+      console.error('🔍 [PAYMENT CONTROLLER] Final payment capture failed:', e);
+      console.error('🔍 [PAYMENT CONTROLLER] Error stack:', e instanceof Error ? e.stack : 'No stack trace');
+
+      const clientUrl = (this.configService.get('CLIENT_URL') || 'http://localhost:4200').replace(/\/+$/, '');
+      const errorRedirectUrl = `${clientUrl}/my-requests?finalPayment=fail&error=${encodeURIComponent(e.message || 'Unknown error')}`;
+
+      console.log('🔍 [PAYMENT CONTROLLER] Redirecting to error page:', errorRedirectUrl);
+      return res.redirect(errorRedirectUrl);
+    }
+  }
+
+  @Get('/paypal/final/cancel')
+  async handleFinalPayPalCancel(@Query('requestId') requestId: string, @Res() res: Response) {
+    const clientUrl = (this.configService.get('CLIENT_URL') || 'http://localhost:4200').replace(/\/+$/, '');
+    const redirectUrl = requestId
+      ? `${clientUrl}/paypal-final-cancel?requestId=${requestId}`
+      : `${clientUrl}/paypal-final-cancel`;
+    return res.redirect(redirectUrl);
   }
 
   @UseGuards()

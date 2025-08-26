@@ -31,6 +31,8 @@ export enum RequestStatus {
   CancellationRequested = 'CANCELLATION_REQUESTED',
   CancellationPending = 'CANCELLATION_PENDING',
   Archived = 'ARCHIVED',
+  PendingAdminReview = 'PENDING_ADMIN_REVIEW',
+  AdminReviewed = 'ADMIN_REVIEWED',
 }
 
 @Entity('requests')
@@ -113,5 +115,24 @@ export class RequestEntity {
 
   @Column({ type: 'text', nullable: true, comment: 'Review comment from requester' })
   reviewComment: string;
+
+  @Column({ type: 'text', nullable: true, comment: 'Reason for rejection when translation is 100% completed' })
+  rejectionReason: string;
+
+  // Admin review fields
+  @Column({ type: 'datetime', nullable: true, comment: 'When admin reviewed the request' })
+  adminReviewedAt: Date;
+
+  @Column({ type: 'bigint', unsigned: true, nullable: true, comment: 'Admin user ID who reviewed' })
+  adminReviewedBy: bigint;
+
+  @Column({ type: 'enum', enum: ['APPROVE_TRANSLATOR', 'APPROVE_REQUESTER'], nullable: true, comment: 'Admin decision' })
+  adminReviewDecision: 'APPROVE_TRANSLATOR' | 'APPROVE_REQUESTER';
+
+  @Column({ type: 'text', nullable: true, comment: 'Admin reason for decision' })
+  adminReviewReason: string;
+
+  @Column({ type: 'text', nullable: true, comment: 'Admin notes for internal use' })
+  adminReviewNotes: string;
 
 }

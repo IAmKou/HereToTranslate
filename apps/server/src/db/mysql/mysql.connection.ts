@@ -189,7 +189,8 @@ export class MySqlConnection {
           'reviewedAt',
           'reviewDecision',
           'reviewRating',
-          'reviewComment'
+          'reviewComment',
+          'rejectionReason'
         ];
 
         for (const field of reviewFields) {
@@ -212,6 +213,9 @@ export class MySqlConnection {
               case 'reviewComment':
                 alterQuery = 'ALTER TABLE `requests` ADD COLUMN `reviewComment` TEXT NULL COMMENT "Review comment from requester"';
                 break;
+              case 'rejectionReason':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `rejectionReason` TEXT NULL COMMENT "Reason for rejection when translation is 100% completed"';
+                break;
             }
 
             if (alterQuery) {
@@ -228,27 +232,96 @@ export class MySqlConnection {
         throw e;
       }
 
-      // Ensure status enum includes INCOMPLETED value
+      // Ensure admin review fields exist in requests table
       try {
-        // Check if INCOMPLETED value exists in status enum
-        const statusValues = await this.dataSource.query(
-          "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = 'status'"
-        );
+        const adminReviewFields = [
+          'adminReviewedAt',
+          'adminReviewedBy',
+          'adminReviewDecision',
+          'adminReviewReason',
+          'adminReviewNotes'
+        ];
 
-        if (statusValues.length > 0) {
-          const columnType = statusValues[0].COLUMN_TYPE;
-          if (columnType && !columnType.includes('INCOMPLETED')) {
-            // Add INCOMPLETED to the enum
-            await this.dataSource.query(
-              "ALTER TABLE `requests` MODIFY COLUMN `status` ENUM('CANCELLED', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'INCOMPLETED', 'DELIVERYPENDING', 'FAILED', 'WAITING_APPROVAL', 'EXTENSION_REQUESTED', 'EXTENSION_APPROVED', 'EXTENSION_REJECTED', 'CANCELLATION_REQUESTED', 'CANCELLATION_PENDING', 'ARCHIVED') NOT NULL DEFAULT 'PENDING'"
-            );
-            this.logger.log('Added INCOMPLETED value to requests.status enum');
+        for (const field of adminReviewFields) {
+          const columnExists = await this.dataSource.query(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = '${field}'`
+          );
+
+          if (columnExists.length === 0) {
+            let alterQuery = '';
+            switch (field) {
+              case 'adminReviewedAt':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `adminReviewedAt` DATETIME NULL COMMENT "When admin reviewed the request"';
+                break;
+              case 'adminReviewedBy':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `adminReviewedBy` BIGINT UNSIGNED NULL COMMENT "Admin user ID who reviewed"';
+                break;
+              case 'adminReviewDecision':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `adminReviewDecision` ENUM("APPROVE_TRANSLATOR", "APPROVE_REQUESTER") NULL COMMENT "Admin decision"';
+                break;
+              case 'adminReviewReason':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `adminReviewReason` TEXT NULL COMMENT "Admin reason for decision"';
+                break;
+              case 'adminReviewNotes':
+                alterQuery = 'ALTER TABLE `requests` ADD COLUMN `adminReviewNotes` TEXT NULL COMMENT "Admin notes for internal use"';
+                break;
+            }
+
+            if (alterQuery) {
+              await this.dataSource.query(alterQuery);
+              this.logger.log(`Added requests.${field} column for admin review functionality`);
+            }
           } else {
-            this.logger.log('INCOMPLETED value already exists in requests.status enum');
+            this.logger.log(`requests.${field} column already exists`);
           }
         }
       } catch (e) {
-        this.logger.error('Failed to update requests.status enum:', e);
+        this.logger.error('Inline migration for requests admin review fields failed:', e);
+        // This is critical for the application to work, so throw the error
+        throw e;
+      }
+
+      // Force update status enum to include DISPUTE and INCOMPLETED
+      try {
+        // 1. Clean invalid status values first to avoid data conflict
+        this.logger.log('🧹 Cleaning invalid status values before enum update...');
+        await this.dataSource.query(
+          "UPDATE `requests` SET status = 'PENDING' WHERE status NOT IN ('CANCELLED', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'INCOMPLETED', 'DELIVERYPENDING', 'FAILED', 'WAITING_APPROVAL', 'DISPUTE', 'EXTENSION_REQUESTED', 'EXTENSION_APPROVED', 'EXTENSION_REJECTED', 'CANCELLATION_REQUESTED', 'CANCELLATION_PENDING', 'ARCHIVED')"
+        );
+        this.logger.log('✅ Invalid status values cleaned');
+
+        // 2. Then update enum safely
+        this.logger.log('🔄 Updating status enum...');
+        await this.dataSource.query(
+          "ALTER TABLE `requests` MODIFY COLUMN `status` ENUM('CANCELLED', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'INCOMPLETED', 'DELIVERYPENDING', 'FAILED', 'WAITING_APPROVAL', 'DISPUTE', 'EXTENSION_REQUESTED', 'EXTENSION_APPROVED', 'EXTENSION_REJECTED', 'CANCELLATION_REQUESTED', 'CANCELLATION_PENDING', 'ARCHIVED') NOT NULL DEFAULT 'PENDING'"
+        );
+        this.logger.log('✅ Successfully updated requests.status enum to include DISPUTE and INCOMPLETED');
+      } catch (e: any) {
+        this.logger.error('❌ Failed to update requests.status enum:', e);
+        // Force throw error để server không start nếu migration fail
+        throw new Error(`Critical migration failed: Cannot update requests.status enum. Error: ${e?.message || 'Unknown error'}`);
+      }
+
+      // Ensure TransactionType enum includes ADMIN_REVIEW value
+      try {
+        const transactionTypeValues = await this.dataSource.query(
+          "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'type'"
+        );
+
+        if (transactionTypeValues.length > 0) {
+          const columnType = transactionTypeValues[0].COLUMN_TYPE;
+          if (columnType && !columnType.includes('ADMIN_REVIEW')) {
+            // Add ADMIN_REVIEW to the enum
+            await this.dataSource.query(
+              "ALTER TABLE `transactions` MODIFY COLUMN `type` ENUM('DEPOSIT', 'PAYMENT', 'WITHDRAWAL', 'REFUND', 'ADMIN_REVIEW') NOT NULL DEFAULT 'PAYMENT'"
+            );
+            this.logger.log('Added ADMIN_REVIEW value to transactions.type enum');
+          } else {
+            this.logger.log('ADMIN_REVIEW value already exists in transactions.type enum');
+          }
+        }
+      } catch (e) {
+        this.logger.error('Failed to update transactions.type enum:', e);
         // Don't throw error here as this is not critical for basic functionality
       }
 
@@ -293,13 +366,66 @@ export class MySqlConnection {
         throw e;
       }
 
+      // Ensure admin review fields exist in transactions table
+      try {
+        const transactionAdminFields = [
+          'fromUserId',
+          'toUserId',
+          'requestId',
+          'adminId',
+          'adminNotes'
+        ];
+
+        for (const field of transactionAdminFields) {
+          const columnExists = await this.dataSource.query(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = '${field}'`
+          );
+
+          if (columnExists.length === 0) {
+            let alterQuery = '';
+            switch (field) {
+              case 'fromUserId':
+                alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `fromUserId` BIGINT UNSIGNED NULL COMMENT "User ID who sent the money"';
+                break;
+              case 'toUserId':
+                alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `toUserId` BIGINT UNSIGNED NULL COMMENT "User ID who received the money"';
+                break;
+              case 'requestId':
+                alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `requestId` BIGINT UNSIGNED NULL COMMENT "Related request ID"';
+                break;
+              case 'adminId':
+                alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `adminId` BIGINT UNSIGNED NULL COMMENT "Admin user ID who processed the transaction"';
+                break;
+              case 'adminNotes':
+                alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `adminNotes` TEXT NULL COMMENT "Admin notes for the transaction"';
+                break;
+            }
+
+            if (alterQuery) {
+              await this.dataSource.query(alterQuery);
+              this.logger.log(`Added transactions.${field} column for admin review functionality`);
+            }
+          } else {
+            this.logger.log(`transactions.${field} column already exists`);
+          }
+        }
+      } catch (e) {
+        this.logger.error('Inline migration for transactions admin review fields failed:', e);
+        // This is critical for the application to work, so throw the error
+        throw e;
+      }
+
       // Create indexes for better performance (if they don't exist)
       try {
         const indexesToCreate = [
           { table: 'requests', column: 'reviewedAt', name: 'idx_requests_reviewed_at' },
           { table: 'requests', column: 'reviewDecision', name: 'idx_requests_review_decision' },
+          { table: 'requests', column: 'status', name: 'idx_requests_status' },
+          { table: 'requests', column: 'adminReviewedAt', name: 'idx_requests_admin_reviewed_at' },
           { table: 'user', column: 'rating', name: 'idx_user_rating' },
-          { table: 'user', column: 'reviewCount', name: 'idx_user_review_count' }
+          { table: 'user', column: 'reviewCount', name: 'idx_user_review_count' },
+          { table: 'transactions', column: 'type', name: 'idx_transactions_type' },
+          { table: 'transactions', column: 'requestId', name: 'idx_transactions_request_id' }
         ];
 
         for (const index of indexesToCreate) {

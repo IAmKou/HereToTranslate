@@ -51,6 +51,11 @@
           <span class="material-icons">notifications</span>
           <span class="menu-text">Notifications</span>
         </router-link>
+
+        <router-link to="/admin/review" class="menu-item" :title="isCollapsed ? 'Admin Review' : ''">
+          <span class="material-icons">gavel</span>
+          <span class="menu-text">Admin Review</span>
+        </router-link>
       </div>
     </nav>
   </aside>

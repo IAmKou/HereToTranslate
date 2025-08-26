@@ -42,6 +42,14 @@ export class PaypalService {
     return `${cleanBaseUrl}/${cleanPath}`;
   }
 
+  private buildServerUrl(path: string): string {
+    // Backend absolute URL for PayPal callbacks
+    const baseUrl = process.env.SERVER_URL || process.env.BACKEND_URL || 'http://localhost:3000';
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    const cleanPath = path.replace(/^\/+/, '');
+    return `${cleanBaseUrl}/api/${cleanPath}`;
+  }
+
   constructor(
     @InjectRepository(TransactionEntity)
     private transactionRepo: Repository<TransactionEntity>,
@@ -219,6 +227,18 @@ export class PaypalService {
         status: TransactionStatus.Pending,
         type: TransactionType.DEPOSIT,
         paypalOrderId: data.id,
+      });
+
+      // AUDIT: Confirm a DEPOSIT transaction was created
+      console.log('[AUDIT] Deposit transaction created', {
+        id: requesterTransaction.id,
+        userId: requesterTransaction.user?.id,
+        requestId: requesterTransaction.request?.id,
+        amount: requesterTransaction.amount,
+        status: requesterTransaction.status,
+        type: requesterTransaction.type,
+        paypalOrderId: requesterTransaction.paypalOrderId,
+        createdAt: requesterTransaction.createdAt,
       });
 
       console.log('✅ Successfully saved requester transaction to database:', {
@@ -456,6 +476,7 @@ export class PaypalService {
         requestId: transaction.request?.id,
         amount: transaction.amount,
         status: transaction.status,
+        type: transaction.type,
         registrantsCount: transaction.request?.registrants?.length || 0,
       });
 
@@ -552,6 +573,14 @@ export class PaypalService {
           requestId: request.id,
         });
 
+        // AUDIT: Before updating to ON_HOLD
+        console.log('[AUDIT] Before set ON_HOLD', {
+          id: transaction.id,
+          status: transaction.status,
+          type: transaction.type,
+          paypalOrderId: transaction.paypalOrderId,
+        });
+
         transaction.status = TransactionStatus.On_Hold;
         transaction.paypalEmail = payerWallet?.paypalEmail ?? '';
 
@@ -562,7 +591,16 @@ export class PaypalService {
           requestId: transaction.request?.id,
           amount: transaction.amount,
           status: transaction.status,
+          type: transaction.type,
           note: 'Money is held in request until project completion'
+        });
+
+        // AUDIT: After updating to ON_HOLD
+        console.log('[AUDIT] After set ON_HOLD', {
+          id: transaction.id,
+          status: transaction.status,
+          type: transaction.type,
+          paypalOrderId: transaction.paypalOrderId,
         });
 
         // Manifest extraction for copied files is now enqueued in background
@@ -683,6 +721,7 @@ export class PaypalService {
           'user',
           'request',
           'request.requester', // Đúng trường requester
+          'request.assignee', // Thêm assignee relation
           'request.registrants',
           'request.category',
           'request.files',
@@ -751,13 +790,21 @@ export class PaypalService {
         // Tạo project mới từ request public
         if (!request.project) {
           try {
-            // Gán assignee là user vừa thanh toán
-            request.assignee = user;
-            // Gọi service tạo project từ request
+            // KHÔNG gán lại assignee - giữ nguyên assignee đã được gán từ approveRegistrant
+            // request.assignee đã được set đúng từ approveRegistrant
+            console.log('[DEBUG] ===> CAPTURE PAYMENT - Creating project with existing assignee:', {
+              requestId: request.id,
+              existingAssigneeId: request.assignee?.id,
+              existingAssigneeEmail: request.assignee?.email,
+              requesterId: user.id,
+              requesterEmail: user.email
+            });
+
+            // Gọi service tạo project từ request với assignee hiện tại
             const createResult =
               await this.projectService.createProjectFromRequest(
                 request,
-                user.id
+                request.assignee?.id || user.id // Ưu tiên assignee, fallback về user nếu không có
               );
             const newProject = await this.projectRepository.findOneOrFail({
               where: { id: createResult.projectId },
@@ -1342,6 +1389,392 @@ export class PaypalService {
     } catch (error) {
       logger.error(`Failed to process refund for request ID ${request.id}: ${error}`);
       throw new InternalServerErrorException('Failed to process refund');
+    }
+  }
+
+  // Create PayPal order for the remaining 50% payment when requester approves
+  async createFinalPaymentOrder(requestId: bigint): Promise<{ approvalUrl: string }> {
+    console.log('🔍 [DEBUG] createFinalPaymentOrder called with requestId:', requestId);
+
+    const request = await this.requestRepository.findOneOrFail({
+      where: { id: requestId },
+      relations: ['requester', 'assignee'],
+    });
+
+    console.log('🔍 [DEBUG] Request found:', {
+      requestId: request.id,
+      requesterId: request.requester?.id,
+      requesterEmail: request.requester?.email,
+      assigneeId: request.assignee?.id,
+      assigneeEmail: request.assignee?.email,
+      dealAmount: request.dealAmount
+    });
+
+    if (!request.assignee || !request.requester) {
+      throw new BadRequestException('Request must have both requester and assignee.');
+    }
+
+    // Find original deposit transaction (50%) by requester
+    console.log('🔍 [DEBUG] Looking for original deposit transaction...');
+    const depositTx = await this.transactionRepo.findOneOrFail({
+      where: {
+        request: { id: requestId },
+        user: { id: request.requester.id },
+        type: TransactionType.DEPOSIT,
+      },
+      relations: ['request', 'user'],
+    });
+
+    console.log('🔍 [DEBUG] Found deposit transaction:', {
+      id: depositTx.id,
+      amount: depositTx.amount,
+      status: depositTx.status,
+      type: depositTx.type,
+      userId: depositTx.user?.id,
+      requestId: depositTx.request?.id
+    });
+
+    const finalAmount = Number(depositTx.amount);
+    if (finalAmount <= 0) {
+      throw new BadRequestException('Invalid deposit amount for final payment.');
+    }
+
+    console.log('🔍 [DEBUG] Final payment amount calculated:', {
+      originalDepositAmount: depositTx.amount,
+      finalAmount: finalAmount,
+      totalForTranslator: finalAmount * 2
+    });
+
+    const accessToken = await this.getAccessToken();
+    const orderData = {
+      intent: 'CAPTURE',
+      purchase_units: [
+        {
+          amount: {
+            currency_code: 'USD',
+            value: finalAmount.toFixed(2),
+          },
+          description: `Final 50% payment for request ID ${request.id}`,
+        },
+      ],
+      application_context: {
+        // Redirect to backend callback first, then backend will redirect to frontend
+        return_url: this.buildServerUrl('payment/paypal/final/success'),
+        cancel_url: this.buildServerUrl('payment/paypal/final/cancel'),
+        brand_name: 'HereToTranslate',
+        user_action: 'PAY_NOW',
+      },
+    } as any;
+
+    console.log('🔍 [DEBUG] PayPal order data:', JSON.stringify(orderData, null, 2));
+
+    const { data } = await axios.post(
+      `${this.api}/v2/checkout/orders`,
+      orderData,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+
+    console.log('🔍 [DEBUG] PayPal order created successfully:', {
+      orderId: data.id,
+      status: data.status,
+      links: data.links?.map((l: any) => ({ rel: l.rel, href: l.href }))
+    });
+
+    const approvalUrl = data.links?.find((l: any) => l.rel === 'approve')?.href;
+    if (!approvalUrl) {
+      throw new InternalServerErrorException('No approval URL returned by PayPal.');
+    }
+
+    console.log('🔍 [DEBUG] Approval URL:', approvalUrl);
+
+    // Create a pending PAYMENT transaction for requester to track this orderId
+    console.log('🔍 [DEBUG] Creating pending PAYMENT transaction for requester...');
+    const pendingTransaction = {
+      user: { id: request.requester.id } as UserEntity,
+      request: { id: request.id } as RequestEntity,
+      amount: finalAmount,
+      status: TransactionStatus.Pending,
+      type: TransactionType.PAYMENT,
+      paypalOrderId: data.id,
+    };
+
+    console.log('🔍 [DEBUG] Transaction data to save:', {
+      userId: pendingTransaction.user.id,
+      requestId: pendingTransaction.request.id,
+      amount: pendingTransaction.amount,
+      status: pendingTransaction.status,
+      type: pendingTransaction.type,
+      paypalOrderId: pendingTransaction.paypalOrderId
+    });
+
+    const savedTransaction = await this.transactionRepo.save(pendingTransaction);
+
+    console.log('🔍 [DEBUG] Transaction saved successfully:', {
+      id: savedTransaction.id,
+      userId: savedTransaction.user?.id,
+      requestId: savedTransaction.request?.id,
+      amount: savedTransaction.amount,
+      status: savedTransaction.status,
+      type: savedTransaction.type,
+      paypalOrderId: savedTransaction.paypalOrderId
+    });
+
+    console.log('🔍 [DEBUG] createFinalPaymentOrder completed successfully');
+    return { approvalUrl };
+  }
+
+  // Capture final 50% order, release deposit and pay translator 100%
+  async captureFinalPayment(orderId: string) {
+    console.log('🔍 [PAYMENT SERVICE] captureFinalPayment called with orderId:', orderId);
+    console.log('🔍 [DEBUG] ===========================================');
+    console.log('🔍 [DEBUG] STARTING FINAL PAYMENT CAPTURE PROCESS');
+    console.log('🔍 [DEBUG] ===========================================');
+
+    try {
+      const accessToken = await this.getAccessToken();
+      console.log('🔍 [PAYMENT SERVICE] Got access token, capturing payment...');
+
+      const captureRes = await axios.post(
+        `${this.api}/v2/checkout/orders/${orderId}/capture`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('🔍 [PAYMENT SERVICE] PayPal capture response status:', captureRes.status);
+      console.log('🔍 [PAYMENT SERVICE] PayPal capture response data:', JSON.stringify(captureRes.data, null, 2));
+
+      if (captureRes.status !== 201) {
+        throw new InternalServerErrorException('Payment capture failed');
+      }
+
+      console.log('🔍 [PAYMENT SERVICE] Looking for transaction with orderId:', orderId);
+
+      // Find the pending PAYMENT transaction created earlier for the requester
+      console.log('🔍 [DEBUG] STEP 1: Finding pending PAYMENT transaction...');
+      const finalPaymentTx = await this.transactionRepo.findOneOrFail({
+        where: { paypalOrderId: orderId },
+        relations: ['request', 'user', 'request.requester', 'request.assignee'],
+      });
+
+      console.log('🔍 [PAYMENT SERVICE] Found final payment transaction:', {
+        id: finalPaymentTx.id,
+        requestId: finalPaymentTx.request?.id,
+        userId: finalPaymentTx.user?.id,
+        amount: finalPaymentTx.amount,
+        status: finalPaymentTx.status,
+        type: finalPaymentTx.type,
+        paypalOrderId: finalPaymentTx.paypalOrderId
+      });
+
+      const request = finalPaymentTx.request;
+      const requester = request.requester;
+      const translator = request.assignee;
+
+      console.log('🔍 [PAYMENT SERVICE] Request details:', {
+        requestId: request.id,
+        requesterId: requester?.id,
+        requesterEmail: requester?.email,
+        translatorId: translator?.id,
+        translatorEmail: translator?.email
+      });
+
+      if (!translator || !requester) {
+        throw new InternalServerErrorException('Missing requester or translator');
+      }
+
+      console.log('🔍 [PAYMENT SERVICE] Looking for deposit transaction...');
+
+      // Locate the original deposit transaction
+      console.log('🔍 [DEBUG] STEP 2: Finding original DEPOSIT transaction...');
+      const depositTx = await this.transactionRepo.findOneOrFail({
+        where: {
+          request: { id: request.id },
+          user: { id: requester.id },
+          type: TransactionType.DEPOSIT,
+        },
+      });
+
+      console.log('🔍 [PAYMENT SERVICE] Found deposit transaction:', {
+        id: depositTx.id,
+        amount: depositTx.amount,
+        status: depositTx.status,
+        type: depositTx.type,
+        userId: depositTx.user?.id,
+        requestId: depositTx.request?.id
+      });
+
+      const depositAmount = Number(depositTx.amount);
+      const finalAmount = Number(finalPaymentTx.amount);
+
+      console.log('🔍 [PAYMENT SERVICE] Processing amounts:', {
+        depositAmount,
+        finalAmount,
+        totalForTranslator: depositAmount + finalAmount,
+        depositTxStatus: depositTx.status,
+        finalPaymentTxStatus: finalPaymentTx.status
+      });
+
+      // 1) Mark deposit transaction as COMPLETED (was ON_HOLD)
+      console.log('🔍 [DEBUG] STEP 3: Updating deposit transaction status to COMPLETED...');
+      console.log('🔍 [DEBUG] Before update - Deposit transaction:', {
+        id: depositTx.id,
+        oldStatus: depositTx.status,
+        newStatus: TransactionStatus.Completed
+      });
+
+      depositTx.status = TransactionStatus.Completed;
+      const updatedDepositTx = await this.transactionRepo.save(depositTx);
+
+      console.log('🔍 [DEBUG] After update - Deposit transaction:', {
+        id: updatedDepositTx.id,
+        newStatus: updatedDepositTx.status,
+        amount: updatedDepositTx.amount
+      });
+
+      // 2) Mark final payment transaction as COMPLETED
+      console.log('🔍 [DEBUG] STEP 4: Updating final payment transaction status to COMPLETED...');
+      console.log('🔍 [DEBUG] Before update - Final payment transaction:', {
+        id: finalPaymentTx.id,
+        oldStatus: finalPaymentTx.status,
+        newStatus: TransactionStatus.Completed
+      });
+
+      finalPaymentTx.status = TransactionStatus.Completed;
+      const updatedFinalPaymentTx = await this.transactionRepo.save(finalPaymentTx);
+
+      console.log('🔍 [DEBUG] After update - Final payment transaction:', {
+        id: updatedFinalPaymentTx.id,
+        newStatus: updatedFinalPaymentTx.status,
+        amount: updatedFinalPaymentTx.amount
+      });
+
+      console.log('🔍 [PAYMENT SERVICE] Updated transaction statuses to Completed');
+
+      // 3) Release held deposit from admin wallet and pay translator total 100%
+      console.log('🔍 [DEBUG] STEP 5: Updating admin wallet (releasing held deposit)...');
+      const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const adminOldBalance = adminWallet.balance;
+
+      console.log('🔍 [DEBUG] Admin wallet before update:', {
+        adminUserId: this.ADMIN_USER_ID,
+        oldBalance: adminOldBalance,
+        amountToDeduct: depositAmount,
+        newBalance: Number(adminOldBalance) - depositAmount
+      });
+
+      adminWallet.balance = Number(adminWallet.balance) - depositAmount;
+      const updatedAdminWallet = await this.walletRepository.save(adminWallet);
+
+      console.log('🔍 [DEBUG] Admin wallet after update:', {
+        adminUserId: this.ADMIN_USER_ID,
+        oldBalance: adminOldBalance,
+        newBalance: updatedAdminWallet.balance,
+        deducted: depositAmount
+      });
+
+      // 4) Add total amount to translator wallet
+      console.log('🔍 [DEBUG] STEP 6: Updating translator wallet (adding total payment)...');
+      const translatorWallet = await this.walletManagerService.getOrCreateWallet(translator.id);
+      const translatorOldBalance = translatorWallet.balance;
+      const amountToAdd = depositAmount + finalAmount;
+
+      console.log('🔍 [DEBUG] Translator wallet before update:', {
+        translatorId: translator.id,
+        translatorEmail: translator.email,
+        oldBalance: translatorOldBalance,
+        amountToAdd: amountToAdd,
+        newBalance: Number(translatorOldBalance) + amountToAdd
+      });
+
+      translatorWallet.balance = Number(translatorWallet.balance) + amountToAdd;
+      const updatedTranslatorWallet = await this.walletRepository.save(translatorWallet);
+
+      console.log('🔍 [DEBUG] Translator wallet after update:', {
+        translatorId: translator.id,
+        translatorEmail: translator.email,
+        oldBalance: translatorOldBalance,
+        newBalance: updatedTranslatorWallet.balance,
+        added: amountToAdd
+      });
+
+      // 5) Create ONE translator transaction with total 100%
+      console.log('🔍 [DEBUG] STEP 7: Creating translator PAYMENT transaction...');
+      const translatorTransactionData = {
+        user: { id: translator.id } as UserEntity,
+        request: { id: request.id } as RequestEntity,
+        amount: amountToAdd,
+        status: TransactionStatus.Completed,
+        type: TransactionType.PAYMENT,
+      };
+
+      console.log('🔍 [DEBUG] Translator transaction data to create:', {
+        userId: translatorTransactionData.user.id,
+        requestId: translatorTransactionData.request.id,
+        amount: translatorTransactionData.amount,
+        status: translatorTransactionData.status,
+        type: translatorTransactionData.type
+      });
+
+      const translatorTransaction = await this.transactionRepo.save(translatorTransactionData);
+
+      console.log('🔍 [PAYMENT SERVICE] Created translator transaction:', {
+        id: translatorTransaction.id,
+        amount: translatorTransaction.amount,
+        status: translatorTransaction.status,
+        type: translatorTransaction.type,
+        userId: translatorTransaction.user?.id,
+        requestId: translatorTransaction.request?.id
+      });
+
+      // 6) Mark request completed
+      console.log('🔍 [DEBUG] STEP 8: Marking request as COMPLETED...');
+      console.log('🔍 [DEBUG] Request before update:', {
+        id: request.id,
+        oldStatus: request.status,
+        newStatus: RequestStatus.Completed
+      });
+
+      request.status = RequestStatus.Completed;
+      const updatedRequest = await this.requestRepository.save(request);
+
+      console.log('🔍 [DEBUG] Request after update:', {
+        id: updatedRequest.id,
+        newStatus: updatedRequest.status
+      });
+
+      console.log('🔍 [PAYMENT SERVICE] Marked request as completed');
+
+      const result = {
+        success: true,
+        requestId: request.id,
+        translatorId: translator.id,
+        paidToTranslator: amountToAdd,
+        depositAmount: depositAmount,
+        finalAmount: finalAmount
+      };
+
+      console.log('🔍 [DEBUG] ===========================================');
+      console.log('🔍 [DEBUG] FINAL PAYMENT CAPTURE PROCESS COMPLETED');
+      console.log('🔍 [DEBUG] ===========================================');
+      console.log('🔍 [DEBUG] Final result:', result);
+      console.log('🔍 [PAYMENT SERVICE] Returning result:', result);
+      return result;
+
+    } catch (error) {
+      console.error('🔍 [PAYMENT SERVICE] captureFinalPayment error:', error);
+      console.error('🔍 [DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      throw error;
     }
   }
 

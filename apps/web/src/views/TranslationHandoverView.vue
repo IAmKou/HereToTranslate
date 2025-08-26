@@ -185,6 +185,9 @@
                 <!-- Review and Rating Section -->
                 <div v-if="!reviewSubmitted && (projectInfo?.status === 'WAITING_APPROVAL' || projectInfo?.status === 'FAILED')" class="review-section">
                   <h4>Review Translation</h4>
+
+
+
                   <div class="review-form">
                     <div class="review-decision">
                       <label>Decision:</label>
@@ -218,7 +221,69 @@
                       <span class="rating-text">{{ rating }}/5 stars</span>
                     </div>
 
-                    <div class="review-comment">
+                    <!-- Evidence Upload for 100% completed rejections -->
+                    <div v-if="isFullyCompleted && reviewDecision === 'REJECTED'" class="evidence-section">
+                      <!-- Clear explanation for evidence requirement -->
+                      <div class="evidence-explanation">
+                        <i class="pi pi-info-circle"></i>
+                        <div>
+                          <strong>Evidence Required</strong>
+                          <p>Because this translation is 100% completed, you must provide evidence to support your rejection. An admin will review your case and make the final decision.</p>
+                        </div>
+                      </div>
+
+                      <!-- Required reason field for 100% completed rejections -->
+                      <div class="review-reason">
+                        <label>Reason for rejection (required):</label>
+                        <textarea
+                          v-model="rejectionReason"
+                          placeholder="Please provide a detailed reason for rejecting this 100% completed translation. Be specific about what issues you found and why the translation is not acceptable..."
+                          rows="5"
+                          required
+                          class="rejection-reason-textarea"
+                        ></textarea>
+                      </div>
+
+                      <label>Evidence files (required):</label>
+                      <div class="evidence-upload">
+                        <div class="upload-area" @click="triggerFileUpload" @drop="handleFileDrop" @dragover="handleDragOver" @dragleave="handleDragLeave">
+                          <div class="upload-icon">
+                            <i class="pi pi-cloud-upload"></i>
+                          </div>
+                          <div class="upload-content">
+                            <h4>Upload Evidence Files</h4>
+                            <p class="upload-description">Drag and drop files here, or click to browse</p>
+                            <p class="upload-hint">Supported: Images (JPG, PNG), Documents (PDF, DOC, DOCX), Text files (TXT)</p>
+                            <div class="upload-button">
+                              <i class="pi pi-folder-open"></i>
+                              Choose Files
+                            </div>
+                          </div>
+                        </div>
+                        <input
+                          ref="fileInput"
+                          type="file"
+                          multiple
+                          accept="image/*,.pdf,.doc,.docx,.txt"
+                          @change="handleFileSelect"
+                          style="display: none"
+                        />
+                      </div>
+
+                      <div v-if="evidenceFiles.length > 0" class="evidence-files">
+                        <h5>Uploaded Evidence:</h5>
+                        <div v-for="(file, index) in evidenceFiles" :key="index" class="evidence-file">
+                          <i class="pi pi-file"></i>
+                          <span>{{ file.name }}</span>
+                          <button @click="removeEvidenceFile(index)" class="remove-file">
+                            <i class="pi pi-times"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Additional comments for normal rejections or approvals -->
+                    <div v-if="reviewDecision === 'APPROVED' || (reviewDecision === 'REJECTED' && !isFullyCompleted)" class="review-comment">
                       <label>Additional comments (optional):</label>
                       <textarea
                         v-model="reviewComment"
@@ -230,7 +295,7 @@
                     <div class="review-actions">
                       <button
                         @click="submitReview"
-                        :disabled="!reviewDecision || rating === 0"
+                        :disabled="!reviewDecision || rating === 0 || (isFullyCompleted && reviewDecision === 'REJECTED' && (evidenceFiles.length === 0 || !rejectionReason.trim()))"
                         class="btn btn-primary"
                       >
                         <i class="pi pi-check"></i> Submit Review
@@ -299,6 +364,13 @@
     <!-- Confirm Review Modal -->
     <div v-if="showConfirmModal" class="modal-overlay" @click="showConfirmModal = false">
       <div class="modal-content" @click.stop>
+        <!-- Loading overlay -->
+        <div v-if="isSubmitting" class="modal-loading-overlay">
+          <div class="loading-spinner">
+            <i class="pi pi-spin pi-spinner"></i>
+            <p>Submitting review...</p>
+          </div>
+        </div>
         <div class="modal-header">
           <h3><i class="pi pi-exclamation-triangle"></i> Confirm Review Submission</h3>
           <button @click="showConfirmModal = false" class="modal-close">
@@ -307,30 +379,96 @@
         </div>
 
         <div class="modal-body">
-          <p>Please confirm your review details before submitting:</p>
+          <!-- Different content for evidence-based rejections -->
+          <div v-if="confirmReviewData?.isFullyCompleted && confirmReviewData?.decision === 'REJECTED'" class="evidence-confirmation">
 
-          <div class="review-summary-preview">
-            <div class="summary-item">
-              <strong>Decision:</strong>
-              <span :class="['status-badge', confirmReviewData?.decision === 'APPROVED' ? 'status-approved' : 'status-rejected']">
-                {{ confirmReviewData?.decision === 'APPROVED' ? 'Approve' : 'Reject' }}
-              </span>
+            <!-- Admin Review Notice moved to top -->
+            <div class="admin-review-notice">
+              <i class="pi pi-shield"></i>
+              <div>
+                <strong>Admin Review Required</strong>
+                <p>Your rejection will be reviewed by an admin. If the admin finds your rejection unjustified, the translator will receive 50% of the deposit. If justified, you will receive a refund.</p>
+              </div>
             </div>
 
-            <div class="summary-item">
-              <strong>Rating:</strong>
-              <span class="rating-display">
-                <i v-for="star in 5" :key="star"
-                   :class="['pi', star <= confirmReviewData?.rating ? 'pi-star-fill' : 'pi-star']"
-                   :style="{ color: star <= confirmReviewData?.rating ? '#fbbf24' : '#d1d5db' }">
-                </i>
-                {{ confirmReviewData?.rating }}/5
-              </span>
-            </div>
+            <div class="review-summary-preview admin-review-close">
+              <div class="summary-item">
+                <strong>Decision:</strong>
+                <span class="status-badge status-rejected">Reject</span>
+              </div>
 
-            <div v-if="confirmReviewData?.comment" class="summary-item">
-              <strong>Comment:</strong>
-              <p class="comment-preview">{{ confirmReviewData.comment }}</p>
+              <div class="summary-item">
+                <strong>Rating:</strong>
+                <span class="rating-display">
+                  <i v-for="star in 5" :key="star"
+                     :class="['pi', star <= confirmReviewData?.rating ? 'pi-star-fill' : 'pi-star']"
+                     :style="{ color: star <= confirmReviewData?.rating ? '#fbbf24' : '#d1d5db' }">
+                  </i>
+                  {{ confirmReviewData?.rating }}/5
+                </span>
+              </div>
+
+              <div v-if="confirmReviewData?.rejectionReason" class="summary-item">
+                <strong>Reason for rejection:</strong>
+                <div class="reason-preview-container">
+                  <textarea
+                    class="reason-preview-textarea"
+                    readonly
+                    rows="4"
+                  >{{ confirmReviewData.rejectionReason }}</textarea>
+                </div>
+              </div>
+
+              <div class="summary-item">
+                <strong>Evidence files:</strong>
+                <div class="evidence-preview-container">
+                  <div class="evidence-count-badge">
+                    <i class="pi pi-file"></i>
+                    <span>{{ confirmReviewData.evidenceFiles?.length || 0 }} files uploaded</span>
+                  </div>
+                  <div v-if="confirmReviewData.evidenceFiles?.length > 0" class="evidence-files-list">
+                    <div v-for="(file, index) in confirmReviewData.evidenceFiles" :key="index" class="evidence-file-item">
+                      <i class="pi pi-file"></i>
+                      <span>{{ file.name }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="confirmReviewData?.comment" class="summary-item">
+                <strong>Additional comments:</strong>
+                <p class="comment-preview">{{ confirmReviewData.comment }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Normal review confirmation -->
+          <div v-else>
+            <p>Please confirm your review details before submitting:</p>
+
+            <div class="review-summary-preview">
+              <div class="summary-item">
+                <strong>Decision:</strong>
+                <span :class="['status-badge', confirmReviewData?.decision === 'APPROVED' ? 'status-approved' : 'status-rejected']">
+                  {{ confirmReviewData?.decision === 'APPROVED' ? 'Approve' : 'Reject' }}
+                </span>
+              </div>
+
+              <div class="summary-item">
+                <strong>Rating:</strong>
+                <span class="rating-display">
+                  <i v-for="star in 5" :key="star"
+                     :class="['pi', star <= confirmReviewData?.rating ? 'pi-star-fill' : 'pi-star']"
+                     :style="{ color: star <= confirmReviewData?.rating ? '#fbbf24' : '#d1d5db' }">
+                  </i>
+                  {{ confirmReviewData?.rating }}/5
+                </span>
+              </div>
+
+              <div v-if="confirmReviewData?.comment" class="summary-item">
+                <strong>Comment:</strong>
+                <p class="comment-preview">{{ confirmReviewData.comment }}</p>
+              </div>
             </div>
           </div>
 
@@ -344,8 +482,10 @@
           <button @click="showConfirmModal = false" class="btn btn-secondary">
             <i class="pi pi-times"></i> Cancel
           </button>
-          <button @click="confirmSubmitReview" class="btn btn-primary">
-            <i class="pi pi-check"></i> Confirm & Submit
+          <button @click="confirmSubmitReview" :disabled="isSubmitting" class="btn btn-primary">
+            <i v-if="isSubmitting" class="pi pi-spin pi-spinner"></i>
+            <i v-else class="pi pi-check"></i>
+            {{ isSubmitting ? 'Submitting...' : 'Confirm & Submit' }}
           </button>
         </div>
       </div>
@@ -380,13 +520,28 @@ const downloading = ref(false);
 const reviewDecision = ref('');
 const rating = ref(0);
 const reviewComment = ref('');
+const rejectionReason = ref(''); // New field for 100% completed rejections
 const reviewSubmitted = ref(false);
 const submittedRating = ref(0);
 const submittedComment = ref('');
 
+// Evidence upload state
+const evidenceFiles = ref<File[]>([]);
+const fileInput = ref<HTMLInputElement>();
+
+// Computed property to check if translation is 100% completed
+const isFullyCompleted = computed(() => {
+  return overallProgress.value === 100 &&
+    completedFiles.value === totalFiles.value &&
+    completedStrings.value === totalStrings.value;
+});
+
 // Confirm modal state
 const showConfirmModal = ref(false);
 const confirmReviewData = ref<any>(null);
+
+// Loading state for form submission
+const isSubmitting = ref(false);
 
 // Data
 const projectInfo = ref<any>(null);
@@ -842,6 +997,46 @@ function getDeliveryMethodText(method: string): string {
   }
 }
 
+// File upload methods
+function triggerFileUpload() {
+  fileInput.value?.click();
+}
+
+function handleFileSelect(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files) {
+    const newFiles = Array.from(target.files);
+    evidenceFiles.value.push(...newFiles);
+  }
+}
+
+function handleFileDrop(event: DragEvent) {
+  event.preventDefault();
+  const uploadArea = event.currentTarget as HTMLElement;
+  uploadArea.classList.remove('dragover');
+
+  if (event.dataTransfer?.files) {
+    const newFiles = Array.from(event.dataTransfer.files);
+    evidenceFiles.value.push(...newFiles);
+  }
+}
+
+function handleDragOver(event: DragEvent) {
+  event.preventDefault();
+  const uploadArea = event.currentTarget as HTMLElement;
+  uploadArea.classList.add('dragover');
+}
+
+function handleDragLeave(event: DragEvent) {
+  event.preventDefault();
+  const uploadArea = event.currentTarget as HTMLElement;
+  uploadArea.classList.remove('dragover');
+}
+
+function removeEvidenceFile(index: number) {
+  evidenceFiles.value.splice(index, 1);
+}
+
 async function downloadAllFiles() {
   downloading.value = true;
 
@@ -970,12 +1165,37 @@ async function submitReview() {
     return;
   }
 
+  // Check if evidence and reason are required for 100% completed rejections
+  if (isFullyCompleted.value && reviewDecision.value === 'REJECTED') {
+    if (evidenceFiles.value.length === 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Warning',
+        detail: 'Please upload evidence for rejection. This translation is 100% completed and requires proof.',
+        life: 3000
+      });
+      return;
+    }
+
+    if (!rejectionReason.value.trim()) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Warning',
+        detail: 'Please provide a reason for rejection. This translation is 100% completed and requires a detailed explanation.',
+        life: 3000
+      });
+      return;
+    }
+  }
+
   // Debug: Log project info to understand structure
   console.log('=== DEBUG submitReview ===');
   console.log('projectInfo.value:', projectInfo.value);
   console.log('projectInfo.value.assignee:', projectInfo.value?.assignee);
   console.log('projectInfo.value.project:', projectInfo.value?.project);
   console.log('projectInfo.value.project?.assignee:', projectInfo.value?.project?.assignee);
+  console.log('isFullyCompleted:', isFullyCompleted.value);
+  console.log('evidenceFiles:', evidenceFiles.value.length);
 
   // Get translator ID from request data
   let translatorId = null;
@@ -999,7 +1219,10 @@ async function submitReview() {
     decision: reviewDecision.value,
     rating: rating.value,
     comment: reviewComment.value,
-    translatorId: translatorId
+    rejectionReason: rejectionReason.value, // Add rejection reason
+    translatorId: translatorId,
+    isFullyCompleted: isFullyCompleted.value,
+    evidenceFiles: evidenceFiles.value
   };
 
   // Show confirmation modal
@@ -1008,8 +1231,72 @@ async function submitReview() {
 
 async function confirmSubmitReview() {
   try {
-    // Submit review to backend
-    await axiosInstance.post('/requests/review', confirmReviewData.value);
+    // Set loading state
+    isSubmitting.value = true;
+
+    // If approved, start PayPal final 50% flow instead of submitting review immediately
+    if (confirmReviewData.value?.decision === 'APPROVED' && requestId.value) {
+      const { data } = await axiosInstance.post(`/payment/finalize-translation/${requestId.value}`);
+      if (data?.approvalUrl) {
+        // Add payment details to PayPal URL for success view
+        const paymentDetails = new URLSearchParams({
+          requestId: requestId.value,
+          amount: originalRequestData.value?.dealAmount?.toString() || '0',
+          currency: 'USD',
+          depositAmount: originalRequestData.value?.dealAmount?.toString() || '0', // Initial 50% deposit
+          totalAmount: originalRequestData.value?.dealAmount?.toString() || '0'  // Total 100% for translator
+        });
+
+        const finalUrl = `${data.approvalUrl}&${paymentDetails.toString()}`;
+        console.log('Redirecting to PayPal with payment details:', finalUrl);
+        window.location.href = finalUrl;
+        return; // Stop further local state updates; flow continues after PayPal redirect
+      }
+    }
+
+    // Otherwise (e.g., REJECTED), submit review to backend
+    if (confirmReviewData.value.isFullyCompleted && confirmReviewData.value.decision === 'REJECTED') {
+      // For 100% completed rejections, upload evidence files
+      const formData = new FormData();
+
+      // Debug: Log all data before sending
+      console.log('=== DEBUG: confirmReviewData ===', confirmReviewData.value);
+      console.log('=== DEBUG: requestId ===', confirmReviewData.value.requestId);
+      console.log('=== DEBUG: decision ===', confirmReviewData.value.decision);
+      console.log('=== DEBUG: rating ===', confirmReviewData.value.rating);
+      console.log('=== DEBUG: rejectionReason ===', confirmReviewData.value.rejectionReason);
+      console.log('=== DEBUG: translatorId ===', confirmReviewData.value.translatorId);
+      console.log('=== DEBUG: evidenceFiles ===', confirmReviewData.value.evidenceFiles);
+
+      formData.append('requestId', confirmReviewData.value.requestId);
+      formData.append('decision', confirmReviewData.value.decision);
+      formData.append('rating', confirmReviewData.value.rating.toString());
+      formData.append('comment', confirmReviewData.value.comment || '');
+      formData.append('rejectionReason', confirmReviewData.value.rejectionReason || '');
+      formData.append('translatorId', confirmReviewData.value.translatorId);
+      formData.append('isFullyCompleted', 'true');
+
+      // Append evidence files - use 'evidence' as key for FilesInterceptor
+      confirmReviewData.value.evidenceFiles.forEach((file: File) => {
+        formData.append('evidence', file);
+      });
+
+      // Debug: Log FormData contents
+      console.log('=== DEBUG: FormData contents ===');
+      for (let [key, value] of (formData as any).entries()) {
+        console.log(`${key}:`, value);
+      }
+
+      console.log('=== DEBUG: Sending to API ===', '/requests/review-with-evidence');
+
+      await axiosInstance.post('/requests/review-with-evidence', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    } else {
+      await axiosInstance.post('/requests/review', confirmReviewData.value);
+    }
 
     // Update local state
     reviewSubmitted.value = true;
@@ -1048,6 +1335,9 @@ async function confirmSubmitReview() {
       detail: err.response?.data?.message || 'Failed to submit review',
       life: 3000
     });
+  } finally {
+    // Reset loading state
+    isSubmitting.value = false;
   }
 }
 
@@ -1233,11 +1523,39 @@ onMounted(() => {
 
 .review-decision label,
 .rating-section label,
-.review-comment label {
+.review-comment label,
+.review-reason label {
   display: block;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+
+.rejection-reason-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: vertical;
+  transition: all 0.3s ease;
+  background: #f9fafb;
+}
+
+.rejection-reason-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.rejection-reason-textarea::placeholder {
+  color: #9ca3af;
+  font-style: italic;
 }
 
 .decision-buttons {
@@ -1320,6 +1638,220 @@ onMounted(() => {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Completion Warning Styles */
+.completion-warning {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  color: #92400e;
+}
+
+.completion-warning i {
+  color: #f59e0b;
+  font-size: 1.25rem;
+  margin-top: 0.125rem;
+}
+
+.completion-warning strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.completion-warning p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Evidence Upload Styles */
+.evidence-section {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.evidence-section label {
+  display: block;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.evidence-upload {
+  margin-bottom: 1rem;
+}
+
+.upload-area {
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-area:hover {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+}
+
+.upload-area.dragover {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  transform: scale(1.02);
+}
+
+.upload-icon {
+  margin-bottom: 1.5rem;
+}
+
+.upload-icon i {
+  font-size: 3rem;
+  color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.upload-content h4 {
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem 0;
+}
+
+.upload-description {
+  color: #4b5563;
+  font-size: 1rem;
+  margin: 0 0 0.5rem 0;
+  font-weight: 500;
+}
+
+.upload-hint {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.4;
+}
+
+.upload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.upload-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.upload-button i {
+  font-size: 1rem;
+}
+
+.evidence-files {
+  margin-top: 1.5rem;
+}
+
+.evidence-files h5 {
+  margin: 0 0 1rem 0;
+  color: #1f2937;
+  font-size: 1.125rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.evidence-files h5::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-radius: 2px;
+}
+
+.evidence-file {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.evidence-file:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #3b82f6;
+}
+
+.evidence-file i {
+  color: #3b82f6;
+  font-size: 1.5rem;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+
+.evidence-file span {
+  flex: 1;
+  color: #374151;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.remove-file {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border: none;
+  color: #dc2626;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.remove-file:hover {
+  background: linear-gradient(135deg, #fecaca, #fca5a5);
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.remove-file i {
+  font-size: 1rem;
 }
 
 .review-actions {
@@ -1646,9 +2178,187 @@ onMounted(() => {
   color: white;
 }
 
+/* Evidence confirmation modal styles */
+.evidence-confirmation {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.evidence-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  color: #92400e;
+}
+
+.evidence-warning i {
+  font-size: 1.5rem;
+  color: #f59e0b;
+  margin-top: 0.25rem;
+}
+
+.evidence-warning h4 {
+  margin: 0 0 0.5rem 0;
+  color: #92400e;
+  font-size: 1.125rem;
+}
+
+.evidence-warning p {
+  margin: 0;
+  color: #92400e;
+}
+
+.reason-preview-container {
+  flex: 1;
+}
+
+.reason-preview-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: none;
+  font-family: inherit;
+  cursor: default;
+  user-select: text;
+}
+
+.reason-preview-textarea:focus {
+  outline: none;
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.evidence-preview-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.evidence-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.evidence-count-badge i {
+  font-size: 1rem;
+}
+
+.evidence-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.evidence-file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.evidence-file-item i {
+  color: #3b82f6;
+  font-size: 1rem;
+}
+
+.admin-review-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  color: #1e40af;
+}
+
+.admin-review-notice i {
+  font-size: 1.5rem;
+  color: #3b82f6;
+  margin-top: 0.125rem;
+}
+
+.admin-review-notice strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #1e40af;
+}
+
+.admin-review-notice p {
+  margin: 0;
+  color: #1e40af;
+  line-height: 1.4;
+}
+
+/* Evidence explanation styles */
+.evidence-explanation {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  color: #1e40af;
+  margin-bottom: 1rem;
+}
+
+.evidence-explanation i {
+  font-size: 1.5rem;
+  color: #3b82f6;
+  margin-top: 0.25rem;
+}
+
+.evidence-explanation strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #1e40af;
+}
+
+.evidence-explanation p {
+  margin: 0;
+  color: #1e40af;
+  line-height: 1.5;
+}
+
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary:disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-secondary {
@@ -1677,9 +2387,9 @@ onMounted(() => {
 .modal-content {
   background: white;
   border-radius: 12px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
+  max-width: 1200px;
+  width: 98%;
+  max-height: 95vh;
   overflow-y: auto;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
   z-index: 10000;
@@ -1700,10 +2410,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 1.25rem;
 }
 
 .modal-header h3 i {
   color: #f59e0b;
+  font-size: 1.125rem;
 }
 
 .modal-close {
@@ -1723,27 +2435,37 @@ onMounted(() => {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
 }
 
 .modal-body p {
   margin-bottom: 1.5rem;
   color: #4a5568;
+  font-size: 0.875rem;
 }
 
 .review-summary-preview {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: 2rem;
   margin-bottom: 1.5rem;
 }
 
+.review-summary-preview.admin-review-close {
+  margin-top: 0.5rem;
+}
+
 .summary-item {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 120px 1fr;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  align-items: start;
 }
 
 .summary-item:last-child {
@@ -1751,8 +2473,10 @@ onMounted(() => {
 }
 
 .summary-item strong {
-  min-width: 80px;
   color: #2d3748;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding-top: 0.25rem;
 }
 
 .comment-preview {
@@ -1763,6 +2487,8 @@ onMounted(() => {
   border-radius: 6px;
   color: #4a5568;
   font-style: italic;
+  font-size: 0.875rem;
+  line-height: 1.4;
 }
 
 .warning-message {
@@ -1783,7 +2509,7 @@ onMounted(() => {
 
 .warning-message p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
 }
 
 .modal-footer {
@@ -1792,6 +2518,39 @@ onMounted(() => {
   padding: 1.5rem;
   border-top: 1px solid #e2e8f0;
   justify-content: flex-end;
+}
+
+/* Loading overlay styles */
+.modal-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  border-radius: 12px;
+}
+
+.loading-spinner {
+  text-align: center;
+  color: #3b82f6;
+}
+
+.loading-spinner i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: #3b82f6;
+}
+
+.loading-spinner p {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
 }
 
 

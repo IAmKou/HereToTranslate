@@ -285,18 +285,6 @@ router.beforeEach((to, from, next) => {
   console.log('🔍 Router Guard - Is admin:', isAdmin);
   console.log('🔍 Router Guard - Current user:', currentUser);
 
-  // If user is already on login page and authenticated, redirect to appropriate home
-  if (to.path === '/login' && isAuthenticated) {
-    if (isAdmin) {
-      console.log('🔍 Router Guard - Authenticated admin on login page, redirecting to adminhome');
-      next('/adminhome');
-    } else {
-      console.log('🔍 Router Guard - Authenticated user on login page, redirecting to userhome');
-      next('/userhome');
-    }
-    return;
-  }
-
   // Allow access to login page even if not authenticated
   if (to.path === '/login') {
     console.log('🔍 Router Guard - Allowing access to login page');

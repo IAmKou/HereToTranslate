@@ -532,6 +532,53 @@ export class FileService {
     }
     */
 
+    // Attempt to delete from Aspose storage (original and language-suffixed variants)
+    try {
+      const isPdf = typeof file.fileName === 'string' && file.fileName.toLowerCase().endsWith('.pdf');
+      if (isPdf) {
+        const projectId = file.project?.id;
+        const candidateFolders: string[] = projectId
+          ? [
+              `projects/project-${projectId}`,
+              `projects/projects-${projectId}`,
+            ]
+          : ['pdf'];
+
+        const dotIdx = file.fileName.lastIndexOf('.');
+        const base = dotIdx > -1 ? file.fileName.slice(0, dotIdx) : file.fileName;
+        const originalName = file.fileName;
+
+        let langCodes: string[] = [];
+        try {
+          langCodes = await this.getTargetLanguagesForProject(projectId);
+        } catch (e) {
+          this.logger.warn('Could not fetch project languages for deletion; proceeding with original only');
+        }
+
+        const suffixNames: string[] = Array.from(new Set(
+          (langCodes || [])
+            .map((l) => String(l).toUpperCase().replace(/[^A-Z0-9_-]/g, ''))
+            .filter(Boolean)
+            .map((code) => `${base}(${code}).pdf`)
+        ));
+
+        const allNames = [originalName, ...suffixNames];
+
+        for (const folder of candidateFolders) {
+          for (const name of allNames) {
+            try {
+              await this.asposeService.deleteFileWithFolder(name, folder);
+              this.logger.log(`[FileService] Deleted from Aspose: ${folder}/${name}`);
+            } catch (delErr) {
+              this.logger.warn(`[FileService] Aspose delete failed for ${folder}/${name}: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
+            }
+          }
+        }
+      }
+    } catch (asposeCleanupErr) {
+      this.logger.warn(`[FileService] Aspose cleanup encountered an error: ${asposeCleanupErr instanceof Error ? asposeCleanupErr.message : String(asposeCleanupErr)}`);
+    }
+
     await this.fileRepository.delete(String(file.id));
     this.logger.log(`File deleted successfully: ${file.fileName}`);
 

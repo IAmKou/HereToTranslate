@@ -74,15 +74,8 @@ export class TranslationController {
       throw new Error('File not found');
     }
 
-    if (file.fileType === 'application/pdf') {
-      const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language);
-      const dotIdx = String(fileName).lastIndexOf('.');
-      const base = dotIdx > -1 ? fileName.slice(0, dotIdx) : fileName;
-      const langSuffix = (language || '').toUpperCase();
-      const asposeName = `${base.replace(/\.[^.]+$/, '')}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
-      return this.asposeService.downloadFile(`pdf/${asposeName}`, 'herett');
-    }
-
+    // For all file types, use the standard exportTranslation method
+    // This ensures consistent behavior and proper GitHub URL generation
     return this.translationService.exportTranslation(fileId, language);
   }
 
@@ -94,17 +87,33 @@ export class TranslationController {
     @Query('format') format: 'original' | 'xliff' = 'original',
     @Res() res: Response
   ) {
-    const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language, format);
-    if (fileType === 'application/pdf') {
-      const dotIdx = String(fileName).lastIndexOf('.');
-      const base = dotIdx > -1 ? fileName.slice(0, dotIdx) : fileName;
-      const langSuffix = (language || '').toUpperCase();
-      const asposeName = `${base.replace(/\.[^.]+$/, '')}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
-      return this.asposeService.downloadFile(`pdf/${asposeName}`, 'herett');
+    try {
+      console.log(`[downloadExport] Starting export for fileId: ${fileId}, language: ${language}, format: ${format}`);
+      
+      const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language, format);
+      
+      console.log(`[downloadExport] Buffer built successfully, size: ${buffer.length} bytes, fileName: ${fileName}, fileType: ${fileType}`);
+      
+      // Set proper headers for file download
+      res.setHeader('Content-Type', fileType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Pragma', 'no-cache');
+      
+      console.log(`[downloadExport] Headers set, sending buffer...`);
+      
+      // Send the buffer directly for all file types
+      res.end(buffer);
+      
+      console.log(`[downloadExport] Buffer sent successfully`);
+    } catch (error) {
+      console.error(`[downloadExport] Error:`, error);
+      return res.status(500).json({
+        message: 'Export failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
-    res.setHeader('Content-Type', fileType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
-    return res.send(buffer);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -277,6 +286,37 @@ export class TranslationController {
       res.status(500).json({
         message: 'Failed to create bulk export',
         error: error?.message || 'Unknown error'
+      });
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('test-pdf/:fileId')
+  async testPdfGeneration(
+    @Param('fileId') fileId: string,
+    @Query('language') language: string,
+    @Res() res: Response
+  ) {
+    try {
+      console.log(`[testPdfGeneration] Testing PDF generation for fileId: ${fileId}, language: ${language}`);
+      
+      const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, language, 'original');
+      
+      console.log(`[testPdfGeneration] Test successful - Buffer size: ${buffer.length} bytes, fileName: ${fileName}, fileType: ${fileType}`);
+      
+      return res.json({
+        success: true,
+        bufferSize: buffer.length,
+        fileName,
+        fileType,
+        message: 'PDF generation test successful'
+      });
+    } catch (error) {
+      console.error(`[testPdfGeneration] Test failed:`, error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'PDF generation test failed'
       });
     }
   }

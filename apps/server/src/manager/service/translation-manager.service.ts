@@ -499,6 +499,7 @@ export class TranslationService {
   ): Promise<{ buffer: Buffer; fileName: string; fileType: string }> {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
+      relations: ['project'],
     });
     if (!fileEntity) throw new Error('File not found');
 
@@ -591,6 +592,46 @@ export class TranslationService {
       console.log(
         `[PDF Export] Processing PDF file: ${fileEntity.fileName}, size: ${fileEntity.fileContent.length} bytes`
       );
+      try {
+        const dotIdxLocal = String(fileEntity.fileName).lastIndexOf('.');
+        const baseLocal = dotIdxLocal > -1 ? fileEntity.fileName.slice(0, dotIdxLocal) : fileEntity.fileName;
+        const langSuffixLocal = String(language || '').toUpperCase();
+        const langFileNameLocal = `${baseLocal}${langSuffixLocal ? `(${langSuffixLocal})` : ''}.pdf`;
+
+        const candidateFolders: string[] = fileEntity.project?.id
+          ? [
+              `projects/project-${fileEntity.project.id}`,
+            ]
+          : ['pdf'];
+
+        let downloaded: Buffer | null = null;
+        for (const folderCandidate of candidateFolders) {
+          // Try language-specific then fallback to original name
+          const fileCandidates = [langFileNameLocal, fileEntity.fileName];
+          for (const nameCandidate of fileCandidates) {
+            try {
+              console.log(`[PDF Export] Attempt Aspose download: folder=${folderCandidate}, file=${nameCandidate}`);
+              const buf = await this.asposeService.downloadFileWithFolder(nameCandidate, folderCandidate);
+              if (buf && Buffer.isBuffer(buf) && buf.length > 0) {
+                downloaded = buf;
+                break;
+              }
+            } catch (_) {
+              // continue to next candidate
+            }
+          }
+          if (downloaded) break;
+        }
+
+        if (downloaded) {
+          console.log(`[PDF Export] Downloaded from Aspose successfully, size=${downloaded.length} bytes`);
+          const ext = '.pdf';
+          const fileName = `${baseLocal}.${language}${ext || ''}`;
+          return { buffer: downloaded, fileName, fileType: fileEntity.fileType };
+        }
+      } catch (attemptErr) {
+        console.warn(`[PDF Export] Aspose download attempt failed, falling back to local generation: ${attemptErr instanceof Error ? attemptErr.message : String(attemptErr)}`);
+      }
 
       const entries = await this.translationModel
         .find({ fileId, language })
@@ -711,7 +752,8 @@ export class TranslationService {
     const dotIdx = String(fileEntity.fileName).lastIndexOf('.');
     const base =
       dotIdx > -1 ? fileEntity.fileName.slice(0, dotIdx) : fileEntity.fileName;
-    const fileName = `${base}.${language}${ext || ''}`;
+    const langUpper = String(language || '').toUpperCase();
+    const fileName = `${base}${langUpper ? `(${langUpper})` : ''}${ext || ''}`;
 
     return { buffer, fileName, fileType: fileEntity.fileType };
   }

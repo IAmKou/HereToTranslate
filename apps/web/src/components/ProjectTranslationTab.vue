@@ -423,6 +423,8 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
   const fileId = file.fileId || file.id;
   const currentLanguage = selectedLanguage.value?.code || defaultLanguage.value.code;
   try {
+    console.log(`[Frontend] Starting export for fileId: ${fileId}, language: ${currentLanguage}, format: ${format}`);
+    
     const res = await axiosInstance.get(`/translation/export/download/${fileId}`, {
       params: {
         language: currentLanguage,
@@ -430,7 +432,20 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
       },
       responseType: 'blob',
     });
+    
+    console.log(`[Frontend] Response received:`, {
+      status: res.status,
+      headers: res.headers,
+      dataSize: res.data?.size || 'unknown',
+      contentType: res.headers['content-type']
+    });
+    
     const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
+    console.log(`[Frontend] Blob created:`, {
+      size: blob.size,
+      type: blob.type
+    });
+    
     // Prefer filename from header; fallback to constructed name
     const disposition = res.headers['content-disposition'] as string | undefined;
     let filename = file.fileName || `export_${fileId}`;
@@ -439,6 +454,9 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
       const extracted = decodeURIComponent(match?.[1] || match?.[2] || '');
       if (extracted) filename = extracted;
     }
+    
+    console.log(`[Frontend] Filename: ${filename}`);
+    
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -447,8 +465,11 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
+    
+    console.log(`[Frontend] Download link clicked for: ${filename}`);
     toast.add({ severity: 'success', summary: 'Exported', detail: `Downloaded ${filename}`, life: 2500 });
   } catch (e: any) {
+    console.error(`[Frontend] Export error:`, e);
     toast.add({ severity: 'error', summary: 'Export failed', detail: e?.message || 'Unable to export file', life: 3000 });
   }
 }

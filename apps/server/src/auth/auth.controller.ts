@@ -179,7 +179,6 @@ export class AuthController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('me')
   async getCurrentUser(@Req() req: Request) {
     const token = req.cookies?.access_token;

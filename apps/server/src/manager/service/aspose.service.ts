@@ -48,40 +48,57 @@ export class AsposeService {
     fileName: string,
     filePage: number,
     replacements: Array<{ oldText: string; newText: string }>,
+    folder = 'pdf',
     storageName?: string
   ): Promise<void> {
     const storage = storageName || this.storage;
-    const filePath = `pdf/${fileName}`;
+    const filePath = `${folder}/${fileName}`;
 
     const exists = await this.pdfApi.objectExists(filePath, storage);
     if (!exists.body.exists) {
       throw new Error(`[Aspose] File not found in storage: ${filePath}`);
     }
   
-    // get detailed text items with style info
+    // get detailed text items with style info (best-effort; depends on SDK version)
     let pageTextItems: any[] = [];
     try {
       let pageTextResp: any = null;
-      // Prefer text rects (include more details)
-      try {
-        pageTextResp = await (this.pdfApi as any).getPageTextRects(
-          fileName,
-          filePage,
-          undefined,
-          'pdf',
-          storage
-        );
-      } catch (e) {
-        console.error(`[Aspose] Error getting page text rects for ${filePath}:`, e);
+      const apiAny: any = this.pdfApi as any;
+      // Prefer text rects (include more details) when available in SDK
+      if (typeof apiAny.getPageTextRects === 'function') {
+        try {
+          pageTextResp = await apiAny.getPageTextRects(
+            fileName,
+            filePage,
+            undefined,
+            folder,
+            storage
+          );
+        } catch (e) {
+          console.warn(`[Aspose] Error getting page text rects for ${filePath}:`, e);
+        }
       }
-      if (!pageTextResp) {
-        // Fallback to getPageText if getPageTextRects is unavailable
-        pageTextResp = await (this.pdfApi as any).getPageText(
-          fileName,
-          filePage,
-          storage,
-          'pdf'
-        );
+      // Fallback to getPageText if getPageTextRects is unavailable or failed
+      if (!pageTextResp && typeof apiAny.getPageText === 'function') {
+        try {
+          // Use full-page rectangle to fetch text occurrences
+          // getPageText(name, pageNumber, LLX, LLY, URX, URY, format?, regex?, splitRects?, folder?, storage?)
+          pageTextResp = await apiAny.getPageText(
+            fileName,
+            filePage,
+            0,
+            0,
+            9999,
+            9999,
+            undefined,
+            undefined,
+            true,
+            folder,
+            storage
+          );
+        } catch (e) {
+          console.warn(`[Aspose] Error getting page text for ${filePath}:`, e);
+        }
       }
       const body = pageTextResp?.body || {};
       // Normalize possible shapes: textRects.list, list, textOccurrences.list
@@ -159,7 +176,7 @@ export class AsposeService {
         filePage,
         request,
         storage,
-        "pdf"
+        folder
       );
   
       console.log(
@@ -204,18 +221,52 @@ export class AsposeService {
   /**
    * Get PDF document info
    */
-  async getPdfInfo(fileName: string, storageName?: string) {
+  async getPdfInfo(fileName: string, folder = 'pdf', storageName?: string) {
     const storage = storageName || this.storage;
-    const filePath = `pdf/${fileName}`;
+    const filePath = `${folder}/${fileName}`;
     
     try {
-      const result = await this.pdfApi.getDocument(fileName, storage, 'pdf');
+      const result = await this.pdfApi.getDocument(fileName, storage, folder);
       console.log(`[Aspose] Retrieved PDF info for: ${filePath}`);
       return result.body;
     } catch (error) {
       console.error(`[Aspose] Error getting PDF info for ${filePath}:`, error);
       throw new Error(`Failed to get PDF info: ${error}`);
     }
+  }
+
+  /**
+   * Helper method to construct file path consistently
+   */
+  private constructFilePath(fileName: string, folder: string): string {
+    return `${folder}/${fileName}`;
+  }
+
+  /**
+   * Check if file exists in storage with folder support
+   */
+  async fileExistsWithFolder(fileName: string, folder = 'pdf', storageName?: string): Promise<boolean> {
+    const storage = storageName || this.storage;
+    const filePath = this.constructFilePath(fileName, folder);
+    return this.fileExists(filePath, storage);
+  }
+
+  /**
+   * Download file from Aspose storage with folder support
+   */
+  async downloadFileWithFolder(fileName: string, folder = 'pdf', storageName?: string): Promise<Buffer> {
+    const storage = storageName || this.storage;
+    const filePath = this.constructFilePath(fileName, folder);
+    return this.downloadFile(filePath, storage);
+  }
+
+  /**
+   * Delete file from Aspose storage with folder support
+   */
+  async deleteFileWithFolder(fileName: string, folder = 'pdf', storageName?: string): Promise<void> {
+    const storage = storageName || this.storage;
+    const filePath = this.constructFilePath(fileName, folder);
+    return this.deleteFile(filePath, storage);
   }
 
 }

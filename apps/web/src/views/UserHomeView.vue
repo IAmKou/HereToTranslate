@@ -285,10 +285,6 @@ onMounted(async () => {
               <div class="stat-content">
                 <div class="stat-number">{{ totalProjects }}</div>
                 <div class="stat-label">Total Projects</div>
-                <div class="stat-trend">
-                  <i class="pi pi-arrow-up"></i>
-                  <span>{{ totalProjects > 0 ? 'Active' : 'No Projects' }}</span>
-                </div>
               </div>
             </div>
 
@@ -299,10 +295,6 @@ onMounted(async () => {
               <div class="stat-content">
                 <div class="stat-number">{{ completedProjects }}</div>
                 <div class="stat-label">Completed</div>
-                <div class="stat-trend">
-                  <i class="pi pi-arrow-up"></i>
-                  <span>{{ completedProjects > 0 ? 'This month' : 'No completed' }}</span>
-                </div>
               </div>
             </div>
 
@@ -313,10 +305,6 @@ onMounted(async () => {
               <div class="stat-content">
                 <div class="stat-number">{{ inProgressProjects }}</div>
                 <div class="stat-label">In Progress</div>
-                <div class="stat-trend">
-                  <i class="pi pi-arrow-right"></i>
-                  <span>{{ inProgressProjects > 0 ? 'Ongoing' : 'No ongoing' }}</span>
-                </div>
               </div>
             </div>
 
@@ -327,10 +315,6 @@ onMounted(async () => {
               <div class="stat-content">
                 <div class="stat-number">{{ formatCurrency(wallet?.balance || 0) }}</div>
                 <div class="stat-label">Balance</div>
-                <div class="stat-trend">
-                  <i class="pi pi-arrow-up"></i>
-                  <span>{{ wallet?.balance && wallet.balance > 0 ? 'Available' : 'No balance' }}</span>
-                </div>
               </div>
             </div>
           </div>

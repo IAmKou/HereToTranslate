@@ -18,6 +18,7 @@ export enum TransactionType {
   PAYMENT = 'PAYMENT',           // Payment between users
   WITHDRAWAL = 'WITHDRAWAL',     // User withdraws money from system
   REFUND = 'REFUND',             // Money refunded to user
+  ADMIN_REVIEW = 'ADMIN_REVIEW', // Admin review decision
 }
 
 

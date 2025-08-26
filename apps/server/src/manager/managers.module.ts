@@ -97,6 +97,8 @@ import { TaskAssignmentController } from './controller/task-assignment.controlle
 import { WorkflowController } from './controller/workflow.controller';
 import { ScannerCronController } from './controller/scanner-cron.controller';
 import { DeadlineCheckerController } from './controller/deadline-checker.controller';
+import { AdminReviewController } from './controller/admin-review.controller';
+import { AdminReviewService } from './service/admin-review.service';
 import { SubtaskManagerService } from './service/subtask-manager.service';
 import { AsposeService } from './service/aspose.service';
 import { SubtaskController } from './controller/subtask.controller';
@@ -192,6 +194,7 @@ import { FeeController } from './controller/fee.controller';
     TaskCommentManagerService,
     OverdueCheckerService,
     TaskManagerService,
+    AdminReviewService,
     ExportManagerService,
     ExportJobProcessor,
     BackgroundExtractService,
@@ -231,6 +234,7 @@ import { FeeController } from './controller/fee.controller';
     TaskCommentManagerService,
     OverdueCheckerService,
     TaskManagerService,
+    AdminReviewService,
     TaskAssignmentManagerService,
     ExportManagerService,
     BackgroundExtractService,
@@ -265,6 +269,7 @@ import { FeeController } from './controller/fee.controller';
     WorkflowController,
     ScannerCronController,
     DeadlineCheckerController,
+    AdminReviewController,
     SubtaskController,
     TaskCommentController,
     ExportController,

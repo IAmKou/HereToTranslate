@@ -295,4 +295,43 @@ export class RequestController {
     }
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('review-with-evidence')
+  @UseInterceptors(FilesInterceptor('evidence'))
+  async submitReviewWithEvidence(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: any,
+    @UploadedFiles() evidenceFiles: Express.Multer.File[]
+  ) {
+    console.log('🔍 [CONTROLLER] submitReviewWithEvidence called:', {
+      requestId: body.requestId,
+      decision: body.decision,
+      rating: body.rating,
+      comment: body.comment,
+      translatorId: body.translatorId,
+      isFullyCompleted: body.isFullyCompleted,
+      evidenceFilesCount: evidenceFiles?.length || 0,
+      userId: req.user.id
+    });
+
+    try {
+      const result = await this.requests.submitReviewWithEvidence(
+        BigInt(body.requestId),
+        req.user.id,
+        body.decision,
+        parseInt(body.rating),
+        body.comment,
+        body.rejectionReason || '', // Add rejection reason
+        body.translatorId,
+        body.isFullyCompleted === 'true',
+        evidenceFiles
+      );
+      console.log('✅ [CONTROLLER] submitReviewWithEvidence success:', result);
+      return result;
+    } catch (error) {
+      console.error('💥 [CONTROLLER] submitReviewWithEvidence error:', error);
+      throw error;
+    }
+  }
+
 }

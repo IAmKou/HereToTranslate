@@ -990,9 +990,24 @@ export class RequestManagerService {
     requestId: number,
     selectedUserId: number
   ): Promise<{ approvalUrl: string }> {
+    console.log('🔍 [DEBUG] approveRegistrant called:', {
+      requestId,
+      selectedUserId,
+      selectedUserIdType: typeof selectedUserId
+    });
+
     const request = await this.requestRepository.findOneOrFail({
       where: { id: BigInt(requestId) },
       relations: ['requester', 'assignee', 'registrants', 'category'],
+    });
+
+    console.log('🔍 [DEBUG] Request found:', {
+      requestId: request.id,
+      isPublic: request.isPublic,
+      requesterId: request.requester?.id,
+      requesterEmail: request.requester?.email,
+      currentAssigneeId: request.assignee?.id,
+      registrantsCount: request.registrants?.length
     });
 
     if (request.assignee) {
@@ -1003,9 +1018,25 @@ export class RequestManagerService {
       where: { id: BigInt(selectedUserId) },
     });
 
+    console.log('🔍 [DEBUG] Selected user found:', {
+      selectedUserId: selectedUser.id,
+      selectedUserEmail: selectedUser.email,
+      selectedUserUsername: selectedUser.username
+    });
+
+    // Gán selectedUser làm assignee cho request
+    request.assignee = selectedUser;
+    await this.requestRepository.save(request);
+
+    console.log('🔍 [DEBUG] Request saved with new assignee:', {
+      requestId: request.id,
+      newAssigneeId: request.assignee?.id,
+      newAssigneeEmail: request.assignee?.email
+    });
+
     const approvalUrl = await this.paymentService.createDeposit(
       request.dealAmount,
-      selectedUser,
+      request.requester,
       request
     );
 
@@ -1767,6 +1798,167 @@ export class RequestManagerService {
     } catch (error) {
       console.error('💥 [SERVICE] Error updating translator rating:', error);
       // Don't throw error here to avoid failing the main review submission
+    }
+  }
+
+  async submitReviewWithEvidence(
+    requestId: bigint,
+    requesterId: bigint,
+    decision: 'APPROVED' | 'REJECTED',
+    rating: number,
+    comment?: string,
+    rejectionReason?: string,
+    translatorId?: string,
+    isFullyCompleted: boolean = false,
+    evidenceFiles: Express.Multer.File[] = []
+  ) {
+    console.log('🔍 [SERVICE] submitReviewWithEvidence called:', {
+      requestId: requestId.toString(),
+      requesterId: requesterId.toString(),
+      decision,
+      rating,
+      comment,
+      translatorId,
+      isFullyCompleted,
+      evidenceFilesCount: evidenceFiles?.length || 0
+    });
+
+    try {
+      // 1. Validate request exists and belongs to requester
+      const request = await this.requestRepository.findOne({
+        where: { id: requestId },
+        relations: ['requester', 'assignee', 'project']
+      });
+
+      if (!request) {
+        throw new BadRequestException('Request not found');
+      }
+
+      if (request.requester.id !== requesterId) {
+        throw new BadRequestException('You can only review your own requests');
+      }
+
+      if (request.status !== 'WAITING_APPROVAL' && request.status !== 'FAILED') {
+        throw new BadRequestException('Request is not in WAITING_APPROVAL or FAILED status');
+      }
+
+      // 2. For 100% completed rejections, require evidence and reason and set status to PENDING_ADMIN_REVIEW
+      if (isFullyCompleted && decision === 'REJECTED') {
+        if (!evidenceFiles || evidenceFiles.length === 0) {
+          throw new BadRequestException('Evidence files are required for rejecting 100% completed translations');
+        }
+
+        if (!rejectionReason || rejectionReason.trim() === '') {
+          throw new BadRequestException('Rejection reason is required for rejecting 100% completed translations');
+        }
+
+        // Save evidence files
+        const evidenceFileEntities: FileEntity[] = [];
+        for (const file of evidenceFiles) {
+          const { fileId } = await this.fileService.handleLocalUpload(file, requesterId, undefined, undefined, requestId);
+          const entity = await this.fileRepository.findOneOrFail({
+            where: { id: BigInt(fileId) },
+          });
+          evidenceFileEntities.push(entity);
+        }
+
+        // Set status to DISPUTE for admin to review
+        request.status = 'DISPUTE';
+        request.reviewedAt = new Date();
+        request.reviewDecision = decision;
+        request.reviewRating = rating;
+        request.reviewComment = comment;
+        request.rejectionReason = rejectionReason; // Save rejection reason
+        request.evidenceFiles = evidenceFileEntities;
+
+        console.log('💾 [SERVICE] Saving 100% completed rejection with evidence:', {
+          requestId: requestId.toString(),
+          status: request.status,
+          evidenceFilesCount: evidenceFileEntities.length
+        });
+
+        await this.requestRepository.save(request);
+
+        // Create notification for admin - use isGlobal flag instead of specific userId
+        await this.notificationService.createNotification({
+          userId: null, // Global notification for all admins
+          type: 'ADMIN_REVIEW_REQUIRED',
+          message: `100% completed translation rejected. Request "${request.title}" requires admin review.`,
+          isGlobal: true, // Mark as global notification for admin dashboard
+          createdBy: requesterId.toString(),
+        });
+
+        // Create notification for translator
+        if (request.assignee) {
+          await this.notificationService.createNotification({
+            userId: request.assignee.id.toString(),
+            type: 'REQUEST_PENDING_ADMIN_REVIEW',
+            message: `Your 100% completed translation for "${request.title}" was rejected and is pending admin review.`,
+            createdBy: requesterId.toString(),
+          });
+        }
+
+        return {
+          success: true,
+          message: 'Review submitted with evidence. Admin will review your case within 2-3 business days.',
+          requestId: requestId.toString(),
+          decision,
+          status: 'DISPUTE',
+          evidenceFilesCount: evidenceFileEntities.length
+        };
+      }
+
+      // 3. For normal reviews, proceed as usual
+      if (decision === 'APPROVED') {
+        request.status = 'COMPLETED';
+      } else if (decision === 'REJECTED') {
+        request.status = 'INCOMPLETED';
+      }
+
+      request.reviewedAt = new Date();
+      request.reviewDecision = decision;
+      request.reviewRating = rating;
+      request.reviewComment = comment;
+
+      await this.requestRepository.save(request);
+
+      // 4. If translatorId is provided, update translator rating
+      if (translatorId && request.assignee) {
+        await this.updateTranslatorRating(
+          BigInt(translatorId),
+          rating,
+          comment
+        );
+      }
+
+      // 5. Create notification for translator
+      if (request.assignee) {
+        await this.notificationService.createNotification({
+          userId: request.assignee.id.toString(),
+          type: 'REQUEST_REVIEWED',
+          message: `Your translation for "${request.title}" has been ${decision.toLowerCase()}. Rating: ${rating}/5 stars.`,
+          createdBy: requesterId.toString(),
+        });
+      }
+
+      console.log('✅ [SERVICE] submitReviewWithEvidence success:', {
+        requestId: requestId.toString(),
+        decision,
+        rating,
+        isFullyCompleted
+      });
+
+      return {
+        success: true,
+        message: `Review submitted successfully. Request ${decision.toLowerCase()}.`,
+        requestId: requestId.toString(),
+        decision,
+        rating
+      };
+
+    } catch (error) {
+      console.error('💥 [SERVICE] submitReviewWithEvidence error:', error);
+      throw error;
     }
   }
 

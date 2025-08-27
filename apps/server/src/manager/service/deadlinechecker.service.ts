@@ -81,7 +81,7 @@ export class DeadlineCheckerService {
     this.logger.log('Deadline checker cron job started - scanning every minute with 10-second rest');
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron(CronExpression.EVERY_10_SECONDS)
   async handleDeadlines() {
     this.logger.log('Starting comprehensive deadline check...');
     const today = new Date();
@@ -175,17 +175,22 @@ export class DeadlineCheckerService {
         if (hoursLeft <= 1) {
           this.logger.warn(`CRITICAL: Request ${req.id} due in ${hoursLeft} hour(s)`);
 
-          if (req.assignee?.email && this.canSendEmail('deadline-critical', req.assignee.id.toString())) {
-            await this.mailerService.sendMail({
-              to: req.assignee.email,
-              subject: '[URGENT] Translation Deadline Critical',
-              template: 'deadline-critical',
-              context: {
-                request: req,
-                hoursLeft,
-              },
-            });
-            this.markEmailSent('deadline-critical', req.assignee.id.toString());
+          if (req.assignee && req.assignee.email && this.canSendEmail('deadline-critical', req.assignee.id.toString())) {
+            try {
+              await this.mailerService.sendMail({
+                to: req.assignee.email,
+                subject: '[URGENT] Translation Deadline Critical',
+                template: 'deadline-critical',
+                context: {
+                  request: req,
+                  hoursLeft,
+                },
+              });
+              this.markEmailSent('deadline-critical', req.assignee.id.toString());
+            } catch (emailError) {
+              this.logger.error(`Failed to send critical deadline email to translator for request ${req.id}:`, emailError);
+              // Don't throw error to prevent crashing the deadline checker
+            }
           }
         }
       }
@@ -205,44 +210,103 @@ export class DeadlineCheckerService {
       this.logger.log(`Found ${overdueRequests.length} overdue requests`);
 
       for (const req of overdueRequests) {
+        // Skip requests that are already in final states
         if (
           req.status === RequestStatus.Failed
           || req.status === RequestStatus.Completed
           || req.status === RequestStatus.WaitingApproval
+          || req.status === RequestStatus.Cancelled
+          || req.status === RequestStatus.Incompleted
         ) {
-          continue; // Skip already handled requests
-        }
-
-        const progress = await this.translationService.getTranslationProgress(
-          req.project.id.toString(),
-          req.project.defaultBranch?.id.toString() || '1'
-        );
-        if (progress.percentage >= 100)
-        {
-          // Translation is complete - move to waiting approval
-          await this.handleCompleteTranslation(req, today);
+          this.logger.log(`Skipping request ${req.id} - already in final state: ${req.status}`);
           continue;
         }
 
-        // Mark as failed if not already handled (since Overdue status doesn't exist)
-        if (req.status === RequestStatus.Approved) {
+        // Check if project exists and has a valid ID
+        if (!req.project || !req.project.id) {
+          this.logger.warn(`Request ${req.id} has no valid project, marking as failed`);
           req.status = RequestStatus.Failed;
           await this.requestRepo.save(req);
+          continue;
+        }
 
-          this.logger.warn(`Request ${req.id} marked as failed due to overdue deadline`);
+                 try {
+           // Calculate progress for the specific target languages of this request
+           let totalProgress = 0;
+           let languageCount = 0;
+           
+           // Get target languages for this request
+           const targetLanguages = Array.isArray(req.targetLanguages) && req.targetLanguages.length > 0
+             ? req.targetLanguages
+             : ['en']; // Default to English if no target languages specified
+           
+           this.logger.log(`Request ${req.id} target languages: ${JSON.stringify(targetLanguages)}`);
+           
+           // Calculate progress for each target language
+           for (const language of targetLanguages) {
+             try {
+               // Ensure translation records exist for this target language
+               await this.translationService.ensureTranslationRecordsExist(
+                 req.project.id.toString(),
+                 req.project.defaultBranch?.id.toString() || '1',
+                 language
+               );
+               
+               const progress = await this.translationService.getTranslationProgress(
+                 req.project.id.toString(),
+                 req.project.defaultBranch?.id.toString() || '1',
+                 language
+               );
+               
+               this.logger.log(`Request ${req.id} progress for language ${language}: ${progress.percentage}% (${progress.completed}/${progress.total})`);
+               
+               totalProgress += progress.percentage;
+               languageCount++;
+             } catch (error) {
+               this.logger.error(`Error calculating progress for language ${language} in request ${req.id}:`, error);
+             }
+           }
+           
+           // Calculate average progress across all target languages
+           const averageProgress = languageCount > 0 ? totalProgress / languageCount : 0;
+           
+           this.logger.log(`Request ${req.id} average translation progress: ${averageProgress.toFixed(2)}%`);
+           
+           if (averageProgress >= 100) {
+             // Translation is complete - move to waiting approval
+             this.logger.log(`Request ${req.id} is 100% complete, moving to waiting approval`);
+             await this.handleCompleteTranslation(req, today);
+             continue;
+           }
 
-          // Send overdue notification
-          if (req.assignee?.email && this.canSendEmail('deadline-overdue', req.assignee.id.toString())) {
-            await this.mailerService.sendMail({
-              to: req.assignee.email,
-              subject: '[OVERDUE] Translation Request Overdue',
-              template: 'deadline-overdue',
-              context: {
-                request: req,
-              },
-            });
-            this.markEmailSent('deadline-overdue', req.assignee.id.toString());
+          // Mark as failed if translation is incomplete and deadline has passed
+          if (req.status === RequestStatus.Approved) {
+            req.status = RequestStatus.Failed;
+            await this.requestRepo.save(req);
+
+                         this.logger.warn(`Request ${req.id} marked as failed due to overdue deadline (progress: ${averageProgress.toFixed(2)}%)`);
+
+            // Send overdue notification
+            if (req.assignee && req.assignee.email && this.canSendEmail('deadline-overdue', req.assignee.id.toString())) {
+              try {
+                await this.mailerService.sendMail({
+                  to: req.assignee.email,
+                  subject: '[OVERDUE] Translation Request Overdue',
+                  template: 'deadline-overdue',
+                  context: {
+                    request: req,
+                  },
+                });
+                this.markEmailSent('deadline-overdue', req.assignee.id.toString());
+              } catch (emailError) {
+                this.logger.error(`Failed to send overdue notification email to translator for request ${req.id}:`, emailError);
+                // Don't throw error to prevent crashing the deadline checker
+              }
+            }
           }
+        } catch (error) {
+          this.logger.error(`Error checking translation progress for request ${req.id}:`, error);
+          // If we can't check progress, don't mark as failed - just log the error
         }
       }
     }
@@ -282,17 +346,22 @@ export class DeadlineCheckerService {
 
         // Send reminder to requester about pending extension
         if (this.canSendEmail('extension-reminder', extension.requester.id.toString())) {
-          await this.mailerService.sendMail({
-            to: extension.requester.email,
-            subject: '[Reminder] Pending Extension Request',
-            template: 'extension-reminder',
-            context: {
-              request: extension.request,
-              extension,
-              daysPending,
-            },
-          });
-          this.markEmailSent('extension-reminder', extension.requester.id.toString());
+          try {
+            await this.mailerService.sendMail({
+              to: extension.requester.email,
+              subject: '[Reminder] Pending Extension Request',
+              template: 'extension-reminder',
+              context: {
+                request: extension.request,
+                extension,
+                daysPending,
+              },
+            });
+            this.markEmailSent('extension-reminder', extension.requester.id.toString());
+          } catch (emailError) {
+            this.logger.error(`Failed to send extension reminder email to requester for extension ${extension.id}:`, emailError);
+            // Don't throw error to prevent crashing the deadline checker
+          }
         }
       }
     }
@@ -403,7 +472,7 @@ export class DeadlineCheckerService {
         status: RequestStatus.Approved,
         deadline: Between(today, addDays(today, 7)),
       },
-      relations: ['project', 'project.createdBy', 'assignee'],
+      relations: ['project', 'project.createdBy', 'requester', 'assignee'],
     });
 
     for (const req of soonDueRequests) {
@@ -431,31 +500,41 @@ export class DeadlineCheckerService {
 
       this.logger.log(`Request ${req.id}: calculated daysLeft = ${daysLeft}`);
 
-      if (req.assignee?.email && this.canSendEmail('deadline-warning-translator', req.assignee.id.toString())) {
-        await this.mailerService.sendMail({
-          to: req.assignee.email,
-          subject: '[Reminder] Translation Deadline Approaching',
-          template: 'deadline-warning-translator',
-          context: {
-            request: req,
-            daysLeft,
-          },
-        });
-        this.markEmailSent('deadline-warning-translator', req.assignee.id.toString());
-      }
+                if (req.assignee && req.assignee.email && this.canSendEmail('deadline-warning-translator', req.assignee.id.toString())) {
+            try {
+              await this.mailerService.sendMail({
+                to: req.assignee.email,
+                subject: '[Reminder] Translation Deadline Approaching',
+                template: 'deadline-warning-translator',
+                context: {
+                  request: req,
+                  daysLeft,
+                },
+              });
+              this.markEmailSent('deadline-warning-translator', req.assignee.id.toString());
+            } catch (emailError) {
+              this.logger.error(`Failed to send deadline warning email to translator for request ${req.id}:`, emailError);
+              // Don't throw error to prevent crashing the deadline checker
+            }
+          }
 
       // Send warning to requester
-      if (this.canSendEmail('deadline-warning-requester', req.requester.id.toString())) {
-        await this.mailerService.sendMail({
-          to: req.requester.email,
-          subject: '[Reminder] Translation Deadline Approaching',
-          template: 'deadline-warning-requester',
-          context: {
-            request: req,
-            daysLeft,
-          },
-        });
-        this.markEmailSent('deadline-warning-requester', req.requester.id.toString());
+      if (req.requester && this.canSendEmail('deadline-warning-requester', req.requester.id.toString())) {
+        try {
+          await this.mailerService.sendMail({
+            to: req.requester.email,
+            subject: '[Reminder] Translation Deadline Approaching',
+            template: 'deadline-warning-requester',
+            context: {
+              request: req,
+              daysLeft,
+            },
+          });
+          this.markEmailSent('deadline-warning-requester', req.requester.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send deadline warning email to requester for request ${req.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
     }
 
@@ -474,17 +553,51 @@ export class DeadlineCheckerService {
     });
 
     for (const req of dueTodayRequests) {
-      const progress = await this.translationService.getTranslationProgress(
-        req.project.id.toString(),
-        req.project.defaultBranch?.id.toString() || '1'
-      );
+      // Calculate progress for the specific target languages of this request
+      let totalProgress = 0;
+      let languageCount = 0;
+      
+      // Get target languages for this request
+      const targetLanguages = Array.isArray(req.targetLanguages) && req.targetLanguages.length > 0
+        ? req.targetLanguages
+        : ['en']; // Default to English if no target languages specified
+      
+      this.logger.log(`Request ${req.id} target languages: ${JSON.stringify(targetLanguages)}`);
+      
+             // Calculate progress for each target language
+       for (const language of targetLanguages) {
+         try {
+           // Ensure translation records exist for this target language
+           await this.translationService.ensureTranslationRecordsExist(
+             req.project.id.toString(),
+             req.project.defaultBranch?.id.toString() || '1',
+             language
+           );
+           
+           const progress = await this.translationService.getTranslationProgress(
+             req.project.id.toString(),
+             req.project.defaultBranch?.id.toString() || '1',
+             language
+           );
+           
+           this.logger.log(`Request ${req.id} progress for language ${language}: ${progress.percentage}% (${progress.completed}/${progress.total})`);
+           
+           totalProgress += progress.percentage;
+           languageCount++;
+         } catch (error) {
+           this.logger.error(`Error calculating progress for language ${language} in request ${req.id}:`, error);
+         }
+       }
+      
+      // Calculate average progress across all target languages
+      const averageProgress = languageCount > 0 ? totalProgress / languageCount : 0;
+      
+      this.logger.log(`Request ${req.id} average progress across ${languageCount} languages: ${averageProgress.toFixed(2)}%`);
 
-      if (progress.percentage === 100) {
-        // Translation is complete - move to waiting approval
+      if (averageProgress >= 100) {
         await this.handleCompleteTranslation(req, today);
       } else {
-        // Translation is incomplete - handle based on extension status
-        await this.handleIncompleteTranslation(req, today, progress.percentage);
+        await this.handleIncompleteTranslation(req, today, averageProgress);
       }
     }
 
@@ -492,6 +605,17 @@ export class DeadlineCheckerService {
   }
 
   private async handleCompleteTranslation(req: RequestEntity, today: Date) {
+    if (
+      req.status === RequestStatus.Completed ||
+      req.status === RequestStatus.WaitingApproval ||
+      req.status === RequestStatus.Failed ||
+      req.status === RequestStatus.Cancelled ||
+      req.status === RequestStatus.Incompleted
+    ) {
+      this.logger.log(`Request ${req.id} is already in final state: ${req.status}, skipping completion processing`);
+      return;
+    }
+
     this.logger.log(`Translation complete for request ${req.id}, moving to approval phase`);
 
     await this.projectService.lockProjectEdits(req.project.id);
@@ -511,17 +635,22 @@ export class DeadlineCheckerService {
       this.logger.error(`Failed to export files for request ${req.id}:`, error);
     }
 
-    if (this.canSendEmail('translation-ready-for-approval', req.requester.id.toString())) {
-      await this.mailerService.sendMail({
-        to: req.requester.email,
-        subject: '[Ready for Review] Your translation is complete',
-        template: 'translation-ready-for-approval',
-        context: {
-          request: req,
-          reviewDeadline: addDays(today, 3),
-        },
-      });
-      this.markEmailSent('translation-ready-for-approval', req.requester.id.toString());
+    if (req.requester && this.canSendEmail('translation-ready-for-approval', req.requester.id.toString())) {
+      try {
+        await this.mailerService.sendMail({
+          to: req.requester.email,
+          subject: '[Ready for Review] Your translation is complete',
+          template: 'translation-ready-for-approval',
+          context: {
+            request: req,
+            reviewDeadline: addDays(today, 3),
+          },
+        });
+        this.markEmailSent('translation-ready-for-approval', req.requester.id.toString());
+      } catch (emailError) {
+        this.logger.error(`Failed to send translation ready for approval email to requester for request ${req.id}:`, emailError);
+        // Don't throw error to prevent crashing the deadline checker
+      }
     }
   }
 
@@ -542,32 +671,42 @@ export class DeadlineCheckerService {
       await this.requestRepo.save(req);
 
       // Send notification to translator about deadline miss and extension option
-      if (req.assignee?.email && this.canSendEmail('deadline-missed-extension-option', req.assignee.id.toString())) {
-        await this.mailerService.sendMail({
-          to: req.assignee.email,
-          subject: '[Action Required] Translation Deadline Missed',
-          template: 'deadline-missed-extension-option',
-          context: {
-            request: req,
-            percentage: percentage.toFixed(1),
-            extensionDeadline: addDays(today, 3),
-          },
-        });
-        this.markEmailSent('deadline-missed-extension-option', req.assignee.id.toString());
+              if (req.assignee && req.assignee.email && this.canSendEmail('deadline-missed-extension-option', req.assignee.id.toString())) {
+        try {
+          await this.mailerService.sendMail({
+            to: req.assignee.email,
+            subject: '[Action Required] Translation Deadline Missed',
+            template: 'deadline-missed-extension-option',
+            context: {
+              request: req,
+              percentage: percentage.toFixed(1),
+              extensionDeadline: addDays(today, 3),
+            },
+          });
+          this.markEmailSent('deadline-missed-extension-option', req.assignee.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send deadline missed extension option email to translator for request ${req.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
 
       // Notify requester about delay
-      if (this.canSendEmail('translation-delayed', req.requester.id.toString())) {
-        await this.mailerService.sendMail({
-          to: req.requester.email,
-          subject: '[Delay Notice] Translation deadline missed',
-          template: 'translation-delayed',
-          context: {
-            request: req,
-            percentage: percentage.toFixed(1),
-          },
-        });
-        this.markEmailSent('translation-delayed', req.requester.id.toString());
+      if (req.requester && this.canSendEmail('translation-delayed', req.requester.id.toString())) {
+        try {
+          await this.mailerService.sendMail({
+            to: req.requester.email,
+            subject: '[Delay Notice] Translation deadline missed',
+            template: 'translation-delayed',
+            context: {
+              request: req,
+              percentage: percentage.toFixed(1),
+            },
+          });
+          this.markEmailSent('translation-delayed', req.requester.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send translation delayed email to requester for request ${req.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
     }
   }
@@ -595,19 +734,24 @@ export class DeadlineCheckerService {
       await this.projectService.archive(req.project);
 
       // Send notifications
-      if (this.canSendEmail('translation-failed-no-extension', req.requester.id.toString())) {
-        await this.mailerService.sendMail({
-          to: req.requester.email,
+      if (req.requester && this.canSendEmail('translation-failed-no-extension', req.requester.id.toString())) {
+        try {
+          await this.mailerService.sendMail({
+            to: req.requester.email,
           subject: '[Failed] Translation request has failed',
           template: 'translation-failed-no-extension',
           context: {
             request: req,
           },
         });
-        this.markEmailSent('translation-failed-no-extension', req.requester.id.toString());
+                  this.markEmailSent('translation-failed-no-extension', req.requester.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send translation failed email to requester for request ${req.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
 
-      if (req.assignee?.email && this.canSendEmail('translation-failed-timeout', req.assignee.id.toString())) {
+      if (req.assignee && req.assignee.email && this.canSendEmail('translation-failed-timeout', req.assignee.id.toString())) {
         await this.mailerService.sendMail({
           to: req.assignee.email,
           subject: '[Failed] Translation request failed due to timeout',
@@ -635,6 +779,12 @@ export class DeadlineCheckerService {
     });
 
     for (const req of approvalTimeouts) {
+      // Double-check that the request is still in WaitingApproval status
+      if (req.status !== RequestStatus.WaitingApproval) {
+        this.logger.log(`Request ${req.id} is no longer in WaitingApproval status (current: ${req.status}), skipping`);
+        continue;
+      }
+
       // Auto-approve after 3 days of no response
       req.status = RequestStatus.Completed;
       await this.requestRepo.save(req);
@@ -646,28 +796,38 @@ export class DeadlineCheckerService {
       await this.projectService.archive(req.project);
 
       // Send notifications
-      if (this.canSendEmail('translation-auto-approved', req.requester.id.toString())) {
-        await this.mailerService.sendMail({
-          to: req.requester.email,
-          subject: '[Auto-Approved] Translation request completed',
-          template: 'translation-auto-approved',
-          context: {
-            request: req,
-          },
-        });
-        this.markEmailSent('translation-auto-approved', req.requester.id.toString());
+      if (req.requester && this.canSendEmail('translation-auto-approved', req.requester.id.toString())) {
+        try {
+          await this.mailerService.sendMail({
+            to: req.requester.email,
+            subject: '[Auto-Approved] Translation request completed',
+            template: 'translation-auto-approved',
+            context: {
+              request: req,
+            },
+          });
+          this.markEmailSent('translation-auto-approved', req.requester.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send auto-approval email to requester for request ${req.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
 
-      if (req.assignee?.email && this.canSendEmail('translation-payment-processed', req.assignee.id.toString())) {
-        await this.mailerService.sendMail({
-          to: req.assignee.email,
-          subject: '[Payment Processed] Translation completed',
-          template: 'translation-payment-processed',
-          context: {
-            request: req,
-          },
-        });
-        this.markEmailSent('translation-payment-processed', req.assignee.id.toString());
+      if (req.assignee && req.assignee.email && this.canSendEmail('translation-payment-processed', req.assignee.id.toString())) {
+        try {
+          await this.mailerService.sendMail({
+            to: req.assignee.email,
+            subject: '[Payment Processed] Translation completed',
+            template: 'translation-payment-processed',
+            context: {
+              request: req,
+            },
+          });
+          this.markEmailSent('translation-payment-processed', req.assignee.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send payment processed email to translator for request ${req.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
     }
 
@@ -704,6 +864,123 @@ export class DeadlineCheckerService {
     }
 
     this.logger.log(`Cleaned up ${expiredExtensions.length} expired extensions`);
+  }
+
+  // Utility method to check and fix request status
+  async checkAndFixRequestStatus(requestId: bigint): Promise<{ success: boolean; message: string; currentStatus: string }> {
+    try {
+      const request = await this.requestRepo.findOne({
+        where: { id: requestId },
+        relations: ['project', 'requester', 'assignee'],
+      });
+
+      if (!request) {
+        return { success: false, message: 'Request not found', currentStatus: 'NOT_FOUND' };
+      }
+
+      this.logger.log(`Checking request ${requestId} - current status: ${request.status}`);
+
+      // If request is already in a final state, return current status
+      if (
+        request.status === RequestStatus.Completed ||
+        request.status === RequestStatus.WaitingApproval ||
+        request.status === RequestStatus.Cancelled ||
+        request.status === RequestStatus.Incompleted
+      ) {
+        return { 
+          success: true, 
+          message: `Request is already in final state: ${request.status}`, 
+          currentStatus: request.status 
+        };
+      }
+
+             // If request is failed but should be completed, check translation progress
+       if (request.status === RequestStatus.Failed && request.project) {
+         try {
+           // Calculate progress for the specific target languages of this request
+           let totalProgress = 0;
+           let languageCount = 0;
+           
+           // Get target languages for this request
+           const targetLanguages = Array.isArray(request.targetLanguages) && request.targetLanguages.length > 0
+             ? request.targetLanguages
+             : ['en']; // Default to English if no target languages specified
+           
+           this.logger.log(`Request ${requestId} target languages: ${JSON.stringify(targetLanguages)}`);
+           
+           // Calculate progress for each target language
+           for (const language of targetLanguages) {
+             try {
+               // Ensure translation records exist for this target language
+               await this.translationService.ensureTranslationRecordsExist(
+                 request.project.id.toString(),
+                 request.project.defaultBranch?.id.toString() || '1',
+                 language
+               );
+               
+               const progress = await this.translationService.getTranslationProgress(
+                 request.project.id.toString(),
+                 request.project.defaultBranch?.id.toString() || '1',
+                 language
+               );
+               
+               this.logger.log(`Request ${requestId} progress for language ${language}: ${progress.percentage}% (${progress.completed}/${progress.total})`);
+               
+               totalProgress += progress.percentage;
+               languageCount++;
+             } catch (error) {
+               this.logger.error(`Error calculating progress for language ${language} in request ${requestId}:`, error);
+             }
+           }
+           
+           // Calculate average progress across all target languages
+           const averageProgress = languageCount > 0 ? totalProgress / languageCount : 0;
+           
+           this.logger.log(`Request ${requestId} average translation progress: ${averageProgress.toFixed(2)}%`);
+
+           if (averageProgress >= 100) {
+             // Translation is complete, move to waiting approval
+             request.status = RequestStatus.WaitingApproval;
+             await this.requestRepo.save(request);
+             
+             this.logger.log(`Fixed request ${requestId}: moved from FAILED to WAITING_APPROVAL`);
+             
+             return { 
+               success: true, 
+               message: `Request moved from FAILED to WAITING_APPROVAL (progress: ${averageProgress.toFixed(2)}%)`, 
+               currentStatus: RequestStatus.WaitingApproval 
+             };
+           } else {
+             return { 
+               success: false, 
+               message: `Request is correctly FAILED (progress: ${averageProgress.toFixed(2)}%)`, 
+               currentStatus: request.status 
+             };
+           }
+        } catch (error) {
+          this.logger.error(`Error checking translation progress for request ${requestId}:`, error);
+          return { 
+            success: false, 
+            message: `Error checking translation progress: ${error instanceof Error ? error.message : 'Unknown error'}`, 
+            currentStatus: request.status 
+          };
+        }
+      }
+
+      return { 
+        success: true, 
+        message: `Request status is appropriate: ${request.status}`, 
+        currentStatus: request.status 
+      };
+
+    } catch (error) {
+      this.logger.error(`Error checking request ${requestId}:`, error);
+      return { 
+        success: false, 
+        message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 
+        currentStatus: 'ERROR' 
+      };
+    }
   }
 
   // Additional methods for extension and approval management
@@ -743,16 +1020,21 @@ export class DeadlineCheckerService {
 
     // Send notification to requester
     if (this.canSendEmail('extension-request-notification', request.requester.id.toString())) {
-      await this.mailerService.sendMail({
-        to: request.requester.email,
-        subject: '[Extension Request] Translator requests deadline extension',
-        template: 'extension-request-notification',
-        context: {
-          request,
-          extension: savedExtension,
-        },
-      });
-      this.markEmailSent('extension-request-notification', request.requester.id.toString());
+      try {
+        await this.mailerService.sendMail({
+          to: request.requester.email,
+          subject: '[Extension Request] Translator requests deadline extension',
+          template: 'extension-request-notification',
+          context: {
+            request,
+            extension: savedExtension,
+          },
+        });
+        this.markEmailSent('extension-request-notification', request.requester.id.toString());
+      } catch (emailError) {
+        this.logger.error(`Failed to send extension request notification email to requester for request ${request.id}:`, emailError);
+        // Don't throw error to prevent crashing the deadline checker
+      }
     }
 
     return savedExtension;
@@ -798,17 +1080,22 @@ export class DeadlineCheckerService {
 
       // Send approval notification
       if (this.canSendEmail('extension-approved', extension.translator.id.toString())) {
-        await this.mailerService.sendMail({
-          to: extension.translator.email,
-          subject: '[Approved] Deadline extension approved',
-          template: 'extension-approved',
-          context: {
-            request: extension.request,
-            extension,
-            newDeadline,
-          },
-        });
-        this.markEmailSent('extension-approved', extension.translator.id.toString());
+        try {
+          await this.mailerService.sendMail({
+            to: extension.translator.email,
+            subject: '[Approved] Deadline extension approved',
+            template: 'extension-approved',
+            context: {
+              request: extension.request,
+              extension,
+              newDeadline,
+            },
+          });
+          this.markEmailSent('extension-approved', extension.translator.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send extension approval email to translator for extension ${extension.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
     } else {
       // Extension rejected - mark request as failed
@@ -823,17 +1110,102 @@ export class DeadlineCheckerService {
 
       // Send rejection notification
       if (this.canSendEmail('extension-rejected', extension.translator.id.toString())) {
-        await this.mailerService.sendMail({
-          to: extension.translator.email,
-          subject: '[Rejected] Deadline extension rejected',
-          template: 'extension-rejected',
-          context: {
-            request: extension.request,
-            extension,
-          },
-        });
-        this.markEmailSent('extension-rejected', extension.translator.id.toString());
+        try {
+          await this.mailerService.sendMail({
+            to: extension.translator.email,
+            subject: '[Rejected] Deadline extension rejected',
+            template: 'extension-rejected',
+            context: {
+              request: extension.request,
+              extension,
+            },
+          });
+          this.markEmailSent('extension-rejected', extension.translator.id.toString());
+        } catch (emailError) {
+          this.logger.error(`Failed to send extension rejection email to translator for extension ${extension.id}:`, emailError);
+          // Don't throw error to prevent crashing the deadline checker
+        }
       }
+    }
+  }
+
+  // Method to check progress for a specific request (for debugging)
+  async checkRequestProgress(requestId: bigint): Promise<{ 
+    requestId: string; 
+    targetLanguages: string[]; 
+    languageProgress: Array<{ language: string; progress: number; completed: number; total: number }>; 
+    averageProgress: number; 
+    status: string; 
+  }> {
+    try {
+      const request = await this.requestRepo.findOne({
+        where: { id: requestId },
+        relations: ['project', 'requester', 'assignee'],
+      });
+
+      if (!request) {
+        throw new Error('Request not found');
+      }
+
+      // Get target languages for this request
+      const targetLanguages = Array.isArray(request.targetLanguages) && request.targetLanguages.length > 0
+        ? request.targetLanguages
+        : ['en']; // Default to English if no target languages specified
+
+      const languageProgress = [];
+      let totalProgress = 0;
+      let languageCount = 0;
+
+             // Calculate progress for each target language
+       for (const language of targetLanguages) {
+         try {
+           // Ensure translation records exist for this target language
+           await this.translationService.ensureTranslationRecordsExist(
+             request.project.id.toString(),
+             request.project.defaultBranch?.id.toString() || '1',
+             language
+           );
+           
+           const progress = await this.translationService.getTranslationProgress(
+             request.project.id.toString(),
+             request.project.defaultBranch?.id.toString() || '1',
+             language
+           );
+
+           languageProgress.push({
+             language,
+             progress: progress.percentage,
+             completed: progress.completed,
+             total: progress.total,
+           });
+
+           totalProgress += progress.percentage;
+           languageCount++;
+         } catch (error) {
+           this.logger.error(`Error calculating progress for language ${language} in request ${requestId}:`, error);
+           languageProgress.push({
+             language,
+             progress: 0,
+             completed: 0,
+             total: 0,
+           });
+         }
+       }
+
+      // Calculate average progress across all target languages
+      const averageProgress = languageCount > 0 ? totalProgress / languageCount : 0;
+
+      return {
+        requestId: requestId.toString(),
+        targetLanguages,
+        languageProgress,
+        averageProgress: Math.round(averageProgress * 100) / 100,
+        status: request.status,
+      };
+
+    } catch (error) {
+      this.logger.error(`Error checking progress for request ${requestId}:`, error);
+      throw error;
     }
   }
 }

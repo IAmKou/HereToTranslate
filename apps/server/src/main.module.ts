@@ -9,9 +9,9 @@ import { SeederModule } from './seeder/seeder.module';
 import { ManagersModule } from './manager/managers.module';
 import { JsonSerializerInterceptor } from './util/json-serializer.interceptor';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import * as path from 'path';
 import { ChatModule } from './chat/chat.module';
+import { CustomHandlebarsAdapter } from './mailer/custom-handlebars.adapter';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -47,7 +47,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       },
       template: {
         dir: path.join(__dirname, 'mailer', 'templates'),
-        adapter: new HandlebarsAdapter(),
+        adapter: new CustomHandlebarsAdapter(),
         options: {
           strict: true,
         },

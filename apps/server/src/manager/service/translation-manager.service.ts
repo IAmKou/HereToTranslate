@@ -55,11 +55,56 @@ export class TranslationService {
     };
   }
 
+  // Helper method to ensure translation records exist for target languages
+  async ensureTranslationRecordsExist(
+    projectId: string,
+    branchId: string,
+    targetLanguage: string
+  ): Promise<void> {
+    // Find all original entries (language 'en') for this project/branch
+    const originalEntries = await this.translationModel.find({
+      projectId,
+      branchId,
+      language: 'en',
+      obsolete: { $ne: true }
+    });
+
+    // For each original entry, ensure a translation record exists for the target language
+    for (const originalEntry of originalEntries) {
+      const existingTranslation = await this.translationModel.findOne({
+        projectId: originalEntry.projectId,
+        branchId: originalEntry.branchId,
+        fileId: originalEntry.fileId,
+        originalText: originalEntry.originalText,
+        language: targetLanguage,
+      });
+
+      if (!existingTranslation) {
+        // Create a new translation record for this target language
+        await this.translationModel.create({
+          projectId: originalEntry.projectId,
+          branchId: originalEntry.branchId,
+          fileId: originalEntry.fileId,
+          manifestEntryId: originalEntry.manifestEntryId,
+          originalText: originalEntry.originalText,
+          translatedText: null, // Will be filled when user translates
+          language: targetLanguage,
+          filePart: originalEntry.filePart,
+          font: originalEntry.font,
+          style: originalEntry.style,
+          position: originalEntry.position,
+          obsolete: false,
+        });
+      }
+    }
+  }
+
   async addTranslation(id: string, translatedText: string, language: string) {
     // Tìm bản ghi gốc để lấy thông tin
     const originalEntry = await this.translationModel.findById(id);
     if (!originalEntry) throw new Error('Manifest entry not found');
 
+    // First, try to find an existing translation for this specific language
     const existingTranslation = await this.translationModel.findOne({
       projectId: originalEntry.projectId,
       branchId: originalEntry.branchId,
@@ -72,27 +117,35 @@ export class TranslationService {
     let isNewTranslation = false;
 
     if (existingTranslation) {
-      // Update bản dịch hiện có
+      // Update existing translation for this language
       existingTranslation.translatedText = translatedText;
       await existingTranslation.save();
       entry = existingTranslation;
     } else {
-      // Tạo bản ghi mới cho ngôn ngữ này
-      entry = await this.translationModel.create({
-        projectId: originalEntry.projectId,
-        branchId: originalEntry.branchId,
-        fileId: originalEntry.fileId,
-        manifestEntryId: originalEntry.manifestEntryId,
-        originalText: originalEntry.originalText,
-        translatedText: translatedText,
-        language: language,
-        filePart: originalEntry.filePart,
-        font: originalEntry.font,
-        style: originalEntry.style,
-        position: originalEntry.position,
-        obsolete: false,
-      });
-      isNewTranslation = true;
+      // Check if the original entry itself is for the target language and has no translation
+      if (originalEntry.language === language && !originalEntry.translatedText) {
+        // Update the original entry with the translation
+        originalEntry.translatedText = translatedText;
+        await originalEntry.save();
+        entry = originalEntry;
+      } else {
+        // Create a new record for this language
+        entry = await this.translationModel.create({
+          projectId: originalEntry.projectId,
+          branchId: originalEntry.branchId,
+          fileId: originalEntry.fileId,
+          manifestEntryId: originalEntry.manifestEntryId,
+          originalText: originalEntry.originalText,
+          translatedText: translatedText,
+          language: language,
+          filePart: originalEntry.filePart,
+          font: originalEntry.font,
+          style: originalEntry.style,
+          position: originalEntry.position,
+          obsolete: false,
+        });
+        isNewTranslation = true;
+      }
     }
 
     const fileId = entry.fileId;

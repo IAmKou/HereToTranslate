@@ -85,7 +85,7 @@ import {
       @Request() req: any
     ) {
       const userId = BigInt(req.user.id);
-  
+
       try {
         await this.deadlineService.respondToExtensionRequest(
           BigInt(dto.extensionId),
@@ -93,10 +93,29 @@ import {
           dto.approved,
           dto.rejectionReason
         );
-  
+
         return {
           success: true,
           message: `Extension request ${dto.approved ? 'approved' : 'rejected'} successfully`,
+        };
+      } catch (error) {
+        throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
+      }
+    }
+
+    @Get('request/:requestId/check-status')
+    async checkRequestStatus(
+      @Param('requestId') requestId: string,
+      @Request() req: any
+    ) {
+      try {
+        const result = await this.deadlineService.checkAndFixRequestStatus(BigInt(requestId));
+        
+        return {
+          success: result.success,
+          message: result.message,
+          currentStatus: result.currentStatus,
+          requestId: requestId
         };
       } catch (error) {
         throw new BadRequestException(error instanceof Error ? error.message : 'Unknown error occurred');
@@ -363,5 +382,27 @@ import {
           createdAt: ext.createdAt,
         })),
       };
+    }
+
+    @Get('request/:requestId/check-progress')
+    async checkRequestProgress(
+      @Param('requestId') requestId: string,
+      @Request() req: any
+    ) {
+      try {
+        const result = await this.deadlineService.checkRequestProgress(BigInt(requestId));
+        
+        return {
+          success: true,
+          requestId: requestId,
+          progress: result,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          requestId: requestId,
+        };
+      }
     }
   }

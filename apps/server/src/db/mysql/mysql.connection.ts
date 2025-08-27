@@ -371,9 +371,9 @@ export class MySqlConnection {
         const transactionAdminFields = [
           'fromUserId',
           'toUserId',
-          'requestId',
           'adminId',
           'adminNotes'
+          // Removed 'requestId' as it's automatically managed by TypeORM's @ManyToOne relationship
         ];
 
         for (const field of transactionAdminFields) {
@@ -390,9 +390,7 @@ export class MySqlConnection {
               case 'toUserId':
                 alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `toUserId` BIGINT UNSIGNED NULL COMMENT "User ID who received the money"';
                 break;
-              case 'requestId':
-                alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `requestId` BIGINT UNSIGNED NULL COMMENT "Related request ID"';
-                break;
+              // Removed requestId case as it's automatically managed by TypeORM
               case 'adminId':
                 alterQuery = 'ALTER TABLE `transactions` ADD COLUMN `adminId` BIGINT UNSIGNED NULL COMMENT "Admin user ID who processed the transaction"';
                 break;
@@ -424,8 +422,8 @@ export class MySqlConnection {
           { table: 'requests', column: 'adminReviewedAt', name: 'idx_requests_admin_reviewed_at' },
           { table: 'user', column: 'rating', name: 'idx_user_rating' },
           { table: 'user', column: 'reviewCount', name: 'idx_user_review_count' },
-          { table: 'transactions', column: 'type', name: 'idx_transactions_type' },
-          { table: 'transactions', column: 'requestId', name: 'idx_transactions_request_id' }
+          { table: 'transactions', column: 'type', name: 'idx_transactions_type' }
+          // Removed idx_transactions_request_id as it's automatically created by TypeORM for foreign key constraints
         ];
 
         for (const index of indexesToCreate) {
@@ -434,10 +432,14 @@ export class MySqlConnection {
           );
 
           if (indexExists.length === 0) {
-            await this.dataSource.query(
-              `CREATE INDEX ${index.name} ON \`${index.table}\`(\`${index.column}\`)`
-            );
-            this.logger.log(`Created index ${index.name} on ${index.table}.${index.column}`);
+            try {
+              await this.dataSource.query(
+                `CREATE INDEX ${index.name} ON \`${index.table}\`(\`${index.column}\`)`
+              );
+              this.logger.log(`Created index ${index.name} on ${index.table}.${index.column}`);
+            } catch (createError) {
+              this.logger.warn(`Failed to create index ${index.name}: ${createError instanceof Error ? createError.message : String(createError)}`);
+            }
           } else {
             this.logger.log(`Index ${index.name} already exists`);
           }

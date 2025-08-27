@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, JoinColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { RequestEntity } from './request.entity';
 
@@ -28,9 +28,11 @@ export class TransactionEntity {
   id: number;
 
   @ManyToOne(() => UserEntity, { nullable: false })
+  @JoinColumn({ name: 'userId' })
   user: UserEntity;
 
   @ManyToOne(() => RequestEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'requestId' })
   request: RequestEntity;
 
   @Column('decimal', { precision: 10, scale: 2 })

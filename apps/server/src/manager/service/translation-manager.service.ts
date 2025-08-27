@@ -35,23 +35,40 @@ export class TranslationService {
     branchId: string,
     language?: string
   ): Promise<{ total: number; completed: number; percentage: number }> {
-    const query: any = { projectId, branchId };
-    if (language) {
-      query.language = language;
+    console.log(`[getTranslationProgress] Called with: projectId=${projectId}, branchId=${branchId}, language=${language}`);
+
+    // Base query for project and branch
+    const baseQuery: any = { projectId, branchId };
+
+    // IMPORTANT: We need to count BASE strings (language='en') as total
+    // and TRANSLATION strings (language=specified) as completed
+    const baseStringsQuery = { ...baseQuery, language: 'en' };
+    const total = await this.translationModel.countDocuments(baseStringsQuery);
+    console.log(`[getTranslationProgress] Base strings (en) found: ${total}`);
+
+    let completed = 0;
+    if (language && language.trim()) {
+      // Count completed strings for the specified language
+      const translationQuery = { ...baseQuery, language: language.trim() };
+      completed = await this.translationModel.countDocuments(translationQuery);
+      console.log(`[getTranslationProgress] Translation strings (${language}) found: ${completed}`);
+    } else {
+      // If no language specified, count all non-English strings as completed
+      const nonEnglishQuery = { ...baseQuery, language: { $ne: 'en' } };
+      completed = await this.translationModel.countDocuments(nonEnglishQuery);
+      console.log(`[getTranslationProgress] Non-English strings found: ${completed}`);
     }
 
-    const total = await this.translationModel.countDocuments(query);
-    const completed = await this.translationModel.countDocuments({
-      ...query,
-      translatedText: { $nin: [null, ''] },
-    });
-
+    // Calculate percentage
     const percentage = total > 0 ? (completed / total) * 100 : 0;
+    const roundedPercentage = Math.round(percentage * 100) / 100;
+
+    console.log(`[getTranslationProgress] Result: ${completed}/${total} = ${roundedPercentage}%`);
 
     return {
       total,
       completed,
-      percentage: Math.round(percentage * 100) / 100, 
+      percentage: roundedPercentage,
     };
   }
 
@@ -152,87 +169,87 @@ export class TranslationService {
       } else {
         updatedBuffer = replacedBuffer;
       }
-          } else if (fileEntity.fileType === 'application/pdf') {
-        const entries = await this.translationModel
-          .find({ fileId, language })
-          .lean();
-        const translatedEntries = entries
-          .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
-          .map((e) => ({
-            originalText: e.originalText as string,
-            translatedText: e.translatedText as string,
-            page: (e as any).filePart || e.position?.page || 1,
-          }));
-        const originalBuffer = fileEntity.fileContent as Buffer;
-        try {
-          logger.log('[PDF] Using AsposeService for text replacement...');
+    } else if (fileEntity.fileType === 'application/pdf') {
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
+      const translatedEntries = entries
+        .filter((e) => e.translatedText && e.translatedText.trim().length > 0)
+        .map((e) => ({
+          originalText: e.originalText as string,
+          translatedText: e.translatedText as string,
+          page: (e as any).filePart || e.position?.page || 1,
+        }));
+      const originalBuffer = fileEntity.fileContent as Buffer;
+      try {
+        logger.log('[PDF] Using AsposeService for text replacement...');
 
-          // Determine the correct file name for this language
-          const dotIdx = String(fileEntity.fileName).lastIndexOf('.');
-          const base = dotIdx > -1 ? fileEntity.fileName.slice(0, dotIdx) : fileEntity.fileName;
-          const langSuffix = String(language || '').toUpperCase();
-          const langFileName = `${base}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
+        // Determine the correct file name for this language
+        const dotIdx = String(fileEntity.fileName).lastIndexOf('.');
+        const base = dotIdx > -1 ? fileEntity.fileName.slice(0, dotIdx) : fileEntity.fileName;
+        const langSuffix = String(language || '').toUpperCase();
+        const langFileName = `${base}${langSuffix ? `(${langSuffix})` : ''}.pdf`;
 
-          // Determine the correct folder
-          const projectFolder = fileEntity.project?.id 
-            ? `projects/project-${fileEntity.project.id}`
-            : 'pdf';
+        // Determine the correct folder
+        const projectFolder = fileEntity.project?.id
+          ? `projects/project-${fileEntity.project.id}`
+          : 'pdf';
 
-          const replacementsByPage = new Map<
-            number,
-            { oldText: string; newText: string }[]
-          >();
-          for (const entry of translatedEntries) {
-            const pageNum = entry.page || 1;
-            if (!replacementsByPage.has(pageNum)) {
-              replacementsByPage.set(pageNum, []);
-            }
-            replacementsByPage
-              .get(pageNum)!
-              .push({
-                oldText: entry.originalText,
-                newText: entry.translatedText,
-              });
+        const replacementsByPage = new Map<
+          number,
+          { oldText: string; newText: string }[]
+        >();
+        for (const entry of translatedEntries) {
+          const pageNum = entry.page || 1;
+          if (!replacementsByPage.has(pageNum)) {
+            replacementsByPage.set(pageNum, []);
           }
-
-          // First, ensure the language-specific file exists by copying from original if needed
-          try {
-            const exists = await this.asposeService.fileExistsWithFolder(langFileName, projectFolder);
-            if (!exists) {
-              logger.log(`[PDF] Language file ${langFileName} doesn't exist, copying from original...`);
-              const originalBuffer = await this.asposeService.downloadFileWithFolder(fileEntity.fileName, projectFolder);
-              await this.asposeService.uploadFile(langFileName, originalBuffer, projectFolder);
-              logger.log(`[PDF] Created language file: ${langFileName}`);
-            }
-          } catch (copyErr) {
-            logger.warn(`[PDF] Failed to ensure language file exists: ${copyErr instanceof Error ? copyErr.message : String(copyErr)}`);
-          }
-
-          // Perform text replacement on the language-specific file
-          for (const [page, replacements] of replacementsByPage.entries()) {
-            logger.log(`[PDF] Replacing ${replacements.length} texts on page ${page} in file ${langFileName}`);
-            await this.asposeService.replaceTextInPdf(
-              langFileName,
-              page,
-              replacements,
-              projectFolder
-            );
-          }
-
-          logger.log('[PDF] AsposeService replacement successful');
-        } catch (asposePdfErr) {
-          logger.error(
-            `[PDF] AsposeService replacement failed: ${
-              asposePdfErr instanceof Error
-                ? asposePdfErr.message
-                : String(asposePdfErr)
-            }`
-          );
-          logger.warn(
-            '[PDF] All PDF replacement methods failed, returning original file'
-          );
-          updatedBuffer = originalBuffer;
+          replacementsByPage
+            .get(pageNum)!
+            .push({
+              oldText: entry.originalText,
+              newText: entry.translatedText,
+            });
         }
+
+        // First, ensure the language-specific file exists by copying from original if needed
+        try {
+          const exists = await this.asposeService.fileExistsWithFolder(langFileName, projectFolder);
+          if (!exists) {
+            logger.log(`[PDF] Language file ${langFileName} doesn't exist, copying from original...`);
+            const originalBuffer = await this.asposeService.downloadFileWithFolder(fileEntity.fileName, projectFolder);
+            await this.asposeService.uploadFile(langFileName, originalBuffer, projectFolder);
+            logger.log(`[PDF] Created language file: ${langFileName}`);
+          }
+        } catch (copyErr) {
+          logger.warn(`[PDF] Failed to ensure language file exists: ${copyErr instanceof Error ? copyErr.message : String(copyErr)}`);
+        }
+
+        // Perform text replacement on the language-specific file
+        for (const [page, replacements] of replacementsByPage.entries()) {
+          logger.log(`[PDF] Replacing ${replacements.length} texts on page ${page} in file ${langFileName}`);
+          await this.asposeService.replaceTextInPdf(
+            langFileName,
+            page,
+            replacements,
+            projectFolder
+          );
+        }
+
+        logger.log('[PDF] AsposeService replacement successful');
+      } catch (asposePdfErr) {
+        logger.error(
+          `[PDF] AsposeService replacement failed: ${
+            asposePdfErr instanceof Error
+              ? asposePdfErr.message
+              : String(asposePdfErr)
+          }`
+        );
+        logger.warn(
+          '[PDF] All PDF replacement methods failed, returning original file'
+        );
+        updatedBuffer = originalBuffer;
+      }
     } else {
       console.log('Error');
     }
@@ -246,9 +263,9 @@ export class TranslationService {
       fileEntity.fileType === 'application/pdf'
         ? '.pdf'
         : fileEntity.fileType ===
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ? '.docx'
-        : '';
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? '.docx'
+          : '';
     const safeFileName = `${base}.${language}${ext}`.replace(
       /[\\/:*?"<>|]/g,
       '_'
@@ -266,7 +283,7 @@ export class TranslationService {
       if (
         existing &&
         fileEntity.fileType ===
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ) {
         // Attempt to re-apply translations onto the GitHub version to preserve previous structure
         const entries = await this.translationModel
@@ -426,9 +443,9 @@ export class TranslationService {
       fileEntity.fileType === 'application/pdf'
         ? '.pdf'
         : fileEntity.fileType ===
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ? '.docx'
-        : '';
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? '.docx'
+          : '';
     const safeFileName = `${base}.${language}${ext}`.replace(
       /[\\/:*?"<>|]/g,
       '_'
@@ -627,8 +644,8 @@ export class TranslationService {
 
         const candidateFolders: string[] = fileEntity.project?.id
           ? [
-              `projects/project-${fileEntity.project.id}`,
-            ]
+            `projects/project-${fileEntity.project.id}`,
+          ]
           : ['pdf'];
 
         let downloaded: Buffer | null = null;
@@ -772,9 +789,9 @@ export class TranslationService {
       fileEntity.fileType === 'application/pdf'
         ? '.pdf'
         : fileEntity.fileType ===
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ? '.docx'
-        : '';
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? '.docx'
+          : '';
 
     const dotIdx = String(fileEntity.fileName).lastIndexOf('.');
     const base =

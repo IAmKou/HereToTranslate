@@ -46,6 +46,26 @@ export class TranslationService {
     const total = await this.translationModel.countDocuments(baseStringsQuery);
     console.log(`[getTranslationProgress] Base strings (en) found: ${total}`);
 
+    // If no base strings found, check if there are any translation records at all for this project
+    if (total === 0) {
+      const anyRecords = await this.translationModel.countDocuments(baseQuery);
+      console.log(`[getTranslationProgress] No base strings found. Total records for project: ${anyRecords}`);
+      
+      if (anyRecords === 0) {
+        console.log(`[getTranslationProgress] No translation records found for project ${projectId}. Project may not have files processed yet.`);
+        return {
+          total: 0,
+          completed: 0,
+          percentage: 0,
+        };
+      } else {
+        // Check if there are non-English strings that could be used as base
+        const nonEnglishRecords = await this.translationModel.find(baseQuery).limit(5);
+        console.log(`[getTranslationProgress] Found ${anyRecords} records but no English strings. Sample records:`, 
+          nonEnglishRecords.map(r => ({ language: r.language, text: r.originalText?.substring(0, 50) })));
+      }
+    }
+
     let completed = 0;
     if (language && language.trim()) {
       // Count completed strings for the specified language
@@ -78,6 +98,8 @@ export class TranslationService {
     branchId: string,
     targetLanguage: string
   ): Promise<void> {
+    console.log(`[ensureTranslationRecordsExist] Called with: projectId=${projectId}, branchId=${branchId}, targetLanguage=${targetLanguage}`);
+    
     // Find all original entries (language 'en') for this project/branch
     const originalEntries = await this.translationModel.find({
       projectId,
@@ -86,7 +108,30 @@ export class TranslationService {
       obsolete: { $ne: true }
     });
 
+    console.log(`[ensureTranslationRecordsExist] Found ${originalEntries.length} original English entries`);
+
+    // If no English entries found, check if there are any records at all for this project
+    if (originalEntries.length === 0) {
+      const anyRecords = await this.translationModel.countDocuments({ projectId, branchId });
+      console.log(`[ensureTranslationRecordsExist] No English entries found. Total records for project: ${anyRecords}`);
+      
+      if (anyRecords === 0) {
+        console.log(`[ensureTranslationRecordsExist] No translation records found for project ${projectId}. Project may not have files processed yet.`);
+        return;
+      } else {
+        // Check what languages exist for this project
+        const existingLanguages = await this.translationModel.distinct('language', { projectId, branchId });
+        console.log(`[ensureTranslationRecordsExist] Existing languages for project: ${existingLanguages.join(', ')}`);
+        
+        // If there are no English strings but other languages exist, we can't create translation records
+        // because we need English as the base language
+        console.log(`[ensureTranslationRecordsExist] Cannot create translation records without English base strings`);
+        return;
+      }
+    }
+
     // For each original entry, ensure a translation record exists for the target language
+    let createdCount = 0;
     for (const originalEntry of originalEntries) {
       const existingTranslation = await this.translationModel.findOne({
         projectId: originalEntry.projectId,
@@ -112,7 +157,102 @@ export class TranslationService {
           position: originalEntry.position,
           obsolete: false,
         });
+        createdCount++;
       }
+    }
+
+    console.log(`[ensureTranslationRecordsExist] Created ${createdCount} new translation records for language ${targetLanguage}`);
+  }
+
+  // Method to check if a project has translation records
+  async hasTranslationRecords(projectId: string, branchId: string): Promise<boolean> {
+    const count = await this.translationModel.countDocuments({ projectId, branchId });
+    return count > 0;
+  }
+
+  // Method to check if a project has English base strings
+  async hasEnglishBaseStrings(projectId: string, branchId: string): Promise<boolean> {
+    const count = await this.translationModel.countDocuments({ 
+      projectId, 
+      branchId, 
+      language: 'en',
+      obsolete: { $ne: true }
+    });
+    return count > 0;
+  }
+
+  // Method to get project translation status
+  async getProjectTranslationStatus(projectId: string, branchId: string): Promise<{
+    hasRecords: boolean;
+    hasEnglishStrings: boolean;
+    totalRecords: number;
+    englishRecords: number;
+    languages: string[];
+  }> {
+    const totalRecords = await this.translationModel.countDocuments({ projectId, branchId });
+    const englishRecords = await this.translationModel.countDocuments({ 
+      projectId, 
+      branchId, 
+      language: 'en',
+      obsolete: { $ne: true }
+    });
+    const languages = await this.translationModel.distinct('language', { projectId, branchId });
+
+    return {
+      hasRecords: totalRecords > 0,
+      hasEnglishStrings: englishRecords > 0,
+      totalRecords,
+      englishRecords,
+      languages,
+    };
+  }
+
+  // Resolve best branchId to use for progress: prefer candidate if it has English strings,
+  // otherwise pick the branch with the most English base strings for this project.
+  async resolveBranchIdForProgress(
+    projectId: string,
+    branchIdCandidate?: string
+  ): Promise<string> {
+    try {
+      if (branchIdCandidate) {
+        const hasEnglishOnCandidate = await this.translationModel.countDocuments({
+          projectId,
+          branchId: branchIdCandidate,
+          language: 'en',
+          obsolete: { $ne: true },
+        });
+        if (hasEnglishOnCandidate > 0) {
+          return branchIdCandidate;
+        }
+      }
+
+      // Find all branches that have English base strings for this project
+      const pipeline = [
+        { $match: { projectId, language: 'en', obsolete: { $ne: true } } },
+        { $group: { _id: '$branchId', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 1 },
+      ];
+      const result = await this.translationModel.aggregate(pipeline);
+      if (Array.isArray(result) && result.length > 0 && result[0]._id) {
+        return String(result[0]._id);
+      }
+
+      // As a fallback, if there are any records at all, pick the branch with most records
+      const anyBranch = await this.translationModel.aggregate([
+        { $match: { projectId } },
+        { $group: { _id: '$branchId', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 1 },
+      ]);
+      if (Array.isArray(anyBranch) && anyBranch.length > 0 && anyBranch[0]._id) {
+        return String(anyBranch[0]._id);
+      }
+
+      // Default fallback
+      return branchIdCandidate || '1';
+    } catch {
+      return branchIdCandidate || '1';
     }
   }
 

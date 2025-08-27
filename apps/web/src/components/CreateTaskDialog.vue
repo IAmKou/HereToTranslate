@@ -129,11 +129,14 @@
             <div v-if="selectedFileParts.length > 0" class="file-parts-summary" style="margin-top: 0.5rem; padding: 0.5rem; background: #f0f9ff; border-radius: 4px; font-size: 0.875rem; color: #1e40af;">
               <strong>Selected:</strong> {{ selectedFileParts.length }} page(s)
               <span v-if="selectedFileParts.length === 1">
-                (Page {{ getSelectedPageNumber(selectedFileParts[0]) }})
-              </span>
+              (Page {{ getSelectedPageNumber(selectedFileParts[0]) }})
+            </span>
               <span v-else>
-                (Multiple pages - task will cover entire file)
-              </span>
+              (Multiple pages - task will cover entire file)
+            </span>
+            </div>
+            <div v-if="fieldErrors.filePages" class="field-error">
+              {{ fieldErrors.filePages }}
             </div>
           </div>
           <div v-else-if="selectedFileId && fileParts.length === 0" class="file-parts-section">
@@ -439,6 +442,9 @@
               (Multiple pages - task will cover entire file)
             </span>
           </div>
+          <div v-if="fieldErrors.filePages" class="field-error">
+            {{ fieldErrors.filePages }}
+          </div>
         </div>
         <div v-else-if="selectedFileId && fileParts.length === 0" class="file-parts-section">
           <div style="color: #666; font-style: italic; text-align: center; padding: 1rem;">
@@ -590,7 +596,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { taskService, CreateTaskDto, ProjectFile, FilePart } from '../services/task.service';
+import { taskService, CreateTaskDto, ProjectFile, FilePart, Task } from '../services/task.service';
 import { SUPPORTED_LANGUAGES, Language } from '../utils/languages';
 
 interface Props {
@@ -668,13 +674,22 @@ const error = ref('');
 // Cache existing task titles for the current project to validate uniqueness
 const projectTaskTitles = ref<string[]>([]);
 
+// Cache existing task pages for the current project to validate page duplication
+const projectTaskPages = ref<Array<{
+  fileId: string;
+  page?: number;
+  pages?: number[];
+  language: string;
+}>>([]);
+
 // Field validation errors
 const fieldErrors = ref({
   title: '',
   description: '',
   fileSelection: '',
   languages: '',
-  dueDateTime: ''
+  dueDateTime: '',
+  filePages: '' // Add new field for file pages validation
 });
 
 // Track if form has been submitted to show all errors
@@ -711,7 +726,7 @@ const initializeFormWithEditData = () => {
       dueDateTime: props.editTask.dueDate || '',
       branchId: props.branchId,
       fileId: props.editTask.fileId || props.fileId,
-      page: props.editTask.page !== undefined ? props.editTask.page : props.page,
+      page: props.editTask.filePart !== undefined ? props.editTask.filePart : props.page,
       pages: props.editTask.pages || props.pages,
       language: props.editTask.language || ''
     };
@@ -770,7 +785,7 @@ const availableRangeEndPages = computed(() => {
     return fileParts.value;
   }
 
-  const fromIndex = fileParts.value.findIndex(part => part.part === pageRangeFrom.value);
+  const fromIndex = fileParts.value.findIndex((part: FilePart) => part.part === pageRangeFrom.value);
   if (fromIndex === -1) {
     return fileParts.value;
   }
@@ -823,7 +838,8 @@ watch(() => props.visible, (newVal: boolean) => {
       description: '',
       fileSelection: '',
       languages: '',
-      dueDateTime: ''
+      dueDateTime: '',
+      filePages: ''
     };
     hasSubmitted.value = false;
 
@@ -841,15 +857,59 @@ watch(() => props.visible, (newVal: boolean) => {
     void (async () => {
       try {
         const tasks = await taskService.getProjectTasks(props.projectId);
+
+        // Load task titles for uniqueness validation
         projectTaskTitles.value = (tasks || []).map((t: any) => t.title).filter((t: string) => typeof t === 'string');
-        console.log('Loaded project task titles for uniqueness validation:', projectTaskTitles.value.length);
+
+        // Load existing task pages for page duplication validation
+        projectTaskPages.value = (tasks || []).map((t: any) => {
+          // Map task data consistently - prioritize standard field names
+          const fileId = t.fileId || t.file_id || t.file || '';
+          const language = t.language || t.lang || t.targetLanguage || t.target_language || '';
+
+          // Map pages data - prioritize standard field names
+          let pageData: number | undefined;
+          let pagesData: number[] | undefined;
+
+          if (t.pages && Array.isArray(t.pages)) {
+            pagesData = t.pages;
+            pageData = undefined;
+          } else if (t.page !== undefined) {
+            pageData = t.page;
+            pagesData = undefined;
+          } else if (t.filePart !== undefined) {
+            pageData = t.filePart;
+            pagesData = undefined;
+          } else if (t.selectedPages && Array.isArray(t.selectedPages)) {
+            pagesData = t.selectedPages;
+            pageData = undefined;
+          }
+
+          return {
+            fileId: fileId,
+            page: pageData,
+            pages: pagesData,
+            language: language
+          };
+        }).filter((t: {
+          fileId: string;
+          page?: number;
+          pages?: number[];
+          language: string;
+        }) => t.fileId && t.language); // Only filter by fileId and language
+
         // Re-validate title immediately in case the user already typed something
         if (formData.value.title) {
           validateTitle();
         }
+        // Re-validate file pages if any are selected
+        if (selectedFileParts.value.length > 0) {
+          validateFilePages();
+        }
       } catch (e) {
-        console.warn('Could not load project tasks for title uniqueness validation');
+        console.error('Error loading project tasks for validation:', e);
         projectTaskTitles.value = [];
+        projectTaskPages.value = [];
       }
     })();
   }
@@ -1015,8 +1075,18 @@ function onFilePartChange() {
     formData.value.pages = undefined;
   }
 
-  console.log('Selected file pages:', selectedFileParts.value);
+  console.log('=== DEBUG: onFilePartChange ===');
+  console.log('Selected file parts:', selectedFileParts.value);
+  console.log('Selected file ID:', selectedFileId.value);
+  console.log('Selected languages:', selectedLanguages.value);
+  console.log('Project task pages:', projectTaskPages.value);
   console.log('Updated formData:', formData.value);
+
+  // Validate file pages for duplication
+  console.log('Calling validateFilePages...');
+  const validationResult = validateFilePages();
+  console.log('Validation result:', validationResult);
+  console.log('Field errors after validation:', fieldErrors.value);
 }
 
 // Select all file parts
@@ -1036,7 +1106,7 @@ function clearAllParts() {
 
 // Get page number for selected part
 function getSelectedPageNumber(partIndex: number): number {
-  const part = fileParts.value.find(p => p.part === partIndex);
+  const part = fileParts.value.find((p: FilePart) => p.part === partIndex);
   return part?.pageNumber || (partIndex + 1);
 }
 
@@ -1053,7 +1123,7 @@ function onPageRangeModeChange() {
 function onSinglePageChange() {
   if (pageRangeFrom.value !== null) {
     // Find the part and get its page number
-    const part = fileParts.value.find(p => p.part === pageRangeFrom.value);
+    const part = fileParts.value.find((p: FilePart) => p.part === pageRangeFrom.value);
     const pageNumber = part?.pageNumber || (pageRangeFrom.value + 1);
     selectedFileParts.value = [pageNumber];
   } else {
@@ -1065,8 +1135,8 @@ function onSinglePageChange() {
 // Handle page range selection
 function onPageRangeChange() {
   if (pageRangeFrom.value !== null && pageRangeTo.value !== null) {
-    const fromIndex = fileParts.value.findIndex(part => part.part === pageRangeFrom.value);
-    const toIndex = fileParts.value.findIndex(part => part.part === pageRangeTo.value);
+    const fromIndex = fileParts.value.findIndex((part: FilePart) => part.part === pageRangeFrom.value);
+    const toIndex = fileParts.value.findIndex((part: FilePart) => part.part === pageRangeTo.value);
 
     if (fromIndex !== -1 && toIndex !== -1 && toIndex >= fromIndex) {
       // Generate array of page numbers from fromIndex to toIndex
@@ -1088,7 +1158,11 @@ function onPageRangeChange() {
 
 // Select first available file
 function selectFirstFile() {
-  const firstReadyFile = projectFilesComputed.value.find((file: any) => file.status === 'ready');
+  const firstReadyFile = projectFilesComputed.value.find((file: {
+    fileId: string;
+    fileName: string;
+    status: string;
+  }) => file.status === 'ready');
   if (firstReadyFile) {
     selectedFileId.value = firstReadyFile.fileId;
     onFileChange();
@@ -1097,14 +1171,20 @@ function selectFirstFile() {
 
 // Select all languages
 function selectAllLanguages() {
-  selectedLanguages.value = availableLanguages.value.map(lang => lang.code);
+  selectedLanguages.value = availableLanguages.value.map((lang: Language) => lang.code);
   validateLanguages();
+  // Re-validate file pages when languages change
+  if (selectedFileParts.value.length > 0) {
+    validateFilePages();
+  }
 }
 
 // Clear all languages
 function clearAllLanguages() {
   selectedLanguages.value = [];
   validateLanguages();
+  // Clear file pages error when languages are cleared
+  fieldErrors.value.filePages = '';
 }
 
 // Validate due date time and show warnings
@@ -1201,18 +1281,37 @@ function validateFileSelection() {
 
 // Validate languages selection
 function validateLanguages() {
+  console.log('=== DEBUG: validateLanguages ===');
+  console.log('Selected languages:', selectedLanguages.value);
+  console.log('Is edit mode:', props.editTask);
+
   if (selectedLanguages.value.length === 0) {
-    fieldErrors.value.languages = props.editTask ? 'Please select a language' : 'Please select at least one target language';
+    const errorMsg = props.editTask ? 'Please select a language' : 'Please select at least one target language';
+    fieldErrors.value.languages = errorMsg;
+    console.log('❌ Language validation failed:', errorMsg);
     return false;
   }
 
   // When editing, only allow one language
   if (props.editTask && selectedLanguages.value.length > 1) {
-    fieldErrors.value.languages = 'Please select only one language when editing a task';
+    const errorMsg = 'Please select only one language when editing a task';
+    fieldErrors.value.languages = errorMsg;
+    console.log('❌ Language validation failed:', errorMsg);
     return false;
   }
 
+  // Clear language error
   fieldErrors.value.languages = '';
+  console.log('✅ Language validation passed');
+
+  // Re-validate file pages when languages change
+  if (selectedFileParts.value.length > 0) {
+    console.log('Re-validating file pages due to language change...');
+    validateFilePages();
+  } else {
+    console.log('No file parts selected, skipping file pages validation');
+  }
+
   return true;
 }
 
@@ -1226,8 +1325,146 @@ function validateDescription() {
   return true;
 }
 
+// Validate file pages to prevent duplication with existing tasks
+function validateFilePages() {
+  console.log('=== DEBUG: validateFilePages START ===');
+  console.log('Input values:', {
+    selectedFileId: selectedFileId.value,
+    selectedFileParts: selectedFileParts.value,
+    selectedLanguages: selectedLanguages.value,
+    projectTaskPages: projectTaskPages.value
+  });
+
+  if (!selectedFileId.value || selectedFileParts.value.length === 0) {
+    console.log('Early return: No file selected or no pages selected');
+    fieldErrors.value.filePages = '';
+    return true;
+  }
+
+  // Check if languages are selected
+  if (selectedLanguages.value.length === 0) {
+    console.log('Early return: No languages selected');
+    fieldErrors.value.filePages = '';
+    return true; // Don't validate pages if no languages selected yet
+  }
+
+  const currentFileId = selectedFileId.value;
+
+  // For edit mode, check only the current language
+  // For create mode, check all selected languages
+  const languagesToCheck = props.editTask ? [selectedLanguages.value[0]] : selectedLanguages.value;
+
+  console.log('Validation parameters:', {
+    currentFileId,
+    selectedFileParts: selectedFileParts.value,
+    languagesToCheck,
+    existingTasksCount: projectTaskPages.value.length
+  });
+
+  // DEBUG: Kiểm tra chi tiết projectTaskPages
+  console.log('🔍 DEBUG: projectTaskPages details:');
+  projectTaskPages.value.forEach((task: any, index: number) => {
+    console.log(`  Task ${index}:`, {
+      fileId: task.fileId,
+      page: task.page,
+      pages: task.pages,
+      language: task.language
+    });
+  });
+
+  // Check for page conflicts with existing tasks
+  const conflictingTasks = projectTaskPages.value.filter((task: {
+    fileId: string;
+    page?: number;
+    pages?: number[];
+    language: string;
+  }) => {
+    console.log('=== Checking task for conflicts ===');
+    console.log('Current task:', task);
+    console.log('Current selection:', {
+      fileId: currentFileId,
+      selectedPages: selectedFileParts.value,
+      selectedLanguages: languagesToCheck
+    });
+
+    // QUAN TRỌNG: Debug chi tiết hơn
+    console.log('Task fileId:', task.fileId, 'vs Current fileId:', currentFileId, 'Match?', task.fileId === currentFileId);
+    console.log('Task language:', task.language, 'vs Languages to check:', languagesToCheck, 'Match?', languagesToCheck.includes(task.language));
+
+    // Skip if different file
+    if (task.fileId !== currentFileId) {
+      console.log('  -> Skipped: Different file (', task.fileId, 'vs', currentFileId, ')');
+      return false;
+    }
+
+    // Skip if different language (unless we're checking all languages)
+    if (!languagesToCheck.includes(task.language)) {
+      console.log('  -> Skipped: Different language (', task.language, 'vs', languagesToCheck, ')');
+      return false;
+    }
+
+    // Check single page conflict
+    if (task.page !== undefined && selectedFileParts.value.includes(task.page)) {
+      console.log('  -> CONFLICT FOUND: Single page', task.page, 'with task:', task);
+      console.log('  -> Selected pages include:', task.page, '?', selectedFileParts.value.includes(task.page));
+      return true;
+    }
+
+    // Check multiple pages conflict
+    if (task.pages && task.pages.length > 0) {
+      const hasConflict = selectedFileParts.value.some((page: number) => task.pages!.includes(page));
+      if (hasConflict) {
+        console.log('  -> CONFLICT FOUND: Multiple pages', task.pages, 'with selected:', selectedFileParts.value);
+        console.log('  -> Conflict details:', selectedFileParts.value.filter((page: number) => task.pages!.includes(page)));
+      } else {
+        console.log('  -> No conflict with multiple pages');
+      }
+      return hasConflict;
+    }
+
+    console.log('  -> No conflict found - task has no page data');
+    return false;
+  });
+
+  console.log('Total conflicting tasks found:', conflictingTasks.length);
+  console.log('Conflicting tasks details:', conflictingTasks);
+
+  if (conflictingTasks.length > 0) {
+    const conflictingPages = conflictingTasks.map((task: {
+      fileId: string;
+      page?: number;
+      pages?: number[];
+      language: string;
+    }) => {
+      if (task.page !== undefined) {
+        return `Page ${task.page}`;
+      }
+      if (task.pages && task.pages.length > 0) {
+        return `Pages ${task.pages.join(', ')}`;
+      }
+      return 'Unknown pages';
+    }).join(', ');
+
+    const conflictingLanguages = [...new Set(conflictingTasks.map((task: {
+      fileId: string;
+      page?: number;
+      pages?: number[];
+      language: string;
+    }) => task.language))];
+    fieldErrors.value.filePages = `These pages are already assigned to existing tasks in ${conflictingLanguages.join(', ')}: ${conflictingPages}`;
+    console.log('❌ File pages validation FAILED:', fieldErrors.value.filePages);
+    return false;
+  }
+
+  fieldErrors.value.filePages = '';
+  console.log('✅ File pages validation PASSED');
+  console.log('=== DEBUG: validateFilePages END ===');
+  return true;
+}
+
 // Validate all fields
 function validateForm() {
+  console.log('=== DEBUG: validateForm START ===');
   hasSubmitted.value = true;
 
   const isTitleValid = validateTitle();
@@ -1235,22 +1472,93 @@ function validateForm() {
   const isFileValid = validateFileSelection();
   const isLanguagesValid = validateLanguages();
   const isDueDateTimeValid = validateDueDateTime();
+  const isFilePagesValid = validateFilePages();
 
-  return isTitleValid && isDescriptionValid && isFileValid && isLanguagesValid && isDueDateTimeValid;
+  console.log('Validation results:', {
+    isTitleValid,
+    isDescriptionValid,
+    isFileValid,
+    isLanguagesValid,
+    isDueDateTimeValid,
+    isFilePagesValid
+  });
+
+  const finalResult = isTitleValid && isDescriptionValid && isFileValid && isLanguagesValid && isDueDateTimeValid && isFilePagesValid;
+  console.log('Final validation result:', finalResult);
+  console.log('Current field errors:', fieldErrors.value);
+  console.log('=== DEBUG: validateForm END ===');
+
+  return finalResult;
 }
 
 async function onSubmit() {
+  console.log('=== DEBUG: onSubmit START ===');
+  console.log('Form data before validation:', formData.value);
+  console.log('Selected file parts:', selectedFileParts.value);
+  console.log('Selected languages:', selectedLanguages.value);
+
   // Validate all fields
   if (!validateForm()) {
+    console.log('❌ Form validation failed, stopping submission');
     return;
   }
+
+  console.log('✅ Form validation passed, proceeding with submission');
 
   // Final server-safe duplicate check just before creating
   try {
     const tasks = await taskService.getProjectTasks(props.projectId);
+
     projectTaskTitles.value = (tasks || []).map((t: any) => t.title).filter((t: string) => typeof t === 'string');
-  } catch {}
+
+    // Update project task pages for final validation
+    // Use consistent mapping logic as when loading initially
+    projectTaskPages.value = (tasks || []).map((t: any) => {
+      // Map task data consistently - prioritize standard field names
+      const fileId = t.fileId || t.file_id || t.file || '';
+      const language = t.language || t.lang || t.targetLanguage || t.target_language || '';
+
+      // Map pages data - prioritize standard field names
+      let pageData: number | undefined;
+      let pagesData: number[] | undefined;
+
+      if (t.pages && Array.isArray(t.pages)) {
+        pagesData = t.pages;
+        pageData = undefined;
+      } else if (t.page !== undefined) {
+        pageData = t.page;
+        pagesData = undefined;
+      } else if (t.filePart !== undefined) {
+        pageData = t.filePart;
+        pagesData = undefined;
+      } else if (t.selectedPages && Array.isArray(t.selectedPages)) {
+        pagesData = t.selectedPages;
+        pageData = undefined;
+      }
+
+      return {
+        fileId: fileId,
+        page: pageData,
+        pages: pagesData,
+        language: language
+      };
+    }).filter((t: {
+      fileId: string;
+      page?: number;
+      pages?: number[];
+      language: string;
+    }) => t.fileId && t.language); // Only filter by fileId and language
+
+    // Re-validate file pages with updated data
+    if (!validateFilePages()) {
+      return;
+    }
+  } catch (error) {
+    console.error('Error fetching latest tasks:', error);
+  }
+
   if (!validateTitle()) {
+    console.log('❌ Final title validation failed, stopping submission');
     return;
   }
 

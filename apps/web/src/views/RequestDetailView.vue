@@ -159,6 +159,34 @@
                 </div>
               </div>
             </div>
+            <!-- Project Progress Card -->
+            <div v-if="shouldShowProgress" class="info-card info-card-hover">
+              <div class="info-card-title">
+                <i class="pi pi-chart-line"></i>
+                Project Progress
+              </div>
+              <div class="progress-list">
+                <div v-for="item in progressItems" :key="item.key" class="progress-row">
+                  <div class="progress-row-header">
+                    <span class="progress-label">
+                      <i class="pi pi-flag"></i>
+                      {{ item.label }}
+                    </span>
+                    <span class="progress-percent">{{ Math.round(item.percentage) }}%</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: Math.min(100, Math.max(0, item.percentage)) + '%', background: progressColor(item.percentage) }"></div>
+                  </div>
+                  <div class="progress-meta">{{ item.completed }} / {{ item.total }} strings</div>
+                </div>
+                <div v-if="progressLoading" class="progress-loading">
+                  <i class="pi pi-spin pi-spinner" /> Loading progress...
+                </div>
+                <div v-if="progressError" class="progress-error">
+                  <i class="pi pi-exclamation-triangle"></i> {{ progressError }}
+                </div>
+              </div>
+            </div>
             <!-- Description Card -->
             <div class="info-card info-card-hover">
               <div class="info-card-title">
@@ -998,6 +1026,69 @@ function onRequestUpdated() {
   fetchRequestDetail()
 }
 
+// Progress state
+type ProgressItem = { key: string; label: string; percentage: number; total: number; completed: number };
+const progressItems = ref<ProgressItem[]>([]);
+const progressLoading = ref<boolean>(false);
+const progressError = ref<string>('');
+const shouldShowProgress = computed(() => {
+  const st = request.value?.status;
+  if (!st) return false;
+  if (st === 'PENDING' || st === 'CANCELLED') return false;
+  return Boolean(request.value?.project?.id && (request.value as any)?.defaultBranch?.id || request.value?.project?.id && (request.value as any)?.project?.defaultBranch?.id);
+});
+function progressColor(p: number) {
+  if (p >= 90) return 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)';
+  if (p >= 60) return 'linear-gradient(90deg, #84cc16 0%, #22c55e 100%)';
+  if (p >= 30) return 'linear-gradient(90deg, #fde68a 0%, #f59e0b 100%)';
+  return 'linear-gradient(90deg, #fecaca 0%, #ef4444 100%)';
+}
+async function fetchProgress() {
+  try {
+    if (!request.value) return;
+    const projId = String((request.value as any)?.project?.id ?? '');
+    const branchId = String(((request.value as any)?.defaultBranch?.id) ?? ((request.value as any)?.project?.defaultBranch?.id) ?? '');
+    if (!projId || !branchId) return;
+
+    console.log('[fetchProgress] Starting with:', { projId, branchId });
+    console.log('[fetchProgress] Request data:', request.value);
+
+    progressLoading.value = true;
+    progressError.value = '';
+    const langs = (request.value.targetLanguages && request.value.targetLanguages.length > 0)
+      ? request.value.targetLanguages
+      : [];
+
+    console.log('[fetchProgress] Target languages:', langs);
+
+    const items: ProgressItem[] = [];
+    if (langs.length > 0) {
+      const promises = langs.map(async (lang: string) => {
+        console.log(`[fetchProgress] Fetching progress for language: ${lang}`);
+        const res = await axiosInstance.get('/translation/progress', { params: { projectId: projId, branchId: branchId, language: lang } });
+        const data = res.data as { total: number; completed: number; percentage: number };
+        console.log(`[fetchProgress] Response for ${lang}:`, data);
+        items.push({ key: lang, label: `Language: ${getLanguageName(lang)}`, percentage: data.percentage || 0, total: data.total || 0, completed: data.completed || 0 });
+      });
+      await Promise.all(promises);
+    } else {
+      console.log('[fetchProgress] No target languages, fetching overall progress');
+      const res = await axiosInstance.get('/translation/progress', { params: { projectId: projId, branchId: branchId } });
+      const data = res.data as { total: number; completed: number; percentage: number };
+      console.log('[fetchProgress] Overall progress response:', data);
+      items.push({ key: 'overall', label: 'Overall', percentage: data.percentage || 0, total: data.total || 0, completed: data.completed || 0 });
+    }
+    // Sort languages alphabetically for stable UI
+    progressItems.value = items.sort((a, b) => a.key.localeCompare(b.key));
+    console.log('[fetchProgress] Final progress items:', progressItems.value);
+  } catch (e: any) {
+    console.error('[fetchProgress] Error:', e);
+    progressError.value = e?.response?.data?.message || e?.message || 'Failed to load progress';
+  } finally {
+    progressLoading.value = false;
+  }
+}
+
 async function fetchRequestDetail() {
   loading.value = true
   try {
@@ -1013,6 +1104,10 @@ async function fetchRequestDetail() {
 
 
     request.value = res.data;
+    // Load progress when applicable
+    if (shouldShowProgress.value) {
+      await fetchProgress();
+    }
   } catch (e) {
     console.error('Error fetching request detail:', e);
     request.value = null;
@@ -1125,6 +1220,9 @@ onMounted(async () => {
   const user = await authService.getCurrentUser();
   userId.value = user?.id ?? null;
   await fetchRequestDetail();
+  if (shouldShowProgress.value) {
+    await fetchProgress();
+  }
 });
 
 
@@ -1239,6 +1337,48 @@ body, .request-detail-wrapper {
 .info-card-title i {
   color: #3b82f6;
   font-size: 16px;
+}
+.progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.progress-row {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+.progress-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.progress-label {
+  color: #374151;
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.progress-percent {
+  color: #111827;
+  font-weight: 800;
+  font-size: 13px;
+}
+.progress-meta {
+  color: #6b7280;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.progress-loading, .progress-error {
+  color: #6b7280;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .overview-grid {
   display: grid;

@@ -436,6 +436,12 @@ const hasActiveFilters = computed(() => {
 const filteredTransactions = computed(() => {
   let filtered = [...transactions.value];
 
+  console.log('Filtering transactions:', {
+    totalTransactions: transactions.value.length,
+    filterDraft: filterDraft.value,
+    initialFiltered: filtered.length
+  });
+
   // Filter by type
   if (filterDraft.value.type) {
     if (filterDraft.value.type === 'deposit') {
@@ -451,7 +457,17 @@ const filteredTransactions = computed(() => {
 
   // Filter by status
   if (filterDraft.value.status) {
-    filtered = filtered.filter((t: any) => t.status && t.status.toLowerCase() === filterDraft.value.status.toLowerCase());
+    console.log('Status filtering:', {
+      filterStatus: filterDraft.value.status,
+      sampleTransactionStatus: filtered[0]?.status
+    });
+    filtered = filtered.filter((t: any) => {
+      const transactionStatus = (t.status || '').toLowerCase();
+      const filterStatus = filterDraft.value.status.toLowerCase();
+      const matches = transactionStatus === filterStatus;
+      console.log(`Transaction ${t.id}: status="${t.status}" -> "${transactionStatus}" vs filter="${filterStatus}" -> ${matches}`);
+      return matches;
+    });
   }
 
   // Filter by min amount
@@ -473,7 +489,14 @@ const filteredTransactions = computed(() => {
     filtered = filtered.filter((t: any) => new Date(t.createdAt) <= end);
   }
 
-  return filtered.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const result = filtered.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  console.log('Filtered transactions result:', {
+    finalCount: result.length,
+    sampleTransaction: result[0] || null
+  });
+
+  return result;
 });
 
 const totalPages = computed(() => Math.ceil(filteredTransactions.value.length / itemsPerPage.value));
@@ -561,13 +584,27 @@ async function loadTransactions() {
   try {
     const response = await axios.get('/api/wallet/transactions');
     console.log('API /api/wallet/transactions response:', response.data);
-    // Map lại dữ liệu để lấy đúng trường ngày và paypalEmail
+
+    // Map the backend response to match frontend expectations
     transactions.value = (response.data || []).map((txn: any) => ({
       ...txn,
-      createdAt: txn.createdAt || txn.created_at || txn.date || '-',
-      paypalEmail: txn.paypalEmail || txn.user?.paypalEmail || txn.meta?.paypalEmail || '-',
+      // Convert amount from string to number
+      amount: parseFloat(txn.amount) || 0,
+      // Add createdAt field (use current date as fallback since backend doesn't provide it)
+      createdAt: txn.createdAt || txn.created_at || txn.date || new Date().toISOString(),
+      // Add paypalEmail field (use userEmail as fallback)
+      paypalEmail: txn.paypalEmail || txn.userEmail || '-',
+      // Ensure requestId is properly set
+      requestId: txn.requestId || null,
+      // Ensure isRequester is boolean
+      isRequester: Boolean(txn.isRequester),
+      // Ensure type is properly set
+      type: txn.type || 'Unknown'
     }));
+
+    console.log('Mapped transactions:', transactions.value);
   } catch (err: any) {
+    console.error('Error loading transactions:', err);
     error.value = err?.response?.data?.message || 'Failed to load transactions.';
   } finally {
     loading.value = false;
@@ -737,7 +774,7 @@ function getStatusTooltip(status: string): string {
 import { watch } from 'vue';
 const statusOptions = [
   { label: 'All Status', value: '', color: '' },
-  { label: 'Pending', value: 'pending', color: 'status-pending' },
+  { label: 'On Hold', value: 'on_hold', color: 'status-pending' },
   { label: 'Completed', value: 'completed', color: 'status-completed' },
   { label: 'Cancelled', value: 'cancelled', color: 'status-failed' },
   { label: 'Failed', value: 'failed', color: 'status-failed' },

@@ -522,12 +522,12 @@
                         <span class="deadline-text">{{ formatDate(req.deadline) }}</span>
                       </div>
                     </td>
-                    <td style="text-align: center; vertical-align: middle;">
+                    <td class="status-cell" style="text-align: center; vertical-align: middle;">
                          <span :class="['status-badge', getStatusClass(req.status)]">
                            {{ formatStatus(req.status) }}
                          </span>
                     </td>
-                    <td style="text-align: center; vertical-align: middle;">
+                    <td class="visibility-cell" style="text-align: center; vertical-align: middle;">
                          <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic, !!req.assignee) ? 'visibility-public' : 'visibility-private']">
                            <i :class="isRequestPublic(req.isPublic, !!req.assignee) ? 'pi pi-globe' : 'pi pi-lock'"></i>
                            {{ isRequestPublic(req.isPublic, !!req.assignee) ? 'Public' : 'Private' }}
@@ -541,22 +541,26 @@
                       <div class="actions-wrapper">
                         <template v-if="req.status === 'PENDING'">
                           <button
-                            class="action-btn btn btn-primary"
+                            class="action-btn accept-btn"
                             :disabled="actionLoading"
                             @click="acceptAssignedRequest(req.id)"
+                            :title="`Accept request: ${req.title}`"
+                            data-tooltip="Accept this request"
                           >
-                            <i v-if="!actionLoading" class="pi pi-check" />
-                            <i v-else class="pi pi-spinner pi-spin" />
-                            <span>{{ actionLoading ? 'Processing...' : 'Accept' }}</span>
+                            <i v-if="!actionLoading" class="pi pi-check btn-icon" />
+                            <i v-else class="pi pi-spinner pi-spin btn-icon" />
+                            <span class="btn-text">{{ actionLoading ? 'Processing...' : 'Accept' }}</span>
                           </button>
                           <button
-                            class="action-btn btn btn-danger"
+                            class="action-btn decline-btn"
                             :disabled="actionLoading"
                             @click="declineAssignedRequest(req.id)"
+                            :title="`Decline request: ${req.title}`"
+                            data-tooltip="Decline this request"
                           >
-                            <i v-if="!actionLoading" class="pi pi-times" />
-                            <i v-else class="pi pi-spinner pi-spin" />
-                            <span>{{ actionLoading ? 'Processing...' : 'Decline' }}</span>
+                            <i v-if="!actionLoading" class="pi pi-times btn-icon" />
+                            <i v-else class="pi pi-spinner pi-spin btn-icon" />
+                            <span class="btn-text">{{ actionLoading ? 'Processing...' : 'Decline' }}</span>
                           </button>
                         </template>
                         <template v-else>
@@ -2735,6 +2739,34 @@ watch(() => route.path, async (newPath, oldPath) => {
 
 .cancel-btn:hover {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.accept-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.accept-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.decline-btn {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.decline-btn:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
 }
 
 .review-btn {

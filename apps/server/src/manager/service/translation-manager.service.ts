@@ -37,59 +37,40 @@ export class TranslationService {
   ): Promise<{ total: number; completed: number; percentage: number }> {
     console.log(`[getTranslationProgress] Called with: projectId=${projectId}, branchId=${branchId}, language=${language}`);
 
-    // Base query for project and branch
-    const baseQuery: any = { projectId, branchId };
+    // Type-agnostic filter (works whether stored as "2" or 2)
+    const projectCandidates: (string | number)[] = [projectId];
+    const parsedProjectNum = Number(projectId);
+    if (!Number.isNaN(parsedProjectNum)) projectCandidates.push(parsedProjectNum);
 
-    // IMPORTANT: We need to count BASE strings (language='en') as total
-    // and TRANSLATION strings (language=specified) as completed
-    const baseStringsQuery = { ...baseQuery, language: 'en' };
-    const total = await this.translationModel.countDocuments(baseStringsQuery);
-    console.log(`[getTranslationProgress] Base strings (en) found: ${total}`);
+    const branchCandidates: (string | number)[] = [branchId];
+    const parsedBranchNum = Number(branchId);
+    if (!Number.isNaN(parsedBranchNum)) branchCandidates.push(parsedBranchNum);
 
-    // If no base strings found, check if there are any translation records at all for this project
-    if (total === 0) {
-      const anyRecords = await this.translationModel.countDocuments(baseQuery);
-      console.log(`[getTranslationProgress] No base strings found. Total records for project: ${anyRecords}`);
-      
-      if (anyRecords === 0) {
-        console.log(`[getTranslationProgress] No translation records found for project ${projectId}. Project may not have files processed yet.`);
-        return {
-          total: 0,
-          completed: 0,
-          percentage: 0,
-        };
-      } else {
-        // Check if there are non-English strings that could be used as base
-        const nonEnglishRecords = await this.translationModel.find(baseQuery).limit(5);
-        console.log(`[getTranslationProgress] Found ${anyRecords} records but no English strings. Sample records:`, 
-          nonEnglishRecords.map(r => ({ language: r.language, text: r.originalText?.substring(0, 50) })));
-      }
-    }
-
-    let completed = 0;
-    if (language && language.trim()) {
-      // Count completed strings for the specified language
-      const translationQuery = { ...baseQuery, language: language.trim() };
-      completed = await this.translationModel.countDocuments(translationQuery);
-      console.log(`[getTranslationProgress] Translation strings (${language}) found: ${completed}`);
-    } else {
-      // If no language specified, count all non-English strings as completed
-      const nonEnglishQuery = { ...baseQuery, language: { $ne: 'en' } };
-      completed = await this.translationModel.countDocuments(nonEnglishQuery);
-      console.log(`[getTranslationProgress] Non-English strings found: ${completed}`);
-    }
-
-    // Calculate percentage
-    const percentage = total > 0 ? (completed / total) * 100 : 0;
-    const roundedPercentage = Math.round(percentage * 100) / 100;
-
-    console.log(`[getTranslationProgress] Result: ${completed}/${total} = ${roundedPercentage}%`);
-
-    return {
-      total,
-      completed,
-      percentage: roundedPercentage,
+    const baseQuery: any = {
+      projectId: { $in: projectCandidates },
+      branchId: { $in: branchCandidates },
     };
+
+    // Total: all records in this project/branch (any language)
+    const total = await this.translationModel.countDocuments(baseQuery);
+    console.log(`[getTranslationProgress] Total records found (any language): ${total}`);
+
+    if (total === 0) {
+      console.log(`[getTranslationProgress] No translation records found for project ${projectId} / branch ${branchId}.`);
+      return { total: 0, completed: 0, percentage: 0 };
+    }
+
+    // Completed: records with a non-empty translatedText
+    const completed = await this.translationModel.countDocuments({
+      ...baseQuery,
+      translatedText: { $exists: true, $nin: [null, ''] },
+    });
+    console.log(`[getTranslationProgress] Completed records (translatedText present): ${completed}`);
+
+    const percentage = Math.round(((completed / total) * 100) * 100) / 100;
+    console.log(`[getTranslationProgress] Result: ${completed}/${total} = ${percentage}%`);
+
+    return { total, completed, percentage };
   }
 
   // Helper method to ensure translation records exist for target languages
@@ -189,18 +170,29 @@ export class TranslationService {
     englishRecords: number;
     languages: string[];
   }> {
-    const totalRecords = await this.translationModel.countDocuments({ projectId, branchId });
-    const englishRecords = await this.translationModel.countDocuments({ 
-      projectId, 
-      branchId, 
-      language: 'en',
-      obsolete: { $ne: true }
-    });
-    const languages = await this.translationModel.distinct('language', { projectId, branchId });
+    // Type-agnostic filter (works whether stored as "2" or 2)
+    const projectCandidates: (string | number)[] = [projectId];
+    const parsedProjectNum = Number(projectId);
+    if (!Number.isNaN(parsedProjectNum)) projectCandidates.push(parsedProjectNum);
+
+    const branchCandidates: (string | number)[] = [branchId];
+    const parsedBranchNum = Number(branchId);
+    if (!Number.isNaN(parsedBranchNum)) branchCandidates.push(parsedBranchNum);
+
+    const filter: any = {
+      projectId: { $in: projectCandidates },
+      branchId: { $in: branchCandidates },
+    };
+
+    const totalRecords = await this.translationModel.countDocuments(filter);
+    const languages = await this.translationModel.distinct('language', filter);
+
+    // With language-agnostic behavior, treat "englishRecords" as totalRecords
+    const englishRecords = totalRecords;
 
     return {
       hasRecords: totalRecords > 0,
-      hasEnglishStrings: englishRecords > 0,
+      hasEnglishStrings: totalRecords > 0,
       totalRecords,
       englishRecords,
       languages,
@@ -226,30 +218,45 @@ export class TranslationService {
         }
       }
 
-      // Find all branches that have English base strings for this project
-      const pipeline = [
-        { $match: { projectId, language: 'en', obsolete: { $ne: true } } },
-        { $group: { _id: '$branchId', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 1 },
-      ];
-      const result = await this.translationModel.aggregate(pipeline);
-      if (Array.isArray(result) && result.length > 0 && result[0]._id) {
-        return String(result[0]._id);
+      // Prefer branch with most English base strings
+      const branchesWithEnglish = await this.translationModel.distinct('branchId', {
+        projectId,
+        language: 'en',
+        obsolete: { $ne: true },
+      });
+      if (branchesWithEnglish && branchesWithEnglish.length > 0) {
+        let bestBranch: string = String(branchesWithEnglish[0]);
+        let bestCount = 0;
+        for (const b of branchesWithEnglish) {
+          const count = await this.translationModel.countDocuments({
+            projectId,
+            branchId: b,
+            language: 'en',
+            obsolete: { $ne: true },
+          });
+          if (count > bestCount) {
+            bestCount = count;
+            bestBranch = String(b);
+          }
+        }
+        return bestBranch;
       }
 
-      // As a fallback, if there are any records at all, pick the branch with most records
-      const anyBranch = await this.translationModel.aggregate([
-        { $match: { projectId } },
-        { $group: { _id: '$branchId', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 1 },
-      ]);
-      if (Array.isArray(anyBranch) && anyBranch.length > 0 && anyBranch[0]._id) {
-        return String(anyBranch[0]._id);
+      // Fallback: branch with most records overall
+      const allBranches = await this.translationModel.distinct('branchId', { projectId });
+      if (allBranches && allBranches.length > 0) {
+        let bestBranch: string = String(allBranches[0]);
+        let bestCount = 0;
+        for (const b of allBranches) {
+          const count = await this.translationModel.countDocuments({ projectId, branchId: b });
+          if (count > bestCount) {
+            bestCount = count;
+            bestBranch = String(b);
+          }
+        }
+        return bestBranch;
       }
 
-      // Default fallback
       return branchIdCandidate || '1';
     } catch {
       return branchIdCandidate || '1';

@@ -81,7 +81,7 @@ export class DeadlineCheckerService {
     this.logger.log('Deadline checker cron job started - scanning every minute with 10-second rest');
   }
 
-  @Cron(CronExpression.EVERY_10_SECONDS)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDeadlines() {
     this.logger.log('Starting comprehensive deadline check...');
     const today = new Date();

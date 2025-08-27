@@ -465,7 +465,8 @@ export class TranslationService {
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           ? '.docx'
           : '';
-    const safeFileName = `${base}.${language}${ext}`.replace(
+    const langUpperForCommit = String(language || '').toUpperCase();
+    const safeFileName = `${base}${langUpperForCommit ? `(${langUpperForCommit})` : ''}${ext}`.replace(
       /[\\/:*?"<>|]/g,
       '_'
     );
@@ -645,7 +646,8 @@ export class TranslationService {
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           ? '.docx'
           : '';
-    const safeFileName = `${base}.${language}${ext}`.replace(
+    const langUpperForExport = String(language || '').toUpperCase();
+    const safeFileName = `${base}${langUpperForExport ? `(${langUpperForExport})` : ''}${ext}`.replace(
       /[\\/:*?"<>|]/g,
       '_'
     );

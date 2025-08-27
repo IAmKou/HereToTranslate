@@ -1,11 +1,10 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import * as AsposePdfCloud from 'asposepdfcloud';
 import { ConfigService } from '@nestjs/config';
 import { TextReplaceListRequest } from 'asposepdfcloud/src/models/textReplaceListRequest';
 import { TextReplace } from 'asposepdfcloud/src/models/textReplace';
 import { TextState } from 'asposepdfcloud/src/models/textState';
 import { Rectangle } from 'asposepdfcloud/src/models/rectangle';
-import { FontStyles } from 'asposepdfcloud/src/models/fontStyles';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PdfTextDoc } from '../../db/mongo/schema/pdf-details.schema';
@@ -34,10 +33,24 @@ export class AsposeService {
     fileName: string,
     fileBuffer: Buffer,
     folder = 'pdf',
-    storageName?: string
+    storageName?: string,
+    targetLang?: string
   ) {
     const storage = storageName || this.storage;
-    const filePath = `${folder}/${fileName}`;
+    let finalName = fileName;
+    try {
+      const lang = String(targetLang || '').trim();
+      if (lang) {
+        const upper = lang.toUpperCase();
+        const dotIdx = fileName.lastIndexOf('.');
+        const base = dotIdx > -1 ? fileName.slice(0, dotIdx) : fileName;
+        const ext = dotIdx > -1 ? fileName.slice(dotIdx) : '';
+        finalName = `${base}(${upper})${ext || '.pdf'}`;
+      }
+    } catch {
+      // ignore formatting errors and keep original name
+    }
+    const filePath = `${folder}/${finalName}`;
     await this.pdfApi.uploadFile(filePath, fileBuffer, storage);
     console.log(`[Aspose] Uploaded: ${filePath}`);
     return filePath;
@@ -53,93 +66,7 @@ export class AsposeService {
     return result.body;
   }
 
-  async getPdfDetail(
-    fileName: string,
-    folder = 'pdf',
-    storageName?: string
-  ) {
-    const storage = storageName || this.storage;
-    console.log(`[Aspose] Getting PDF details for: ${fileName} in folder: ${folder}`);
-    
-    try {
-      const pageRes = await this.pdfApi.getPages(fileName, storage, folder);
-      const pages = pageRes.body.pages.list;
-      console.log(`[Aspose] Found ${pages.length} pages in PDF`);
-
-      const pageDetails: Array<{ pageNumber: number; details: any[] }> = [];
-
-      for (const page of pages) {
-        const pageNumber = page.id;
-        console.log(`[Aspose] Processing page ${pageNumber}`);
-        
-        const textRes = await this.pdfApi.getPageText(
-          fileName,
-          pageNumber,
-          page.rectangle.lLX,
-          page.rectangle.lLY,
-          page.rectangle.uRX,
-          page.rectangle.uRY,
-          undefined,
-          undefined,
-          false,
-          folder,
-          storage
-        );
-        const list = textRes.body?.textOccurrences?.list || [];
-        console.log(`[Aspose] Found ${list.length} text occurrences on page ${pageNumber}`);
-        
-        const textDetails = list.map((item: any) => ({
-          text: item.text,
-          font: item.textState?.font,
-          fontSize: item.textState?.fontSize,
-          isBold: Array.isArray(item.textState?.fontStyle)
-            ? item.textState.fontStyle.includes(FontStyles.Bold)
-            : false,
-          isItalic: Array.isArray(item.textState?.fontStyle)
-            ? item.textState.fontStyle.includes(FontStyles.Italic)
-            : false,
-          color: item.textState?.foregroundColor,
-          llx: item.rect?.lLX,
-          lly: item.rect?.lLY,
-          urx: item.rect?.uRX,
-          ury: item.rect?.uRY,
-        }));
-
-        pageDetails.push({ pageNumber, details: textDetails });
-      }
-
-      console.log(`[Aspose] Total text details collected: ${pageDetails.reduce((sum, page) => sum + page.details.length, 0)}`);
-      console.log(`[Aspose] Attempting to save to MongoDB...`);
-
-      // Upsert into Mongo with better error handling
-      const result = await this.pdfTextModel.findOneAndUpdate(
-        { fileName },
-        { 
-          fileName, 
-          uploadedAt: new Date(), 
-          pages: pageDetails 
-        },
-        { 
-          upsert: true, 
-          new: true, 
-          setDefaultsOnInsert: true 
-        }
-      );
-
-      console.log(`[Aspose] MongoDB save result:`, {
-        success: !!result,
-        id: result?._id,
-        fileName: result?.fileName,
-        pagesCount: result?.pages?.length,
-        totalDetails: result?.pages?.reduce((sum: number, page: any) => sum + (page.details?.length || 0), 0)
-      });
-
-      return { fileName, pages: pageDetails };
-    } catch (error) {
-      console.error(`[Aspose] Error in getPdfDetail:`, error);
-      throw error;
-    }
-  }
+  
 
   /**
    * Replace text in a PDF file
@@ -158,221 +85,25 @@ export class AsposeService {
     if (!exists.body.exists) {
       throw new Error(`[Aspose] File not found in storage: ${filePath}`);
     }
-    let pageTextItems: any[] = [];
-    let storedDetailsForPage: any[] = [];
-    try {
-      // Prefer stored details if available
-      try {
-        console.log(`[Aspose] Looking for stored PDF details for: ${fileName}`);
-        const stored = await this.pdfTextModel.findOne({ fileName }).lean();
-        console.log(`[Aspose] Stored details found:`, {
-          found: !!stored,
-          pagesCount: stored?.pages?.length || 0,
-          totalDetails: stored?.pages?.reduce((sum: number, page: any) => sum + (page.details?.length || 0), 0) || 0
-        });
-        
-        if (stored?.pages?.length) {
-          const pageEntry = stored.pages.find((p: any) => p.pageNumber === filePage);
-          if (pageEntry?.details?.length) {
-            storedDetailsForPage = pageEntry.details;
-            console.log(`[Aspose] Found ${storedDetailsForPage.length} stored details for page ${filePage}`);
-          } else {
-            console.log(`[Aspose] No stored details found for page ${filePage}`);
-          }
-        } else {
-          console.log(`[Aspose] No stored pages found for file: ${fileName}`);
-        }
-      } catch (e) {
-        console.warn(`[Aspose] Error fetching stored details:`, e);
-        // ignore and fallback
-      }
-
-      let pageTextResp: any = null;
-      const apiAny: any = this.pdfApi as any;
-      if (typeof apiAny.getPageTextRects === 'function') {
-        try {
-          pageTextResp = await apiAny.getPageTextRects(
-            fileName,
-            filePage,
-            undefined,
-            folder,
-            storage
-          );
-        } catch (e) {
-          console.warn(
-            `[Aspose] Error getting page text rects for ${filePath}:`,
-            e
-          );
-        }
-      }
-      // Fallback to getPageText if getPageTextRects is unavailable or failed
-      if (!pageTextResp && typeof apiAny.getPageText === 'function') {
-        try {
-          // Use full-page rectangle to fetch text occurrences
-          // getPageText(name, pageNumber, LLX, LLY, URX, URY, format?, regex?, splitRects?, folder?, storage?)
-          pageTextResp = await apiAny.getPageText(
-            fileName,
-            filePage,
-            0,
-            0,
-            9999,
-            9999,
-            undefined,
-            undefined,
-            true,
-            folder,
-            storage
-          );
-        } catch (e) {
-          console.warn(`[Aspose] Error getting page text for ${filePath}:`, e);
-        }
-      }
-      const body = pageTextResp?.body || {};
-      // Normalize possible shapes: textRects.list, list, textOccurrences.list
-      pageTextItems =
-        body.textRects?.list || body.list || body.textOccurrences?.list || [];
-      if (!Array.isArray(pageTextItems)) pageTextItems = [];
-    } catch (e) {
-      console.warn(
-        `[Aspose] Could not fetch page text items for style inference`
-      );
-    }
-
     try {
       console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
-      console.log(`[Aspose] Stored details count: ${storedDetailsForPage.length}, Fetched items count: ${pageTextItems.length}`);
       
       const textReplaces: TextReplace[] = replacements.map((r, index) => {
-        console.log(`[Aspose] Processing replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
-        
-        // Use stored details first, then fallback to on-the-fly fetched items
-        const matchStored = storedDetailsForPage.find((item: any) => {
-          const t = (item.text || '').toString().trim();
-          const matches = t === r.oldText;
-          if (matches) {
-            console.log(`[Aspose] Found match in stored details: "${t}"`);
-          }
-          return matches;
-        });
-        
-        const matchFetched = pageTextItems.find((item: any) => {
-          const t = (item.text || item.Text || '').toString().trim();
-          const matches = t === r.oldText;
-          if (matches) {
-            console.log(`[Aspose] Found match in fetched items: "${t}"`);
-          }
-          return matches;
-        });
-        
-        const match: any = matchStored || matchFetched;
-        
-        if (!match) {
-          console.warn(`[Aspose] No match found for text: "${r.oldText}"`);
-        }
-
-        const textState = new TextState();
-        if (match) {
-          const m: any = match;
-          console.log(`[Aspose] Using match for text replacement:`, {
-            text: m.text,
-            font: m.font,
-            fontSize: m.fontSize,
-            isBold: m.isBold,
-            isItalic: m.isItalic,
-            color: m.color
-          });
-          
-          // Use stored details directly since they're already processed
-          if (m.font) {
-            (textState as any).font = m.font;
-            console.log(`[Aspose] Set font: ${m.font}`);
-          }
-          if (m.fontSize != null) {
-            (textState as any).fontSize = m.fontSize;
-            console.log(`[Aspose] Set fontSize: ${m.fontSize}`);
-          }
-          if (m.color) {
-            (textState as any).foregroundColor = m.color;
-            console.log(`[Aspose] Set color: ${m.color}`);
-          }
-          if (m.isBold) {
-            (textState as any).bold = m.isBold;
-            console.log(`[Aspose] Set bold: ${m.isBold}`);
-          }
-          if (m.isItalic) {
-            (textState as any).italic = m.isItalic;
-            console.log(`[Aspose] Set italic: ${m.isItalic}`);
-          }
-          
-          // Fallback to textState if available
-          const mState: any = m.textState || m.TextState;
-          if (mState) {
-            try {
-              if (!(textState as any).font && mState.font) {
-                (textState as any).font = mState.font;
-              }
-              if (!(textState as any).fontSize && mState.fontSize != null) {
-                (textState as any).fontSize = mState.fontSize;
-              }
-              if (!(textState as any).foregroundColor && mState.foregroundColor) {
-                (textState as any).foregroundColor = mState.foregroundColor;
-              }
-              if (mState.fontStyle != null) {
-                (textState as any).fontStyle = mState.fontStyle;
-              }
-              if (!(textState as any).bold && mState.bold != null) {
-                (textState as any).bold = mState.bold;
-              }
-              if (!(textState as any).italic && mState.italic != null) {
-                (textState as any).italic = mState.italic;
-              }
-              if (mState.underline != null) {
-                (textState as any).underline = mState.underline;
-              }
-            } catch (e) {
-              console.error(
-                `[Aspose] Error getting text state for ${filePath}:`,
-                e
-              );
-            }
-          }
-        } else {
-          console.warn(`[Aspose] No match found, using default text state`);
-        }
-
-        // Rectangle: fallback to empty; if available, use it
-        const rect = new Rectangle();
-        if (match && (match.rect || match.Rectangle || (match.llx != null))) {
-          try {
-            const rct: any = match.rect || match.Rectangle || match;
-            (rect as any).llx = rct.llx ?? rct.LLX ?? (rect as any).llx;
-            (rect as any).lly = rct.lly ?? rct.LLY ?? (rect as any).lly;
-            (rect as any).urx = rct.urx ?? rct.URX ?? (rect as any).urx;
-            (rect as any).ury = rct.ury ?? rct.URY ?? (rect as any).ury;
-          } catch (e) {
-            console.error(
-              `[Aspose] Error getting rectangle for ${filePath}:`,
-              e
-            );
-          }
-        }
-
+        console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
         const textReplace = {
-          oldValue: r.oldText,
+          oldValue: this.buildFlexibleRegex(r.oldText),
           newValue: r.newText,
-          regex: false,
-          textState,
-          rect,
+          regex: true,
+          textState: new TextState(),
+          rect: new Rectangle(),
           centerTextHorizontally: false,
-        };
-        
-        console.log(`[Aspose] Created text replace object for: "${r.oldText}" -> "${r.newText}"`);
+        } as unknown as TextReplace;
         return textReplace;
       });
 
       const request: TextReplaceListRequest = {
         textReplaces,
-        defaultFont: 'Arial', // fallback
+        defaultFont: 'Arial',
         startIndex: 0,
         countReplace: 0,
       };
@@ -399,9 +130,7 @@ export class AsposeService {
         body: response.body
       });
 
-      console.log(
-        `[Aspose] Text replaced in ${filePath} on page ${filePage} (styles preserved)`
-      );
+      console.log(`[Aspose] Text replaced in ${filePath} on page ${filePage}`);
     } catch (error) {
       console.error(`[Aspose] Error replacing text in ${filePath}:`, error);
       throw new Error(`Failed to replace text in PDF: ${error}`);
@@ -464,6 +193,37 @@ export class AsposeService {
   }
 
   /**
+   * Build a regex that is resilient to PDF text segmentation:
+   * - Collapse any whitespace sequences
+   * - Allow smart quotes/quotes variants
+   * - Allow optional hyphen + line-break between words
+   */
+  private buildFlexibleRegex(input: string): string {
+    const quoteClass = `["'“”‘’]`;
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const tokens = input
+      .split(/(\s+)/)
+      .filter(Boolean)
+      .map((t) => {
+        if (/\s+/.test(t)) {
+          // whitespace: allow arbitrary whitespace and optional hyphen breaks
+          // Avoid \s in character class to satisfy linter; include common whitespace explicitly
+          return `[\n\r\t\f -]+`;
+        }
+        // normalize quotes inside tokens to a class
+        const withQuotes = t
+          .replace(/["'“”‘’]/g, '"')
+          .split('"')
+          .map((seg) => escapeRegex(seg))
+          .join(quoteClass);
+        return withQuotes;
+      });
+    // Use case-insensitive, multiline by default; Cloud SDK flags are implicit with regex: true
+    const pattern = tokens.join('');
+    return pattern;
+  }
+
+  /**
    * Check if file exists in storage with folder support
    */
   async fileExistsWithFolder(
@@ -482,10 +242,24 @@ export class AsposeService {
   async downloadFileWithFolder(
     fileName: string,
     folder = 'pdf',
-    storageName?: string
+    storageName?: string,
+    targetLang?: string
   ): Promise<Buffer> {
     const storage = storageName || this.storage;
-    const filePath = this.constructFilePath(fileName, folder);
+    let finalName = fileName;
+    try {
+      const lang = String(targetLang || '').trim();
+      if (lang) {
+        const upper = lang.toUpperCase();
+        const dotIdx = fileName.lastIndexOf('.');
+        const base = dotIdx > -1 ? fileName.slice(0, dotIdx) : fileName;
+        const ext = dotIdx > -1 ? fileName.slice(dotIdx) : '';
+        finalName = `${base}(${upper})${ext || '.pdf'}`;
+      }
+    } catch {
+      // ignore formatting errors and keep original name
+    }
+    const filePath = this.constructFilePath(finalName, folder);
     return this.downloadFile(filePath, storage);
   }
 

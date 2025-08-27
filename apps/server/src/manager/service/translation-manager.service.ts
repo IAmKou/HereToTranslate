@@ -81,11 +81,11 @@ export class TranslationService {
   ): Promise<void> {
     console.log(`[ensureTranslationRecordsExist] Called with: projectId=${projectId}, branchId=${branchId}, targetLanguage=${targetLanguage}`);
     
-    // Find all original entries (language 'en') for this project/branch
+    // Find all original entries (language 'base') for this project/branch
     const originalEntries = await this.translationModel.find({
       projectId,
       branchId,
-      language: 'en',
+      language: 'base',
       obsolete: { $ne: true }
     });
 
@@ -170,7 +170,6 @@ export class TranslationService {
     englishRecords: number;
     languages: string[];
   }> {
-    // Type-agnostic filter (works whether stored as "2" or 2)
     const projectCandidates: (string | number)[] = [projectId];
     const parsedProjectNum = Number(projectId);
     if (!Number.isNaN(parsedProjectNum)) projectCandidates.push(parsedProjectNum);
@@ -207,13 +206,13 @@ export class TranslationService {
   ): Promise<string> {
     try {
       if (branchIdCandidate) {
-        const hasEnglishOnCandidate = await this.translationModel.countDocuments({
+        const hasBaseOnCandidate = await this.translationModel.countDocuments({
           projectId,
           branchId: branchIdCandidate,
-          language: 'en',
+          language: 'base',
           obsolete: { $ne: true },
         });
-        if (hasEnglishOnCandidate > 0) {
+        if (hasBaseOnCandidate > 0) {
           return branchIdCandidate;
         }
       }
@@ -221,17 +220,17 @@ export class TranslationService {
       // Prefer branch with most English base strings
       const branchesWithEnglish = await this.translationModel.distinct('branchId', {
         projectId,
-        language: 'en',
+        language: 'base',
         obsolete: { $ne: true },
       });
       if (branchesWithEnglish && branchesWithEnglish.length > 0) {
-        let bestBranch: string = String(branchesWithEnglish[0]);
+        let bestBranch = String(branchesWithEnglish[0]);
         let bestCount = 0;
         for (const b of branchesWithEnglish) {
           const count = await this.translationModel.countDocuments({
             projectId,
             branchId: b,
-            language: 'en',
+            language: 'base',
             obsolete: { $ne: true },
           });
           if (count > bestCount) {
@@ -245,7 +244,7 @@ export class TranslationService {
       // Fallback: branch with most records overall
       const allBranches = await this.translationModel.distinct('branchId', { projectId });
       if (allBranches && allBranches.length > 0) {
-        let bestBranch: string = String(allBranches[0]);
+        let bestBranch = String(allBranches[0]);
         let bestCount = 0;
         for (const b of allBranches) {
           const count = await this.translationModel.countDocuments({ projectId, branchId: b });

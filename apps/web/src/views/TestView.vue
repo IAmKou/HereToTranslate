@@ -41,7 +41,7 @@ const progress = ref({
 const fetchProgress = async () => {
   try {
     const { data } = await axios.get(
-      `/api/translation/progress?projectId=66&branchId=66`
+      `/api/translation/progress?projectId=2&branchId=2&language=ar`
     );
     progress.value = data;
   } catch (err) {

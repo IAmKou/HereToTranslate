@@ -242,11 +242,18 @@ export class DeadlineCheckerService {
            
            this.logger.log(`Request ${req.id} target languages: ${JSON.stringify(targetLanguages)}`);
            
-           // First, check if the project has any translation records
-           const projectStatus = await this.translationService.getProjectTranslationStatus(
-             req.project.id.toString(),
-             req.project.defaultBranch?.id.toString() || '1'
-           );
+          // Resolve correct branch to use for this project
+          const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
+            req.project.id.toString(),
+            req.project.defaultBranch?.id?.toString()
+          );
+          this.logger.log(`Request ${req.id} using branch ${resolvedBranchId} for progress checks`);
+
+          // First, check if the project has any translation records
+          const projectStatus = await this.translationService.getProjectTranslationStatus(
+            req.project.id.toString(),
+            resolvedBranchId
+          );
            
            this.logger.log(`Request ${req.id} project status:`, projectStatus);
            
@@ -268,13 +275,13 @@ export class DeadlineCheckerService {
                // Ensure translation records exist for this target language
                await this.translationService.ensureTranslationRecordsExist(
                  req.project.id.toString(),
-                 req.project.defaultBranch?.id.toString() || '1',
+                 resolvedBranchId,
                  language
                );
                
                const progress = await this.translationService.getTranslationProgress(
                  req.project.id.toString(),
-                 req.project.defaultBranch?.id.toString() || '1',
+                 resolvedBranchId,
                  language
                );
                
@@ -584,39 +591,26 @@ export class DeadlineCheckerService {
       
       this.logger.log(`Request ${req.id} target languages: ${JSON.stringify(targetLanguages)}`);
       
-      // First, check if the project has any translation records
-      const projectStatus = await this.translationService.getProjectTranslationStatus(
+      // Resolve correct branch to use for this project
+      const resolvedBranchId2 = await this.translationService.resolveBranchIdForProgress(
         req.project.id.toString(),
-        req.project.defaultBranch?.id.toString() || '1'
+        req.project.defaultBranch?.id?.toString()
       );
-      
-      this.logger.log(`Request ${req.id} project status:`, projectStatus);
-      
-      if (!projectStatus.hasRecords) {
-        this.logger.warn(`Request ${req.id} has no translation records. Project may not have files processed yet.`);
-        // Don't mark as failed - just log and continue
-        continue;
-      }
-      
-      if (!projectStatus.hasEnglishStrings) {
-        this.logger.warn(`Request ${req.id} has no English base strings. Cannot calculate progress.`);
-        // Don't mark as failed - just log and continue
-        continue;
-      }
-      
+      this.logger.log(`Request ${req.id} using branch ${resolvedBranchId2} for progress checks`);
+
       // Calculate progress for each target language
       for (const language of targetLanguages) {
         try {
           // Ensure translation records exist for this target language
           await this.translationService.ensureTranslationRecordsExist(
             req.project.id.toString(),
-            req.project.defaultBranch?.id.toString() || '1',
+            resolvedBranchId2,
             language
           );
           
           const progress = await this.translationService.getTranslationProgress(
             req.project.id.toString(),
-            req.project.defaultBranch?.id.toString() || '1',
+            resolvedBranchId2,
             language
           );
           
@@ -948,10 +942,17 @@ export class DeadlineCheckerService {
            
            this.logger.log(`Request ${requestId} target languages: ${JSON.stringify(targetLanguages)}`);
            
+           // Resolve correct branch to use for this project
+           const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
+             request.project.id.toString(),
+             request.project.defaultBranch?.id?.toString()
+           );
+           this.logger.log(`Request ${requestId} using branch ${resolvedBranchId} for progress checks`);
+
            // First, check if the project has any translation records
            const projectStatus = await this.translationService.getProjectTranslationStatus(
              request.project.id.toString(),
-             request.project.defaultBranch?.id.toString() || '1'
+             resolvedBranchId
            );
            
            this.logger.log(`Request ${requestId} project status:`, projectStatus);
@@ -980,13 +981,13 @@ export class DeadlineCheckerService {
                // Ensure translation records exist for this target language
                await this.translationService.ensureTranslationRecordsExist(
                  request.project.id.toString(),
-                 request.project.defaultBranch?.id.toString() || '1',
+                 resolvedBranchId,
                  language
                );
                
                const progress = await this.translationService.getTranslationProgress(
                  request.project.id.toString(),
-                 request.project.defaultBranch?.id.toString() || '1',
+                 resolvedBranchId,
                  language
                );
                
@@ -1223,10 +1224,17 @@ export class DeadlineCheckerService {
       let totalProgress = 0;
       let languageCount = 0;
 
+      // Resolve correct branch to use for this project
+      const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
+        request.project.id.toString(),
+        request.project.defaultBranch?.id?.toString()
+      );
+      this.logger.log(`Request ${requestId} using branch ${resolvedBranchId} for progress checks`);
+
       // First, check if the project has any translation records
       const projectStatus = await this.translationService.getProjectTranslationStatus(
         request.project.id.toString(),
-        request.project.defaultBranch?.id.toString() || '1'
+        resolvedBranchId
       );
       
       this.logger.log(`Request ${requestId} project status:`, projectStatus);
@@ -1271,13 +1279,13 @@ export class DeadlineCheckerService {
           // Ensure translation records exist for this target language
           await this.translationService.ensureTranslationRecordsExist(
             request.project.id.toString(),
-            request.project.defaultBranch?.id.toString() || '1',
+            resolvedBranchId,
             language
           );
           
           const progress = await this.translationService.getTranslationProgress(
             request.project.id.toString(),
-            request.project.defaultBranch?.id.toString() || '1',
+            resolvedBranchId,
             language
           );
 

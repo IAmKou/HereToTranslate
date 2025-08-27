@@ -586,6 +586,12 @@ export class ManifestService {
       return;
     }
 
+    // Resolve target language from request/project context (prefer project's first target language)
+    const projectAny: any = file.project as any;
+    const targetLanguage: string = Array.isArray(projectAny?.targetLanguages) && projectAny.targetLanguages.length > 0
+      ? String(projectAny.targetLanguages[0])
+      : String(projectAny?.defaultLanguage || 'en');
+
     const manifestEntries: Partial<TranslationString>[] = [];
     const apiKey = 'K89333403988957';
 
@@ -708,7 +714,7 @@ export class ManifestService {
                     fileId: String(file.id),
                     manifestEntryId: uuidv4(),
                     originalText: pageText,
-                    language: 'en',
+                    language: targetLanguage,
                     font: pageItems[0]?.font || 'default',
                     style: {
                       bold: pageItems.some((i: any) => i.bold),
@@ -741,7 +747,7 @@ export class ManifestService {
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
               originalText: lineObj.text,
-              language: 'en',
+              language: targetLanguage,
               font: lineObj.items[0]?.font || 'default',
               style: {
                 bold: lineObj.items.some((i: any) => i.bold),
@@ -805,7 +811,7 @@ export class ManifestService {
                 fileId: String(file.id),
                 manifestEntryId: uuidv4(),
                 originalText: line,
-                language: 'en',
+                language: targetLanguage,
                 font: 'default',
                 style: {},
                 position: { x: 0, y: 0, page: currentPage }, // Sử dụng currentPage thay vì mặc định 1
@@ -892,7 +898,7 @@ export class ManifestService {
                 fileId: String(file.id),
                 manifestEntryId: uuidv4(),
                 originalText: `Picture ${pictureCount}`,
-                language: 'en',
+                language: targetLanguage,
                 font: 'default',
                 style: {},
                 position: { x: 0, y: 0, page: 1 }, // Word không có thông tin trang cụ thể, mặc định page 1
@@ -907,7 +913,7 @@ export class ManifestService {
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
               originalText: html,
-              language: 'en',
+              language: targetLanguage,
               font: 'default',
               style: {},
               position: { x: 0, y: 0, page: 1 }, // Word không có thông tin trang cụ thể, mặc định page 1
@@ -930,7 +936,7 @@ export class ManifestService {
             fileId: String(file.id),
             manifestEntryId: uuidv4(),
             originalText: line,
-            language: 'en',
+            language: targetLanguage,
             font: 'default',
             style: {},
             position: { x: 0, y: 0, page: 1 }, // Plain text không có thông tin trang, mặc định page 1
@@ -966,7 +972,7 @@ export class ManifestService {
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
               originalText: str,
-              language: 'en',
+              language: targetLanguage,
               font: 'default',
               style: {},
               position: { x: 0, y: 0, page: 1 }, // JSON không có thông tin trang, mặc định page 1
@@ -989,7 +995,7 @@ export class ManifestService {
             fileId: String(file.id),
             manifestEntryId: uuidv4(),
             originalText: line,
-            language: 'en',
+            language: targetLanguage,
             font: 'default',
             style: {},
             position: { x: 0, y: 0, page: 1 }, // Fallback không có thông tin trang, mặc định page 1

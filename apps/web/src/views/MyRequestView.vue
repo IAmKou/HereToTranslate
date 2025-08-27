@@ -279,14 +279,11 @@
                            Request cancelled
                          </span>
 
-                        <!-- Show message for completed requests -->
-                        <span v-if="req.status === 'COMPLETED'" class="status-message completed" title="This request has been completed successfully">
-                           ✓ Completed
-                         </span>
 
-                        <!-- Handover button for failed and waiting approval requests -->
+
+                        <!-- Handover button for failed, waiting approval and completed requests -->
                         <button
-                          v-if="(req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && req.project"
+                          v-if="(req.status === 'FAILED' || req.status === 'WAITING_APPROVAL' || req.status === 'COMPLETED') && req.project"
                           @click="viewHandover(req)"
                           class="action-btn handover-btn"
                           :title="`View and evaluate translation product for: ${req.title}`"
@@ -708,8 +705,10 @@
                     <td class="request-title text-sm text-gray-700 text-left" style="vertical-align: middle;"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.requester?.fullName || req.requester?.email || 'Unknown' }}</td>
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
-                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120" style="vertical-align: middle;"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
-                    <td class="text-sm text-gray-500 italic text-left" width="130" style="vertical-align: middle;">
+                    <td class="deal-amount" style="text-align:center; vertical-align: middle;">
+                      <span class="deal-icon">💵</span>${{ req.dealAmount }}
+                    </td>
+                    <td style="vertical-align: middle;">
                       <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
                         <span class="deadline-icon">🗓</span>
                         <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
@@ -739,10 +738,7 @@
                     </td>
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <!-- Show message for completed requests -->
-                        <span v-if="req.status === 'COMPLETED'" class="status-message completed" title="This request has been completed successfully">
-                           ✓ Completed
-                         </span>
+
 
                         <!-- Show message for incompleted requests -->
                         <span v-if="req.status === 'INCOMPLETED'" class="status-message incompleted" title="This request has been marked as incomplete">
@@ -835,16 +831,6 @@
 
           <!-- On-going Requests Tab -->
           <div v-else-if="activeTab === 'ongoing-requests' && !loading && !error" class="tab-content" :key="'ongoing-requests'">
-            <!-- Grace Period Info Banner -->
-            <div class="grace-period-banner">
-              <div class="banner-icon">
-                <i class="pi pi-clock"></i>
-              </div>
-              <div class="banner-content">
-                <h4>Deadline Extension Grace Period</h4>
-                <p>After the deadline passes, you still have <strong>3 additional days</strong> to request an extension. Use this time wisely to complete your translation or request more time.</p>
-              </div>
-            </div>
 
             <!-- Search Bar for On-going -->
             <div class="filter-bar">
@@ -2465,6 +2451,68 @@ watch(() => route.path, async (newPath, oldPath) => {
   font-size: 0.8rem;
 }
 
+.deal-icon {
+  font-size: 0.9rem;
+}
+
+.deadline-icon {
+  font-size: 0.9rem;
+}
+
+/* Ensure consistent table cell alignment */
+.request-row td {
+  vertical-align: middle;
+  padding: 12px 8px;
+  height: 60px;
+}
+
+.request-row td:first-child {
+  text-align: center;
+  width: 60px;
+}
+
+.request-row td:nth-child(2) {
+  text-align: left;
+  min-width: 200px;
+}
+
+.request-row td:nth-child(3) {
+  text-align: left;
+  min-width: 150px;
+}
+
+.request-row td:nth-child(4) {
+  text-align: left;
+  min-width: 120px;
+}
+
+.request-row td:nth-child(5) {
+  text-align: center;
+  min-width: 120px;
+}
+
+.request-row td:nth-child(6) {
+  text-align: center;
+  min-width: 130px;
+}
+
+.request-row td:nth-child(7) {
+  text-align: center;
+  min-width: 120px;
+  padding-right: 40px !important;
+}
+
+.request-row td:nth-child(8) {
+  text-align: center;
+  min-width: 100px;
+  padding-left: 40px !important;
+}
+
+.request-row td:nth-child(9) {
+  text-align: center;
+  min-width: 150px;
+}
+
 
 
 
@@ -2474,11 +2522,30 @@ watch(() => route.path, async (newPath, oldPath) => {
 .request-title {
   font-weight: 500;
   color: #1e293b;
+  display: flex;
+  align-items: center;
+}
+
+/* Ensure Title cell in the registrations table is vertically centered */
+.request-row td.request-title {
+  display: flex;
+  align-items: center;
+}
+
+.request-row td.request-title a {
+  display: inline-flex;
+  align-items: center;
 }
 
 .deal-amount {
   font-weight: 600;
   color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 40px;
+  padding: 8px 4px;
 }
 
 .status-badge {
@@ -2549,11 +2616,11 @@ watch(() => route.path, async (newPath, oldPath) => {
 
 /* Increase spacing between Status and Visibility columns */
 .status-cell {
-  padding-right: 28px !important;
+  padding-right: 50px !important;
 }
 
 .visibility-cell {
-  padding-left: 28px !important;
+  padding-left: 50px !important;
 }
 
 .actions-wrapper {

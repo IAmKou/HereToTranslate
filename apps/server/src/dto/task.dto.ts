@@ -59,6 +59,11 @@ export class UpdateTaskDto {
   @IsString()
   statusId?: string;
 
+  // Optional flag to explicitly bypass workflow validation when updating status
+  // Use-case: immediately setting a target status right after a reopen operation
+  @IsOptional()
+  skipWorkflowValidation?: boolean;
+
   @IsOptional()
   @IsDateString()
   dueDate?: string;

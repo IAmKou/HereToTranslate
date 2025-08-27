@@ -10,6 +10,13 @@ import { GitHubService } from '#LocalProject/Managers/service/github-manager.ser
 import { logger } from 'nx/src/utils/logger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { promisify } from 'util';
+import { execFile } from 'child_process';
+const execFileAsync = promisify(execFile);
 import { replaceDocxTextWithCount } from '../../util/extensions/docx-utils.extension';
 import { Buffer } from 'buffer';
 import { ActivityManagerService } from './activity-manager.service';
@@ -27,7 +34,8 @@ export class TranslationService {
     private readonly githubService: GitHubService,
     @Inject(forwardRef(() => ActivityManagerService))
     private readonly activityManagerService: ActivityManagerService,
-    private readonly asposeService: AsposeService
+    private readonly asposeService: AsposeService,
+    private readonly configService: ConfigService
   ) {}
 
   async getTranslationProgress(
@@ -80,7 +88,7 @@ export class TranslationService {
     targetLanguage: string
   ): Promise<void> {
     console.log(`[ensureTranslationRecordsExist] Called with: projectId=${projectId}, branchId=${branchId}, targetLanguage=${targetLanguage}`);
-    
+
     // Find all original entries (language 'base') for this project/branch
     const originalEntries = await this.translationModel.find({
       projectId,
@@ -95,7 +103,7 @@ export class TranslationService {
     if (originalEntries.length === 0) {
       const anyRecords = await this.translationModel.countDocuments({ projectId, branchId });
       console.log(`[ensureTranslationRecordsExist] No English entries found. Total records for project: ${anyRecords}`);
-      
+
       if (anyRecords === 0) {
         console.log(`[ensureTranslationRecordsExist] No translation records found for project ${projectId}. Project may not have files processed yet.`);
         return;
@@ -103,7 +111,7 @@ export class TranslationService {
         // Check what languages exist for this project
         const existingLanguages = await this.translationModel.distinct('language', { projectId, branchId });
         console.log(`[ensureTranslationRecordsExist] Existing languages for project: ${existingLanguages.join(', ')}`);
-        
+
         // If there are no English strings but other languages exist, we can't create translation records
         // because we need English as the base language
         console.log(`[ensureTranslationRecordsExist] Cannot create translation records without English base strings`);
@@ -153,9 +161,9 @@ export class TranslationService {
 
   // Method to check if a project has English base strings
   async hasEnglishBaseStrings(projectId: string, branchId: string): Promise<boolean> {
-    const count = await this.translationModel.countDocuments({ 
-      projectId, 
-      branchId, 
+    const count = await this.translationModel.countDocuments({
+      projectId,
+      branchId,
       language: 'en',
       obsolete: { $ne: true }
     });
@@ -267,7 +275,6 @@ export class TranslationService {
     const originalEntry = await this.translationModel.findById(id);
     if (!originalEntry) throw new Error('Manifest entry not found');
 
-    // First, try to find an existing translation for this specific language
     const existingTranslation = await this.translationModel.findOne({
       projectId: originalEntry.projectId,
       branchId: originalEntry.branchId,
@@ -280,35 +287,27 @@ export class TranslationService {
     let isNewTranslation = false;
 
     if (existingTranslation) {
-      // Update existing translation for this language
+      // Update bản dịch hiện có
       existingTranslation.translatedText = translatedText;
       await existingTranslation.save();
       entry = existingTranslation;
     } else {
-      // Check if the original entry itself is for the target language and has no translation
-      if (originalEntry.language === language && !originalEntry.translatedText) {
-        // Update the original entry with the translation
-        originalEntry.translatedText = translatedText;
-        await originalEntry.save();
-        entry = originalEntry;
-      } else {
-        // Create a new record for this language
-        entry = await this.translationModel.create({
-          projectId: originalEntry.projectId,
-          branchId: originalEntry.branchId,
-          fileId: originalEntry.fileId,
-          manifestEntryId: originalEntry.manifestEntryId,
-          originalText: originalEntry.originalText,
-          translatedText: translatedText,
-          language: language,
-          filePart: originalEntry.filePart,
-          font: originalEntry.font,
-          style: originalEntry.style,
-          position: originalEntry.position,
-          obsolete: false,
-        });
-        isNewTranslation = true;
-      }
+      // Tạo bản ghi mới cho ngôn ngữ này
+      entry = await this.translationModel.create({
+        projectId: originalEntry.projectId,
+        branchId: originalEntry.branchId,
+        fileId: originalEntry.fileId,
+        manifestEntryId: originalEntry.manifestEntryId,
+        originalText: originalEntry.originalText,
+        translatedText: translatedText,
+        language: language,
+        filePart: originalEntry.filePart,
+        font: originalEntry.font,
+        style: originalEntry.style,
+        position: originalEntry.position,
+        obsolete: false,
+      });
+      isNewTranslation = true;
     }
 
     const fileId = entry.fileId;
@@ -678,7 +677,11 @@ export class TranslationService {
       `[Export] Successfully pushed to GitHub: ${repoName}/${githubPath}`
     );
 
-    const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${language}/${encodeURIComponent(
+    // Build public raw URL for Office viewer using configured GitHub username
+    const owner = (this as any).configService?.get?.('GITHUB_USERNAME')
+      || process.env.GITHUB_USERNAME
+      || '';
+    const githubUrl = `https://raw.githubusercontent.com/${owner}/${repoName}/main/${encodeURIComponent(language)}/${encodeURIComponent(
       safeFileName
     )}`;
     return { githubUrl };
@@ -786,6 +789,142 @@ export class TranslationService {
     }
 
     return results;
+  }
+
+  async exportToPdf(
+    fileId: string,
+    language: string
+  ): Promise<{ buffer: Buffer; fileName: string; fileType: string }> {
+    // Build latest DOCX (or source) buffer first
+    const { buffer: originalBuffer, fileName } = await this.buildExportBuffer(
+      fileId,
+      language,
+      'original'
+    );
+
+    // Try convert DOCX -> PDF using libreoffice (soffice) directly to avoid npm deps
+    try {
+      const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'htt-'));
+      const docxPath = path.join(tmpDir, 'input.docx');
+      const pdfPath = path.join(tmpDir, 'input.pdf');
+      await fs.promises.writeFile(docxPath, originalBuffer);
+
+      // Prefer console wrapper to avoid UI and prompts
+      const candidates = [
+        'soffice.com',
+        'soffice',
+        'C:/Program Files/LibreOffice/program/soffice.com',
+        'C:/Program Files/LibreOffice/program/soffice.exe',
+      ];
+
+      const sofficeArgs = [
+        '--headless',
+        '--invisible',
+        '--norestore',
+        '--nolockcheck',
+        '--nodefault',
+        '--nofirststartwizard',
+        '--convert-to',
+        'pdf',
+        '--outdir',
+        tmpDir,
+        docxPath,
+      ];
+
+      let executed = false;
+      let lastErr: any = null;
+      for (const cmd of candidates) {
+        try {
+          await execFileAsync(cmd, sofficeArgs, { windowsHide: true });
+          executed = true;
+          break;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      if (!executed) {
+        throw lastErr || new Error('Failed to run LibreOffice');
+      }
+
+      let pdf = await fs.promises.readFile(pdfPath);
+      // Optional: reduce size (compress) for preview by re-saving via pdf-lib
+      try {
+        const { PDFDocument } = await import('pdf-lib');
+        const doc = await PDFDocument.load(pdf);
+        const bytes = await doc.save({ useObjectStreams: false });
+        pdf = Buffer.from(bytes);
+      } catch (_) {}
+      // Cleanup, ignore errors
+      fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      const pdfName = fileName.replace(/\.docx?$/i, '.pdf');
+      return { buffer: pdf, fileName: pdfName, fileType: 'application/pdf' };
+    } catch (e) {
+      // continue to next strategy
+    }
+
+    // Try convert DOCX -> PDF using libreoffice-convert if available
+    try {
+      const libre = await import('libreoffice-convert');
+      const convertAsync = (input: Buffer, ext: string) =>
+        new Promise<Buffer>((resolve, reject) => {
+          // @ts-ignore
+          libre.convert(input, ext, undefined, (err: any, done: Buffer) => {
+            if (err) return reject(err);
+            resolve(done);
+          });
+        });
+
+      const pdf = await convertAsync(originalBuffer, '.pdf');
+      const pdfName = fileName.replace(/\.docx?$/i, '.pdf');
+      return { buffer: pdf, fileName: pdfName, fileType: 'application/pdf' };
+    } catch (e) {
+      // Fallback: create simple PDF with translated entries (layout not guaranteed)
+      const entries = await this.translationModel
+        .find({ fileId, language })
+        .lean();
+      const translatedEntries = entries
+        .filter((x: any) => x.translatedText && x.translatedText.trim().length > 0)
+        .map((x: any) => ({
+          originalText: x.originalText as string,
+          translatedText: x.translatedText as string,
+          position: x.position,
+          style: x.style,
+          font: x.font,
+        }));
+      const pdfBuffer = await this.createSimplePdfWithTranslations(translatedEntries);
+      const pdfName = fileName.replace(/\.docx?$/i, '.pdf');
+      return { buffer: pdfBuffer, fileName: pdfName, fileType: 'application/pdf' };
+    }
+  }
+
+  async addPreviewWatermark(
+    pdfBuffer: Buffer,
+    watermarkText: string
+  ): Promise<Buffer> {
+    try {
+      const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      const pages = pdfDoc.getPages();
+      const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const opacity = 0.15;
+      const fontSize = 48;
+      for (const page of pages) {
+        const { width, height } = page.getSize();
+        page.drawText(watermarkText, {
+          x: width * 0.1,
+          y: height * 0.5,
+          size: fontSize,
+          font,
+          color: rgb(0.9, 0.1, 0.1),
+          rotate: { type: 'degrees', angle: 30 },
+          opacity,
+        });
+      }
+      const out = await pdfDoc.save();
+      return Buffer.from(out);
+    } catch (_) {
+      return pdfBuffer; // In case of any error, return original buffer
+    }
   }
 
   async buildExportBuffer(

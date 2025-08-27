@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsEnum, IsOptional, Min, Max, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsEnum, IsOptional, Min, Max, IsNotEmpty, IsBoolean } from 'class-validator';
 
 export class SubmitReviewDto {
   @IsString()
@@ -20,4 +20,8 @@ export class SubmitReviewDto {
   @IsString()
   @IsNotEmpty()
   translatorId: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isFullyCompleted?: boolean;
 }

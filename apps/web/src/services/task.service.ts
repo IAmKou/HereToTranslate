@@ -79,6 +79,8 @@ export interface UpdateTaskDto {
   description?: string;
   // Backend expects statusId for transitions
   statusId?: string;
+  // Optional: bypass workflow validation (used immediately after reopen)
+  skipWorkflowValidation?: boolean;
   assignedToId?: string;
   reviewerId?: string;
   approverId?: string;

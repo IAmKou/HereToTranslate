@@ -17,6 +17,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MailService } from '../../mailer/mailer.service';
 import { NotificationManagerService } from './notification-manager.service';
 import { WalletManagerService } from './wallet-manager.service';
+import { getVietnamTime } from '../../util/common';
 
 @Injectable()
 export class AdminReviewService {
@@ -322,7 +323,8 @@ export class AdminReviewService {
       request: request,
       amount: depositAmount,
       type: TransactionType.PAYMENT,
-      status: TransactionStatus.COMPLETED
+      status: TransactionStatus.COMPLETED,
+      createdAt: getVietnamTime()
     });
 
     try {
@@ -512,7 +514,8 @@ export class AdminReviewService {
       request: request,
       amount: depositAmount,
       type: 'REFUND',
-      status: 'COMPLETED'
+      status: 'COMPLETED',
+      createdAt: getVietnamTime()
     });
 
     try {

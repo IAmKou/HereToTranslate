@@ -1152,10 +1152,24 @@ async function refreshAllTaskProgress() {
 
 // Drag & Drop functionality
 const draggedTask = ref<Task | null>(null);
+const allowedToStatusByTask = ref<Record<string, Set<string>>>({});
+const allowedLoadedByTask = ref<Record<string, boolean>>({});
 const draggedIndex = ref<number>(-1);
 const isDragging = ref(false);
 const dragOverColumn = ref<string | null>(null);
 const didDrop = ref(false);
+
+// Helpers to display clearer reasons
+function getStatusNameById(id: string | undefined | null): string {
+  if (!id) return 'Unknown';
+  try {
+    const list: any[] = (availableStatuses as any)?.value || [];
+    const found = list.find((s: any) => String(s.id) === String(id));
+    return found?.name || String(id);
+  } catch {
+    return String(id);
+  }
+}
 
 function handleDragStart(event: DragEvent, task: Task, index: number) {
   draggedTask.value = task;
@@ -1177,13 +1191,38 @@ function handleDragStart(event: DragEvent, task: Task, index: number) {
   }
 
   console.log('🚀 Drag started successfully for task:', task.id);
+
+  // Load allowed transitions for this task to pre-validate drops
+  (async () => {
+    try {
+      allowedLoadedByTask.value[task.id] = false;
+      allowedToStatusByTask.value[task.id] = new Set<string>();
+      const { data } = await axiosInstance.get(`/workflows/task/${task.id}/transitions`);
+      const set = new Set<string>();
+      (Array.isArray(data) ? data : []).forEach((tr: any) => {
+        const tid = tr?.toStatus?.id ?? tr?.toStatusId ?? tr?.to?.id ?? tr?.to;
+        if (tid) set.add(String(tid));
+      });
+      allowedToStatusByTask.value[task.id] = set;
+      allowedLoadedByTask.value[task.id] = true;
+    } catch (e) {
+      // If we fail to load, clear any cache so we don't block erroneously
+      delete allowedToStatusByTask.value[task.id];
+      allowedLoadedByTask.value[task.id] = true; // allow drop if API not available
+    }
+  })();
 }
 
 function handleDragEnd(event: DragEvent) {
   // If drop event did not fire but we have a target column, perform the move here as a fallback
   if (!didDrop.value && draggedTask.value && dragOverColumn.value) {
-    // Use index 0 as default insertion point
-    void moveTaskToColumn(draggedTask.value, dragOverColumn.value, 0);
+    const allowed = allowedToStatusByTask.value[draggedTask.value.id];
+    const loaded = allowedLoadedByTask.value[draggedTask.value.id];
+    const targetId = String(dragOverColumn.value);
+    // Only perform fallback move if allowed and loaded
+    if (loaded && allowed && allowed.has(targetId)) {
+      void moveTaskToColumn(draggedTask.value, targetId, 0);
+    }
   }
 
   isDragging.value = false;
@@ -1199,6 +1238,12 @@ function handleDragEnd(event: DragEvent) {
   }
 
   console.log('🏁 Drag ended');
+
+  // Cleanup caches for current task
+  if (draggedTask.value) {
+    delete allowedToStatusByTask.value[draggedTask.value.id];
+    delete allowedLoadedByTask.value[draggedTask.value.id];
+  }
 }
 
 function handleDragOver(event: DragEvent, statusId: string) {
@@ -1207,6 +1252,19 @@ function handleDragOver(event: DragEvent, statusId: string) {
 
   // Add visual feedback to drop zone
   const target = event.currentTarget as HTMLElement;
+  // If this target is not allowed for current task, do not highlight
+  if (draggedTask.value) {
+    const allowed = allowedToStatusByTask.value[draggedTask.value.id];
+    const loaded = allowedLoadedByTask.value[draggedTask.value.id];
+    if (!loaded) {
+      dragOverColumn.value = null;
+      return; // wait until allowed transitions are loaded
+    }
+    if (allowed && !allowed.has(String(statusId))) {
+      dragOverColumn.value = null;
+      return;
+    }
+  }
   if (target && !target.classList.contains('drag-over')) {
     target.classList.add('drag-over');
     target.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
@@ -1256,6 +1314,23 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
   }
 
   console.log('🎯 Dropping task:', draggedTask.value.id, 'to status:', targetStatusId);
+
+  // Block drop if transition not allowed
+  const allowed = allowedToStatusByTask.value[draggedTask.value.id];
+  const loaded = allowedLoadedByTask.value[draggedTask.value.id];
+  if (!loaded) {
+    // If transitions not loaded yet, block silently
+    return;
+  }
+  if (allowed && !allowed.has(String(targetStatusId))) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Cannot move',
+      detail: 'Cannot move because workflow transition is not allowed.',
+      life: 3500
+    });
+    return;
+  }
 
   // Get drop position (you could enhance this to detect exact position)
   const dropIndex = getDropIndex(event, targetStatusId);
@@ -1346,8 +1421,8 @@ async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: n
     // Show error toast
     toast.add({
       severity: 'error',
-      summary: 'Move Failed',
-      detail: 'Failed to move task. Please try again.',
+      summary: 'Cannot move',
+      detail: 'Cannot move because workflow transition is not allowed.',
       life: 3000
     });
   }
@@ -2221,7 +2296,7 @@ async function confirmReopenTask() {
         };
         console.log('📤 [REOPEN] Sending update data to API:', updateData);
 
-        updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, updateData);
+        updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, { ...updateData, skipWorkflowValidation: true as any });
         console.log('✅ [REOPEN] Task status updated successfully:', {
           taskId: updatedLocalTask.id,
           newStatus: updatedLocalTask.status,
@@ -2249,7 +2324,8 @@ async function confirmReopenTask() {
           // Now try to update status again
           const statusId = String(reopenTargetStatusId.value);
           const updateData = {
-            statusId: statusId
+            statusId: statusId,
+            skipWorkflowValidation: true as any
           };
           console.log('📤 [REOPEN] Retrying status update after reopen:', updateData);
           updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, updateData);

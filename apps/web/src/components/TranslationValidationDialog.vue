@@ -137,8 +137,8 @@ const warnings = computed((): ValidationWarning[] => {
   // 7. Date/Time Format Validation (Crowdin doesn't allow)
   validateDateTimeFormat(props.originalText, props.translatedText, computedWarnings);
 
-  // 8. Context-Aware Validation (Crowdin doesn't allow)
-  validateContext(props.originalText, props.translatedText, computedWarnings);
+  // 8. Context-Aware Validation disabled per product decision
+  // validateContext(props.originalText, props.translatedText, computedWarnings);
 
   // 9. Number Validation (Crowdin doesn't allow)
   validateNumbers(props.originalText, props.translatedText, computedWarnings);
@@ -146,8 +146,8 @@ const warnings = computed((): ValidationWarning[] => {
   // 10. Punctuation Validation (Crowdin doesn't allow)
   validatePunctuation(props.originalText, props.translatedText, computedWarnings);
 
-  // 11. Length Validation (Crowdin doesn't allow)
-  validateLength(props.originalText, props.translatedText, computedWarnings);
+  // 11. Length Validation disabled per product decision
+  // validateLength(props.originalText, props.translatedText, computedWarnings);
 
   return computedWarnings;
 });
@@ -261,17 +261,23 @@ function validateCharacterCase(originalText: string, translatedText: string, war
     });
   }
 
-  const allCapsWords = (originalText.match(/\b[A-Z]{2,}\b/g) || []) as string[];
-  allCapsWords.forEach((word: string) => {
+  // Only enforce preservation of true acronyms (e.g. API, HTML), not generic capitalized words like THE/OF
+  const allCapsWords = (originalText.match(/\b[A-Z0-9]{2,}\b/g) || []) as string[];
+  const knownAcronyms = new Set([
+    'API','HTTP','HTTPS','URL','URI','ID','UID','PDF','CSV','JSON','XML','SQL','DB','UI','UX','CPU','GPU','RAM','SSO','OTP','SSH','AES','RSA','JWT','HTML','CSS','PNG','JPG','JPEG','SVG','UTF','UTF8','UTF-8','TTL','TTL','VAT','SKU','ERP','CRM','SLA','ETA'
+  ]);
+  // Preserve only known acronyms or tokens that contain digits (e.g., ISO9001)
+  const acronymsToPreserve = allCapsWords.filter(word => knownAcronyms.has(word) || /[0-9]/.test(word));
+  acronymsToPreserve.forEach((word: string) => {
     if (!translatedText.includes(word)) {
       warnings.push({
         type: 'case_mismatch',
-        message: `Missing capitalized word: ${word}`,
+        message: `Missing acronym: ${word}`,
         severity: 'warning',
         originalText,
         translatedText,
-        canAutoFix: false, // Crowdin doesn't allow case auto-fix
-        autoFixDescription: `Add capitalized word ${word}`,
+        canAutoFix: false,
+        autoFixDescription: `Add acronym ${word}`,
         autoFixAction: () => translatedText + ' ' + word
       });
     }
@@ -424,18 +430,7 @@ function validatePunctuation(originalText: string, translatedText: string, warni
 
 // 11. Length Validation - CROWDIN DOESN'T ALLOW
 function validateLength(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
-  const lengthRatio = translatedText.length / originalText.length;
-
-  if (lengthRatio < 0.3 || lengthRatio > 3) {
-    warnings.push({
-      type: 'length_mismatch',
-      message: `Length differs significantly (${Math.round(lengthRatio * 100)}% of original)`,
-      severity: 'warning',
-      originalText,
-      translatedText,
-      canAutoFix: false // Crowdin doesn't allow length auto-fix
-    });
-  }
+  // Disabled: do nothing
 }
 
 // Computed properties for auto-fix functionality

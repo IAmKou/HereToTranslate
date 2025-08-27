@@ -1418,6 +1418,26 @@ export class PaypalService {
           createdBy: this.ADMIN_USER_ID,
         });
 
+        // Ensure any lingering DEPOSIT entries for this request are marked as Failed
+        await this.transactionRepo
+          .createQueryBuilder()
+          .update(TransactionEntity)
+          .set({ status: TransactionStatus.Failed })
+          .where(
+            'requestId = :rid AND userId = :uid AND type = :type AND status IN (:...statuses)',
+            {
+              rid: request.id,
+              uid: request.requester.id,
+              type: TransactionType.DEPOSIT,
+              statuses: [
+                TransactionStatus.On_Hold,
+                TransactionStatus.Pending,
+                TransactionStatus.WaitingApproval,
+              ],
+            },
+          )
+          .execute();
+
         logger.log(`Fallback refund processed: $${amount} to requester ID ${request.requester.id} for request ID ${request.id}`);
       } catch (error) {
         logger.error(`Fallback refund failed for request ID ${request.id}: ${error}`);
@@ -1452,6 +1472,26 @@ export class PaypalService {
       });
 
       await this.transactionRepo.save(refundTransaction);
+
+      // Additionally, ensure any other matching DEPOSIT entries are marked as Failed
+      await this.transactionRepo
+        .createQueryBuilder()
+        .update(TransactionEntity)
+        .set({ status: TransactionStatus.Failed })
+        .where(
+          'requestId = :rid AND userId = :uid AND type = :type AND status IN (:...statuses)',
+          {
+            rid: request.id,
+            uid: request.requester.id,
+            type: TransactionType.DEPOSIT,
+            statuses: [
+              TransactionStatus.On_Hold,
+              TransactionStatus.Pending,
+              TransactionStatus.WaitingApproval,
+            ],
+          },
+        )
+        .execute();
 
       await this.notificationService.createNotification({
         userId: request.requester.id,
@@ -1861,21 +1901,27 @@ export class PaypalService {
         deducted: depositAmount
       });
 
-      // 4) Add total amount to translator wallet
-      console.log('🔍 [DEBUG] STEP 6: Updating translator wallet (adding total payment)...');
+      // 4) Calculate platform fee and add net amount to translator wallet
+      console.log('🔍 [DEBUG] STEP 6: Calculating platform fee and updating translator wallet...');
       const translatorWallet = await this.walletManagerService.getOrCreateWallet(translator.id);
       const translatorOldBalance = translatorWallet.balance;
-      const amountToAdd = depositAmount + finalAmount;
+      const grossPayout = depositAmount + finalAmount;
+      const feePercentage = await this.feeService.getDefaultFee();
+      const feeAmount = Number((grossPayout * (feePercentage / 100)).toFixed(2));
+      const netToTranslator = Number((grossPayout - feeAmount).toFixed(2));
 
       console.log('🔍 [DEBUG] Translator wallet before update:', {
         translatorId: translator.id,
         translatorEmail: translator.email,
         oldBalance: translatorOldBalance,
-        amountToAdd: amountToAdd,
-        newBalance: Number(translatorOldBalance) + amountToAdd
+        grossPayout,
+        feePercentage,
+        feeAmount,
+        netToTranslator,
+        newBalance: Number(translatorOldBalance) + netToTranslator
       });
 
-      translatorWallet.balance = Number(translatorWallet.balance) + amountToAdd;
+      translatorWallet.balance = Number(translatorWallet.balance) + netToTranslator;
       const updatedTranslatorWallet = await this.walletRepository.save(translatorWallet);
 
       console.log('🔍 [DEBUG] Translator wallet after update:', {
@@ -1883,15 +1929,15 @@ export class PaypalService {
         translatorEmail: translator.email,
         oldBalance: translatorOldBalance,
         newBalance: updatedTranslatorWallet.balance,
-        added: amountToAdd
+        added: netToTranslator
       });
 
-      // 5) Create ONE translator transaction with total 100%
-      console.log('🔍 [DEBUG] STEP 7: Creating translator PAYMENT transaction...');
+      // 5) Create translator PAYMENT transaction with net amount and record platform fee for admin
+      console.log('🔍 [DEBUG] STEP 7: Creating translator PAYMENT transaction and platform fee transaction...');
       const translatorTransactionData = {
         user: { id: translator.id } as UserEntity,
         request: { id: request.id } as RequestEntity,
-        amount: amountToAdd,
+        amount: netToTranslator,
         status: TransactionStatus.Completed,
         type: TransactionType.PAYMENT,
       };
@@ -1914,6 +1960,20 @@ export class PaypalService {
         userId: translatorTransaction.user?.id,
         requestId: translatorTransaction.request?.id
       });
+
+      // Record platform fee: credit fee to admin wallet and create a transaction entry
+      const adminWalletAfter = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const adminBeforeFee = Number(adminWalletAfter.balance);
+      adminWalletAfter.balance = Number(adminWalletAfter.balance) + feeAmount;
+      await this.walletRepository.save(adminWalletAfter);
+      await this.transactionRepo.save({
+        user: { id: this.ADMIN_USER_ID } as UserEntity,
+        request: { id: request.id } as RequestEntity,
+        amount: feeAmount,
+        status: TransactionStatus.Completed,
+        // Intentionally omit type to mirror fee recording in finalizeTranslation
+      });
+      console.log('🔍 [DEBUG] Platform fee recorded:', { feePercentage, feeAmount, adminBeforeFee, adminAfterFee: adminWalletAfter.balance });
 
       // 6) Mark request completed
       console.log('🔍 [DEBUG] STEP 8: Marking request as COMPLETED...');

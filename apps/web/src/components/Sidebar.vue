@@ -32,19 +32,11 @@
         <span class="menu-text">Transaction History</span>
       </router-link>
       <div class="sidebar-divider"></div>
-      <router-link to="/user-home/settings" class="menu-item" :title="isCollapsed ? 'Settings' : ''">
-        <span class="material-icons">settings</span>
-        <span class="menu-text">Settings</span>
-      </router-link>
     </nav>
     <div class="sidebar-footer">
       <router-link to="/userprofile" class="menu-item profile-link" :title="isCollapsed ? 'Profile' : ''">
         <span class="material-icons">person</span>
         <span class="menu-text">Profile</span>
-      </router-link>
-      <router-link to="/help" class="menu-item" :title="isCollapsed ? 'Help & Support' : ''">
-        <span class="material-icons">help_outline</span>
-        <span class="menu-text">Help & Support</span>
       </router-link>
     </div>
   </aside>

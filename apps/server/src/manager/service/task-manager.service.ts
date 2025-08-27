@@ -704,9 +704,18 @@ export class TaskManagerService {
 
     // Handle status transition separately using transitionTask
     if (dto.statusId !== undefined) {
-      // Always skip workflow validation for status updates (simplified approach)
-      console.log(`✅ [BACKEND] Task ${id} skipping workflow validation for status update`);
-      await this.updateTaskStatusWithoutValidation(id, dto.statusId, userId.toString());
+      // Decide whether to enforce workflow transitions or skip validation
+      const shouldSkipValidation = (dto as any).skipWorkflowValidation === true;
+
+      if (shouldSkipValidation) {
+        console.log(`✅ [BACKEND] Task ${id} updating status WITHOUT workflow validation (explicit)`);
+        await this.updateTaskStatusWithoutValidation(id, dto.statusId, userId.toString());
+        return this.getTask(id);
+      }
+
+      console.log(`🔐 [BACKEND] Task ${id} updating status WITH workflow validation`);
+      const toStatusId = dto.statusId as string;
+      await this.transitionTask(id, { toStatusId, comment: undefined } as any, userId.toString());
       return this.getTask(id);
     }
 

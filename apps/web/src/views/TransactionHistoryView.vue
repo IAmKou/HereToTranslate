@@ -185,7 +185,7 @@
                       <span :class="['status-badge', `status-${transaction.status.toLowerCase()}`,
                         (transaction.status && transaction.status.replace(/[-_ ]/g, '').toUpperCase() === 'ONHOLD') ? 'badge-on-hold' : '']"
                             :title="getStatusTooltip(transaction.status)">
-                        {{ formatStatus(transaction.status) }}
+                        {{ formatStatusFor(transaction) }}
                       </span>
                   </td>
                   <td>
@@ -300,7 +300,7 @@
                 <span v-if="detailTarget.status.toLowerCase() === 'completed'">✅</span>
                 <span v-else-if="detailTarget.status.toLowerCase() === 'pending'">⏳</span>
                 <span v-else-if="detailTarget.status.toLowerCase() === 'failed'">❌</span>
-                {{ formatStatus(detailTarget.status) }}
+                {{ formatStatusFor(detailTarget) }}
               </span>
             </div>
           </div>
@@ -686,6 +686,34 @@ function formatStatus(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
+function formatStatusFor(transaction: any): string {
+  if (!transaction) return '';
+  const status = String(transaction.status || '').toLowerCase();
+  const typeTitle = getTransactionTitle(transaction); // uses type when available
+  const type = String(transaction.type || typeTitle).toUpperCase();
+
+  // Map DEPOSIT + failed -> Refunded in UI
+  if (type === 'DEPOSIT' && status === 'failed') {
+    return 'Refunded';
+  }
+
+  // If we find a matching REFUND for the same request and amount, consider deposit as Refunded visually
+  if (type === 'DEPOSIT') {
+    const reqId = (transaction as any).requestId ?? (transaction.request?.id ?? null);
+    const amountAbs = Math.abs(Number(transaction.amount));
+    const hasMatchingRefund = (transactions.value || []).some((t: any) => {
+      const tType = String(t.type || '').toUpperCase();
+      const tReq = t.requestId ?? (t.request?.id ?? null);
+      const tAmountAbs = Math.abs(Number(t.amount));
+      return tType === 'REFUND' && t.status && String(t.status).toLowerCase() === 'completed' && tReq === reqId && tAmountAbs === amountAbs;
+    });
+    if (hasMatchingRefund) {
+      return 'Refunded';
+    }
+  }
+  return formatStatus(transaction.status || '');
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -696,8 +724,9 @@ function formatCurrency(amount: number): string {
 function formatDate(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  date.setHours(date.getHours() + 7);
-  return date.toLocaleString('en-US', {
+  // Tự động cộng thêm 7 tiếng
+  const adjusted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return adjusted.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -709,8 +738,9 @@ function formatDate(dateString: string): string {
 function formatDateRelative(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  date.setHours(date.getHours() + 7);
-  return dayjs(date).fromNow();
+  // Tự động cộng thêm 7 tiếng
+  const adjusted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return dayjs(adjusted).fromNow();
 }
 
 function prevPage() {

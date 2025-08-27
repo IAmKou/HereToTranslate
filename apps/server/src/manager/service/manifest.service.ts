@@ -129,7 +129,16 @@ function groupTextByLine(items: any[], yThreshold = 8) {
     const lineBasePage = currentLine[0].page;
 
     // Check if item is on the same page and line
-    if (currentItem.page === lineBasePage && Math.abs(currentItem.y - lineBaseY) < yThreshold) {
+    // Use a dynamic vertical threshold relative to text height to avoid
+    // accidentally merging two visually separate lines (e.g., title and author)
+    const baseHeight = (currentLine[0].height || currentLine[0].fontSize || 10);
+    const itemHeight = (currentItem.height || currentItem.fontSize || 10);
+    const dynamicThreshold = Math.max(2, Math.min(6, Math.min(baseHeight, itemHeight) * 0.35));
+
+    if (
+      currentItem.page === lineBasePage &&
+      Math.abs(currentItem.y - lineBaseY) < Math.min(yThreshold, dynamicThreshold)
+    ) {
       currentLine.push(currentItem);
     } else {
       // New line or new page
@@ -355,7 +364,7 @@ function groupTextByLine(items: any[], yThreshold = 8) {
       }
       // Don't force sentence boundary for semicolons or colons - let it continue
     } else {
-      // If page changed or standalone line, save current sentence and start new one
+      // If page changed OR line is standalone, flush current sentence first
       if (currentSentence.trim().length >= 5) {
         result.push({
           text: currentSentence.trim(),
@@ -363,17 +372,27 @@ function groupTextByLine(items: any[], yThreshold = 8) {
         });
       }
 
-      // Debug: Log page change or standalone
       if (linePage !== currentPage) {
         console.log(`[PDF] Page changed from ${currentPage} to ${linePage}`);
-      } else if (isStandalone) {
-        console.log(`[PDF] Found standalone line: "${lineText}" from page ${currentPage}`);
       }
 
-      // Start new sentence on new page or standalone line
-      currentSentence = lineText;
-      currentItems = lineItems;
-      currentPage = linePage;
+      if (isStandalone) {
+        // Push the standalone line as its own entry and DO NOT carry it into the next sentence
+        console.log(`[PDF] Emitting standalone line: "${lineText}" from page ${linePage}`);
+        result.push({
+          text: lineText,
+          items: lineItems,
+        });
+        // Reset accumulators; keep currentPage at this line's page
+        currentSentence = '';
+        currentItems = [];
+        currentPage = linePage;
+      } else {
+        // Start new sentence on new page (non-standalone)
+        currentSentence = lineText;
+        currentItems = lineItems;
+        currentPage = linePage;
+      }
     }
 
     // Don't force split sentences - let them grow naturally
@@ -677,7 +696,7 @@ export class ManifestService {
           console.error('[PDF] Error stack:', error?.stack);
           throw new Error('Failed to extract text from PDF: ' + (error?.message || error));
         }
-        
+
         if (items && items.length > 0) {
           // Group các đoạn text lại thành dòng
           console.log('[PDF] Step 3: Grouping text items into lines...');

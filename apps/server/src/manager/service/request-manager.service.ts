@@ -122,15 +122,6 @@ export class RequestManagerService {
 
     const savedRequest = await this.requestRepository.save(request);
 
-    // Send global notification for public requests
-    if (savedRequest.isPublic) {
-      await this.notificationService.createGlobalNotification({
-        type: 'PUBLIC_REQUEST_CREATED',
-        message: `New public request available: "${savedRequest.title}" - $${savedRequest.dealAmount}`,
-        createdBy: uid,
-      });
-    }
-
     return savedRequest;
   }
 
@@ -1732,7 +1723,8 @@ export class RequestManagerService {
     decision: 'APPROVED' | 'REJECTED',
     rating: number,
     comment?: string,
-    translatorId?: string
+    translatorId?: string,
+    isFullyCompleted: boolean = false
   ) {
     console.log('🔍 [SERVICE] submitReview called:', {
       requestId: requestId.toString(),
@@ -1767,6 +1759,28 @@ export class RequestManagerService {
         request.status = RequestStatus.Completed;
       } else if (decision === 'REJECTED') {
         request.status = RequestStatus.Incompleted;
+
+        // 3. Process refund for rejected requests
+        // For non-100% completed rejections, refund 100% deposit
+        // For 100% completed rejections, no refund here (handled by admin review)
+        if (!isFullyCompleted) {
+          console.log('💰 [SERVICE] Processing 100% refund for rejected request (not 100% completed):', {
+            requestId: requestId.toString(),
+            requesterId: request.requester.id.toString(),
+            dealAmount: request.dealAmount
+          });
+
+          try {
+            await this.paymentService.refundDeposit(request);
+            console.log('✅ [SERVICE] 100% refund processed successfully for rejected request');
+          } catch (refundError) {
+            console.error('💥 [SERVICE] Failed to process refund for rejected request:', refundError);
+            // Don't throw error here to avoid failing the review submission
+            // The refund can be processed manually later if needed
+          }
+        } else {
+          console.log('⚠️ [SERVICE] 100% completed rejection - no refund processed here, will be handled by admin review');
+        }
       }
 
       request.reviewedAt = new Date();
@@ -1787,7 +1801,7 @@ export class RequestManagerService {
 
       console.log('✅ [SERVICE] Review data saved successfully to database');
 
-      // 3. If translatorId is provided, update translator rating
+      // 4. If translatorId is provided, update translator rating
       if (translatorId && request.assignee) {
         await this.updateTranslatorRating(
           BigInt(translatorId),
@@ -1796,7 +1810,7 @@ export class RequestManagerService {
         );
       }
 
-      // 4. Create notification for translator
+      // 5. Create notification for translator
       if (request.assignee) {
         await this.notificationService.createNotification({
           userId: request.assignee.id,
@@ -1806,7 +1820,7 @@ export class RequestManagerService {
         });
       }
 
-      // 5. Send email notification to translator
+      // 6. Send email notification to translator
       if (request.assignee?.email) {
         console.log('📧 [SERVICE] Sending email notification to translator:', {
           translatorEmail: request.assignee.email,
@@ -2017,6 +2031,28 @@ export class RequestManagerService {
         request.status = 'COMPLETED';
       } else if (decision === 'REJECTED') {
         request.status = 'INCOMPLETED';
+
+        // Process refund for rejected requests
+        // For non-100% completed rejections, refund 100% deposit
+        // For 100% completed rejections, no refund here (handled by admin review)
+        if (!isFullyCompleted) {
+          console.log('💰 [SERVICE] Processing 100% refund for rejected request (submitReviewWithEvidence, not 100% completed):', {
+            requestId: requestId.toString(),
+            requesterId: request.requester.id.toString(),
+            dealAmount: request.dealAmount
+          });
+
+          try {
+            await this.paymentService.refundDeposit(request);
+            console.log('✅ [SERVICE] 100% refund processed successfully for rejected request (submitReviewWithEvidence)');
+          } catch (refundError) {
+            console.error('💥 [SERVICE] Failed to process refund for rejected request (submitReviewWithEvidence):', refundError);
+            // Don't throw error here to avoid failing the review submission
+            // The refund can be processed manually later if needed
+          }
+        } else {
+          console.log('⚠️ [SERVICE] 100% completed rejection (submitReviewWithEvidence) - no refund processed here, will be handled by admin review');
+        }
       }
 
       request.reviewedAt = new Date();

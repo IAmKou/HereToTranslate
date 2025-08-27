@@ -743,12 +743,17 @@ function calculateValidationWarnings(str: any): any[] {
   }
 
   // Check for ALL CAPS words
-  const allCapsWords = (originalText.match(/\b[A-Z]{2,}\b/g) || []) as string[];
-  allCapsWords.forEach((word: string) => {
+  const allCapsWords = (originalText.match(/\b[A-Z0-9]{2,}\b/g) || []) as string[];
+  const knownAcronyms = new Set([
+    'API','HTTP','HTTPS','URL','URI','ID','UID','PDF','CSV','JSON','XML','SQL','DB','UI','UX','CPU','GPU','RAM','SSO','OTP','SSH','AES','RSA','JWT','HTML','CSS','PNG','JPG','JPEG','SVG','UTF','UTF8','UTF-8','TTL','VAT','SKU','ERP','CRM','SLA','ETA'
+  ]);
+  // Preserve only known acronyms or tokens that contain digits (e.g., ISO9001)
+  const acronymsToPreserve = allCapsWords.filter(word => knownAcronyms.has(word) || /[0-9]/.test(word));
+  acronymsToPreserve.forEach((word: string) => {
     if (!translatedText.includes(word)) {
       warnings.push({
         type: 'case_mismatch',
-        message: `Missing capitalized word: ${word}`,
+        message: `Missing acronym: ${word}`,
         severity: 'warning',
         canAutoFix: false, // Crowdin doesn't allow case auto-fix
         autoFixAction: () => translatedText + ' ' + word
@@ -835,46 +840,9 @@ function calculateValidationWarnings(str: any): any[] {
     }
   });
 
-  // 10. Length Validation - CROWDIN DOESN'T ALLOW
-  const lengthRatio = translatedText.length / originalText.length;
-  if (lengthRatio < 0.3 || lengthRatio > 3) {
-    warnings.push({
-      type: 'length_mismatch',
-      message: `Length differs significantly (${Math.round(lengthRatio * 100)}% of original)`,
-      severity: 'warning',
-      canAutoFix: false // Crowdin doesn't allow length auto-fix
-    });
-  }
+  // 10. Length Validation - Disabled per product decision
 
-  // 11. Context-Aware Validation - CROWDIN DOESN'T ALLOW
-  const contextKeywords = {
-    error: ['ERROR', 'FAILED', 'CRITICAL', 'EXCEPTION', 'INVALID'],
-    success: ['SUCCESS', 'COMPLETED', 'DONE', 'FINISHED', 'OK'],
-    warning: ['WARNING', 'CAUTION', 'ATTENTION', 'NOTICE', 'ALERT'],
-    action: ['CLICK', 'PRESS', 'SELECT', 'CHOOSE', 'ENTER']
-  };
-
-  Object.entries(contextKeywords).forEach(([context, keywords]) => {
-    const hasKeyword = keywords.some(keyword =>
-      originalText.toUpperCase().includes(keyword)
-    );
-
-    if (hasKeyword) {
-      const hasSimilarContext = keywords.some(keyword =>
-        translatedText.toUpperCase().includes(keyword) ||
-        translatedText.toLowerCase().includes(keyword.toLowerCase())
-      );
-
-      if (!hasSimilarContext) {
-        warnings.push({
-          type: 'context_mismatch',
-          message: `Translation should maintain ${context} context`,
-          severity: 'warning',
-          canAutoFix: false // Crowdin doesn't allow context auto-fix
-        });
-      }
-    }
-  });
+  // 11. Context-Aware Validation - Disabled per product decision
 
   // Filter out skipped warnings
   return warnings.filter(warning => !skippedWarnings.value.has(warning.message));
@@ -953,11 +921,7 @@ function checkValidationIssues(str: any): boolean {
     return true;
   }
 
-  // Check for significant length difference
-  const lengthRatio = translatedText.length / originalText.length;
-  if (lengthRatio < 0.3 || lengthRatio > 3) {
-    return true;
-  }
+  // Length difference check disabled per product decision
 
   return false;
 }

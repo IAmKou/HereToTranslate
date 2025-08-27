@@ -467,6 +467,44 @@ function approveRegistrant(userId: number) {
   confirmDialogDesc.value = 'You are about to approve this candidate and proceed to PayPal payment. This action cannot be undone.';
   pendingApproveUserId.value = userId;
   showConfirmDialog.value = true;
+
+  // Preload PayPal approval URL để tăng tốc độ
+  preloadPayPalApproval(userId);
+}
+
+// Preload PayPal approval URL để tăng tốc độ
+async function preloadPayPalApproval(userId: number) {
+  try {
+    const requestId = route.params.requestId;
+    // Sử dụng fetch với AbortController để có thể cancel nếu cần
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/requests/${requestId}/approve/${userId}`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.approvalUrl) {
+        // Preload PayPal page
+        const link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.href = data.approvalUrl;
+        document.head.appendChild(link);
+      }
+    }
+  } catch (error) {
+    // Ignore preload errors
+    console.log('Preload PayPal failed:', error);
+  }
 }
 
 async function confirmApproveRegistrant() {
@@ -474,24 +512,36 @@ async function confirmApproveRegistrant() {
   showConfirmDialog.value = false;
   const userId = pendingApproveUserId.value;
   approvingUser.value = userId;
+
   try {
     const requestId = route.params.requestId;
-    const response = await axiosInstance.post(`/requests/${requestId}/approve/${userId}`);
+
+    // Sử dụng Promise.race để có timeout nhanh hơn
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), 10000)
+    );
+
+    const approvalPromise = axiosInstance.post(`/requests/${requestId}/approve/${userId}`);
+
+    const response = await Promise.race([approvalPromise, timeoutPromise]);
+
     if (response.data && response.data.approvalUrl) {
       // Cập nhật trạng thái approved cho user vừa được approve
       const idx = registrants.value.findIndex((u: UserInfo) => u.id === userId);
       if (idx !== -1) registrants.value[idx].approved = true;
-      showToastMsg('Approved successfully! Redirecting to PayPal...', 'success');
-      setTimeout(() => {
-        window.location.href = response.data.approvalUrl;
-      }, 1200);
+
+      // Hiển thị toast ngắn gọn và chuyển hướng ngay lập tức
+      showToastMsg('Approved successfully!', 'success');
+
+      // Chuyển hướng ngay lập tức thay vì delay 1.2s
+      window.location.href = response.data.approvalUrl;
     } else {
       showToastMsg('No approval URL returned from PayPal. Please try again.', 'error');
     }
-    await reloadRegistrants();
+    // Không cần reload registrants vì đã cập nhật local state
   } catch (error: any) {
     console.error('Error approving registrant:', error);
-    const errorMessage = error.response?.data?.message || 'Failed to approve registrant';
+    const errorMessage = error.response?.data?.message || 'Request timeout or failed';
     showToastMsg(errorMessage, 'error');
   } finally {
     approvingUser.value = null;
@@ -611,7 +661,8 @@ function showToastMsg(msg: string, type: 'success' | 'error' = 'success') {
   toastMessage.value = msg;
   toastType.value = type;
   showToast.value = true;
-  setTimeout(() => { showToast.value = false; }, 1800);
+  // Giảm thời gian hiển thị toast để tăng tốc độ
+  setTimeout(() => { showToast.value = false; }, 800);
 }
 
 onMounted(async () => {
@@ -1042,10 +1093,13 @@ onMounted(async () => {
   position: relative;
   box-shadow: 0 16px 64px 0 rgba(59,130,246,0.18);
   padding: 0 0 24px 0;
-  animation: modalIn 0.18s cubic-bezier(.4,0,.2,1);
+  animation: modalIn 0.12s cubic-bezier(.4,0,.2,1); /* Giảm animation time */
+  /* Tối ưu performance */
+  will-change: transform;
+  transform: translateZ(0);
 }
 @keyframes modalIn {
-  0% { transform: scale(0.95) translateY(40px); opacity: 0; }
+  0% { transform: scale(0.98) translateY(20px); opacity: 0; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 .custom-modal-approve .modal-header {
@@ -1139,6 +1193,10 @@ onMounted(async () => {
   color: #fff;
   border: none;
   box-shadow: 0 2px 8px 0 rgba(59,130,246,0.10);
+  /* Tối ưu performance */
+  will-change: transform;
+  transform: translateZ(0);
+  transition: all 0.15s ease; /* Giảm transition time */
 }
 .custom-modal-approve .btn-confirm:hover {
   background: #1746a2;
@@ -1593,12 +1651,15 @@ onMounted(async () => {
   border-radius: 8px !important;
   font-weight: 700 !important;
   font-size: 12px !important;
-  transition: all 0.25s !important;
+  transition: all 0.15s !important; /* Giảm transition time */
   min-width: 120px !important;
   box-shadow: 0 3px 8px rgba(59, 130, 246, 0.25) !important;
   margin-right: 8px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
+  /* Tối ưu performance */
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .approve-candidate-btn:hover:not(:disabled) {

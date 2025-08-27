@@ -103,8 +103,35 @@ const fetchProjects = async () => {
   try {
     isLoadingProjects.value = true;
     projectsError.value = null;
-    const { data } = await axiosInstance.get('/projects/me/projects');
-    projects.value = data;
+
+    // Fetch both projects and requests data
+    const [projectsResponse, requestsResponse] = await Promise.all([
+      axiosInstance.get('/projects/me/projects'),
+      axiosInstance.get('/requests/myRegistrations')
+    ]);
+
+    const projectsData = projectsResponse.data || [];
+    const requestsData = requestsResponse.data || [];
+
+    // Create a map of request data by title for easy lookup
+    const requestsMap = new Map();
+    requestsData.forEach((req: any) => {
+      requestsMap.set(req.title, req);
+    });
+
+    // Merge projects with request status data
+    const mergedProjects = projectsData.map((project: any) => {
+      const requestData = requestsMap.get(project.name);
+      if (requestData) {
+        return {
+          ...project,
+          status: requestData.status || requestData.registrationStatus || project.status
+        };
+      }
+      return project;
+    });
+
+    projects.value = mergedProjects;
   } catch (err: any) {
     projectsError.value = 'Failed to load your projects.';
     console.error('Error fetching projects:', err);
@@ -143,11 +170,24 @@ const fetchRecentActivities = async () => {
 
 // Computed properties for stats
 const inProgressProjects = computed(() => {
-  return projects.value.filter((p: Project) => p.status === 'in_progress' || !p.status).length;
+  return projects.value.filter((p: Project) => {
+    // Consider a project "in progress" if:
+    // 1. Status is 'in_progress' or 'incompleted' (ongoing work)
+    // 2. No status (fallback for backward compatibility)
+    // 3. Any status that indicates active work
+    const status = p.status?.toLowerCase();
+    return status === 'in_progress' ||
+      status === 'incompleted' ||
+      status === 'approved' ||
+      !status;
+  }).length;
 });
 
 const completedProjects = computed(() => {
-  return projects.value.filter((p: Project) => p.status === 'completed').length;
+  return projects.value.filter((p: Project) => {
+    const status = p.status?.toLowerCase();
+    return status === 'completed';
+  }).length;
 });
 
 const totalProjects = computed(() => {
@@ -207,6 +247,49 @@ const formatCurrency = (amount: number) => {
     style: 'currency',
     currency: 'USD'
   }).format(amount);
+};
+
+// Helper to get project status class
+const getProjectStatusClass = (status?: string) => {
+  if (!status) return 'in-progress'; // Default to in-progress if no status
+  const statusLower = status.toLowerCase();
+  switch (statusLower) {
+    case 'completed':
+      return 'completed';
+    case 'in_progress':
+    case 'incompleted':
+      return 'in-progress';
+    case 'pending':
+      return 'pending';
+    case 'cancelled':
+      return 'cancelled';
+    case 'rejected':
+      return 'rejected';
+    default:
+      return 'in-progress'; // Default to in-progress for unknown statuses
+  }
+};
+
+// Helper to format project status
+const formatProjectStatus = (status?: string) => {
+  if (!status) return 'In Progress'; // Default to In Progress if no status
+  const statusLower = status.toLowerCase();
+  switch (statusLower) {
+    case 'completed':
+      return 'Completed';
+    case 'in_progress':
+      return 'In Progress';
+    case 'incompleted':
+      return 'Incompleted';
+    case 'pending':
+      return 'Pending';
+    case 'cancelled':
+      return 'Cancelled';
+    case 'rejected':
+      return 'Rejected';
+    default:
+      return 'In Progress'; // Default to In Progress for unknown statuses
+  }
 };
 
 onMounted(async () => {
@@ -388,8 +471,8 @@ onMounted(async () => {
                         </div>
                       </div>
                       <div class="project-status">
-                         <span class="status-badge" :class="project.status || 'in-progress'">
-                           {{ project.status || 'In Progress' }}
+                         <span class="status-badge" :class="getProjectStatusClass(project.status)">
+                           {{ formatProjectStatus(project.status) }}
                          </span>
                       </div>
                     </div>

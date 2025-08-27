@@ -435,6 +435,7 @@
                 v-model="selectedTargetLanguages"
                 :options="SUPPORTED_LANGUAGES"
                 :multiple="true"
+                :max="5"
                 :close-on-select="false"
                 :clear-on-select="false"
                 :preserve-search="true"

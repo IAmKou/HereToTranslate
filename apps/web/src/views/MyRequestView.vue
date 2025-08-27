@@ -251,7 +251,7 @@
                         <button
                           @click="onCancel(req)"
                           class="action-btn cancel-btn"
-                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED' && req.status !== 'INCOMPLETED'"
+                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED' && req.status !== 'INCOMPLETED' && req.status !== 'FAILED'"
                           :title="`Cancel request: ${req.title}`"
                           data-tooltip="Cancel this request"
                         >
@@ -279,14 +279,11 @@
                            Request cancelled
                          </span>
 
-                        <!-- Show message for completed requests -->
-                        <span v-if="req.status === 'COMPLETED'" class="status-message completed" title="This request has been completed successfully">
-                           ✓ Completed
-                         </span>
 
-                        <!-- Handover button for failed and waiting approval requests -->
+
+                        <!-- Handover button for failed, waiting approval and completed requests -->
                         <button
-                          v-if="(req.status === 'FAILED' || req.status === 'WAITING_APPROVAL') && req.project"
+                          v-if="(req.status === 'FAILED' || req.status === 'WAITING_APPROVAL' || req.status === 'COMPLETED') && req.project"
                           @click="viewHandover(req)"
                           class="action-btn handover-btn"
                           :title="`View and evaluate translation product for: ${req.title}`"
@@ -525,12 +522,12 @@
                         <span class="deadline-text">{{ formatDate(req.deadline) }}</span>
                       </div>
                     </td>
-                    <td style="text-align: center; vertical-align: middle;">
+                    <td class="status-cell" style="text-align: center; vertical-align: middle;">
                          <span :class="['status-badge', getStatusClass(req.status)]">
                            {{ formatStatus(req.status) }}
                          </span>
                     </td>
-                    <td style="text-align: center; vertical-align: middle;">
+                    <td class="visibility-cell" style="text-align: center; vertical-align: middle;">
                          <span v-if="req.status === 'PENDING'" :class="['visibility-badge', isRequestPublic(req.isPublic, !!req.assignee) ? 'visibility-public' : 'visibility-private']">
                            <i :class="isRequestPublic(req.isPublic, !!req.assignee) ? 'pi pi-globe' : 'pi pi-lock'"></i>
                            {{ isRequestPublic(req.isPublic, !!req.assignee) ? 'Public' : 'Private' }}
@@ -544,22 +541,26 @@
                       <div class="actions-wrapper">
                         <template v-if="req.status === 'PENDING'">
                           <button
-                            class="action-btn btn btn-primary"
+                            class="action-btn accept-btn"
                             :disabled="actionLoading"
                             @click="acceptAssignedRequest(req.id)"
+                            :title="`Accept request: ${req.title}`"
+                            data-tooltip="Accept this request"
                           >
-                            <i v-if="!actionLoading" class="pi pi-check" />
-                            <i v-else class="pi pi-spinner pi-spin" />
-                            <span>{{ actionLoading ? 'Processing...' : 'Accept' }}</span>
+                            <i v-if="!actionLoading" class="pi pi-check btn-icon" />
+                            <i v-else class="pi pi-spinner pi-spin btn-icon" />
+                            <span class="btn-text">{{ actionLoading ? 'Processing...' : 'Accept' }}</span>
                           </button>
                           <button
-                            class="action-btn btn btn-danger"
+                            class="action-btn decline-btn"
                             :disabled="actionLoading"
                             @click="declineAssignedRequest(req.id)"
+                            :title="`Decline request: ${req.title}`"
+                            data-tooltip="Decline this request"
                           >
-                            <i v-if="!actionLoading" class="pi pi-times" />
-                            <i v-else class="pi pi-spinner pi-spin" />
-                            <span>{{ actionLoading ? 'Processing...' : 'Decline' }}</span>
+                            <i v-if="!actionLoading" class="pi pi-times btn-icon" />
+                            <i v-else class="pi pi-spinner pi-spin btn-icon" />
+                            <span class="btn-text">{{ actionLoading ? 'Processing...' : 'Decline' }}</span>
                           </button>
                         </template>
                         <template v-else>
@@ -708,8 +709,10 @@
                     <td class="request-title text-sm text-gray-700 text-left" style="vertical-align: middle;"> <a href="#" @click.prevent="goToRequestDetail(req.id)">{{ req.title }}</a> </td>
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.requester?.fullName || req.requester?.email || 'Unknown' }}</td>
                     <td class="text-sm text-gray-700 text-left" style="vertical-align: middle;">{{ req.category?.name || '-' }}</td>
-                    <td class="deal-amount text-center text-sm text-green-600 font-bold" width="120" style="vertical-align: middle;"><span class="deal-icon">💵</span>${{ req.dealAmount }}</td>
-                    <td class="text-sm text-gray-500 italic text-left" width="130" style="vertical-align: middle;">
+                    <td class="deal-amount" style="text-align:center; vertical-align: middle;">
+                      <span class="deal-icon">💵</span>${{ req.dealAmount }}
+                    </td>
+                    <td style="vertical-align: middle;">
                       <div class="deadline-wrapper" :class="getDeadlineStatus(req).class">
                         <span class="deadline-icon">🗓</span>
                         <span class="deadline-text">{{ formatDeadline(req.deadline) }}</span>
@@ -739,10 +742,7 @@
                     </td>
                     <td class="actions-cell" style="text-align: center; vertical-align: middle;">
                       <div class="actions-wrapper">
-                        <!-- Show message for completed requests -->
-                        <span v-if="req.status === 'COMPLETED'" class="status-message completed" title="This request has been completed successfully">
-                           ✓ Completed
-                         </span>
+
 
                         <!-- Show message for incompleted requests -->
                         <span v-if="req.status === 'INCOMPLETED'" class="status-message incompleted" title="This request has been marked as incomplete">
@@ -835,16 +835,6 @@
 
           <!-- On-going Requests Tab -->
           <div v-else-if="activeTab === 'ongoing-requests' && !loading && !error" class="tab-content" :key="'ongoing-requests'">
-            <!-- Grace Period Info Banner -->
-            <div class="grace-period-banner">
-              <div class="banner-icon">
-                <i class="pi pi-clock"></i>
-              </div>
-              <div class="banner-content">
-                <h4>Deadline Extension Grace Period</h4>
-                <p>After the deadline passes, you still have <strong>3 additional days</strong> to request an extension. Use this time wisely to complete your translation or request more time.</p>
-              </div>
-            </div>
 
             <!-- Search Bar for On-going -->
             <div class="filter-bar">
@@ -2465,6 +2455,68 @@ watch(() => route.path, async (newPath, oldPath) => {
   font-size: 0.8rem;
 }
 
+.deal-icon {
+  font-size: 0.9rem;
+}
+
+.deadline-icon {
+  font-size: 0.9rem;
+}
+
+/* Ensure consistent table cell alignment */
+.request-row td {
+  vertical-align: middle;
+  padding: 12px 8px;
+  height: 60px;
+}
+
+.request-row td:first-child {
+  text-align: center;
+  width: 60px;
+}
+
+.request-row td:nth-child(2) {
+  text-align: left;
+  min-width: 200px;
+}
+
+.request-row td:nth-child(3) {
+  text-align: left;
+  min-width: 150px;
+}
+
+.request-row td:nth-child(4) {
+  text-align: left;
+  min-width: 120px;
+}
+
+.request-row td:nth-child(5) {
+  text-align: center;
+  min-width: 120px;
+}
+
+.request-row td:nth-child(6) {
+  text-align: center;
+  min-width: 130px;
+}
+
+.request-row td:nth-child(7) {
+  text-align: center;
+  min-width: 120px;
+  padding-right: 40px !important;
+}
+
+.request-row td:nth-child(8) {
+  text-align: center;
+  min-width: 100px;
+  padding-left: 40px !important;
+}
+
+.request-row td:nth-child(9) {
+  text-align: center;
+  min-width: 150px;
+}
+
 
 
 
@@ -2474,11 +2526,30 @@ watch(() => route.path, async (newPath, oldPath) => {
 .request-title {
   font-weight: 500;
   color: #1e293b;
+  display: flex;
+  align-items: center;
+}
+
+/* Ensure Title cell in the registrations table is vertically centered */
+.request-row td.request-title {
+  display: flex;
+  align-items: center;
+}
+
+.request-row td.request-title a {
+  display: inline-flex;
+  align-items: center;
 }
 
 .deal-amount {
   font-weight: 600;
   color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 40px;
+  padding: 8px 4px;
 }
 
 .status-badge {
@@ -2549,11 +2620,11 @@ watch(() => route.path, async (newPath, oldPath) => {
 
 /* Increase spacing between Status and Visibility columns */
 .status-cell {
-  padding-right: 28px !important;
+  padding-right: 50px !important;
 }
 
 .visibility-cell {
-  padding-left: 28px !important;
+  padding-left: 50px !important;
 }
 
 .actions-wrapper {
@@ -2668,6 +2739,34 @@ watch(() => route.path, async (newPath, oldPath) => {
 
 .cancel-btn:hover {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.accept-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.accept-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.decline-btn {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.decline-btn:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
 }
 
 .review-btn {

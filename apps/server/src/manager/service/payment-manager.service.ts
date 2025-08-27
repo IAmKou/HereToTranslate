@@ -1418,6 +1418,26 @@ export class PaypalService {
           createdBy: this.ADMIN_USER_ID,
         });
 
+        // Ensure any lingering DEPOSIT entries for this request are marked as Failed
+        await this.transactionRepo
+          .createQueryBuilder()
+          .update(TransactionEntity)
+          .set({ status: TransactionStatus.Failed })
+          .where(
+            'requestId = :rid AND userId = :uid AND type = :type AND status IN (:...statuses)',
+            {
+              rid: request.id,
+              uid: request.requester.id,
+              type: TransactionType.DEPOSIT,
+              statuses: [
+                TransactionStatus.On_Hold,
+                TransactionStatus.Pending,
+                TransactionStatus.WaitingApproval,
+              ],
+            },
+          )
+          .execute();
+
         logger.log(`Fallback refund processed: $${amount} to requester ID ${request.requester.id} for request ID ${request.id}`);
       } catch (error) {
         logger.error(`Fallback refund failed for request ID ${request.id}: ${error}`);
@@ -1453,6 +1473,26 @@ export class PaypalService {
 
       await this.transactionRepo.save(refundTransaction);
 
+      // Additionally, ensure any other matching DEPOSIT entries are marked as Failed
+      await this.transactionRepo
+        .createQueryBuilder()
+        .update(TransactionEntity)
+        .set({ status: TransactionStatus.Failed })
+        .where(
+          'requestId = :rid AND userId = :uid AND type = :type AND status IN (:...statuses)',
+          {
+            rid: request.id,
+            uid: request.requester.id,
+            type: TransactionType.DEPOSIT,
+            statuses: [
+              TransactionStatus.On_Hold,
+              TransactionStatus.Pending,
+              TransactionStatus.WaitingApproval,
+            ],
+          },
+        )
+        .execute();
+
       await this.notificationService.createNotification({
         userId: request.requester.id,
         type: 'REFUND_PROCESSED',
@@ -1471,6 +1511,21 @@ export class PaypalService {
 
   // Pay held deposit to translator when requester cancels an approved project
   async payoutDepositToTranslator(request: RequestEntity): Promise<void> {
+    // Debug wallets BEFORE payout
+    try {
+      const adminWBefore = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const requesterWBefore = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+      const translatorWBefore = request.assignee?.id ? await this.walletManagerService.getOrCreateWallet(request.assignee.id) : undefined;
+      console.log('[PAYOUT_DEPOSIT][BEFORE] Wallet balances:', {
+        admin: Number(adminWBefore.balance),
+        requesterId: request.requester.id?.toString?.(),
+        requester: Number(requesterWBefore.balance),
+        translatorId: request.assignee?.id?.toString?.(),
+        translator: translatorWBefore ? Number(translatorWBefore.balance) : null,
+      });
+    } catch (e) {
+      console.warn('[PAYOUT_DEPOSIT] Failed to fetch BEFORE wallet balances:', e);
+    }
     // Find the original deposit (prefer ON_HOLD; fallback to PENDING/WAITING_APPROVAL)
     let depositTx = await this.transactionRepo.findOne({
       where: {
@@ -1568,6 +1623,156 @@ export class PaypalService {
     });
 
     logger.log(`[PAYOUT_DEPOSIT] Paid $${amount} to translator ${translatorId} for request ${request.id}`);
+
+    // Debug wallets AFTER payout
+    try {
+      const adminWAfter = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const requesterWAfter = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+      const translatorWAfter = request.assignee?.id ? await this.walletManagerService.getOrCreateWallet(request.assignee.id) : undefined;
+
+      console.log('[PAYOUT_DEPOSIT][AFTER] Wallet balances:', {
+        admin: Number(adminWAfter.balance),
+        requesterId: request.requester.id?.toString?.(),
+        requester: Number(requesterWAfter.balance),
+        translatorId: request.assignee?.id?.toString?.(),
+        translator: translatorWAfter ? Number(translatorWAfter.balance) : null,
+      });
+    } catch (e) {
+      console.warn('[PAYOUT_DEPOSIT] Failed to fetch AFTER wallet balances:', e);
+    }
+  }
+
+  // New: Handle requester cancellation when request is already Approved without crediting requester balance
+  async payoutDepositToTranslatorOnApprovedCancel(request: RequestEntity): Promise<void> {
+    // Debug wallets BEFORE payout
+    try {
+      const adminWBefore = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const requesterWBefore = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+      const translatorWBefore = request.assignee?.id ? await this.walletManagerService.getOrCreateWallet(request.assignee.id) : undefined;
+      console.log('[PAYOUT_DEPOSIT_APPROVED_CANCEL][BEFORE] Wallet balances:', {
+        admin: Number(adminWBefore.balance),
+        requesterId: request.requester.id?.toString?.(),
+        requester: Number(requesterWBefore.balance),
+        translatorId: request.assignee?.id?.toString?.(),
+        translator: translatorWBefore ? Number(translatorWBefore.balance) : null,
+      });
+    } catch (e) {
+      console.warn('[PAYOUT_DEPOSIT_APPROVED_CANCEL] Failed to fetch BEFORE wallet balances:', e);
+    }
+
+    // Find the original deposit (prefer ON_HOLD; fallback to PENDING/WAITING_APPROVAL)
+    let depositTx = await this.transactionRepo.findOne({
+      where: {
+        request: { id: request.id },
+        user: { id: request.requester.id },
+        status: TransactionStatus.On_Hold,
+        type: TransactionType.DEPOSIT,
+      },
+    });
+
+    if (!depositTx) {
+      depositTx = await this.transactionRepo.findOne({
+        where: [
+          {
+            request: { id: request.id },
+            user: { id: request.requester.id },
+            status: TransactionStatus.Pending,
+            type: TransactionType.DEPOSIT,
+          },
+          {
+            request: { id: request.id },
+            user: { id: request.requester.id },
+            status: TransactionStatus.WaitingApproval,
+            type: TransactionType.DEPOSIT,
+          },
+        ],
+        order: { id: 'DESC' },
+      });
+    }
+
+    let sourceDepositTx = depositTx;
+    if (!sourceDepositTx) {
+      // Fallback to any historical DEPOSIT amount
+      const anyDepositTx = await this.transactionRepo.findOne({
+        where: {
+          request: { id: request.id },
+          user: { id: request.requester.id },
+          type: TransactionType.DEPOSIT,
+        },
+        order: { id: 'DESC' },
+      });
+      sourceDepositTx = anyDepositTx ?? undefined;
+      if (!sourceDepositTx) {
+        logger.warn(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] No deposit transaction found for request ${request.id}. Skipping payout.`);
+        return;
+      }
+      logger.warn(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] Using historical DEPOSIT tx id=${sourceDepositTx.id} for payout.`);
+    }
+
+    const amount = Math.abs(Number(sourceDepositTx.amount));
+
+    // Move funds from admin wallet to translator wallet
+    const adminWallet = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+    const adminBefore = Number(adminWallet.balance);
+    adminWallet.balance = Number(adminWallet.balance) - amount;
+    await this.walletRepository.save(adminWallet);
+    logger.log(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] Admin wallet: ${adminBefore} -> ${adminWallet.balance}`);
+
+    const translatorId = request.assignee?.id;
+    if (!translatorId) {
+      logger.warn(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] Request ${request.id} has no assignee; skipping payout`);
+      return;
+    }
+
+    const translatorWallet = await this.walletManagerService.getOrCreateWallet(translatorId);
+    const translatorBefore = Number(translatorWallet.balance);
+    translatorWallet.balance = Number(translatorWallet.balance) + amount;
+    await this.walletRepository.save(translatorWallet);
+    logger.log(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] Translator wallet (${translatorId}): ${translatorBefore} -> ${translatorWallet.balance}`);
+
+    // Mark the requester's DEPOSIT as Completed to reflect finalized hold payout
+    if (sourceDepositTx) {
+      const oldStatus = sourceDepositTx.status;
+      sourceDepositTx.status = TransactionStatus.Completed;
+      await this.transactionRepo.save(sourceDepositTx);
+      logger.log(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] Updated DEPOSIT tx ${sourceDepositTx.id} ${oldStatus} -> Completed`);
+    }
+
+    // Create translator PAYMENT transaction for audit trail (net deposit amount)
+    const translatorPayment = this.transactionRepo.create({
+      user: { id: translatorId } as UserEntity,
+      request: { id: request.id } as RequestEntity,
+      amount: amount as any,
+      status: TransactionStatus.Completed,
+      type: TransactionType.PAYMENT,
+    });
+    await this.transactionRepo.save(translatorPayment);
+    logger.log(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] Created PAYMENT tx for translator id=${translatorPayment.id} amount=$${amount}`);
+
+    // Notify translator
+    await this.notificationService.createNotification({
+      userId: translatorId,
+      type: 'DEPOSIT_PAID_TO_TRANSLATOR',
+      message: `Deposit $${amount} for request "${request.title}" has been paid to your balance due to requester cancellation (Approved state).`,
+      createdBy: this.ADMIN_USER_ID,
+    });
+
+    // Debug wallets AFTER payout
+    try {
+      const adminWAfter = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const requesterWAfter = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+      const translatorWAfter = request.assignee?.id ? await this.walletManagerService.getOrCreateWallet(request.assignee.id) : undefined;
+
+      console.log('[PAYOUT_DEPOSIT_APPROVED_CANCEL][AFTER] Wallet balances:', {
+        admin: Number(adminWAfter.balance),
+        requesterId: request.requester.id?.toString?.(),
+        requester: Number(requesterWAfter.balance),
+        translatorId: request.assignee?.id?.toString?.(),
+        translator: translatorWAfter ? Number(translatorWAfter.balance) : null,
+      });
+    } catch (e) {
+      console.warn('[PAYOUT_DEPOSIT_APPROVED_CANCEL] Failed to fetch AFTER wallet balances:', e);
+    }
   }
 
   // Create PayPal order for the remaining 50% payment when requester approves
@@ -1861,21 +2066,27 @@ export class PaypalService {
         deducted: depositAmount
       });
 
-      // 4) Add total amount to translator wallet
-      console.log('🔍 [DEBUG] STEP 6: Updating translator wallet (adding total payment)...');
+      // 4) Calculate platform fee and add net amount to translator wallet
+      console.log('🔍 [DEBUG] STEP 6: Calculating platform fee and updating translator wallet...');
       const translatorWallet = await this.walletManagerService.getOrCreateWallet(translator.id);
       const translatorOldBalance = translatorWallet.balance;
-      const amountToAdd = depositAmount + finalAmount;
+      const grossPayout = depositAmount + finalAmount;
+      const feePercentage = await this.feeService.getDefaultFee();
+      const feeAmount = Number((grossPayout * (feePercentage / 100)).toFixed(2));
+      const netToTranslator = Number((grossPayout - feeAmount).toFixed(2));
 
       console.log('🔍 [DEBUG] Translator wallet before update:', {
         translatorId: translator.id,
         translatorEmail: translator.email,
         oldBalance: translatorOldBalance,
-        amountToAdd: amountToAdd,
-        newBalance: Number(translatorOldBalance) + amountToAdd
+        grossPayout,
+        feePercentage,
+        feeAmount,
+        netToTranslator,
+        newBalance: Number(translatorOldBalance) + netToTranslator
       });
 
-      translatorWallet.balance = Number(translatorWallet.balance) + amountToAdd;
+      translatorWallet.balance = Number(translatorWallet.balance) + netToTranslator;
       const updatedTranslatorWallet = await this.walletRepository.save(translatorWallet);
 
       console.log('🔍 [DEBUG] Translator wallet after update:', {
@@ -1883,15 +2094,15 @@ export class PaypalService {
         translatorEmail: translator.email,
         oldBalance: translatorOldBalance,
         newBalance: updatedTranslatorWallet.balance,
-        added: amountToAdd
+        added: netToTranslator
       });
 
-      // 5) Create ONE translator transaction with total 100%
-      console.log('🔍 [DEBUG] STEP 7: Creating translator PAYMENT transaction...');
+      // 5) Create translator PAYMENT transaction with net amount and record platform fee for admin
+      console.log('🔍 [DEBUG] STEP 7: Creating translator PAYMENT transaction and platform fee transaction...');
       const translatorTransactionData = {
         user: { id: translator.id } as UserEntity,
         request: { id: request.id } as RequestEntity,
-        amount: amountToAdd,
+        amount: netToTranslator,
         status: TransactionStatus.Completed,
         type: TransactionType.PAYMENT,
       };
@@ -1914,6 +2125,20 @@ export class PaypalService {
         userId: translatorTransaction.user?.id,
         requestId: translatorTransaction.request?.id
       });
+
+      // Record platform fee: credit fee to admin wallet and create a transaction entry
+      const adminWalletAfter = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);
+      const adminBeforeFee = Number(adminWalletAfter.balance);
+      adminWalletAfter.balance = Number(adminWalletAfter.balance) + feeAmount;
+      await this.walletRepository.save(adminWalletAfter);
+      await this.transactionRepo.save({
+        user: { id: this.ADMIN_USER_ID } as UserEntity,
+        request: { id: request.id } as RequestEntity,
+        amount: feeAmount,
+        status: TransactionStatus.Completed,
+        // Intentionally omit type to mirror fee recording in finalizeTranslation
+      });
+      console.log('🔍 [DEBUG] Platform fee recorded:', { feePercentage, feeAmount, adminBeforeFee, adminAfterFee: adminWalletAfter.balance });
 
       // 6) Mark request completed
       console.log('🔍 [DEBUG] STEP 8: Marking request as COMPLETED...');

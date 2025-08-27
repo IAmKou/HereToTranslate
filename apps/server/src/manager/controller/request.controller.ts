@@ -285,7 +285,8 @@ export class RequestController {
         body.decision,
         body.rating,
         body.comment,
-        body.translatorId
+        body.translatorId,
+        body.isFullyCompleted === 'true' || false
       );
       console.log('✅ [CONTROLLER] submitReview success:', result);
       return result;

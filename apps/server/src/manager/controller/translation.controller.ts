@@ -1,16 +1,20 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Res, UseGuards, Req } from '@nestjs/common';
 import { TranslationService } from '#LocalProject/Managers/service/translation-manager.service';
 import { JwtAuthGuard } from '#LocalProject/Auth/guards/jwt.guard';
 import type { Response } from 'express';
 import { AsposeService } from '#LocalProject/Managers/service/aspose.service';
 import { FileService } from '#LocalProject/Managers/service/file-manager.service';
+import { ConfigService } from '@nestjs/config';
+import type { Request } from 'express';
+import * as crypto from 'crypto';
 
 @Controller('translation')
 export class TranslationController {
   constructor(
     private readonly translationService: TranslationService,
     private readonly asposeService: AsposeService,
-    private readonly fileService: FileService
+    private readonly fileService: FileService,
+    private readonly configService: ConfigService
   ) {}
   @UseGuards(JwtAuthGuard)
   @Get('strings')
@@ -181,6 +185,98 @@ export class TranslationController {
       });
     }
   }
+
+  // --- Temporary public preview link (no auth on the final file GET) ---
+  private signPreviewToken(payload: any): string {
+    const secret = this.configService.get<string>('JWT_SECRET') || 'preview-secret';
+    const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const sig = crypto.createHmac('sha256', secret).update(data).digest('base64url');
+    return `${data}.${sig}`;
+  }
+  private verifyPreviewToken(token: string): any | null {
+    try {
+      const secret = this.configService.get<string>('JWT_SECRET') || 'preview-secret';
+      const [data, sig] = token.split('.');
+      if (!data || !sig) return null;
+      const expect = crypto.createHmac('sha256', secret).update(data).digest('base64url');
+      if (expect !== sig) return null;
+      const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+      if (payload.exp && Date.now() > payload.exp) return null;
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('preview-link')
+  async createPreviewLink(
+    @Body('fileId') fileId: string,
+    @Body('language') language: string,
+    @Body('ttlSec') ttlSec = 600,
+    @Req() req: Request
+  ) {
+    if (!fileId || !language) throw new BadRequestException('fileId and language are required');
+    const exp = Date.now() + Math.max(60, Math.min(ttlSec, 3600)) * 1000;
+    const token = this.signPreviewToken({ fileId, language, exp });
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+    const host = req.get('host');
+    const base = `${proto}://${host}`;
+    const url = `${base}/translation/export/preview/${encodeURIComponent(fileId)}?language=${encodeURIComponent(language)}&token=${encodeURIComponent(token)}`;
+    return { url, token, expiresAt: exp };
+  }
+
+  @Get('export/preview/:fileId')
+  async streamPreviewFile(
+    @Param('fileId') fileId: string,
+    @Query('language') language: string,
+    @Query('token') token: string,
+    @Res() res: Response
+  ) {
+    const payload = this.verifyPreviewToken(token || '');
+    if (!payload || payload.fileId !== fileId || payload.language !== language) {
+      return res.status(401).send('Invalid or expired token');
+    }
+    try {
+      const { buffer, fileName } = await this.translationService.buildExportBuffer(fileId, language, 'original');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.end(buffer);
+    } catch (e) {
+      return res.status(500).send('Failed to build preview');
+    }
+  }
+
+  // Build PDF from DOCX export and stream (no auth to simplify preview embedding if needed)
+  @UseGuards(JwtAuthGuard)
+  @Get('export/pdf/:fileId')
+  async streamPdf(
+    @Param('fileId') fileId: string,
+    @Query('language') language: string,
+    @Query('watermark') watermark: string,
+    @Res() res: Response
+  ) {
+    try {
+      let { buffer, fileName } = await this.translationService.exportToPdf(fileId, language);
+      if (watermark) {
+        buffer = await this.translationService.addPreviewWatermark(buffer, watermark);
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.end(buffer);
+    } catch (e) {
+      return res.status(500).json({ message: 'Failed to build PDF', error: (e as any)?.message || 'unknown' });
+    }
+  }
 }
 
-  
+

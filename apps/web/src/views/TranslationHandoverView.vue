@@ -193,6 +193,7 @@
                       <label>Decision:</label>
                       <div class="decision-buttons">
                         <button
+                          v-if="isFullyCompleted"
                           @click="reviewDecision = 'APPROVED'"
                           :class="['decision-btn', { active: reviewDecision === 'APPROVED' }]"
                         >
@@ -219,6 +220,13 @@
                         ></i>
                       </div>
                       <span class="rating-text">{{ rating }}/5 stars</span>
+                    </div>
+                    <div v-else-if="!isFullyCompleted" class="completion-warning">
+                      <i class="pi pi-info-circle"></i>
+                      <div>
+                        <strong>Approval is only available at 100% completion.</strong>
+                        <p>Once all strings are translated, you can approve the translation.</p>
+                      </div>
                     </div>
 
                     <!-- Evidence Upload for 100% completed rejections -->
@@ -351,6 +359,10 @@
                 <button @click="downloadIndividualFiles" class="btn btn-secondary">
                   <i class="pi pi-info-circle"></i>
                   How to Download Individual Files
+                </button>
+                <button @click="openPreviewModal" class="btn btn-secondary">
+                  <i class="pi pi-eye"></i>
+                  Preview translation
                 </button>
               </div>
             </div>
@@ -490,11 +502,142 @@
         </div>
       </div>
     </div>
+    <!-- Preview Translation Modal -->
+    <div v-if="showPreviewModal" class="modal-overlay" @click="closePreviewModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3><i class="pi pi-eye"></i> Preview translation</h3>
+          <button @click="closePreviewModal" class="modal-close">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="review-summary-preview">
+            <div class="summary-item">
+              <strong>Select file</strong>
+              <div>
+                <div v-if="files.length === 0" class="no-files">No file to preview</div>
+                <div v-else class="files-list">
+                  <div
+                    v-for="f in files"
+                    :key="f.id || f.fileId"
+                    class="file-item"
+                    @click="selectPreviewFile(f)"
+                    :style="{ cursor: 'pointer', borderColor: (selectedPreviewFileId === (f.id || f.fileId)) ? '#3b82f6' : '#e2e8f0' }"
+                  >
+                    <div class="file-info">
+                      <i :class="getFileIcon(f.fileType || '')"></i>
+                      <div>
+                        <div class="file-name">{{ f.fileName }}</div>
+                        <div class="file-meta">{{ getFileTypeName(f.fileType || '') }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="summary-item">
+              <strong>Select language</strong>
+              <div>
+                <div v-if="(projectInfo?.targetLanguages || []).length === 0">No language</div>
+                <div class="language-select" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                  <button
+                    v-for="lang in (projectInfo?.targetLanguages || [])"
+                    :key="lang"
+                    class="btn"
+                    :class="selectedPreviewLanguage === lang ? 'btn-primary' : 'btn-secondary'"
+                    @click="selectedPreviewLanguage = lang"
+                  >
+                    {{ getLanguageName(lang) }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="summary-item">
+              <strong>Select pages (up to 5)</strong>
+              <div>
+                <div v-if="previewPagesLoading" style="color:#4a5568;">Loading pages...</div>
+                <div v-else-if="previewPages.length === 0" style="color:#4a5568;">No page data</div>
+                <div class="download-stats" v-else>
+                  <button
+                    v-for="p in previewPages"
+                    :key="p.filePart"
+                    class="btn"
+                    :class="selectedPages.includes(p.pageNumber) ? 'btn-primary' : 'btn-secondary'"
+                    @click="toggleSelectPage(p.pageNumber)"
+                    :disabled="previewSelectionLocked"
+                  >
+                    Page {{ p.pageNumber }}
+                  </button>
+                </div>
+                <div style="margin-top:0.5rem; color:#6b7280; font-size:0.85rem;">
+                  Selected {{ selectedPages.length }}/5 pages
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="isBuildingPreview" class="loading-spinner" style="margin: 1rem 0;">
+            <i class="pi pi-spin pi-spinner"></i>
+            <p>Building preview...</p>
+          </div>
+
+          <!-- Preview content is no longer rendered inside modal. It always opens in a new tab. -->
+        </div>
+
+        <div class="modal-footer">
+          <button @click="closePreviewModal" class="btn btn-secondary">
+            <i class="pi pi-times"></i> Close
+          </button>
+          <!-- Removed manual open button; preview always opens in new tab by default. -->
+          <button
+            class="btn btn-primary"
+            :disabled="!canStartPreview || isBuildingPreview"
+            @click="buildPreview"
+          >
+            <i v-if="isBuildingPreview" class="pi pi-spin pi-spinner"></i>
+            <i v-else class="pi pi-eye"></i>
+            View preview
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- One-time confirm modal for selected preview pages -->
+  <div v-if="showPreviewConfirm" class="modal-overlay" @click="cancelSelectedPages">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h3><i class="pi pi-question-circle"></i> Confirm selected pages</h3>
+        <button @click="cancelSelectedPages" class="modal-close">
+          <i class="pi pi-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Please confirm these pages will be used for future previews:</p>
+        <div class="download-stats" style="flex-wrap:wrap; gap:.5rem;">
+          <span v-for="(pg, idx) in selectedPages" :key="idx" class="status-badge">Page {{ pg }}</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button @click="cancelSelectedPages" class="btn btn-secondary">
+          <i class="pi pi-times"></i> Cancel
+        </button>
+        <button @click="confirmSelectedPages" class="btn btn-primary">
+          <i class="pi pi-check"></i> Confirm & Continue
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
+
+
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
@@ -550,6 +693,62 @@ const translationStrings = ref<any[]>([]);
 const handoverInfo = ref<any>(null);
 const originalRequestData = ref<any>(null); // Store original request data
 const isRequestBased = computed(() => !!requestId.value);
+
+// Preview state
+const showPreviewModal = ref(false);
+const selectedPreviewFileId = ref<string>('');
+const selectedPreviewLanguage = ref<string>('');
+const previewPages = ref<Array<{ pageNumber: number; filePart: number; stringCount: number; hasTranslatedStrings: boolean }>>([]);
+const previewPagesLoading = ref(false);
+const selectedPages = ref<number[]>([]);
+const previewUrl = ref<string>('');
+const isBuildingPreview = ref(false);
+const currentPreviewPage = ref<number | null>(null);
+const previewMode = ref<'pdf' | 'html' | 'text' | 'external' | 'none'>('none');
+const textPreview = ref<string>('');
+const htmlPreview = ref<string>('');
+const previewExternalUrl = ref<string>('');
+// Preview confirmation and lock state
+const showPreviewConfirm = ref(false);
+const previewSelectionLocked = ref(false);
+
+const requiredPreviewCount = computed(() => Math.min(5, previewPages.value.length || 0));
+const canStartPreview = computed(() => {
+  // Require selecting exactly requiredPreviewCount pages (<=5, or fewer if file has <5 pages)
+  return !!selectedPreviewFileId.value && !!selectedPreviewLanguage.value && requiredPreviewCount.value > 0 && selectedPages.value.length === requiredPreviewCount.value;
+});
+
+// Persist preview selection in localStorage (scoped by requestId or projectId)
+const previewStorageKey = computed(() => {
+  const scope = isRequestBased.value ? `req-${requestId.value}` : `proj-${projectId.value}`;
+  return `htt-preview-${scope}`;
+});
+
+function savePreviewState() {
+  try {
+    const state = {
+      fileId: selectedPreviewFileId.value,
+      language: selectedPreviewLanguage.value,
+      pages: selectedPages.value,
+      currentPage: currentPreviewPage.value,
+      locked: previewSelectionLocked.value,
+    };
+    localStorage.setItem(previewStorageKey.value, JSON.stringify(state));
+  } catch {}
+}
+
+function loadPreviewState() {
+  try {
+    const raw = localStorage.getItem(previewStorageKey.value);
+    if (!raw) return;
+    const parsed = JSON.parse(raw || '{}') || {};
+    if (parsed.fileId) selectedPreviewFileId.value = String(parsed.fileId);
+    if (parsed.language) selectedPreviewLanguage.value = String(parsed.language);
+    if (Array.isArray(parsed.pages)) selectedPages.value = parsed.pages.map((n: any) => Number(n)).slice(0, 5);
+    if (parsed.currentPage) currentPreviewPage.value = Number(parsed.currentPage);
+    if (typeof parsed.locked === 'boolean') previewSelectionLocked.value = !!parsed.locked;
+  } catch {}
+}
 
 // Computed
 const translatedFiles = computed(() =>
@@ -718,7 +917,7 @@ async function loadDataFromRequest() {
             console.log(`Loaded ${languageStrings.length} strings for language ${language}`);
 
             // Add language info to each string for tracking
-            const stringsWithLanguage = languageStrings.map(str => ({
+            const stringsWithLanguage = languageStrings.map((str: any) => ({
               ...str,
               targetLanguage: language
             }));
@@ -734,7 +933,7 @@ async function loadDataFromRequest() {
         console.log('Translation strings data:', translationStrings.value);
 
         // Debug: Check if any strings have translatedText
-        const stringsWithTranslation = translationStrings.value.filter(str => str.translatedText && str.translatedText.trim());
+        const stringsWithTranslation = translationStrings.value.filter((str: any) => str.translatedText && str.translatedText.trim());
         console.log('Strings with translation:', stringsWithTranslation.length);
         console.log('Sample strings with translation:', stringsWithTranslation.slice(0, 3));
 
@@ -842,7 +1041,7 @@ async function loadDataFromProject() {
       console.log(`Loaded ${languageStrings.length} strings for language ${language}`);
 
       // Add language info to each string for tracking
-      const stringsWithLanguage = languageStrings.map(str => ({
+      const stringsWithLanguage = languageStrings.map((str: any) => ({
         ...str,
         targetLanguage: language
       }));
@@ -995,6 +1194,368 @@ function getDeliveryMethodText(method: string): string {
     case 'cloud': return 'Cloud storage';
     default: return 'Undetermined';
   }
+}
+
+// Preview helpers
+function openPreviewModal() {
+  showPreviewModal.value = true;
+  // Load saved state first
+  loadPreviewState();
+  // Default select first file and first language if available
+  if (!selectedPreviewFileId.value && files.value.length > 0) {
+    const f = files.value[0];
+    selectedPreviewFileId.value = String(f.id || f.fileId || '');
+  }
+  if (!selectedPreviewLanguage.value && (projectInfo.value?.targetLanguages || []).length > 0) {
+    selectedPreviewLanguage.value = projectInfo.value.targetLanguages[0];
+  }
+  fetchPreviewPages();
+}
+
+function closePreviewModal() {
+  showPreviewModal.value = false;
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value);
+    previewUrl.value = '';
+  }
+  selectedPages.value = [];
+}
+
+function selectPreviewFile(file: any) {
+  if (previewSelectionLocked.value) return;
+  const id = String(file.id || file.fileId || '');
+  if (selectedPreviewFileId.value !== id) {
+    selectedPreviewFileId.value = id;
+    // Reset pages when file changes
+    selectedPages.value = [];
+    fetchPreviewPages();
+    savePreviewState();
+  }
+}
+
+async function fetchPreviewPages() {
+  if (!selectedPreviewFileId.value) return;
+  try {
+    previewPagesLoading.value = true;
+    const pid = isRequestBased.value ? (projectInfo.value?.project?.id || originalRequestData.value?.project?.id) : projectId.value;
+    const bid = isRequestBased.value ? (projectInfo.value?.project?.defaultBranch?.id || '1') : branchId.value;
+    const { data } = await axiosInstance.get(`/translation/file-pages/${selectedPreviewFileId.value}`, {
+      params: { projectId: pid, branchId: bid }
+    });
+    previewPages.value = Array.isArray(data?.pages) ? data.pages : [];
+  } catch (e) {
+    previewPages.value = [];
+  } finally {
+    previewPagesLoading.value = false;
+  }
+}
+
+function toggleSelectPage(pageNumber: number) {
+  if (previewSelectionLocked.value) return;
+  const idx = selectedPages.value.indexOf(pageNumber);
+  if (idx >= 0) {
+    selectedPages.value.splice(idx, 1);
+  } else {
+    if (selectedPages.value.length >= 5) return;
+    // Keep user-chosen order; do not auto-sort
+    selectedPages.value.push(pageNumber);
+  }
+  // Keep current page aligned
+  if (!currentPreviewPage.value && selectedPages.value.length > 0) {
+    currentPreviewPage.value = selectedPages.value[0];
+  }
+  savePreviewState();
+}
+
+async function buildPreview() {
+  if (!canStartPreview.value) return;
+  // If not locked yet, ask for confirmation once
+  if (!previewSelectionLocked.value) {
+    showPreviewConfirm.value = true;
+    return;
+  }
+  try {
+    isBuildingPreview.value = true;
+    // Download exported single-language file
+    const response = await axiosInstance.get(`/translation/export/download/${selectedPreviewFileId.value}`, {
+      params: { language: selectedPreviewLanguage.value },
+      responseType: 'blob'
+    });
+    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
+
+    const contentType = String((response.headers as any)?.['content-type'] || 'application/octet-stream');
+    const blob = new Blob([response.data], { type: contentType });
+
+    // PDF -> always open in new tab (render ONLY selected pages as images)
+    if (contentType.includes('application/pdf')) {
+      const url = window.URL.createObjectURL(blob);
+      const pages = selectedPages.value.slice(0, 5);
+      const opened = openPdfAsImagesInNewTab(url, pages);
+      if (opened) showPreviewModal.value = false; else toast.add({ severity: 'info', summary: 'Popup blocked', detail: 'Please allow popups to view preview.', life: 3000 });
+      savePreviewState();
+    } else if (contentType.includes('text/plain')) {
+      // TXT -> text preview
+      const text = await blob.text();
+      textPreview.value = text;
+      previewMode.value = 'text';
+      currentPreviewPage.value = null;
+      savePreviewState();
+    } else if (contentType.includes('application/json') || contentType.includes('+json')) {
+      // JSON -> pretty text
+      const raw = await blob.text();
+      try {
+        const obj = JSON.parse(raw);
+        textPreview.value = JSON.stringify(obj, null, 2);
+      } catch {
+        textPreview.value = raw;
+      }
+      previewMode.value = 'text';
+      currentPreviewPage.value = null;
+      savePreviewState();
+    } else if (contentType.includes('text/html')) {
+      const html = await blob.text();
+      htmlPreview.value = html;
+      previewMode.value = 'html';
+      currentPreviewPage.value = null;
+      savePreviewState();
+    } else if (contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+      // DOCX: chuyển sang PDF từ backend rồi mở tab mới (không cần public)
+      try {
+        const pdfResp = await axiosInstance.get(`/translation/export/pdf/${selectedPreviewFileId.value}`, {
+          params: { language: selectedPreviewLanguage.value, watermark: 'PREVIEW - DO NOT COPY' },
+          responseType: 'blob'
+        });
+        const url = window.URL.createObjectURL(new Blob([pdfResp.data], { type: 'application/pdf' }));
+        const opened = openPdfAsImagesInNewTab(url, selectedPages.value.slice(0, 5));
+        if (opened) showPreviewModal.value = false; else toast.add({ severity: 'info', summary: 'Popup blocked', detail: 'Please allow popups to view preview.', life: 3000 });
+        savePreviewState();
+      } catch (e) {
+        // Fallback: Mammoth HTML, nếu không được thì tải về
+        try {
+          await ensureMammothLoaded();
+          const buffer = await blob.arrayBuffer();
+          // @ts-ignore
+          const result = await (window as any).mammoth.convertToHtml({ arrayBuffer: buffer });
+          htmlPreview.value = String(result?.value || '');
+          previewMode.value = 'html';
+          currentPreviewPage.value = null;
+          savePreviewState();
+        } catch {
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${projectInfo.value?.name || 'translated-file'}.docx`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+          previewMode.value = 'none';
+        }
+      }
+    } else {
+      // Unknown -> download fallback
+      toast.add({ severity: 'info', summary: 'Cannot preview', detail: 'This format is not supported for preview. Downloading...', life: 3000 });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${projectInfo.value?.name || 'translated-file'}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      previewMode.value = 'none';
+    }
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: err?.response?.data?.message || 'Failed to build preview', life: 3000 });
+  } finally {
+    isBuildingPreview.value = false;
+  }
+}
+
+const iframeSrc = computed(() => {
+  if (!previewUrl.value) return '';
+  const page = currentPreviewPage.value || 1;
+  return `${previewUrl.value}#page=${page}`;
+});
+
+function openPdfInCleanTab(pdfUrl: string, page: number) {
+  const w = window.open('', '_blank');
+  if (!w) return false;
+  const safeUrl = `${pdfUrl}#page=${page}`;
+  const html = `<!doctype html><html><head><meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preview</title>
+    <style>
+      html,body{height:100%;margin:0;background:#fff;}
+      .overlay{position:fixed;top:0;left:0;right:0;height:72px;background:#fff;z-index:9999;pointer-events:auto;}
+      .overlay-bottom{position:fixed;bottom:0;left:0;right:0;height:16px;background:transparent;z-index:9999;pointer-events:auto;}
+      .wrap{position:fixed;top:0;left:0;right:0;bottom:0}
+      .viewer{position:absolute;inset:0;border:0;width:100%;height:100%;}
+      .wm{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-24deg);pointer-events:none;color:rgba(255,0,0,.12);font-weight:800;font-size:6vw;white-space:nowrap;z-index:9998}
+      @media print{ body{ display:none !important; } }
+    </style></head>
+    <body>
+      <div class="overlay" title="Toolbar disabled"></div>
+      <div class="overlay-bottom"></div>
+      <div class="wm">PREVIEW - DO NOT COPY</div>
+      <div class="wrap">
+        <iframe class="viewer" src="${safeUrl}"></iframe>
+      </div>
+    </body></html>`;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  try {
+    // Attach blockers from opener context to avoid inline <script>
+    w.document.addEventListener('contextmenu', function(e){ e.preventDefault(); }, {capture:true});
+    w.document.addEventListener('keydown', function(e:any){
+      const key = (e.key || '').toLowerCase();
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && ['s','p','o','u','c'].includes(key)) { e.preventDefault(); }
+      if (e.key === 'F12') { e.preventDefault(); }
+    }, {capture:true});
+    // Block printing (best-effort)
+    try { (w as any).print = () => {}; } catch {}
+    try { (w as any).onbeforeprint = () => { try { w.document.body.style.display = 'none'; } catch {} }; } catch {}
+  } catch {}
+  return true;
+}
+
+// Load PDF.js from CDN and render only provided pages as images in a clean tab
+async function ensurePdfJs(targetDoc: Document): Promise<void> {
+  // Load PDF.js into the target document (the new tab), not the opener
+  // @ts-ignore
+  if ((targetDoc.defaultView as any)?.pdfjsLib) return;
+  await new Promise<void>((resolve, reject) => {
+    const s = targetDoc.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load PDF.js'));
+    targetDoc.head.appendChild(s);
+  });
+  try {
+    // @ts-ignore
+    (targetDoc.defaultView as any).pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  } catch {}
+}
+
+function openPdfAsImagesInNewTab(pdfUrl: string, pages: number[]): boolean {
+  const tab = window.open('', '_blank');
+  if (!tab) return false;
+  tab.document.write(`<!doctype html><html><head><meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preview</title>
+    <style>
+      body{margin:0;background:#fff;font-family:sans-serif}
+      .page{display:flex;justify-content:center;padding:16px}
+      img{max-width:100%;height:auto;box-shadow:0 2px 12px rgba(0,0,0,.12)}
+      .overlay{position:fixed;top:0;left:0;right:0;height:72px;background:#fff;z-index:9999;pointer-events:auto}
+      @media print{ body{ display:none !important; } }
+    </style></head><body>
+    <div class="overlay" title="Toolbar disabled"></div>
+    <div id="root"></div>
+    </body></html>`);
+  tab.document.close();
+
+  (async () => {
+    try {
+      await ensurePdfJs(tab.document);
+      // @ts-ignore
+      const pdfjsLib = (tab as any).pdfjsLib || (tab.window as any).pdfjsLib || (tab.document.defaultView as any).pdfjsLib;
+      const loadingTask = pdfjsLib.getDocument(pdfUrl);
+      const pdf = await loadingTask.promise;
+      const targetPages = pages.slice(0, 5);
+      for (const p of targetPages) {
+        const pageIndex = Math.min(Math.max(1, p), pdf.numPages);
+        const page = await pdf.getPage(pageIndex);
+        const viewport = page.getViewport({ scale: 1.25 });
+        const canvas = tab.document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) continue;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const img = tab.document.createElement('img');
+        img.src = canvas.toDataURL('image/jpeg', 0.85);
+        const wrap = tab.document.createElement('div');
+        wrap.className = 'page';
+        wrap.appendChild(img);
+        tab.document.body.appendChild(wrap);
+      }
+      // Anti-copy basics
+      tab.document.addEventListener('contextmenu', (e:any)=>e.preventDefault(), {capture:true});
+      tab.document.addEventListener('keydown', (e:any)=>{ const k=(e.key||'').toLowerCase(); const ctrl=e.ctrlKey||e.metaKey; if(ctrl&&['s','p','o','u','c'].includes(k)) e.preventDefault(); if(e.key==='F12') e.preventDefault(); }, {capture:true});
+    } catch {}
+  })();
+  return true;
+}
+
+// Watchers to persist changes
+watch(selectedPreviewLanguage, savePreviewState);
+watch(selectedPreviewFileId, savePreviewState);
+watch(selectedPages, savePreviewState, { deep: true });
+watch(currentPreviewPage, savePreviewState);
+
+// Load Mammoth (DOCX -> HTML) from CDN when needed
+async function ensureMammothLoaded(): Promise<void> {
+  // @ts-ignore
+  if ((window as any).mammoth) return;
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/mammoth/mammoth.browser.min.js';
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load mammoth'));
+    document.head.appendChild(s);
+  });
+}
+
+function openPreviewInNewTab() {
+  try {
+    if (previewMode.value === 'pdf' && previewUrl.value) {
+      const page = currentPreviewPage.value || 1;
+      window.open(`${previewUrl.value}#page=${page}`, '_blank');
+      return;
+    }
+    if (previewMode.value === 'external' && previewExternalUrl.value) {
+      window.open(previewExternalUrl.value, '_blank');
+      return;
+    }
+    if (previewMode.value === 'html' && htmlPreview.value) {
+      const newTab = window.open('', '_blank');
+      if (newTab) {
+        newTab.document.open();
+        newTab.document.write(htmlPreview.value);
+        newTab.document.close();
+      }
+      return;
+    }
+    if (previewMode.value === 'text' && textPreview.value) {
+      const blob = new Blob([textPreview.value], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Do not revoke immediately; let browser load it
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      return;
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+// Confirm selection once and lock it
+function confirmSelectedPages() {
+  previewSelectionLocked.value = true;
+  showPreviewConfirm.value = false;
+  savePreviewState();
+  // proceed to preview
+  buildPreview();
+}
+
+function cancelSelectedPages() {
+  showPreviewConfirm.value = false;
 }
 
 // File upload methods
@@ -1165,6 +1726,17 @@ async function submitReview() {
     return;
   }
 
+  // Block approvals unless completion is 100%
+  if (reviewDecision.value === 'APPROVED' && !isFullyCompleted.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Cannot approve',
+      detail: 'Approval is only available when translation is 100% completed.',
+      life: 3000
+    });
+    return;
+  }
+
   // Check if evidence and reason are required for 100% completed rejections
   if (isFullyCompleted.value && reviewDecision.value === 'REJECTED') {
     if (evidenceFiles.value.length === 0) {
@@ -1236,6 +1808,12 @@ async function confirmSubmitReview() {
 
     // If approved, start PayPal final 50% flow instead of submitting review immediately
     if (confirmReviewData.value?.decision === 'APPROVED' && requestId.value) {
+      // Close modal immediately for faster perceived response
+      showConfirmModal.value = false;
+
+      // Pre-open a tab to avoid popup blockers and make navigation instant when URL is ready
+      const newTab = window.open('', '_blank');
+
       const { data } = await axiosInstance.post(`/payment/finalize-translation/${requestId.value}`);
       if (data?.approvalUrl) {
         // Add payment details to PayPal URL for success view
@@ -1249,9 +1827,18 @@ async function confirmSubmitReview() {
 
         const finalUrl = `${data.approvalUrl}&${paymentDetails.toString()}`;
         console.log('Redirecting to PayPal with payment details:', finalUrl);
-        window.location.href = finalUrl;
+
+        if (newTab && !newTab.closed) {
+          newTab.location.href = finalUrl;
+        } else {
+          // Fallback to same-tab redirect if popup was blocked
+          window.location.href = finalUrl;
+        }
         return; // Stop further local state updates; flow continues after PayPal redirect
       }
+
+      // If we did not get approvalUrl, close any pre-opened tab and continue error handling
+      if (newTab && !newTab.closed) newTab.close();
     }
 
     // Otherwise (e.g., REJECTED), submit review to backend
@@ -1295,7 +1882,12 @@ async function confirmSubmitReview() {
         }
       });
     } else {
-      await axiosInstance.post('/requests/review', confirmReviewData.value);
+      // Add isFullyCompleted parameter to the review data
+      const reviewData = {
+        ...confirmReviewData.value,
+        isFullyCompleted: isFullyCompleted.value
+      };
+      await axiosInstance.post('/requests/review', reviewData);
     }
 
     // Update local state

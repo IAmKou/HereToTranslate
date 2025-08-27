@@ -92,11 +92,7 @@ async function handleCancel() {
   loading.value = true
 
   try {
-    await axiosInstance.post('/project-cancellation/request', {
-      requestId: Number(props.request.id),
-      reason: '',
-      action: 'DELETE'
-    })
+    await axiosInstance.post(`/requests/${Number(props.request.id)}/cancel`)
 
     emit('cancelled')
     emit('close')

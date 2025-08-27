@@ -55,6 +55,8 @@ export class WalletManagerService implements OnModuleInit {
       .createQueryBuilder('t')
       .where('t.user = :userId', { userId })
       .andWhere('t.amount > 0')
+      // Loại trừ DEPOSIT của requester để không làm tăng balance hiển thị
+      .andWhere('t.type != :depositType', { depositType: 'DEPOSIT' })
       .andWhere('t.status IN (:...statuses)', {
         statuses: [TransactionStatus.Completed, TransactionStatus.Approved]
       })
@@ -83,7 +85,7 @@ export class WalletManagerService implements OnModuleInit {
       .andWhere('t.status IN (:...statuses)', { statuses: [TransactionStatus.Pending, TransactionStatus.WaitingApproval] })
       .select('SUM(t.amount)', 'sum')
       .getRawOne();
-    // Tính balance động (bao gồm cả ON_HOLD và APPROVED)
+    // Tính balance động dựa trên các khoản thực sự credit cho user (loại trừ DEPOSIT của requester)
     const balance = Number(totalDeposits?.sum || 0) - Number(totalWithdrawn?.sum || 0);
     return {
       ...wallet,

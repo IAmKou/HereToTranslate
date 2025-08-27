@@ -111,39 +111,13 @@
 
           <!-- Transactions List/Table (card) -->
           <div class="card transactions-section">
-            <div v-if="filteredTransactions.length === 0" class="empty-state">
-              <!-- SVG Illustration -->
-              <div class="empty-illustration">
-                <!-- Ví rỗng sinh động -->
-                <svg width="160" height="120" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="20" y="50" width="120" height="40" rx="16" fill="#E0E7EF"/>
-                  <rect x="32" y="60" width="96" height="20" rx="8" fill="#F3F4F6"/>
-                  <rect x="50" y="70" width="60" height="8" rx="4" fill="#CBD5E1"/>
-                  <ellipse cx="80" cy="100" rx="32" ry="8" fill="#F3F4F6"/>
-                  <g>
-                    <rect x="60" y="38" width="40" height="24" rx="8" fill="#fbbf24"/>
-                    <rect x="68" y="44" width="24" height="8" rx="4" fill="#fde68a"/>
-                    <circle cx="80" cy="50" r="4" fill="#f59e0b"/>
-                  </g>
-                  <g>
-                    <path d="M90 38 Q92 30 100 32" stroke="#fbbf24" stroke-width="2" fill="none"/>
-                    <circle cx="100" cy="32" r="2" fill="#fbbf24"/>
-                  </g>
-                  <g>
-                    <path d="M70 38 Q68 30 60 32" stroke="#fbbf24" stroke-width="2" fill="none"/>
-                    <circle cx="60" cy="32" r="2" fill="#fbbf24"/>
-                  </g>
-                </svg>
-              </div>
-              <h3>No transactions found</h3>
-              <p>No transactions match your current filters.</p>
-              <div class="empty-cta-group">
-                <button class="empty-cta-btn" @click="goToWallet">Top up Wallet</button>
-                <button class="empty-cta-btn secondary" @click="goToCreateRequest">Create a Request</button>
-              </div>
+
+
+            <div v-if="filteredTransactions.length === 0" class="empty-message">
+              <p>No transactions found.</p>
             </div>
 
-            <div v-else class="transactions-table-wrapper">
+            <div v-if="filteredTransactions.length > 0" class="transactions-table-wrapper">
               <table class="transactions-table">
                 <thead>
                 <tr>
@@ -182,10 +156,9 @@
                       </span>
                   </td>
                   <td>
-                      <span :class="['status-badge', `status-${transaction.status.toLowerCase()}`,
-                        (transaction.status && transaction.status.replace(/[-_ ]/g, '').toUpperCase() === 'ONHOLD') ? 'badge-on-hold' : '']"
+                      <span :class="['status-badge', getStatusBadgeClass(transaction)]"
                             :title="getStatusTooltip(transaction.status)">
-                        {{ formatStatus(transaction.status) }}
+                        {{ formatStatusFor(transaction) }}
                       </span>
                   </td>
                   <td>
@@ -293,14 +266,12 @@
           <div class="box-row">
             <div class="box-title">Status:</div>
             <div class="box-value">
-              <span :class="['status-badge',
-                detailTarget.status.toLowerCase() === 'completed' ? 'status-completed' :
-                detailTarget.status.toLowerCase() === 'pending' ? 'status-pending' :
-                detailTarget.status.toLowerCase() === 'failed' ? 'status-failed' : '']">
+              <span :class="['status-badge', getStatusBadgeClass(detailTarget)]">
                 <span v-if="detailTarget.status.toLowerCase() === 'completed'">✅</span>
                 <span v-else-if="detailTarget.status.toLowerCase() === 'pending'">⏳</span>
                 <span v-else-if="detailTarget.status.toLowerCase() === 'failed'">❌</span>
-                {{ formatStatus(detailTarget.status) }}
+                <span v-else-if="formatStatusFor(detailTarget) === 'Refunded'">💰</span>
+                {{ formatStatusFor(detailTarget) }}
               </span>
             </div>
           </div>
@@ -464,6 +435,13 @@ const filteredTransactions = computed(() => {
     filtered = filtered.filter((t: any) => {
       const transactionStatus = (t.status || '').toLowerCase();
       const filterStatus = filterDraft.value.status.toLowerCase();
+
+      // Xử lý trường hợp Refunded
+      if (filterStatus === 'refunded') {
+        const displayStatus = formatStatusFor(t);
+        return displayStatus.toLowerCase() === 'refunded';
+      }
+
       const matches = transactionStatus === filterStatus;
       console.log(`Transaction ${t.id}: status="${t.status}" -> "${transactionStatus}" vs filter="${filterStatus}" -> ${matches}`);
       return matches;
@@ -686,6 +664,34 @@ function formatStatus(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
+function formatStatusFor(transaction: any): string {
+  if (!transaction) return '';
+  const status = String(transaction.status || '').toLowerCase();
+  const typeTitle = getTransactionTitle(transaction); // uses type when available
+  const type = String(transaction.type || typeTitle).toUpperCase();
+
+  // Map DEPOSIT + failed -> Refunded in UI
+  if (type === 'DEPOSIT' && status === 'failed') {
+    return 'Refunded';
+  }
+
+  // If we find a matching REFUND for the same request and amount, consider deposit as Refunded visually
+  if (type === 'DEPOSIT') {
+    const reqId = (transaction as any).requestId ?? (transaction.request?.id ?? null);
+    const amountAbs = Math.abs(Number(transaction.amount));
+    const hasMatchingRefund = (transactions.value || []).some((t: any) => {
+      const tType = String(t.type || '').toUpperCase();
+      const tReq = t.requestId ?? (t.request?.id ?? null);
+      const tAmountAbs = Math.abs(Number(t.amount));
+      return tType === 'REFUND' && t.status && String(t.status).toLowerCase() === 'completed' && tReq === reqId && tAmountAbs === amountAbs;
+    });
+    if (hasMatchingRefund) {
+      return 'Refunded';
+    }
+  }
+  return formatStatus(transaction.status || '');
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -696,8 +702,9 @@ function formatCurrency(amount: number): string {
 function formatDate(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  date.setHours(date.getHours() + 7);
-  return date.toLocaleString('en-US', {
+  // Tự động cộng thêm 7 tiếng
+  const adjusted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return adjusted.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -709,8 +716,9 @@ function formatDate(dateString: string): string {
 function formatDateRelative(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  date.setHours(date.getHours() + 7);
-  return dayjs(date).fromNow();
+  // Tự động cộng thêm 7 tiếng
+  const adjusted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return dayjs(adjusted).fromNow();
 }
 
 function prevPage() {
@@ -770,6 +778,29 @@ function getStatusTooltip(status: string): string {
   return '';
 }
 
+function getStatusBadgeClass(transaction: any): string {
+  // Kiểm tra nếu là trạng thái Refunded (được xử lý bởi formatStatusFor)
+  const displayStatus = formatStatusFor(transaction);
+  if (displayStatus === 'Refunded') {
+    return 'status-refunded';
+  }
+
+  // Xử lý các trạng thái khác
+  const status = String(transaction.status || '').toLowerCase();
+  if (status === 'on_hold' || status === 'onhold') {
+    return 'status-pending';
+  }
+  if (status === 'completed' || status === 'approved') {
+    return 'status-completed';
+  }
+  if (status === 'failed' || status === 'cancelled') {
+    return 'status-failed';
+  }
+
+  // Trạng thái mặc định
+  return `status-${status}`;
+}
+
 // Watch for filter changes to reset pagination
 import { watch } from 'vue';
 const statusOptions = [
@@ -778,6 +809,7 @@ const statusOptions = [
   { label: 'Completed', value: 'completed', color: 'status-completed' },
   { label: 'Cancelled', value: 'cancelled', color: 'status-failed' },
   { label: 'Failed', value: 'failed', color: 'status-failed' },
+  { label: 'Refunded', value: 'refunded', color: 'status-refunded' },
 ];
 
 // --- WATCH FILTERS ---
@@ -1051,6 +1083,11 @@ onMounted(() => {
 .status-failed {
   background: #fee2e2;
   color: #dc2626;
+}
+
+.status-refunded {
+  background: #fef3c7;
+  color: #d97706;
 }
 
 .transaction-info {
@@ -1332,6 +1369,13 @@ onMounted(() => {
     gap: 4px;
   }
 }
+.empty-message {
+  text-align: center;
+  padding: 48px 20px;
+  color: #6b7280;
+  font-size: 1.1rem;
+}
+
 .empty-illustration {
   display: flex;
   justify-content: center;
@@ -1383,6 +1427,7 @@ onMounted(() => {
   padding: 12px 16px;
   border-bottom: 1px solid #f3f4f6;
   text-align: left;
+  vertical-align: middle; /* ensure all cells align to middle */
 }
 .transactions-table th {
   background: #f9fafb;
@@ -1980,6 +2025,16 @@ onMounted(() => {
 .modal-detail-boxed .status-badge.status-failed {
   background: #fee2e2;
   color: #ef4444;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-size: 1em;
+  margin-right: 4px;
+}
+
+.modal-detail-boxed .status-badge.status-refunded {
+  background: #fef3c7;
+  color: #d97706;
   font-weight: 700;
   border-radius: 8px;
   padding: 2px 10px;

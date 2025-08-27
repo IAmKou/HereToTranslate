@@ -710,13 +710,35 @@ export class TranslationService {
       error?: string;
     }> = [];
 
+    // Stage outputs for optional ZIP
+    const zipStaging: Array<{ path: string; content: Buffer }> = [];
+
     for (const file of files) {
       for (const lang of targetLanguages) {
         try {
-          const { githubUrl } = await this.exportTranslation(
+          // Build buffer for language
+          const { buffer, fileName } = await this.buildExportBuffer(
             file.id.toString(),
             lang
           );
+
+          // Commit per-language artifact
+          const repoName = `project-${file.project.id}`;
+          const githubPath = `${lang}/${fileName}`;
+          await this.githubService.commitChange({
+            repo: repoName,
+            branch: 'main',
+            path: githubPath,
+            content: buffer,
+            message: `Update exported translation for ${file.fileName} (${lang}) - ${new Date().toISOString()}`,
+          });
+          const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${lang}/${encodeURIComponent(
+            fileName
+          )}`;
+
+          // Stage for ZIP (folder by language)
+          zipStaging.push({ path: `${lang}/${fileName}`, content: buffer });
+
           results.push({
             fileId: file.id.toString(),
             language: lang,
@@ -729,6 +751,37 @@ export class TranslationService {
             error: err?.message || 'Export failed',
           });
         }
+      }
+    }
+
+    // If exporting multiple languages, also publish a ZIP bundle
+    if (targetLanguages.length > 1 && zipStaging.length > 0) {
+      try {
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+        for (const entry of zipStaging) {
+          zip.file(entry.path, entry.content);
+        }
+        const zipBuffer: Buffer = (await zip.generateAsync({ type: 'nodebuffer' })) as unknown as Buffer;
+
+        const repoName = `project-${projectId}`;
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const zipName = `project-${projectId}-translations-${ts}.zip`;
+        const zipPath = `exports/${zipName}`;
+        await this.githubService.commitChange({
+          repo: repoName,
+          branch: 'main',
+          path: zipPath,
+          content: zipBuffer,
+          message: `Publish multi-language ZIP (${targetLanguages.join(',')}) - ${new Date().toISOString()}`,
+        });
+        const zipUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${encodeURIComponent(
+          zipPath
+        )}`;
+
+        results.push({ fileId: 'zip', language: targetLanguages.join(','), githubUrl: zipUrl });
+      } catch (zipErr: any) {
+        results.push({ fileId: 'zip', language: targetLanguages.join(','), error: zipErr?.message || 'ZIP export failed' });
       }
     }
 

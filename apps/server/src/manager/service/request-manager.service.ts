@@ -642,7 +642,7 @@ export class RequestManagerService {
   async cancelRequest(uid: bigint, requestId: bigint) {
     const request = await this.requestRepository.findOne({
       where: { id: BigInt(requestId) },
-      relations: ['requester'],
+      relations: ['requester', 'assignee'],
     });
 
     if (!request) {
@@ -666,6 +666,47 @@ export class RequestManagerService {
             `Cannot cancel request within 50% of the deadline`
           );
         }
+
+        // Debug balances BEFORE payout
+        const adminWalletBefore = await this.walletService.getOrCreateWallet(BigInt(1));
+        const requesterWalletBefore = await this.walletService.getOrCreateWallet(request.requester.id);
+        const translatorWalletBefore = request.assignee?.id ? await this.walletService.getOrCreateWallet(request.assignee.id) : undefined;
+        logger.log('[CANCEL_APPROVED][BEFORE] Wallet balances:', {
+          admin: Number(adminWalletBefore.balance),
+          requesterId: request.requester.id?.toString?.(),
+          requester: Number(requesterWalletBefore.balance),
+          translatorId: request.assignee?.id?.toString?.(),
+          translator: translatorWalletBefore ? Number(translatorWalletBefore.balance) : null,
+        });
+
+        // Pay held deposit to translator when requester cancels an approved project
+        // Use new flow that avoids crediting requester balance
+        try {
+          await this.paymentService.payoutDepositToTranslatorOnApprovedCancel(request);
+        } catch (err) {
+          logger.error(`[CANCEL_APPROVED] Failed to payout deposit to translator for request ${request.id}: ${err}`);
+          throw new InternalServerErrorException('Failed to payout deposit to translator during cancellation');
+        }
+
+        // Debug balances AFTER payout
+        const adminWalletAfter = await this.walletService.getOrCreateWallet(BigInt(1));
+        const requesterWalletAfter = await this.walletService.getOrCreateWallet(request.requester.id);
+        const translatorWalletAfter = request.assignee?.id ? await this.walletService.getOrCreateWallet(request.assignee.id) : undefined;
+        logger.log('[CANCEL_APPROVED][AFTER] Wallet balances:', {
+          admin: Number(adminWalletAfter.balance),
+          requesterId: request.requester.id?.toString?.(),
+          requester: Number(requesterWalletAfter.balance),
+          requesterDelta: Number(requesterWalletAfter.balance) - Number(requesterWalletBefore.balance),
+          translatorId: request.assignee?.id?.toString?.(),
+          translator: translatorWalletAfter ? Number(translatorWalletAfter.balance) : null,
+          translatorDelta: translatorWalletAfter && translatorWalletBefore ? (Number(translatorWalletAfter.balance) - Number(translatorWalletBefore.balance)) : null,
+        });
+
+        // Mark request as cancelled and exit early to avoid any refund-to-requester paths
+        request.status = RequestStatus.Cancelled;
+        await this.requestRepository.save(request);
+        logger.log(`[CANCEL_APPROVED] Request ${request.id} cancelled by requester; deposit paid to translator.`);
+        return request;
       }
       else {
         throw new BadRequestException(`Request is not in pending status`);

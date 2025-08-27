@@ -251,7 +251,7 @@
                         <button
                           @click="onCancel(req)"
                           class="action-btn cancel-btn"
-                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED' && req.status !== 'INCOMPLETED'"
+                          v-if="req.status !== 'COMPLETED' && req.status !== 'CANCELLED' && req.status !== 'INCOMPLETED' && req.status !== 'FAILED'"
                           :title="`Cancel request: ${req.title}`"
                           data-tooltip="Cancel this request"
                         >

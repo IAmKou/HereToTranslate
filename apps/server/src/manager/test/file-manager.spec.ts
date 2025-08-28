@@ -27,7 +27,6 @@ jest.mock('../service/activity-manager.service');
 
 // Mock Aspose bridges
 jest.mock('../../util/extensions/aspose-pdf-bridge');
-jest.mock('../../util/extensions/aspose-docx-bridge');
 
 // Mock mammoth
 jest.mock('mammoth', () => ({
@@ -49,7 +48,6 @@ describe('FileService', () => {
   let manifestService: any;
   let activityManagerService: any;
   let asposePDFBridge: any;
-  let asposeDocxBridge: any;
 
   const mockUser = { id: 1n, username: 'testuser', fullName: 'Test User', email: 'test@example.com' };
   const mockProject = { id: 1n, name: 'Test Project', members: [mockUser], createdBy: mockUser };
@@ -105,12 +103,6 @@ describe('FileService', () => {
       getServiceInfo: jest.fn().mockReturnValue({ available: true, initialized: true }),
     };
 
-    asposeDocxBridge = {
-      isAvailable: jest.fn().mockReturnValue(true),
-      uploadFileToStorage: jest.fn().mockResolvedValue(undefined),
-      getServiceInfo: jest.fn().mockReturnValue({ available: true, initialized: true }),
-    };
-
     service = new FileService(
       fileRepository as any,
       translationModel as any,
@@ -120,7 +112,6 @@ describe('FileService', () => {
       commitRepository as any,
       activityManagerService,
       asposePDFBridge,
-      asposeDocxBridge,
     );
   });
 
@@ -691,9 +682,7 @@ describe('FileService', () => {
       
       expect(status.overallAvailable).toBe(true);
       expect(status.pdfBridge.available).toBe(true);
-      expect(status.docxBridge.available).toBe(true);
       expect(status.pdfBridge.info.available).toBe(true);
-      expect(status.docxBridge.info.available).toBe(true);
     });
 
     it('should upload PDF files to Aspose storage', async () => {

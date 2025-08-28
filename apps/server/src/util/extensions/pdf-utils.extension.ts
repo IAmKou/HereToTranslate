@@ -1,4 +1,4 @@
-import { AsposePDFBridge, AsposePDFReplacementEntry, AsposePDFExtractionResult } from './aspose-pdf-bridge';
+
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -424,48 +424,3 @@ export async function overlayTranslationsOnPdf(
   return out;
 }
 
-/**
- * Extract text from PDF using Aspose.PDF Cloud API (highest quality)
- * This provides the highest quality text extraction with full formatting preservation
- * @param buffer - PDF file buffer
- * @param asposePdfBridge - Aspose PDF bridge instance
- * @returns Promise<AsposePDFExtractionResult> - Extraction result with text, items, images, and metadata
- */
-export async function extractPdfTextWithAsposePDF(
-  buffer: Buffer,
-  asposePdfBridge: AsposePDFBridge
-): Promise<AsposePDFExtractionResult> {
-  try {
-    console.log('[PDF] Using Aspose PDF Cloud API for text extraction...');
-    const result = await asposePdfBridge.extractTextWithAsposePDF(buffer);
-    console.log('[PDF] Aspose PDF Cloud API extraction successful');
-    return result;
-  } catch (error) {
-    console.error(`[PDF] Aspose PDF Cloud API extraction failed: ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
-  }
-}
-
-/**
- * Replace text in PDF using Aspose.PDF Cloud API (highest quality)
- * This provides true text replacement while maintaining formatting
- * @param originalBuffer - Original PDF file buffer
- * @param replacements - Array of text replacement entries
- * @param asposePdfBridge - Aspose PDF bridge instance
- * @returns Promise<Buffer> - Updated PDF buffer
- */
-export async function replacePdfTextWithAsposePDF(
-  originalBuffer: Buffer,
-  replacements: AsposePDFReplacementEntry[],
-  asposePdfBridge: AsposePDFBridge
-): Promise<Buffer> {
-  try {
-    console.log('[PDF] Using Aspose PDF Cloud API for text replacement...');
-    const result = await asposePdfBridge.replaceTextWithAsposePDF(originalBuffer, replacements);
-    console.log('[PDF] Aspose PDF Cloud API replacement successful');
-    return result;
-    } catch (error) {
-    console.error(`[PDF] Aspose PDF Cloud API replacement failed: ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
-  }
-}

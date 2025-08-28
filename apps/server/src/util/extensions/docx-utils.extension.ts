@@ -1,7 +1,6 @@
 import JSZip from 'jszip';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 import { logger } from 'nx/src/utils/logger';
-import { createAsposeBridge, AsposeDocxBridge } from './aspose-docx-bridge';
 
 /**
  * Enhanced DOCX text replacement that preserves formatting, layouts, fonts, and styles
@@ -43,42 +42,6 @@ export async function replaceDocxTextWithCount(
       logger.warn(`[DOCX] Debug analysis failed: ${debugError instanceof Error ? debugError.message : String(debugError)}`);
     }
     
-    // Strategy 0: Try Aspose.Words Cloud API (highest quality - preserves ALL formatting)
-    try {
-      const asposeBridge = createAsposeBridge();
-      if (asposeBridge.isServiceAvailable()) {
-        const result = await asposeBridge.processDocxWithAspose(originalBuffer, translations);
-        if (result.replacedCount > 0) {
-          logger.log(`[DOCX] Aspose.Words Cloud API replacement successful: ${result.replacedCount} replacements`);
-          return result;
-        }
-      }
-    } catch (error) {
-      logger.warn(`[DOCX] Aspose.Words Cloud API replacement failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-
-    // Strategy 0.5: Try to enable Aspose.Words Cloud API if not already enabled
-    try {
-      const asposeBridge = createAsposeBridge();
-      if (!asposeBridge.isServiceAvailable()) {
-        // Try to set credentials and enable Aspose
-        try {
-          const enabled = await asposeBridge.setCredentials();
-          if (enabled) {
-            const result = await asposeBridge.processDocxWithAspose(originalBuffer, translations);
-            if (result.replacedCount > 0) {
-              logger.log(`[DOCX] Aspose.Words Cloud API replacement successful: ${result.replacedCount} replacements`);
-              return result;
-            }
-          }
-        } catch (credentialError) {
-          logger.warn(`[DOCX] Aspose.Words Cloud API credentials failed: ${credentialError instanceof Error ? credentialError.message : String(credentialError)}`);
-        }
-      }
-    } catch (error) {
-      logger.warn(`[DOCX] Aspose.Words Cloud API replacement failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-
     // Strategy 1: Try XML-based replacement (preserves all formatting)
     try {
       const result = await replaceDocxTextXmlBased(originalBuffer, translations);

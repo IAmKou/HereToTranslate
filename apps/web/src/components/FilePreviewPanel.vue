@@ -322,13 +322,16 @@ async function loadPdfWithPdfJs() {
       throw new Error('PDF.js import failed');
     }
 
-    // Set worker for browser environment
+    // Set worker for browser environment - Updated for v5
     try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      // For PDF.js v5, use the new worker setup
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.js';
       console.log('PDF.js worker configured');
     } catch (workerError) {
       console.error('Failed to configure PDF.js worker:', workerError);
-      throw new Error('PDF.js worker configuration failed');
+      // Fallback to CDN worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.js';
+      console.log('Using CDN worker fallback');
     }
 
     // Load PDF document from base64 data
@@ -2487,3 +2490,4 @@ function stopResize() {
   border-radius: 4px;
 }
 </style>
+p

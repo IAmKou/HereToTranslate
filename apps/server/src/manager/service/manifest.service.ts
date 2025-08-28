@@ -737,6 +737,86 @@ function assignFilePartsForDocx(manifestEntries: any[]): void {
   console.log(`[DOCX] Using filePart (0-based) for pagination, just like PDF!`);
 }
 
+// Function để parse DOCX trực tiếp từ XML structure như Crowdin
+async function parseDocxXml(buffer: Buffer): Promise<string[]> {
+  try {
+    console.log('[DOCX-XML] Starting XML parsing like Crowdin...');
+
+    // DOCX là file ZIP chứa XML, cần extract document.xml
+    const JSZip = await import('jszip');
+    const zip = new JSZip.default();
+    const zipContent = await zip.loadAsync(buffer);
+
+    // Lấy document.xml từ ZIP
+    const documentXml = zipContent.file('word/document.xml');
+    if (!documentXml) {
+      throw new Error('Could not find word/document.xml in DOCX');
+    }
+
+    const xmlContent = await documentXml.async('string');
+    console.log('[DOCX-XML] Successfully extracted document.xml');
+
+    // Parse XML để lấy text theo thứ tự chính xác
+    const textElements: string[] = [];
+
+    // Tìm tất cả paragraph elements (<w:p>)
+    const paragraphRegex = /<w:p[^>]*>(.*?)<\/w:p>/gs;
+    const paragraphs = xmlContent.match(paragraphRegex) || [];
+
+    console.log(`[DOCX-XML] Found ${paragraphs.length} paragraphs in XML`);
+
+    for (const paragraph of paragraphs) {
+      // Extract text từ mỗi paragraph, giữ nguyên thứ tự
+      const textRegex = /<w:t[^>]*>(.*?)<\/w:t>/gs;
+      const textMatches = paragraph.match(textRegex) || [];
+
+      if (textMatches.length > 0) {
+        // Combine tất cả text trong paragraph và clean HTML tags
+        const paragraphText = textMatches
+          .map(match => match.replace(/<w:t[^>]*>(.*?)<\/w:t>/, '$1'))
+          .join('')
+          .trim();
+
+        // Clean text kỹ hơn - loại bỏ tất cả HTML tags và attributes
+        const cleanText = paragraphText
+          .replace(/<\/?w:r[^>]*>/g, '')  // Loại bỏ <w:r> tags
+          .replace(/<\/?w:t[^>]*>/g, '')  // Loại bỏ <w:t> tags hoàn toàn
+          .replace(/xml:space="[^"]*"/g, '')  // Loại bỏ xml:space attributes
+          .replace(/w:rsidR="[^"]*"/g, '')  // Loại bỏ w:rsidR attributes
+          .replace(/\s+/g, ' ')  // Normalize spaces
+          .trim();
+
+        if (cleanText.length > 0) {
+          textElements.push(cleanText);
+          console.log(`[DOCX-XML] Added paragraph: "${cleanText.substring(0, 50)}..."`);
+        }
+      }
+    }
+
+    console.log(`[DOCX-XML] XML parsing completed - ${textElements.length} text elements extracted`);
+    return textElements;
+
+  } catch (error: any) {
+    console.error('[DOCX-XML] Error parsing DOCX XML:', error?.message || error);
+
+    // Fallback to mammoth nếu XML parsing thất bại
+    console.log('[DOCX-XML] Falling back to mammoth extraction...');
+    const { value: rawText } = await mammoth.extractRawText({
+      buffer: buffer,
+      includeDefaultStyleMap: false,
+      includeEmbeddedStyleMap: false
+    });
+
+    // Tách theo dòng đơn giản
+    const lines = rawText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    return lines;
+  }
+}
+
 // Enhanced function to divide PDF by original pages
 function assignFilePartsByPage(manifestEntries: any[]): void {
   // Group entries by page
@@ -1221,7 +1301,7 @@ export class ManifestService {
 
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
         console.log(`[DOCX] Starting DOCX to TXT conversion for proper order...`);
-        
+
         // Convert DOCX to plain text to preserve document order
         const { value: plainText } = await mammoth.extractRawText({
           buffer: file.fileContent
@@ -1233,7 +1313,7 @@ export class ManifestService {
         // Function to split text into sentences while preserving order
         function splitIntoSentences(text: string): string[] {
           if (!text || !text.trim()) return [];
-          
+
           // Split by sentence endings: . ? ! ...
           const sentenceEndings = /[.!?]+/g;
           const sentences = text.split(sentenceEndings);
@@ -1267,7 +1347,7 @@ export class ManifestService {
         let orderIndex = 0;
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
-          
+
           // Skip empty lines
           if (!line) continue;
 

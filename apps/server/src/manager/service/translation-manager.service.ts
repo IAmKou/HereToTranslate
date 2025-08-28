@@ -1617,6 +1617,23 @@ export class TranslationService {
       );
     }
   }
+
+  async buildProjectExportBuffers(
+    projectId: string,
+    languages: string[],
+    format: 'original' | 'xliff' = 'original'
+  ): Promise<Array<{ fileId: string; language: string; fileName: string; buffer: Buffer }>> {
+    const files = await this.fileRepository.find({ where: { project: { id: BigInt(projectId) } } as any });
+    const results: Array<{ fileId: string; language: string; fileName: string; buffer: Buffer }> = [];
+    const uniqueLangs = Array.from(new Set((languages || []).map(l => String(l).trim()).filter(Boolean)));
+    for (const file of files) {
+      for (const lang of uniqueLangs) {
+        const { buffer, fileName } = await this.buildExportBuffer(file.id.toString(), lang, format);
+        results.push({ fileId: file.id.toString(), language: lang, fileName, buffer });
+      }
+    }
+    return results;
+  }
 }
 
 async function rebuildFileWithManifest(

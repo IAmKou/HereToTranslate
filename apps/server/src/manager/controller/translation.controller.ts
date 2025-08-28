@@ -190,6 +190,48 @@ export class TranslationController {
     }
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('export/download-project/:projectId')
+  async downloadProjectExport(
+    @Param('projectId') projectId: string,
+    @Res() res: Response,
+    @Query('languages') languagesRaw: string, // comma-separated list
+    @Query('format') format: 'original' | 'xliff' = 'original'
+  ) {
+    try {
+      const languages = (languagesRaw || '')
+        .split(',')
+        .map(l => l.trim())
+        .filter(Boolean);
+      if (languages.length === 0) {
+        return res.status(400).json({ message: 'languages is required (comma-separated)' });
+      }
+
+      const entries = await this.translationService.buildProjectExportBuffers(projectId, languages, format);
+      const JSZip = require('jszip');
+      const zip = new JSZip();
+
+      for (const entry of entries) {
+        // entry.fileName already includes (LANG) pattern from buildExportBuffer
+        zip.file(entry.fileName, entry.buffer);
+      }
+
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      const zipFileName = `project-${projectId}-export-${languages.join('-')}-${Date.now()}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
+      res.setHeader('Content-Length', zipBuffer.length);
+      res.send(zipBuffer);
+      return;
+    } catch (error) {
+      console.error(`[downloadProjectExport] Error:`, error);
+      return res.status(500).json({
+        message: 'Project export failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
   // --- Temporary public preview link (no auth on the final file GET) ---
   private signPreviewToken(payload: any): string {
     const secret = this.configService.get<string>('JWT_SECRET') || 'preview-secret';

@@ -84,44 +84,7 @@
             </div>
           </div>
 
-          <!-- Translated Files List -->
-          <div class="info-card">
-            <h3><i class="pi pi-file-edit"></i> Translated Files</h3>
-            <div v-if="translatedFiles.length === 0" class="no-files">
-              <i class="pi pi-info-circle"></i>
-              <p v-if="isRequestBased && !projectInfo?.project">File management for requests without projects is not yet implemented. Files will be displayed here once a project is created from this request.</p>
-              <p v-else-if="isRequestBased && projectInfo?.project">No translated files found in the associated project.</p>
-              <p v-else>No translated files available yet.</p>
-            </div>
-            <div v-else class="files-list">
-              <div v-for="file in translatedFiles" :key="file.id" class="file-item">
-                <div class="file-info">
-                  <i :class="getFileIcon(file.fileType)"></i>
-                  <div>
-                    <div class="file-name">{{ file.fileName }}</div>
-                    <div class="file-meta">{{ getFileTypeName(file.fileType) }}</div>
-                  </div>
-                </div>
-                <div class="file-progress">
-                  <div class="progress-bar">
-                    <div class="progress-fill" :style="{ width: getFileProgress(file) + '%' }"></div>
-                  </div>
-                  <span>{{ getFileProgress(file) }}%</span>
-                </div>
-                <div class="file-status">
-                   <span class="status-badge" :class="getFileStatusClass(file)">
-                     {{ getFileStatusText(file) }}
-                   </span>
-                </div>
-                <div class="file-actions">
-                  <button @click="downloadFile(file)" class="btn btn-primary">
-                    <i class="pi pi-download"></i>
-                    Download
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+
 
           <!-- Handover Information -->
           <div class="info-card">
@@ -351,14 +314,11 @@
                 </div>
               </div>
               <div class="download-actions">
-                <button @click="downloadAllFiles" class="btn btn-primary" :disabled="downloading">
+                <button @click="downloadAllFiles" class="btn btn-primary" :disabled="downloading"
+                        v-if="projectInfo?.status === 'COMPLETED' || projectInfo?.status === 'INCOMPLETED'">
                   <i v-if="downloading" class="pi pi-spin pi-spinner"></i>
                   <i v-else class="pi pi-download"></i>
                   {{ downloading ? 'Downloading...' : 'Download All' }}
-                </button>
-                <button @click="downloadIndividualFiles" class="btn btn-secondary">
-                  <i class="pi pi-info-circle"></i>
-                  How to Download Individual Files
                 </button>
                 <button @click="openPreviewModal" class="btn btn-secondary">
                   <i class="pi pi-eye"></i>
@@ -1602,34 +1562,17 @@ async function downloadAllFiles() {
   downloading.value = true;
 
   try {
+    let currentProjectId: string;
+    let currentBranchId: string;
+
     if (isRequestBased.value) {
       // For requests, try to download from project if available
       const requestRes = await axiosInstance.get(`/requests/${requestId.value}/detail`);
       const request = requestRes.data;
 
       if (request.project) {
-        const projectId = request.project.id;
-        const branchId = request.project.defaultBranch?.id || '1';
-
-        const response = await axiosInstance.get(`/translation/download/all/${projectId}/${branchId}`, {
-          responseType: 'blob'
-        });
-
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Successfully downloaded all files!',
-          life: 3000
-        });
+        currentProjectId = request.project.id;
+        currentBranchId = request.project.defaultBranch?.id || '1';
       } else {
         // For requests without project, show a message that download functionality is not yet implemented
         toast.add({
@@ -1638,28 +1581,82 @@ async function downloadAllFiles() {
           detail: 'Download functionality for requests without projects is not yet implemented.',
           life: 3000
         });
+        return;
       }
     } else {
-      const response = await axiosInstance.get(`/translation/download/all/${projectId.value}/${branchId.value}`, {
-        responseType: 'blob'
-      });
+      currentProjectId = projectId.value;
+      currentBranchId = branchId.value;
+    }
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+    // Get all files for the project
+    const filesResponse = await axiosInstance.get(`/exports/project/${currentProjectId}/files?branchId=${currentBranchId}`);
+    const files = filesResponse.data;
 
+    if (!files || files.length === 0) {
       toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Successfully downloaded all files!',
+        severity: 'info',
+        summary: 'Info',
+        detail: 'No files found to download.',
         life: 3000
       });
+      return;
     }
+
+    // Create a ZIP file containing all translated files
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const file of files) {
+      try {
+        // Download each translated file using the correct endpoint
+        const response = await axiosInstance.get(`/translation/export/download/${file.id}`, {
+          responseType: 'blob'
+        });
+
+        // Add the file to the ZIP
+        zip.file(file.fileName, response.data);
+        successCount++;
+      } catch (err: any) {
+        console.error(`Failed to download file ${file.fileName}:`, err);
+        errorCount++;
+      }
+    }
+
+    if (successCount === 0) {
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to download any files.',
+        life: 3000
+      });
+      return;
+    }
+
+    // Generate and download the ZIP file
+    const zipBuffer = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 }
+    });
+
+    const url = window.URL.createObjectURL(zipBuffer);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `Successfully downloaded ${successCount} files${errorCount > 0 ? ` (${errorCount} failed)` : ''}!`,
+      life: 3000
+    });
 
   } catch (err: any) {
     toast.add({

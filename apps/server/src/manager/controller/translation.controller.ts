@@ -176,6 +176,7 @@ export class TranslationController {
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
       res.setHeader('Content-Length', zipBuffer.length);
       res.send(zipBuffer);
+      return;
       console.log(`[downloadExport] ZIP sent successfully with ${successCount} files, ${errorCount} errors`);
     } catch (error) {
       console.error(`[downloadExport] Error:`, error);
@@ -258,9 +259,11 @@ export class TranslationController {
     @Res() res: Response
   ) {
     try {
-      let { buffer, fileName } = await this.translationService.exportToPdf(fileId, language);
+      const { buffer, fileName } = await this.translationService.exportToPdf(fileId, language);
       if (watermark) {
-        buffer = await this.translationService.addPreviewWatermark(buffer, watermark);
+        const watermarkedBuffer = await this.translationService.addPreviewWatermark(buffer, watermark);
+        res.end(watermarkedBuffer);
+        return;
       }
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);

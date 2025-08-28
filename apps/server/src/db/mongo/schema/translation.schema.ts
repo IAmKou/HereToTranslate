@@ -29,6 +29,9 @@ export class TranslationString {
   @Prop({ type: Number, default: 0 })
   filePart: number;
 
+  @Prop({ type: Number, default: 0 })
+  orderIndex: number;
+
   @Prop()
   font?: string;
 
@@ -50,4 +53,5 @@ export class TranslationString {
 
 export const TranslationStringSchema = SchemaFactory.createForClass(TranslationString);
 TranslationStringSchema.index({ manifestEntryId: 1 });
+TranslationStringSchema.index({ orderIndex: 1 });
 TranslationStringSchema.index({ fileId: 1, language: 1, originalText: 1 });

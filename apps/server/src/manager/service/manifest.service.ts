@@ -653,7 +653,7 @@ function splitIntoSentences(text: string): string[] {
         parts.push(buf.trim());
         buf = '';
         // skip trailing spaces
-        while (i + 1 < s.length && /[\s\)\]"'”’\-]/.test(s[i + 1])) {
+        while (i + 1 < s.length && /[\s)\]"'”’-]/.test(s[i + 1])) {
           buf += s[++i];
         }
       }
@@ -683,12 +683,12 @@ function splitIntoSentences(text: string): string[] {
 
   // Merge dialogue attribution that follows a closing quote, e.g.
   // “... ?” he asked.  -> keep as a single sentence
-  const isAttributionStart = (s: string) => /^(?:["'“”‘’\)\]]\s*)?(?:he|she|they|we|i|the\s+\w+|mr|mrs|ms|dr)\s+(?:said|asked|replied|answered|whispered|shouted|cried|murmured|added|called|retorted|muttered|remarked)\b/i.test(s.trim());
+  const isAttributionStart = (s: string) => /^(?:["'“”‘’)\]]\s*)?(?:he|she|they|we|i|the\s+\w+|mr|mrs|ms|dr)\s+(?:said|asked|replied|answered|whispered|shouted|cried|murmured|added|called|retorted|muttered|remarked)\b/i.test(s.trim());
   const mergedAttribution: string[] = [];
   for (let i = 0; i < result.length; i++) {
     const prev = mergedAttribution[mergedAttribution.length - 1];
     const curr = result[i];
-    if (prev && /[.!?]["'”’\)\]]?$/.test(prev) && isAttributionStart(curr)) {
+    if (prev && /[.!?]["'”’)\]]?$/.test(prev) && isAttributionStart(curr)) {
       mergedAttribution[mergedAttribution.length - 1] = `${prev} ${curr}`.replace(/\s+/g, ' ').trim();
     } else {
       mergedAttribution.push(curr);
@@ -940,7 +940,7 @@ export class ManifestService {
             const bottomY = Math.max(...line.items.map((i: any) => (i.y || 0) + (i.height || 0)));
             return { minX, maxX, avgH, page, topY, bottomY };
           };
-          const startsWithAttribution = (txt: string) => /^(?:["'“”‘’\)\]]\s*)?(?:he|she|they|we|i|the\s+\w+|mr|mrs|ms|dr)\s+(?:said|asked|replied|answered|whispered|shouted|cried|murmured|added|called|retorted|muttered|remarked)\b/i.test((txt||'').trim());
+          const startsWithAttribution = (txt: string) => /^(?:["'“”‘’)\]]\s*)?(?:he|she|they|we|i|the\s+\w+|mr|mrs|ms|dr)\s+(?:said|asked|replied|answered|whispered|shouted|cried|murmured|added|called|retorted|muttered|remarked)\b/i.test((txt||'').trim());
 
           for (const lineObj of groupedLines) {
             // Đảm bảo tất cả items trong line có cùng page
@@ -1220,59 +1220,32 @@ export class ManifestService {
       }
 
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-        // Sử dụng mammoth để extract HTML với styleMap chi tiết hơn
-        const { value: html } = await mammoth.convertToHtml({
-          buffer: file.fileContent,
-          styleMap: [
-            "p[style-name='Heading 1'] => h1:fresh",
-            "p[style-name='Heading 2'] => h2:fresh",
-            "p[style-name='Heading 3'] => h3:fresh",
-            "p[style-name='Heading 4'] => h4:fresh",
-            "p[style-name='Heading 5'] => h5:fresh",
-            "p[style-name='Heading 6'] => h6:fresh",
-            "p[style-name='Title'] => h1.title:fresh",
-            "p[style-name='Subtitle'] => h2.subtitle:fresh",
-            "p[style-name='Quote'] => blockquote:fresh",
-            "p[style-name='Intense Quote'] => blockquote.intense:fresh",
-            "p[style-name='List Paragraph'] => li:fresh",
-            "p[style-name='Footnote Text'] => p.footnote:fresh",
-            "p[style-name='Normal'] => p:fresh",
-            "p[style-name='Default Paragraph Font'] => p:fresh",
-            "r[style-name='Strong'] => strong",
-            "r[style-name='Emphasis'] => em",
-            "r[style-name='Code'] => code",
-            "table => table",
-            "tr => tr",
-            "td => td",
-            "th => th"
-          ],
-          includeDefaultStyleMap: true
+        console.log(`[DOCX] Starting DOCX to TXT conversion for proper order...`);
+        
+        // Convert DOCX to plain text to preserve document order
+        const { value: plainText } = await mammoth.extractRawText({
+          buffer: file.fileContent
         });
 
-        // Cũng lấy raw text để so sánh
-        const { value: rawText } = await mammoth.extractRawText({ buffer: file.fileContent });
-        console.log(`[DOCX] Raw text extracted:`, rawText.substring(0, 200));
+        console.log(`[DOCX] Converted to plain text, length: ${plainText.length}`);
+        console.log(`[DOCX] First 300 chars: "${plainText.substring(0, 300)}"`);
 
-        // Parse HTML để tách từng đoạn, heading, bảng, list, caption, v.v.
-        const cheerio = await import('cheerio');
-        const $ = cheerio.load(html);
-        let pictureCount = 1;
-        let totalEntries = 0;
-
-        // Hàm để tách text thành sentences dựa trên dấu kết thúc câu
+        // Function to split text into sentences while preserving order
         function splitIntoSentences(text: string): string[] {
-          // Tách theo dấu kết thúc câu: . ? ! ...
+          if (!text || !text.trim()) return [];
+          
+          // Split by sentence endings: . ? ! ...
           const sentenceEndings = /[.!?]+/g;
           const sentences = text.split(sentenceEndings);
 
-          // Lọc bỏ sentences rỗng và thêm lại dấu kết thúc
+          // Filter empty sentences and add back endings
           const result: string[] = [];
           let currentIndex = 0;
 
           for (let i = 0; i < sentences.length; i++) {
             const sentence = sentences[i].trim();
             if (sentence.length > 0) {
-              // Tìm dấu kết thúc tương ứng
+              // Find corresponding ending
               const match = text.slice(currentIndex).match(sentenceEndings);
               const ending = match ? match[0] : '';
 
@@ -1284,97 +1257,93 @@ export class ManifestService {
           return result.filter(s => s.trim().length > 0);
         }
 
-        // GIẢI PHÁP DỨT ĐIỂM: Sử dụng raw text với logic tách thông minh
-        console.log(`[DOCX] Using raw text with smart splitting for guaranteed accuracy`);
+        // Process plain text line by line to maintain document order
+        const lines = plainText.split('\n').filter((line: string) => line.trim().length > 0);
+        let totalEntries = 0;
 
-        // Tách raw text thành các dòng và xử lý thông minh
-        const lines = rawText.split('\n').filter((line: string) => line.trim().length > 0);
+        console.log(`[DOCX] Processing ${lines.length} lines in document order...`);
 
-        console.log(`[DOCX] Raw text has ${lines.length} lines`);
-        console.log(`[DOCX] First 10 lines:`, lines.slice(0, 10).map((line: string, i: number) =>
-          `${i + 1}. "${line.trim().substring(0, 50)}${line.trim().length > 50 ? '...' : ''}"`
-        ));
+        // Process each line in order
+        let orderIndex = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          
+          // Skip empty lines
+          if (!line) continue;
 
-        // Tạo entries cho từng dòng với logic thông minh
-        lines.forEach((line: string, index: number) => {
-          const trimmedLine = line.trim();
-          if (trimmedLine.length > 0) {
-            // Loại bỏ dòng chỉ có punctuation
-            const cleanText = trimmedLine.replace(/^[^\w]*$/, '').trim();
-            if (cleanText.length === 0) {
-              console.log(`[DOCX] Skipping punctuation-only line: "${trimmedLine}"`);
-              return;
-            }
-
-            // Nếu dòng ngắn (≤ 50 ký tự), giữ nguyên như một string
-            if (trimmedLine.length <= 50) {
-              manifestEntries.push({
-                projectId: String(file.project.id),
-                branchId: String(file.branch.id),
-                fileId: String(file.id),
-                manifestEntryId: uuidv4(),
-                originalText: trimmedLine,
-                language: targetLanguage,
-                font: 'default',
-                style: {},
-                position: { x: 0, y: 0, page: 1 },
-              });
-              totalEntries++;
-              console.log(`[DOCX] Added short line ${index + 1}: "${trimmedLine}"`);
-            } else {
-              // Nếu dòng dài, tách thành sentences
-              const sentences = splitIntoSentences(trimmedLine);
-              sentences.forEach((sentence: string) => {
-                if (sentence.trim().length > 0) {
-                  manifestEntries.push({
-                    projectId: String(file.project.id),
-                    branchId: String(file.branch.id),
-                    fileId: String(file.id),
-                    manifestEntryId: uuidv4(),
-                    originalText: sentence.trim(),
-                    language: targetLanguage,
-                    font: 'default',
-                    style: {},
-                    position: { x: 0, y: 0, page: 1 },
-                  });
-                  totalEntries++;
-                  console.log(`[DOCX] Added sentence from line ${index + 1}: "${sentence.trim().substring(0, 50)}${sentence.trim().length > 50 ? '...' : ''}"`);
-                }
-              });
-            }
+          // Skip lines that are just punctuation or whitespace
+          const cleanText = line.replace(/^[^\w]*$/, '').trim();
+          if (cleanText.length === 0) {
+            console.log(`[DOCX] Skipping punctuation-only line: "${line}"`);
+            continue;
           }
-        });
 
-        console.log(`[DOCX] Created ${totalEntries} separate text entries from raw text parsing`);
-
-        // Xử lý ảnh riêng biệt
-        $('img').each((i: number, img: any) => {
-          const src = $(img).attr('src');
-          if (src && src.startsWith('data:image/')) {
+          // Handle different line types based on content and position
+          if (i === 0 || i === 1 || i === 2) {
+            // First 3 lines are likely title, author, subtitle
             manifestEntries.push({
               projectId: String(file.project.id),
               branchId: String(file.branch.id),
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
-              originalText: `Picture ${pictureCount}`,
+              orderIndex: orderIndex++,
+              originalText: line,
+              language: targetLanguage,
+              font: 'default',
+              style: { bold: true },
+              position: { x: 0, y: 0, page: 1 },
+            });
+            totalEntries++;
+            console.log(`[DOCX] Added title/header line ${i + 1}: "${line}"`);
+          } else if (line.length <= 50) {
+            // Short lines (likely headings, titles, or short phrases)
+            manifestEntries.push({
+              projectId: String(file.project.id),
+              branchId: String(file.branch.id),
+              fileId: String(file.id),
+              manifestEntryId: uuidv4(),
+              orderIndex: orderIndex++,
+              originalText: line,
               language: targetLanguage,
               font: 'default',
               style: {},
-              position: { x: 0, y: 0, page: 1 }, // Tạm thời gán page 1
+              position: { x: 0, y: 0, page: 1 },
             });
-            pictureCount++;
             totalEntries++;
+            console.log(`[DOCX] Added short line ${i + 1}: "${line}"`);
+          } else {
+            // Long lines: split into sentences
+            const sentences = splitIntoSentences(line);
+            sentences.forEach((sentence: string) => {
+              if (sentence.trim().length > 0) {
+                manifestEntries.push({
+                  projectId: String(file.project.id),
+                  branchId: String(file.branch.id),
+                  fileId: String(file.id),
+                  manifestEntryId: uuidv4(),
+                  orderIndex: orderIndex++,
+                  originalText: sentence.trim(),
+                  language: targetLanguage,
+                  font: 'default',
+                  style: {},
+                  position: { x: 0, y: 0, page: 1 },
+                });
+                totalEntries++;
+              }
+            });
+            console.log(`[DOCX] Added long line ${i + 1} with ${sentences.length} sentences`);
           }
-        });
+        }
 
-        // GÁN CỐ ĐỊNH: 15 strings cho mỗi trang
+        console.log(`[DOCX] Created ${totalEntries} entries maintaining document order`);
+
+        // Assign pages: 15 strings per page
         const STRINGS_PER_PAGE = 15;
         const totalPages = Math.ceil(manifestEntries.length / STRINGS_PER_PAGE);
 
-        console.log(`[DOCX] Extracted ${totalEntries} entries (sentences + images), will assign ${STRINGS_PER_PAGE} strings per page`);
-        console.log(`[DOCX] Total pages needed: ${totalPages}`);
+        console.log(`[DOCX] Assigning ${STRINGS_PER_PAGE} strings per page across ${totalPages} pages`);
 
-        // Phân chia entries theo 15 strings/trang
+        // Assign page numbers while preserving order
         manifestEntries.forEach((entry: any, index: number) => {
           const pageNumber = Math.floor(index / STRINGS_PER_PAGE) + 1;
           entry.position = {
@@ -1384,8 +1353,8 @@ export class ManifestService {
           };
         });
 
-        console.log(`[DOCX] Successfully assigned ${STRINGS_PER_PAGE} strings per page across ${totalPages} pages`);
-        console.log(`[DOCX] Each string is now a complete sentence, avoiding premature splitting`);
+        console.log(`[DOCX] Successfully assigned pages while maintaining document order`);
+        console.log(`[DOCX] Total entries: ${totalEntries}, Total pages: ${totalPages}`);
         break;
       }
 
@@ -1736,4 +1705,5 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
     throw error;
   }
 }
+
 

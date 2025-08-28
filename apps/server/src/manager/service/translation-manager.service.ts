@@ -1401,7 +1401,7 @@ export class TranslationService {
 
     const baseStrings = await this.translationModel
       .find(baseQuery)
-      .sort({ filePart: 1, _id: 1 })
+      .sort({ filePart: 1, orderIndex: 1 })
       .lean();
 
     // Lấy bản dịch của ngôn ngữ được chọn
@@ -1411,7 +1411,7 @@ export class TranslationService {
 
     const translatedStrings = await this.translationModel
       .find(translationQuery)
-      .sort({ filePart: 1, _id: 1 })
+      .sort({ filePart: 1, orderIndex: 1 })
       .lean();
 
     // Tạo map để merge nhanh theo fileId + originalText để tránh trộn giữa các file
@@ -1472,7 +1472,7 @@ export class TranslationService {
     // Lấy tất cả strings của file để phân tích số trang
     const strings = await this.translationModel
       .find({ fileId, projectId, branchId })
-      .sort({ filePart: 1, _id: 1 })
+      .sort({ filePart: 1, orderIndex: 1 })
       .lean();
 
     // Nhóm strings theo filePart (trang)

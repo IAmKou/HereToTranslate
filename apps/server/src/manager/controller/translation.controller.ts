@@ -119,7 +119,10 @@ export class TranslationController {
       }
 
       if (languages.length <= 1) {
-        const lang = languages[0] || language || '';
+        const lang = (languages[0] || language || '').trim();
+        if (!lang) {
+          return res.status(400).json({ message: 'language is required for single-file export' });
+        }
         console.log(`[downloadExport] Single-language export for fileId: ${fileId}, language: ${lang}, format: ${format}`);
         const { buffer, fileName, fileType } = await this.translationService.buildExportBuffer(fileId, lang, format);
 

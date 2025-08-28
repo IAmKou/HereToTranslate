@@ -84,44 +84,7 @@
             </div>
           </div>
 
-          <!-- Translated Files List -->
-          <div class="info-card">
-            <h3><i class="pi pi-file-edit"></i> Translated Files</h3>
-            <div v-if="translatedFiles.length === 0" class="no-files">
-              <i class="pi pi-info-circle"></i>
-              <p v-if="isRequestBased && !projectInfo?.project">File management for requests without projects is not yet implemented. Files will be displayed here once a project is created from this request.</p>
-              <p v-else-if="isRequestBased && projectInfo?.project">No translated files found in the associated project.</p>
-              <p v-else>No translated files available yet.</p>
-            </div>
-            <div v-else class="files-list">
-              <div v-for="file in translatedFiles" :key="file.id" class="file-item">
-                <div class="file-info">
-                  <i :class="getFileIcon(file.fileType)"></i>
-                  <div>
-                    <div class="file-name">{{ file.fileName }}</div>
-                    <div class="file-meta">{{ getFileTypeName(file.fileType) }}</div>
-                  </div>
-                </div>
-                <div class="file-progress">
-                  <div class="progress-bar">
-                    <div class="progress-fill" :style="{ width: getFileProgress(file) + '%' }"></div>
-                  </div>
-                  <span>{{ getFileProgress(file) }}%</span>
-                </div>
-                <div class="file-status">
-                   <span class="status-badge" :class="getFileStatusClass(file)">
-                     {{ getFileStatusText(file) }}
-                   </span>
-                </div>
-                <div class="file-actions">
-                  <button @click="downloadFile(file)" class="btn btn-primary">
-                    <i class="pi pi-download"></i>
-                    Download
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+
 
           <!-- Handover Information -->
           <div class="info-card">
@@ -351,15 +314,17 @@
                 </div>
               </div>
               <div class="download-actions">
-                <button @click="downloadAllFiles" class="btn btn-primary" :disabled="downloading">
+                <button
+                  v-if="projectInfo?.status === 'COMPLETED' || projectInfo?.status === 'INCOMPLETED'"
+                  @click="downloadAllFiles"
+                  class="btn btn-primary"
+                  :disabled="downloading"
+                >
                   <i v-if="downloading" class="pi pi-spin pi-spinner"></i>
                   <i v-else class="pi pi-download"></i>
                   {{ downloading ? 'Downloading...' : 'Download All' }}
                 </button>
-                <button @click="downloadIndividualFiles" class="btn btn-secondary">
-                  <i class="pi pi-info-circle"></i>
-                  How to Download Individual Files
-                </button>
+
                 <button @click="openPreviewModal" class="btn btn-secondary">
                   <i class="pi pi-eye"></i>
                   Preview translation
@@ -561,20 +526,25 @@
               <div>
                 <div v-if="previewPagesLoading" style="color:#4a5568;">Loading pages...</div>
                 <div v-else-if="previewPages.length === 0" style="color:#4a5568;">No page data</div>
-                <div class="download-stats" v-else>
-                  <button
-                    v-for="p in previewPages"
-                    :key="p.filePart"
-                    class="btn"
-                    :class="selectedPages.includes(p.pageNumber) ? 'btn-primary' : 'btn-secondary'"
-                    @click="toggleSelectPage(p.pageNumber)"
-                    :disabled="previewSelectionLocked"
-                  >
-                    Page {{ p.pageNumber }}
-                  </button>
+                <div v-else>
+                  <div v-if="previewPages.length <= 5" style="color:#059669; font-size:0.875rem; margin-bottom:0.5rem;">
+                    <i class="pi pi-check-circle"></i> All {{ previewPages.length }} pages auto-selected
+                  </div>
+                  <div class="download-stats">
+                    <button
+                      v-for="p in previewPages"
+                      :key="p.filePart"
+                      class="btn"
+                      :class="selectedPages.includes(p.pageNumber) ? 'btn-primary' : 'btn-secondary'"
+                      @click="toggleSelectPage(p.pageNumber)"
+                      :disabled="previewSelectionLocked"
+                    >
+                      Page {{ p.pageNumber }}
+                    </button>
+                  </div>
                 </div>
                 <div style="margin-top:0.5rem; color:#6b7280; font-size:0.85rem;">
-                  Selected {{ selectedPages.length }}/5 pages
+                  Selected {{ selectedPages.length }}/{{ Math.min(5, previewPages.length) }} pages
                 </div>
               </div>
             </div>
@@ -714,8 +684,13 @@ const previewSelectionLocked = ref(false);
 
 const requiredPreviewCount = computed(() => Math.min(5, previewPages.value.length || 0));
 const canStartPreview = computed(() => {
-  // Require selecting exactly requiredPreviewCount pages (<=5, or fewer if file has <5 pages)
-  return !!selectedPreviewFileId.value && !!selectedPreviewLanguage.value && requiredPreviewCount.value > 0 && selectedPages.value.length === requiredPreviewCount.value;
+  // Allow preview if file and language are selected, and at least one page is selected
+  // For files with 5 or fewer pages, auto-selection should work
+  // For files with more than 5 pages, user must manually select pages
+  return !!selectedPreviewFileId.value &&
+    !!selectedPreviewLanguage.value &&
+    selectedPages.value.length > 0 &&
+    previewPages.value.length > 0;
 });
 
 // Persist preview selection in localStorage (scoped by requestId or projectId)
@@ -1199,6 +1174,8 @@ function getDeliveryMethodText(method: string): string {
 // Preview helpers
 function openPreviewModal() {
   showPreviewModal.value = true;
+  // Reset lock state when opening modal
+  previewSelectionLocked.value = false;
   // Load saved state first
   loadPreviewState();
   // Default select first file and first language if available
@@ -1219,6 +1196,8 @@ function closePreviewModal() {
     previewUrl.value = '';
   }
   selectedPages.value = [];
+  // Reset the lock so user can select pages again
+  previewSelectionLocked.value = false;
 }
 
 function selectPreviewFile(file: any) {
@@ -1239,12 +1218,35 @@ async function fetchPreviewPages() {
     previewPagesLoading.value = true;
     const pid = isRequestBased.value ? (projectInfo.value?.project?.id || originalRequestData.value?.project?.id) : projectId.value;
     const bid = isRequestBased.value ? (projectInfo.value?.project?.defaultBranch?.id || '1') : branchId.value;
+
+    if (!pid || !bid) {
+      console.log('No project ID or branch ID available for fetching pages');
+      previewPages.value = [];
+      return;
+    }
+
     const { data } = await axiosInstance.get(`/translation/file-pages/${selectedPreviewFileId.value}`, {
       params: { projectId: pid, branchId: bid }
     });
     previewPages.value = Array.isArray(data?.pages) ? data.pages : [];
+
+    // If no pages from API, create a default page for preview
+    if (previewPages.value.length === 0) {
+      console.log('No pages from API, creating default page');
+      previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: false }];
+    }
+
+    // Auto-select all pages if file has 5 or fewer pages
+    if (previewPages.value.length <= 5) {
+      selectedPages.value = previewPages.value.map(p => p.pageNumber);
+      console.log(`Auto-selected all ${previewPages.value.length} pages`);
+    }
   } catch (e) {
-    previewPages.value = [];
+    console.error('Error fetching preview pages:', e);
+    // Create a default page if API fails
+    previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: false }];
+    // Auto-select the default page
+    selectedPages.value = [1];
   } finally {
     previewPagesLoading.value = false;
   }
@@ -1705,15 +1707,7 @@ async function downloadFile(file: any) {
   }
 }
 
-function downloadIndividualFiles() {
-  // Show toast message that individual files can be downloaded directly
-  toast.add({
-    severity: 'info',
-    summary: 'Info',
-    detail: 'You can download individual files using the Download button next to each file above.',
-    life: 5000
-  });
-}
+
 
 async function submitReview() {
   if (!reviewDecision.value || rating.value === 0) {

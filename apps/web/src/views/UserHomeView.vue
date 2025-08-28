@@ -194,6 +194,14 @@ const totalProjects = computed(() => {
   return projects.value.length;
 });
 
+// Filter projects to only show "Incompleted" and "Completed" statuses
+const filteredProjects = computed(() => {
+  return projects.value.filter((project: Project) => {
+    const status = project.status?.toLowerCase();
+    return status === 'incompleted' || status === 'completed';
+  });
+});
+
 const pendingRequests = computed(() => {
   // TODO: Fetch from API when available
   // const { data } = await axiosInstance.get('/requests/pending');
@@ -437,13 +445,13 @@ onMounted(async () => {
                   </div>
 
                   <!-- Empty State -->
-                  <div v-else-if="projects.length === 0" class="empty-container">
+                  <div v-else-if="filteredProjects.length === 0" class="empty-container">
                     <div class="empty-content">
                       <div class="empty-icon">
                         <i class="pi pi-folder-open"></i>
                       </div>
-                      <h4>No projects yet</h4>
-                      <p>Start your translation journey by creating your first project</p>
+                      <h4>No projects with Incompleted or Completed status</h4>
+                      <p>Only projects with Incompleted or Completed status are shown here</p>
                       <router-link to="/projects/create" class="btn btn-primary">
                         <i class="pi pi-plus"></i>
                         Create Project
@@ -454,7 +462,7 @@ onMounted(async () => {
                   <!-- Projects List -->
                   <div v-else class="projects-list">
                     <div
-                      v-for="project in projects.slice(0, 5)"
+                      v-for="project in filteredProjects.slice(0, 5)"
                       :key="project.id"
                       class="project-item"
                       @click="() => window.location.href = `/projects/${project.id}`"

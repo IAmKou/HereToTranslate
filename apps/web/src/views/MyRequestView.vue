@@ -542,25 +542,25 @@
                         <template v-if="req.status === 'PENDING'">
                           <button
                             class="action-btn accept-btn"
-                            :disabled="actionLoading"
+                            :disabled="!!assignedActionLoading[req.id]"
                             @click="acceptAssignedRequest(req.id)"
                             :title="`Accept request: ${req.title}`"
                             data-tooltip="Accept this request"
                           >
-                            <i v-if="!actionLoading" class="pi pi-check btn-icon" />
+                            <i v-if="assignedActionLoading[req.id] !== 'accept'" class="pi pi-check btn-icon" />
                             <i v-else class="pi pi-spinner pi-spin btn-icon" />
-                            <span class="btn-text">{{ actionLoading ? 'Processing...' : 'Accept' }}</span>
+                            <span class="btn-text">{{ assignedActionLoading[req.id] === 'accept' ? 'Processing...' : 'Accept' }}</span>
                           </button>
                           <button
                             class="action-btn decline-btn"
-                            :disabled="actionLoading"
+                            :disabled="!!assignedActionLoading[req.id]"
                             @click="declineAssignedRequest(req.id)"
                             :title="`Decline request: ${req.title}`"
                             data-tooltip="Decline this request"
                           >
-                            <i v-if="!actionLoading" class="pi pi-times btn-icon" />
+                            <i v-if="assignedActionLoading[req.id] !== 'decline'" class="pi pi-times btn-icon" />
                             <i v-else class="pi pi-spinner pi-spin btn-icon" />
-                            <span class="btn-text">{{ actionLoading ? 'Processing...' : 'Decline' }}</span>
+                            <span class="btn-text">{{ assignedActionLoading[req.id] === 'decline' ? 'Processing...' : 'Decline' }}</span>
                           </button>
                         </template>
                         <template v-else>
@@ -1013,6 +1013,8 @@ const assignedRequests = ref([])
 const myRegistrations = ref([])
 const ongoingRequests = ref([])
 const actionLoading = ref(false)
+// Loading state per assigned request row: 'accept' | 'decline' | null
+const assignedActionLoading = ref({})
 const router = useRouter()
 const route = useRoute()
 
@@ -2033,11 +2035,25 @@ async function acceptRequest(requestId) {
 
 // Actions for assigned private requests
 async function acceptAssignedRequest(requestId) {
-  return acceptRequest(requestId)
+  assignedActionLoading.value = { ...assignedActionLoading.value, [requestId]: 'accept' }
+  try {
+    await acceptRequest(requestId)
+  } finally {
+    const map = { ...assignedActionLoading.value }
+    delete map[requestId]
+    assignedActionLoading.value = map
+  }
 }
 
 async function declineAssignedRequest(requestId) {
-  return rejectRequest(requestId)
+  assignedActionLoading.value = { ...assignedActionLoading.value, [requestId]: 'decline' }
+  try {
+    await rejectRequest(requestId)
+  } finally {
+    const map = { ...assignedActionLoading.value }
+    delete map[requestId]
+    assignedActionLoading.value = map
+  }
 }
 
 async function rejectRequest(requestId) {

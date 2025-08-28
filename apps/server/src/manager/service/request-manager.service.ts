@@ -178,13 +178,7 @@ export class RequestManagerService {
       where: { id: BigInt(dto.assigneeId) },
     });
 
-    // Create notification for assignee about new private request
-    await this.notificationService.createNotification({
-      userId: BigInt(dto.assigneeId),
-      type: 'PRIVATE_REQUEST_CREATED',
-      message: `You have received a new private request: "${title}" from ${requesterUser.fullName || requesterUser.username}`,
-      createdBy: uid,
-    });
+    // Removed in response to user request: do not create a notification for new private requests
 
     if (assigneeUser?.email) {
       await this.mailService.sendPrivateRequestConfirmation(assigneeUser.email, {

@@ -75,7 +75,7 @@ const totalEditorPages = ref<Record<string, number>>({}); // fileId -> total pag
 const editorPageContents = ref<Record<string, string[]>>({}); // fileId -> array of page contents
 
 // Thay đổi từ PART_SIZE cố định thành chia theo page
-const DOCX_STRINGS_PER_PAGE = 100; // DOCX: 100 strings/page
+const DOCX_STRINGS_PER_PAGE = 15; // DOCX: 15 strings/page (đã cập nhật backend)
 const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
 
 // State cho page modal
@@ -133,7 +133,19 @@ function getTotalParts(fileId: string | number) {
     return pages.size;
   }
 
-  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  // Nếu là DOCX, chia theo filePart (giống hệt như PDF)
+  if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const pages = new Set<number>();
+    uniqueStrings.forEach((str: any) => {
+      const page = str.filePart !== undefined ? str.filePart + 1 : (str.position?.page || 1);
+      pages.add(page);
+    });
+    console.log(`[DEBUG] DOCX file ${fileId}: ${uniqueStrings.length} strings, ${pages.size} pages`);
+    console.log(`[DEBUG] DOCX filePart values:`, Array.from(pages).sort((a, b) => a - b));
+    return pages.size;
+  }
+
+  // Fallback: chia theo 15 strings/page
   return Math.ceil(uniqueStrings.length / DOCX_STRINGS_PER_PAGE);
 }
 
@@ -152,7 +164,12 @@ function getStringsOfPart(fileId: string | number, part: number) {
     return arr.filter((str: any) => str.filePart === part);
   }
 
-  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  // Nếu là DOCX, lấy strings theo filePart (giống hệt như PDF)
+  if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    return arr.filter((str: any) => str.filePart === part);
+  }
+
+  // Fallback: chia theo 15 strings/page
   const start = part * DOCX_STRINGS_PER_PAGE;
   return arr.slice(start, start + DOCX_STRINGS_PER_PAGE);
 }
@@ -174,7 +191,13 @@ function getStringsCountOfPart(fileId: string | number, part: number) {
     return uniqueStrings.filter((str: any) => str.filePart === part).length;
   }
 
-  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  // Nếu là DOCX, đếm strings theo filePart (giống hệt như PDF)
+  if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const uniqueStrings = deduplicateStrings(arr);
+    return uniqueStrings.filter((str: any) => str.filePart === part).length;
+  }
+
+  // Fallback: chia theo 15 strings/page
   const uniqueStrings = deduplicateStrings(arr);
   const start = part * DOCX_STRINGS_PER_PAGE;
   return Math.min(DOCX_STRINGS_PER_PAGE, uniqueStrings.length - start);
@@ -209,6 +232,25 @@ function goToNextPage(fileId: string | number) {
   if (currentPart < totalParts - 1) {
     selectedPartMap.value[id] = currentPart + 1;
   }
+}
+
+// Hàm để lấy page number hiển thị cho user
+function getPageNumber(fileId: string | number, part: number): string {
+  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
+
+  if (!file) return `Page ${part + 1}`;
+
+  // Nếu là DOCX, sử dụng filePart (giống hệt như PDF)
+  if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const arr = stringsByFile.value[fileId] || [];
+    const pageStrings = arr.filter((str: any) => str.filePart === part);
+    if (pageStrings.length > 0) {
+      return `Page ${part + 1}`;
+    }
+  }
+
+  // Fallback: sử dụng part + 1
+  return `Page ${part + 1}`;
 }
 
 // Computed cho filtered pages
@@ -452,7 +494,12 @@ function getFilteredStringsOfPart(fileId: string | number, part: number) {
     return filtered.filter((str: any) => str.filePart === part);
   }
 
-  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
+  // Nếu là DOCX, lấy strings theo filePart (giống hệt như PDF)
+  if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    return filtered.filter((str: any) => str.filePart === part);
+  }
+
+  // Fallback: chia theo 15 strings/page
   const start = part * DOCX_STRINGS_PER_PAGE;
   return filtered.slice(start, start + DOCX_STRINGS_PER_PAGE);
 }
@@ -729,18 +776,8 @@ function calculateValidationWarnings(str: any): any[] {
     });
   }
 
-  // 4. Character Case Validation - CROWDIN DOESN'T ALLOW
-  const originalStartsWithUpper = /^[A-Z]/.test(originalText);
-  const translatedStartsWithUpper = /^[A-Z]/.test(translatedText);
-  if (originalStartsWithUpper && !translatedStartsWithUpper) {
-    warnings.push({
-      type: 'case_mismatch',
-      message: 'Translation should start with uppercase letter',
-      severity: 'warning',
-      canAutoFix: false, // Crowdin doesn't allow case auto-fix
-      autoFixAction: () => translatedText.charAt(0).toUpperCase() + translatedText.slice(1)
-    });
-  }
+  // 4. Character Case Validation - DISABLED per user request
+  // Removed uppercase validation as requested
 
   // Check for ALL CAPS words
   const allCapsWords = (originalText.match(/\b[A-Z0-9]{2,}\b/g) || []) as string[];
@@ -1388,7 +1425,7 @@ const focusedString = computed(() => {
                     style="padding: 0.5em 1em; border-radius: 8px; border: 1px solid #6366f1; background: #334155; color: #e2e8f0; font-weight:600; cursor:pointer; display: flex; align-items: center; gap: 0.5em; min-width: 120px; justify-content: space-between;"
                     :disabled="isFileProcessing(file)"
                   >
-                    <span>{{ (selectedPartMap[file.fileId || file.id] ?? 0) + 1 }} ({{ getStringsCountOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0) }} strings)</span>
+                    <span>{{ getPageNumber(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0) }} ({{ getStringsCountOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0) }} strings)</span>
                     <i class="pi pi-chevron-down"></i>
                   </button>
 

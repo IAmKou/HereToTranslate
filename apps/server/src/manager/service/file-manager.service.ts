@@ -548,34 +548,16 @@ export class FileService {
 
     // Tạm thời bypass kiểm tra commit để test
     this.logger.log('Bypassing commit check for testing...');
-    /*
-    // Kiểm tra commit liên quan đến file (filePath trùng tên file) - loại trừ Initial commit
-    const hasCommit = await this.commitRepository
-      .createQueryBuilder('commit')
-      .where('commit.filePath = :filePath', { filePath: file.fileName })
-      .andWhere('commit.message NOT LIKE :message', { message: '%Initial%' })
-      .getCount();
-
-    this.logger.log(`Commits excluding Initial commit: ${hasCommit}`);
-
-    if (hasCommit > 0) {
-      throw new BadRequestException('Cannot delete file: There are commits related to this file.');
-    }
-    */
-
-    // Attempt to delete from Aspose storage (original and language-suffixed variants)
     try {
       const isPdf = typeof file.fileName === 'string' && file.fileName.toLowerCase().endsWith('.pdf');
-      const isDocx = typeof file.fileName === 'string' && file.fileName.toLowerCase().endsWith('.docx');
-      
-      // Delete from Aspose storage for all file types, not just PDFs
-      const projectId = file.project?.id;
-      const candidateFolders: string[] = projectId
-        ? [`projects/project-${projectId}`]
-        : ['pdf'];
 
-      // For PDFs, also delete language variants
+      // Only delete from Aspose storage for PDF files
       if (isPdf) {
+        const projectId = file.project?.id;
+        const candidateFolders: string[] = projectId
+          ? [`projects/project-${projectId}`]
+          : ['pdf'];
+
         const dotIdx = file.fileName.lastIndexOf('.');
         const base = dotIdx > -1 ? file.fileName.slice(0, dotIdx) : file.fileName;
         const originalName = file.fileName;
@@ -607,17 +589,9 @@ export class FileService {
           }
         }
       } else {
-        // For non-PDF files, just delete the original file
-        for (const folder of candidateFolders) {
-          try {
-            await this.asposeService.deleteFileWithFolder(file.fileName, folder);
-            this.logger.log(`[FileService] Deleted from Aspose: ${folder}/${file.fileName}`);
-          } catch (delErr) {
-            this.logger.warn(`[FileService] Aspose delete failed for ${folder}/${file.fileName}: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
-          }
-        }
+        this.logger.log(`[FileService] Skipping Aspose deletion for non-PDF file: ${file.fileName}`);
       }
-      
+
       if (isPdf) {
         try {
           const { PdfTextModel } = await import('../../db/mongo/schema/pdf-details.schema.js');

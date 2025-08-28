@@ -17,21 +17,21 @@ export async function replaceDocxTextWithCount(
     }
 
     logger.log(`[DOCX] Starting enhanced text replacement with ${translations.size} translations`);
-    
+
     // Debug: Analyze DOCX structure to understand why some translations might not be found
     try {
       const zip = new JSZip();
       const docxZip = await zip.loadAsync(originalBuffer);
-      
+
       // List all files in the DOCX
       const fileNames = Object.keys(docxZip.files);
       logger.log(`[DOCX] DOCX contains ${fileNames.length} files: ${fileNames.slice(0, 10).join(', ')}${fileNames.length > 10 ? '...' : ''}`);
-      
+
       // Check main document content
       const documentXml = await docxZip.file('word/document.xml')?.async('string');
       if (documentXml) {
         logger.log(`[DOCX] Main document size: ${documentXml.length} characters`);
-        
+
         // Log some sample text to help debug
         const sampleText = documentXml.match(/<w:t[^>]*>([^<]{1,100})<\/w:t>/g);
         if (sampleText) {
@@ -41,7 +41,7 @@ export async function replaceDocxTextWithCount(
     } catch (debugError) {
       logger.warn(`[DOCX] Debug analysis failed: ${debugError instanceof Error ? debugError.message : String(debugError)}`);
     }
-    
+
     // Strategy 1: Try XML-based replacement (preserves all formatting)
     try {
       const result = await replaceDocxTextXmlBased(originalBuffer, translations);
@@ -97,7 +97,7 @@ async function replaceDocxTextXmlBased(
   try {
     const zip = new JSZip();
     const docxZip = await zip.loadAsync(originalBuffer);
-    
+
     // Get the main document XML
     const documentXml = await docxZip.file('word/document.xml')?.async('string');
     if (!documentXml) {
@@ -110,15 +110,15 @@ async function replaceDocxTextXmlBased(
     // Replace text while preserving XML structure
     for (const [originalText, translatedText] of translations) {
       logger.log(`[DOCX] Processing translation: "${originalText.substring(0, 50)}..." -> "${translatedText.substring(0, 50)}..."`);
-      
+
       // Escape special characters for XML
       const escapedOriginal = escapeXmlText(originalText);
       const escapedTranslated = escapeXmlText(translatedText);
-      
+
       // Strategy 1: Direct text replacement within w:t tags
       const directRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapedOriginal}[^<]*)(</w:t>)`, 'g');
       const directMatches = modifiedXml.match(directRegex);
-      
+
       if (directMatches) {
         logger.log(`[DOCX] Found direct match for: "${originalText}" (${directMatches.length} occurrences)`);
         modifiedXml = modifiedXml.replace(directRegex, (match: string, openTag: string, content: string, closeTag: string) => {
@@ -129,7 +129,27 @@ async function replaceDocxTextXmlBased(
         });
         continue; // Skip to next translation if direct replacement worked
       }
-      
+
+      // Strategy 1.5: For short texts (like titles), try to find them as part of longer text
+      if (originalText.length < 100 && !originalText.includes('.')) {
+        logger.log(`[DOCX] Trying to find short text "${originalText}" within longer text elements`);
+
+        // Look for the short text within any w:t element
+        const shortTextRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapedOriginal}[^<]*)(</w:t>)`, 'g');
+        const shortTextMatches = modifiedXml.match(shortTextRegex);
+
+        if (shortTextMatches) {
+          logger.log(`[DOCX] Found short text "${originalText}" within longer text (${shortTextMatches.length} occurrences)`);
+          modifiedXml = modifiedXml.replace(shortTextRegex, (match: string, openTag: string, content: string, closeTag: string) => {
+            // Replace only the specific part, preserving the rest
+            const newContent = content.replace(escapedOriginal, escapedTranslated);
+            replacementCount++;
+            return `${openTag}${newContent}${closeTag}`;
+          });
+          continue;
+        }
+      }
+
       // Strategy 2: Handle text split across multiple w:t tags (including HTML-tagged text)
       const splitResult = searchAndReplaceSplitText(modifiedXml, originalText, translatedText);
       if (splitResult.replacements > 0) {
@@ -138,16 +158,16 @@ async function replaceDocxTextXmlBased(
         logger.log(`[DOCX] Split text replacement successful for: "${originalText}" (${splitResult.replacements} replacements)`);
         continue;
       }
-      
+
       // Strategy 3: Look for text without HTML tags (strip tags for comparison)
       const strippedOriginal = stripHtmlTags(originalText);
       if (strippedOriginal !== originalText) {
         logger.log(`[DOCX] Trying stripped text search for: "${strippedOriginal}" (original: "${originalText}")`);
-        
+
         // Search for the stripped text in the XML
         const strippedRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapeXmlText(strippedOriginal)}[^<]*)(</w:t>)`, 'g');
         const strippedMatches = modifiedXml.match(strippedRegex);
-        
+
         if (strippedMatches) {
           logger.log(`[DOCX] Found stripped text match for: "${strippedOriginal}" (${strippedMatches.length} occurrences)`);
           modifiedXml = modifiedXml.replace(strippedRegex, (match: string, openTag: string, content: string, closeTag: string) => {
@@ -158,10 +178,10 @@ async function replaceDocxTextXmlBased(
           continue;
         }
       }
-      
+
       // Strategy 4: Look for text in other XML files (headers, footers, etc.)
       // This will be handled by the ZIP-based strategy
-      
+
       logger.log(`[DOCX] No match found for: "${originalText}" - will try ZIP-based strategy`);
     }
 
@@ -171,13 +191,13 @@ async function replaceDocxTextXmlBased(
 
     // Update the document.xml in the ZIP
     docxZip.file('word/document.xml', modifiedXml);
-    
+
     // Generate the new DOCX buffer
     const newBuffer = await docxZip.generateAsync({ type: 'nodebuffer' });
-    
+
     logger.log(`[DOCX] XML-based replacement completed: ${replacementCount} replacements`);
     return { buffer: newBuffer, replacedCount: replacementCount };
-    
+
   } catch (error) {
     logger.error(`[DOCX] Error in XML-based replacement: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
@@ -198,7 +218,7 @@ function searchAndReplaceSplitText(
 ): { modifiedXml: string; replacements: number } {
   let modifiedXml = xmlContent;
   let replacements = 0;
-  
+
   // Strategy 1: Direct replacement
   const directRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapeXmlText(originalText)}[^<]*)(</w:t>)`, 'g');
   if (modifiedXml.match(directRegex)) {
@@ -209,7 +229,7 @@ function searchAndReplaceSplitText(
     });
     return { modifiedXml, replacements };
   }
-  
+
   // Strategy 2: Look for text split across multiple w:t tags
   // This handles cases where text is broken up by formatting changes
   const wttags = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
@@ -218,43 +238,43 @@ function searchAndReplaceSplitText(
     for (let i = 0; i < wttags.length - 1; i++) {
       const currentTag = wttags[i];
       const nextTag = wttags[i + 1];
-      
+
       const currentContent = currentTag.replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1');
       const nextContent = nextTag.replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1');
-      
+
       // Check if combining current and next tag content contains our text
       const combinedContent = currentContent + nextContent;
       if (combinedContent.includes(originalText)) {
         logger.log(`[DOCX] Found split text: "${originalText}" across consecutive w:t tags`);
-        
+
         // Replace the text in the first tag if it contains the beginning
         if (currentContent.includes(originalText.substring(0, Math.min(originalText.length, currentContent.length)))) {
           const newCurrentContent = currentContent.replace(
             originalText.substring(0, Math.min(originalText.length, currentContent.length)),
             translatedText.substring(0, Math.min(translatedText.length, currentContent.length))
           );
-          
+
           // Update the XML content
           modifiedXml = modifiedXml.replace(currentTag, currentTag.replace(currentContent, newCurrentContent));
           replacements++;
-          
+
           // If the text spans both tags, also update the second tag
           if (originalText.length > currentContent.length) {
             const remainingOriginal = originalText.substring(currentContent.length);
             const remainingTranslated = translatedText.substring(Math.min(translatedText.length, currentContent.length));
-            
+
             if (nextContent.includes(remainingOriginal)) {
               const newNextContent = nextContent.replace(remainingOriginal, remainingTranslated);
               modifiedXml = modifiedXml.replace(nextTag, nextTag.replace(nextContent, newNextContent));
               replacements++;
             }
           }
-          
+
           return { modifiedXml, replacements };
         }
       }
     }
-    
+
     // Strategy 3: Look for text that might be split across more than 2 tags
     // This is more complex and requires a sliding window approach
     for (let windowSize = 3; windowSize <= Math.min(5, wttags.length); windowSize++) {
@@ -264,10 +284,10 @@ function searchAndReplaceSplitText(
           const tagContent = wttags[i + j].replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1');
           combinedContent += tagContent;
         }
-        
+
         if (combinedContent.includes(originalText)) {
           logger.log(`[DOCX] Found split text: "${originalText}" across ${windowSize} w:t tags`);
-          
+
           // This is a simplified replacement - in production you'd want more sophisticated logic
           // For now, we'll try to replace the text in the first tag that contains part of it
           for (let j = 0; j < windowSize; j++) {
@@ -279,18 +299,18 @@ function searchAndReplaceSplitText(
               break;
             }
           }
-          
+
           return { modifiedXml, replacements };
         }
       }
     }
   }
-  
+
   // Strategy 4: Try to find text without HTML tags
   const strippedOriginal = stripHtmlTags(originalText);
   if (strippedOriginal !== originalText) {
     logger.log(`[DOCX] Trying stripped text search for split text: "${strippedOriginal}"`);
-    
+
     // Look for the stripped text in the XML
     const strippedRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapeXmlText(strippedOriginal)}[^<]*)(</w:t>)`, 'g');
     if (modifiedXml.match(strippedRegex)) {
@@ -302,7 +322,7 @@ function searchAndReplaceSplitText(
       return { modifiedXml, replacements };
     }
   }
-  
+
   return { modifiedXml, replacements };
 }
 
@@ -319,35 +339,35 @@ async function replaceDocxTextZipBased(
   try {
     const zip = new JSZip();
     const docxZip = await zip.loadAsync(originalBuffer);
-    
+
     let replacementCount = 0;
-    
+
     // Process all XML files in the DOCX
     const xmlFiles = [
-      'word/document.xml', 
-      'word/header1.xml', 
+      'word/document.xml',
+      'word/header1.xml',
       'word/footer1.xml',
       'word/header2.xml',
       'word/footer2.xml',
       'word/header3.xml',
       'word/footer3.xml'
     ];
-    
+
     for (const xmlFile of xmlFiles) {
       const xmlContent = await docxZip.file(xmlFile)?.async('string');
       if (!xmlContent) continue;
-      
+
       let modifiedXml = xmlContent;
       let fileReplacements = 0;
-      
+
       for (const [originalText, translatedText] of translations) {
         const escapedOriginal = escapeXmlText(originalText);
         const escapedTranslated = escapeXmlText(translatedText);
-        
+
         // Strategy 1: Direct text replacement in w:t tags
         const directRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapedOriginal}[^<]*)(</w:t>)`, 'g');
         const directMatches = modifiedXml.match(directRegex);
-        
+
         if (directMatches) {
           modifiedXml = modifiedXml.replace(directRegex, (match: string, openTag: string, content: string, closeTag: string) => {
             const newContent = content.replace(escapedOriginal, escapedTranslated);
@@ -356,7 +376,7 @@ async function replaceDocxTextZipBased(
           });
           continue;
         }
-        
+
         // Strategy 2: Use comprehensive text search for split text
         const result = searchAndReplaceSplitText(modifiedXml, originalText, translatedText);
         if (result.replacements > 0) {
@@ -364,15 +384,15 @@ async function replaceDocxTextZipBased(
           fileReplacements += result.replacements;
           continue;
         }
-        
+
         // Strategy 3: Look for text without HTML tags (strip tags for comparison)
         const strippedOriginal = stripHtmlTags(originalText);
         if (strippedOriginal !== originalText) {
           logger.log(`[DOCX] ZIP: Trying stripped text search for: "${strippedOriginal}" (original: "${originalText}")`);
-          
+
           const strippedRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapeXmlText(strippedOriginal)}[^<]*)(</w:t>)`, 'g');
           const strippedMatches = modifiedXml.match(strippedRegex);
-          
+
           if (strippedMatches) {
             logger.log(`[DOCX] ZIP: Found stripped text match for: "${strippedOriginal}" (${strippedMatches.length} occurrences)`);
             modifiedXml = modifiedXml.replace(strippedRegex, (match: string, openTag: string, content: string, closeTag: string) => {
@@ -383,14 +403,14 @@ async function replaceDocxTextZipBased(
             continue;
           }
         }
-        
+
         // Strategy 4: Look for partial matches (text might be split)
         const partialRegex = new RegExp(`(<w:t[^>]*>)([^<]*${escapedOriginal.substring(0, Math.max(3, Math.floor(escapedOriginal.length / 2)))}[^<]*)(</w:t>)`, 'g');
         const partialMatches = modifiedXml.match(partialRegex);
-        
+
         if (partialMatches) {
           logger.log(`[DOCX] ZIP: Found partial match for "${originalText}" in ${xmlFile}`);
-          
+
           // Try to find the complete text by looking at surrounding context
           // Look for text that might be split across multiple w:t tags
           const surroundingText = findSurroundingText(modifiedXml, escapedOriginal.substring(0, Math.max(3, Math.floor(escapedOriginal.length / 2))));
@@ -406,18 +426,18 @@ async function replaceDocxTextZipBased(
           }
         }
       }
-      
+
       if (fileReplacements > 0) {
         docxZip.file(xmlFile, modifiedXml);
         replacementCount += fileReplacements;
         logger.log(`[DOCX] ZIP-based replacement in ${xmlFile}: ${fileReplacements} replacements`);
       }
     }
-    
+
     if (replacementCount === 0) {
       throw new Error('No text replacements found in ZIP files');
     }
-    
+
     const newBuffer = await docxZip.generateAsync({ type: 'nodebuffer' });
     logger.log(`[DOCX] ZIP-based replacement completed: ${replacementCount} replacements`);
     return { buffer: newBuffer, replacedCount: replacementCount };
@@ -441,22 +461,22 @@ async function replaceDocxTextWithDocxLib(
     // Parse the original DOCX to extract structure
     const zip = new JSZip();
     const docxZip = await zip.loadAsync(originalBuffer);
-    
+
     const documentXml = await docxZip.file('word/document.xml')?.async('string');
     if (!documentXml) {
       throw new Error('Could not read document.xml');
     }
-    
+
     // Extract paragraphs and their formatting
     const paragraphs = extractParagraphsWithFormatting(documentXml);
-    
+
     let replacementCount = 0;
     const newParagraphs: any[] = [];
-    
+
     for (const paragraph of paragraphs) {
       let paragraphText = paragraph.text;
       let hasReplacement = false;
-      
+
       // Check if this paragraph contains any text to translate
       for (const [originalText, translatedText] of translations) {
         if (paragraphText.includes(originalText)) {
@@ -465,7 +485,7 @@ async function replaceDocxTextWithDocxLib(
           replacementCount++;
         }
       }
-      
+
       // Create new paragraph with preserved formatting
       const newParagraph = new Paragraph({
         children: [
@@ -481,14 +501,14 @@ async function replaceDocxTextWithDocxLib(
         alignment: paragraph.alignment,
         spacing: paragraph.spacing,
       });
-      
+
       newParagraphs.push(newParagraph);
     }
-    
+
     if (replacementCount === 0) {
       throw new Error('No text replacements found');
     }
-    
+
     // Create new document
     const doc = new Document({
       sections: [
@@ -497,7 +517,7 @@ async function replaceDocxTextWithDocxLib(
         },
       ],
     });
-    
+
     const buffer = await Packer.toBuffer(doc);
     logger.log(`[DOCX] Docx library replacement completed: ${replacementCount} replacements`);
     return { buffer, replacedCount: replacementCount };
@@ -523,28 +543,28 @@ function extractParagraphsWithFormatting(xmlContent: string): Array<{
   spacing: any;
 }> {
   const paragraphs: any[] = [];
-  
+
   // Parse XML to extract paragraph information
   // This is a simplified parser - in production you'd want a more robust XML parser
-  
+
   // Extract text runs with their properties
   const textRunRegex = /<w:r[^>]*>.*?<w:t[^>]*>(.*?)<\/w:t>.*?<\/w:r>/gs;
   const matches = xmlContent.match(textRunRegex);
-  
+
   if (matches) {
     for (const match of matches) {
       // Extract text content
       const textMatch = match.match(/<w:t[^>]*>(.*?)<\/w:t>/);
       if (textMatch) {
         const text = textMatch[1];
-        
+
         // Extract formatting properties
         const bold = match.includes('<w:b/>') || match.includes('<w:b val="true"/>');
         const italics = match.includes('<w:i/>') || match.includes('<w:i val="true"/>');
         const size = extractFontSize(match);
         const font = extractFontFamily(match);
         const color = extractColor(match);
-        
+
         paragraphs.push({
           text,
           bold,
@@ -558,7 +578,7 @@ function extractParagraphsWithFormatting(xmlContent: string): Array<{
       }
     }
   }
-  
+
   return paragraphs;
 }
 
@@ -668,3 +688,4 @@ export async function replaceDocxText(
   const result = await replaceDocxTextWithCount(originalBuffer, translations);
   return result.buffer;
 }
+

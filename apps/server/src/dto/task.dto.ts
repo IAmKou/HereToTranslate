@@ -41,6 +41,12 @@ export class CreateTaskDto {
   @IsNumber()
   filePart?: number;
 
+  // Support selecting multiple pages when creating a task
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  pages?: number[];
+
   @IsOptional()
   @IsString()
   language?: string;

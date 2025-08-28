@@ -68,26 +68,8 @@ export class TranslationValidator {
 
     if (!this.translatedText || !this.originalText) return issues;
 
-    // Check if original starts with uppercase and translation doesn't
-    const originalStartsWithUpper = /^[A-Z]/.test(this.originalText.trim());
-    const translatedStartsWithUpper = /^[A-Z]/.test(this.translatedText.trim());
-
-    if (originalStartsWithUpper && !translatedStartsWithUpper) {
-      issues.push({
-        id: 'capitalization_start',
-        type: 'warning',
-        message: 'Translation should start with uppercase letter',
-        category: 'capitalization',
-        severity: 'medium',
-        autoFixable: true,
-        autoFix: () => {
-          const trimmed = this.translatedText.trim();
-          return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-        },
-        originalText: this.originalText,
-        translatedText: this.translatedText
-      });
-    }
+    // Check if original starts with uppercase and translation doesn't - DISABLED per user request
+    // Removed uppercase validation as requested
 
     // Check if original is all caps and translation isn't
     const originalIsAllCaps = this.originalText === this.originalText.toUpperCase() &&

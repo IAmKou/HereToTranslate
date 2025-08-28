@@ -326,6 +326,8 @@ const updateUnreadCount = async () => {
 
 const addToast = (notification: Notification) => {
   if (isAdmin.value) return
+  // Suppress toast for "Request Registration" events
+  if (notification.type === 'PUBLIC_REQUEST_REGISTERED') return
   const toast: ToastNotification = {
     ...notification,
     id: `toast-${++toastIdCounter}`
@@ -402,8 +404,10 @@ const connectToNotificationSocket = () => {
       unreadCount.value++
     }
 
-    // Show toast
-    addToast(notification)
+    // Show toast (skip for Request Registration)
+    if (notification.type !== 'PUBLIC_REQUEST_REGISTERED') {
+      addToast(notification)
+    }
   })
 
   socket.on('global_notification', (notification: any) => {
@@ -444,8 +448,10 @@ const connectToNotificationSocket = () => {
       unreadCount.value++
     }
 
-    // Show toast
-    addToast(notification)
+    // Show toast (skip for Request Registration)
+    if (notification.type !== 'PUBLIC_REQUEST_REGISTERED') {
+      addToast(notification)
+    }
   })
 
   socket.on('notification_deleted', (data: { id: string }) => {

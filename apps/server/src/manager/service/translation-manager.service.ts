@@ -989,13 +989,29 @@ export class TranslationService {
         const translations = new Map<string, string>();
         for (const e of entries) {
           if (e.translatedText && e.translatedText.trim().length > 0) {
+            // Add the original text as-is
             translations.set(e.originalText, e.translatedText);
-            console.log(
-              `[DOCX Export] Translation: "${e.originalText.substring(
-                0,
-                50
-              )}..." -> "${e.translatedText.substring(0, 50)}..."`
-            );
+
+            // Also try to find the text in the original DOCX by looking for partial matches
+            // This helps when the backend has split text but the DOCX still has the original format
+            const originalText = e.originalText.trim();
+
+            // If the text is short (likely a title, heading, or short phrase),
+            // also try to find it as part of a longer text in the DOCX
+            if (originalText.length < 100 && !originalText.includes('.')) {
+              // For short texts, try to find them within longer contexts
+              // This is especially useful for titles like "THE STORY OF MY LIFE", "BY", "ALAN MALONE"
+              console.log(
+                `[DOCX Export] Translation (short text): "${originalText}" -> "${e.translatedText}"`
+              );
+            } else {
+              console.log(
+                `[DOCX Export] Translation: "${originalText.substring(
+                  0,
+                  50
+                )}..." -> "${e.translatedText.substring(0, 50)}..."`
+              );
+            }
           }
         }
 

@@ -404,9 +404,10 @@ async function loadTasks() {
   loading.value = true;
   error.value = '';
   try {
-    console.log('📞 [LOAD_TASKS] Calling API: /tasks/project/' + props.projectId);
-    const { data } = await axiosInstance.get(`/tasks/project/${props.projectId}`);
-    console.log('📥 [LOAD_TASKS] API response received, data type:', typeof data, 'is array:', Array.isArray(data));
+    console.log('📞 [LOAD_TASKS] Calling API via taskService.getProjectTasks for project ' + props.projectId);
+    const data = await taskService.getProjectTasks(props.projectId);
+    console.log('📥 [LOAD_TASKS] API response received, data length:', Array.isArray(data) ? data.length : 'N/A');
+    // data đã được normalize trong service (filePart→page, selectedPages→pages)
     tasks.value = Array.isArray(data) ? [...data] : [];
     console.log('✅ [LOAD_TASKS] Tasks loaded for project', props.projectId, ':', tasks.value.length, 'tasks');
 
@@ -1626,20 +1627,37 @@ async function updatePageInfo() {
   let totalStringCount = 0;
 
   // Check if we have multiple pages selected
-  if (selectedTask.value?.pages && Array.isArray(selectedTask.value.pages) && selectedTask.value.pages.length > 0) {
-    console.log('📚 Multiple pages selected:', selectedTask.value.pages);
+  // Prefer backend 'selectedPages' if present
+  const multiPages = (selectedTask.value as any).selectedPages || selectedTask.value?.pages;
+  if (multiPages && Array.isArray(multiPages) && multiPages.length > 0) {
+    console.log('📚 Multiple pages selected:', multiPages);
 
-    // Calculate total string count for all selected pages
-    for (const pageNum of selectedTask.value.pages) {
-      const page = pages.find((p: any) => Number(p.part) === Number(pageNum));
+    // Helper: tolerant match for 0-based/1-based
+    const matchPage = (pagesArr: any[], target: number) => {
+      const t = Number(target);
+      return pagesArr.find((p: any) => {
+        const part = Number(p.part);
+        const pageNumber = Number(p.pageNumber ?? part);
+        return (
+          part === t || pageNumber === t ||
+          part + 1 === t || pageNumber + 1 === t ||
+          part === t + 1 || pageNumber === t + 1
+        );
+      });
+    };
+
+    let matchedCount = 0;
+    for (const pageNum of multiPages) {
+      const page = matchPage(pages, Number(pageNum));
       if (page) {
+        matchedCount += 1;
         totalStringCount += page.stringCount || 0;
       }
     }
 
-    if (totalStringCount > 0) {
+    if (matchedCount > 0) {
       currentPageInfo.value = {
-        pageNumber: selectedTask.value.pages[0] + 1,
+        pageNumber: multiPages[0] + 1,
         stringCount: totalStringCount
       };
       console.log('✅ Set currentPageInfo for multiple pages:', currentPageInfo.value);
@@ -1652,7 +1670,20 @@ async function updatePageInfo() {
     console.log('📖 Single page selected:', selectedTask.value.page);
 
     // Find the specific page
-    const page = pages.find((p: any) => Number(p.part) === Number(selectedTask.value.page));
+    // Some APIs return part as 1-based pageNumber while our stored page is 0-based.
+    // Match both exact and off-by-one to be resilient after reload.
+    const page = (() => {
+      const stored = Number(selectedTask.value!.page);
+      return pages.find((p: any) => {
+        const part = Number(p.part);
+        const pageNumber = Number(p.pageNumber ?? part);
+        return (
+          part === stored || pageNumber === stored ||
+          part - 1 === stored || pageNumber - 1 === stored ||
+          part === stored + 1 || pageNumber === stored + 1
+        );
+      });
+    })();
 
     if (page) {
       currentPageInfo.value = {
@@ -1987,7 +2018,7 @@ onMounted(() => {
   loadAllTaskCommentCounts();
 
   // Close dropdowns when clicking outside
-  document.addEventListener('click', closeAllDropdowns);
+  // Note: Do not close on every click; rely on guarded handler below
 
   // Add click outside listener for filter dropdown
   document.addEventListener('click', (event) => {
@@ -3183,9 +3214,12 @@ function setupRealtimeCommentListeners() {
                 Page: <b>Page {{ selectedTask.page + 1 }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
                 <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.page = {{ selectedTask.page }} -->
               </div>
+              <div v-else-if="(selectedTask as any).selectedPages && (selectedTask as any).selectedPages.length > 0">
+                Pages: <b>{{ formatSelectedPages((selectedTask as any).selectedPages) }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
+                <!-- Debug: pages={{ JSON.stringify(selectedTask.pages) }} -->
+              </div>
               <div v-else-if="selectedTask.pages && selectedTask.pages.length > 0">
                 Pages: <b>{{ formatSelectedPages(selectedTask.pages) }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
-                <!-- Debug: pages={{ JSON.stringify(selectedTask.pages) }} -->
               </div>
               <div v-else-if="selectedTask.fileId">
                 Pages: <b>All pages</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)

@@ -7,8 +7,7 @@ import { TextState } from 'asposepdfcloud/src/models/textState';
 import { Rectangle } from 'asposepdfcloud/src/models/rectangle';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { PdfTextDoc, PdfTextModel } from '../../db/mongo/schema/pdf-details.schema';
-import { FontStyles } from 'asposepdfcloud/src/models/fontStyles';
+import { PdfTextDoc } from '../../db/mongo/schema/pdf-details.schema';
 
 @Injectable()
 export class AsposeService {
@@ -67,106 +66,77 @@ export class AsposeService {
     return result.body;
   }
 
-  
+
 
   /**
    * Replace text in a PDF file
    */
-  
-async replaceTextInPdf(
-  fileName: string,
-  filePage: number,
-  replacements: Array<{ oldText: string; newText: string }>,
-  folder = 'pdf',
-  storageName?: string
-): Promise<void> {
-  const storage = storageName || this.storage;
-  const filePath = `${folder}/${fileName}`;
+  async replaceTextInPdf(
+    fileName: string,
+    filePage: number,
+    replacements: Array<{ oldText: string; newText: string }>,
+    folder = 'pdf',
+    storageName?: string
+  ): Promise<void> {
+    const storage = storageName || this.storage;
+    const filePath = `${folder}/${fileName}`;
 
-  const exists = await this.pdfApi.objectExists(filePath, storage);
-  if (!exists.body.exists) {
-    throw new Error(`[Aspose] File not found in storage: ${filePath}`);
-  }
+    const exists = await this.pdfApi.objectExists(filePath, storage);
+    if (!exists.body.exists) {
+      throw new Error(`[Aspose] File not found in storage: ${filePath}`);
+    }
+    try {
+      console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
 
-  try {
-    console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
-
-    // fetch page details from Mongo
-    const pdfDoc = await PdfTextModel.findOne({ fileName }).lean();
-    if (!pdfDoc) throw new Error(`[Mongo] No text metadata found for file: ${fileName}`);
-
-    const page = pdfDoc.pages.find((p) => p.pageNumber === filePage);
-    if (!page) throw new Error(`[Mongo] No page metadata found for page: ${filePage}`);
-
-    const textReplaces: TextReplace[] = replacements.map((r, index) => {
-      // try to find a match in Mongo
-      const match = page.details.find((d) => d.text.trim() === r.oldText.trim());
-      
-      console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
-
-      if (match) {
-        // Use MongoDB data if found
-        const rect = new Rectangle();
-        rect.lLX = match.llx;
-        rect.lLY = match.lly;
-        rect.uRX = match.urx;
-        rect.uRY = match.ury;
-
-        const textState = new TextState();
-        textState.fontSize = match.fontSize;
-        textState.font = match.font;
-        textState.foregroundColor = { a: 255, r: 0, g: 0, b: 0 };
-
-        if (match.isBold) textState.fontStyle = FontStyles.Bold;
-        if (match.isItalic) textState.fontStyle = FontStyles.Italic;
-        if (match.isUnderline) textState.underline = true;
-
-        return {
-          oldValue: r.oldText,
+      const textReplaces: TextReplace[] = replacements.map((r, index) => {
+        console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
+        const textReplace = {
+          oldValue: this.buildFlexibleRegex(r.oldText),
           newValue: r.newText,
-          regex: false, // exact string
-          rect,
-          textState,
+          regex: true,
+          textState: new TextState(),
+          rect: new Rectangle(),
           centerTextHorizontally: false,
         } as unknown as TextReplace;
-      } else {
-        // Use Aspose defaults if no match found
-        console.warn(`[Aspose] No match found in DB for "${r.oldText}", using Aspose defaults`);
-        return {
-          oldValue: r.oldText,
-          newValue: r.newText,
-          regex: false, // exact string
-          centerTextHorizontally: false,
-        } as unknown as TextReplace;
-      }
-    });
+        return textReplace;
+      });
 
-     const request: TextReplaceListRequest = {
-       textReplaces,
-      defaultFont: 'TimesNewRomanPSMT',
-      startIndex: 0,
-      countReplace: 0,
-    };
+      const request: TextReplaceListRequest = {
+        textReplaces,
+        defaultFont: 'Arial',
+        startIndex: 0,
+        countReplace: 0,
+      };
 
-    const response = await this.pdfApi.postPageTextReplace(
-      fileName,
-      filePage,
-      request,
-      storage,
-      folder
-    );
+      console.log(`[Aspose] Sending text replace request to Aspose API...`);
+      console.log(`[Aspose] Request details:`, {
+        fileName,
+        filePage,
+        textReplacesCount: textReplaces.length,
+        storage,
+        folder
+      });
 
-    console.log(`[Aspose] API response received:`, {
-      status: response.body.status,
-      body: response.body
-    });
+      const response = await this.pdfApi.postPageTextReplace(
+        fileName,
+        filePage,
+        request,
+        storage,
+        folder
+      );
 
-    console.log(`[Aspose] Text replaced in ${filePath} on page ${filePage}`);
-  } catch (error) {
-    console.error(`[Aspose] Error replacing text in ${filePath}:`, error);
-    throw new Error(`Failed to replace text in PDF: ${error}`);
+      console.log(`[Aspose] API response received:`, {
+        status: response.body.status,
+        body: response.body
+      });
+
+      console.log(`[Aspose] Text replaced in ${filePath} on page ${filePage}`);
+    } catch (error) {
+      console.error(`[Aspose] Error replacing text in ${filePath}:`, error);
+      throw new Error(`Failed to replace text in PDF: ${error}`);
+    }
   }
-}
+
   /**
    * Delete file from Aspose storage
    */
@@ -314,16 +284,16 @@ async replaceTextInPdf(
       console.log(`[Aspose] Testing MongoDB connection...`);
       const count = await this.pdfTextModel.countDocuments();
       console.log(`[Aspose] MongoDB connection successful. Document count: ${count}`);
-      return { 
-        success: true, 
-        message: 'MongoDB connection successful', 
-        count 
+      return {
+        success: true,
+        message: 'MongoDB connection successful',
+        count
       };
     } catch (error) {
       console.error(`[Aspose] MongoDB connection test failed:`, error);
-      return { 
-        success: false, 
-        message: `MongoDB connection failed: ${error instanceof Error ? error.message : String(error)}` 
+      return {
+        success: false,
+        message: `MongoDB connection failed: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }

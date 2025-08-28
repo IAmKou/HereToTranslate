@@ -65,6 +65,7 @@ export class TaskManagerService {
     branchId?: string;
     fileId?: string;
     filePart?: number;
+    pages?: number[];
     language?: string;
     workflowId?: string;
     statusId?: string;
@@ -85,6 +86,7 @@ export class TaskManagerService {
       branchId,
       fileId,
       filePart,
+      pages,
       language,
       workflowId,
       statusId,
@@ -215,6 +217,7 @@ export class TaskManagerService {
       branchId,
       fileId,
       filePart,
+      selectedPages: Array.isArray(pages) && pages.length > 0 ? pages : undefined,
       language,
       workflow,
       status,
@@ -480,6 +483,7 @@ export class TaskManagerService {
         branchId: true,
         fileId: true,
         filePart: true,
+        selectedPages: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -533,6 +537,7 @@ export class TaskManagerService {
         branchId: true,
         fileId: true,
         filePart: true,
+        selectedPages: true,
         language: true,
         dueDate: true,
         createdAt: true,

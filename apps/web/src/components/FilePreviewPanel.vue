@@ -81,13 +81,15 @@
           <!-- PDF Preview with Direct Highlighting -->
           <div v-else-if="isPdfType()" class="pdf-preview" style="position: relative;">
             <!-- PDF.js Viewer instead of iframe -->
-            <div v-if="previewUrl && pdfJsLoaded" class="pdf-js-viewer">
+            <!-- IMPORTANT: always render the canvas when previewUrl exists to avoid deadlock
+                 (canvas was previously gated by pdfJsLoaded which itself required the canvas). -->
+            <div v-if="previewUrl && !pdfFailed" class="pdf-js-viewer">
               <canvas ref="pdfCanvas" class="pdf-canvas" style="width: 100%; height: 100%;"></canvas>
               <div ref="highlightContainer" class="highlight-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;"></div>
             </div>
 
-            <!-- Fallback to iframe if PDF.js not loaded -->
-            <iframe v-else-if="previewUrl" :src="previewUrl" class="pdf-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <!-- Fallback to iframe if PDF.js failed to load/render -->
+            <iframe v-else-if="previewUrl && pdfFailed" :src="previewUrl" class="pdf-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
 
             <!-- Controls -->
             <div v-if="pdfJsLoaded" class="pdf-controls" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px; z-index: 30;">
@@ -271,6 +273,7 @@ const pdfZoom = ref(1);
 const pdfDocument = ref<any>(null);
 const pdfPage = ref<any>(null);
 const pdfJsLoaded = ref(false);
+const pdfFailed = ref(false);
 
 // DOCX Preview State
 const docxContainer = ref<HTMLDivElement>();
@@ -355,6 +358,7 @@ async function loadPdfWithPdfJs() {
 
     // Mark as loaded
     pdfJsLoaded.value = true;
+    pdfFailed.value = false;
     console.log('PDF.js viewer ready for direct highlighting');
 
   } catch (error) {
@@ -362,6 +366,7 @@ async function loadPdfWithPdfJs() {
     console.error('Error details:', error.message);
     // Fallback to iframe - PDF.js failed
     pdfJsLoaded.value = false;
+    pdfFailed.value = true;
     console.log('PDF.js failed, will use iframe fallback');
   }
 }
@@ -845,7 +850,7 @@ async function renderDocxWithPreview() {
     }
     const arrayBuffer = bytes.buffer;
 
-    // Render DOCX
+    // Render DOCX with enhanced page break support
     await renderAsync(arrayBuffer, docxContainer.value, docxContainer.value, {
       className: 'docx-renderer',
       inWrapper: true,
@@ -853,7 +858,7 @@ async function renderDocxWithPreview() {
       ignoreHeight: false,
       ignoreFonts: false,
       breakPages: true,
-      ignoreLastRenderedPageBreak: true,
+      ignoreLastRenderedPageBreak: false, // Changed to false to respect page breaks
       experimental: true,
       trimXmlDeclaration: true,
       useBase64URL: true,
@@ -862,7 +867,17 @@ async function renderDocxWithPreview() {
       renderFooters: true,
       renderFootnotes: true,
       renderHeaders: true,
+      // Add custom styling for page breaks
+      customStyleMap: {
+        'page-break-before': 'always',
+        'page-break-after': 'always',
+        'break-before': 'page',
+        'break-after': 'page'
+      }
     });
+
+    // Add custom CSS for page breaks after rendering
+    addPageBreakStyles();
 
     docxRendered.value = true;
     console.log('DOCX rendered successfully with docx-preview');
@@ -871,6 +886,75 @@ async function renderDocxWithPreview() {
     console.error('Error rendering DOCX with docx-preview:', error);
     docxRendered.value = false;
   }
+}
+
+// Function to add custom page break styles
+function addPageBreakStyles() {
+  if (!docxContainer.value) return;
+
+  // Add CSS for page breaks
+  const style = document.createElement('style');
+  style.id = 'docx-page-break-styles';
+  style.textContent = `
+    .docx-renderer {
+      background: white;
+      color: #000;
+      font-family: 'Times New Roman', serif;
+      line-height: 1.6;
+    }
+
+    .docx-renderer * {
+      background: white !important;
+      color: #000 !important;
+    }
+
+    /* Page break styling */
+    .docx-renderer .page-break {
+      page-break-before: always;
+      break-before: page;
+      margin-top: 2rem;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 2rem;
+      min-height: 100vh;
+      display: block;
+    }
+
+    /* Force page breaks for specific elements */
+    .docx-renderer h1:not(:first-child),
+    .docx-renderer h2:not(:first-child) {
+      page-break-before: always;
+      break-before: page;
+      margin-top: 2rem;
+    }
+
+    /* Document page styling */
+    .docx-renderer {
+      background: white;
+      padding: 2rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      margin: 1rem;
+    }
+
+    /* Ensure proper page layout */
+    .docx-renderer > div {
+      background: white;
+      min-height: 100vh;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+  `;
+
+  // Remove existing styles if any
+  const existingStyle = document.getElementById('docx-page-break-styles');
+  if (existingStyle) {
+    existingStyle.remove();
+  }
+
+  document.head.appendChild(style);
 }
 
 // Watchers
@@ -2134,12 +2218,9 @@ function stopResize() {
 .docx-container {
   flex: 1;
   overflow: auto;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  margin: 1rem;
+  background: #f8f9fa;
+  padding: 1rem;
   position: relative;
-  padding: 2rem;
 }
 
 .docx-content {
@@ -2147,6 +2228,9 @@ function stopResize() {
   min-height: 100%;
   transition: transform 0.3s ease;
   transform-origin: top left;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .docx-loading {
@@ -2167,14 +2251,50 @@ function stopResize() {
 .docx-renderer {
   background: white;
   color: #000;
-  font-family: inherit;
-  line-height: inherit;
+  font-family: 'Times New Roman', serif;
+  line-height: 1.6;
+  padding: 0;
+  margin: 0;
 }
 
 /* Ensure DOCX content displays properly */
 .docx-renderer * {
   background: white !important;
   color: #000 !important;
+}
+
+/* Enhanced page break styling for DOCX */
+.docx-renderer .page-break {
+  page-break-before: always;
+  break-before: page;
+  margin-top: 2rem;
+  border-top: 2px solid #e2e8f0;
+  padding-top: 2rem;
+  min-height: 100vh;
+  display: block;
+  background: white !important;
+}
+
+/* Document page styling */
+.docx-renderer > div {
+  background: white;
+  min-height: 100vh;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Force page breaks for headings */
+.docx-renderer h1:not(:first-child),
+.docx-renderer h2:not(:first-child) {
+  page-break-before: always;
+  break-before: page;
+  margin-top: 2rem;
+  background: white !important;
 }
 
 /* MOST AGGRESSIVE OVERRIDE - Override everything including parent styles */

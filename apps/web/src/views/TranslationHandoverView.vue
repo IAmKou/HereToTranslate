@@ -1682,18 +1682,23 @@ async function downloadAllFiles() {
   downloading.value = true;
 
   try {
-    // Use translation/export/download/:fileId for each file
-    // Enforce single-language export only
-    const targetLangs: string[] = Array.isArray(projectInfo.value?.targetLanguages) ? projectInfo.value.targetLanguages : [];
-    if (!files.value || files.value.length === 0) {
-      toast.add({ severity: 'info', summary: 'Info', detail: 'No files to download.', life: 3000 });
+    // Determine project id (support request-based view)
+    const pid = isRequestBased.value
+      ? (projectInfo.value?.project?.id || originalRequestData.value?.project?.id)
+      : projectId.value;
+
+    if (!pid) {
+      toast.add({ severity: 'warn', summary: 'Missing project', detail: 'No project found to export.', life: 3000 });
       return;
     }
 
-    // Determine the single language to export
-    const selectedLang = selectedPreviewLanguage.value || (targetLangs[0] || '');
-    if (!selectedLang) {
-      toast.add({ severity: 'warn', summary: 'Select language', detail: 'Please select a language to download.', life: 3000 });
+    const targetLangs: string[] = Array.isArray(projectInfo.value?.targetLanguages) ? projectInfo.value.targetLanguages : [];
+    const langsCsv = selectedPreviewLanguage.value
+      ? selectedPreviewLanguage.value
+      : (targetLangs.length > 0 ? targetLangs.join(',') : '');
+
+    if (!langsCsv) {
+      toast.add({ severity: 'warn', summary: 'Select language', detail: 'Please select at least one language.', life: 3000 });
       return;
     }
 
@@ -1713,37 +1718,25 @@ async function downloadAllFiles() {
       return fallback;
     };
 
-    // Sequentially download each file to avoid overwhelming the browser
-    for (const f of files.value) {
-      const fid = String(f.id || f.fileId);
-      if (!fid) continue;
-      const params: any = { language: selectedLang };
-
-      const resp = await axiosInstance.get(`/translation/export/download/${fid}`, {
-        params,
-        responseType: 'blob'
-      });
-
-      const blob = new Blob([resp.data], { type: (resp.headers as any)['content-type'] || 'application/octet-stream' });
-      const url = window.URL.createObjectURL(blob);
-      const fallbackName = f.fileName;
-      const fileName = getFilenameFromHeaders(resp.headers, fallbackName);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    }
-
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'All files have been queued for download.',
-      life: 3000
+    // Request a single ZIP for the whole project
+    const resp = await axiosInstance.get(`/translation/export/download-project/${pid}`, {
+      params: { languages: langsCsv, format: 'original' },
+      responseType: 'blob'
     });
 
+    const blob = new Blob([resp.data], { type: (resp.headers as any)['content-type'] || 'application/zip' });
+    const url = window.URL.createObjectURL(blob);
+    const fallbackName = `project-${pid}-export.zip`;
+    const fileName = getFilenameFromHeaders(resp.headers, fallbackName);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Project export is downloading.', life: 3000 });
   } catch (err: any) {
     toast.add({
       severity: 'error',

@@ -210,6 +210,10 @@ export const taskService = {
     if (task.filePart !== undefined && task.page === undefined) {
       task.page = task.filePart;
     }
+    // Map backend selectedPages -> pages for consistent UI
+    if (Array.isArray(task.selectedPages) && (!Array.isArray(task.pages) || task.pages.length === 0)) {
+      task.pages = task.selectedPages;
+    }
     return task as Task;
   },
 
@@ -218,6 +222,11 @@ export const taskService = {
     const payload: any = { ...dto };
     if (payload.page !== undefined && payload.filePart === undefined) {
       payload.filePart = payload.page;
+    }
+    // If pages array exists, pass through for backend to persist in selectedPages
+    if (Array.isArray(payload.pages) && payload.pages.length === 1 && payload.filePart === undefined) {
+      // Single-element pages should also set filePart for compatibility
+      payload.filePart = payload.pages[0];
     }
     const { data } = await axiosInstance.post('/tasks', payload);
     return this._normalizeTask(data);

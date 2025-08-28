@@ -172,9 +172,9 @@ export class FileController {
 
     try {
       const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer);
-      
+
       const info = await this.asposeService.getPdfInfo(file.originalname, 'pdf');
-      
+
       return {
         success: true,
         message: 'PDF uploaded successfully',

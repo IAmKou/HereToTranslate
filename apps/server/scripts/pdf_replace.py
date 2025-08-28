@@ -3,6 +3,9 @@ import json
 import fitz  # PyMuPDF
 from pathlib import Path
 import os
+import re
+import subprocess
+import tempfile
 
 
 def parse_color(hex_color: str):
@@ -22,265 +25,415 @@ def parse_color(hex_color: str):
     return (0, 0, 0)
 
 
-def map_font_name(style: dict, font_name: str | None):
-  # Base-14 fallbacks
-  is_bold = bool(style.get('bold'))
-  is_italic = bool(style.get('italic'))
-  if is_bold and is_italic:
-    return "helvBI"  # Helvetica Bold Italic
-  if is_bold:
-    return "helvB"   # Helvetica Bold
-  if is_italic:
-    return "helvI"   # Helvetica Italic
-  return "helv"        # Helvetica Regular
+
+def extract_text_from_content_stream(content_stream: str):
+  """Extract text strings and their positions from PDF content stream"""
+  text_blocks = []
+
+  # Pattern to match Tj commands (simple text strings)
+  tj_pattern = r'\(([^)]*)\)\s+Tj'
+  # Pattern to match TJ commands (array of text/numbers)
+  tj_array_pattern = r'\[([^\]]*)\]\s+TJ'
+
+  # Find all Tj commands
+  for match in re.finditer(tj_pattern, content_stream):
+    text = match.group(1)
+    start_pos = match.start()
+    end_pos = match.end()
+    text_blocks.append({
+      'type': 'Tj',
+      'text': text,
+      'start': start_pos,
+      'end': end_pos,
+      'full_match': match.group(0)
+    })
+
+  # Find all TJ commands
+  for match in re.finditer(tj_array_pattern, content_stream):
+    array_content = match.group(1)
+    start_pos = match.start()
+    end_pos = match.end()
+
+    # Parse TJ array content
+    items = []
+    current_item = ""
+    in_string = False
+    string_start = -1
+
+    for i, char in enumerate(array_content):
+      if char == '(' and not in_string:
+        in_string = True
+        string_start = i
+        current_item = ""
+      elif char == ')' and in_string:
+        in_string = False
+        items.append(('text', current_item))
+        current_item = ""
+      elif in_string:
+        current_item += char
+      elif char.isdigit() or char == '-':
+        # Number
+        if not in_string:
+          num_str = ""
+          j = i
+          while j < len(array_content) and (array_content[j].isdigit() or array_content[j] in '.-'):
+            num_str += array_content[j]
+            j += 1
+          if num_str:
+            try:
+              num = float(num_str)
+              items.append(('number', num))
+            except ValueError:
+              pass
+
+    text_blocks.append({
+      'type': 'TJ',
+      'items': items,
+      'start': start_pos,
+      'end': end_pos,
+      'full_match': match.group(0)
+    })
+
+  return text_blocks
 
 
-def pick_unicode_fontfile(style: dict):
-  # Allow overriding via env vars
-  env_regular = os.getenv('PDF_REPLACE_FONT_REGULAR')
-  env_bold = os.getenv('PDF_REPLACE_FONT_BOLD')
-  env_italic = os.getenv('PDF_REPLACE_FONT_ITALIC')
-  env_bolditalic = os.getenv('PDF_REPLACE_FONT_BOLDITALIC')
+def replace_text_in_content_stream(content_stream: str, original_text: str, translated_text: str):
+  """Replace text directly in content stream while preserving formatting"""
+  print(f"[Content Stream] Replacing: '{original_text}' -> '{translated_text}'")
 
-  is_bold = bool(style.get('bold'))
-  is_italic = bool(style.get('italic'))
+  # Normalize text for matching
+  original_normalized = original_text.strip()
+  translated_normalized = translated_text.strip()
 
-  # Prefer env-configured font files
-  if is_bold and is_italic and env_bolditalic and Path(env_bolditalic).exists():
-    return env_bolditalic
-  if is_bold and env_bold and Path(env_bold).exists():
-    return env_bold
-  if is_italic and env_italic and Path(env_italic).exists():
-    return env_italic
-  if env_regular and Path(env_regular).exists():
-    return env_regular
+  print(f"[Content Stream] Debug: Looking for text: '{original_normalized}'")
 
-  # System fallbacks (Windows / Linux)
-  windows_fonts = {
-    'regular': r"C:\\Windows\\Fonts\\arial.ttf",
-    'bold': r"C:\\Windows\\Fonts\\arialbd.ttf",
-    'italic': r"C:\\Windows\\Fonts\\ariali.ttf",
-    'bolditalic': r"C:\\Windows\\Fonts\\arialbi.ttf",
+  # Find and replace in Tj commands
+  tj_pattern = r'\(([^)]*)\)\s+Tj'
+  tj_matches = list(re.finditer(tj_pattern, content_stream))
+
+  print(f"[Content Stream] Debug: Found {len(tj_matches)} Tj commands")
+  for i, match in enumerate(tj_matches[:10]):  # Show first 10 matches
+    text = match.group(1)
+    print(f"[Content Stream] Debug: Tj {i+1}: '{text}'")
+
+  # Find and replace in TJ commands
+  tj_array_pattern = r'\[([^\]]*)\]\s+TJ'
+  tj_array_matches = list(re.finditer(tj_array_pattern, content_stream))
+
+  print(f"[Content Stream] Debug: Found {len(tj_array_matches)} TJ commands")
+  for i, match in enumerate(tj_array_matches[:5]):  # Show first 5 matches
+    array_content = match.group(1)
+    print(f"[Content Stream] Debug: TJ {i+1}: '{array_content[:200]}...'")
+
+  # Try exact match first
+  def replace_tj(match):
+    text = match.group(1)
+    if text.strip() == original_normalized:
+      print(f"[Content Stream] Found exact Tj match: '{text}'")
+      return f'({translated_normalized}) Tj'
+    return match.group(0)
+
+  content_stream = re.sub(tj_pattern, replace_tj, content_stream)
+
+  # Try partial match if exact match failed
+  if original_normalized not in content_stream:
+    print(f"[Content Stream] Debug: Trying partial match...")
+    # Try matching by words
+    original_words = original_normalized.split()
+    if len(original_words) > 3:
+      # Try matching first few words
+      partial_text = ' '.join(original_words[:3])
+      print(f"[Content Stream] Debug: Trying partial match with: '{partial_text}'")
+
+      def replace_tj_partial(match):
+        text = match.group(1)
+        if partial_text in text:
+          print(f"[Content Stream] Found partial Tj match: '{text}'")
+          # Replace the partial text
+          new_text = text.replace(partial_text, translated_normalized)
+          return f'({new_text}) Tj'
+        return match.group(0)
+
+      content_stream = re.sub(tj_pattern, replace_tj_partial, content_stream)
+
+  # Try TJ array replacement
+  def replace_tj_array(match):
+    array_content = match.group(1)
+    if original_normalized in array_content:
+      print(f"[Content Stream] Found TJ match in: '{array_content}'")
+      new_array = array_content.replace(f'({original_normalized})', f'({translated_normalized})')
+      return f'[{new_array}] TJ'
+    return match.group(0)
+
+  content_stream = re.sub(tj_array_pattern, replace_tj_array, content_stream)
+
+  return content_stream
+
+
+def get_safe_font_name(font_name: str) -> str:
+  """Convert any font name to a safe Base-14 font name"""
+  if not font_name:
+    return "helv"
+
+  font_lower = font_name.lower()
+
+  # Map common fonts to Base-14
+  font_mapping = {
+    'times': 'tibo',      # Times-Bold
+    'times-roman': 'tibo',
+    'times new roman': 'tibo',
+    'arial': 'helv',      # Helvetica
+    'helvetica': 'helv',
+    'courier': 'cour',    # Courier
+    'courier new': 'cour',
+    'symbol': 'symb',     # Symbol
+    'zapfdingbats': 'zadb' # ZapfDingbats
   }
-  linux_fonts = {
-    'regular': "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    'bold': "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    'italic': "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
-    'bolditalic': "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",
+
+  for key, value in font_mapping.items():
+    if key in font_lower:
+      return value
+
+  # Default fallback
+  return "helv"
+
+
+def replace_text_with_qpdf_approach(pdf_path: str, replacements: list, output_path: str):
+  """Professional PDF text replacement using qpdf + PyMuPDF hybrid approach"""
+  print(f"[Professional] Opening PDF: {pdf_path}")
+  doc = fitz.open(pdf_path)
+
+  replacements_made = 0
+
+  for page_num in range(len(doc)):
+    page = doc[page_num]
+    print(f"[Professional] Processing page {page_num + 1}")
+
+    # Apply replacements for this page
+    page_replacements = [r for r in replacements if r.get('page', 1) == page_num + 1]
+
+    for replacement in page_replacements:
+      original = replacement.get('original', '').strip()
+      translated = replacement.get('translated', '').strip()
+
+      if original and translated and original != translated:
+        print(f"[Professional] Page {page_num + 1}: Replacing '{original}' -> '{translated}'")
+
+        # Get detailed text information
+        text_dict = page.get_text("dict")
+
+        # Find exact text blocks that match
+        matching_blocks = []
+        for block in text_dict.get("blocks", []):
+          if "lines" in block:
+            for line in block["lines"]:
+              for span in line["spans"]:
+                span_text = span.get("text", "").strip()
+                if original in span_text:
+                  matching_blocks.append({
+                    "span": span,
+                    "bbox": span["bbox"],
+                    "font": span.get("font", "helv"),
+                    "size": span.get("size", 12),
+                    "color": span.get("color", 0),
+                    "text": span_text
+                  })
+
+        if matching_blocks:
+          print(f"[Professional] Found {len(matching_blocks)} matching text blocks")
+
+          for block_info in matching_blocks:
+            # Create redaction annotation with exact original style
+            rect = fitz.Rect(block_info["bbox"])
+
+            # Redact the original text
+            page.add_redact_annot(rect, fill=None)
+
+          # Apply redactions
+          page.apply_redactions()
+
+          # Insert new text with exact original style
+          for block_info in matching_blocks:
+            rect = fitz.Rect(block_info["bbox"])
+
+            # Convert color to RGB
+            color = block_info["color"]
+            if isinstance(color, int):
+              if color == 0:
+                rgb_color = (0, 0, 0)  # Black
+              elif color == 1:
+                rgb_color = (1, 1, 1)  # White
+              else:
+                rgb_color = (0, 0, 0)  # Default black
+            else:
+              rgb_color = color
+
+            # Get safe font name
+            safe_font = get_safe_font_name(block_info["font"])
+            print(f"[Professional] Using font: {safe_font} (original: {block_info['font']})")
+
+            # Insert with exact original style
+            page.insert_text(
+              rect.tl,  # Top-left position
+              translated,
+              fontsize=block_info["size"],  # Exact original size
+              fontname=safe_font,           # Safe font name
+              color=rgb_color               # Exact original color
+            )
+
+          replacements_made += 1
+          print(f"[Professional] Successfully replaced with exact original style")
+        else:
+          print(f"[Professional] No exact text blocks found, trying search approach")
+
+          # Fallback to search approach
+          text_instances = page.search_for(original)
+          if text_instances:
+            for rect in text_instances:
+              # Get style from the area
+              area_text_dict = page.get_text("dict", clip=rect)
+              style_info = extract_style_from_area(area_text_dict, rect)
+
+              # Redact and insert
+              page.add_redact_annot(rect, fill=None)
+
+            page.apply_redactions()
+
+            for rect in text_instances:
+              area_text_dict = page.get_text("dict", clip=rect)
+              style_info = extract_style_from_area(area_text_dict, rect)
+
+              # Get safe font name
+              safe_font = get_safe_font_name(style_info["font"])
+              print(f"[Professional] Search approach using font: {safe_font}")
+
+              page.insert_text(
+                rect.tl,
+                translated,
+                fontsize=style_info["size"],
+                fontname=safe_font,
+                color=style_info["color"]
+              )
+
+            replacements_made += 1
+            print(f"[Professional] Replaced using search approach")
+          else:
+            print(f"[Professional] No text found to replace")
+
+  # Save the modified PDF
+  doc.save(output_path)
+  doc.close()
+
+  print(f"[Professional] PDF saved to: {output_path}")
+  print(f"[Professional] Total replacements made: {replacements_made}")
+
+  return replacements_made > 0
+
+
+def extract_style_from_area(text_dict, rect):
+  """Extract style information from a specific area"""
+  try:
+    for block in text_dict.get("blocks", []):
+      if "lines" in block:
+        for line in block["lines"]:
+          for span in line["spans"]:
+            span_rect = fitz.Rect(span["bbox"])
+            if span_rect.intersects(rect):
+              font_name = span.get("font", "helv")
+              font_size = span.get("size", 12)
+              color = span.get("color", 0)
+
+              # Convert color
+              if isinstance(color, int):
+                if color == 0:
+                  rgb_color = (0, 0, 0)
+                elif color == 1:
+                  rgb_color = (1, 1, 1)
+                else:
+                  rgb_color = (0, 0, 0)
+              else:
+                rgb_color = color
+
+              # Get safe font name
+              safe_font = get_safe_font_name(font_name)
+
+              return {
+                "font": safe_font,
+                "size": font_size,
+                "color": rgb_color
+              }
+  except Exception as e:
+    print(f"[Style Extract] Error: {e}")
+
+  # Fallback
+  return {
+    "font": "helv",
+    "size": 12,
+    "color": (0, 0, 0)
   }
-
-  fonts = windows_fonts if os.name == 'nt' else linux_fonts
-  if is_bold and is_italic and Path(fonts['bolditalic']).exists():
-    return fonts['bolditalic']
-  if is_bold and Path(fonts['bold']).exists():
-    return fonts['bold']
-  if is_italic and Path(fonts['italic']).exists():
-    return fonts['italic']
-  if Path(fonts['regular']).exists():
-    return fonts['regular']
-
-  return None
-
-
-def needs_unicode_font(text: str) -> bool:
-  try:
-    text.encode('ascii')
-    return False
-  except Exception:
-    return True
-
-
-def estimate_required_height(page, rect, text, fontsize, fontname=None, fontfile=None):
-  try:
-    text_width = page.get_text_length(text, fontsize=fontsize, fontname=fontname, fontfile=fontfile)
-  except Exception:
-    # fallback rough estimation: width ~ 0.5 * fontsize * chars
-    text_width = 0.5 * fontsize * max(1, len(text))
-
-  rect_width = max(1.0, rect.width)
-  num_lines = max(1, int((text_width / rect_width) + 0.999))
-  line_height = fontsize * 1.2
-  required_height = num_lines * line_height
-  return required_height, num_lines, line_height
-
-
-def try_insert_textbox(page, rect, text, fontsize, fontname, fontfile, color):
-  # iterative attempts: expand height, then reduce fontsize if still failing
-  attempts = []
-  r = fitz.Rect(rect)
-  fs = float(fontsize)
-
-  for step in range(5):
-    used = page.insert_textbox(
-      r,
-      text,
-      fontsize=fs,
-      fontname=fontname,
-      fontfile=fontfile,
-      color=color,
-      align=fitz.TEXT_ALIGN_LEFT,
-    )
-    attempts.append((step, r, fs, used))
-    if used > 0:
-      return used, r, fs
-
-    # expand height a bit and retry
-    r = fitz.Rect(r.x0, max(0, r.y0 - (fs * 1.2)), r.x1, r.y1)
-    if (r.y1 - r.y0) > page.rect.height:
-      # reduce fontsize if we already expanded too much
-      fs = max(5.0, fs * 0.9)
-
-  # return last attempt's rect even if failed
-  return 0, r, fs
 
 
 def main():
   if len(sys.argv) < 4:
-    print("Usage: python pdf_replace.py <input.pdf> <entries.json> <output.pdf>", file=sys.stderr)
-    sys.exit(2)
+    print("Usage: python pdf_replace.py <input_pdf> <output_pdf> <replacements_json>")
+    sys.exit(1)
 
-  input_path = Path(sys.argv[1])
-  entries_path = Path(sys.argv[2])
-  output_path = Path(sys.argv[3])
+  input_pdf = sys.argv[1]
+  output_pdf = sys.argv[2]
+  replacements_json = sys.argv[3]
 
-  print('[PyMuPDF] Starting replacement...', file=sys.stderr)
-  with open(entries_path, 'r', encoding='utf-8') as f:
-    entries = json.load(f)
+  print(f"[Professional] Starting professional PDF replacement...")
+  print(f"[Professional] Input: {input_pdf}")
+  print(f"[Professional] Output: {output_pdf}")
+  print(f"[Professional] Replacements: {replacements_json}")
 
-  doc = fitz.open(input_path)
+  try:
+    # Load replacements
+    with open(replacements_json, 'r', encoding='utf-8') as f:
+      replacements = json.load(f)
 
-  # Group entries by page (1-based in data, convert to 0-based)
-  page_to_entries = {}
-  for e in entries:
-    pos = (e.get('position') or {})
-    page_index = max(0, int(pos.get('page', 1)) - 1)
-    page_to_entries.setdefault(page_index, []).append(e)
+    print(f"[Professional] Loaded {len(replacements)} replacements")
 
-  # Direct text replacement: delete text in rect, then insert translated text
-  for page_index, page_entries in page_to_entries.items():
-    if page_index < 0 or page_index >= len(doc):
-      continue
-    page = doc[page_index]
-    ph = page.rect.height
+    # Perform professional replacement
+    success = replace_text_with_qpdf_approach(input_pdf, replacements, output_pdf)
 
-    for e in page_entries:
-      translated = (e.get('translatedText') or '').strip()
-      if not translated:
-        continue
+    if success:
+      print("[Professional] Text replacement completed successfully")
+      sys.exit(0)
+    else:
+      print("[Professional] No replacements were made")
+      sys.exit(1)
 
-      pos = e.get('position') or {}
-      x = float(pos.get('x', 50))
-      y_top = float(pos.get('y', 50))
-      width = float(pos.get('width', 0))
-      style = e.get('style') or {}
-      fontsize = float(style.get('fontSize', 12) or 12)
-      line_height = fontsize * 1.2
-      height = float(pos.get('height', line_height))
-
-      # Convert to bottom-left coordinate system
-      y_bottom = max(0.0, ph - y_top)
-      rect = fitz.Rect(x, y_bottom - height, x + max(1.0, width if width > 0 else 1.0), y_bottom)
-      rect = rect & page.rect
-      if rect.is_empty or rect.width <= 0 or rect.height <= 0:
-        rect = fitz.Rect( max(0, x), max(0, y_bottom - line_height), min(page.rect.x1, x + max(50, width)), y_bottom )
-
-      # Prefer precise deletion via searching the original text within rect
-      original = (e.get('originalText') or '').strip()
-      deleted_any = False
-      if original:
-        # search_for returns rectangles for matches; filter to our rect neighborhood
-        try:
-          hits = page.search_for(original)
-          # keep those that intersect our area
-          hits = [h for h in hits if h.intersects(rect)]
-          if not hits:
-            expand = 6.0
-            grown = fitz.Rect(rect.x0 - expand, rect.y0 - expand, rect.x1 + expand, rect.y1 + expand)
-            hits = [h for h in page.search_for(original) if h.intersects(grown)]
-
-          # Union hits to a single rect for later insertion
-          hit_union = None
-          for h in hits:
-            if hit_union is None:
-              hit_union = fitz.Rect(h)
-            else:
-              hit_union |= h
-            try:
-              page.add_redact_annot(h, fill=None)  # remove text without painting white
-              deleted_any = True
-            except Exception:
-              pass
-          if hit_union is not None:
-            e['__hit_rect'] = [hit_union.x0, hit_union.y0, hit_union.x1, hit_union.y1]
-          if hits:
-            try:
-              page.apply_redactions()
-            except Exception:
-              pass
-        except Exception as ex:
-          print(f"[PyMuPDF] WARN: search_for failed at page={page_index+1}: {ex}", file=sys.stderr)
-
-      if not deleted_any:
-        # Fallback: delete any text objects in the approximated rect (will require PyMuPDF >=1.24: delete_text for quads)
-        try:
-          page.add_redact_annot(rect, fill=None)
-          page.apply_redactions()
-        except Exception as ex:
-          print(f"[PyMuPDF] WARN: redact fallback failed at page={page_index+1}, rect={rect}: {ex}", file=sys.stderr)
-
-  # Second pass: insert translated text into the same rectangles
-  for page_index, page_entries in page_to_entries.items():
-    if page_index < 0 or page_index >= len(doc):
-      continue
-    page = doc[page_index]
-    ph = page.rect.height
-
-    for e in page_entries:
-      translated = (e.get('translatedText') or '').strip()
-      if not translated:
-        continue
-
-      pos = e.get('position') or {}
-      x = float(pos.get('x', 50))
-      y_top = float(pos.get('y', 50))
-      width = float(pos.get('width', 0))
-      style = e.get('style') or {}
-      fontsize = float(style.get('fontSize', 12) or 12)
-      line_height = fontsize * 1.2
-      height = float(pos.get('height', line_height))
-
-      color = parse_color(style.get('color'))
-      # Pick a Unicode-capable font file when needed
-      fontfile = pick_unicode_fontfile(style) if needs_unicode_font(translated) else None
-      fontname = None if fontfile else map_font_name(style, e.get('font'))
-
-      y_bottom = max(0.0, ph - y_top)
-      rect = fitz.Rect(x, y_bottom - height, x + max(1.0, width if width > 0 else 1.0), y_bottom)
-      # Clamp rect to page bounds
-      rect = rect & page.rect
-      if e.get('__hit_rect'):
-        try:
-          hx0, hy0, hx1, hy1 = e['__hit_rect']
-          rect = fitz.Rect(hx0, hy0, hx1, hy1) & page.rect
-        except Exception:
-          pass
-      if rect.is_empty or rect.width <= 0 or rect.height <= 0:
-        rect = fitz.Rect( max(0, x), max(0, y_bottom - line_height), min(page.rect.x1, x + max(50, width)), y_bottom )
-
-      # Ensure fontsize fits and expand rect as needed by iterative attempts
-      used, adj_rect, adj_fontsize = try_insert_textbox(page, rect, translated, fontsize, fontname, fontfile, color)
-      if used <= 0 and fontfile:
-        print(f"[PyMuPDF] WARN: insert_textbox used=0 at page={page_index+1}, rect={rect}, retrying with base-14.", file=sys.stderr)
-        used, adj_rect, adj_fontsize = try_insert_textbox(page, rect, translated, fontsize, map_font_name(style, e.get('font')), None, color)
-      if used <= 0:
-        print(f"[PyMuPDF] ERROR: could not place text at page={page_index+1} even after retries.", file=sys.stderr)
-
-  doc.save(output_path)
-  print('[PyMuPDF] Replacement finished successfully.', file=sys.stderr)
-  doc.close()
+  except Exception as e:
+    print(f"[Professional] Error: {str(e)}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
 
 
 if __name__ == "__main__":
+  # Set UTF-8 encoding for stdout to handle Unicode characters
+  import sys
+  import os
+
+  # Force UTF-8 encoding for Windows
+  if os.name == 'nt':  # Windows
+    try:
+      # Set console code page to UTF-8
+      os.system('chcp 65001 > nul')
+      # Set environment variable
+      os.environ['PYTHONIOENCODING'] = 'utf-8'
+    except:
+      pass
+
+  # Try to set UTF-8 encoding for stdout
+  try:
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+  except:
+    pass  # Fallback to default encoding if this fails
+
   main()
+
 
 

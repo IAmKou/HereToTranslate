@@ -866,31 +866,7 @@
               </Transition>
             </div>
 
-            <!-- File upload -->
-            <input
-              ref="fileInput"
-              type="file"
-              accept="image/*"
-              style="display: none"
-              @change="handleFileUpload"
-            >
-            <button
-              type="button"
-              class="input-action-btn"
-              title="Attach file"
-              @click="fileInput?.click()"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.64 16.2a2 2 0 0 1-2.83-2.83l8.49-8.49" />
-              </svg>
-            </button>
+
 
             <!-- Send button -->
             <button
@@ -919,34 +895,7 @@
           </div>
         </div>
 
-        <!-- Upload progress -->
-        <Transition name="slide-up">
-          <div
-            v-if="isUploading"
-            class="upload-progress"
-          >
-            <div class="progress-content">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.64 16.2a2 2 0 0 1-2.83-2.83l8.49-8.49" />
-              </svg>
-              <span>Uploading...</span>
-              <span class="progress-percent">{{ uploadProgress }}%</span>
-            </div>
-            <div class="progress-bar">
-              <div
-                class="progress-fill"
-                :style="{ width: uploadProgress + '%' }"
-              />
-            </div>
-          </div>
-        </Transition>
+
       </div>
     </footer>
   </div>
@@ -1034,10 +983,7 @@ const isConnecting = ref(true)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 
-// File upload
-const fileInput = ref<HTMLInputElement | null>(null)
-const isUploading = ref(false)
-const uploadProgress = ref(0)
+// File upload removed
 
 // Notification
 const notification = ref<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -1286,42 +1232,7 @@ const handleReply = (m: ChatMessage) => {
   replyingTo.value = m
 }
 
-const handleFileUpload = async (e: Event) => {
-  const input = e.target as HTMLInputElement
-  if (!input.files?.length) return
-  const file = input.files[0]
-
-  if (!file.type.startsWith('image/')) return displayNotification('Only images allowed', 'error')
-  if (file.size > 5 * 1024 * 1024) return displayNotification('Max file size 5MB', 'error')
-
-  isUploading.value = true
-  const form = new FormData()
-  form.append('file', file)
-
-  try {
-    const res = await axios.post('/api/chat/upload', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (e: any) => {
-        if (e.total) uploadProgress.value = Math.round((e.loaded * 100) / e.total)
-      }
-    })
-    socket.value?.emit('send_message', {
-      roomId: props.roomId,
-      senderId: props.currentUserId,
-      senderUsername: props.currentUsername,
-      message: '',
-      fileUrl: res.data.url,
-      fileName: file.name
-    })
-    displayNotification('File uploaded', 'success')
-  } catch {
-    displayNotification('Upload failed', 'error')
-  } finally {
-    isUploading.value = false
-    uploadProgress.value = 0
-    if (fileInput.value) fileInput.value.value = ''
-  }
-}
+// File upload logic removed
 
 // ======================== Participants =========================
 const loadParticipants = async () => {

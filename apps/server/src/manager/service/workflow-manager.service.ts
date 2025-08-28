@@ -116,14 +116,29 @@ export class WorkflowManagerService {
       throw new NotFoundException('Task not found');
     }
 
+    // Normalize raw fields that may vary depending on driver/aliases
+    const projectIdRaw: unknown = (task as any).projectId ?? (task as any)['task_projectId'];
+    const statusIdRaw: unknown = (task as any).statusId ?? (task as any)['task_statusId'];
+
+    // Validate IDs before converting to BigInt to avoid undefined → BigInt errors
+    if (projectIdRaw === undefined || projectIdRaw === null || projectIdRaw === '') {
+      throw new BadRequestException('Task is missing projectId');
+    }
+    if (statusIdRaw === undefined || statusIdRaw === null || statusIdRaw === '') {
+      throw new BadRequestException('Task is missing statusId');
+    }
+
+    const projectIdBig = BigInt(String(projectIdRaw));
+    const statusIdBig = BigInt(String(statusIdRaw));
+
     // Get the default workflow for the project
-    const defaultWorkflow = await this.getDefaultWorkflow(task.projectId);
+    const defaultWorkflow = await this.getDefaultWorkflow(projectIdBig.toString());
 
     // Get transitions from the default workflow only
     return await this.transitionRepository.find({
       where: {
         workflow: { id: defaultWorkflow.id },
-        fromStatus: { id: BigInt(task.statusId) },
+        fromStatus: { id: statusIdBig },
         isActive: true
       },
       relations: ['toStatus'],

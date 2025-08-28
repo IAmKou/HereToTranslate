@@ -242,24 +242,9 @@ function validateWhitespace(originalText: string, translatedText: string, warnin
   }
 }
 
-// 4. Character Case Validation - CROWDIN DOESN'T ALLOW
+// 4. Character Case Validation - DISABLED per user request
 function validateCharacterCase(originalText: string, translatedText: string, warnings: ValidationWarning[]) {
-  // Check if original starts with uppercase and translation doesn't
-  const originalStartsWithUpper = /^[A-Z]/.test(originalText);
-  const translatedStartsWithUpper = /^[A-Z]/.test(translatedText);
-
-  if (originalStartsWithUpper && !translatedStartsWithUpper) {
-    warnings.push({
-      type: 'case_mismatch',
-      message: 'Translation should start with uppercase letter',
-      severity: 'warning',
-      originalText,
-      translatedText,
-      canAutoFix: false, // Crowdin doesn't allow case auto-fix
-      autoFixDescription: 'Capitalize first letter',
-      autoFixAction: () => translatedText.charAt(0).toUpperCase() + translatedText.slice(1)
-    });
-  }
+  // Removed uppercase validation as requested
 
   // Only enforce preservation of true acronyms (e.g. API, HTML), not generic capitalized words like THE/OF
   const allCapsWords = (originalText.match(/\b[A-Z0-9]{2,}\b/g) || []) as string[];

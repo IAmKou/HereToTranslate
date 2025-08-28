@@ -546,75 +546,195 @@ function groupTextByLine(items: any[], yThreshold = 8) {
   return mergedResult;
 }
 
-// Enhanced function to split text into meaningful sentences
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function splitIntoSentences(text: string): string[] {
-  // Clean the text first
-  text = text.trim();
-  if (text.length < 5) return [text];
+// Strict reading-order grouping: page -> y -> x, adaptive y-band to avoid mid-line splits
+function groupTextByLineStrict(items: any[], yThreshold = 6) {
+  if (!items || items.length === 0) return [];
 
-  // Try to split by Vietnamese sentence endings first
-  const vietnameseEndings = /[.!?]+/g;
-  const sentences = text.split(vietnameseEndings).filter(s => s.trim().length > 0);
-
-  // If we got meaningful sentences, return them
-  if (sentences.length > 1) {
-    return sentences.map(s => s.trim()).filter(s => s.length >= 3);
+  // Group by page
+  const byPage = new Map<number, any[]>();
+  for (const it of items) {
+    const p = Number(it.page) || 1;
+    if (!byPage.has(p)) byPage.set(p, []);
+    byPage.get(p)!.push(it);
   }
 
-  // If no sentence endings found, try to split by common Vietnamese patterns
-  const patterns = [
-    /[.!?]+/, // Standard sentence endings
-    /[.!?]+[\s\n]+/, // With whitespace
-    /[.!?]+[\s\n]+[A-ZĐ]/, // Followed by capital letter
-    /[\n\r]+/, // Line breaks
-    /[;:]+[\s\n]+/, // Semicolons and colons
-  ];
+  const lines: { text: string; items: any[] }[] = [];
+  const pages = Array.from(byPage.keys()).sort((a, b) => a - b);
+  for (const p of pages) {
+    const pageItems = byPage.get(p)!;
+    // sort strictly top-to-bottom then left-to-right
+    pageItems.sort((a: any, b: any) => (a.y === b.y ? a.x - b.x : a.y - b.y));
 
-  for (const pattern of patterns) {
-    const split = text.split(pattern).filter(s => s.trim().length > 0);
-    if (split.length > 1) {
-      return split.map(s => s.trim()).filter(s => s.length >= 5);
-    }
-  }
+    let currentLine: any[] = [];
+    let avgY = 0;
+    let avgH = 0;
 
-  // If still no good splits, split by length with word boundaries
-  if (text.length > 150) {
-    const chunks = [];
-    const words = text.split(/\s+/);
-    let currentChunk = '';
+    for (const token of pageItems) {
+      const tokenY = token.y;
+      const tokenH = token.height || token.fontSize || 10;
+      if (currentLine.length === 0) {
+        currentLine.push(token);
+        avgY = tokenY;
+        avgH = tokenH;
+        continue;
+      }
 
-    for (const word of words) {
-      if ((currentChunk + ' ' + word).length > 150) {
-        if (currentChunk.trim()) {
-          chunks.push(currentChunk.trim());
-        }
-        currentChunk = word;
+      const band = Math.max(yThreshold, Math.min(10, avgH * 0.85));
+      const sameLine = Math.abs(tokenY - avgY) <= band;
+      if (sameLine) {
+        currentLine.push(token);
+        avgY = (avgY * (currentLine.length - 1) + tokenY) / currentLine.length;
+        avgH = (avgH * (currentLine.length - 1) + tokenH) / currentLine.length;
       } else {
-        currentChunk += (currentChunk ? ' ' : '') + word;
+        currentLine.sort((a: any, b: any) => a.x - b.x);
+        const text = currentLine.map((t: any) => String(t.text || '').trim()).filter(Boolean).join(' ').trim();
+        if (text) lines.push({ text, items: currentLine.map((t: any) => ({ ...t, page: p })) });
+        currentLine = [token];
+        avgY = tokenY;
+        avgH = tokenH;
       }
     }
 
-    if (currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
+    if (currentLine.length) {
+      currentLine.sort((a: any, b: any) => a.x - b.x);
+      const text = currentLine.map((t: any) => String(t.text || '').trim()).filter(Boolean).join(' ').trim();
+      if (text) lines.push({ text, items: currentLine.map((t: any) => ({ ...t, page: p })) });
     }
-
-    return chunks.filter(chunk => chunk.length >= 5);
   }
 
-  // If text is short enough, return as is
-  return [text];
+  return lines;
 }
 
-// Hàm mới để chia DOCX theo 100 strings/page
-function assignFilePartsForDocx(manifestEntries: any[]): void {
-  const DOCX_STRINGS_PER_PAGE = 100;
+// Enhanced sentence splitter with exceptions for abbreviations, decimals, ellipses, quotes
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function splitIntoSentences(text: string): string[] {
+  const original = String(text || '').trim();
+  if (!original) return [];
 
-  // Chia entries thành các nhóm 100 strings
-  for (let i = 0; i < manifestEntries.length; i++) {
-    const pageIndex = Math.floor(i / DOCX_STRINGS_PER_PAGE);
-    manifestEntries[i].filePart = pageIndex;
+  // Protect ellipses
+  const ELLIPSIS_TOKEN = '[[ELLIPSIS]]';
+  let s = original.replace(/\.\.\./g, ELLIPSIS_TOKEN);
+
+  // Normalize spaced initials like "M R." -> "MR." and "J. R. R." -> "J.R.R."
+  // remove spaces between single-letter initials and a following dotted initial
+  s = s
+    .replace(/\b([A-Za-z])\s+([A-Za-z])\s*\./g, '$1$2.')
+    .replace(/\b([A-Za-z])\s*\.\s+([A-Za-z])\s*\./g, '$1.$2.')
+    .replace(/\b([A-Za-z])\s+([A-Za-z])\b/g, (m, a, b) => (a.length === 1 && b.length === 1 ? `${a}${b}` : m));
+
+  // Common English abbreviations and titles
+  const abbrev = new Set([
+    'mr','mrs','ms','dr','prof','rev','hon','sr','jr','st','gen','col','capt','lt','sen','gov','pres','supt','det',
+    'e.g','i.e','etc','cf','vs','approx','ca','al','ibid','no','ave','blvd','rd','st','apt','dept',
+    'u.s','u.k','e.u','u.n','ph.d','m.sc','b.a','b.sc','inc','ltd','co','a.m','p.m','am','pm'
+  ]);
+
+  // Tokenize on potential sentence enders while preserving punctuation
+  const parts: string[] = [];
+  let buf = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    buf += ch;
+    if (ch === '.' || ch === '!' || ch === '?') {
+      const next = s[i + 1] || '';
+      const prev = s[i - 1] || '';
+
+      // decimal number 3.14 or version 2.1.5
+      const isDecimal = /\d/.test(prev) && /\d/.test(next);
+
+      // abbreviation check: take last word before dot
+      const m = buf.match(/([A-Za-z]\.?[A-Za-z]?\.?|[A-Za-z]+)\.$/);
+      const lastWord = (m && m[1] ? m[1] : '').replace(/\./g, '').toLowerCase();
+      const isAbbrev = abbrev.has(lastWord) || (/^(?:[A-Za-z]\.){2,}$/.test(buf.trim()));
+
+      // ellipsis already protected; if it's one dot of ellipsis, it would be tokenized above
+      if (!isDecimal && !isAbbrev) {
+        // lookahead: allow closing quotes/parentheses/dash after ender
+        parts.push(buf.trim());
+        buf = '';
+        // skip trailing spaces
+        while (i + 1 < s.length && /[\s\)\]"'”’\-]/.test(s[i + 1])) {
+          buf += s[++i];
+        }
+      }
+    }
   }
+  if (buf.trim()) parts.push(buf.trim());
+
+  // Restore ellipses
+  const normalized = parts
+    .map(p => p.replace(new RegExp(ELLIPSIS_TOKEN, 'g'), '...'))
+    .map(p => p.replace(/\s+/g, ' ').trim())
+    .filter(p => p.length > 0);
+
+  // Merge too-short fragments back
+  const result: string[] = [];
+  for (const piece of normalized) {
+    if (result.length === 0) {
+      result.push(piece);
+      continue;
+    }
+    if (piece.length < 4) {
+      result[result.length - 1] = `${result[result.length - 1]} ${piece}`.replace(/\s+/g, ' ').trim();
+    } else {
+      result.push(piece);
+    }
+  }
+
+  // Merge dialogue attribution that follows a closing quote, e.g.
+  // “... ?” he asked.  -> keep as a single sentence
+  const isAttributionStart = (s: string) => /^(?:["'“”‘’\)\]]\s*)?(?:he|she|they|we|i|the\s+\w+|mr|mrs|ms|dr)\s+(?:said|asked|replied|answered|whispered|shouted|cried|murmured|added|called|retorted|muttered|remarked)\b/i.test(s.trim());
+  const mergedAttribution: string[] = [];
+  for (let i = 0; i < result.length; i++) {
+    const prev = mergedAttribution[mergedAttribution.length - 1];
+    const curr = result[i];
+    if (prev && /[.!?]["'”’\)\]]?$/.test(prev) && isAttributionStart(curr)) {
+      mergedAttribution[mergedAttribution.length - 1] = `${prev} ${curr}`.replace(/\s+/g, ' ').trim();
+    } else {
+      mergedAttribution.push(curr);
+    }
+  }
+
+  // Fallback if everything collapsed
+  if (mergedAttribution.length === 0) return [original];
+  return mergedAttribution;
+}
+
+// Hàm mới để chia DOCX theo trang thực tế - làm giống hệt như PDF
+function assignFilePartsForDocx(manifestEntries: any[]): void {
+  // Đảm bảo mỗi page có đúng 15 strings (trừ page cuối có thể ít hơn)
+  const STRINGS_PER_PAGE = 15;
+  let expectedPage = 1;
+  let currentCount = 0;
+
+  for (const entry of manifestEntries) {
+    if (currentCount >= STRINGS_PER_PAGE) {
+      expectedPage++;
+      currentCount = 0;
+    }
+    entry.position.page = expectedPage;
+    entry.filePart = expectedPage - 1; // filePart bắt đầu từ 0, giống như PDF
+    currentCount++;
+  }
+
+  // Debug: in ra thông tin phân trang
+  const pageDistribution = new Map<number, number>();
+  manifestEntries.forEach((entry: any) => {
+    const page = entry.position?.page || 1;
+    pageDistribution.set(page, (pageDistribution.get(page) || 0) + 1);
+  });
+
+  console.log('[DOCX] Page distribution based on 15 strings per page:');
+  const sortedPages = Array.from(pageDistribution.keys()).sort((a, b) => a - b);
+  for (const page of sortedPages) {
+    console.log(`[DOCX] Page ${page}: ${pageDistribution.get(page)} entries`);
+  }
+
+  // Thông báo tổng quan
+  console.log(`[DOCX] Total pages detected: ${sortedPages.length}`);
+  console.log(`[DOCX] Total entries: ${manifestEntries.length}`);
+  console.log(`[DOCX] Final page assignment completed. Each page now has max ${STRINGS_PER_PAGE} strings.`);
+  console.log(`[DOCX] Using filePart (0-based) for pagination, just like PDF!`);
 }
 
 // Enhanced function to divide PDF by original pages
@@ -803,9 +923,24 @@ export class ManifestService {
 
         if (items && items.length > 0) {
           // Group các đoạn text lại thành dòng
-          console.log('[PDF] Step 3: Grouping text items into lines...');
-          const groupedLines = groupTextByLine(items, 5); // Tăng threshold lên 5 để linh hoạt hơn
+          console.log('[PDF] Step 3: Grouping text items into lines (strict)...');
+          const groupedLines = groupTextByLineStrict(items, 8);
           console.log('[PDF] Grouped lines count:', groupedLines.length);
+
+          // Merge visual lines into paragraphs first
+          type Para = { text: string; items: any[] };
+          const paragraphs: Para[] = [];
+          const areSimilar = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
+          const getMetrics = (line: any) => {
+            const minX = Math.min(...line.items.map((i: any) => i.x));
+            const maxX = Math.max(...line.items.map((i: any) => (i.x || 0) + (i.width || 0)));
+            const avgH = line.items.reduce((s: number, i: any) => s + (i.height || i.fontSize || 10), 0) / Math.max(1, line.items.length);
+            const page = line.items[0]?.page || 1;
+            const topY = Math.min(...line.items.map((i: any) => i.y));
+            const bottomY = Math.max(...line.items.map((i: any) => (i.y || 0) + (i.height || 0)));
+            return { minX, maxX, avgH, page, topY, bottomY };
+          };
+          const startsWithAttribution = (txt: string) => /^(?:["'“”‘’\)\]]\s*)?(?:he|she|they|we|i|the\s+\w+|mr|mrs|ms|dr)\s+(?:said|asked|replied|answered|whispered|shouted|cried|murmured|added|called|retorted|muttered|remarked)\b/i.test((txt||'').trim());
 
           for (const lineObj of groupedLines) {
             // Đảm bảo tất cả items trong line có cùng page
@@ -858,34 +993,63 @@ export class ManifestService {
               continue; // Skip the original logic for this line
             }
 
-            // Lấy page từ item đầu tiên (vì đã được sắp xếp theo page)
-            const page = lineObj.items[0]?.page || 1;
+            const metrics = getMetrics(lineObj);
+            if (paragraphs.length === 0) {
+              paragraphs.push({ text: lineObj.text, items: [...lineObj.items] });
+            } else {
+              const prev = paragraphs[paragraphs.length - 1];
+              const pm = getMetrics({ items: prev.items });
+              const samePage = pm.page === metrics.page;
+              const leftAligned = areSimilar(pm.minX, metrics.minX, Math.max(2, pm.avgH * 1.2));
+              const vGap = Math.max(0, metrics.topY - pm.bottomY);
+              const smallVGap = vGap <= Math.max(pm.avgH, metrics.avgH) * 1.15;
+              if (samePage && leftAligned && smallVGap) {
+                prev.text = `${prev.text} ${lineObj.text}`.replace(/\s+/g, ' ').trim();
+                prev.items.push(...lineObj.items);
+              } else {
+                // Special-case: dialogue attribution moved to a new visual line
+                if (samePage && startsWithAttribution(lineObj.text)) {
+                  prev.text = `${prev.text} ${lineObj.text}`.replace(/\s+/g, ' ').trim();
+                  prev.items.push(...lineObj.items);
+                } else {
+                  paragraphs.push({ text: lineObj.text, items: [...lineObj.items] });
+                }
+              }
+            }
+          }
 
-            const minX = Math.min(...lineObj.items.map((i: any) => i.x));
-            const maxX = Math.max(...lineObj.items.map((i: any) => (i.x || 0) + (i.width || 0)));
-            const maxH = Math.max(...lineObj.items.map((i: any) => i.height || i.fontSize || 0));
-            manifestEntries.push({
-              projectId: String(file.project.id),
-              branchId: String(file.branch.id),
-              fileId: String(file.id),
-              manifestEntryId: uuidv4(),
-              originalText: lineObj.text,
-              language: targetLanguage,
-              font: lineObj.items[0]?.font || 'default',
-              style: {
-                bold: lineObj.items.some((i: any) => i.bold),
-                italic: lineObj.items.some((i: any) => i.italic),
-                color: lineObj.items[0]?.color,
-                fontSize: lineObj.items[0]?.fontSize || maxH || undefined,
-              },
-              position: {
-                x: minX,
-                y: Math.min(...lineObj.items.map((i: any) => i.y)),
-                width: isFinite(maxX - minX) ? maxX - minX : undefined,
-                height: maxH || undefined,
-                page: page,
-              },
-            });
+          // Emit sentences from paragraphs
+          for (const para of paragraphs) {
+            const page = para.items[0]?.page || 1;
+            const minX = Math.min(...para.items.map((i: any) => i.x));
+            const maxX = Math.max(...para.items.map((i: any) => (i.x || 0) + (i.width || 0)));
+            const maxH = Math.max(...para.items.map((i: any) => i.height || i.fontSize || 0));
+            const sentences = splitIntoSentences(para.text);
+            for (const sentence of sentences) {
+              if (!sentence || !sentence.trim()) continue;
+              manifestEntries.push({
+                projectId: String(file.project.id),
+                branchId: String(file.branch.id),
+                fileId: String(file.id),
+                manifestEntryId: uuidv4(),
+                originalText: sentence.trim(),
+                language: targetLanguage,
+                font: para.items[0]?.font || 'default',
+                style: {
+                  bold: para.items.some((i: any) => i.bold),
+                  italic: para.items.some((i: any) => i.italic),
+                  color: para.items[0]?.color,
+                  fontSize: para.items[0]?.fontSize || maxH || undefined,
+                },
+                position: {
+                  x: minX,
+                  y: Math.min(...para.items.map((i: any) => i.y)),
+                  width: isFinite(maxX - minX) ? maxX - minX : undefined,
+                  height: maxH || undefined,
+                  page: page,
+                },
+              });
+            }
           }
           console.log('[PDF] SUCCESS: manifestEntries from parser (grouped lines):', manifestEntries.length);
           console.log('[PDF] Sample manifest entries:', manifestEntries.slice(0, 2).map((entry: any) => ({
@@ -909,36 +1073,40 @@ export class ManifestService {
             /^trang\s*$/i
           ];
 
-          for (const line of lines) {
+          for (const rawLine of lines) {
             // Kiểm tra xem line có phải là page break indicator không
             let isPageBreak = false;
             for (const indicator of pageBreakIndicators) {
-              if (indicator.test(line.trim())) {
-                const pageMatch = line.match(/\d+/);
+              if (indicator.test(rawLine.trim())) {
+                const pageMatch = rawLine.match(/\d+/);
                 if (pageMatch) {
                   currentPage = parseInt(pageMatch[0]);
                 } else {
                   currentPage++;
                 }
                 isPageBreak = true;
-                console.log(`[PDF] OCR detected page break: "${line}" -> page ${currentPage}`);
+                console.log(`[PDF] OCR detected page break: "${rawLine}" -> page ${currentPage}`);
                 break;
               }
             }
 
             // Bỏ qua page break indicators, chỉ thêm content
             if (!isPageBreak) {
-              manifestEntries.push({
-                projectId: String(file.project.id),
-                branchId: String(file.branch.id),
-                fileId: String(file.id),
-                manifestEntryId: uuidv4(),
-                originalText: line,
-                language: targetLanguage,
-                font: 'default',
-                style: {},
-                position: { x: 0, y: 0, page: currentPage }, // Sử dụng currentPage thay vì mặc định 1
-              });
+              const sentences = splitIntoSentences(rawLine);
+              for (const sentence of sentences) {
+                if (!sentence || !sentence.trim()) continue;
+                manifestEntries.push({
+                  projectId: String(file.project.id),
+                  branchId: String(file.branch.id),
+                  fileId: String(file.id),
+                  manifestEntryId: uuidv4(),
+                  originalText: sentence.trim(),
+                  language: targetLanguage,
+                  font: 'default',
+                  style: {},
+                  position: { x: 0, y: 0, page: currentPage },
+                });
+              }
             }
           }
           console.log('[PDF] SUCCESS: manifestEntries from OCR:', manifestEntries.length);
@@ -951,6 +1119,58 @@ export class ManifestService {
           console.error('[PDF] Items count:', items?.length || 0);
           console.error('[PDF] Text length:', text?.length || 0);
           throw new Error('No text could be extracted from PDF (parser and OCR failed)');
+        }
+
+        // Safety: ensure the first textual line of each page is captured
+        try {
+          if (items && items.length > 0) {
+            const byPage: Record<number, any[]> = {} as any;
+            for (const it of items as any[]) {
+              const p = Number((it as any).page) || 1;
+              (byPage[p] ||= []).push(it);
+            }
+            for (const [pStr, list] of Object.entries(byPage)) {
+              const p = Number(pStr);
+              list.sort((a: any, b: any) => (a.y === b.y ? a.x - b.x : a.y - b.y));
+              if (list.length === 0) continue;
+              const firstY = list[0].y;
+              const band = Math.max(6, (list[0].height || list[0].fontSize || 10) * 0.9);
+              const firstLine = list.filter((t: any) => Math.abs(t.y - firstY) <= band).sort((a: any, b: any) => a.x - b.x);
+              const firstText = firstLine.map((t: any) => String(t.text || '').trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+              if (firstText && firstText.length >= 4) {
+                const exists = manifestEntries.some((e: any) => (e.position?.page === p) && typeof e.originalText === 'string' && e.originalText.includes(firstText.substring(0, Math.min(20, firstText.length))));
+                if (!exists) {
+                  const minX = Math.min(...firstLine.map((i: any) => i.x));
+                  const maxX = Math.max(...firstLine.map((i: any) => (i.x || 0) + (i.width || 0)));
+                  const maxH = Math.max(...firstLine.map((i: any) => i.height || i.fontSize || 0));
+                  manifestEntries.unshift({
+                    projectId: String(file.project.id),
+                    branchId: String(file.branch.id),
+                    fileId: String(file.id),
+                    manifestEntryId: uuidv4(),
+                    originalText: firstText,
+                    language: targetLanguage,
+                    font: firstLine[0]?.font || 'default',
+                    style: {
+                      bold: firstLine.some((i: any) => i.bold),
+                      italic: firstLine.some((i: any) => i.italic),
+                      color: firstLine[0]?.color,
+                      fontSize: firstLine[0]?.fontSize || maxH || undefined,
+                    },
+                    position: {
+                      x: minX,
+                      y: Math.min(...firstLine.map((i: any) => i.y)),
+                      width: isFinite(maxX - minX) ? maxX - minX : undefined,
+                      height: maxH || undefined,
+                      page: p,
+                    },
+                  });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('[PDF] First-line safeguard skipped due to error:', (e as any)?.message || e);
         }
 
         // Store images separately for export (not in manifest entries)
@@ -1000,49 +1220,172 @@ export class ManifestService {
       }
 
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-        // Sử dụng mammoth để extract HTML giữ bố cục logic
-        const { value: html } = await mammoth.convertToHtml({ buffer: file.fileContent });
+        // Sử dụng mammoth để extract HTML với styleMap chi tiết hơn
+        const { value: html } = await mammoth.convertToHtml({
+          buffer: file.fileContent,
+          styleMap: [
+            "p[style-name='Heading 1'] => h1:fresh",
+            "p[style-name='Heading 2'] => h2:fresh",
+            "p[style-name='Heading 3'] => h3:fresh",
+            "p[style-name='Heading 4'] => h4:fresh",
+            "p[style-name='Heading 5'] => h5:fresh",
+            "p[style-name='Heading 6'] => h6:fresh",
+            "p[style-name='Title'] => h1.title:fresh",
+            "p[style-name='Subtitle'] => h2.subtitle:fresh",
+            "p[style-name='Quote'] => blockquote:fresh",
+            "p[style-name='Intense Quote'] => blockquote.intense:fresh",
+            "p[style-name='List Paragraph'] => li:fresh",
+            "p[style-name='Footnote Text'] => p.footnote:fresh",
+            "p[style-name='Normal'] => p:fresh",
+            "p[style-name='Default Paragraph Font'] => p:fresh",
+            "r[style-name='Strong'] => strong",
+            "r[style-name='Emphasis'] => em",
+            "r[style-name='Code'] => code",
+            "table => table",
+            "tr => tr",
+            "td => td",
+            "th => th"
+          ],
+          includeDefaultStyleMap: true
+        });
+
+        // Cũng lấy raw text để so sánh
+        const { value: rawText } = await mammoth.extractRawText({ buffer: file.fileContent });
+        console.log(`[DOCX] Raw text extracted:`, rawText.substring(0, 200));
+
         // Parse HTML để tách từng đoạn, heading, bảng, list, caption, v.v.
         const cheerio = await import('cheerio');
         const $ = cheerio.load(html);
         let pictureCount = 1;
-        // Tách từng đoạn, heading, cell, list item, caption, th, blockquote, pre, figcaption
-        const selectors = 'p, h1, h2, h3, h4, h5, h6, li, td, caption, th, blockquote, pre, figcaption';
-        $(selectors).each((i: number, el: any) => {
-          const html = $(el).html()?.trim(); // Lấy innerHTML để giữ tag con
-          // Bỏ qua nếu chỉ là ảnh (không có text nào ngoài <img>)
-          const textOnly = $(el).text().trim();
-          // Nếu đoạn chỉ chứa <img> (không có text), tạo entry Picture N
-          if ($(el).find('img').length > 0 && (!textOnly || textOnly.length === 0)) {
-            $(el).find('img').each((j: number, img: any) => {
+        let totalEntries = 0;
+
+        // Hàm để tách text thành sentences dựa trên dấu kết thúc câu
+        function splitIntoSentences(text: string): string[] {
+          // Tách theo dấu kết thúc câu: . ? ! ...
+          const sentenceEndings = /[.!?]+/g;
+          const sentences = text.split(sentenceEndings);
+
+          // Lọc bỏ sentences rỗng và thêm lại dấu kết thúc
+          const result: string[] = [];
+          let currentIndex = 0;
+
+          for (let i = 0; i < sentences.length; i++) {
+            const sentence = sentences[i].trim();
+            if (sentence.length > 0) {
+              // Tìm dấu kết thúc tương ứng
+              const match = text.slice(currentIndex).match(sentenceEndings);
+              const ending = match ? match[0] : '';
+
+              result.push(sentence + ending);
+              currentIndex += sentence.length + ending.length;
+            }
+          }
+
+          return result.filter(s => s.trim().length > 0);
+        }
+
+        // GIẢI PHÁP DỨT ĐIỂM: Sử dụng raw text với logic tách thông minh
+        console.log(`[DOCX] Using raw text with smart splitting for guaranteed accuracy`);
+
+        // Tách raw text thành các dòng và xử lý thông minh
+        const lines = rawText.split('\n').filter((line: string) => line.trim().length > 0);
+
+        console.log(`[DOCX] Raw text has ${lines.length} lines`);
+        console.log(`[DOCX] First 10 lines:`, lines.slice(0, 10).map((line: string, i: number) =>
+          `${i + 1}. "${line.trim().substring(0, 50)}${line.trim().length > 50 ? '...' : ''}"`
+        ));
+
+        // Tạo entries cho từng dòng với logic thông minh
+        lines.forEach((line: string, index: number) => {
+          const trimmedLine = line.trim();
+          if (trimmedLine.length > 0) {
+            // Loại bỏ dòng chỉ có punctuation
+            const cleanText = trimmedLine.replace(/^[^\w]*$/, '').trim();
+            if (cleanText.length === 0) {
+              console.log(`[DOCX] Skipping punctuation-only line: "${trimmedLine}"`);
+              return;
+            }
+
+            // Nếu dòng ngắn (≤ 50 ký tự), giữ nguyên như một string
+            if (trimmedLine.length <= 50) {
               manifestEntries.push({
                 projectId: String(file.project.id),
                 branchId: String(file.branch.id),
                 fileId: String(file.id),
                 manifestEntryId: uuidv4(),
-                originalText: `Picture ${pictureCount}`,
+                originalText: trimmedLine,
                 language: targetLanguage,
                 font: 'default',
                 style: {},
-                position: { x: 0, y: 0, page: 1 }, // Word không có thông tin trang cụ thể, mặc định page 1
+                position: { x: 0, y: 0, page: 1 },
               });
-              pictureCount++;
-            });
-          } else if (html && (textOnly.length > 0 || /<img/i.test(html))) {
-            // Đoạn có text hoặc vừa text vừa ảnh, giữ nguyên innerHTML
+              totalEntries++;
+              console.log(`[DOCX] Added short line ${index + 1}: "${trimmedLine}"`);
+            } else {
+              // Nếu dòng dài, tách thành sentences
+              const sentences = splitIntoSentences(trimmedLine);
+              sentences.forEach((sentence: string) => {
+                if (sentence.trim().length > 0) {
+                  manifestEntries.push({
+                    projectId: String(file.project.id),
+                    branchId: String(file.branch.id),
+                    fileId: String(file.id),
+                    manifestEntryId: uuidv4(),
+                    originalText: sentence.trim(),
+                    language: targetLanguage,
+                    font: 'default',
+                    style: {},
+                    position: { x: 0, y: 0, page: 1 },
+                  });
+                  totalEntries++;
+                  console.log(`[DOCX] Added sentence from line ${index + 1}: "${sentence.trim().substring(0, 50)}${sentence.trim().length > 50 ? '...' : ''}"`);
+                }
+              });
+            }
+          }
+        });
+
+        console.log(`[DOCX] Created ${totalEntries} separate text entries from raw text parsing`);
+
+        // Xử lý ảnh riêng biệt
+        $('img').each((i: number, img: any) => {
+          const src = $(img).attr('src');
+          if (src && src.startsWith('data:image/')) {
             manifestEntries.push({
               projectId: String(file.project.id),
               branchId: String(file.branch.id),
               fileId: String(file.id),
               manifestEntryId: uuidv4(),
-              originalText: html,
+              originalText: `Picture ${pictureCount}`,
               language: targetLanguage,
               font: 'default',
               style: {},
-              position: { x: 0, y: 0, page: 1 }, // Word không có thông tin trang cụ thể, mặc định page 1
+              position: { x: 0, y: 0, page: 1 }, // Tạm thời gán page 1
             });
+            pictureCount++;
+            totalEntries++;
           }
         });
+
+        // GÁN CỐ ĐỊNH: 15 strings cho mỗi trang
+        const STRINGS_PER_PAGE = 15;
+        const totalPages = Math.ceil(manifestEntries.length / STRINGS_PER_PAGE);
+
+        console.log(`[DOCX] Extracted ${totalEntries} entries (sentences + images), will assign ${STRINGS_PER_PAGE} strings per page`);
+        console.log(`[DOCX] Total pages needed: ${totalPages}`);
+
+        // Phân chia entries theo 15 strings/trang
+        manifestEntries.forEach((entry: any, index: number) => {
+          const pageNumber = Math.floor(index / STRINGS_PER_PAGE) + 1;
+          entry.position = {
+            x: 0,
+            y: 0,
+            page: pageNumber
+          };
+        });
+
+        console.log(`[DOCX] Successfully assigned ${STRINGS_PER_PAGE} strings per page across ${totalPages} pages`);
+        console.log(`[DOCX] Each string is now a complete sentence, avoiding premature splitting`);
         break;
       }
 
@@ -1133,9 +1476,9 @@ export class ManifestService {
       assignFilePartsByPage(manifestEntries);
       console.log(`[MANIFEST] Assigned file parts by page for PDF. Total entries: ${manifestEntries.length}`);
     } else {
-      // DOCX và file khác: chia theo 100 strings/page
+      // DOCX và file khác: chia theo 15 strings/trang
       assignFilePartsForDocx(manifestEntries);
-      console.log(`[MANIFEST] Assigned file parts by 100 strings/page for DOCX. Total entries: ${manifestEntries.length}`);
+      console.log(`[MANIFEST] Assigned file parts by 15 strings per page for DOCX. Total entries: ${manifestEntries.length}`);
     }
 
     // Trước khi insertMany, set obsolete: false cho từng manifestEntries

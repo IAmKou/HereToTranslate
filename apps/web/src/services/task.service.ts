@@ -8,6 +8,7 @@ export interface Task {
   projectId?: string;
   branchId?: string;
   fileId?: string;
+  filePart?: number; // backend field
   page?: number;
   pages?: number[]; // Array of selected pages for multiple page selection
   language?: string;
@@ -71,6 +72,7 @@ export interface CreateTaskDto {
   fileId?: string;
   page?: number;
   pages?: number[]; // Array of selected pages for multiple page selection
+  filePart?: number; // backend expects this
   language?: string;
 }
 
@@ -201,19 +203,34 @@ export interface TaskHistory {
 }
 
 export const taskService = {
+  // Normalize backend task shape to frontend expectations
+  _normalizeTask(raw: any): Task {
+    if (!raw || typeof raw !== 'object') return raw as Task;
+    const task: any = { ...raw };
+    if (task.filePart !== undefined && task.page === undefined) {
+      task.page = task.filePart;
+    }
+    return task as Task;
+  },
+
   async createTask(dto: CreateTaskDto): Promise<Task> {
-    const { data } = await axiosInstance.post('/tasks', dto);
-    return data;
+    // Backend expects filePart, not page
+    const payload: any = { ...dto };
+    if (payload.page !== undefined && payload.filePart === undefined) {
+      payload.filePart = payload.page;
+    }
+    const { data } = await axiosInstance.post('/tasks', payload);
+    return this._normalizeTask(data);
   },
 
   async getProjectTasks(projectId: string): Promise<Task[]> {
     const { data } = await axiosInstance.get(`/tasks/project/${projectId}`);
-    return data;
+    return Array.isArray(data) ? data.map((t: any) => this._normalizeTask(t)) : [];
   },
 
   async getTask(id: string): Promise<Task> {
     const { data } = await axiosInstance.get(`/tasks/${id}`);
-    return data;
+    return this._normalizeTask(data);
   },
 
   async updateTask(id: string, dto: UpdateTaskDto): Promise<Task> {

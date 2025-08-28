@@ -91,379 +91,459 @@ async function extractTextWithOcrSpace(fileBuffer: Buffer, apiKey: string): Prom
   }
 }
 
+// OCR.space with overlay (bounding boxes)
+async function extractOverlayWithOcrSpace(fileBuffer: Buffer, apiKey: string): Promise<{
+  items: {
+    text: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    page: number;
+  }[];
+}> {
+  try {
+    const form = new FormData();
+    form.append('apikey', apiKey);
+    form.append('isOverlayRequired', 'true');
+    form.append('file', fileBuffer, { filename: 'file.pdf', contentType: 'application/pdf' });
+    form.append('language', 'eng');
+    form.append('OCREngine', '2');
+    form.append('scale', 'true');
+    form.append('detectOrientation', 'true');
+
+    const response = await axios.post('https://api.ocr.space/parse/image', form, {
+      headers: form.getHeaders(),
+      timeout: 180000,
+    });
+
+    const items: any[] = [];
+    if (response.data && Array.isArray(response.data.ParsedResults)) {
+      for (let idx = 0; idx < response.data.ParsedResults.length; idx++) {
+        const pr = response.data.ParsedResults[idx];
+        const pageNum = Number(pr.Page) || idx + 1;
+        const overlay = pr.TextOverlay;
+        if (overlay && overlay.Lines && Array.isArray(overlay.Lines)) {
+          for (const line of overlay.Lines) {
+            if (!line || !Array.isArray(line.Words)) continue;
+            for (const w of line.Words) {
+              const text: string = (w.WordText || '').trim();
+              if (!text) continue;
+              const x = Number(w.Left) || 0;
+              const y = Number(w.Top) || 0;
+              const width = Number(w.Width) || Math.max(5, text.length * 5);
+              const height = Number(w.Height) || 10;
+              items.push({ text, x, y, width, height, page: pageNum });
+            }
+          }
+        }
+      }
+    }
+
+    return { items };
+  } catch (error: any) {
+    console.error('[OCR] OCR.space overlay API error:', error?.response ? error.response.data : error?.message || error);
+    throw new Error('Failed to extract overlay using OCR service: ' + (error?.message || error));
+  }
+}
+
 function groupTextByLine(items: any[], yThreshold = 8) {
   if (!items.length) {
     return [];
   }
 
-  // Enhanced sorting: Sort by page first, then by reading order (top-to-bottom, left-to-right)
-  items.sort((a, b) => {
-    // First sort by page
-    if (a.page !== b.page) {
-      return a.page - b.page;
-    }
-
-    // Then sort by Y position (top to bottom)
-    if (Math.abs(a.y - b.y) > yThreshold) {
-      return a.y - b.y;
-    }
-
-    // If on same line (within threshold), sort by X (left to right)
-    return a.x - b.x;
-  });
-
-  // Debug: Log page distribution before grouping
-  const pageDistribution = new Map();
-  items.forEach((item: any) => {
-    const page = item.page || 1;
-    pageDistribution.set(page, (pageDistribution.get(page) || 0) + 1);
-  });
-  console.log('[PDF] Page distribution before grouping:', Array.from(pageDistribution.entries()).sort((a, b) => a[0] - b[0]));
-
-  const lines = [];
-  let currentLine = [items[0]];
-
-  for (let i = 1; i < items.length; i++) {
-    const currentItem = items[i];
-    const lineBaseY = currentLine[0].y;
-    const lineBasePage = currentLine[0].page;
-
-    // Check if item is on the same page and line
-    // Use a dynamic vertical threshold relative to text height to avoid
-    // accidentally merging two visually separate lines (e.g., title and author)
-    const baseHeight = (currentLine[0].height || currentLine[0].fontSize || 10);
-    const itemHeight = (currentItem.height || currentItem.fontSize || 10);
-    const dynamicThreshold = Math.max(2, Math.min(6, Math.min(baseHeight, itemHeight) * 0.35));
-
-    if (
-      currentItem.page === lineBasePage &&
-      Math.abs(currentItem.y - lineBaseY) < Math.min(yThreshold, dynamicThreshold)
-    ) {
-      currentLine.push(currentItem);
+  // Prepare angle bucket (0, 90, 180, 270) for each item if available
+  for (const it of items) {
+    if (typeof it.angle === 'number') {
+      const a = ((Math.round(it.angle / 90) * 90) % 360 + 360) % 360; // snap to nearest 90
+      it.angleBucket = a;
     } else {
-      // New line or new page
-      currentLine.sort((a, b) => a.x - b.x);
-      lines.push(currentLine);
-      currentLine = [currentItem];
+      it.angleBucket = 0;
     }
   }
 
-  // Don't forget the last line
-  if (currentLine.length > 0) {
-    currentLine.sort((a, b) => a.x - b.x);
-    lines.push(currentLine);
-  }
+  // Helper to get median
+  const median = (arr: number[]) => {
+    if (arr.length === 0) return 0;
+    const s = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  };
 
-  // Debug: Log page distribution after grouping
-  const pageDistributionAfterGrouping = new Map();
-  lines.forEach((line: any) => {
-    const page = line[0]?.page || 1;
-    pageDistributionAfterGrouping.set(page, (pageDistributionAfterGrouping.get(page) || 0) + 1);
+  // Sort by page, then angle bucket to keep orientations separate
+  items.sort((a, b) => {
+    if (a.page !== b.page) return a.page - b.page;
+    if (a.angleBucket !== b.angleBucket) return a.angleBucket - b.angleBucket;
+    return 0;
   });
-  console.log('[PDF] Page distribution after grouping:', Array.from(pageDistributionAfterGrouping.entries()).sort((a, b) => a[0] - b[0]));
 
-  // Enhanced processing: Merge lines into complete sentences, but respect page boundaries
-  const result = [];
-  let currentSentence = '';
-  let currentItems: any[] = [];
-
-  // Ensure we get the correct page from the first line
-  let currentPage = 1;
-  if (lines.length > 0 && lines[0].length > 0) {
-    currentPage = lines[0][0].page || 1;
-    console.log(`[PDF] Starting with page: ${currentPage}`);
+  // Group by page then by angle bucket
+  const itemsByPage = new Map<number, Map<number, any[]>>();
+  for (const it of items) {
+    const p = it.page || 1;
+    const a = it.angleBucket || 0;
+    if (!itemsByPage.has(p)) itemsByPage.set(p, new Map());
+    const byAngle = itemsByPage.get(p)!;
+    if (!byAngle.has(a)) byAngle.set(a, []);
+    byAngle.get(a)!.push(it);
   }
 
-  // Debug: Log first few lines to check page distribution
-  console.log('[PDF] First 10 lines page distribution:');
-  for (let i = 0; i < Math.min(10, lines.length); i++) {
-    const line = lines[i];
-    const page = line[0]?.page || 1;
-    console.log(`[PDF] Line ${i}: page ${page}, text: "${line.map((item: any) => item.text).join(' ').substring(0, 50)}..."`);
-  }
+  const lines: any[][] = [];
 
-  for (const lineItems of lines) {
-    if (lineItems.length === 0) continue;
+  for (const [page, byAngle] of Array.from(itemsByPage.entries()).sort((a, b) => a[0] - b[0])) {
+    for (const [angleBucket, pageItemsRaw] of Array.from(byAngle.entries()).sort((a, b) => a[0] - b[0])) {
+      const pageItems = [...pageItemsRaw];
+      const vertical = angleBucket === 90 || angleBucket === 270;
 
-    // Check if we've moved to a new page
-    const linePage = lineItems[0]?.page || 1;
-    if (linePage !== currentPage) {
-      // Save current sentence before switching pages
-      if (currentSentence.trim().length >= 5) {
-        result.push({
-          text: currentSentence.trim(),
-          items: currentItems,
-        });
-      }
-      currentSentence = '';
-      currentItems = [];
-      currentPage = linePage;
-    }
+      // Sort to detect columns: use x when horizontal, use y when vertical text
+      pageItems.sort((a: any, b: any) => (vertical ? a.y - b.y : a.x - b.x));
 
-    // Ensure all items in this line are from the same page
-    const pagesInLine = new Set(lineItems.map((item: any) => item.page));
-    if (pagesInLine.size > 1) {
-      console.warn(`[PDF] WARNING: Line has items from multiple pages:`, Array.from(pagesInLine));
-      // Skip this line to avoid cross-page contamination
-      continue;
-    }
+      const baseMeasure = (i: any) => (vertical ? (i.height || 0) : (i.width || 0)) || Math.max(1, i.text?.length || 1);
+      const widths = pageItems.map(baseMeasure);
+      const medianWidth = Math.max(2, median(widths));
+      const columnGapThreshold = medianWidth * 1.5;
 
-    // Force page boundary check - never merge across pages
-    if (linePage !== currentPage) {
-      // This should never happen due to sorting, but double-check
-      console.warn(`[PDF] WARNING: Page mismatch detected: expected ${currentPage}, got ${linePage}`);
-      continue;
-    }
+      // --- Lightweight XY-cut block segmentation (separate main body vs sidebars/notes) ---
+      // Heuristics-driven thresholds
+      const heights = pageItems.map((i: any) => i.height || i.fontSize || 10);
+      const medianHeight = Math.max(6, median(heights));
+      const blockGapX = medianWidth * 4;   // large horizontal whitespace indicates a vertical cut
+      const blockGapY = medianHeight * 3;  // large vertical whitespace indicates a horizontal cut
 
-    // Sort items by x position to ensure correct reading order
-    lineItems.sort((a, b) => a.x - b.x);
+      // Build blocks by proximity and whitespace gaps
+      type Block = { items: any[]; minX: number; maxX: number; minY: number; maxY: number };
+      const blocks: Block[] = [];
 
-    let lineText = '';
-    let lastX = 0;
-
-    for (let i = 0; i < lineItems.length; i++) {
-      const item = lineItems[i];
-      const currentX = item.x;
-
-      // Add space if there's a significant gap
-      if (i > 0) {
-        const gap = currentX - lastX;
-        const avgHeight = lineItems.reduce((sum, it) => sum + (it.height || 10), 0) / lineItems.length;
-        const spaceThreshold = avgHeight * 0.2;
-
-        if (gap > spaceThreshold) {
-          lineText += ' ';
+      const sortedForBlocks = [...pageItems].sort((a: any, b: any) => (a.y === b.y ? a.x - b.x : a.y - b.y));
+      for (const it of sortedForBlocks) {
+        let assigned = false;
+        for (const blk of blocks) {
+          const horizGap = Math.max(0, Math.max(blk.minX, it.x) - Math.min(blk.maxX, (it.x || 0) + (it.width || 0)));
+          const vertGap = Math.max(0, Math.max(blk.minY, it.y) - Math.min(blk.maxY, (it.y || 0) + (it.height || 0)));
+          const overlapsX = horizGap < blockGapX; // enough closeness on X
+          const overlapsY = vertGap < blockGapY;  // enough closeness on Y
+          if (overlapsX && overlapsY) {
+            blk.items.push(it);
+            blk.minX = Math.min(blk.minX, it.x);
+            blk.maxX = Math.max(blk.maxX, (it.x || 0) + (it.width || 0));
+            blk.minY = Math.min(blk.minY, it.y);
+            blk.maxY = Math.max(blk.maxY, (it.y || 0) + (it.height || 0));
+            assigned = true;
+            break;
+          }
+        }
+        if (!assigned) {
+          blocks.push({
+            items: [it],
+            minX: it.x,
+            maxX: (it.x || 0) + (it.width || 0),
+            minY: it.y,
+            maxY: (it.y || 0) + (it.height || 0),
+          });
         }
       }
 
+      // Order blocks in reading order: left-to-right, then top-to-bottom
+      blocks.sort((a: any, b: any) => (Math.abs(a.minX - b.minX) > columnGapThreshold ? a.minX - b.minX : a.minY - b.minY));
+
+      // Process each block independently with column detection and line grouping
+      for (const blk of blocks) {
+        const blockItems = blk.items.sort((a: any, b: any) => (vertical ? a.y - b.y : a.x - b.x));
+
+        // Detect table-like blocks: many items with recurring aligned x and y positions
+        const xCenters = blockItems.map((it: any) => it.x + (it.width || 0) / 2).sort((a: number, b: number) => a - b);
+        const yCenters = blockItems.map((it: any) => it.y + (it.height || 0) / 2).sort((a: number, b: number) => a - b);
+        const cluster = (vals: number[], gap: number) => {
+          const groups: number[][] = [];
+          let current: number[] = [];
+          for (let i = 0; i < vals.length; i++) {
+            if (current.length === 0) { current.push(vals[i]); continue; }
+            if (Math.abs(vals[i] - current[current.length - 1]) <= gap) current.push(vals[i]); else { groups.push(current); current = [vals[i]]; }
+          }
+          if (current.length) groups.push(current);
+          return groups.map(g => g.reduce((s, v) => s + v, 0) / g.length);
+        };
+        const xClusterCenters = cluster(xCenters, medianWidth);
+        const yClusterCenters = cluster(yCenters, medianHeight * 0.8);
+
+        const isTableBlock = xClusterCenters.length >= 3 && yClusterCenters.length >= 3 && blockItems.length >= 12;
+
+        if (isTableBlock) {
+          // Group items into rows by nearest y cluster, then sort each row by x
+          const rowsMap = new Map<number, any[]>();
+          for (const it of blockItems) {
+            const centerY = it.y + (it.height || 0) / 2;
+            let bestIdx = 0; let bestDist = Infinity;
+            for (let i = 0; i < yClusterCenters.length; i++) {
+              const d = Math.abs(centerY - yClusterCenters[i]);
+              if (d < bestDist) { bestDist = d; bestIdx = i; }
+            }
+            if (!rowsMap.has(bestIdx)) rowsMap.set(bestIdx, []);
+            rowsMap.get(bestIdx)!.push(it);
+          }
+          const sortedRowKeys = Array.from(rowsMap.keys()).sort((a, b) => a - b);
+          for (const rk of sortedRowKeys) {
+            const rowItems = rowsMap.get(rk)!.sort((a: any, b: any) => a.x - b.x);
+            if (rowItems.length === 0) continue;
+            const line = [...rowItems];
+            line.sort((a: any, b: any) => a.x - b.x);
+            lines.push(line.map((t: any) => ({ ...t, page, angleBucket })));
+          }
+          // Move to next block; skip column logic for table-like block
+          continue;
+        }
+
+        // Build columns by large gaps between boxes (swap axes if vertical)
+        const columns: any[][] = [];
+        let currentCol: any[] = [];
+        let lastEdge = -Infinity;
+        for (const it of blockItems) {
+          const lead = vertical ? it.y : it.x;
+          const tail = vertical ? (it.y || 0) + (it.height || 0) : (it.x || 0) + (it.width || 0);
+          if (currentCol.length === 0) {
+            currentCol.push(it);
+            lastEdge = tail;
+            continue;
+          }
+          const gap = lead - lastEdge;
+          if (gap > columnGapThreshold) {
+            columns.push(currentCol);
+            currentCol = [it];
+          } else {
+            currentCol.push(it);
+          }
+          lastEdge = Math.max(lastEdge, tail);
+        }
+        if (currentCol.length) columns.push(currentCol);
+
+        // Normalize columns order by their average X (or Y if vertical)
+        const colsWithPos = columns.map((col) => ({
+          avg: col.reduce((s, i) => s + (vertical ? i.x : i.x), 0) / Math.max(1, col.length),
+          items: col,
+        }));
+        colsWithPos.sort((a, b) => a.avg - b.avg);
+
+        // For each column, group into lines by proximity perpendicular to column flow
+        for (const col of colsWithPos) {
+          // Sort by Y (horizontal text) or by X (vertical text)
+          col.items.sort((a: any, b: any) => {
+            if (vertical) {
+              return Math.abs(a.x - b.x) > yThreshold ? a.x - b.x : a.y - b.y;
+            }
+            return Math.abs(a.y - b.y) > yThreshold ? a.y - b.y : a.x - b.x;
+          });
+
+          let line: any[] = [];
+          for (const token of col.items) {
+            if (line.length === 0) {
+              line.push(token);
+              continue;
+            }
+
+            const base = line[0];
+            const baseHeight = base.height || base.fontSize || 10;
+            const itemHeight = token.height || token.fontSize || 10;
+            const dynamic = Math.max(2, Math.min(6, Math.min(baseHeight, itemHeight) * 0.35));
+
+            const delta = vertical ? Math.abs(token.x - base.x) : Math.abs(token.y - base.y);
+            if (delta < Math.min(yThreshold, dynamic)) {
+              line.push(token);
+            } else {
+              line.sort((a: any, b: any) => (vertical ? a.y - b.y : a.x - b.x));
+              lines.push(line.map((t: any) => ({ ...t, page, angleBucket })));
+              line = [token];
+            }
+          }
+          if (line.length) {
+            line.sort((a: any, b: any) => (vertical ? a.y - b.y : a.x - b.x));
+            lines.push(line.map((t: any) => ({ ...t, page, angleBucket })));
+          }
+        }
+      }
+    }
+  }
+
+  // Post-process: merge hyphenated line breaks within same column/page
+  const mergedLines: any[][] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i];
+    if (mergedLines.length === 0) {
+      mergedLines.push(current);
+      continue;
+    }
+
+    const prev = mergedLines[mergedLines.length - 1];
+    const prevPage = prev[0]?.page;
+    const currPage = current[0]?.page;
+
+    // Same page and roughly same column (x overlap)
+    const prevMinX = Math.min(...prev.map((t: any) => t.x));
+    const prevMaxX = Math.max(...prev.map((t: any) => (t.x || 0) + (t.width || 0)));
+    const currMinX = Math.min(...current.map((t: any) => t.x));
+    const currMaxX = Math.max(...current.map((t: any) => (t.x || 0) + (t.width || 0)));
+    const xOverlap = Math.min(prevMaxX, currMaxX) - Math.max(prevMinX, currMinX);
+    const overlapRatio = xOverlap / Math.max(1, Math.min(prevMaxX - prevMinX, currMaxX - currMinX));
+
+    // Compute previous line text quickly
+    const prevText = prev.map((t: any) => t.text).join('');
+
+    if (
+      prevPage === currPage &&
+      overlapRatio > 0.5 &&
+      /-$/.test(prevText.trim())
+    ) {
+      // De-hyphenate: remove trailing hyphen from prev last token
+      const last = prev[prev.length - 1];
+      if (last && typeof last.text === 'string') {
+        last.text = last.text.replace(/-\s*$/, '');
+      }
+      // Merge tokens without inserting extra space
+      mergedLines[mergedLines.length - 1] = prev.concat(current);
+    } else {
+      mergedLines.push(current);
+    }
+  }
+
+  // Detect repeated headers/footers across pages to improve reading order
+  const headerFooterCandidates = new Map<string, number>();
+  const signatureOfLine = (lineItems: any[]) => {
+    const text = lineItems.map((i: any) => i.text).join('').replace(/\s+/g, ' ').trim();
+    const pageHeight = lineItems[0]?.pageHeight || 0;
+    const minY = Math.min(...lineItems.map((i: any) => i.y));
+    const maxY = Math.max(...lineItems.map((i: any) => (i.y || 0) + (i.height || 0)));
+    const posBucket = pageHeight > 0 && (minY < pageHeight * 0.08 ? 'TOP' : (maxY > pageHeight * 0.92 ? 'BOTTOM' : 'MID'));
+    return `${posBucket}|${text}`;
+  };
+  for (const l of mergedLines) {
+    if (!l || l.length === 0) continue;
+    const sig = signatureOfLine(l);
+    if (sig.startsWith('TOP') || sig.startsWith('BOTTOM')) {
+      headerFooterCandidates.set(sig, (headerFooterCandidates.get(sig) || 0) + 1);
+    }
+  }
+  const repeatedHeaderFooter = new Set<string>(
+    Array.from(headerFooterCandidates.entries())
+      .filter(([, cnt]) => cnt >= 3)
+      .map(([sig]) => sig)
+  );
+
+  // Build result objects with text and items, preserve per-line order and handle RTL
+  const result: any[] = [];
+  for (const rawLineItems of mergedLines) {
+    // All line items are from same page by construction
+    const lineItems = [...rawLineItems];
+
+    // Skip repeated header/footer lines
+    const sig = signatureOfLine(lineItems);
+    if (repeatedHeaderFooter.has(sig)) {
+      continue;
+    }
+
+    // Detect RTL by presence of strong RTL characters
+    const rtlRegex = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    const sampleText = lineItems.map((i: any) => i.text).join('');
+    const isRTL = rtlRegex.test(sampleText);
+    const isVertical = (lineItems[0]?.angleBucket === 90 || lineItems[0]?.angleBucket === 270);
+
+    // Sort items appropriately
+    lineItems.sort((a: any, b: any) => {
+      if (isVertical) return a.y - b.y;
+      return isRTL ? b.x - a.x : a.x - b.x;
+    });
+
+    let lineText = '';
+    let lastX = 0;
+    for (let i = 0; i < lineItems.length; i++) {
+      const item = lineItems[i];
+      const currentX = item.x;
+      if (!isVertical) {
+        if (i > 0) {
+          const gap = currentX - lastX;
+          const avgHeight = lineItems.reduce((sum: number, it: any) => sum + (it.height || 10), 0) / lineItems.length;
+          const spaceThreshold = avgHeight * 0.2;
+          if (!isRTL && gap > spaceThreshold) lineText += ' ';
+        }
+      }
       lineText += item.text;
       lastX = currentX + (item.width || 0);
     }
 
-    // Clean up the line text
     lineText = lineText.trim();
+    if (lineText.length < 1) continue;
 
-    // Skip very short lines
-    if (lineText.length < 3) {
-      console.log(`[PDF] Skipping very short line: ${lineText}`);
+    result.push({ text: lineText, items: lineItems });
+  }
+
+  // Merge consecutive lines into paragraphs when alignment/spacing is consistent
+  const paragraphs: any[] = [];
+  const areSimilar = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
+  const getLineMetrics = (line: any) => {
+    const items = line.items;
+    const minX = Math.min(...items.map((i: any) => i.x));
+    const maxX = Math.max(...items.map((i: any) => (i.x || 0) + (i.width || 0)));
+    const avgH = items.reduce((s: number, i: any) => s + (i.height || i.fontSize || 10), 0) / Math.max(1, items.length);
+    const avgFont = items.reduce((s: number, i: any) => s + (i.fontSize || i.height || 10), 0) / Math.max(1, items.length);
+    const italic = items.some((i: any) => i.italic);
+    const bold = items.some((i: any) => i.bold);
+    const page = items[0]?.page || 1;
+    return { minX, maxX, width: maxX - minX, avgH, avgFont, italic, bold, page };
+  };
+
+  const isTitleLike = (m: any) => m.avgFont >= 1.6 * (m.avgH || 10) || m.width >= 0.8 * m.width; // rough large font
+  const isQuoteLike = (text: string, m: any) => m.italic || /^"/.test(text) || /"$/.test(text);
+
+  for (let i = 0; i < result.length; i++) {
+    const line = result[i];
+    const metrics = getLineMetrics(line);
+
+    // Start new paragraph if first, title-like, or quote-like
+    const isTitle = isTitleLike(metrics);
+    const isQuote = isQuoteLike(line.text, metrics);
+    if (paragraphs.length === 0 || isTitle || isQuote) {
+      paragraphs.push({ text: line.text, items: [...line.items], metrics });
       continue;
     }
 
-    // Validation
-    const vietnameseRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
-    const hasVietnamese = vietnameseRegex.test(lineText);
+    // Try to merge with previous paragraph when:
+    // - same page
+    // - left margin aligned (within 1.5x avg height)
+    // - vertical gap small relative to line height
+    // - similar font size (within 20%) and style not title/quote
+    const prev = paragraphs[paragraphs.length - 1];
+    const pm = prev.metrics;
+    const samePage = pm.page === metrics.page;
+    const leftAligned = areSimilar(pm.minX, metrics.minX, Math.max(2, pm.avgH * 1.5));
+    const prevBottom = Math.max(...prev.items.map((i: any) => (i.y || 0) + (i.height || 0)));
+    const currTop = Math.min(...line.items.map((i: any) => i.y));
+    const vGap = Math.max(0, currTop - prevBottom);
+    const smallVGap = vGap <= Math.max(pm.avgH, metrics.avgH) * 1.2;
+    const fontClose = metrics.avgFont > 0 && Math.abs(metrics.avgFont - pm.avgFont) / metrics.avgFont <= 0.2;
 
-    const readableChars = lineText.replace(/[^a-zA-ZÀ-ỹ0-9\s.,!?;:()[\]{}"'`~@#$%^&*+=|\\/<>]/g, '');
-    const readabilityScore = readableChars.length / lineText.length;
+    const currentIsQuoteOrTitle = isTitle || isQuote;
+    const prevIsQuoteOrTitle = isTitleLike(pm) || isQuoteLike(prev.text, pm);
 
-    if (!hasVietnamese && readabilityScore < 0.2) {
-      console.log(`[PDF] Skipping very low readability line: ${lineText.substring(0, 50)}`);
-      continue;
-    }
-
-    if (hasVietnamese && readabilityScore < 0.1) {
-      console.log(`[PDF] Skipping very low readability Vietnamese line: ${lineText.substring(0, 50)}`);
-      continue;
-    }
-
-    // Check if this looks like a table of contents or list item
-    const isListOrToc = lineText.match(/^(CHƯƠNG|CHAPTER|PHẦN|PART|MỞ ĐẦU|INTRODUCTION|TÁI BÚT|POSTSCRIPT|THƯ TUYỆT MỆNH|START|END|TABLE OF CONTENTS)/i) ||
-      lineText.match(/^\d+\./) ||
-      lineText.match(/^[A-Z][A-Z\s]+$/); // All caps text like "TABLE OF CONTENTS"
-
-    // Check if this is a standalone line that should be its own string
-    const isStandalone = lineText.length <= 50 &&
-      (lineText.match(/^[A-Z][A-Z\s]+$/) || // All caps short text
-        lineText.match(/^[A-Z][a-z\s]+$/) || // Title case short text
-        isListOrToc);
-
-    // Debug: Log standalone detection
-    if (isStandalone) {
-      console.log(`[PDF] Detected standalone line: "${lineText}" (isListOrToc: ${isListOrToc})`);
-    }
-
-    // Add line to current sentence (only if same page and not standalone)
-    if (linePage === currentPage && !isStandalone) {
-      // Debug: Log only first 5 lines of first page
-      if (currentPage === 3 && currentItems.length < 5) {
-        console.log(`[PDF] Processing line: "${lineText}" from page ${currentPage}`);
-      }
-
-      // Merge lines into complete sentences
-      currentSentence += (currentSentence ? ' ' : '') + lineText;
-      currentItems = currentItems.concat(lineItems);
-
-      // Check if sentence is complete (ends with proper punctuation)
-      if (lineText.trim().match(/[.!?]$/)) {
-        // Complete sentence found
-        if (currentSentence.trim().length >= 5) {
-          result.push({
-            text: currentSentence.trim(),
-            items: currentItems,
-          });
-          console.log(`[PDF] Added complete sentence: "${currentSentence.trim().substring(0, 50)}..." from page ${currentPage}`);
-        }
-
-        // Reset for next sentence
-        currentSentence = '';
-        currentItems = [];
-      }
-      // Check if current sentence ends with punctuation (from previous lines)
-      else if (currentSentence.trim().match(/[.!?]$/)) {
-        // Previous sentence ended with punctuation, start new sentence
-        if (currentSentence.trim().length >= 5) {
-          result.push({
-            text: currentSentence.trim(),
-            items: currentItems,
-          });
-          console.log(`[PDF] Added complete sentence from previous line: "${currentSentence.trim().substring(0, 50)}..." from page ${currentPage}`);
-        }
-
-        // Start new sentence with current line
-        currentSentence = lineText;
-        currentItems = lineItems;
-      }
-      // Check if we need to force a sentence boundary
-      else if (currentSentence.length > 200 && currentSentence.includes('.')) {
-        // Look for the last complete sentence
-        const lastDotIndex = currentSentence.lastIndexOf('.');
-        if (lastDotIndex > currentSentence.length * 0.6) { // Dot is in the latter part
-          const completeSentence = currentSentence.substring(0, lastDotIndex + 1).trim();
-          const remainingText = currentSentence.substring(lastDotIndex + 1).trim();
-
-          if (completeSentence.length >= 20) {
-            result.push({
-              text: completeSentence,
-              items: currentItems.slice(0, Math.floor(currentItems.length * 0.8)),
-            });
-            console.log(`[PDF] Force split long sentence: "${completeSentence.substring(0, 50)}..." from page ${currentPage}`);
-
-            // Continue with remaining text + current line
-            currentSentence = (remainingText + ' ' + lineText).trim();
-            currentItems = currentItems.slice(Math.floor(currentItems.length * 0.8)).concat(lineItems);
-          }
-        }
-      }
-      // Check if sentence seems incomplete (ends with common incomplete patterns)
-      else if (lineText.trim().match(/[;:,]\s*$/)) {
-        // Likely incomplete - continue building sentence
-        console.log(`[PDF] Continuing incomplete sentence: "${lineText.trim()}"`);
-      }
-      // Check if current sentence is getting too long (likely incomplete)
-      else if (currentSentence.length > 500) {
-        // Force a boundary to prevent extremely long sentences
-        console.log(`[PDF] Forcing boundary for long sentence: "${currentSentence.substring(0, 100)}..."`);
-        if (currentSentence.trim().length >= 5) {
-          result.push({
-            text: currentSentence.trim(),
-            items: currentItems,
-          });
-        }
-        currentSentence = lineText;
-        currentItems = lineItems;
-      }
-      // Don't force sentence boundary for semicolons or colons - let it continue
+    if (samePage && leftAligned && smallVGap && fontClose && !currentIsQuoteOrTitle && !prevIsQuoteOrTitle) {
+      prev.text = `${prev.text}${prev.text.endsWith('-') ? '' : ' '}${line.text}`.replace(/\s+/g, ' ').trim();
+      prev.items.push(...line.items);
+      // update metrics
+      prev.metrics = getLineMetrics({ items: prev.items, text: prev.text });
     } else {
-      // If page changed OR line is standalone, flush current sentence first
-      if (currentSentence.trim().length >= 5) {
-        result.push({
-          text: currentSentence.trim(),
-          items: currentItems,
-        });
-      }
-
-      if (linePage !== currentPage) {
-        console.log(`[PDF] Page changed from ${currentPage} to ${linePage}`);
-      }
-
-      if (isStandalone) {
-        // Push the standalone line as its own entry and DO NOT carry it into the next sentence
-        console.log(`[PDF] Emitting standalone line: "${lineText}" from page ${linePage}`);
-        result.push({
-          text: lineText,
-          items: lineItems,
-        });
-        // Reset accumulators; keep currentPage at this line's page
-        currentSentence = '';
-        currentItems = [];
-        currentPage = linePage;
-      } else {
-        // Start new sentence on new page (non-standalone)
-        currentSentence = lineText;
-        currentItems = lineItems;
-        currentPage = linePage;
-      }
-    }
-
-    // Don't force split sentences - let them grow naturally
-    // Only split if we have a clear sentence boundary
-    if (currentSentence.length > 1000) {
-      // Only split at clear sentence endings
-      const lastSentenceEnd = currentSentence.lastIndexOf('.');
-      if (lastSentenceEnd > 0 && lastSentenceEnd > currentSentence.length * 0.7) {
-        // Split at the last sentence ending
-        const firstPart = currentSentence.substring(0, lastSentenceEnd + 1).trim();
-        const secondPart = currentSentence.substring(lastSentenceEnd + 1).trim();
-
-        if (firstPart.length >= 5) {
-          result.push({
-            text: firstPart,
-            items: currentItems.slice(0, Math.floor(currentItems.length * 0.7)),
-          });
-        }
-
-        currentSentence = secondPart;
-        currentItems = currentItems.slice(Math.floor(currentItems.length * 0.7));
-      }
+      paragraphs.push({ text: line.text, items: [...line.items], metrics });
     }
   }
 
-  // Don't forget the last sentence if it doesn't end with punctuation
-  if (currentSentence.trim().length >= 5) {
-    result.push({
-      text: currentSentence.trim(),
-      items: currentItems,
-    });
-  }
+  // Replace result with merged paragraphs
+  const mergedResult = paragraphs.map(p => ({ text: p.text, items: p.items }));
 
-  console.log(`[PDF] Processed ${lines.length} lines into ${result.length} complete sentences`);
-
-  // Debug: Log page distribution after sentence merging
-  const pageDistributionAfterMerging = new Map();
-  result.forEach((sentence: any) => {
-    // Ensure all items in sentence are from the same page
-    const pagesInSentence = new Set(sentence.items.map((item: any) => item.page));
-    if (pagesInSentence.size > 1) {
-      console.warn(`[PDF] WARNING: Sentence has items from multiple pages:`, Array.from(pagesInSentence));
-      console.warn(`[PDF] Sentence text:`, sentence.text.substring(0, 100));
-    }
-
-    // Use the most common page in the sentence
-    const pageCounts = new Map();
-    sentence.items.forEach((item: any) => {
-      const page = item.page || 1;
-      pageCounts.set(page, (pageCounts.get(page) || 0) + 1);
-    });
-
-    let mostCommonPage = 1;
-    let maxCount = 0;
-    for (const [page, count] of pageCounts) {
-      if (count > maxCount) {
-        maxCount = count;
-        mostCommonPage = page;
-      }
-    }
-
-    // Debug: Log sentences assigned to page 1 to understand why
-    if (mostCommonPage === 1) {
-      console.log(`[PDF] Sentence assigned to page 1: "${sentence.text.substring(0, 50)}..." (${sentence.items.length} items)`);
-    }
-
-    pageDistributionAfterMerging.set(mostCommonPage, (pageDistributionAfterMerging.get(mostCommonPage) || 0) + 1);
+  // Debug info
+  const pageDistributionAfterGrouping = new Map();
+  mergedResult.forEach((line: any) => {
+    const p = line.items[0]?.page || 1;
+    pageDistributionAfterGrouping.set(p, (pageDistributionAfterGrouping.get(p) || 0) + 1);
   });
-  console.log('[PDF] Page distribution after sentence merging:', Array.from(pageDistributionAfterMerging.entries()).sort((a, b) => a[0] - b[0]));
+  console.log('[PDF] Page distribution after grouping:', Array.from(pageDistributionAfterGrouping.entries()).sort((a, b) => a[0] - b[0]));
 
-  return result;
+  return mergedResult;
 }
 
 // Enhanced function to split text into meaningful sentences
@@ -677,17 +757,41 @@ export class ManifestService {
             }
           } else {
             console.warn('[PDF] WARNING: No text items found with pdfjs-dist, falling back to OCR.');
-            // Fallback to OCR.space
+            // Fallback to OCR.space with overlay for bbox
             try {
-              console.log('[PDF] Step 2: Falling back to OCR.space...');
-              text = await extractTextWithOcrSpace(file.fileContent, apiKey);
+              console.log('[PDF] Step 2: Falling back to OCR.space overlay for bbox...');
+              const overlay = await extractOverlayWithOcrSpace(file.fileContent, apiKey);
               usedOcr = true;
-              console.log('[PDF] OCR result - text length:', text?.length || 0);
-              console.log('[PDF] OCR result - first 200 chars:', text ? text.substring(0, 200) : '[EMPTY]');
+              const ocrItems = overlay.items.map((w: any) => ({
+                text: w.text,
+                font: 'ocr',
+                fontSize: w.height,
+                bold: false,
+                italic: false,
+                color: '#000000',
+                x: w.x,
+                // OCR overlay uses top-left origin; align with our coordinate system (top-down)
+                y: w.y,
+                width: w.width,
+                height: w.height,
+                page: w.page,
+                pageHeight: undefined,
+                angle: 0,
+              }));
+              items = ocrItems;
+              console.log('[PDF] OCR overlay items count:', items.length);
             } catch (ocrError: any) {
-              console.error('[PDF] ERROR: OCR failed:', ocrError?.message || ocrError);
-              console.error('[PDF] OCR error stack:', ocrError?.stack);
-              throw new Error('Failed to extract text from PDF: ' + (ocrError?.message || ocrError));
+              console.error('[PDF] ERROR: OCR overlay failed, trying plain text OCR:', ocrError?.message || ocrError);
+              try {
+                text = await extractTextWithOcrSpace(file.fileContent, apiKey);
+                usedOcr = true;
+                console.log('[PDF] OCR result - text length:', text?.length || 0);
+                console.log('[PDF] OCR result - first 200 chars:', text ? text.substring(0, 200) : '[EMPTY]');
+              } catch (plainError: any) {
+                console.error('[PDF] ERROR: OCR failed:', plainError?.message || plainError);
+                console.error('[PDF] OCR error stack:', plainError?.stack);
+                throw new Error('Failed to extract text from PDF: ' + (plainError?.message || plainError));
+              }
             }
           }
         }
@@ -1071,6 +1175,7 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
     width: number;
     height: number;
     page: number;
+    pageHeight?: number;
   }[];
   images: {
     data: Buffer;
@@ -1139,7 +1244,7 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
       console.log(`[PDF] Processing page ${i}/${numPages}...`);
       const page = await doc.getPage(i);
       const viewport = page.getViewport({ scale: 1.0 });
-      const textContent = await page.getTextContent();
+      const textContent = await page.getTextContent({ disableCombineTextItems: true });
 
       console.log(`[PDF] Page ${i} has ${textContent.items.length} text items`);
 
@@ -1186,6 +1291,11 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
         const tx = item.transform;
         const x = tx[4];
         const y = viewport.height - tx[5]; // y in pdfjs is calculated from bottom up
+        // derive rotation angle from transform matrix (snap to 0/90/180/270 later)
+        const a = tx[0];
+        const b = tx[1];
+        let angleDeg = Math.round((Math.atan2(b, a) * 180) / Math.PI);
+        if (angleDeg < 0) angleDeg += 360;
         const height = item.height;
         const width = item.width;
         const fontName = item.fontName;
@@ -1195,7 +1305,19 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
         const isItalic = fontName.toLowerCase().includes('italic');
 
         // Enhanced text cleaning for better extraction
-        let cleanText = item.str;
+        let cleanText = item.str
+          // normalize unicode spaces to normal space
+          .replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
+          // remove zero width no-break
+          .replace(/\uFEFF/g, '')
+          // map common ligatures
+          .replace(/[\uFB00-\uFB04]/g, (m: string) => ({
+            '\uFB00': 'ff',
+            '\uFB01': 'fi',
+            '\uFB02': 'fl',
+            '\uFB03': 'ffi',
+            '\uFB04': 'ffl',
+          } as any)[m] || m);
 
         // Try multiple encoding approaches - only use supported encodings
         const encodingAttempts = [
@@ -1257,6 +1379,8 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
           width,
           height,
           page: i,
+          pageHeight: viewport.height,
+          angle: angleDeg,
         });
       }
     }
@@ -1269,3 +1393,4 @@ async function parsePdfWithFonts(buffer: Buffer): Promise<{
     throw error;
   }
 }
+

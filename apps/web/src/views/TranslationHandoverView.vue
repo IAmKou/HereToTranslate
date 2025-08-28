@@ -308,14 +308,10 @@
                 <p v-if="isRequestBased && !projectInfo?.project">Download functionality for requests without projects is not yet implemented. Files will be available for download once a project is created from this request.</p>
                 <p v-else-if="isRequestBased && projectInfo?.project">Files from the associated project are available for download.</p>
                 <p v-else>All files have been translated and are ready for download.</p>
-                <div class="download-stats">
-                  <span><i class="pi pi-file"></i> {{ totalFiles }} files</span>
-                  <span><i class="pi pi-check-circle"></i> {{ completedStrings }} translated strings</span>
-                </div>
+
               </div>
               <div class="download-actions">
                 <button
-                  v-if="projectInfo?.status === 'COMPLETED' || projectInfo?.status === 'INCOMPLETED'"
                   @click="downloadAllFiles"
                   class="btn btn-primary"
                   :disabled="downloading"
@@ -530,7 +526,43 @@
                   <div v-if="previewPages.length <= 5" style="color:#059669; font-size:0.875rem; margin-bottom:0.5rem;">
                     <i class="pi pi-check-circle"></i> All {{ previewPages.length }} pages auto-selected
                   </div>
-                  <div class="download-stats">
+
+                  <!-- Condensed selector when page count is large -->
+                  <div v-if="previewPages.length > 10" class="condensed-page-select" style="display:flex; flex-direction:column; gap:.5rem;">
+                    <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+                      <input
+                        v-model="pageInput"
+                        :disabled="previewSelectionLocked"
+                        type="text"
+                        placeholder="e.g. 1, 5, 12"
+                        style="padding:.5rem .75rem; border:1px solid #e2e8f0; border-radius:6px; width:220px;"
+                      />
+                      <button class="btn btn-secondary" :disabled="previewSelectionLocked" @click="applyPageInput">
+                        Apply
+                      </button>
+                      <span style="color:#6b7280; font-size:.85rem;">Enter up to 5 page numbers</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:.5rem;">
+                      <button class="btn btn-secondary" :disabled="previewSelectionLocked || pageWindowStart<=1" @click="shiftPageWindow(-20)">Prev 20</button>
+                      <button class="btn btn-secondary" :disabled="previewSelectionLocked || pageWindowStart+19>=maxPageNumber" @click="shiftPageWindow(20)">Next 20</button>
+                      <span style="color:#6b7280; font-size:.85rem;">Viewing pages {{ pageWindowStart }}–{{ Math.min(pageWindowStart+19, maxPageNumber) }}</span>
+                    </div>
+                    <div class="download-stats" style="flex-wrap:wrap; gap:.5rem;">
+                      <button
+                        v-for="p in windowPages"
+                        :key="p.filePart + ':' + p.pageNumber"
+                        class="btn"
+                        :class="selectedPages.includes(p.pageNumber) ? 'btn-primary' : 'btn-secondary'"
+                        @click="toggleSelectPage(p.pageNumber)"
+                        :disabled="previewSelectionLocked"
+                      >
+                        Page {{ p.pageNumber }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Original simple list when page count is small -->
+                  <div v-else class="download-stats">
                     <button
                       v-for="p in previewPages"
                       :key="p.filePart"
@@ -681,6 +713,17 @@ const previewExternalUrl = ref<string>('');
 // Preview confirmation and lock state
 const showPreviewConfirm = ref(false);
 const previewSelectionLocked = ref(false);
+// Condensed page selection helpers
+const pageInput = ref<string>('');
+const pageWindowStart = ref<number>(1);
+const maxPageNumber = computed<number>(() => (previewPages.value.length > 0 ? Math.max(...previewPages.value.map((p: { pageNumber: number }) => p.pageNumber)) : 0));
+const windowPages = computed<Array<{ pageNumber: number; filePart: number; stringCount: number; hasTranslatedStrings: boolean }>>(() => {
+  const start = pageWindowStart.value;
+  const end = Math.min(start + 19, maxPageNumber.value);
+  const set = new Set<number>();
+  for (let n = start; n <= end; n++) set.add(n);
+  return previewPages.value.filter((p: { pageNumber: number }) => set.has(p.pageNumber));
+});
 
 const requiredPreviewCount = computed(() => Math.min(5, previewPages.value.length || 0));
 const canStartPreview = computed(() => {
@@ -743,49 +786,58 @@ const completedFiles = computed(() => {
 });
 
 const totalStrings = computed(() => {
-  // Count total strings = unique original strings × number of target languages
-  const uniqueOriginalStrings = translationStrings.value.filter((str: any, index: number, self: any[]) =>
-    index === self.findIndex((s: any) => s.originalText === str.originalText)
-  );
+  // Count total strings per file: sum(unique original strings per file) × number of target languages
   const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
-  const totalCount = uniqueOriginalStrings.length * targetLanguages.length;
+  if (!Array.isArray(files.value) || files.value.length === 0) return 0;
 
-  console.log('=== DEBUG totalStrings calculation ===');
-  console.log('Unique original strings:', uniqueOriginalStrings.length);
+  let totalUniqueOriginalsAcrossFiles = 0;
+  for (const file of files.value) {
+    const fid = String(file.id || file.fileId || '');
+    if (!fid) continue;
+    const stringsForFile = translationStrings.value.filter((str: any) => String(str.fileId) === fid);
+    const uniqueOriginalsForFile = stringsForFile.filter((str: any, index: number, self: any[]) =>
+      index === self.findIndex((s: any) => s.originalText === str.originalText)
+    );
+    totalUniqueOriginalsAcrossFiles += uniqueOriginalsForFile.length;
+  }
+
+  const totalCount = totalUniqueOriginalsAcrossFiles * targetLanguages.length;
+
+  console.log('=== DEBUG totalStrings calculation (per-file) ===');
+  console.log('Files:', files.value.length);
+  console.log('Sum of unique originals across files:', totalUniqueOriginalsAcrossFiles);
   console.log('Target languages:', targetLanguages);
-  console.log('Total strings =', uniqueOriginalStrings.length, '×', targetLanguages.length, '=', totalCount);
-  console.log('=== DEBUG targetLanguages ===', targetLanguages);
+  console.log('Total strings =', totalUniqueOriginalsAcrossFiles, '×', targetLanguages.length, '=', totalCount);
   return totalCount;
 });
 
 const completedStrings = computed(() => {
-  // Count total completed strings = unique original strings with ALL languages completed × number of target languages
+  // Count translated units across all files: unique (fileId, originalText, targetLanguage) with non-empty translatedText
   const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
-  const uniqueOriginalStrings = translationStrings.value.filter((str: any, index: number, self: any[]) =>
-    index === self.findIndex((s: any) => s.originalText === str.originalText)
+  if (!Array.isArray(files.value) || files.value.length === 0) return 0;
+
+  const validFileIds = new Set(
+    files.value.map((f: any) => String(f.id || f.fileId || '')).filter((id: string) => !!id)
   );
 
-  const completedOriginalStrings = uniqueOriginalStrings.filter((originalStr: any) => {
-    // Check if this original string has translations for ALL target languages
-    const hasAllTranslations = targetLanguages.every((lang: string) => {
-      const translatedString = translationStrings.value.find((str: any) =>
-        str.originalText === originalStr.originalText &&
-        str.targetLanguage === lang &&
-        str.translatedText &&
-        str.translatedText.trim()
-      );
-      return !!translatedString;
-    });
-    return hasAllTranslations;
-  });
+  const seen = new Set<string>();
+  let translatedUnits = 0;
+  for (const str of translationStrings.value) {
+    const fid = String(str.fileId || '');
+    if (!validFileIds.has(fid)) continue;
+    const lang = String(str.targetLanguage || '');
+    if (!targetLanguages.includes(lang)) continue;
+    if (!str.translatedText || !String(str.translatedText).trim()) continue;
 
-  const totalCompletedCount = completedOriginalStrings.length * targetLanguages.length;
+    const key = `${fid}__${str.originalText}__${lang}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      translatedUnits += 1;
+    }
+  }
 
-  console.log('=== DEBUG completedStrings calculation ===');
-  console.log('Completed original strings:', completedOriginalStrings.length);
-  console.log('Target languages:', targetLanguages);
-  console.log('Total completed strings =', completedOriginalStrings.length, '×', targetLanguages.length, '=', totalCompletedCount);
-  return totalCompletedCount;
+  console.log('=== DEBUG completedStrings (translated units) ===', translatedUnits);
+  return translatedUnits;
 });
 
 const overallProgress = computed(() => {
@@ -1057,32 +1109,30 @@ function getFileProgress(file: any): number {
     return 0;
   }
 
-  // Get unique original strings for this file
-  const uniqueOriginalStrings = fileStrings.filter((str: any, index: number, self: any[]) =>
+  // New logic: compute progress based on per-language translated entries
+  const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
+  // Unique originals for denominator
+  const uniqueOriginals = fileStrings.filter((str: any, index: number, self: any[]) =>
     index === self.findIndex((s: any) => s.originalText === str.originalText)
   );
+  const totalUnits = uniqueOriginals.length * targetLanguages.length;
 
-  const totalFileStrings = uniqueOriginalStrings.length;
-  console.log('Unique original strings for this file:', totalFileStrings);
+  // Count unique translated entries per (originalText, targetLanguage)
+  const seenKeys = new Set<string>();
+  let translatedUnits = 0;
+  for (const str of fileStrings) {
+    const lang = String(str.targetLanguage || '');
+    if (!targetLanguages.includes(lang)) continue;
+    if (!str.translatedText || !String(str.translatedText).trim()) continue;
+    const key = `${str.originalText}__${lang}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      translatedUnits += 1;
+    }
+  }
 
-  // Count how many unique original strings have translations in ALL target languages
-  const targetLanguages = projectInfo.value?.targetLanguages || ['en'];
-  const completed = uniqueOriginalStrings.filter((originalStr: any) => {
-    // Check if this original string has translations for ALL target languages
-    const hasAllTranslations = targetLanguages.every((lang: string) => {
-      const translatedString = fileStrings.find((str: any) =>
-        str.originalText === originalStr.originalText &&
-        str.targetLanguage === lang &&
-        str.translatedText &&
-        str.translatedText.trim()
-      );
-      return !!translatedString;
-    });
-    return hasAllTranslations;
-  }).length;
-
-  const progress = Math.round((completed / totalFileStrings) * 100);
-  console.log(`File progress: ${completed}/${totalFileStrings} = ${progress}%`);
+  const progress = totalUnits === 0 ? 0 : Math.round((translatedUnits / totalUnits) * 100);
+  console.log(`File progress (per-language): ${translatedUnits}/${totalUnits} = ${progress}%`);
   return progress;
 }
 
@@ -1207,6 +1257,7 @@ function selectPreviewFile(file: any) {
     selectedPreviewFileId.value = id;
     // Reset pages when file changes
     selectedPages.value = [];
+    pageWindowStart.value = 1;
     fetchPreviewPages();
     savePreviewState();
   }
@@ -1238,9 +1289,12 @@ async function fetchPreviewPages() {
 
     // Auto-select all pages if file has 5 or fewer pages
     if (previewPages.value.length <= 5) {
-      selectedPages.value = previewPages.value.map(p => p.pageNumber);
+      selectedPages.value = previewPages.value.map((p: { pageNumber: number }) => p.pageNumber);
       console.log(`Auto-selected all ${previewPages.value.length} pages`);
     }
+    // Reset input helpers
+    pageInput.value = '';
+    pageWindowStart.value = 1;
   } catch (e) {
     console.error('Error fetching preview pages:', e);
     // Create a default page if API fails
@@ -1267,6 +1321,30 @@ function toggleSelectPage(pageNumber: number) {
     currentPreviewPage.value = selectedPages.value[0];
   }
   savePreviewState();
+}
+
+function shiftPageWindow(delta: number) {
+  const next = Math.max(1, Math.min((pageWindowStart.value || 1) + delta, Math.max(1, maxPageNumber.value - 19)));
+  pageWindowStart.value = next;
+}
+
+function applyPageInput() {
+  if (previewSelectionLocked.value) return;
+  const text = pageInput.value || '';
+  const nums: number[] = text
+    .split(/[\s,]+/)
+    .map((s: string) => Number(s))
+    .filter((n: number) => Number.isFinite(n) && n >= 1 && n <= maxPageNumber.value);
+  const unique: number[] = [];
+  for (const n of nums) {
+    if (!unique.includes(n)) unique.push(n);
+    if (unique.length >= 5) break;
+  }
+  if (unique.length > 0) {
+    selectedPages.value = unique;
+    currentPreviewPage.value = unique[0];
+    savePreviewState();
+  }
 }
 
 async function buildPreview() {
@@ -1604,64 +1682,67 @@ async function downloadAllFiles() {
   downloading.value = true;
 
   try {
-    if (isRequestBased.value) {
-      // For requests, try to download from project if available
-      const requestRes = await axiosInstance.get(`/requests/${requestId.value}/detail`);
-      const request = requestRes.data;
+    // Use translation/export/download/:fileId for each file
+    // Enforce single-language export only
+    const targetLangs: string[] = Array.isArray(projectInfo.value?.targetLanguages) ? projectInfo.value.targetLanguages : [];
+    if (!files.value || files.value.length === 0) {
+      toast.add({ severity: 'info', summary: 'Info', detail: 'No files to download.', life: 3000 });
+      return;
+    }
 
-      if (request.project) {
-        const projectId = request.project.id;
-        const branchId = request.project.defaultBranch?.id || '1';
+    // Determine the single language to export
+    const selectedLang = selectedPreviewLanguage.value || (targetLangs[0] || '');
+    if (!selectedLang) {
+      toast.add({ severity: 'warn', summary: 'Select language', detail: 'Please select a language to download.', life: 3000 });
+      return;
+    }
 
-        const response = await axiosInstance.get(`/translation/download/all/${projectId}/${branchId}`, {
-          responseType: 'blob'
-        });
-
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Successfully downloaded all files!',
-          life: 3000
-        });
-      } else {
-        // For requests without project, show a message that download functionality is not yet implemented
-        toast.add({
-          severity: 'info',
-          summary: 'Info',
-          detail: 'Download functionality for requests without projects is not yet implemented.',
-          life: 3000
-        });
+    // Helper to extract filename from Content-Disposition
+    const getFilenameFromHeaders = (headers: any, fallback: string) => {
+      const cd = (headers || {})['content-disposition'] || (headers || {})['Content-Disposition'];
+      if (typeof cd === 'string') {
+        const match = cd.match(/filename\*?=([^;]+)/i);
+        if (match) {
+          let name = match[1].trim();
+          name = name.replace(/^utf-8''/i, '');
+          name = name.replace(/^"|"$/g, '');
+          try { return decodeURIComponent(name); } catch {}
+          return name;
+        }
       }
-    } else {
-      const response = await axiosInstance.get(`/translation/download/all/${projectId.value}/${branchId.value}`, {
+      return fallback;
+    };
+
+    // Sequentially download each file to avoid overwhelming the browser
+    for (const f of files.value) {
+      const fid = String(f.id || f.fileId);
+      if (!fid) continue;
+      const params: any = { language: selectedLang };
+
+      const resp = await axiosInstance.get(`/translation/export/download/${fid}`, {
+        params,
         responseType: 'blob'
       });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const blob = new Blob([resp.data], { type: (resp.headers as any)['content-type'] || 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const fallbackName = f.fileName;
+      const fileName = getFilenameFromHeaders(resp.headers, fallbackName);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${projectInfo.value?.name || 'translated-files'}.zip`);
+      link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-
-      toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Successfully downloaded all files!',
-        life: 3000
-      });
     }
+
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'All files have been queued for download.',
+      life: 3000
+    });
 
   } catch (err: any) {
     toast.add({

@@ -412,10 +412,25 @@ export class TranslationService {
 
         // First, ensure the language-specific file exists by copying from original if needed
         try {
-          const exists = await this.asposeService.fileExistsWithFolder(langFileName, projectFolder);
-          if (!exists) {
-            logger.log(`[PDF] Language file ${langFileName} doesn't exist, copying from original...`);
-            const originalBuffer = await this.asposeService.downloadFileWithFolder(fileEntity.fileName, projectFolder);
+          const langExists = await this.asposeService.fileExistsWithFolder(langFileName, projectFolder);
+          if (!langExists) {
+            logger.log(`[PDF] Language file ${langFileName} doesn't exist, creating from original buffer...`);
+
+            // Ensure original exists in Aspose; if not, upload it from DB buffer
+            const originalExists = await this.asposeService.fileExistsWithFolder(
+              fileEntity.fileName,
+              projectFolder
+            );
+            if (!originalExists) {
+              logger.log(`[PDF] Original file not in Aspose storage, uploading original buffer: ${fileEntity.fileName}`);
+              await this.asposeService.uploadFile(
+                fileEntity.fileName,
+                originalBuffer,
+                projectFolder
+              );
+            }
+
+            // Create the language-specific variant by uploading the same original buffer under the lang-specific name
             await this.asposeService.uploadFile(langFileName, originalBuffer, projectFolder);
             logger.log(`[PDF] Created language file: ${langFileName}`);
           }
@@ -1383,15 +1398,17 @@ export class TranslationService {
       .sort({ filePart: 1, _id: 1 })
       .lean();
 
-    // Tạo map để merge nhanh: originalText -> translatedText
-    const translationMap = new Map();
-    translatedStrings.forEach((str) => {
-      translationMap.set(str.originalText, str.translatedText);
+    // Tạo map để merge nhanh theo fileId + originalText để tránh trộn giữa các file
+    const translationMap = new Map<string, string>();
+    translatedStrings.forEach((str: any) => {
+      const key = `${String(str.fileId)}||${String(str.originalText)}`;
+      translationMap.set(key, str.translatedText as string);
     });
 
     // Merge base strings với bản dịch của ngôn ngữ được chọn
-    const mergedStrings = baseStrings.map((str) => {
-      const translatedText = translationMap.get(str.originalText) || '';
+    const mergedStrings = baseStrings.map((str: any) => {
+      const key = `${String(str.fileId)}||${String(str.originalText)}`;
+      const translatedText = translationMap.get(key) || '';
       return {
         ...str,
         translatedText,
@@ -1399,15 +1416,19 @@ export class TranslationService {
     });
 
     // Lấy tên file và thông tin file type
-    const fileIds = Array.from(new Set(mergedStrings.map((str) => str.fileId)));
+    const fileIdSet = new Set<string>();
+    mergedStrings.forEach((str: any) => {
+      fileIdSet.add(String(str.fileId));
+    });
+    const fileIds: string[] = Array.from(fileIdSet);
     const fileNamesMap: Record<string, string> = {};
     const fileTypesMap: Record<string, string> = {};
 
     if (fileIds.length > 0) {
       const files = await this.fileRepository.find({
-        where: { id: In(fileIds.map((id) => BigInt(id))) },
+        where: { id: In(fileIds.map((id: string) => BigInt(id))) },
       });
-      files.forEach((f) => {
+      files.forEach((f: any) => {
         fileNamesMap[String(f.id)] = f.fileName;
         fileTypesMap[String(f.id)] = f.fileType;
       });
@@ -1415,12 +1436,12 @@ export class TranslationService {
 
     // Nếu có fileType được cung cấp, sử dụng nó thay vì lấy từ database
     if (fileType && fileIds.length > 0) {
-      fileIds.forEach((fileId) => {
-        fileTypesMap[fileId] = fileType;
+      fileIds.forEach((fid: string) => {
+        fileTypesMap[fid] = fileType;
       });
     }
 
-    return mergedStrings.map((str) => ({
+    return mergedStrings.map((str: any) => ({
       id: str._id.toString(),
       originalText: str.originalText,
       translatedText: str.translatedText || '',

@@ -65,9 +65,6 @@ export class AsposeService {
     console.log(`[Aspose] Downloaded: ${filePath}`);
     return result.body;
   }
-
-
-
   /**
    * Replace text in a PDF file
    */
@@ -87,7 +84,8 @@ export class AsposeService {
     }
     try {
       console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
-
+      const pdf = this.pdfApi.getDocument(fileName, storage, folder);
+      const rectangle = (await pdf).body.document.pages.list[filePage].rectangle;
       const textReplaces: TextReplace[] = replacements.map((r, index) => {
         console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
         const textReplace = {
@@ -95,7 +93,7 @@ export class AsposeService {
           newValue: r.newText,
           regex: true,
           textState: new TextState(),
-          rect: new Rectangle(),
+          rect: rectangle,
           centerTextHorizontally: false,
         } as unknown as TextReplace;
         return textReplace;

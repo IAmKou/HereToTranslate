@@ -7,7 +7,8 @@ import { TextState } from 'asposepdfcloud/src/models/textState';
 import { Rectangle } from 'asposepdfcloud/src/models/rectangle';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { PdfTextDoc } from '../../db/mongo/schema/pdf-details.schema';
+import { PdfTextDoc, PdfTextModel } from '../../db/mongo/schema/pdf-details.schema';
+import { FontStyles } from 'asposepdfcloud/src/models/fontStyles';
 
 @Injectable()
 export class AsposeService {
@@ -71,72 +72,101 @@ export class AsposeService {
   /**
    * Replace text in a PDF file
    */
-  async replaceTextInPdf(
-    fileName: string,
-    filePage: number,
-    replacements: Array<{ oldText: string; newText: string }>,
-    folder = 'pdf',
-    storageName?: string
-  ): Promise<void> {
-    const storage = storageName || this.storage;
-    const filePath = `${folder}/${fileName}`;
+  
+async replaceTextInPdf(
+  fileName: string,
+  filePage: number,
+  replacements: Array<{ oldText: string; newText: string }>,
+  folder = 'pdf',
+  storageName?: string
+): Promise<void> {
+  const storage = storageName || this.storage;
+  const filePath = `${folder}/${fileName}`;
 
-    const exists = await this.pdfApi.objectExists(filePath, storage);
-    if (!exists.body.exists) {
-      throw new Error(`[Aspose] File not found in storage: ${filePath}`);
-    }
-    try {
-      console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
-      
-      const textReplaces: TextReplace[] = replacements.map((r, index) => {
-        console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
-        const textReplace = {
-          oldValue: this.buildFlexibleRegex(r.oldText),
-          newValue: r.newText,
-          regex: true,
-          textState: new TextState(),
-          rect: new Rectangle(),
-          centerTextHorizontally: false,
-        } as unknown as TextReplace;
-        return textReplace;
-      });
-
-      const request: TextReplaceListRequest = {
-        textReplaces,
-        defaultFont: 'Arial',
-        startIndex: 0,
-        countReplace: 0,
-      };
-
-      console.log(`[Aspose] Sending text replace request to Aspose API...`);
-      console.log(`[Aspose] Request details:`, {
-        fileName,
-        filePage,
-        textReplacesCount: textReplaces.length,
-        storage,
-        folder
-      });
-
-      const response = await this.pdfApi.postPageTextReplace(
-        fileName,
-        filePage,
-        request,
-        storage,
-        folder
-      );
-
-      console.log(`[Aspose] API response received:`, {
-        status: response.body.status,
-        body: response.body
-      });
-
-      console.log(`[Aspose] Text replaced in ${filePath} on page ${filePage}`);
-    } catch (error) {
-      console.error(`[Aspose] Error replacing text in ${filePath}:`, error);
-      throw new Error(`Failed to replace text in PDF: ${error}`);
-    }
+  const exists = await this.pdfApi.objectExists(filePath, storage);
+  if (!exists.body.exists) {
+    throw new Error(`[Aspose] File not found in storage: ${filePath}`);
   }
 
+  try {
+    console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
+
+    // fetch page details from Mongo
+    const pdfDoc = await PdfTextModel.findOne({ fileName }).lean();
+    if (!pdfDoc) throw new Error(`[Mongo] No text metadata found for file: ${fileName}`);
+
+    const page = pdfDoc.pages.find((p) => p.pageNumber === filePage);
+    if (!page) throw new Error(`[Mongo] No page metadata found for page: ${filePage}`);
+
+    const textReplaces: TextReplace[] = replacements.map((r, index) => {
+      // try to find a match in Mongo
+      const match = page.details.find((d) => d.text.trim() === r.oldText.trim());
+      
+      console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
+
+      if (match) {
+        // Use MongoDB data if found
+        const rect = new Rectangle();
+        rect.lLX = match.llx;
+        rect.lLY = match.lly;
+        rect.uRX = match.urx;
+        rect.uRY = match.ury;
+
+        const textState = new TextState();
+        textState.fontSize = match.fontSize;
+        textState.font = match.font;
+        textState.foregroundColor = { a: 255, r: 0, g: 0, b: 0 };
+
+        if (match.isBold) textState.fontStyle = FontStyles.Bold;
+        if (match.isItalic) textState.fontStyle = FontStyles.Italic;
+        if (match.isUnderline) textState.underline = true;
+
+        return {
+          oldValue: r.oldText,
+          newValue: r.newText,
+          regex: false, // exact string
+          rect,
+          textState,
+          centerTextHorizontally: false,
+        } as unknown as TextReplace;
+      } else {
+        // Use Aspose defaults if no match found
+        console.warn(`[Aspose] No match found in DB for "${r.oldText}", using Aspose defaults`);
+        return {
+          oldValue: r.oldText,
+          newValue: r.newText,
+          regex: false, // exact string
+          centerTextHorizontally: false,
+        } as unknown as TextReplace;
+      }
+    });
+
+     const request: TextReplaceListRequest = {
+       textReplaces,
+      defaultFont: 'TimesNewRomanPSMT',
+      startIndex: 0,
+      countReplace: 0,
+    };
+
+    const response = await this.pdfApi.postPageTextReplace(
+      fileName,
+      filePage,
+      request,
+      storage,
+      folder
+    );
+
+    console.log(`[Aspose] API response received:`, {
+      status: response.body.status,
+      body: response.body
+    });
+
+    console.log(`[Aspose] Text replaced in ${filePath} on page ${filePage}`);
+  } catch (error) {
+    console.error(`[Aspose] Error replacing text in ${filePath}:`, error);
+    throw new Error(`Failed to replace text in PDF: ${error}`);
+  }
+}
   /**
    * Delete file from Aspose storage
    */

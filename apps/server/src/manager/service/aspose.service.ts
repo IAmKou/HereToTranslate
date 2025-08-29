@@ -84,8 +84,7 @@ export class AsposeService {
     }
     try {
       console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
-      const pdf = this.pdfApi.getDocument(fileName, storage, folder);
-      const rectangle = (await pdf).body.document.pages.list[filePage].rectangle;
+
       const textReplaces: TextReplace[] = replacements.map((r, index) => {
         console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
         const textReplace = {
@@ -93,7 +92,7 @@ export class AsposeService {
           newValue: r.newText,
           regex: true,
           textState: new TextState(),
-          rect: rectangle,
+          rect: new Rectangle(),
           centerTextHorizontally: false,
         } as unknown as TextReplace;
         return textReplace;
@@ -134,7 +133,6 @@ export class AsposeService {
       throw new Error(`Failed to replace text in PDF: ${error}`);
     }
   }
-
   /**
    * Delete file from Aspose storage
    */

@@ -215,7 +215,19 @@ export class FileController {
     try {
       const folder = body.folder || 'pdf';
       const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer, folder);
-      await this.asposeService.replaceTextInPdf(file.originalname, 1, body.replacements, folder);
+      
+      // Group replacements by page if they have page information, otherwise use page 0
+      const replacementsByPage = new Map<number, Array<{ oldText: string; newText: string }>>();
+      
+      // For now, put all replacements on page 0 (first page) since no page info is provided
+      // You can extend this to support page-specific replacements by adding page field to the request
+      replacementsByPage.set(0, body.replacements);
+      
+      // Process each page's replacements
+      for (const [page, replacements] of replacementsByPage.entries()) {
+        await this.asposeService.replaceTextInPdf(file.originalname, page, replacements, folder);
+      }
+      
       const finalPdfBuffer = await this.asposeService.downloadFileWithFolder(file.originalname, folder);
 
       return {

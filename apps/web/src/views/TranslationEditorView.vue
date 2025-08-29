@@ -973,7 +973,8 @@ async function performSave(str: any) {
   try {
     await axiosInstance.post(`/translation/translate/${id}`, {
       translatedText: str.translatedText,
-      language: selectedLanguage.value
+      language: selectedLanguage.value,
+      page: getCurrentEditorPage(str.fileId) // Use current editor page instead of str.filePart
     });
     str._dirty = false;
     str._saved = true;

@@ -59,11 +59,10 @@ export class TranslationController {
   async translateString(
     @Param('id') id: string,
     @Body('translatedText') translatedText: string,
-    @Body('language') language: string,
-    @Body('page') page?: number
+    @Body('language') language: string
   ) {
     try {
-      return await this.translationService.addTranslation(id, translatedText, language, page);
+      return await this.translationService.addTranslation(id, translatedText, language);
     } catch (err: any) {
       if (err?.message && err.message.includes('DOCX body not found')) {
         return {

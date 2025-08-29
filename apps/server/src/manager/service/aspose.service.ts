@@ -84,20 +84,8 @@ export class AsposeService {
     }
     try {
       console.log(`[Aspose] Processing ${replacements.length} replacements for file ${fileName} on page ${filePage}`);
-      
-      // Get the PDF document to access page-specific information
-      const pdf = await this.pdfApi.getDocument(fileName, storage, folder);
-      const pages = pdf.body.document.pages.list;
-      
-      // Validate page number
-      if (filePage < 0 || filePage >= pages.length) {
-        throw new Error(`[Aspose] Invalid page number: ${filePage}. PDF has ${pages.length} pages (0-${pages.length - 1})`);
-      }
-      
-      // Get the rectangle for the specific page
-      const pageRectangle = pages[filePage].rectangle;
-      console.log(`[Aspose] Using rectangle for page ${filePage}:`, pageRectangle);
-      
+      const pdf = this.pdfApi.getDocument(fileName, storage, folder);
+      const rectangle = (await pdf).body.document.pages.list[filePage].rectangle;
       const textReplaces: TextReplace[] = replacements.map((r, index) => {
         console.log(`[Aspose] Replacement ${index + 1}: "${r.oldText}" -> "${r.newText}"`);
         const textReplace = {
@@ -105,7 +93,7 @@ export class AsposeService {
           newValue: r.newText,
           regex: true,
           textState: new TextState(),
-          rect: pageRectangle, // Use page-specific rectangle
+          rect: rectangle,
           centerTextHorizontally: false,
         } as unknown as TextReplace;
         return textReplace;
@@ -124,8 +112,7 @@ export class AsposeService {
         filePage,
         textReplacesCount: textReplaces.length,
         storage,
-        folder,
-        pageRectangle
+        folder
       });
 
       const response = await this.pdfApi.postPageTextReplace(

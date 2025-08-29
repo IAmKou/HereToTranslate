@@ -270,7 +270,7 @@ export class TranslationService {
     }
   }
 
-  async addTranslation(id: string, translatedText: string, language: string, page?: number) {
+  async addTranslation(id: string, translatedText: string, language: string) {
     // Tìm bản ghi gốc để lấy thông tin
     const originalEntry = await this.translationModel.findById(id);
     if (!originalEntry) throw new Error('Manifest entry not found');
@@ -376,7 +376,7 @@ export class TranslationService {
         .map((e) => ({
           originalText: e.originalText as string,
           translatedText: e.translatedText as string,
-          page: page !== undefined ? page : ((e as any).filePart || e.position?.page || 0), // Use frontend page or fallback to database
+          page: (e as any).filePart || e.position?.page || 1,
         }));
       const originalBuffer = fileEntity.fileContent as Buffer;
       try {
@@ -1114,7 +1114,7 @@ export class TranslationService {
         .map((e) => ({
           originalText: e.originalText as string,
           translatedText: e.translatedText as string,
-          page: (e as any).filePart || e.position?.page || 0, // PDF pages are 0-indexed
+          page: (e as any).filePart || e.position?.page || 1,
         }));
 
       console.log(

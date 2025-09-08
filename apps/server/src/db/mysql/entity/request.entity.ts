@@ -100,39 +100,4 @@ export class RequestEntity {
   @Column({ type: 'json', nullable: true })
   targetLanguages: string[];
 
-  @Column({ type: 'int', nullable: true, comment: 'Rating from 1-5 stars given by requester to translator' })
-  rating: number;
-
-  // Review fields
-  @Column({ type: 'datetime', nullable: true, comment: 'When the request was reviewed' })
-  reviewedAt: Date;
-
-  @Column({ type: 'enum', enum: ['APPROVED', 'REJECTED'], nullable: true, comment: 'Review decision' })
-  reviewDecision: 'APPROVED' | 'REJECTED';
-
-  @Column({ type: 'int', nullable: true, comment: 'Review rating from 1-5 stars' })
-  reviewRating: number;
-
-  @Column({ type: 'text', nullable: true, comment: 'Review comment from requester' })
-  reviewComment: string;
-
-  @Column({ type: 'text', nullable: true, comment: 'Reason for rejection when translation is 100% completed' })
-  rejectionReason: string;
-
-  // Admin review fields
-  @Column({ type: 'datetime', nullable: true, comment: 'When admin reviewed the request' })
-  adminReviewedAt: Date;
-
-  @Column({ type: 'bigint', unsigned: true, nullable: true, comment: 'Admin user ID who reviewed' })
-  adminReviewedBy: bigint;
-
-  @Column({ type: 'enum', enum: ['APPROVE_TRANSLATOR', 'APPROVE_REQUESTER'], nullable: true, comment: 'Admin decision' })
-  adminReviewDecision: 'APPROVE_TRANSLATOR' | 'APPROVE_REQUESTER';
-
-  @Column({ type: 'text', nullable: true, comment: 'Admin reason for decision' })
-  adminReviewReason: string;
-
-  @Column({ type: 'text', nullable: true, comment: 'Admin notes for internal use' })
-  adminReviewNotes: string;
-
 }

@@ -293,38 +293,6 @@ export class TranslationController {
       return res.status(500).send('Failed to build preview');
     }
   }
-
-  // Build PDF from DOCX export and stream (no auth to simplify preview embedding if needed)
-  @UseGuards(JwtAuthGuard)
-  @Get('export/pdf/:fileId')
-  async streamPdf(
-    @Param('fileId') fileId: string,
-    @Query('language') language: string,
-    @Query('watermark') watermark: string,
-    @Res() res: Response
-  ) {
-    try {
-      const { buffer, fileName } = await this.translationService.exportToPdf(fileId, language);
-      if (watermark) {
-        const watermarkedBuffer = await this.translationService.addPreviewWatermark(buffer, watermark);
-        res.end(watermarkedBuffer);
-        return;
-      }
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.end(buffer);
-    } catch (e) {
-      return res.status(500).json({ message: 'Failed to build PDF', error: (e as any)?.message || 'unknown' });
-    }
-  }
 }
 
 

@@ -19,7 +19,7 @@ export class ProjectDiscussionThreadEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: bigint;
 
-  @ManyToOne(() => require('./project.entity').ProjectEntity, project => project.discussions, { onDelete: 'CASCADE' })
+  @ManyToOne(() => require('./project.entity').ProjectEntity, (project: ProjectEntity) => project.discussions, { onDelete: 'CASCADE' })
   project: ProjectEntity;
 
   @Column({ type: 'national varchar', length: 32 })

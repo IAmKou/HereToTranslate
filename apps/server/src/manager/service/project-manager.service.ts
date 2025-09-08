@@ -9,16 +9,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository, Not } from 'typeorm';
 import {
-  BranchEntity,
   CategoryEntity,
-  CommitEntity,
   FileEntity,
   ProjectEntity,
   ProjectRoleEntity,
   ProjectTagEntity,
   UserEntity,
   RequestEntity,
-  CommitStatus,
   ProjectInvitationEntity,
   InvitationStatus,
 } from '#LocalProject/Entities';
@@ -30,7 +27,6 @@ import {
 } from '@here-to-translate/common';
 import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
-import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 import { ActivityManagerService } from './activity-manager.service';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
@@ -51,19 +47,13 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(ProjectRoleEntity)
     private readonly projectRoleRepository: Repository<ProjectRoleEntity>,
-    @InjectRepository(BranchEntity)
-    private readonly branchRepository: Repository<BranchEntity>,
-    @InjectRepository(CommitEntity)
-    private readonly commitRepository: Repository<CommitEntity>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
     private readonly dataSource: DataSource,
-    private readonly githubService: GitHubService,
     private readonly notificationService: NotificationManagerService,
     private readonly activityManagerService: ActivityManagerService,
     private readonly statusManagerService: StatusManagerService,
     private readonly workflowManagerService: WorkflowManagerService,
-    private readonly manifestService: ManifestService,
     private readonly backgroundExtract: BackgroundExtractService
   ) {
     super();
@@ -185,30 +175,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       this.logger.debug(`Project saved with ID: ${savedProject.id}, targetLanguages: ${JSON.stringify(savedProject.targetLanguages)}`);
 
-      // Create 'main' branch in DB
-      const mainBranch = queryRunner.manager.create(BranchEntity, {
-        name: 'main',
-        project: savedProject,
-        user: { id: uid },
-        createdAt: new Date(),
-      });
-
-      const savedBranch = await queryRunner.manager.save(mainBranch);
-
-      // Create initial commit
-      const initialCommit = queryRunner.manager.create(CommitEntity, {
-        branch: savedBranch,
-        project: savedProject,
-        author: { id: uid },
-        message: 'Initial commit',
-        contentSnapshot: '{}',
-        createdAt: new Date(),
-      });
-
-      await queryRunner.manager.save(initialCommit);
-
-      // Update defaultBranch reference in project
-      savedProject.defaultBranch = savedBranch;
       await queryRunner.manager.save(savedProject);
 
       // Create roles
@@ -242,23 +208,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       savedProject.members = [<UserEntity>{ id: uid }];
       await queryRunner.manager.save(savedProject);
 
-      const githubRepoName = `project-${savedProject.id}`;
-
-      // Create GitHub repo without auto init
-      await this.githubService.createRepository(githubRepoName, isPrivate);
-
-      // Push README to 'main' branch (create it in GitHub)
-      await this.githubService.pushInitialFile({
-        repo: githubRepoName,
-        path: 'README.md',
-        message: 'Initial commit',
-        content: `# ${name}\n\n${description || ''}`,
-        branch: 'main', // ✅ must match DB
-      });
-
       await queryRunner.commitTransaction();
 
-      // Create default statuses and workflow (Kanban: To Do, In Progress, Done)
       try {
         const createdStatuses = await this.statusManagerService.createDefaultStatuses(
           savedProject.id.toString()
@@ -278,7 +229,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       return {
         message: 'Project created successfully',
         projectId: savedProject.id,
-        branchId: savedBranch.id,
       };
     } catch (error) {
       this.logger.debug('Rolling back transaction');
@@ -325,11 +275,8 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
             fileType: file.fileType,
             fileContent: file.fileContent,
             project: { id: projectResult.projectId },
-            // Ensure the file is attached to the project's default branch so manifest generation works
-            branch: { id: projectResult.branchId },
             uploader: { id: uid },
             createdAt: new Date(),
-            // Link the copied file back to the request to prevent deletion
             request: { id: request.id },
             isSyncedFromRequest: true,
           });
@@ -630,7 +577,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     await queryRunner.startTransaction();
 
     try {
-      await this.githubService.deleteRepository(repoName);
 
       await queryRunner.manager.remove(project);
 
@@ -1081,267 +1027,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     };
   }
 
-  async createBranch(
-    projectId: bigint,
-    userId: bigint,
-    displayName: string,
-    fromBranchId?: bigint,
-    visibleToRoleIds?: bigint[]
-  ): Promise<BranchEntity> {
-    await this.testPermissions(
-      projectId,
-      userId,
-      PermissionFlags.ManageBranches
-    );
-
-    if (!fromBranchId) {
-      const project = await this.projectRepository.findOneOrFail({
-        where: { id: projectId },
-        relations: ['defaultBranch'],
-      });
-
-      fromBranchId = project.defaultBranch.id;
-    }
-
-    const branch = this.branchRepository.create({
-      name: '',
-      project: { id: projectId } as any,
-      user: { id: userId } as any,
-    });
-
-    if (visibleToRoleIds?.length) {
-      const roles = await this.projectRoleRepository.find({
-        where: { id: In(visibleToRoleIds) },
-      });
-      branch.visibleToRoles = roles;
-    } else {
-      branch.visibleToRoles = [];
-    }
-
-    const savedBranch = await this.branchRepository.save(branch);
-
-    const githubBranchName = `branch-${savedBranch.id}`;
-    const baseBranchName = `branch-${fromBranchId}`;
-    const repoName = `project-${projectId}`;
-    try {
-      await this.githubService.createBranch(
-        repoName,
-        githubBranchName,
-        baseBranchName
-      );
-      // Push initial file để branch tồn tại trên GitHub
-      await this.githubService.pushInitialFile({
-        repo: repoName,
-        path: 'README.md',
-        message: 'Initial commit on new branch',
-        content: `# Branch ${githubBranchName}`,
-        branch: githubBranchName,
-      });
-    } catch (err: any) {
-      // Nếu repo hoặc base branch chưa tồn tại, tạo repo và branch main trước
-      if (err.status === 404) {
-        // Tạo repo nếu chưa có
-        try {
-          await this.githubService.createRepository(repoName, true);
-        } catch (repoErr: any) {
-          if (repoErr.status !== 422) throw repoErr; // 422: repo đã tồn tại
-        }
-        // Tạo branch main nếu chưa có
-        try {
-          await this.githubService.createBranch(repoName, 'main', 'main');
-        } catch (mainErr: any) {
-          // Nếu branch main đã tồn tại thì bỏ qua
-          if (mainErr.status !== 422 && mainErr.status !== 404) throw mainErr;
-        }
-        // Thử lại tạo branch mới
-        await this.githubService.createBranch(
-          repoName,
-          githubBranchName,
-          baseBranchName
-        );
-        // Push initial file cho branch mới
-        await this.githubService.pushInitialFile({
-          repo: repoName,
-          path: 'README.md',
-          message: 'Initial commit on new branch',
-          content: `# Branch ${githubBranchName}`,
-          branch: githubBranchName,
-        });
-      } else {
-        throw err;
-      }
-    }
-
-    savedBranch.name = displayName;
-    const finalBranch = await this.branchRepository.save(savedBranch);
-
-    // Log activity
-    try {
-      await this.activityManagerService.logBranchCreate(
-        Number(projectId),
-        Number(userId),
-        displayName
-      );
-    } catch (error) {
-      this.logger.error('Failed to log branch create activity:', error);
-    }
-
-    return finalBranch;
-  }
-
-  async renameBranchName(
-    branchId: bigint,
-    userId: bigint,
-    projectId: bigint,
-    newName: string
-  ) {
-    await this.testPermissions(
-      projectId,
-      userId,
-      PermissionFlags.ManageBranches
-    );
-
-    const branch = await this.branchRepository.findOneOrFail({
-      where: { id: branchId },
-      relations: ['project'],
-    });
-
-    if (branch.project.id !== projectId) {
-      throw new ForbiddenException('Branch does not belong to this project');
-    }
-
-    branch.name = newName;
-    return this.branchRepository.save(branch);
-  }
-
-  async listBranchesForProject(
-    projectId: bigint,
-    userId: bigint
-  ): Promise<BranchEntity[]> {
-    console.log(
-      'listBranchesForProject called with projectId:',
-      projectId,
-      'userId:',
-      userId
-    );
-    await this.testPermissions(projectId, userId, PermissionFlags.ViewProject);
-
-    const result = await this.branchRepository
-      .createQueryBuilder('branch')
-      .where('branch.projectId = :projectId', { projectId })
-      .getMany();
-    console.log('Branches for project', projectId, ':', result);
-    return result;
-  }
-
-  async submitCommit(
-    projectId: bigint,
-    userId: bigint,
-    branchId: bigint,
-    filePath: string,
-    content: string,
-    message: string
-  ): Promise<CommitEntity> {
-    await this.testPermissions(projectId, userId, PermissionFlags.PushCommit);
-
-    const commit = this.commitRepository.create({
-      project: { id: projectId } as any,
-      branch: { id: branchId } as any,
-      author: { id: userId } as any,
-      message,
-      contentSnapshot: content,
-      filePath,
-      status: CommitStatus.Pending,
-    });
-
-    const savedCommit = await this.commitRepository.save(commit);
-
-    // Log activity
-    try {
-      await this.activityManagerService.logCommitCreate(
-        Number(projectId),
-        Number(userId),
-        message,
-        Number(branchId)
-      );
-    } catch (error) {
-      this.logger.error('Failed to log commit create activity:', error);
-    }
-
-    return savedCommit;
-  }
-
-  async reviewCommit(
-    projectId: bigint,
-    commitId: bigint,
-    reviewerId: bigint,
-    approve: boolean,
-    reviewMessage?: string
-  ) {
-    await this.testPermissions(
-      projectId,
-      reviewerId,
-      PermissionFlags.ReviewCommit
-    );
-
-    const commit = await this.commitRepository.findOneOrFail({
-      where: { id: commitId },
-      relations: ['project', 'branch'],
-    });
-
-    commit.status = approve ? CommitStatus.Approved : CommitStatus.Rejected;
-    commit.reviewedByUserId = reviewerId;
-    commit.reviewMessage = reviewMessage;
-
-    await this.commitRepository.save(commit);
-
-    if (approve) {
-      const githubRepo = `project-${commit.project.id}`;
-      // Lấy tên branch thực tế từ DB
-      const branchEntity = await this.branchRepository.findOne({
-        where: { id: commit.branch.id },
-      });
-      if (!branchEntity) throw new Error('Branch not found');
-      const githubBranch = branchEntity.name;
-
-      this.logger.log(
-        `[GITHUB] Start pushing commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`
-      );
-      try {
-        await this.githubService.commitChange({
-          repo: githubRepo,
-          branch: githubBranch,
-          path: commit.filePath,
-          content: commit.contentSnapshot,
-          message: commit.message,
-        });
-        this.logger.log(
-          `[GITHUB] Successfully pushed commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`
-        );
-      } catch (err) {
-        this.logger.error(
-          `[GITHUB] Failed to push commit to GitHub: repo=${githubRepo}, branch=${githubBranch}, path=${commit.filePath}`,
-          err
-        );
-        throw err;
-      }
-    }
-
-    return commit;
-  }
-
-  async getLocalCommits(projectId: bigint, branchId: bigint) {
-    return this.commitRepository.find({
-      where: { project: { id: projectId }, branch: { id: branchId } },
-      relations: ['author'],
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  async listCommits(projectId: bigint, branchId: bigint) {
-    return this.githubService.listCommits(projectId, branchId);
-  }
-
   async lockProjectEdits(projectId: bigint): Promise<void> {
     this.logger.debug(`Locking project edits for project ID: ${projectId}`);
 
@@ -1530,26 +1215,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         await this.notificationService.createNotification({
           userId: newOwner.id,
           type: 'PROJECT_OWNERSHIP_RECEIVED',
-          title: 'Project Ownership Transferred',
           message: `You are now the owner of project "${project.name}"`,
-          data: {
-            projectId: projectId.toString(),
-            projectName: project.name,
-            transferredFrom: project.createdBy.username
-          }
         });
 
         // Notify old owner about losing ownership
         await this.notificationService.createNotification({
           userId: currentOwnerId,
           type: 'PROJECT_OWNERSHIP_LOST',
-          title: 'Project Ownership Transferred',
           message: `Project ownership of "${project.name}" has been transferred to ${newOwner.username}`,
-          data: {
-            projectId: projectId.toString(),
-            projectName: project.name,
-            transferredTo: newOwner.username
-          }
         });
       } catch (notifError) {
         this.logger.warn(`Failed to send notifications but transfer was successful:`, notifError);
@@ -1557,11 +1230,11 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       // Log activity with separate error handling
       try {
-        await this.activityManagerService.logActivity(
-          projectId,
-          currentOwnerId,
-          'TRANSFER_OWNERSHIP',
-          `Project ownership transferred from ${project.createdBy.username} to ${newOwner.username}`
+        await this.activityManagerService.logProjectUpdate(
+          Number(projectId),
+          Number(currentOwnerId),
+          project.name,
+          undefined,
         );
       } catch (logError) {
         this.logger.warn(`Failed to log activity but transfer was successful:`, logError);
@@ -1571,7 +1244,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
       // Return updated project with separate error handling
       try {
-        return await this.projectRepository.findOne({
+        return await this.projectRepository.findOneOrFail({
           where: { id: projectId },
           relations: ['createdBy'],
         });

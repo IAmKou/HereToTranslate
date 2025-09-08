@@ -1,6 +1,6 @@
-import { Injectable, forwardRef, Inject } from '@nestjs/common';
+import { Injectable} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Repository} from 'typeorm';
 import { ProjectActivity, ActivityType } from '../../db/mysql/entity/project-activity.entity';
 import { UserEntity } from '#LocalProject/Entities';
 
@@ -110,22 +110,20 @@ export class ActivityManagerService {
           id: activity.userId,
           username: `User ${activity.userId}`,
           fullName: `User ${activity.userId}`,
-          avatarUrl: null
         };
 
         // Fetch real user information
         if (activity.userId) {
           try {
             const user = await this.userRepository.findOne({
-              where: { id: activity.userId },
+              where: { id: BigInt(activity.userId) },
               select: ['id', 'username', 'fullName', 'avatarUrl']
             });
             if (user) {
               userInfo = {
-                id: user.id,
+                id: Number(user.id),
                 username: user.username,
-                fullName: user.fullName || user.username, // Use fullName if available, fallback to username
-                avatarUrl: user.avatarUrl
+                fullName: user.fullName || user.username, 
               };
             }
           } catch (error) {
@@ -375,15 +373,6 @@ export class ActivityManagerService {
         memberName,
         newRole,
       },
-    });
-  }
-
-  async logProjectUpdate(projectId: number, userId: number) {
-    return await this.createActivity({
-      projectId,
-      userId,
-      type: ActivityType.PROJECT_UPDATE,
-      details: {},
     });
   }
 }

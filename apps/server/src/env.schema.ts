@@ -39,11 +39,11 @@ export class EnvConfigs {
   @IsNotEmpty()
   readonly GOOGLE_OAUTH2_CLIENT: string;
 
-  @IsString()
-  @IsNotEmpty()
-  readonly ASPOSE_CLIENT_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  readonly ASPOSE_CLIENT_SECRET: string;
+  // @IsString()
+  // @IsNotEmpty()
+  // readonly ASPOSE_CLIENT_ID: string;
+  //
+  // @IsString()
+  // @IsNotEmpty()
+  // readonly ASPOSE_CLIENT_SECRET: string;
 }

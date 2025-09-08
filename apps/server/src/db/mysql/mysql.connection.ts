@@ -4,7 +4,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   UserTypeEntity,
   UserEntity,
-  BranchEntity,
   ProjectEntity,
   CategoryEntity,
   FileEntity,
@@ -18,7 +17,6 @@ import {
   RequestEntity,
   TaskEntity,
   TransactionEntity,
-  CommitEntity,
   ProjectTagEntity,
   TranslationApprovalEntity,
   WalletEntity,
@@ -29,15 +27,18 @@ import {
   WorkflowTransitionEntity,
   AssignmentHistoryEntity,
   TaskAssignmentEntity,
-  RequestRegistrationEntity,
-  TaskStatusHistoryEntity, SubtaskAssignmentHistoryEntity,
-  SubtaskEntity, SubtaskAssignmentEntity, SubtaskStatusHistoryEntity, ProjectCancellationEntity, DeadlineExtensionEntity
-
-
+  TaskStatusHistoryEntity,
+  SubtaskAssignmentHistoryEntity,
+  SubtaskEntity,
+  SubtaskAssignmentEntity,
+  SubtaskStatusHistoryEntity,
+  ProjectCancellationEntity,
+  DeadlineExtensionEntity,
+  TaskHistoryEntity,
+  ProjectActivity,
+  TaskCommentEntity
 } from '#LocalProject/Entities';
-import { TaskHistoryEntity } from './entity/task-history.entity';
-import { ProjectActivity } from './entity/project-activity.entity';
-import { TaskCommentEntity } from './entity/task-comment.entity';
+
 
 @Injectable()
 export class MySqlConnection {
@@ -60,7 +61,7 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: false, // Temporarily disabled to prevent schema conflicts
+      synchronize: true, 
       logging: true,
       supportBigNumbers: true,
       charset: 'utf8mb4_unicode_ci',
@@ -70,7 +71,6 @@ export class MySqlConnection {
       migrationsRun: this.config.get<boolean>('MYSQL_MIGRATE_ON_STARTUP') || false,
       entities: [
         UserEntity,
-        BranchEntity,
         ProjectEntity,
         CategoryEntity,
         FileEntity,
@@ -81,7 +81,6 @@ export class MySqlConnection {
         RequestEntity,
         TaskEntity,
         TransactionEntity,
-        CommitEntity,
         ProjectTagEntity,
         ProjectDiscussionCommentEntity,
         ProjectDiscussionThreadEntity,
@@ -109,7 +108,6 @@ export class MySqlConnection {
         TaskStatusHistoryEntity,
         AssignmentHistoryEntity,
         TaskAssignmentEntity,
-        RequestRegistrationEntity,
         TaskCommentEntity
       ],
     });

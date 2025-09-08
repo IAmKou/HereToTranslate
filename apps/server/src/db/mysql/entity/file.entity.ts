@@ -1,6 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import type { ProjectEntity } from './project.entity';
-import type { BranchEntity } from './branch.entity';
 import type { UserEntity } from './user.entity';
 import type { RequestEntity } from './request.entity';
 
@@ -12,8 +11,6 @@ export class FileEntity {
   @ManyToOne(() => require('./project.entity').ProjectEntity, { nullable: true, onDelete: 'CASCADE' })
   project: ProjectEntity;
 
-  @ManyToOne(() => require('./branch.entity').BranchEntity, { nullable: true, onDelete: 'CASCADE' })
-  branch: BranchEntity;
 
   @ManyToOne(() => require('./user.entity').UserEntity, { nullable: false, onDelete: 'CASCADE' })
   uploader: UserEntity;

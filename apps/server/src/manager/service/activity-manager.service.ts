@@ -161,8 +161,6 @@ export class ActivityManagerService {
         return false;
       }
 
-      // Implement undo logic based on activity type
-      // This would typically involve reverting the action
       console.log(`Undoing activity ${activityId} of type ${activity.type}`);
 
       // For now, just mark as undone or delete

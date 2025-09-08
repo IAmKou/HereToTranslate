@@ -21,7 +21,7 @@ export enum ActivityType {
 
 @Entity('project_activities')
 @Index(['projectId', 'createdAt'])
-@Index(['userId', 'createdAt'])
+@Index(['createdAt'])
 @Index(['type', 'createdAt'])
 export class ProjectActivity {
   @PrimaryGeneratedColumn('uuid')

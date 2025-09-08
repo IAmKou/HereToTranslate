@@ -9,7 +9,6 @@ jest.mock('@nestjs/typeorm', () => ({
 }));
 
 // Mock external services to avoid ESM dependencies
-jest.mock('../service/github-manager.service');
 jest.mock('../service/notification-manager.service');
 jest.mock('../service/activity-manager.service');
 jest.mock('../service/task-status-manager.service');
@@ -21,11 +20,8 @@ describe('ProjectManagerService', () => {
   let mockProjectRepository: any;
   let mockUserRepository: any;
   let mockProjectRoleRepository: any;
-  let mockBranchRepository: any;
-  let mockCommitRepository: any;
   let mockFileRepository: any;
   let mockDataSource: any;
-  let mockGitHubService: any;
   let mockNotificationService: any;
   let mockActivityManagerService: any;
   let mockStatusManagerService: any;
@@ -92,22 +88,6 @@ describe('ProjectManagerService', () => {
         getMany: jest.fn(),
       })),
     };
-    mockBranchRepository = {
-      create: jest.fn(),
-      save: jest.fn(),
-      findOne: jest.fn(),
-      findOneOrFail: jest.fn(),
-      createQueryBuilder: jest.fn(() => ({
-        where: jest.fn().mockReturnThis(),
-        getMany: jest.fn(),
-      })),
-    };
-    mockCommitRepository = {
-      create: jest.fn(),
-      save: jest.fn(),
-      find: jest.fn(),
-      findOneOrFail: jest.fn(),
-    };
     mockFileRepository = {
       findOne: jest.fn(),
       save: jest.fn(),
@@ -130,14 +110,6 @@ describe('ProjectManagerService', () => {
         query: jest.fn(),
       })),
     };
-    mockGitHubService = {
-      createRepository: jest.fn(),
-      pushInitialFile: jest.fn(),
-      deleteRepository: jest.fn(),
-      createBranch: jest.fn(),
-      commitChange: jest.fn(),
-      listCommits: jest.fn(),
-    };
     mockNotificationService = {
       createNotification: jest.fn(),
     };
@@ -159,11 +131,8 @@ describe('ProjectManagerService', () => {
       mockProjectRepository,
       mockUserRepository,
       mockProjectRoleRepository,
-      mockBranchRepository,
-      mockCommitRepository,
       mockFileRepository,
       mockDataSource,
-      mockGitHubService,
       mockNotificationService,
       mockActivityManagerService,
       mockStatusManagerService,
@@ -250,8 +219,6 @@ describe('ProjectManagerService', () => {
       mockQueryRunner.manager.findOne.mockResolvedValue(null); // No existing tags
       mockQueryRunner.manager.create.mockImplementation((entity, data) => data);
       mockQueryRunner.manager.save.mockImplementation((entity) => Promise.resolve({ ...entity, id: 1n }));
-      (mockGitHubService.createRepository as jest.Mock).mockResolvedValue(undefined);
-      (mockGitHubService.pushInitialFile as jest.Mock).mockResolvedValue(undefined);
       (mockStatusManagerService.createDefaultStatuses as jest.Mock).mockResolvedValue([]);
       (mockWorkflowManagerService.createDefaultWorkflow as jest.Mock).mockResolvedValue(undefined);
 
@@ -499,7 +466,6 @@ describe('ProjectManagerService', () => {
         ...mockProject,
         createdBy: { id: 1n },
       });
-      (mockGitHubService.deleteRepository as jest.Mock).mockResolvedValue(undefined);
       mockQueryRunner.manager.remove.mockResolvedValue(undefined);
 
       const result = await service.deleteProject(1n, 1n);
@@ -629,28 +595,19 @@ describe('ProjectManagerService', () => {
         defaultBranch: { id: 1n },
       });
       // Mock branchRepository.create to return a proper object
-      mockBranchRepository.create!.mockImplementation((data: any) => data);
-      // Mock branchRepository.save to return a proper object with id
-      mockBranchRepository.save!.mockResolvedValue({ 
-        ...mockBranch, 
-        id: 2n,
-        visibleToRoles: [], // Add this property to prevent the error
-      });
       mockQueryRunner.manager.create.mockImplementation((entity, data) => data);
       mockQueryRunner.manager.save.mockResolvedValue({ 
         ...mockBranch, 
         id: 2n,
         visibleToRoles: [], // Add this property to prevent the error
       });
-      (mockGitHubService.createBranch as jest.Mock).mockResolvedValue(undefined);
-      (mockGitHubService.pushInitialFile as jest.Mock).mockResolvedValue(undefined);
+
       (mockActivityManagerService.logBranchCreate as jest.Mock).mockResolvedValue(undefined);
 
       const result = await service.createBranch(1n, 1n, 'New Branch');
 
       expect(result).toBeDefined();
-      expect(mockBranchRepository.create).toHaveBeenCalled();
-      expect(mockBranchRepository.save).toHaveBeenCalled();
+
     });
 
     it('should throw ForbiddenException when user lacks permission', async () => {
@@ -684,15 +641,12 @@ describe('ProjectManagerService', () => {
         select: jest.fn().mockReturnThis(),
         getRawOne: jest.fn().mockResolvedValue({ userPermissionFlags: PermissionFlags.PushCommit }),
       }));
-      (mockCommitRepository.create as jest.Mock).mockImplementation((data: any) => data);
-      mockCommitRepository.save!.mockResolvedValue(mockCommit);
       (mockActivityManagerService.logCommitCreate as jest.Mock).mockResolvedValue(undefined);
 
       const result = await service.submitCommit(1n, 1n, 1n, 'test.txt', 'content', 'Test commit');
 
       expect(result).toBeDefined();
-      expect(mockCommitRepository.create).toHaveBeenCalled();
-      expect(mockCommitRepository.save).toHaveBeenCalled();
+
     });
 
     it('should throw ForbiddenException when user lacks permission', async () => {
@@ -726,20 +680,11 @@ describe('ProjectManagerService', () => {
         select: jest.fn().mockReturnThis(),
         getRawOne: jest.fn().mockResolvedValue({ userPermissionFlags: PermissionFlags.ReviewCommit }),
       }));
-      mockCommitRepository.findOneOrFail!.mockResolvedValue({
-        ...mockCommit,
-        project: { id: 1n },
-        branch: { id: 1n },
-      });
-      (mockBranchRepository.findOne as jest.Mock).mockResolvedValue({ name: 'main' });
-      (mockCommitRepository.save as jest.Mock).mockResolvedValue(mockCommit);
-      (mockGitHubService.commitChange as jest.Mock).mockResolvedValue(undefined);
 
       const result = await service.reviewCommit(1n, 1n, 1n, true, 'Approved');
 
       expect(result).toBeDefined();
-      expect(mockCommitRepository.save).toHaveBeenCalled();
-      expect(mockGitHubService.commitChange).toHaveBeenCalled();
+
     });
 
     it('should reject commit successfully', async () => {
@@ -754,18 +699,13 @@ describe('ProjectManagerService', () => {
         select: jest.fn().mockReturnThis(),
         getRawOne: jest.fn().mockResolvedValue({ userPermissionFlags: PermissionFlags.ReviewCommit }),
       }));
-      mockCommitRepository.findOneOrFail!.mockResolvedValue({
-        ...mockCommit,
-        project: { id: 1n },
-        branch: { id: 1n },
-      });
-      (mockCommitRepository.save as jest.Mock).mockResolvedValue(mockCommit);
+
+
 
       const result = await service.reviewCommit(1n, 1n, 1n, false, 'Rejected');
 
       expect(result).toBeDefined();
-      expect(mockCommitRepository.save).toHaveBeenCalled();
-      expect(mockGitHubService.commitChange).not.toHaveBeenCalled();
+
     });
   });
 

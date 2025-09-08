@@ -6,7 +6,6 @@ import {
   TranslationString,
   TranslationStringDocument,
 } from '../../db/mongo/schema/translation.schema';
-import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { logger } from 'nx/src/utils/logger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -31,7 +30,6 @@ export class TranslationService {
     private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
-    private readonly githubService: GitHubService,
     @Inject(forwardRef(() => ActivityManagerService))
     private readonly activityManagerService: ActivityManagerService,
     private readonly asposeService: AsposeService,
@@ -327,7 +325,6 @@ export class TranslationService {
           Number(fileEntity.uploader?.id || 0),
           translatedText,
           language,
-          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
         );
       } else {
         await this.activityManagerService.logTranslationEdit(
@@ -335,7 +332,6 @@ export class TranslationService {
           Number(fileEntity.uploader?.id || 0),
           translatedText,
           language,
-          fileEntity.branch?.id ? Number(fileEntity.branch.id) : undefined
         );
       }
     } catch (error) {
@@ -487,15 +483,8 @@ export class TranslationService {
     const path = `${language}/${safeFileName}`;
 
     try {
-      // Prefer patching from existing GitHub content if exists to preserve structure/order
-      const existing = await this.githubService.getFileContentOrNull({
-        repo: repoName,
-        path,
-        branch: 'main',
-      });
       let nextBuffer = updatedBuffer;
       if (
-        existing &&
         fileEntity.fileType ===
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ) {
@@ -510,17 +499,11 @@ export class TranslationService {
           }
         }
         const { buffer: patched, replacedCount } =
-          await replaceDocxTextWithCount(existing.content, translations);
-        nextBuffer = replacedCount > 0 ? patched : existing.content;
+          await replaceDocxTextWithCount(nextBuffer, translations);
+        nextBuffer = replacedCount > 0 ? patched : nextBuffer;
       }
 
-      await this.githubService.commitChange({
-        repo: repoName,
-        branch: 'main',
-        path,
-        content: nextBuffer,
-        message: `Update translations for ${fileEntity.fileName} (${language})`,
-      });
+     
       logger.log(`✅ Translation committed to GitHub: ${repoName}/${path}`);
     } catch (err) {
       logger.error(`❌ Error committing translation to GitHub: ${err}`);
@@ -679,17 +662,6 @@ export class TranslationService {
     );
     console.log(`[Export] Pushing to GitHub: ${repoName}/${githubPath}`);
 
-    // Always commit the latest version to GitHub
-    await this.githubService.commitChange({
-      repo: repoName,
-      branch: 'main',
-      path: githubPath,
-      content: buffer,
-      message: `Update exported translation for ${
-        fileEntity.fileName
-      } (${language}) - ${new Date().toISOString()}`,
-    });
-
     console.log(
       `[Export] Successfully pushed to GitHub: ${repoName}/${githubPath}`
     );
@@ -745,13 +717,6 @@ export class TranslationService {
           // Commit per-language artifact
           const repoName = `project-${file.project.id}`;
           const githubPath = `${lang}/${fileName}`;
-          await this.githubService.commitChange({
-            repo: repoName,
-            branch: 'main',
-            path: githubPath,
-            content: buffer,
-            message: `Update exported translation for ${file.fileName} (${lang}) - ${new Date().toISOString()}`,
-          });
           const githubUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${lang}/${encodeURIComponent(
             fileName
           )}`;
@@ -788,13 +753,6 @@ export class TranslationService {
         const ts = new Date().toISOString().replace(/[:.]/g, '-');
         const zipName = `project-${projectId}-translations-${ts}.zip`;
         const zipPath = `exports/${zipName}`;
-        await this.githubService.commitChange({
-          repo: repoName,
-          branch: 'main',
-          path: zipPath,
-          content: zipBuffer,
-          message: `Publish multi-language ZIP (${targetLanguages.join(',')}) - ${new Date().toISOString()}`,
-        });
         const zipUrl = `https://raw.githubusercontent.com/<IAmKou>/${repoName}/main/${encodeURIComponent(
           zipPath
         )}`;
@@ -806,112 +764,6 @@ export class TranslationService {
     }
 
     return results;
-  }
-
-  async exportToPdf(
-    fileId: string,
-    language: string
-  ): Promise<{ buffer: Buffer; fileName: string; fileType: string }> {
-    // Build latest DOCX (or source) buffer first
-    const { buffer: originalBuffer, fileName } = await this.buildExportBuffer(
-      fileId,
-      language,
-      'original'
-    );
-
-    // Try convert DOCX -> PDF using libreoffice (soffice) directly to avoid npm deps
-    try {
-      const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'htt-'));
-      const docxPath = path.join(tmpDir, 'input.docx');
-      const pdfPath = path.join(tmpDir, 'input.pdf');
-      await fs.promises.writeFile(docxPath, originalBuffer);
-
-      // Prefer console wrapper to avoid UI and prompts
-      const candidates = [
-        'soffice.com',
-        'soffice',
-        'C:/Program Files/LibreOffice/program/soffice.com',
-        'C:/Program Files/LibreOffice/program/soffice.exe',
-      ];
-
-      const sofficeArgs = [
-        '--headless',
-        '--invisible',
-        '--norestore',
-        '--nolockcheck',
-        '--nodefault',
-        '--nofirststartwizard',
-        '--convert-to',
-        'pdf',
-        '--outdir',
-        tmpDir,
-        docxPath,
-      ];
-
-      let executed = false;
-      let lastErr: any = null;
-      for (const cmd of candidates) {
-        try {
-          await execFileAsync(cmd, sofficeArgs, { windowsHide: true });
-          executed = true;
-          break;
-        } catch (err) {
-          lastErr = err;
-        }
-      }
-      if (!executed) {
-        throw lastErr || new Error('Failed to run LibreOffice');
-      }
-
-      let pdf = await fs.promises.readFile(pdfPath);
-      // Optional: reduce size (compress) for preview by re-saving via pdf-lib
-      try {
-        const { PDFDocument } = await import('pdf-lib');
-        const doc = await PDFDocument.load(pdf);
-        const bytes = await doc.save({ useObjectStreams: false });
-        pdf = Buffer.from(bytes);
-      } catch (_) {}
-      // Cleanup, ignore errors
-      fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-      const pdfName = fileName.replace(/\.docx?$/i, '.pdf');
-      return { buffer: pdf, fileName: pdfName, fileType: 'application/pdf' };
-    } catch (e) {
-      // continue to next strategy
-    }
-
-    // Try convert DOCX -> PDF using libreoffice-convert if available
-    try {
-      const libre = await import('libreoffice-convert');
-      const convertAsync = (input: Buffer, ext: string) =>
-        new Promise<Buffer>((resolve, reject) => {
-          // @ts-ignore
-          libre.convert(input, ext, undefined, (err: any, done: Buffer) => {
-            if (err) return reject(err);
-            resolve(done);
-          });
-        });
-
-      const pdf = await convertAsync(originalBuffer, '.pdf');
-      const pdfName = fileName.replace(/\.docx?$/i, '.pdf');
-      return { buffer: pdf, fileName: pdfName, fileType: 'application/pdf' };
-    } catch (e) {
-      // Fallback: create simple PDF with translated entries (layout not guaranteed)
-      const entries = await this.translationModel
-        .find({ fileId, language })
-        .lean();
-      const translatedEntries = entries
-        .filter((x: any) => x.translatedText && x.translatedText.trim().length > 0)
-        .map((x: any) => ({
-          originalText: x.originalText as string,
-          translatedText: x.translatedText as string,
-          position: x.position,
-          style: x.style,
-          font: x.font,
-        }));
-      const pdfBuffer = await this.createSimplePdfWithTranslations(translatedEntries);
-      const pdfName = fileName.replace(/\.docx?$/i, '.pdf');
-      return { buffer: pdfBuffer, fileName: pdfName, fileType: 'application/pdf' };
-    }
   }
 
   async addPreviewWatermark(

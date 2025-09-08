@@ -1,14 +1,12 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
-import { BranchEntity, FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
+import { FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
-import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import  { Express } from 'express';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
-import { CommitEntity } from '../../db/mysql/entity/commit.entity';
 import { AsposeService } from './aspose.service';
 import mammoth from 'mammoth';
 import { ActivityManagerService } from './activity-manager.service';
@@ -22,10 +20,7 @@ export class FileService {
     private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
-    private readonly githubService: GitHubService,
     private readonly manifestService : ManifestService,
-    @InjectRepository(CommitEntity)
-    private readonly commitRepository: Repository<CommitEntity>,
     @Inject(forwardRef(() => ActivityManagerService))
     private readonly activityManagerService: ActivityManagerService,
     private readonly asposeService: AsposeService,
@@ -112,7 +107,6 @@ export class FileService {
       fileContent,
       uploader: { id: uid },
       project: projectId ? { id: projectId } : undefined,
-      branch: branchId ? { id: branchId } : undefined,
       request: requestId ? { id: requestId } : undefined,
       isSyncedFromRequest: !!requestId,
     });
@@ -160,7 +154,6 @@ export class FileService {
           (typeof fileType === 'string' && fileType.toLowerCase().includes('pdf')) ||
           (typeof safeFileName === 'string' && safeFileName.toLowerCase().endsWith('.pdf'));
         if (isPdf) {
-          await this.asposeService.getPdfDetail(safeFileName, projectFolder);
           this.logger.log(`[FileService] Stored PDF text details for ${safeFileName}`);
         }
       } catch (e) {
@@ -184,18 +177,6 @@ export class FileService {
       }
     } catch (err) {
       this.logger.error('Aspose storage upload error:', err);
-      // Fallback to GitHub if Aspose fails
-      try {
-        await this.githubService.pushInitialFile({
-          repo: repoName,
-          path: safeFileName,
-          content: fileContent,
-          message: `Uploaded ${fileName}`,
-        });
-        this.logger.log(`Fallback: File pushed to GitHub repo: ${repoName}, path: ${timestamped}`);
-      } catch (githubErr) {
-        this.logger.error('GitHub fallback also failed:', githubErr);
-      }
     }
 
     this.logger.log(`File uploaded to storage: ${timestamped}`);
@@ -208,7 +189,6 @@ export class FileService {
       updatedAt: savedFile.updatedAt,
       uploaderId: savedFile.uploader?.id ? savedFile.uploader.id.toString() : undefined,
       projectId: savedFile.project?.id ? savedFile.project.id.toString() : undefined,
-      branchId: savedFile.branch?.id ? savedFile.branch.id.toString() : undefined,
       requestId: savedFile.request?.id ? savedFile.request.id.toString() : undefined,
     };
   }
@@ -234,7 +214,6 @@ export class FileService {
       where: {
         fileName,
         project: projectId ? { id: projectId } : undefined,
-        branch: branchId ? { id: branchId } : undefined,
       },
       relations: ['project', 'branch'],
     });
@@ -258,7 +237,6 @@ export class FileService {
         updatedAt: existingFile.updatedAt,
         uploaderId: existingFile.uploader?.id?.toString(),
         projectId: existingFile.project?.id?.toString(),
-        branchId: existingFile.branch?.id?.toString(),
         requestId: existingFile.request?.id?.toString(),
       };
       isUpdate = true;
@@ -270,7 +248,6 @@ export class FileService {
         fileContent: file.buffer,
         uploader: { id: uid },
         project: projectId ? { id: projectId } : undefined,
-        branch: branchId ? { id: branchId } : undefined,
         request: requestId ? { id: requestId } : undefined,
         status: 'processing',
         title: title,
@@ -284,7 +261,6 @@ export class FileService {
         updatedAt: savedFile.updatedAt,
         uploaderId: savedFile.uploader?.id?.toString(),
         projectId: savedFile.project?.id?.toString(),
-        branchId: savedFile.branch?.id?.toString(),
         requestId: savedFile.request?.id?.toString(),
       };
     }
@@ -321,7 +297,6 @@ export class FileService {
           (typeof file.mimetype === 'string' && file.mimetype.toLowerCase().includes('pdf')) ||
           (typeof fileName === 'string' && fileName.toLowerCase().endsWith('.pdf'));
         if (isPdf) {
-          await this.asposeService.getPdfDetail(fileName, projectFolder);
           this.logger.log(`[FileService] Stored PDF text details for ${fileName}`);
         }
       } catch (e) {
@@ -385,7 +360,6 @@ export class FileService {
       fileContent: file.buffer,
       uploader: { id: uid } as UserEntity,
       project: null as ProjectEntity | null,
-      branch: null as BranchEntity | null,
     } as DeepPartial<FileEntity>);
 
     const saved = await this.fileRepository.save(fileEntity);
@@ -461,11 +435,11 @@ export class FileService {
     const fullFile = await this.fileRepository.findOneOrFail({
       where: { id: BigInt(saved.fileId) },
       relations: ['project', 'branch'],
-      select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'project'],
     });
 
     await this.manifestService.generateManifest(fullFile);
-    if (fullFile.project && fullFile.branch) {
+    if (fullFile.project) {
       try {
         await this.uploadToAsposeStorage(
           fullFile.fileContent,
@@ -476,7 +450,6 @@ export class FileService {
         try {
           const isPdf = typeof fullFile.fileName === 'string' && fullFile.fileName.toLowerCase().endsWith('.pdf');
           if (isPdf) {
-            await this.asposeService.getPdfDetail(fullFile.fileName);
             this.logger.log(`[FileService] Stored PDF text details for ${fullFile.fileName}`);
           }
         } catch (e) {
@@ -484,19 +457,6 @@ export class FileService {
         }
       } catch (err) {
         this.logger.error('Error uploading file to Aspose storage', err);
-        // Fallback to GitHub
-        try {
-          await this.githubService.pushInitialFile({
-            repo: `project-${fullFile.project.id}`,
-            path: fullFile.fileName,
-            content: fullFile.fileContent,
-            message: `Upload file: ${fullFile.fileName}`,
-            branch: 'main',
-          });
-          this.logger.log(`Fallback: File pushed to GitHub for fileId: ${fullFile.id}`);
-        } catch (githubErr) {
-          this.logger.error('GitHub fallback also failed:', githubErr);
-        }
       }
     }
 
@@ -534,20 +494,6 @@ export class FileService {
     if (linkedCount > 0) {
       throw new BadRequestException('Cannot delete file: This file is linked to a request.');
     }
-
-    // Debug: Kiểm tra tất cả commit liên quan đến file này
-    const allCommits = await this.commitRepository
-      .createQueryBuilder('commit')
-      .where('commit.filePath = :filePath', { filePath: file.fileName })
-      .getMany();
-
-    this.logger.log(`Found ${allCommits.length} commits for file: ${file.fileName}`);
-    allCommits.forEach(commit => {
-      this.logger.log(`Commit ID: ${commit.id}, Message: "${commit.message}", FilePath: "${commit.filePath}"`);
-    });
-
-    // Tạm thời bypass kiểm tra commit để test
-    this.logger.log('Bypassing commit check for testing...');
     try {
       const isPdf = typeof file.fileName === 'string' && file.fileName.toLowerCase().endsWith('.pdf');
 
@@ -615,7 +561,6 @@ export class FileService {
           Number(file.project.id),
           Number(userId),
           file.fileName,
-          file.branch?.id ? Number(file.branch.id) : undefined
         );
       } catch (error) {
         this.logger.error('Failed to log file delete activity:', error);
@@ -661,19 +606,8 @@ export class FileService {
       await this.manifestService.generateManifest(file); // Đảm bảo hàm này set obsolete: false cho string mới
       appendLog('Manifest generated.');
       // Upload file to Aspose storage if project/branch info is present
-      if (file.project && file.branch) {
-        try {
-          await this.githubService.pushInitialFile({
-            repo: `project-${file.project.id}`,
-            path: file.fileName,
-            content: file.fileContent,
-            message: `Upload file: ${file.fileName}`,
-            branch: 'main',
-          });
-          appendLog('Fallback: File pushed to GitHub.');
-        } catch (githubErr: any) {
-          appendLog('GitHub fallback also failed: ' + (githubErr?.message || githubErr));
-        }
+      if (file.project ) {
+        //j
       }
       appendLog('Successfully generated manifest for file.');
       await this.fileRepository.save(file);
@@ -708,7 +642,6 @@ export class FileService {
       fileContent,
       uploader: { id: uid },
       project: projectId ? { id: projectId } : undefined,
-      branch: branchId ? { id: branchId } : undefined,
       request: requestId ? { id: requestId } : undefined,
     });
 
@@ -721,7 +654,6 @@ export class FileService {
       updatedAt: savedFile.updatedAt,
       uploaderId: savedFile.uploader?.id?.toString(),
       projectId: savedFile.project?.id?.toString(),
-      branchId: savedFile.branch?.id?.toString(),
       requestId: savedFile.request?.id?.toString(),
     };
   }
@@ -787,7 +719,7 @@ export class FileService {
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(saved.fileId) },
       relations: ['project', 'branch'],
-      select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
+      select: ['id', 'fileName', 'fileType', 'fileContent', 'project'],
     });
 
     if (fileEntity) {
@@ -799,7 +731,7 @@ export class FileService {
       }
 
       // Upload file to Aspose storage if project/branch info is present
-      if (fileEntity.project && fileEntity.branch) {
+      if (fileEntity.project) {
         try {
           const projectFolder = `projects/project-${fileEntity.project.id}`;
           await this.uploadToAsposeStorage(
@@ -811,19 +743,6 @@ export class FileService {
           this.logger.log(`File uploaded to Aspose storage for fileId: ${fileEntity.id}`);
         } catch (err) {
           this.logger.error('Error uploading file to Aspose storage', err);
-          // Fallback to GitHub
-          try {
-            await this.githubService.pushInitialFile({
-              repo: `project-${fileEntity.project.id}`,
-              path: fileEntity.fileName,
-              content: fileEntity.fileContent,
-              message: `Upload file: ${fileEntity.fileName}`,
-              branch: 'main',
-            });
-            this.logger.log(`Fallback: File pushed to GitHub for fileId: ${fileEntity.id}`);
-          } catch (githubErr) {
-            this.logger.error('GitHub fallback also failed:', githubErr);
-          }
         }
       }
     }
@@ -884,7 +803,6 @@ export class FileService {
       updatedAt: file.updatedAt,
       uploaderId: file.uploader?.id?.toString(),
       projectId: file.project?.id?.toString(),
-      branchId: file.branch?.id?.toString(),
       requestId: file.request?.id?.toString(),
       title: file.title ?? null,
     };
@@ -1034,8 +952,8 @@ export class FileService {
   async getFileMetadata(fileId: string): Promise<{ fileName: string; fileType: string; projectId?: string; branchId?: string }> {
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['project', 'branch'],
-      select: ['id', 'fileName', 'fileType', 'project', 'branch'],
+      relations: ['project'],
+      select: ['id', 'fileName', 'fileType', 'project'],
     });
 
     if (!file) {
@@ -1046,7 +964,6 @@ export class FileService {
       fileName: file.fileName,
       fileType: file.fileType,
       projectId: file.project?.id?.toString(),
-      branchId: file.branch?.id?.toString(),
     };
   }
 

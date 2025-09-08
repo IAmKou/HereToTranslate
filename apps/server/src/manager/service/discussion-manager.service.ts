@@ -475,11 +475,9 @@ export class DiscussionManagerService extends CommonHttpServiceImpl {
       throw new NotFoundException('Unknown comment');
     }
 
-    // Kiểm tra quyền: comment author hoặc discussion owner
     const isCommentAuthor = comment.author && comment.author.id === uid;
-    const isDiscussionOwner = comment.thread.author && comment.thread.author.id === uid;
 
-    if (!isCommentAuthor && !isDiscussionOwner) {
+    if (!isCommentAuthor ) {
       throw new ForbiddenException(
         'You do not have permission to delete this comment'
       );

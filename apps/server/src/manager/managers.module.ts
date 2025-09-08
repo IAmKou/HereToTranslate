@@ -1,37 +1,37 @@
-import { CategoryEntity } from '../db/mysql/entity/category.entity';
-import { DiscussionAccessPolicyEntity, ProjectDiscussionCommentEntity, ProjectDiscussionThreadEntity } from '../db/mysql/entity/project-discussion.entity';
-import { ProjectEntity } from '../db/mysql/entity/project.entity';
-import { ProjectGroupEntity } from '../db/mysql/entity/project-group.entity';
-import { ProjectRoleEntity } from '../db/mysql/entity/project-role.entity';
-import { ProjectTagEntity } from '../db/mysql/entity/project-tag.entity';
-import { RequestEntity } from '../db/mysql/entity/request.entity';
-import { TransactionEntity } from '../db/mysql/entity/transaction.entity';
-import { UserEntity } from '../db/mysql/entity/user.entity';
-import { UserTypeEntity } from '../db/mysql/entity/user-type.entity';
-import { WalletEntity } from '../db/mysql/entity/wallet.entity';
-import { TranslationApprovalEntity } from '../db/mysql/entity/translation-approval.entity';
-import { BranchEntity } from '../db/mysql/entity/branch.entity';
-import { CommitEntity } from '../db/mysql/entity/commit.entity';
-import { FileEntity } from '../db/mysql/entity/file.entity';
-import { TaskEntity } from '../db/mysql/entity/task.entity';
-import { NotificationEntity } from '../db/mysql/entity/notification.entity';
-import { SettingsEntity } from '../db/mysql/entity/setting.entity';
-import { TaskStatusEntity } from '../db/mysql/entity/task-status.entity';
-import { AssignmentHistoryEntity } from '../db/mysql/entity/assignment-history.entity';
-import { DeadlineExtensionEntity } from '../db/mysql/entity/deadline-extension.entity';
-import { ProjectCancellationEntity } from '../db/mysql/entity/project-cancellation.entity';
-import { TaskAssignmentEntity } from '../db/mysql/entity/task-assignment.entity';
-import { WorkflowEntity } from '../db/mysql/entity/workflow.entity';
-import { WorkflowTransitionEntity } from '../db/mysql/entity/workflow-transition.entity';
-import { TaskStatusHistoryEntity } from '../db/mysql/entity/task-status-history.entity';
-import { TranslationPreviewEntity } from '../db/mysql/entity/translation-preview.entity';
-import { SubtaskEntity } from '../db/mysql/entity/subtask.entity';
-import { SubtaskStatusHistoryEntity } from '../db/mysql/entity/subtask-status-history.entity';
-import { TaskHistoryEntity } from '../db/mysql/entity/task-history.entity';
-import { TaskCommentEntity } from '../db/mysql/entity/task-comment.entity';
-import { RequestRegistrationEntity } from '../db/mysql/entity/request-registration.entity';
-import { ProjectActivity } from '../db/mysql/entity/project-activity.entity';
-import { ProjectInvitationEntity } from '../db/mysql/entity/project-invitation.entity';
+import { CategoryEntity,
+  DiscussionAccessPolicyEntity,
+  ProjectEntity,
+  ProjectDiscussionCommentEntity,
+  ProjectDiscussionThreadEntity,
+  ProjectGroupEntity,
+  ProjectRoleEntity,
+  ProjectTagEntity,
+  RequestEntity,
+  TransactionEntity,
+  UserEntity,
+  UserTypeEntity,
+  WalletEntity,
+  TranslationApprovalEntity,
+  FileEntity,
+  TaskEntity,
+  NotificationEntity,
+  SettingsEntity,
+  TaskStatusEntity,
+  AssignmentHistoryEntity,
+  DeadlineExtensionEntity,
+  ProjectCancellationEntity,
+  TaskAssignmentEntity,
+  WorkflowEntity,
+  WorkflowTransitionEntity,
+  TaskStatusHistoryEntity,
+  SubtaskStatusHistoryEntity,
+  TaskCommentEntity,
+  ProjectActivity,
+  ProjectInvitationEntity,
+  SubtaskEntity,
+  TranslationPreviewEntity,
+  TaskHistoryEntity,
+ } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
@@ -60,7 +60,6 @@ import { MongoModule } from '../db/mongo/mongo.module';
 import { WalletController } from './controller/wallet.controller';
 import { PaymentController } from './controller/payment.controller';
 import { WalletManagerService } from './service/wallet-manager.service';
-import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { FileService } from './service/file-manager.service';
 import { TranslationService } from './service/translation-manager.service';
 import { FileController } from './controller/file.controller';
@@ -97,8 +96,6 @@ import { TaskAssignmentController } from './controller/task-assignment.controlle
 import { WorkflowController } from './controller/workflow.controller';
 import { ScannerCronController } from './controller/scanner-cron.controller';
 import { DeadlineCheckerController } from './controller/deadline-checker.controller';
-import { AdminReviewController } from './controller/admin-review.controller';
-import { AdminReviewService } from './service/admin-review.service';
 import { SubtaskManagerService } from './service/subtask-manager.service';
 import { AsposeService } from './service/aspose.service';
 import { SubtaskController } from './controller/subtask.controller';
@@ -134,14 +131,11 @@ import { FeeController } from './controller/fee.controller';
       TransactionEntity,
       WalletEntity,
       TranslationApprovalEntity,
-      BranchEntity,
-      CommitEntity,
       FileEntity,
       TaskEntity,
       TaskHistoryEntity,
       NotificationEntity,
       ProjectInvitationEntity,
-      RequestRegistrationEntity,
       SettingsEntity,
       ProjectActivity,
       TaskStatusHistoryEntity,
@@ -172,7 +166,6 @@ import { FeeController } from './controller/fee.controller';
     ChatService,
     PaypalService,
     WalletManagerService,
-    GitHubService,
     FileService,
     TranslationService,
     TaskManagerService,
@@ -194,7 +187,6 @@ import { FeeController } from './controller/fee.controller';
     TaskCommentManagerService,
     OverdueCheckerService,
     TaskManagerService,
-    AdminReviewService,
     ExportManagerService,
     ExportJobProcessor,
     BackgroundExtractService,
@@ -214,7 +206,6 @@ import { FeeController } from './controller/fee.controller';
     ChatService,
     PaypalService,
     WalletManagerService,
-    GitHubService,
     FileService,
     TranslationService,
     TaskManagerService,
@@ -234,7 +225,6 @@ import { FeeController } from './controller/fee.controller';
     TaskCommentManagerService,
     OverdueCheckerService,
     TaskManagerService,
-    AdminReviewService,
     TaskAssignmentManagerService,
     ExportManagerService,
     BackgroundExtractService,
@@ -269,7 +259,6 @@ import { FeeController } from './controller/fee.controller';
     WorkflowController,
     ScannerCronController,
     DeadlineCheckerController,
-    AdminReviewController,
     SubtaskController,
     TaskCommentController,
     ExportController,

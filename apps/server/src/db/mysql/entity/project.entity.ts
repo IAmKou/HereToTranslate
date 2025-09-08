@@ -2,8 +2,6 @@ import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, CreateDateColumn, M
 import type { UserEntity } from './user.entity';
 import type { ProjectRoleEntity } from './project-role.entity';
 import type { ProjectGroupEntity } from './project-group.entity';
-import type { BranchEntity } from './branch.entity';
-import type { CommitEntity } from './commit.entity';
 import type { FileEntity } from './file.entity';
 import type { CategoryEntity } from './category.entity';
 import type { ProjectTagEntity } from './project-tag.entity';
@@ -50,16 +48,6 @@ export class ProjectEntity {
   })
   groups: ProjectGroupEntity[];
 
-  @OneToMany(() => require('./branch.entity').BranchEntity, (branch: BranchEntity) => branch.project)
-  branches: BranchEntity[];
-
-  @ManyToOne(() => require('./branch.entity').BranchEntity, { nullable: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'defaultBranchId' })
-  defaultBranch: BranchEntity;
-
-  @OneToMany(() => require('./commit.entity').CommitEntity, (commit: CommitEntity) => commit.project)
-  commits: CommitEntity[];
-
   @OneToMany(() => require('./project-discussion.entity').ProjectDiscussionThreadEntity, (thread: ProjectDiscussionThreadEntity) => thread.project)
   discussions: ProjectDiscussionThreadEntity[];
 
@@ -82,4 +70,6 @@ export class ProjectEntity {
     inverseJoinColumn: { name: 'tagId', referencedColumnName: 'id' }
   })
   tags: ProjectTagEntity[];
+
+  
 }

@@ -23,7 +23,6 @@ import { JwtFallthroughGuard } from '#LocalProject/Auth/guards/jwt-fallthrough.g
 import { JsonSerializerInterceptor } from '#LocalProject/Utils/json-serializer.interceptor';
 import { BigIntTransformPipe } from '#LocalProject/Utils/pipes/bigint-transform.pipe';
 import { ProjectManagerService } from '../service/project-manager.service';
-import { GitHubService } from '#LocalProject/Managers/service/github-manager.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileService } from '../service/file-manager.service';
 
@@ -32,7 +31,6 @@ import { FileService } from '../service/file-manager.service';
 export class ProjectController {
   constructor(
     private readonly projects: ProjectManagerService,
-    private readonly gitHubService: GitHubService,
     private readonly fileService: FileService
   ) {}
 
@@ -161,106 +159,6 @@ export class ProjectController {
   ) {
     const { members, projectRoles } = await this.projects.getProjectMembersWithRoles(projectId);
     return { members, projectRoles };
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post(':projectId/branches')
-  async createBranch(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { displayName: string; fromBranchId?: bigint }
-  ) {
-    return this.projects.createBranch(
-      projectId,
-      req.user.id,
-      body.displayName,
-      body.fromBranchId
-    );
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Patch(':projectId/:branchId/rename')
-  async editBranch(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Param('branchId', BigIntTransformPipe) branchId: bigint,
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { newName: string }
-  ) {
-    return this.projects.renameBranchName(
-      branchId,
-      req.user.id,
-      projectId,
-      body.newName
-    );
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':projectId/branches')
-  async getBranches(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Req() req: AuthenticatedRequest
-  ) {
-    return this.projects.listBranchesForProject(projectId, req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':projectId/getBranches')
-  async getAllBranch(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Req() req: AuthenticatedRequest
-  ) {
-    return this.projects.listBranchesForProject(projectId, req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post(':projectId/:branchId/commit')
-  async submitCommit(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Param('branchId', BigIntTransformPipe) branchId: bigint,
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { filePath: string; content: string; message: string }
-  ) {
-    return this.projects.submitCommit(
-      projectId,
-      req.user.id,
-      branchId,
-      body.filePath,
-      body.content,
-      body.message
-    );
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post(':projectId/:commitId/review')
-  async reviewCommit(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Param('commitId', BigIntTransformPipe) commitId: bigint,
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { approve: boolean; reviewMessage?: string }
-  ) {
-    return this.projects.reviewCommit(
-      projectId,
-      commitId,
-      req.user.id,
-      body.approve,
-      body.reviewMessage
-    );
-  }
-
-  @Get(':projectId/:branchId/listCommit')
-  async getCommitsFromGitHub(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Param('branchId', BigIntTransformPipe) branchId: bigint
-  ) {
-    return this.projects.listCommits(projectId, branchId);
-  }
-
-  @Get(':projectId/:branchId/local-commits')
-  async getLocalCommits(
-    @Param('projectId', BigIntTransformPipe) projectId: bigint,
-    @Param('branchId', BigIntTransformPipe) branchId: bigint
-  ) {
-    return this.projects.getLocalCommits(projectId, branchId);
   }
 
   @UseGuards(JwtAuthGuard)

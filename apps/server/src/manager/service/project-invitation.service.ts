@@ -4,7 +4,7 @@ import { Repository, DataSource } from 'typeorm';
 import { ProjectInvitationEntity, InvitationStatus } from '../../db/mysql/entity/project-invitation.entity';
 import { ProjectEntity } from '../../db/mysql/entity/project.entity';
 import { UserEntity } from '../../db/mysql/entity/user.entity';
-import { CreateProjectInvitationDto, UpdateInvitationStatusDto, ProjectInvitationResponseDto } from '../../dto/project-invitation.dto';
+import { ProjectInvitationResponseDto } from '../../dto/project-invitation.dto';
 import { ProjectManagerService } from './project-manager.service';
 import { NotificationGateway } from '../../util/gateway/notification.gateway';
 import { MailService } from '../../mailer/mailer.service';
@@ -124,7 +124,7 @@ export class ProjectInvitationService {
             console.log(`📧 Email sent successfully to ${invitedUser.email} for updated project invitation`);
           } catch (emailError) {
             console.error('📧 Email send error for updated invitation:', emailError);
-            console.error('📧 Email error stack:', emailError.stack);
+            console.error('📧 Email error stack:', emailError);
             // Don't fail the invitation update if email fails
           }
 
@@ -205,7 +205,7 @@ export class ProjectInvitationService {
         console.log(`📧 Email sent successfully to ${invitedUser.email} for project invitation`);
       } catch (emailError) {
         console.error('📧 Email send error:', emailError);
-        console.error('📧 Email error stack:', emailError.stack);
+        console.error('📧 Email error stack:', emailError);
         // Don't fail the invitation creation if email fails
       }
 
@@ -224,7 +224,7 @@ export class ProjectInvitationService {
       return invitationResponse;
     } catch (error) {
       console.error('Error in createInvitation:', error);
-      console.error('Error stack:', error.stack);
+      console.error('Error stack:', error);
       throw error;
     }
   }

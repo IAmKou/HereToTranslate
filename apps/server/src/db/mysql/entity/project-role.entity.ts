@@ -3,7 +3,6 @@ import type { UserEntity } from './user.entity';
 import type { ProjectEntity } from './project.entity';
 import { Permission, PermissionFlags } from '@here-to-translate/common';
 import { BigIntColumnTransformer } from '#LocalProject/Utils/extensions/typeorm.extensions';
-import { BranchEntity } from './branch.entity';
 
 @Entity('projectrole')
 export class ProjectRoleEntity {
@@ -33,9 +32,6 @@ export class ProjectRoleEntity {
     transformer: BigIntColumnTransformer(Permission)
   })
   permissionFlags: Permission;
-
-  @ManyToMany(() => require('./branch.entity').BranchEntity, (branch: BranchEntity) => branch.visibleToRoles)
-  branch: BranchEntity;
 
   @CreateDateColumn()
   createdAt: Date;

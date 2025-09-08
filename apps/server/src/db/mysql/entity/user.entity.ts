@@ -10,8 +10,6 @@ import {
 } from 'typeorm';
 import type { ProjectEntity } from './project.entity';
 import type { ProjectRoleEntity } from './project-role.entity';
-import type { BranchEntity } from './branch.entity';
-import type { CommitEntity } from './commit.entity';
 import type { FileEntity } from './file.entity';
 import type { ProjectGroupEntity } from './project-group.entity';
 import type { UserTypeEntity } from './user-type.entity';
@@ -74,12 +72,6 @@ export class UserEntity {
 
   @ManyToMany(() => require('./project-group.entity').ProjectGroupEntity, (group: ProjectGroupEntity) => group.members, { cascade: true })
   groups: ProjectGroupEntity[];
-
-  @OneToMany(() => require('./branch.entity').BranchEntity, (branch: BranchEntity) => branch.user)
-  branch: BranchEntity[];
-
-  @OneToMany(() => require('./commit.entity').CommitEntity, (commit: CommitEntity) => commit.author)
-  commit: CommitEntity[];
 
   @OneToMany(() => require('./file.entity').FileEntity, (file: FileEntity) => file.uploader)
   file: FileEntity[];

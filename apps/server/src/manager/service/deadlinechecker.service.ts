@@ -245,7 +245,6 @@ export class DeadlineCheckerService {
           // Resolve correct branch to use for this project
           const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
             req.project.id.toString(),
-            req.project.defaultBranch?.id?.toString()
           );
           this.logger.log(`Request ${req.id} using branch ${resolvedBranchId} for progress checks`);
 
@@ -594,7 +593,6 @@ export class DeadlineCheckerService {
       // Resolve correct branch to use for this project
       const resolvedBranchId2 = await this.translationService.resolveBranchIdForProgress(
         req.project.id.toString(),
-        req.project.defaultBranch?.id?.toString()
       );
       this.logger.log(`Request ${req.id} using branch ${resolvedBranchId2} for progress checks`);
 
@@ -945,7 +943,6 @@ export class DeadlineCheckerService {
            // Resolve correct branch to use for this project
            const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
              request.project.id.toString(),
-             request.project.defaultBranch?.id?.toString()
            );
            this.logger.log(`Request ${requestId} using branch ${resolvedBranchId} for progress checks`);
 
@@ -1227,7 +1224,6 @@ export class DeadlineCheckerService {
       // Resolve correct branch to use for this project
       const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
         request.project.id.toString(),
-        request.project.defaultBranch?.id?.toString()
       );
       this.logger.log(`Request ${requestId} using branch ${resolvedBranchId} for progress checks`);
 

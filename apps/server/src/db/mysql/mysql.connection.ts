@@ -36,14 +36,13 @@ import {
   DeadlineExtensionEntity,
   TaskHistoryEntity,
   ProjectActivity,
-  TaskCommentEntity
+  TaskCommentEntity,
+  TranslationEntity
 } from '#LocalProject/Entities';
 
 
 @Injectable()
 export class MySqlConnection {
-  private static instance: MySqlConnection;
-
   // TypeORM DataSource instance
   private readonly _dataSource: DataSource;
 
@@ -62,56 +61,54 @@ export class MySqlConnection {
         rejectUnauthorized: false,
       },
       synchronize: true, 
-      logging: true,
+      logging: false,
       supportBigNumbers: true,
-      charset: 'utf8mb4_unicode_ci',
+      extra: {
+        charset: 'utf8mb4_unicode_ci',
+      },
 
       migrations:
         isDev ? ['dist/migrations/*.js'] : [],
       migrationsRun: this.config.get<boolean>('MYSQL_MIGRATE_ON_STARTUP') || false,
       entities: [
         UserEntity,
+        UserTypeEntity,
         ProjectEntity,
         CategoryEntity,
         FileEntity,
         ProjectGroupEntity,
         ProjectRoleEntity,
         ProjectInvitationEntity,
-        ReportEntity,
-        RequestEntity,
-        TaskEntity,
-        TransactionEntity,
-        ProjectTagEntity,
         ProjectDiscussionCommentEntity,
         ProjectDiscussionThreadEntity,
         DiscussionAccessPolicyEntity,
-        UserTypeEntity,
+        ReportEntity,
+        RequestEntity,
+        TaskEntity,
+        TaskHistoryEntity,
+        TaskStatusEntity,
+        TaskAssignmentEntity,
+        TaskStatusHistoryEntity,
+        TaskCommentEntity,
+        TransactionEntity,
+        ProjectTagEntity,
         TranslationApprovalEntity,
+        TranslationEntity,
         WalletEntity,
         NotificationEntity,
         SettingsEntity,
-        TaskHistoryEntity,
         ProjectActivity,
-        TaskStatusEntity,
         DeadlineExtensionEntity,
         ProjectCancellationEntity,
-        TaskAssignmentEntity,
         WorkflowEntity,
         WorkflowTransitionEntity,
-        TaskStatusHistoryEntity,
         SubtaskEntity,
         SubtaskAssignmentEntity,
         SubtaskStatusHistoryEntity,
         SubtaskAssignmentHistoryEntity,
-        WorkflowEntity,
-        WorkflowTransitionEntity,
-        TaskStatusHistoryEntity,
-        AssignmentHistoryEntity,
-        TaskAssignmentEntity,
-        TaskCommentEntity
+        AssignmentHistoryEntity
       ],
     });
-    MySqlConnection.instance = this;
   }
 
   // Init MySQL connection
@@ -193,7 +190,8 @@ export class MySqlConnection {
 
         for (const field of reviewFields) {
           const columnExists = await this.dataSource.query(
-            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = '${field}'`
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            ['requests', field]
           );
 
           if (columnExists.length === 0) {
@@ -227,7 +225,7 @@ export class MySqlConnection {
       } catch (e) {
         this.logger.error('Inline migration for requests review fields failed:', e);
         // This is critical for the application to work, so throw the error
-        throw e;
+        throw new Error(`Critical migration failed: Cannot add review fields to requests table. Error: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Ensure admin review fields exist in requests table
@@ -242,7 +240,8 @@ export class MySqlConnection {
 
         for (const field of adminReviewFields) {
           const columnExists = await this.dataSource.query(
-            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requests' AND COLUMN_NAME = '${field}'`
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            ['requests', field]
           );
 
           if (columnExists.length === 0) {
@@ -276,7 +275,7 @@ export class MySqlConnection {
       } catch (e) {
         this.logger.error('Inline migration for requests admin review fields failed:', e);
         // This is critical for the application to work, so throw the error
-        throw e;
+        throw new Error(`Critical migration failed: Cannot add admin review fields to requests table. Error: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Force update status enum to include DISPUTE and INCOMPLETED
@@ -333,7 +332,8 @@ export class MySqlConnection {
 
         for (const field of userRatingFields) {
           const columnExists = await this.dataSource.query(
-            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = '${field}'`
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            ['user', field]
           );
 
           if (columnExists.length === 0) {
@@ -361,7 +361,7 @@ export class MySqlConnection {
       } catch (e) {
         this.logger.error('Inline migration for user rating fields failed:', e);
         // This is critical for the application to work, so throw the error
-        throw e;
+        throw new Error(`Critical migration failed: Cannot add rating fields to user table. Error: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Ensure admin review fields exist in transactions table
@@ -376,7 +376,8 @@ export class MySqlConnection {
 
         for (const field of transactionAdminFields) {
           const columnExists = await this.dataSource.query(
-            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = '${field}'`
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            ['transactions', field]
           );
 
           if (columnExists.length === 0) {
@@ -408,7 +409,7 @@ export class MySqlConnection {
       } catch (e) {
         this.logger.error('Inline migration for transactions admin review fields failed:', e);
         // This is critical for the application to work, so throw the error
-        throw e;
+        throw new Error(`Critical migration failed: Cannot add admin review fields to transactions table. Error: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Create indexes for better performance (if they don't exist)
@@ -426,7 +427,8 @@ export class MySqlConnection {
 
         for (const index of indexesToCreate) {
           const indexExists = await this.dataSource.query(
-            `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${index.table}' AND INDEX_NAME = '${index.name}'`
+            'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
+            [index.table, index.name]
           );
 
           if (indexExists.length === 0) {

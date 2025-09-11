@@ -15,18 +15,6 @@ export class FileController {
     private readonly asposeService: AsposeService
   ) {}
 
-  @Get('test-mongo')
-  async testMongoConnection() {
-    try {
-      const result = await this.asposeService.testMongoConnection();
-      return result;
-    } catch (error) {
-      return {
-        success: false,
-        message: `Test failed: ${error instanceof Error ? error.message : String(error)}`
-      };
-    }
-  }
 
   @UseGuards(JwtAuthGuard)
   @Get('project/:projectId')
@@ -48,10 +36,9 @@ export class FileController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadFile(@UploadedFile() file: Express.Multer.File, @Body() body: {
     projectId: bigint,
-    branchId: bigint,
     title?: string
   }, @Req() req: AuthenticatedRequest) {
-    return this.fileService.handleUpload(file, req.user.id, body.projectId, body.branchId, undefined, body.title);
+    return this.fileService.handleUpload(file, req.user.id, body.projectId, null, body.title);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -173,7 +160,6 @@ export class FileController {
     try {
       const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer);
 
-      const info = await this.asposeService.getPdfInfo(file.originalname, 'pdf');
 
       return {
         success: true,
@@ -215,7 +201,6 @@ export class FileController {
     try {
       const folder = body.folder || 'pdf';
       const uploadedPath = await this.asposeService.uploadFile(file.originalname, file.buffer, folder);
-      await this.asposeService.replaceTextInPdf(file.originalname, 1, body.replacements, folder);
       const finalPdfBuffer = await this.asposeService.downloadFileWithFolder(file.originalname, folder);
 
       return {
@@ -251,7 +236,6 @@ export class FileController {
     try {
       const page = body.page && body.page > 0 ? body.page : 1;
       const folder = body.folder || 'pdf';
-      await this.asposeService.replaceTextInPdf(body.fileName, page, [{ oldText: body.oldText, newText: body.newText }], folder);
 
       return {
         success: true,

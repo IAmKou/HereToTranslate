@@ -1,5 +1,5 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Job } from 'bull';
+import type { Job } from 'bull';
 import { Injectable } from '@nestjs/common';
 import { TranslationService } from './translation-manager.service';
 import { InjectRepository } from '@nestjs/typeorm';

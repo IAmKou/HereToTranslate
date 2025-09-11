@@ -33,3 +33,4 @@ export * from './subtask-assignment-history.entity';
 export * from './request-review.entity';
 export * from './project-activity.entity';
 export * from './task-history.entity';
+export * from './translation.entity';

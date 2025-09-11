@@ -253,10 +253,6 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requests.targetLanguages',
-        'requests.reviewedAt',
-        'requests.reviewDecision',
-        'requests.reviewRating',
-        'requests.reviewComment',
         'requester.id',
         'requester.username',
         'project.id',
@@ -466,8 +462,6 @@ export class RequestManagerService {
         'project.name',
         'project.description',
         'project.createdAt',
-        'defaultBranch.id',
-        'defaultBranch.name',
       ])
       .where('requests.id = :requestId', { requestId })
       .leftJoin('requests.requester', 'requester')
@@ -477,7 +471,6 @@ export class RequestManagerService {
       .leftJoinAndSelect('requests.registrants', 'registrants')
       .leftJoinAndSelect('requests.files', 'files')
       .leftJoin('requests.project', 'project')
-      .leftJoin('project.defaultBranch', 'defaultBranch');
 
     const request = await query.getOne();
 
@@ -900,11 +893,6 @@ export class RequestManagerService {
       .select([
         'request.id',
         'request.status',
-        'request.rating',
-        'request.reviewRating',
-        'request.reviewDecision',
-        'request.reviewedAt',
-        'request.reviewComment',
         'assignee.id',
         'assignee.username',
         'assignee.fullName',

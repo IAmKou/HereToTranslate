@@ -1,24 +1,14 @@
 <script setup lang="ts">
-import { ref, defineProps, watch, onMounted, computed, nextTick, onBeforeUnmount } from 'vue';
+import { ref, defineProps, watch, onMounted, computed, onBeforeUnmount } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import InputText from 'primevue/inputtext';
-// import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
 import axiosInstance from '../api';
 import { useProjectPermission } from '../composables/useProjectPermission';
 import { SUPPORTED_LANGUAGES, type Language } from '../utils/languages';
 // import BulkExportDialog from './BulkExportDialog.vue';
 
-interface TranslationString {
-  id: string;
-  originalText: string;
-  translatedText: string;
-  fileId: string;
-}
-
 const props = defineProps<{
   projectId: string | number;
-  branchId: string | number | null;
   project?: any;
   members?: any[];
   currentUser?: any;
@@ -39,7 +29,7 @@ const files = ref<any[]>([]);
 const translationStrings = ref<any[]>([]);
 const loading = ref(false);
 const error = ref('');
-const expandedFileIds = ref<(string|number)[]>([]);
+// Removed unused expandedFileIds
 
 // Thêm state để track current language để tránh load lại dữ liệu không cần thiết
 const currentLoadedLanguage = ref<string>('');
@@ -63,24 +53,12 @@ watch(projectLanguages, (newLanguages) => {
 }, { immediate: true });
 
 // Thay vì searchQuery/filterStatus toàn cục, dùng map cho từng file
-const searchQueryMap = ref<Record<string, string>>({});
-const filterStatusMap = ref<Record<string, 'all' | 'translated' | 'untranslated'>>({});
-const highlightUntranslated = ref(true);
-const sideBySide = ref(false);
-const viewMode = ref<'single' | 'side'>('single');
-const focusUntranslated = ref(false);
+// const searchQueryMap = ref<Record<string, string>>({});
+// const filterStatusMap = ref<Record<string, 'all' | 'translated' | 'untranslated'>>({});
+// const focusUntranslated = ref(false);
 
 
-
-const selectedPartMap = ref<Record<string, number>>({}); // fileId -> part index
 // Removed bulk export dialog state
-
-// Hàm kiểm tra file đang processing
-function isFileProcessing(file: any): boolean {
-  return file.status === 'processing';
-}
-
-// Removed export dropdown listeners and handlers
 
 // Expose method để component cha có thể gọi reload files
 function reloadFiles() {
@@ -107,79 +85,14 @@ defineExpose({
   reloadFiles
 });
 
-const DOCX_STRINGS_PER_PAGE = 100; // DOCX: 100 strings/page
+// const DOCX_STRINGS_PER_PAGE = 100; // kept for potential future use
 
-function getTotalParts(fileId: string | number) {
-  const arr = stringsByFile.value[fileId] || [];
-  // Lọc strings theo filePart
-  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
-
-  if (!file) {
-    // Fallback: chia theo 100 strings/page
-    return Math.ceil(arr.length / DOCX_STRINGS_PER_PAGE);
-  }
-
-  // Nếu là PDF, chia theo page gốc
-  if (file.fileType === 'application/pdf') {
-    // Đếm số page khác nhau trong strings
-    const pages = new Set<number>();
-    arr.forEach((str: any) => {
-      const page = str.position?.page || 1;
-      pages.add(page);
-    });
-    return pages.size;
-  }
-
-  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
-  return Math.ceil(arr.length / DOCX_STRINGS_PER_PAGE);
-}
-
-function getStringsOfPart(fileId: string | number, part: number) {
-  const arr = stringsByFile.value[fileId] || [];
-  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
-
-  if (!file) {
-    // Fallback: chia theo 100 strings/page
-    const start = part * DOCX_STRINGS_PER_PAGE;
-    return arr.slice(start, start + DOCX_STRINGS_PER_PAGE);
-  }
-
-  // Nếu là PDF, lấy strings theo page
-  if (file.fileType === 'application/pdf') {
-    const pageNumber = part + 1; // part bắt đầu từ 0, page bắt đầu từ 1
-    return arr.filter((str: any) => (str.position?.page || 1) === pageNumber);
-  }
-
-  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
-  const start = part * DOCX_STRINGS_PER_PAGE;
-  return arr.slice(start, start + DOCX_STRINGS_PER_PAGE);
-}
-
-function getStringsCountOfPart(fileId: string | number, part: number) {
-  const arr = stringsByFile.value[fileId] || [];
-  const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
-
-  if (!file) {
-    // Fallback: chia theo 100 strings/page
-    const start = part * DOCX_STRINGS_PER_PAGE;
-    return Math.min(DOCX_STRINGS_PER_PAGE, arr.length - start);
-  }
-
-  // Nếu là PDF, đếm strings theo page
-  if (file.fileType === 'application/pdf') {
-    const pageNumber = part + 1; // part bắt đầu từ 0, page bắt đầu từ 1
-    return arr.filter((str: any) => (str.position?.page || 1) === pageNumber).length;
-  }
-
-  // Nếu là DOCX hoặc file khác, chia theo 100 strings/page
-  const start = part * DOCX_STRINGS_PER_PAGE;
-  return Math.min(DOCX_STRINGS_PER_PAGE, arr.length - start);
-}
+// Removed unused segmented helpers
 
 async function loadFiles() {
-  if (!props.projectId || !props.branchId) return;
+  if (!props.projectId) return;
   try {
-    const res = await axiosInstance.get(`/files/project/${props.projectId}?branchId=${props.branchId}`);
+    const res = await axiosInstance.get(`/files/project/${props.projectId}`);
     files.value = Array.isArray(res.data) ? res.data : [];
   } catch (e) {
     files.value = [];
@@ -187,7 +100,7 @@ async function loadFiles() {
 }
 
 async function loadTranslationStrings() {
-  if (!props.projectId || !props.branchId) return;
+  if (!props.projectId ) return;
 
   const currentLanguage = selectedLanguage.value?.code || defaultLanguage.value.code;
 
@@ -202,7 +115,6 @@ async function loadTranslationStrings() {
     const res = await axiosInstance.get('/translation/strings', {
       params: {
         projectId: props.projectId,
-        branchId: props.branchId,
         language: currentLanguage,
       },
     });
@@ -261,73 +173,11 @@ const fileProgress = computed(() => {
   return progress;
 });
 
-// Computed: Lọc chuỗi dịch theo file, search, filter
-const filteredStringsByFile = computed(() => {
-  const map: Record<string, any[]> = {};
-  for (const str of translationStrings.value) {
-    // Lọc theo search
-    const q = (searchQueryMap.value[str.fileId] || '').trim().toLowerCase();
-    let match = true;
-    if (q) {
-      match = ((str.originalText || '').toLowerCase().includes(q)) ||
-        ((str.translatedText || '').toLowerCase().includes(q));
-    }
-    // Lọc theo trạng thái
-    let statusMatch = true;
-    const status = filterStatusMap.value[str.fileId] || 'all';
-    if (status === 'translated') {
-      statusMatch = !!(str.translatedText && str.translatedText.trim().length > 0);
-    } else if (status === 'untranslated') {
-      statusMatch = !str.translatedText || str.translatedText.trim().length === 0;
-    }
-    if (match && statusMatch) {
-      if (!map[str.fileId]) map[str.fileId] = [];
-      map[str.fileId].push(str);
-    }
-  }
-  return map;
-});
+// Removed unused filtered helper
 
-function toggleFileAccordion(fileId: string|number) {
-  if (expandedFileIds.value.includes(fileId)) {
-    expandedFileIds.value = expandedFileIds.value.filter(id => id !== fileId);
-  } else {
-    expandedFileIds.value.push(fileId);
-  }
-}
-
-// Hàm lọc chuỗi dịch cho từng file
-function getFilteredStrings(fileId: string | number) {
-  const arr = stringsByFile.value[fileId] || [];
-  const q = (searchQueryMap.value[fileId] || '').trim().toLowerCase();
-  // Nếu bật focusUntranslated thì chỉ lấy untranslated
-  const status = focusUntranslated.value ? 'untranslated' : (filterStatusMap.value[fileId] || 'all');
-  return arr.filter((str: any) => {
-    let match = true;
-    if (q) {
-      match = ((str.originalText || '').toLowerCase().includes(q)) ||
-        ((str.translatedText || '').toLowerCase().includes(q));
-    }
-    let statusMatch = true;
-    if (status === 'translated') {
-      statusMatch = !!(str.translatedText && str.translatedText.trim().length > 0);
-    } else if (status === 'untranslated') {
-      statusMatch = !str.translatedText || str.translatedText.trim().length === 0;
-    }
-    return match && statusMatch;
-  });
-}
-
-function getFilteredStringsOfPart(fileId: string | number, part: number) {
-  const filtered = getFilteredStrings(fileId);
-  // Lọc strings theo filePart
-  return filtered.filter(str => (str.filePart || 0) === part);
-}
-
-// Thêm hàm chọn icon theo loại file
 function getFileIconClass(fileName: string) {
   if (!fileName) return 'pi pi-file';
-  const ext = fileName.split('.').pop()?.toLowerCase();
+  const ext = String(fileName.split('.').pop() || '').toLowerCase();
   if (["doc", "docx"].includes(ext)) return "pi pi-file-word";
   if (["xls", "xlsx"].includes(ext)) return "pi pi-file-excel";
   if (["pdf"].includes(ext)) return "pi pi-file-pdf";
@@ -337,18 +187,7 @@ function getFileIconClass(fileName: string) {
   return "pi pi-file";
 }
 
-// Hàm icon trạng thái dịch
-function getStatusIcon(progress: { total: number; translated: number }) {
-  if (!progress) return '';
-  if (progress.translated === 0) return 'pi pi-ban text-red'; // ⛔
-  if (progress.translated === progress.total && progress.total > 0) return 'pi pi-check-circle text-green';
-  return 'pi pi-exclamation-circle text-yellow';
-}
-const filterOptions = [
-  { value: 'all', label: 'All', icon: 'pi pi-list', tooltip: 'Show all segments' },
-  { value: 'translated', label: 'Translated', icon: 'pi pi-check', tooltip: 'Show only translated' },
-  { value: 'untranslated', label: 'Untranslated', icon: 'pi pi-times', tooltip: 'Show only untranslated' },
-];
+// Removed unused status/filters
 
 const { hasPermission } = useProjectPermission(
   computed(() => props.project || {}),
@@ -356,13 +195,10 @@ const { hasPermission } = useProjectPermission(
   computed(() => props.currentUser || null)
 );
 
-const canEditTranslation = computed(() => hasPermission('EditTranslation'));
-
 // Thêm computed để kiểm tra quyền mở editor
 const canOpenEditor = computed(() => hasPermission('EditTranslation') || hasPermission('ManageTranslation'));
 
-// Watch cho projectId, branchId và selectedLanguage thay đổi
-watch([() => props.projectId, () => props.branchId], () => {
+watch([() => props.projectId], () => {
   loadFiles();
   loadTranslationStrings();
 });
@@ -385,37 +221,11 @@ onBeforeUnmount(() => {
 });
 
 // Autosize textarea
-const textareaRefs = ref<Record<string, HTMLTextAreaElement | null>>({});
-function setTextareaRef(id: string, el: HTMLTextAreaElement | null) {
-  if (el) textareaRefs.value[id] = el;
-}
-function autoResize(e: Event) {
-  const el = e.target as HTMLTextAreaElement;
-  el.style.height = 'auto';
-  el.style.height = (el.scrollHeight) + 'px';
-}
-
-// Thêm trạng thái dirty/saved cho từng chuỗi
-function onInput(str: any) {
-  str._dirty = true;
-  str._saved = false;
-}
 const toast = useToast();
-async function saveTranslation(str: any) {
-  console.log('saveTranslation str:', str);
-  const id = str.id;
-  try {
-    const currentLanguage = selectedLanguage.value?.code || defaultLanguage.value.code;
-    await axiosInstance.post(`/translation/translate/${id}`, {
-      translatedText: str.translatedText,
-      language: currentLanguage,
-    });
-    str._dirty = false;
-    str._saved = true;
-    toast.add({ severity: 'success', summary: 'Saved', detail: 'Translation saved successfully', life: 2000 });
-  } catch (e: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e?.message || 'Failed to save translation', life: 3000 });
-  }
+
+function setHoverBg(e: MouseEvent, color: string) {
+  const el = e.currentTarget as HTMLElement | null;
+  if (el) el.style.background = color;
 }
 
 // Export translated file (download)
@@ -521,7 +331,7 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
     <div v-if="loading">Loading translation strings...</div>
     <div v-else-if="error" style="color:red">{{ error }}</div>
     <div v-else>
-      <div v-if="files.length === 0">No files found for this branch.</div>
+      <div v-if="files.length === 0">No files found for this projects.</div>
 
       <div v-for="file in files" :key="file.fileId || file.id" class="file-accordion" style="margin-bottom: 1.5em;">
         <div class="file-header" style="cursor: default; background: #e0e7ff; border-radius: 14px; box-shadow: none;">
@@ -534,12 +344,12 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
           </div>
           <div style="display:flex; align-items:center; gap:0.5rem; margin-left:0.8rem;">
             <a
-              :href="canOpenEditor ? `/projects/${props.projectId}/branches/${props.branchId}/translate?fileId=${file.fileId || file.id}&language=${selectedLanguage?.code || 'en'}` : '#'"
+              :href="canOpenEditor ? `/projects/${props.projectId}/translate?fileId=${file.fileId || file.id}&language=${selectedLanguage?.code || 'en'}` : '#'"
               class="open-translator-btn"
               :class="{ 'disabled': !canOpenEditor }"
               style="background: #7c5dfa; color: white; border: none; padding: 0.4rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s; font-size: 0.9rem;"
-              @mouseenter="canOpenEditor && ($event.target.style.background = '#5f43ea')"
-              @mouseleave="canOpenEditor && ($event.target.style.background = '#7c5dfa')"
+              @mouseenter="canOpenEditor && setHoverBg($event, '#5f43ea')"
+              @mouseleave="canOpenEditor && setHoverBg($event, '#7c5dfa')"
               :title="!canOpenEditor ? 'You do not have permission to open the translation editor (requires EditTranslation or ManageTranslation permission)' : ''"
               @click="!canOpenEditor && $event.preventDefault()"
             >
@@ -550,8 +360,8 @@ async function exportTranslatedFile(file: any, format: 'original' | 'xliff' = 'o
               <button
                 class="open-translator-btn"
                 style="background: #10b981; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s; font-size: 0.9rem;"
-                @mouseenter="$event.target.style.background = '#0ea371'"
-                @mouseleave="$event.target.style.background = '#10b981'"
+                @mouseenter="setHoverBg($event, '#0ea371')"
+                @mouseleave="setHoverBg($event, '#10b981')"
                 title="Export translated file (download)"
                 @click="exportTranslatedFile(file, 'original')"
               >

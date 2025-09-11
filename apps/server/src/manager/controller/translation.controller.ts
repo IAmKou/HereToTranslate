@@ -20,27 +20,24 @@ export class TranslationController {
   @Get('strings')
   async getAllTranslationStrings(
     @Query('projectId') projectId: string,
-    @Query('branchId') branchId: string,
     @Query('language') language: string ,
     @Query('fileId') fileId?: string,
     @Query('page') page?: number,
     @Query('fileType') fileType?: string
   ) {
-    return this.translationService.getAllString(projectId, branchId, language, fileId, page, fileType);
+    return this.translationService.getAllString(projectId, language, fileId, page, fileType);
   }
   @Get('progress')
   async getProgress(
     @Query('projectId') projectId: string,
-    @Query('branchId') branchId: string,
     @Query('language') language?: string,
   ) {
-    if (!projectId || !branchId) {
-      throw new BadRequestException('projectId and branchId are required');
+    if (!projectId ) {
+      throw new BadRequestException('projectId are required');
     }
 
     return this.translationService.getTranslationProgress(
       projectId,
-      branchId,
       language,
     );
   }
@@ -50,9 +47,8 @@ export class TranslationController {
   async getFilePages(
     @Param('fileId') fileId: string,
     @Query('projectId') projectId: string,
-    @Query('branchId') branchId: string
   ) {
-    return this.translationService.getFilePages(fileId, projectId, branchId);
+    return this.translationService.getFilePages(fileId, projectId);
   }
 
   @Post('translate/:id')

@@ -107,6 +107,8 @@ import { ExportController } from '#LocalProject/Managers/controller/export.contr
 import { ExportJobProcessor } from '#LocalProject/Managers/service/export-job.processor';
 import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-config-checker';
 import { FeeController } from './controller/fee.controller';
+import { TranslationEntity } from '../db/mysql/entity/translation.entity';
+import { DocxEditorService } from './service/docx-editor.service';
 
 @Global()
 @Module({
@@ -149,6 +151,7 @@ import { FeeController } from './controller/fee.controller';
       SubtaskEntity,
       SubtaskStatusHistoryEntity,
       TaskCommentEntity,
+      TranslationEntity,
     ]),
     // Restore Bull queue for export jobs (required by ExportManagerService)
     BullModule.registerQueue({ name: 'export', redis: { host: 'localhost', port: 6379 } }),
@@ -192,6 +195,7 @@ import { FeeController } from './controller/fee.controller';
     BackgroundExtractService,
     PaypalConfigChecker,
     AsposeService,
+    DocxEditorService,
   ],
   exports: [
     CategoryManagerService,
@@ -230,6 +234,7 @@ import { FeeController } from './controller/fee.controller';
     BackgroundExtractService,
     PaypalConfigChecker,
     AsposeService,
+    DocxEditorService,
   ],
   controllers: [
     CategoryController,

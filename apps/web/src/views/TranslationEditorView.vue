@@ -28,7 +28,6 @@ const router = useRouter();
 
 // Get projectId and branchId from route params
 const projectId = computed(() => route.params.projectId as string);
-const branchId = computed(() => route.params.branchId as string);
 const selectedFileId = computed(() => route.query.fileId as string);
 const selectedLanguageFromQuery = computed(() => route.query.language as string);
 
@@ -276,9 +275,9 @@ const filteredPages = computed(() => {
 });
 
 async function loadFiles() {
-  if (!projectId.value || !branchId.value) return;
+  if (!projectId.value) return;
   try {
-    const res = await axiosInstance.get(`/files/project/${projectId.value}?branchId=${branchId.value}`);
+    const res = await axiosInstance.get(`/files/project/${projectId.value}`);
     files.value = Array.isArray(res.data) ? res.data : [];
     console.log('Files loaded:', files.value);
     if (files.value.length > 0) {
@@ -290,15 +289,14 @@ async function loadFiles() {
 }
 
 async function loadTranslationStrings() {
-  if (!projectId.value || !branchId.value) return;
+  if (!projectId.value) return;
   loading.value = true;
   error.value = '';
   try {
     const res = await axiosInstance.get('/translation/strings', {
       params: {
         projectId: projectId.value,
-        branchId: branchId.value,
-        language: selectedLanguage.value, // Thêm tham số language mặc định
+        language: selectedLanguage.value, 
       },
     });
     translationStrings.value = Array.isArray(res.data)
@@ -312,6 +310,9 @@ async function loadTranslationStrings() {
         return { ...str, id };
       })
       : [];
+    
+    console.log('Translation strings loaded:', translationStrings.value.length);
+    console.log('Translation strings data:', translationStrings.value);
 
     // Xử lý phân trang cho từng file
     for (const file of files.value) {
@@ -412,7 +413,6 @@ const debugFileInfo = computed(() => {
   };
 });
 
-// Computed: Lọc chuỗi dịch theo file, search, filter
 const filteredStringsByFile = computed(() => {
   const map: Record<string, any[]> = {};
   for (const str of translationStrings.value) {
@@ -458,11 +458,14 @@ function toggleFileAccordion(fileId: string|number) {
 // Hàm lọc chuỗi dịch cho từng file
 function getFilteredStrings(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
+  console.log(`getFilteredStrings for fileId ${fileId}:`, arr.length, 'strings');
   // Sử dụng deduplication để đảm bảo tính nhất quán
   const uniqueStrings = deduplicateStrings(arr);
+  console.log(`After deduplication:`, uniqueStrings.length, 'strings');
   const q = (searchQueryMap.value[fileId] || '').trim().toLowerCase();
   // Nếu bật focusUntranslated thì chỉ lấy untranslated
   const status = focusUntranslated.value ? 'untranslated' : (filterStatusMap.value[fileId] || 'all');
+  console.log(`Filter status: ${status}, search query: "${q}"`);
   return uniqueStrings.filter((str: any) => {
     let match = true;
     if (q) {
@@ -481,6 +484,7 @@ function getFilteredStrings(fileId: string | number) {
 
 function getFilteredStringsOfPart(fileId: string | number, part: number) {
   const filtered = getFilteredStrings(fileId);
+  console.log(`getFilteredStringsOfPart for fileId ${fileId}, part ${part}:`, filtered.length, 'filtered strings');
   const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
 
   if (!file) {
@@ -494,9 +498,12 @@ function getFilteredStringsOfPart(fileId: string | number, part: number) {
     return filtered.filter((str: any) => str.filePart === part);
   }
 
-  // Nếu là DOCX, lấy strings theo filePart (giống hệt như PDF)
+  // Nếu là DOCX, lấy strings theo filePart (convert 0-indexed to 1-indexed)
   if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    return filtered.filter((str: any) => str.filePart === part);
+    const targetPart = part + 1; // Convert 0-indexed to 1-indexed
+    const result = filtered.filter((str: any) => str.filePart === targetPart);
+    console.log(`DOCX filtering: UI part=${part}, target filePart=${targetPart}, found strings:`, result.length);
+    return result;
   }
 
   // Fallback: chia theo 15 strings/page
@@ -560,12 +567,10 @@ watch(selectedLanguageFromQuery, (newLanguage) => {
   }
 }, { immediate: true });
 
-// For now, we'll assume the user has edit permissions
-// In a real implementation, you'd need to pass project, members, and currentUser as props or fetch them
 const canEditTranslation = ref(true);
 
-// Watch cho projectId và branchId thay đổi
-watch([projectId, branchId], () => {
+// Watch cho projectId thay đổi
+watch([projectId], () => {
   loadFiles();
   loadTranslationStrings();
   loadProjectInfo();
@@ -1044,8 +1049,6 @@ function handleValidationSkip() {
   }
 }
 
-
-
 function handleValidationAutoFix() {
   if (currentValidationString.value) {
     // Get all auto-fixable warnings
@@ -1188,8 +1191,6 @@ function getStatusAriaLabel(str: any): string {
 function goBackToProject() {
   router.push(`/projects/${projectId.value}`);
 }
-
-
 
 // Custom dropdown state
 const isDropdownOpen = ref(false);
@@ -1386,7 +1387,6 @@ const focusedString = computed(() => {
         <div v-if="loading">Loading translation strings...</div>
         <div v-else-if="error" style="color:red">{{ error }}</div>
         <div v-else>
-          <div v-if="filteredFiles.length === 0">No files found for this branch.</div>
           <div v-for="file in filteredFiles" :key="file.fileId || file.id" class="file-accordion">
             <div class="file-header" @click="toggleFileAccordion(file.fileId || file.id)">
             <span class="file-name">
@@ -1506,7 +1506,7 @@ const focusedString = computed(() => {
                       v-for="opt in filterOptions"
                       :key="opt.value"
                       :class="['filter-btn', { active: filterStatusMap[file.fileId || file.id] === opt.value }]"
-                      @click="filterStatusMap[file.fileId || file.id] = opt.value"
+                      @click="filterStatusMap[file.fileId || file.id] = opt.value as 'all' | 'translated' | 'untranslated'"
                       :title="opt.tooltip"
                       type="button"
                       :disabled="isFileProcessing(file)"
@@ -1561,7 +1561,7 @@ const focusedString = computed(() => {
                             placeholder="Enter translation..."
                             @input="e => { autoResize(e); onInput(str); }"
                             rows="1"
-                            :ref="el => setTextareaRef(str.id, el)"
+                            :ref="el => setTextareaRef(str.id, el as HTMLTextAreaElement | null)"
                             :disabled="!canEditTranslation || isFileProcessing(file)"
                             :data-str-id="str.id"
                             @focus="handleInputFocus(str.id)"
@@ -1618,7 +1618,7 @@ const focusedString = computed(() => {
                           placeholder="Enter translation..."
                           @input="e => { autoResize(e); onInput(str); }"
                           rows="1"
-                          :ref="el => setTextareaRef(str.id, el)"
+                          :ref="el => setTextareaRef(str.id, el as HTMLTextAreaElement | null)"
                           :disabled="!canEditTranslation || isFileProcessing(file)"
                           :data-str-id="str.id"
                           @focus="handleInputFocus(str.id)"

@@ -243,13 +243,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/projects/:projectId/branches/:branchId/translate',
+      path: '/projects/:projectId/translate',
       name: 'translation-editor',
       component: () => import('../views/TranslationEditorView.vue'),
       meta: { requiresAuth: true },
     },
     {
-      path: '/projects/:projectId/branches/:branchId/handover',
+      path: '/projects/:projectId/handover',
       name: 'translation-handover',
       component: () => import('../views/TranslationHandoverView.vue'),
       meta: { requiresAuth: true },

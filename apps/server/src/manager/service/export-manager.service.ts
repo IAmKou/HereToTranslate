@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import type { Queue } from 'bull';
 import { ExportJobData, ExportJobResult } from './export-job.processor';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -8,7 +8,7 @@ import { FileEntity } from '#LocalProject/Entities';
 
 export interface ExportJobStatus {
   jobId: string;
-  status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed';
+  status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused' | 'stuck';
   progress?: number;
   result?: ExportJobResult;
   error?: string;
@@ -145,7 +145,7 @@ export class ExportManagerService {
 
   async getProjectFiles(projectId: string, branchId?: string): Promise<Array<{ id: string; fileName: string; fileType: string }>> {
     const query = this.fileRepository.createQueryBuilder('file')
-      .where('file.projectId = :projectId', { projectId })
+      .where('file.projectId = :projectId', { projectId: BigInt(projectId) })
       .select(['file.id', 'file.fileName', 'file.fileType']);
 
     if (branchId) {

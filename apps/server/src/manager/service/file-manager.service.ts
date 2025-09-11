@@ -2,13 +2,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
 import { FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
-import  { Express } from 'express';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
 import { Model } from 'mongoose';
-import { AsposeService } from './aspose.service';
-import mammoth from 'mammoth';
+import { DocxEditorService } from './docx-editor.service';
 import { ActivityManagerService } from './activity-manager.service';
 
 @Injectable()
@@ -20,10 +18,10 @@ export class FileService {
     private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
-    private readonly manifestService : ManifestService,
+    private readonly manifestService: ManifestService,
     @Inject(forwardRef(() => ActivityManagerService))
     private readonly activityManagerService: ActivityManagerService,
-    private readonly asposeService: AsposeService,
+    private readonly docxEditorService: DocxEditorService,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
@@ -34,6 +32,13 @@ export class FileService {
     try {
       const mime = upload.mimetype || '';
       const buf = upload.buffer;
+      
+      // Quick buffer size check - files under 100 bytes are likely empty
+      if (buf.length < 100) {
+        this.logger.warn(`[FILE_VALIDATION] File too small (${buf.length} bytes), likely empty`);
+        return false;
+      }
+      
       // Quick text-like check
       const textLike = (
         mime.startsWith('text/') ||
@@ -47,35 +52,89 @@ export class FileService {
       );
       if (textLike) {
         const text = buf.toString('utf8');
-        return /\S/.test(text);
+        const hasText = /\S/.test(text);
+        this.logger.log(`[TEXT_VALIDATION] Text file validation result: ${hasText}, content length: ${text.length}`);
+        return hasText;
       }
+      
       // PDF check via text extraction
       if (mime === 'application/pdf') {
         try {
           const segments = await this.extractPdfTextSegments(buf);
-          return Array.isArray(segments) && segments.some(seg => typeof seg?.text === 'string' && seg.text.trim().length > 0);
+          const hasContent = Array.isArray(segments) && segments.some(seg => typeof seg?.text === 'string' && seg.text.trim().length > 0);
+          this.logger.log(`[PDF_VALIDATION] PDF validation result: ${hasContent}, segments: ${segments?.length || 0}`);
+          return hasContent;
         } catch (e) {
-          // If extraction fails, do not block by default
-          this.logger.warn('PDF text extraction failed during validation; allowing upload');
-          return true;
+          this.logger.error(`[PDF_VALIDATION] PDF text extraction failed: ${e instanceof Error ? e.message : String(e)}`);
+          // For PDFs, if extraction fails completely, it's likely corrupted or empty
+          return false;
         }
       }
-      // DOCX raw text extraction using mammoth
+      
+      // DOCX text extraction using docx-editor service
       if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         try {
-          const result = await mammoth.extractRawText({ buffer: buf });
-          const text = result?.value ?? '';
-          return /\S/.test(text);
+          this.logger.log(`[DOCX_VALIDATION] Starting DOCX content validation for file with buffer size: ${buf.length}`);
+          
+          // First try plain text extraction as it's more reliable
+          let hasContent = false;
+          try {
+            const plainText = await this.docxEditorService.extractTextFromBuffer(buf);
+            hasContent = !!(plainText && plainText.trim().length > 0);
+            this.logger.log(`[DOCX_VALIDATION] Plain text extraction result: ${hasContent}, text length: ${plainText?.length || 0}`);
+            if (hasContent) {
+              this.logger.log(`[DOCX_VALIDATION] Plain text preview: "${plainText.substring(0, 100)}..."`);
+              return true; // If plain text extraction succeeds and has content, file is valid
+            }
+          } catch (plainTextError) {
+            this.logger.warn(`[DOCX_VALIDATION] Plain text extraction failed: ${plainTextError instanceof Error ? plainTextError.message : String(plainTextError)}`);
+          }
+          
+          // If plain text extraction failed or returned empty, try detailed extraction
+          try {
+            const { segments } = await this.docxEditorService.extractDocxContentFromBuffer(buf);
+            this.logger.log(`[DOCX_VALIDATION] Extracted ${segments.length} segments from DOCX`);
+            
+            if (segments.length === 0) {
+              this.logger.warn('[DOCX_VALIDATION] No segments extracted from DOCX file');
+              return false;
+            }
+            
+            // Check if any segments have meaningful text
+            hasContent = segments.some(segment => {
+              const hasText = segment.text && segment.text.trim().length > 0;
+              if (hasText) {
+                this.logger.log(`[DOCX_VALIDATION] Found meaningful content: "${segment.text.substring(0, 50)}..."`);
+              }
+              return hasText;
+            });
+            
+            this.logger.log(`[DOCX_VALIDATION] Segments validation result: ${hasContent}`);
+            return hasContent;
+          } catch (segmentError) {
+            this.logger.error(`[DOCX_VALIDATION] Segment extraction failed: ${segmentError instanceof Error ? segmentError.message : String(segmentError)}`);
+            return false;
+          }
         } catch (e) {
-          this.logger.warn('DOCX text extraction failed during validation; allowing upload');
-          return true;
+          this.logger.error(`[DOCX_VALIDATION] DOCX validation completely failed: ${e instanceof Error ? e.message : String(e)}`);
+          this.logger.error(`[DOCX_VALIDATION] Error stack: ${e instanceof Error ? e.stack : 'No stack'}`);
+          // If all DOCX extraction methods fail, the file is likely corrupted or empty
+          return false;
         }
       }
-      // Other formats: skip strict validation
-      return true;
+      
+      // For other formats (images, etc.), assume they have content if they have reasonable size
+      if (buf.length > 1000) {
+        this.logger.log(`[FILE_VALIDATION] Non-text file with size ${buf.length} bytes, assuming valid`);
+        return true;
+      }
+      
+      this.logger.warn(`[FILE_VALIDATION] File validation failed - unknown format or too small: ${mime}, ${buf.length} bytes`);
+      return false;
     } catch (error) {
-      this.logger.warn('Content validation encountered an error; allowing upload');
-      return true;
+      this.logger.error(`[FILE_VALIDATION] Content validation encountered an error: ${error instanceof Error ? error.message : String(error)}`);
+      // If validation fails due to error, be conservative and reject
+      return false;
     }
   }
 
@@ -85,7 +144,6 @@ export class FileService {
     fileType: string;
     fileContent: Buffer;
     projectId?: bigint;
-    branchId?: bigint;
     requestId?: bigint;
   }): Promise<{
     fileId: string;
@@ -95,11 +153,10 @@ export class FileService {
     updatedAt: Date;
     uploaderId?: string;
     projectId?: string;
-    branchId?: string;
     requestId?: string;
   }> {
     this.logger.log('===DEBUG FILE NAME saveFile===');
-    const { uid, fileName, fileType, fileContent, projectId, branchId, requestId } = params;
+    const { uid, fileName, fileType, fileContent, projectId, requestId } = params;
 
     const file = this.fileRepository.create({
       fileName,
@@ -109,18 +166,16 @@ export class FileService {
       project: projectId ? { id: projectId } : undefined,
       request: requestId ? { id: requestId } : undefined,
       isSyncedFromRequest: !!requestId,
+      status: 'processing', // Set initial status
     });
 
-    this.logger.log(`Saving file: ${fileName}, type: ${fileType}, projectId: ${projectId}, branchId: ${branchId}, uploader: ${uid}`);
+    this.logger.log(`Saving file: ${fileName}, type: ${fileType}, projectId: ${projectId}, uploader: ${uid}`);
     this.logger.log(`File content length: ${fileContent.length}`);
-    this.logger.log(`Raw fileName: ${fileName}`);
-    this.logger.log(`fileName (JSON): ${JSON.stringify(fileName)}`);
-    this.logger.log(`fileName (Buffer): ${Buffer.from(fileName, 'utf8').toString('hex')}`);
 
     const savedFile = await this.fileRepository.save(file);
     const safeFileName = fileName.replace(/[\\/:*?"<>|]/g, '_');
     const timestamped = `${Date.now()}_${safeFileName}`;
-    const repoName = `project-${projectId}`;
+    // const repoName = `project-${projectId}`; // unused
 
     // Log activity if this is a project file
     if (projectId) {
@@ -137,18 +192,16 @@ export class FileService {
           Number(uid),
           fileName,
           stringCount,
-          branchId ? Number(branchId) : undefined
         );
       } catch (error) {
         this.logger.error('Failed to log file upload activity:', error);
       }
     }
 
-    // Upload to Aspose storage instead of GitHub
     try {
       const projectFolder = projectId ? `projects/project-${projectId}` : 'pdf';
-      await this.uploadToAsposeStorage(fileContent, safeFileName, fileType, projectFolder);
-      this.logger.log(`File uploaded to Aspose storage: ${safeFileName}`);
+      // Skipping external storage upload; handled locally or by downstream services
+      this.logger.log(`File stored locally/in-DB: ${safeFileName}`);
       try {
         const isPdf =
           (typeof fileType === 'string' && fileType.toLowerCase().includes('pdf')) ||
@@ -159,24 +212,9 @@ export class FileService {
       } catch (e) {
         this.logger.warn(`[FileService] getPdfDetail failed post-upload: ${(e as any)?.message || String(e)}`);
       }
-      // Also upload language-suffixed variants for PDFs
-      if (
-        projectId && (
-          (typeof fileType === 'string' && fileType.toLowerCase().includes('pdf')) ||
-          (typeof safeFileName === 'string' && safeFileName.toLowerCase().endsWith('.pdf'))
-        )
-      ) {
-        try {
-          const uniqueLangs = await this.getTargetLanguagesForProject(projectId);
-          if (uniqueLangs.length > 0) {
-            await this.uploadPdfLanguageVariants(fileContent, safeFileName, uniqueLangs, projectFolder);
-          }
-        } catch (e) {
-          this.logger.warn('Failed to upload language variants for PDF: ' + (e as any)?.message);
-        }
-      }
+      // Skipping creation of PDF language-suffixed variants (no external storage)
     } catch (err) {
-      this.logger.error('Aspose storage upload error:', err);
+      this.logger.error('Storage upload hook error (skipped):', err);
     }
 
     this.logger.log(`File uploaded to storage: ${timestamped}`);
@@ -197,33 +235,41 @@ export class FileService {
     file: Express.Multer.File,
     uid: bigint,
     projectId?: bigint,
-    branchId?: bigint,
-    requestId?: bigint,
+    requestId?: bigint | null,
     title?: string,
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
-    // Validate meaningful content for certain formats to catch empty-content files with non-zero size
     const hasContent = await this.hasMeaningfulContentForUpload(file);
     if (!hasContent) {
       throw new BadRequestException('Uploaded file appears to have no extractable text content. Please upload a file with content.');
     }
 
-    // Tìm file trùng tên trong cùng project + branch
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+    // Normalize mime if needed
+    let mime = file.mimetype || '';
+    if (!mime || mime === 'application/octet-stream') {
+      const ext = fileName.toLowerCase().split('.').pop();
+      switch (ext) {
+        case 'txt': mime = 'text/plain'; break;
+        case 'json': mime = 'application/json'; break;
+        case 'docx': mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; break;
+        case 'pdf': mime = 'application/pdf'; break;
+        default: mime = file.mimetype || 'application/octet-stream';
+      }
+    }
+
+    // Upsert file record
     const existingFile = await this.fileRepository.findOne({
-      where: {
-        fileName,
-        project: projectId ? { id: projectId } : undefined,
-      },
-      relations: ['project', 'branch'],
+      where: { fileName, project: projectId ? { id: projectId } : undefined },
+      relations: ['project'],
     });
 
     let saved;
     let isUpdate = false;
     if (existingFile) {
-      // Update nội dung file cũ
       existingFile.fileContent = file.buffer;
-      existingFile.fileType = file.mimetype;
+      existingFile.fileType = mime;
       existingFile.uploader = { id: uid } as any;
       existingFile.updatedAt = new Date();
       existingFile.status = 'processing';
@@ -241,10 +287,9 @@ export class FileService {
       };
       isUpdate = true;
     } else {
-      // Tạo file mới như cũ
       const fileEntity = this.fileRepository.create({
         fileName,
-        fileType: file.mimetype,
+        fileType: mime,
         fileContent: file.buffer,
         uploader: { id: uid },
         project: projectId ? { id: projectId } : undefined,
@@ -257,6 +302,7 @@ export class FileService {
       saved = {
         fileId: savedFile.id.toString(),
         fileName: savedFile.fileName,
+        fileType: savedFile.fileType,
         createdAt: savedFile.createdAt,
         updatedAt: savedFile.updatedAt,
         uploaderId: savedFile.uploader?.id?.toString(),
@@ -265,89 +311,117 @@ export class FileService {
       };
     }
 
-    // Log activity if this is a project file
+    // Activity log
     if (projectId) {
       try {
-        // Count strings if it's a text-based file
         let stringCount = 0;
-        if (file.mimetype.includes('text') || file.mimetype.includes('document') || file.mimetype.includes('pdf')) {
-          // This is a simplified count - in a real implementation you'd extract actual strings
-          stringCount = Math.floor(file.buffer.length / 100); // Rough estimate
+        switch (true) {
+          case /text\//.test(mime):
+          case /json/.test(mime):
+          case /pdf/.test(mime):
+          case /officedocument\.wordprocessingml\.document/.test(mime):
+            stringCount = Math.floor(file.buffer.length / 100);
+            break;
+          default:
+            stringCount = 0;
         }
-
-        await this.activityManagerService.logFileUpload(
-          Number(projectId),
-          Number(uid),
-          fileName,
-          stringCount,
-          branchId ? Number(branchId) : undefined
-        );
+        await this.activityManagerService.logFileUpload(Number(projectId), Number(uid), fileName, stringCount);
       } catch (error) {
         this.logger.error('Failed to log file upload activity:', error);
       }
     }
 
-    // Upload to Aspose storage
+    this.logger.log(`[UPLOAD_PROCESS] Starting file processing for ${fileName}, mime: ${mime}, fileId: ${saved.fileId}`);
+
     try {
-      const projectFolder = projectId ? `projects/project-${projectId}` : 'pdf';
-      await this.uploadToAsposeStorage(file.buffer, fileName, file.mimetype, projectFolder);
-      this.logger.log(`File uploaded to Aspose storage: ${fileName}`);
-      try {
-        const isPdf =
-          (typeof file.mimetype === 'string' && file.mimetype.toLowerCase().includes('pdf')) ||
-          (typeof fileName === 'string' && fileName.toLowerCase().endsWith('.pdf'));
-        if (isPdf) {
-          this.logger.log(`[FileService] Stored PDF text details for ${fileName}`);
-        }
-      } catch (e) {
-        this.logger.warn(`[FileService] getPdfDetail failed post-upload (local): ${(e as any)?.message || String(e)}`);
+      const request = requestId ? await this.requestRepository.findOne({ where: { id: requestId } }) : undefined;
+      this.logger.log(`[UPLOAD_PROCESS] Request found: ${!!request}, requestId: ${requestId}`);
+      
+      const fileRecord = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) }, relations: ['project'] });
+      if (!fileRecord) {
+        this.logger.error(`[UPLOAD_PROCESS] Saved file not found for fileId: ${saved.fileId}`);
+        throw new NotFoundException('Saved file not found');
       }
-      // Also upload language-suffixed variants for PDFs when project present
-      if (
-        projectId && (
-          (typeof file.mimetype === 'string' && file.mimetype.toLowerCase().includes('pdf')) ||
-          (typeof fileName === 'string' && fileName.toLowerCase().endsWith('.pdf'))
-        )
-      ) {
-        try {
-          const uniqueLangs = await this.getTargetLanguagesForProject(projectId);
-          if (uniqueLangs.length > 0) {
-            await this.uploadPdfLanguageVariants(file.buffer, fileName, uniqueLangs, projectFolder);
+
+      this.logger.log(`[UPLOAD_PROCESS] File record loaded: ${fileRecord.fileName}, project: ${fileRecord.project?.id || 'none'}`);
+
+      switch (mime) {
+        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+          this.logger.log(`[UPLOAD_PROCESS] Processing DOCX file: ${fileName}`);
+          
+          // DOCX files are processed directly by DocxEditorService without external storage
+          this.logger.log(`[UPLOAD_PROCESS] Processing DOCX file directly: ${fileName}`);
+
+          if (requestId) {
+            this.logger.log(`[UPLOAD_PROCESS] DOCX processing via DocxEditorService for request: ${requestId}`);
+            try {
+              this.logger.log(`[UPLOAD_PROCESS] Calling docxEditorService.processDocxFile`);
+              const extraction = await this.docxEditorService.extractDocxContentFromBuffer(fileRecord.fileContent);
+              await this.docxEditorService.storeTranslationSegments(
+                BigInt(saved.fileId),
+                fileRecord.project?.id as bigint,
+                request?.targetLanguages?.[0] || 'en',
+                extraction,
+                String(requestId)
+              );
+              this.logger.log(`[UPLOAD_PROCESS] DocxEditorService processing completed`);
+            } catch (docxError) {
+              this.logger.error(`[UPLOAD_PROCESS] DocxEditorService processing failed: ${docxError}`);
+              throw docxError;
+            }
+          } else {
+            this.logger.log(`[UPLOAD_PROCESS] DOCX processing via ManifestService (no request)`);
+            await this.manifestService.generateManifest(fileRecord);
           }
-        } catch (e) {
-          this.logger.warn('Failed to upload language variants for PDF (local upload): ' + (e as any)?.message);
+          break;
+        }
+        case 'application/json':
+        case 'text/plain':
+        case 'text/html':
+        case 'text/css':
+        case 'application/javascript':
+        case 'text/xml': {
+          this.logger.log(`[UPLOAD_PROCESS] Processing text-based file: ${fileName}, type: ${mime}`);
+          await this.manifestService.generateManifest(fileRecord);
+          break;
+        }
+        case 'application/pdf': {
+          this.logger.log(`[UPLOAD_PROCESS] Processing PDF file: ${fileName}`);
+          await this.manifestService.generateManifest(fileRecord);
+          break;
+        }
+        default: {
+          this.logger.log(`[UPLOAD_PROCESS] Processing file with default handler: ${fileName}, type: ${mime}`);
+          await this.manifestService.generateManifest(fileRecord);
+          break;
         }
       }
+
+      // Mark ready
+      this.logger.log(`[UPLOAD_PROCESS] Marking file as ready: ${fileName}`);
+      fileRecord.status = 'ready';
+      await this.fileRepository.save(fileRecord);
+      this.logger.log(`[UPLOAD_PROCESS] File processing completed successfully: ${fileName}`);
     } catch (err) {
-      this.logger.error('Aspose storage upload error:', err);
-      // Continue without failing the upload
+      this.logger.error(`[UPLOAD_PROCESS] Error processing file ${fileName}:`, err);
+      this.logger.error(`[UPLOAD_PROCESS] Error stack: ${err instanceof Error ? err.stack : 'No stack available'}`);
+      
+      const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
+      if (fileEntity) {
+        fileEntity.status = 'error';
+        await this.fileRepository.save(fileEntity);
+        this.logger.log(`[UPLOAD_PROCESS] Marked file as error status: ${fileName}`);
+      }
     }
 
-    // Chạy extract string ở background, trả về ngay cho client
-    setTimeout(async () => {
-      try {
-        await this.extractStringsFromFile(saved.fileId, uid);
-        // Cập nhật status file thành 'ready'
-        const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
-        if (fileEntity) {
-          fileEntity.status = 'ready';
-          await this.fileRepository.save(fileEntity);
-        }
-      } catch (err) {
-        // Nếu lỗi, cập nhật status file thành 'error'
-        const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
-        if (fileEntity) {
-          fileEntity.status = 'error';
-          await this.fileRepository.save(fileEntity);
-        }
-      }
-    }, 100);
+    // Get the final status after processing
+    const finalFileRecord = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
+    const finalStatus = finalFileRecord?.status || 'processing';
 
-    // Trả về ngay, không chờ extract xong
     return {
       ...saved,
       updated: isUpdate,
-      status: 'processing',
+      status: finalStatus,
       title: title ?? undefined,
     };
   }
@@ -434,30 +508,14 @@ export class FileService {
 
     const fullFile = await this.fileRepository.findOneOrFail({
       where: { id: BigInt(saved.fileId) },
-      relations: ['project', 'branch'],
+      relations: ['project'],
       select: ['id', 'fileName', 'fileType', 'fileContent', 'project'],
     });
 
     await this.manifestService.generateManifest(fullFile);
     if (fullFile.project) {
-      try {
-        await this.uploadToAsposeStorage(
-          fullFile.fileContent,
-          fullFile.fileName,
-          fullFile.fileType
-        );
-        this.logger.log(`File uploaded to Aspose storage for fileId: ${fullFile.id}`);
-        try {
-          const isPdf = typeof fullFile.fileName === 'string' && fullFile.fileName.toLowerCase().endsWith('.pdf');
-          if (isPdf) {
-            this.logger.log(`[FileService] Stored PDF text details for ${fullFile.fileName}`);
-          }
-        } catch (e) {
-          this.logger.warn(`[FileService] getPdfDetail failed post-upload (request): ${(e as any)?.message || String(e)}`);
-        }
-      } catch (err) {
-        this.logger.error('Error uploading file to Aspose storage', err);
-      }
+      // External storage upload disabled; keeping file in DB/local
+      this.logger.log(`Skipping external storage upload for fileId: ${fullFile.id}`);
     }
 
     return {
@@ -497,7 +555,6 @@ export class FileService {
     try {
       const isPdf = typeof file.fileName === 'string' && file.fileName.toLowerCase().endsWith('.pdf');
 
-      // Only delete from Aspose storage for PDF files
       if (isPdf) {
         const projectId = file.project?.id;
         const candidateFolders: string[] = projectId
@@ -524,16 +581,8 @@ export class FileService {
 
         const allNames = [originalName, ...suffixNames];
 
-        for (const folder of candidateFolders) {
-          for (const name of allNames) {
-            try {
-              await this.asposeService.deleteFileWithFolder(name, folder);
-              this.logger.log(`[FileService] Deleted from Aspose: ${folder}/${name}`);
-            } catch (delErr) {
-              this.logger.warn(`[FileService] Aspose delete failed for ${folder}/${name}: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
-            }
-          }
-        }
+        // DOCX files are not stored externally, so no cleanup needed
+        this.logger.log(`[FileService] Skipping external storage cleanup for DOCX file: ${file.fileName}`);
       } else {
         this.logger.log(`[FileService] Skipping Aspose deletion for non-PDF file: ${file.fileName}`);
       }
@@ -554,7 +603,6 @@ export class FileService {
     await this.fileRepository.delete(String(file.id));
     this.logger.log(`File deleted successfully: ${file.fileName}`);
 
-    // Log activity if this is a project file
     if (file.project?.id) {
       try {
         await this.activityManagerService.logFileDelete(
@@ -575,15 +623,29 @@ export class FileService {
   }
 
   async extractStringsFromFile(fileId: string, userId: string | bigint) {
+    this.logger.log(`[EXTRACT_STRINGS] Starting extractStringsFromFile for fileId: ${fileId}, userId: ${userId}`);
+    
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['uploader', 'project', 'branch']
+      relations: ['uploader', 'project']
     });
 
-    if (!file) throw new NotFoundException('File not found');
+    if (!file) {
+      this.logger.error(`[EXTRACT_STRINGS] File not found for fileId: ${fileId}`);
+      throw new NotFoundException('File not found');
+    }
+
+    this.logger.log(`[EXTRACT_STRINGS] File found: ${file.fileName}, type: ${file.fileType}, uploader: ${file.uploader.id}, project: ${file.project?.id || 'none'}`);
+
+    // Check if file belongs to a project - this is required for translation entities
+    if (!file.project || !file.project.id) {
+      this.logger.error(`[EXTRACT_STRINGS] File does not belong to any project. ProjectId is required for string extraction.`);
+      throw new Error('File must belong to a project to extract strings. Please upload the file to a project first.');
+    }
 
     // Check permission - chỉ uploader mới có thể extract strings
     if (file.uploader.id.toString() !== userId.toString()) {
+      this.logger.error(`[EXTRACT_STRINGS] Permission denied. File uploader: ${file.uploader.id}, requesting user: ${userId}`);
       throw new Error('You do not have permission to extract strings from this file');
     }
 
@@ -594,23 +656,35 @@ export class FileService {
         file.extractLog = log;
       }
     }
+    
+    this.logger.log(`[EXTRACT_STRINGS] Starting extraction process for file: ${file.fileName}`);
+    
     try {
       appendLog('Start extracting strings...');
+      this.logger.log(`[EXTRACT_STRINGS] File content buffer size: ${file.fileContent?.length || 0} bytes`);
+      
       // ĐÁNH DẤU OBSOLETE CHO STRING CŨ THAY VÌ XÓA CỨNG
-      appendLog('Marking old strings as obsolete...');
-      await this.translationModel.updateMany(
-        { fileId: file.id.toString(), obsolete: { $ne: true } },
-        { $set: { obsolete: true } }
-      );
+      // Obsolete handling is no longer needed with SQL-only storage
+      appendLog('Preparing SQL manifest extraction...');
+      this.logger.log(`[EXTRACT_STRINGS] Calling manifestService.generateManifest for file: ${file.fileName}`);
+      
       appendLog('Generating manifest...');
       await this.manifestService.generateManifest(file); // Đảm bảo hàm này set obsolete: false cho string mới
+      
       appendLog('Manifest generated.');
-      // Upload file to Aspose storage if project/branch info is present
-      if (file.project ) {
-        //j
+      this.logger.log(`[EXTRACT_STRINGS] Manifest generation completed successfully for file: ${file.fileName}`);
+      
+      if (file.project) {
+        this.logger.log(`[EXTRACT_STRINGS] File belongs to project: ${file.project.id}`);
+      } else {
+        this.logger.log(`[EXTRACT_STRINGS] File does not belong to any project`);
       }
+      
       appendLog('Successfully generated manifest for file.');
       await this.fileRepository.save(file);
+      
+      this.logger.log(`[EXTRACT_STRINGS] Extract strings completed successfully for file: ${file.fileName}`);
+      
       return {
         success: true,
         message: 'Manifest generated successfully',
@@ -618,10 +692,13 @@ export class FileService {
         fileName: file.fileName
       };
     } catch (error: any) {
-      appendLog('Error generating manifest: ' + (error?.message || error));
+      const errorMsg = error?.message || error;
+      appendLog('Error generating manifest: ' + errorMsg);
+      this.logger.error(`[EXTRACT_STRINGS] Error generating manifest for file ${file.fileName}:`, error);
+      this.logger.error(`[EXTRACT_STRINGS] Error stack: ${error?.stack || 'No stack available'}`);
+      
       await this.fileRepository.save(file);
-      this.logger.error(`Error generating manifest for file ${file.fileName}:`, error);
-      throw new Error(`Failed to generate manifest: `);
+      throw new Error(`Failed to generate manifest: ${errorMsg}`);
     }
   }
 
@@ -631,10 +708,9 @@ export class FileService {
     fileType: string;
     fileContent: Buffer;
     projectId?: bigint;
-    branchId?: bigint;
     requestId?: bigint;
   }) {
-    const { uid, fileName, fileType, fileContent, projectId, branchId, requestId } = params;
+    const { uid, fileName, fileType, fileContent, projectId, requestId } = params;
 
     const file = this.fileRepository.create({
       fileName,
@@ -662,7 +738,6 @@ export class FileService {
     file: Express.Multer.File,
     uid: bigint,
     projectId?: bigint,
-    branchId?: bigint,
     requestId?: bigint,
   ) {
     this.logger.log('===DEBUG FILE NAME handleUpload===');
@@ -711,14 +786,12 @@ export class FileService {
       fileType: fileType,
       fileContent: file.buffer,
       projectId,
-      branchId,
       requestId,
     });
 
-    // Find the full file entity with project/branch for manifest
     const fileEntity = await this.fileRepository.findOne({
       where: { id: BigInt(saved.fileId) },
-      relations: ['project', 'branch'],
+      relations: ['project'],
       select: ['id', 'fileName', 'fileType', 'fileContent', 'project'],
     });
 
@@ -730,20 +803,9 @@ export class FileService {
         // Continue execution even if manifest generation fails
       }
 
-      // Upload file to Aspose storage if project/branch info is present
       if (fileEntity.project) {
-        try {
-          const projectFolder = `projects/project-${fileEntity.project.id}`;
-          await this.uploadToAsposeStorage(
-            fileEntity.fileContent,
-            fileEntity.fileName,
-            fileEntity.fileType,
-            projectFolder
-          );
-          this.logger.log(`File uploaded to Aspose storage for fileId: ${fileEntity.id}`);
-        } catch (err) {
-          this.logger.error('Error uploading file to Aspose storage', err);
-        }
+        // Skipping external storage upload; handled locally or by downstream services
+        this.logger.log(`Skipping external storage upload for fileId: ${fileEntity.id}`);
       }
     }
 
@@ -768,7 +830,7 @@ export class FileService {
 
     const file = await this.fileRepository.findOne({
       where: { id: fileId },
-      relations: ['project', 'branch'],
+      relations: ['project'],
     });
 
     if (!file) {
@@ -866,44 +928,68 @@ export class FileService {
         return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'image' };
       }
       default: {
-        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
+        // For unknown/binary types, avoid UTF-8 decoding; return base64
+        const isProbablyText = /^(text\/|application\/(json|xml|javascript))/.test(fileEntity.fileType || '');
+        if (isProbablyText) {
+          return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('utf8'), previewType: 'text' };
+        }
+        return { fileType: fileEntity.fileType, content: fileEntity.fileContent.toString('base64'), previewType: 'binary' };
       }
     }
   }
 
   private async extractPdfTextSegments(pdfBuffer: Buffer): Promise<any[]> {
+    // Try robust extractors first, then graceful fallbacks
     try {
-      const textSegments: any[] = [];
-      let segmentId = 1;
-
-      // Simple text extraction - split by lines
-      const text = pdfBuffer.toString('utf8');
-      const lines = text.split('\n').filter(line => line.trim().length > 0);
-
-      lines.forEach((line, index) => {
-        if (line.trim().length > 0) {
-          textSegments.push({
-            id: `segment_${segmentId}`,
+      // 1) Try pdf-parse if available
+      try {
+        const pdfParse = (await import('pdf-parse')).default as any;
+        const result = await pdfParse(pdfBuffer);
+        const text = String(result?.text || '').trim();
+        if (text) {
+          const lines = text.split(/\r?\n/).filter(l => l.trim());
+          return lines.map((line, idx) => ({
+            id: `segment_${idx + 1}`,
             text: line.trim(),
-            coordinates: [{
-              x: 50,
-              y: 50 + (index * 20),
-              width: line.length * 7,
-              height: 16
-            }],
-            page: 1
-          });
-          segmentId++;
+            coordinates: [],
+            page: 1,
+          }));
         }
-      });
+      } catch (e) {
+        this.logger.warn(`[PDF EXTRACT] pdf-parse not available or failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
 
-      this.logger.log(`Fallback extraction completed. Total text segments: ${textSegments.length}`);
-      return textSegments;
+      // 2) Try pdfjs-dist (textContent)
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        // @ts-ignore
+        const getDocument = (pdfjsLib as any).getDocument || (pdfjsLib as any).default?.getDocument;
+        if (getDocument) {
+          const loadingTask = getDocument({ data: pdfBuffer });
+          const pdf = await loadingTask.promise;
+          const segments: any[] = [];
+          for (let pageNum = 1; pageNum <= Math.min(pdf.numPages || 1, 10); pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const content = await page.getTextContent();
+            for (const item of content.items || []) {
+              const str = String((item as any).str || '').trim();
+              if (str) {
+                segments.push({ id: `p${pageNum}_${segments.length + 1}`, text: str, coordinates: [], page: pageNum });
+              }
+            }
+          }
+          if (segments.length) return segments;
+        }
+      } catch (e) {
+        this.logger.warn(`[PDF EXTRACT] pdfjs-dist not available or failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
 
+      // 3) Final fallback: DO NOT decode as utf8 blindly; treat as no text
+      this.logger.warn('[PDF EXTRACT] No text extracted; returning empty segments');
+      return [];
     } catch (error) {
       this.logger.error(`Error extracting PDF text segments: ${error instanceof Error ? error.message : String(error)}`);
-      this.logger.error(`Error stack: ${error instanceof Error ? error.stack : 'No stack available'}`);
-      throw error;
+      return [];
     }
   }
 
@@ -949,7 +1035,7 @@ export class FileService {
 
 
 
-  async getFileMetadata(fileId: string): Promise<{ fileName: string; fileType: string; projectId?: string; branchId?: string }> {
+  async getFileMetadata(fileId: string): Promise<{ fileName: string; fileType: string; projectId?: string }> {
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
       relations: ['project'],
@@ -965,58 +1051,6 @@ export class FileService {
       fileType: file.fileType,
       projectId: file.project?.id?.toString(),
     };
-  }
-
-  /**
-   * Upload file to Aspose storage
-   */
-  private async uploadToAsposeStorage(fileContent: Buffer, fileName: string, fileType: string, folder = 'pdf'): Promise<void> {
-    try {
-      this.logger.log(`[FileService] Attempting to upload file to Aspose storage: ${fileName} (${fileType})`);
-
-      // The new AsposeService handles all file types automatically
-      this.logger.log('[FileService] Using AsposeService for file upload...');
-
-      // Skip Aspose upload for DOCX files
-      const isDocx =
-        (typeof fileType === 'string' && fileType.includes('officedocument.wordprocessingml.document')) ||
-        (typeof fileName === 'string' && fileName.toLowerCase().endsWith('.docx'));
-      if (isDocx) {
-        this.logger.log('[FileService] Skipping Aspose upload for DOCX file');
-        return;
-      }
-
-      // Use the new AsposeService for all file types
-      try {
-        this.logger.log(`[FileService] Using AsposeService for file: ${fileName} (${fileType})`);
-        await this.asposeService.uploadFile(fileName, fileContent, folder);
-        this.logger.log(`[FileService] File uploaded to Aspose storage via AsposeService: ${fileName} (${fileType})`);
-        return;
-      } catch (uploadError) {
-        this.logger.error(`[FileService] Failed to upload file via AsposeService: ${fileName}`, uploadError);
-        throw new Error(`Aspose storage upload failed: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
-      }
-
-    } catch (error) {
-      this.logger.error(`[FileService] Failed to upload file to Aspose storage: ${fileName}`, error);
-      throw error;
-    }
-  }
-
-  private async uploadPdfLanguageVariants(fileContent: Buffer, originalFileName: string, languages: string[], folder = 'pdf'): Promise<void> {
-    try {
-      const dotIdx = originalFileName.lastIndexOf('.');
-      const base = dotIdx > -1 ? originalFileName.slice(0, dotIdx) : originalFileName;
-      for (const lang of languages) {
-        const code = String(lang).toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-        if (!code) continue;
-        const langName = `${base}(${code}).pdf`;
-        await this.asposeService.uploadFile(langName, fileContent, folder);
-        this.logger.log(`[FileService] Uploaded language variant to Aspose: ${langName}`);
-      }
-    } catch (e) {
-      this.logger.warn('uploadPdfLanguageVariants failed: ' + (e as any)?.message);
-    }
   }
 
   private async getTargetLanguagesForProject(projectId?: bigint): Promise<string[]> {
@@ -1036,7 +1070,7 @@ export class FileService {
       const fallback = backendFallbackByProject[String(projectId)] || [];
       const merged = Array.from(new Set([...
         normalizedFromTranslations,
-        ...fallback
+      ...fallback
       ]));
 
       return merged;
@@ -1045,45 +1079,5 @@ export class FileService {
       return [];
     }
   }
-
-  /**
-   * Check if Aspose storage is available
-   */
-  public isAsposeStorageAvailable(): boolean {
-    // The new AsposeService is always available if properly configured
-    return true;
-  }
-
-  /**
-   * Get Aspose storage status information
-   */
-  public getAsposeStorageStatus(): {
-    asposeService: { available: boolean; info: any };
-    overallAvailable: boolean;
-  } {
-    return {
-      asposeService: {
-        available: true,
-        info: { service: 'AsposeService', version: '1.0' }
-      },
-      overallAvailable: true
-    };
-  }
-
-  /**
-   * Check if a file exists in Aspose storage
-   */
-  public async checkFileInAsposeStorage(fileName: string, fileType: string): Promise<boolean> {
-    try {
-      // The new AsposeService can check file existence
-      // For now, we'll assume files exist if we can access them
-      // This can be enhanced later with actual file existence checking
-      return true;
-    } catch (error) {
-      this.logger.error(`Failed to check file existence in Aspose storage: ${fileName}`, error);
-      return false;
-    }
-  }
-
 
 }

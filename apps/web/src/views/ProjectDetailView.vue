@@ -324,14 +324,13 @@
               />
               <ProjectFileTab
                 v-else-if="activeTab === 'files'"
-                :project-id="project.id"
-                :branch-id="selectedBranchId"
+                :project-id="String(project.id)"
                 :project-files="projectFiles"
                 :files-loading="filesLoading"
                 :files-error="filesError || ''"
-                :is-image="isImage"
-                :is-p-d-f="isPDF"
-                :download-file="downloadFile"
+                :is-image="isImageName"
+                :is-p-d-f="isPDFName"
+                :download-file="downloadFileProp"
                 :load-files="loadFiles"
                 :project="project"
                 :members="members"
@@ -342,27 +341,16 @@
               <ProjectTranslationTab
                 v-else-if="activeTab === 'translation'"
                 ref="translationTabRef"
-                :project-id="project.id"
-                :branch-id="selectedBranchId"
+                :project-id="String(project.id)"
                 :project="project"
                 :members="members"
                 :current-user="currentUser"
                 key="translation"
               />
-              <ProjectCommitTab
-                v-else-if="activeTab === 'commits'"
-                :project-id="project.id"
-                :branch-id="selectedBranchId"
-                :project="project"
-                :members="members"
-                :current-user="currentUser"
-                key="commits"
-              />
               <ProjectTaskTab
                 v-else-if="activeTab === 'task'"
                 ref="taskTabRef"
                 :project-id="project.id"
-                :branch-id="selectedBranchId"
                 :project-members="members"
                 :project-groups="[]"
                 :project="project"
@@ -372,7 +360,6 @@
               <ProjectActivityTab
                 v-else-if="activeTab === 'activity'"
                 :project-id="Number(project.id)"
-                :branch-id="selectedBranchId ? Number(selectedBranchId) : undefined"
                 :project="project"
                 :members="members"
                 :current-user="currentUser"
@@ -641,7 +628,7 @@
 
         <ProjectRoleManagementView
           v-if="showRoleModal"
-          :project-id="project?.id"
+          :project-id="String(project?.id ?? '')"
           @close="showRoleModal = false"
           @roles-updated="handleRolesUpdated"
         />
@@ -671,7 +658,7 @@
 
         <ProjectRoleManagementView
           v-if="showAddRoleModal"
-          :project-id="project?.id"
+          :project-id="String(project?.id ?? '')"
           :show-create-role-modal="true"
           @close="showAddRoleModal = false"
           @roles-updated="handleRolesUpdated"
@@ -701,7 +688,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axiosInstance from '../api';
 import { PermissionFlags, PermissionStrings } from '@here-to-translate/common';
-import { SUPPORTED_LANGUAGES, getLanguageByCode, type Language } from '../utils/languages';
+import { getLanguageByCode } from '../utils/languages';
 import type { IProjectResponse } from '@here-to-translate/common/interfaces';
 import Navbar from '../components/Navbar.vue';
 import Sidebar from '../components/Sidebar.vue';
@@ -711,12 +698,10 @@ import ProjectRoleManagementView from './ProjectRoleManagementView.vue';
 import ProjectMemberTab from '../components/ProjectMemberTab.vue';
 // import ProjectGroupTab from '../components/ProjectGroupTab.vue';
 import ProjectTranslationTab from '../components/ProjectTranslationTab.vue';
-import ProjectCommitTab from '../components/ProjectCommitTab.vue';
 import ProjectTaskTab from '../components/ProjectTaskTab.vue';
 import ProjectFileTab from '../components/ProjectFileTab.vue';
 import ProjectRoleTab from '../components/ProjectRoleTab.vue';
 import ProjectActivityTab from '../components/ProjectActivityTab.vue';
-import type { Ref } from 'vue';
 import { useAuthStore } from '../store/auth';
 import { useToast } from 'primevue/usetoast';
 const authStore = useAuthStore();
@@ -728,12 +713,6 @@ const router = useRouter();
 
 // Interfaces
 type Project = IProjectResponse;
-
-interface ProjectRole {
-  id: string;
-  name: string;
-  permissionFlags: string;
-}
 
 // Groups functionality temporarily commented out
 // interface ProjectGroup {
@@ -821,7 +800,7 @@ const members = ref<
 const membersLoading = ref(false);
 const membersError = ref('');
 
-type TabType = 'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'commits' | 'task' | 'roles';
+type TabType = 'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'commits' | 'task' | 'roles' | 'activity';
 const activeTab = ref<TabType>('description');
 
 const isAllSelected = ref(false);
@@ -868,9 +847,8 @@ watch(availablePermissions, () => {
 // Watch project, tự động gọi loadFiles khi project có dữ liệu
 watch(project, (newProject) => {
   if (newProject && newProject.id) {
-    console.log('project.value changed, calling loadFiles & loadBranches');
+    console.log('project.value changed, calling loadFiles');
     loadFiles();
-    loadBranches();
   }
 });
 
@@ -1200,7 +1178,6 @@ const fetchCurrentUser = async () => {
 onMounted(async () => {
   await fetchCurrentUser();
   loadProject();
-  loadBranches();
 
   // Handle tab query parameter
   const tabParam = route.query.tab as string;
@@ -1250,8 +1227,8 @@ const refreshFiles = () => {
   loadFiles();
 };
 
-const downloadFile = (file) => {
-  const id = file.fileId || file.id;
+const downloadFile = (file: ProjectFile) => {
+  const id = (file as any).fileId || file.id;
   window.open(`/api/files/${id}/download`, '_blank');
 };
 
@@ -1501,32 +1478,9 @@ function getRoleCount(roles: any[]): number {
   return roles ? roles.length : 0;
 }
 
-const branches = ref<any[]>([]);
-const selectedBranchId = ref<string | number | null>(null);
-
-async function loadBranches() {
-  if (!project.value?.id) return;
-  try {
-    // Gọi đúng API backend lấy branch cho project
-    const res = await axiosInstance.get(`/projects/${project.value.id}/branches`);
-    console.log('API /branches response:', res.data);
-    branches.value = Array.isArray(res.data) ? res.data : (res.data.branches || []);
-    selectedBranchId.value = branches.value.length > 0 ? String(branches.value[0].id) : null;
-    console.log('Branches:', branches.value, 'Selected:', selectedBranchId.value, typeof selectedBranchId.value, 'Count:', branches.value.length);
-    if (branches.value.length === 0) {
-      // Hiển thị log chi tiết nếu không có branch
-      window.alert('Branches array is empty! Response: ' + JSON.stringify(res.data));
-    }
-  } catch (e) {
-    branches.value = [];
-    selectedBranchId.value = null;
-    console.error('Error loading branches:', e);
-  }
-}
 
 onMounted(() => {
   loadProject();
-  loadBranches();
 });
 
 // Add computed property for actual role count
@@ -1563,7 +1517,7 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
   }
   // Danh sách key quyền đúng thứ tự (không phải label)
   const availablePermissions = [
-    'ProjectAdmin', 'ManageRoles', 'ManageMembers', 'ManageBranches', 'ManageGroups',
+    'ProjectAdmin', 'ManageRoles', 'ManageMembers', 'ManageGroups',
     'ManageProjectMetadata', 'ManageWorkspaces', 'ManageDiscussions', 'ViewAudit',
     'ReviewCommit', 'PushCommit', 'ReviewRequests', 'ViewRequest', 'ManageWorkspaceMetadata',
     'ViewWorkspace', 'ViewProject', 'ManageComments', 'PostComment', 'Vote', 'AttachFiles', 'ViewThread'
@@ -1632,15 +1586,27 @@ const confirmDeleteGroup = async () => {
 
 
 
-const translationTabRef = ref(null);
+const translationTabRef = ref<{ reloadFiles?: () => void } | null>(null);
 
 const handleFileReady = (fileId: string | number) => {
   console.log('File ready:', fileId);
   // Reload files trong ProjectTranslationTab ngay khi file ready
-  if (translationTabRef.value && translationTabRef.value.reloadFiles) {
+  if (translationTabRef.value?.reloadFiles) {
     translationTabRef.value.reloadFiles();
   }
 };
+
+// Name-based helpers for components expecting (fileName: string) => boolean
+function isImageName(fileName: string): boolean {
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
+}
+
+function isPDFName(fileName: string): boolean {
+  return /\.pdf$/i.test(fileName);
+}
+
+// Adapter for download callback typing differences
+const downloadFileProp = (file: any) => downloadFile(file as ProjectFile);
 </script>
 
 <style scoped>
@@ -5879,7 +5845,8 @@ const handleFileReady = (fileId: string | number) => {
   top: 2.2em;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5em;
+  gap: 0.4em;
+  min-width: 180px;
 }
 .discord-badge-group {
   display: inline-flex;
@@ -5966,4 +5933,7 @@ const handleFileReady = (fileId: string | number) => {
   gap: 0.4em;
   min-width: 180px;
 }
+
+
+
 </style>

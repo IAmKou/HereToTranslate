@@ -1,14 +1,9 @@
 <script setup lang="ts">
-import { ref, defineProps, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
-import type { Ref } from 'vue';
+import { ref, defineProps, computed, watch, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import TreeTable from 'primevue/treetable';
-import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Dialog from 'primevue/dialog';
-import { FilterMatchMode } from 'primevue/api';
-import Menu from 'primevue/menu';
+import type { AxiosProgressEvent } from 'axios';
 import axiosInstance from '../api';
 import { useProjectMemberPermissions } from '../composables/useProjectMemberPermissions';
 import { parsePermissionFlags } from '../utils/permissions';
@@ -24,11 +19,11 @@ interface ProjectFile {
   revision?: string;
   status?: 'processing' | 'ready' | 'error';
   syncedFromRequest?: boolean;
+  fileId?: string | number;
 }
 
 const props = defineProps<{
   projectId: string | number;
-  branchId: string | number | null;
   filesLoading: boolean;
   filesError: string;
   projectFiles: ProjectFile[];
@@ -55,29 +50,26 @@ const filesToUpload = ref<File[]>([]);
 const titles = ref<string[]>([]);
 const titlesFilled = computed(() => titles.value.length > 0 && titles.value.every((t: string) => !!t && t.trim().length > 0));
 const searchValue = ref('');
-const filters = ref({
-  global: { value: null, matchMode: FilterMatchMode.CONTAINS },
-});
 
 const searchLoading = ref(false);
 const searchResults = ref<any[]>([]);
 const searchQuery = ref('');
 
 const dropdownOpenId = ref<string | number | null>(null);
-const dropdownMenuRefs = ref<Record<string, HTMLElement | null>>({});
-const ellipsisBtnRefs = ref<Record<string, HTMLElement | null>>({});
+const dropdownMenuRefs = ref<Record<string, any>>({});
+const ellipsisBtnRefs = ref<Record<string, any>>({});
 
 function toggleDropdown(id: string | number) {
   dropdownOpenId.value = dropdownOpenId.value === id ? null : id;
 }
 
 function setDropdownMenuRef(id: string | number) {
-  return (el: HTMLElement | null) => {
+  return (el: any) => {
     dropdownMenuRefs.value[id] = el;
   };
 }
 function setEllipsisBtnRef(id: string | number) {
-  return (el: HTMLElement | null) => {
+  return (el: any) => {
     ellipsisBtnRefs.value[id] = el;
   };
 }
@@ -150,6 +142,7 @@ function startPollingFileStatus(fileId: string | number) {
         if (file.status === 'ready') {
           toast.add({ severity: 'success', summary: 'Success', detail: 'File is ready for translation!', life: 3000 });
           window.dispatchEvent(new Event('file-ready-for-translation'));
+          emit('fileReady', fileId);
         } else {
           toast.add({ severity: 'warn', summary: 'Warning', detail: 'File processing failed. Please try again.', life: 3000 });
         }
@@ -159,7 +152,6 @@ function startPollingFileStatus(fileId: string | number) {
     }
   }, 5000);
 }
-const renamingFile = ref<any>(null);
 const renameInput = ref('');
 const showRenameDialog = ref(false);
 const editingFileId = ref<string | number | null>(null);
@@ -235,19 +227,17 @@ async function uploadSingleFile(file: File, title: string) {
   const formData = new FormData();
   formData.append('file', file);
   const projectId = props.projectId;
-  const branchId = props.branchId;
   if (!projectId) throw new Error('Project ID not found');
-  if (!branchId) throw new Error('Branch ID not found');
   formData.append('projectId', projectId.toString());
-  formData.append('branchId', branchId.toString());
   formData.append('title', title);
   let response;
   try {
     response = await axiosInstance.post('/files/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (progressEvent: ProgressEvent) => {
-        if (progressEvent.lengthComputable) {
-          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+      onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+        const total = typeof progressEvent.total === 'number' ? progressEvent.total : undefined;
+        if (total && progressEvent.loaded != null) {
+          uploadProgress.value = Math.round((progressEvent.loaded * 100) / total);
         }
       }
     });
@@ -278,10 +268,6 @@ async function uploadSingleFile(file: File, title: string) {
 async function uploadFilesWithTitles() {
   if (!props.projectId) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Project ID not found', life: 3000 });
-    return;
-  }
-  if (!props.branchId) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Branch ID not found', life: 3000 });
     return;
   }
   if (!titlesFilled.value) {
@@ -334,10 +320,6 @@ async function uploadFilesImmediately() {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Project ID not found', life: 3000 });
     return;
   }
-  if (!props.branchId) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Branch ID not found', life: 3000 });
-    return;
-  }
   uploadError.value = '';
   uploading.value = true;
   uploadProgress.value = 0;
@@ -360,18 +342,6 @@ async function uploadFilesImmediately() {
   }
 }
 
-// Convert flat file list to tree structure for TreeTable
-function buildTree(files: ProjectFile[]): any[] {
-  // This is a placeholder. In real app, you should have folder/file structure from backend.
-  // Here, we just show all files as root nodes for demo.
-  return files.map((file: ProjectFile) => ({
-    key: file.id,
-    data: file,
-    children: file.children ? buildTree(file.children) : undefined,
-    icon: getFileIcon(file.fileName)
-  }));
-}
-
 function getFileIcon(fileName: string): string {
   if (!fileName) return 'pi pi-file';
   if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return 'pi pi-file-word';
@@ -381,41 +351,7 @@ function getFileIcon(fileName: string): string {
   return 'pi pi-file';
 }
 
-// Thêm hàm xác định là folder
-function isFolder(node: any): boolean {
-  return !!(node.children && node.children.length > 0);
-}
-
-function fileNameSlot({ node }: { node: any }) {
-  const iconClass = isFolder(node) ? 'pi pi-folder' : getFileIcon(node.data.fileName);
-  const iconColor = isFolder(node) ? '#fbbf24' : '#6366f1';
-  const name = node.data.fileName.length > 40 ? node.data.fileName.slice(0, 37) + '...' : node.data.fileName;
-  return `
-    <span style="display:flex;align-items:center;gap:8px;">
-      <i class='${iconClass}' style='color:${iconColor}'></i>
-      <span title='${node.data.fileName}' style="font-weight:500;">${name}</span>
-    </span>
-  `;
-}
-function stringsSlot({ node }: { node: any }) {
-  return `<span style='display:block;text-align:center;'>${node.data.strings ?? '--'}</span>`;
-}
-function revisionSlot({ node }: { node: any }) {
-  return `<span style='display:block;text-align:center;'>${node.data.revision ?? '--'}</span>`;
-}
-function actionsSlot({ node }: { node: any }) {
-  let downloadBtn = '';
-  if (!isFolder(node)) {
-    downloadBtn = `<button class='p-button p-button-rounded p-button-text p-button-sm pi pi-download' title='Download' style='min-width:32px;min-height:32px;border-radius:50%;margin:0 2px;' onclick='window.__downloadFile && window.__downloadFile(${JSON.stringify(node.data)})'></button>`;
-  }
-  return `
-    <div style='display:flex;gap:8px;justify-content:center;'>
-      <button class='p-button p-button-rounded p-button-text p-button-sm pi pi-cog' title='Configure' disabled style='min-width:32px;min-height:32px;border-radius:50%;margin:0 2px;'></button>
-      <button class='p-button p-button-rounded p-button-text p-button-sm pi pi-refresh' title='Update' disabled style='min-width:32px;min-height:32px;border-radius:50%;margin:0 2px;'></button>
-      ${downloadBtn}
-    </div>
-  `;
-}
+// Removed unused slot generators
 
 // Thêm computed filteredFiles để search
 const filteredFiles = computed(() => {
@@ -423,25 +359,7 @@ const filteredFiles = computed(() => {
   return props.projectFiles.filter((f: any) => f.fileName.toLowerCase().includes(searchValue.value.toLowerCase()));
 });
 
-// Helper: Tách tên gốc và version từ tên file
-function parseFileNameVersion(fileName: string) {
-  // Tìm _vX.X hoặc -vX.X hoặc (vX.X) ở cuối tên file
-  const match = fileName.match(/(.+?)([_\-\(\s]?v(\d+(?:\.\d+)*))?\.[^.]+$/i);
-  if (match) {
-    return {
-      baseName: match[1].trim(),
-      version: match[3] ? 'v' + match[3] : 'v1.0',
-    };
-  }
-  // Không có version, trả về tên gốc và v1.0
-  const dotIdx = fileName.lastIndexOf('.');
-  return {
-    baseName: dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName,
-    version: 'v1.0',
-  };
-}
-
-// XÓA: groupFilesByBaseName, groupedFiles, selectedVersion, getSelectedFile, onSelectVersion
+// Removed unused slot helpers and parser
 
 // Fuzzy search helper (simple, case-insensitive, partial match)
 function fuzzyMatch(str: string, query: string) {
@@ -485,10 +403,10 @@ function handleAction(action: string, fileId: string | number) {
   if (action === 'download') {
     props.downloadFile(file);
   } else if (action === 'rename') {
-    editingFileId.value = file.id || file.fileId;
+    editingFileId.value = (file.id ?? file.fileId) ?? null;
     editingFileName.value = file.fileName;
   } else if (action === 'set-title') {
-    editingTitleFileId.value = file.id || file.fileId;
+    editingTitleFileId.value = (file.id ?? file.fileId) ?? null;
     editingTitleInput.value = file.title || '';
     showSetTitleDialog.value = true;
   } else if (action === 'delete') {
@@ -548,7 +466,7 @@ function cancelRename() {
 
 
 async function confirmDelete() {
-  const fileId = fileToDelete.value?.id || fileToDelete.value?.fileId;
+  const fileId = (fileToDelete.value?.id ?? fileToDelete.value?.fileId) as string | number | undefined;
   console.log('confirmDelete called', fileToDelete.value, 'id dùng để xóa:', fileId);
   // Client guard: prevent deleting files synced from request
   if (fileToDelete.value?.syncedFromRequest) {
@@ -575,7 +493,7 @@ async function confirmDelete() {
   }
   deletingFile.value = true;
   try {
-    await axiosInstance.delete(`/files/${fileId}`);
+    await axiosInstance.delete(`/files/${String(fileId)}`);
     showDeleteDialog.value = false;
     isSidebarCollapsed.value = false;
     props.loadFiles();
@@ -708,9 +626,6 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
         </div>
       </div>
     </transition>
-    <div v-if="!props.branchId" class="warning-message" style="color:#e53e3e; margin-bottom: 1em; font-weight:600;">
-      This project has no branch. Please create a branch before uploading files.
-    </div>
     <div class="toolbar">
       <div class="toolbar-left">
         <InputText v-model="searchValue" placeholder="Search files by name..." class="search-input custom-search-input" />
@@ -718,7 +633,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       <div class="toolbar-right">
         <Button label="Add File" icon="pi pi-upload" class="p-button-success p-button-lg add-file-btn"
                 @click="canAttachFiles && triggerUpload()"
-                :disabled="uploading || !props.branchId || !canAttachFiles"
+                :disabled="uploading || !canAttachFiles"
                 :title="!canAttachFiles ? 'You do not have permission to add files (requires AttachFiles permission)' : ''"
         />
         <input ref="uploadInput" type="file" style="display:none" @change="handleFileChange" multiple />
@@ -736,10 +651,10 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
       </tr>
       </thead>
       <tbody>
-      <tr v-for="file in filteredFiles" :key="file.id || file.fileId">
+      <tr v-for="file in filteredFiles" :key="file.id ?? file.fileId">
         <td class="file-name-cell">
           <i :class="getFileIcon(file.fileName)" style="color:#6366f1" />
-          <div v-if="editingFileId === (file.id || file.fileId)" class="inline-edit-container">
+          <div v-if="editingFileId === (file.id ?? file.fileId)" class="inline-edit-container">
             <InputText
               v-model="editingFileName"
               @keyup.enter="confirmRename"
@@ -760,11 +675,11 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
           <span class="file-title">{{ file.title || '' }}</span>
         </td>
         <td class="file-actions-cell" style="position:relative;">
-          <Button icon="pi pi-ellipsis-v" class="p-button-rounded p-button-text p-button-sm" @click="toggleDropdown(file.id || file.fileId)" :ref="setEllipsisBtnRef(file.id || file.fileId)" />
+          <Button icon="pi pi-ellipsis-v" class="p-button-rounded p-button-text p-button-sm" @click="toggleDropdown((file.id ?? file.fileId)!)" :ref="setEllipsisBtnRef((file.id ?? file.fileId)!)" />
           <transition name="fade">
-            <div v-if="dropdownOpenId === (file.id || file.fileId)" class="custom-dropdown-menu" :ref="setDropdownMenuRef(file.id || file.fileId)">
+            <div v-if="dropdownOpenId === (file.id ?? file.fileId)" class="custom-dropdown-menu" :ref="setDropdownMenuRef((file.id ?? file.fileId)!)">
               <button class="dropdown-item"
-                      @click="canViewFiles && handleAction('download', file.id || file.fileId)"
+                      @click="canViewFiles && handleAction('download', (file.id ?? file.fileId)!)"
                       :disabled="!canViewFiles"
                       :title="!canViewFiles ? 'You do not have permission to download files (requires ViewFiles permission)' : ''"
               >
@@ -772,7 +687,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
                 <span>Download</span>
               </button>
               <button class="dropdown-item"
-                      @click="canManageFiles && handleAction('set-title', file.id || file.fileId)"
+                      @click="canManageFiles && handleAction('set-title', (file.id ?? file.fileId)!)"
                       :disabled="!canManageFiles"
                       :title="!canManageFiles ? 'You do not have permission to set title (requires ManageFiles permission)' : ''"
               >
@@ -780,7 +695,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
                 <span>Set Title</span>
               </button>
               <button class="dropdown-item"
-                      @click="canManageFiles && handleAction('rename', file.id || file.fileId)"
+                      @click="canManageFiles && handleAction('rename', (file.id ?? file.fileId)!)"
                       :disabled="!canManageFiles"
                       :title="!canManageFiles ? 'You do not have permission to rename files (requires ManageFiles permission)' : ''"
               >
@@ -788,7 +703,7 @@ watch([canAttachFiles, canManageFiles, canViewFiles], () => {
                 <span>Rename</span>
               </button>
               <button class="dropdown-item delete"
-                      @click="canManageFiles && !file.syncedFromRequest && handleAction('delete', file.id || file.fileId)"
+                      @click="canManageFiles && !file.syncedFromRequest && handleAction('delete', (file.id ?? file.fileId)!)"
                       :disabled="!canManageFiles || file.syncedFromRequest"
                       :title="file.syncedFromRequest ? 'Cannot delete: This file is synced from a request' : (!canManageFiles ? 'You do not have permission to delete files (requires ManageFiles permission)' : '')"
               >

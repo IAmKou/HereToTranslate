@@ -12,8 +12,6 @@ export class WalletManagerService implements OnModuleInit {
     private readonly walletRepository: Repository<WalletEntity>,
     @InjectRepository(TransactionEntity)
     private readonly transactionRepository: Repository<TransactionEntity>,
-    // @InjectRepository(UserEntity)
-    // private readonly userRepository: Repository<UserEntity>,
   ) {}
 
   async onModuleInit() {

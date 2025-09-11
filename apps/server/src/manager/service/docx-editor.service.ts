@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TranslationEntity } from '../../db/mysql/entity/translation.entity';
+import { TranslationEntity } from '#LocalProject/Entities';
 import { TranslationService as TranslationManagerService } from './translation-manager.service';
 import mammoth from 'mammoth';
 import docx4js from 'docx4js';
@@ -85,7 +85,7 @@ export class DocxEditorService {
       // Process each run in the paragraph
       $p.find("w\\:r").each((j: number, r: any) => {
         const $r = $(r);
-        
+
         // Check for run-level page breaks
         const runPageBreak = $r.find("w\\:br[w\\:type='page']");
         if (runPageBreak.length > 0) {
@@ -96,32 +96,32 @@ export class DocxEditorService {
         // Extract text from all text nodes in this run
         const textNodes = $r.find("w\\:t");
         if (textNodes.length === 0) return;
-        
+
         let runText = "";
         textNodes.each((k: number, t: any) => {
           runText += $(t).text() || "";
         });
-        
+
         if (!runText || runText.trim().length === 0) return;
 
         // Extract formatting
         const $rPr = $r.find("w\\:rPr");
-        const fontFamily = $rPr.find("w\\:rFonts").attr("w:ascii") || 
-                         $rPr.find("w\\:rFonts").attr("w:hAnsi") || 
+        const fontFamily = $rPr.find("w\\:rFonts").attr("w:ascii") ||
+                         $rPr.find("w\\:rFonts").attr("w:hAnsi") ||
                          "Calibri";
-        
+
         const sizeVal = $rPr.find("w\\:sz").attr("w:val");
         const fontSize = sizeVal ? parseInt(sizeVal, 10) / 2 : 11;
-        
+
         const bold = $rPr.find("w\\:b").length > 0;
         const italic = $rPr.find("w\\:i").length > 0;
         const underlineNode = $rPr.find("w\\:u");
-        const underline = underlineNode.attr("w:val") || 
+        const underline = underlineNode.attr("w:val") ||
                         (underlineNode.length > 0 ? "single" : "none");
 
         // Segment the run text into sentences
         const textSegments = this.segmentText(runText);
-        
+
         // Create a segment for each sentence
         textSegments.forEach((segmentText, segmentIdx) => {
           const segment: ExtractedSegment = {
@@ -145,7 +145,7 @@ export class DocxEditorService {
               extractionMethod: 'docx4js-wrapper-fallback'
             }
           };
-          
+
           segments.push(segment);
         });
 
@@ -169,7 +169,7 @@ export class DocxEditorService {
 
     // Clean the text first
     const cleanText = text.trim();
-    
+
     // Advanced sentence segmentation
     const sentences = cleanText
       // Split on sentence endings followed by whitespace and capital letter or number
@@ -251,7 +251,7 @@ export class DocxEditorService {
       // Parse with cheerio
       const $ = cheerio.load(xml, { xmlMode: true });
       console.log(`[DOCX_DETAILED] XML parsed with cheerio successfully`);
-      
+
     const segments: ExtractedSegment[] = [];
     let currentPage = 1;
     let orderIndex = 0;
@@ -275,7 +275,7 @@ export class DocxEditorService {
       // Process each run in the paragraph
         $p.find("w\\:r").each((j: number, r: any) => {
           const $r = $(r);
-          
+
           // Check for run-level page breaks
           const runPageBreak = $r.find("w\\:br[w\\:type='page']");
           if (runPageBreak.length > 0) {
@@ -286,33 +286,33 @@ export class DocxEditorService {
           // Extract text from all text nodes in this run
           const textNodes = $r.find("w\\:t");
           if (textNodes.length === 0) return;
-          
+
           let runText = "";
           textNodes.each((k: number, t: any) => {
             runText += $(t).text() || "";
           });
-          
+
           if (!runText || runText.trim().length === 0) return;
 
           // Extract formatting
           const $rPr = $r.find("w\\:rPr");
-          const fontFamily = $rPr.find("w\\:rFonts").attr("w:ascii") || 
-                           $rPr.find("w\\:rFonts").attr("w:hAnsi") || 
+          const fontFamily = $rPr.find("w\\:rFonts").attr("w:ascii") ||
+                           $rPr.find("w\\:rFonts").attr("w:hAnsi") ||
                            "Calibri";
-          
+
           const sizeVal = $rPr.find("w\\:sz").attr("w:val");
           // Word stores font size in half-points, so divide by 2 to get points
           const fontSize = sizeVal ? parseInt(sizeVal, 10) / 2 : 11;
-          
+
           const bold = $rPr.find("w\\:b").length > 0;
           const italic = $rPr.find("w\\:i").length > 0;
           const underlineNode = $rPr.find("w\\:u");
-          const underline = underlineNode.attr("w:val") || 
+          const underline = underlineNode.attr("w:val") ||
                           (underlineNode.length > 0 ? "single" : "none");
 
           // Segment the run text into sentences
           const textSegments = this.segmentText(runText);
-          
+
           // Create a segment for each sentence
           textSegments.forEach((segmentText, segmentIdx) => {
           const segment: ExtractedSegment = {
@@ -335,7 +335,7 @@ export class DocxEditorService {
                 wordCount: segmentText.split(/\s+/).length
               }
             };
-            
+
             segments.push(segment);
           });
 
@@ -404,7 +404,7 @@ export class DocxEditorService {
 
       // Parse with cheerio
       const $ = cheerio.load(xml, { xmlMode: true });
-      
+
     const segments: ExtractedSegment[] = [];
     let currentPage = 1;
     let orderIndex = 0;
@@ -424,7 +424,7 @@ export class DocxEditorService {
       // Process each run in the paragraph
         $p.find("w\\:r").each((j: number, r: any) => {
           const $r = $(r);
-          
+
           // Check for run-level page breaks
           const runPageBreak = $r.find("w\\:br[w\\:type='page']");
           if (runPageBreak.length > 0) {
@@ -435,33 +435,33 @@ export class DocxEditorService {
           // Extract text from all text nodes in this run
           const textNodes = $r.find("w\\:t");
           if (textNodes.length === 0) return;
-          
+
           let runText = "";
           textNodes.each((k: number, t: any) => {
             runText += $(t).text() || "";
           });
-          
+
           if (!runText || runText.trim().length === 0) return;
 
           // Extract formatting
           const $rPr = $r.find("w\\:rPr");
-          const fontFamily = $rPr.find("w\\:rFonts").attr("w:ascii") || 
-                           $rPr.find("w\\:rFonts").attr("w:hAnsi") || 
+          const fontFamily = $rPr.find("w\\:rFonts").attr("w:ascii") ||
+                           $rPr.find("w\\:rFonts").attr("w:hAnsi") ||
                            "Calibri";
-          
+
           const sizeVal = $rPr.find("w\\:sz").attr("w:val");
           // Word stores font size in half-points, so divide by 2 to get points
           const fontSize = sizeVal ? parseInt(sizeVal, 10) / 2 : 11;
-          
+
           const bold = $rPr.find("w\\:b").length > 0;
           const italic = $rPr.find("w\\:i").length > 0;
           const underlineNode = $rPr.find("w\\:u");
-          const underline = underlineNode.attr("w:val") || 
+          const underline = underlineNode.attr("w:val") ||
                           (underlineNode.length > 0 ? "single" : "none");
 
           // Segment the run text into sentences
           const textSegments = this.segmentText(runText);
-          
+
           // Create a segment for each sentence
           textSegments.forEach((segmentText, segmentIdx) => {
           const segment: ExtractedSegment = {
@@ -484,7 +484,7 @@ export class DocxEditorService {
                 wordCount: segmentText.split(/\s+/).length
               }
             };
-            
+
             segments.push(segment);
           });
 
@@ -514,16 +514,16 @@ export class DocxEditorService {
   async extractDocxContentFromBuffer(buffer: Buffer): Promise<DocxExtractionResult> {
     try {
       console.log(`[DOCX_EXTRACT] Starting extraction from buffer of size: ${buffer.length}`);
-      
+
       // Extract plain text for metadata first
       const plainText = await this.extractTextFromBuffer(buffer);
       console.log(`[DOCX_EXTRACT] Plain text extracted, length: ${plainText.length}`);
       console.log(`[DOCX_EXTRACT] Plain text preview: "${plainText.substring(0, 100)}..."`);
-      
+
       // If we have plain text but detailed extraction fails, create basic segments
       let segments: ExtractedSegment[] = [];
       let totalPages = 1;
-      
+
       try {
         // Try detailed extraction first
         const detailedResult = await this.extractDetailedContentFromBuffer(buffer);
@@ -532,7 +532,7 @@ export class DocxEditorService {
         console.log(`[DOCX_EXTRACT] Detailed extraction completed: ${segments.length} segments, ${totalPages} pages`);
       } catch (detailedError) {
         console.warn(`[DOCX_EXTRACT] Detailed extraction failed, falling back to plain text segmentation: ${detailedError instanceof Error ? detailedError.message : String(detailedError)}`);
-        
+
         // Fallback: create segments from plain text
         if (plainText && plainText.trim().length > 0) {
           const textSegments = this.segmentText(plainText);
@@ -560,7 +560,7 @@ export class DocxEditorService {
           console.log(`[DOCX_EXTRACT] Created ${segments.length} fallback segments from plain text`);
         }
       }
-      
+
       if (segments.length > 0) {
         console.log(`[DOCX_EXTRACT] First segment: "${segments[0].text}"`);
       }
@@ -572,8 +572,8 @@ export class DocxEditorService {
           extractedAt: new Date().toISOString(),
           totalSegments: segments.length,
           originalTextLength: plainText.length,
-          processingMethod: segments.length > 0 && segments[0].metadata?.extractionMethod === 'mammoth-fallback' 
-            ? 'mammoth-fallback' 
+          processingMethod: segments.length > 0 && segments[0].metadata?.extractionMethod === 'mammoth-fallback'
+            ? 'mammoth-fallback'
             : 'docx4js + advanced-segmentation',
           averageSegmentLength: segments.length > 0 ? Math.round(plainText.length / segments.length) : 0
         }
@@ -593,7 +593,7 @@ export class DocxEditorService {
     try {
       // Extract plain text for metadata
       const plainText = await this.extractText(filePath);
-      
+
       // Extract detailed formatting and segmented content
       const { segments, totalPages } = await this.extractDetailedContent(filePath);
 
@@ -628,7 +628,7 @@ export class DocxEditorService {
 
     for (const segment of extractionResult.segments) {
       const translation = new TranslationEntity();
-      
+
       translation.fileId = fileId;
       translation.projectId = projectId;
       translation.requestId = requestId || null;
@@ -665,12 +665,12 @@ export class DocxEditorService {
   ): Promise<Buffer> {
     // Get all translations for this file in correct order
     const translations = await this.translationRepository.find({
-      where: { 
+      where: {
         fileId,
         targetLanguage,
         status: 'translated'
       },
-      order: { 
+      order: {
         pageNumber: 'ASC',
         paragraphIndex: 'ASC',
         runIndex: 'ASC',
@@ -772,18 +772,18 @@ export class DocxEditorService {
     fileId: bigint,
     targetLanguage?: string
   ): Promise<TranslationEntity[]> {
-    const whereCondition: any = { 
+    const whereCondition: any = {
       fileId,
       status: 'pending'
     };
-    
+
     if (targetLanguage) {
       whereCondition.targetLanguage = targetLanguage;
     }
 
     return await this.translationRepository.find({
       where: whereCondition,
-      order: { 
+      order: {
         pageNumber: 'ASC',
         paragraphIndex: 'ASC',
         runIndex: 'ASC',
@@ -800,7 +800,7 @@ export class DocxEditorService {
     targetLanguage: string
   ): Promise<TranslationEntity[]> {
     const pendingTranslations = await this.translationRepository.find({
-      where: { 
+      where: {
         fileId,
         status: 'pending'
       },
@@ -836,12 +836,12 @@ export class DocxEditorService {
     extractionResult: DocxExtractionResult;
   }> {
     // Step 1: Extract and store original content
-    const { translations: originalTranslations, extractionResult } = 
+    const { translations: originalTranslations, extractionResult } =
       await this.processDocxFile(filePath, fileId, projectId, sourceLanguage, requestId);
 
     // Step 2: Mark segments for user translation
     const pendingTranslations = await this.markForUserTranslation(
-      fileId, 
+      fileId,
       targetLanguage
     );
 

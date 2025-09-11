@@ -1,7 +1,7 @@
 import { Injectable} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository} from 'typeorm';
-import { ProjectActivity, ActivityType } from '../../db/mysql/entity/project-activity.entity';
+import { ProjectActivity, ActivityType } from '#LocalProject/Entities';
 import { UserEntity } from '#LocalProject/Entities';
 
 export interface CreateActivityDto {
@@ -75,12 +75,13 @@ export class ActivityManagerService {
         case 'today':
           startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           break;
-        case 'week':
+        case 'week': {
           const dayOfWeek = now.getDay();
           const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
           startDate = new Date(now.getTime() - daysToSubtract * 24 * 60 * 60 * 1000);
           startDate.setHours(0, 0, 0, 0);
           break;
+        }
         case 'month':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1);
           break;
@@ -123,7 +124,7 @@ export class ActivityManagerService {
               userInfo = {
                 id: Number(user.id),
                 username: user.username,
-                fullName: user.fullName || user.username, 
+                fullName: user.fullName || user.username,
               };
             }
           } catch (error) {

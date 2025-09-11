@@ -206,39 +206,6 @@ export class ProjectCancellationService {
     }
   }
 
-  private async markDepositAsLost(request: RequestEntity): Promise<void> {
-    // Find the deposit transaction
-    const depositTransaction = await this.transactionRepo.findOne({
-      where: {
-        request: { id: request.id },
-        user: { id: request.requester.id },
-        status: TransactionStatus.Pending,
-      },
-    });
-
-    if (depositTransaction) {
-      // Mark as completed (lost to platform)
-      depositTransaction.status = TransactionStatus.Completed;
-      await this.transactionRepo.save(depositTransaction);
-    }
-  }
-
-  private async sendCancellationNotification(
-    cancellation: ProjectCancellationEntity,
-    recipientId: bigint
-  ): Promise<void> {
-    const isRequesterInitiated = cancellation.cancellationType === CancellationType.REQUESTER_INITIATED;
-
-    await this.notificationService.createNotification({
-      userId: recipientId,
-      type: 'CANCELLATION_REQUEST',
-      message: `${isRequesterInitiated ? 'Requester' : 'Translator'} has requested to ${cancellation.isArchiveOnly ? 'archive' : 'delete'} the project: "${cancellation.request.title}"`,
-      createdBy: cancellation.initiator.id,
-    });
-
-    // Send email notification
-  }
-
   private async sendCancellationRejectedNotification(
     cancellation: ProjectCancellationEntity
   ): Promise<void> {

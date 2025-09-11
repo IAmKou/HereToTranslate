@@ -1180,7 +1180,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       }
 
       // Find or create Project Owner role
-      let ownerRole = projectRoles.find(role => role.name === 'Project Owner');
+      const ownerRole = projectRoles.find(role => role.name === 'Project Owner');
 
       if (ownerRole) {
         // Update existing Project Owner role to only have new owner

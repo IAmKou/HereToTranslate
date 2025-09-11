@@ -116,7 +116,8 @@ export class ExportManagerService {
     return status;
   }
 
-  async getUserJobs(userId: string, limit: number = 10): Promise<ExportJobStatus[]> {
+  async getUserJobs(userId: string, limit: number): Promise<ExportJobStatus[]> {
+    limit = 10;
     const jobs = await this.exportQueue.getJobs(['waiting', 'active', 'completed', 'failed', 'delayed'], 0, limit);
 
     const userJobs = jobs.filter(job => job.data.userId === userId);

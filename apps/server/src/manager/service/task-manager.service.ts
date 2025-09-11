@@ -768,53 +768,6 @@ export class TaskManagerService {
     return normalize;
   }
 
-  async getAvailableTransitions(taskId: string, userId: string) {
-    const task = await this.taskRepository.findOne({
-      where: { id: BigInt(taskId) },
-      relations: ['status', 'workflow', 'createdBy', 'assignedTo'],
-    });
-
-    if (!task || !task.workflow) {
-      return [];
-    }
-
-    const user = await this.userRepository.findOneOrFail({
-      where: { id: BigInt(userId) },
-    });
-
-    const transitions = await this.transitionRepository.find({
-      where: {
-        workflow: { id: task.workflow.id },
-        fromStatus: { id: task.status.id },
-        isActive: true,
-      },
-      relations: ['toStatus'],
-    });
-
-    const availableTransitions = [];
-    for (const transition of transitions) {
-      const hasPermission = await this.checkTransitionPermission(
-        transition,
-        task,
-        user
-      );
-      if (hasPermission) {
-        availableTransitions.push({
-          id: transition.id,
-          name: transition.name,
-          toStatus: {
-            id: transition.toStatus.id,
-            name: transition.toStatus.name,
-            color: transition.toStatus.color,
-            type: transition.toStatus.type,
-          },
-        });
-      }
-    }
-
-    return availableTransitions;
-  }
-
   async deleteTask(id: string) {
     const task = await this.getTask(id);
     await this.taskRepository.remove(task);
@@ -1017,41 +970,6 @@ export class TaskManagerService {
     return tasks;
   }
 
-  async createFromPart(params: {
-    projectId: string;
-    branchId: string;
-    fileId: string;
-    filePart: number;
-    createdById: string;
-    assignedToId?: string;
-    groupId?: string;
-    dueDate?: Date;
-    language: string;
-  }) {
-    const strings = await this.translationService.getAllString(
-      params.projectId,
-      params.branchId,
-      params.language,
-      params.fileId,
-      params.filePart
-    );
-    if (strings.length === 0)
-      throw new NotFoundException('No strings in that part');
-
-    const example = strings
-      .slice(0, 3)
-      .map((s: Record<string, unknown>) => `- ${s.originalText}`)
-      .join('\n');
-    const description = `Contains ${strings.length} strings:\n${example}`;
-    const title = `Translate part ${params.filePart}`;
-
-    return this.createTask({
-      ...params,
-      title,
-      description,
-    });
-  }
-
   async getTaskProgress(taskId: bigint) {
     const task = await this.taskRepository.findOneOrFail({
       where: { id: taskId },
@@ -1081,108 +999,6 @@ export class TaskManagerService {
     const percent = total === 0 ? 0 : Math.round((translated / total) * 100);
 
     return { total, translated, percent };
-  }
-
-  async listTasks(page = 1, pageSize = 20) {
-    const [tasks, count] = await this.taskRepository.findAndCount({
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      order: { createdAt: 'DESC' },
-      relations: ['assignedTo', 'group', 'createdBy'],
-    });
-
-    return {
-      items: tasks,
-      total: count,
-      page,
-      pageSize,
-      totalPages: Math.ceil(count / pageSize),
-    };
-  }
-
-  // New methods for pagination & scoring
-  async createTaskWithPagination(params: {
-    title: string;
-    description?: string;
-    createdById: string;
-    assignedToId?: string;
-    groupId?: string;
-    dueDate?: Date;
-    projectId?: string;
-    branchId?: string;
-    fileId?: string;
-    language?: string;
-    workflowId?: string;
-    statusId?: string;
-    priority?: string;
-    storyPoints?: number;
-    customFields?: Record<string, unknown>;
-    selectedPages?: number[];
-    assignments?: AssignTaskDto[];
-  }) {
-    // Create the basic task first
-    const task = await this.createTask(params);
-
-
-
-    // Handle assignments if provided
-    if (params.assignments) {
-      for (const assignment of params.assignments) {
-        await this.taskAssignmentService.assignTask(
-          task.projectId || '',
-          {
-            ...assignment,
-            taskId: task.id.toString()
-          },
-          params.createdById
-        );
-      }
-    }
-
-    return this.getTaskWithDetails(task.id.toString());
-  }
-
-  async getTaskWithDetails(id: string) {
-    const task = await this.getTask(id);
-
-    // Get assignments
-    const assignments = await this.taskAssignmentService.getTaskAssignments(id);
-
-    return {
-      ...task,
-      assignments,
-    };
-  }
-
-  async updateTaskPagination(
-    taskId: string,
-    selectedPages: number[]
-  ) {
-    const task = await this.taskRepository.findOneOrFail({
-      where: { id: BigInt(taskId) },
-    });
-
-    if (!task.fileId) {
-      throw new BadRequestException('Task must have a file to update pagination');
-    }
-
-    task.selectedPages = selectedPages;
-    await this.taskRepository.save(task);
-
-    await this.taskRepository.save(task);
-    this.taskGateway.emitTaskUpdate(task);
-
-    return this.getTaskWithDetails(taskId);
-  }
-
-
-
-  async assignTaskRole(projectId: string, dto: AssignTaskDto, assignedById: string) {
-    return await this.taskAssignmentService.assignTask(projectId, dto, assignedById);
-  }
-
-  async reassignTaskRole(projectId: string, dto: ReassignTaskDto, reassignedById: string) {
-    return await this.taskAssignmentService.reassignTask(projectId, dto, reassignedById);
   }
 
   async getTaskAssignments(taskId: string) {

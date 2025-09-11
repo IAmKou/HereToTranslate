@@ -7,8 +7,8 @@ export class ScannerCronService {
   private readonly logger = new Logger(ScannerCronService.name);
   private isRunning = false;
   private cronJob: CronJob;
-  private scanInterval = '0 * * * * *'; 
-  private restTime = 10000; 
+  private scanInterval = '0 * * * * *';
+  private restTime = 10000;
 
   constructor(private readonly schedulerRegistry: SchedulerRegistry) {
     this.initializeCronJob();
@@ -20,7 +20,7 @@ export class ScannerCronService {
     });
 
     this.schedulerRegistry.addCronJob('scanner-cron', this.cronJob);
-    
+
     this.cronJob.start();
     this.logger.log(`Scanner cron job started with interval: ${this.scanInterval}`);
   }
@@ -36,10 +36,10 @@ export class ScannerCronService {
 
     try {
       await this.performScan();
-      
+
       this.logger.log(`Scan completed, resting for ${this.restTime / 1000} seconds...`);
       await this.sleep(this.restTime);
-      
+
       this.logger.log('Rest period completed, ready for next scan');
     } catch (error) {
       this.logger.error('Error during scan:', error);
@@ -50,40 +50,39 @@ export class ScannerCronService {
 
   private async performScan() {
     this.logger.log('Performing scan operations...');
-    
+
     await this.simulateScanWork();
-    
+
     this.logger.log('Scan operations completed');
   }
 
   private async simulateScanWork() {
     const startTime = Date.now();
-    
-    // 模拟一些异步操作
+
     await Promise.all([
       this.checkDatabaseRecords(),
       this.processPendingTasks(),
       this.cleanupExpiredData(),
     ]);
-    
+
     const duration = Date.now() - startTime;
     this.logger.log(`Scan work completed in ${duration}ms`);
   }
 
   private async checkDatabaseRecords() {
     this.logger.debug('Checking database records...');
-    await this.sleep(100); 
+    await this.sleep(100);
   }
 
   private async processPendingTasks() {
 
     this.logger.debug('Processing pending tasks...');
-    await this.sleep(150); 
+    await this.sleep(150);
   }
 
   private async cleanupExpiredData() {
     this.logger.debug('Cleaning up expired data...');
-    await this.sleep(200); 
+    await this.sleep(200);
   }
 
   private sleep(ms: number): Promise<void> {
@@ -94,7 +93,7 @@ export class ScannerCronService {
     if (this.isRunning) {
       throw new Error('Scan is already running');
     }
-    
+
     this.logger.log('Manual scan triggered');
     await this.handleScan();
   }
@@ -104,7 +103,7 @@ export class ScannerCronService {
       this.scanInterval = interval;
       this.logger.log(`Updating scan interval to: ${interval}`);
     }
-    
+
     if (restTime) {
       this.restTime = restTime;
       this.logger.log(`Updating rest time to: ${restTime}ms`);
@@ -113,9 +112,9 @@ export class ScannerCronService {
     this.cronJob.stop();
     this.schedulerRegistry.deleteCronJob('scanner-cron');
     this.initializeCronJob();
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       message: 'Scan configuration updated successfully',
       newInterval: this.scanInterval,
       newRestTime: this.restTime

@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TaskCommentEntity } from '../../db/mysql/entity/task-comment.entity';
-import { TaskEntity } from '../../db/mysql/entity/task.entity';
-import { UserEntity } from '../../db/mysql/entity/user.entity';
-import { CreateTCommentDto, UpdateTCommentDto } from '../../dto/task-comment.dto';
+import {
+  UserEntity,
+  TaskEntity,
+  TaskCommentEntity,
+} from '#LocalProject/Entities';
+import { CreateTCommentDto, UpdateTCommentDto } from '#LocalProject/Dtos';
 import { TaskGateway } from '../../util/gateway/task.gateway';
 
 @Injectable()
@@ -16,7 +22,7 @@ export class TaskCommentManagerService {
     private readonly taskRepository: Repository<TaskEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    private readonly taskGateway: TaskGateway,
+    private readonly taskGateway: TaskGateway
   ) {}
 
   async getTaskComments(taskId: string) {
@@ -26,7 +32,7 @@ export class TaskCommentManagerService {
       order: { createdAt: 'DESC' },
     });
 
-    return comments.map(comment => ({
+    return comments.map((comment) => ({
       id: comment.id.toString(),
       content: comment.content,
       taskId: comment.task.id.toString(),
@@ -66,7 +72,9 @@ export class TaskCommentManagerService {
       content: dto.content,
       task: { id: BigInt(taskId) },
       author: { id: BigInt(userId) },
-      parentComment: dto.parentCommentId ? { id: BigInt(dto.parentCommentId) } : undefined,
+      parentComment: dto.parentCommentId
+        ? { id: BigInt(dto.parentCommentId) }
+        : undefined,
       attachments: dto.attachments,
       mentions: dto.mentions,
     });
@@ -100,7 +108,11 @@ export class TaskCommentManagerService {
     };
   }
 
-  async updateTaskComment(commentId: string, dto: UpdateTCommentDto, userId: string) {
+  async updateTaskComment(
+    commentId: string,
+    dto: UpdateTCommentDto,
+    userId: string
+  ) {
     // Find comment with author relation
     const comment = await this.taskCommentRepository.findOne({
       where: { id: BigInt(commentId) },

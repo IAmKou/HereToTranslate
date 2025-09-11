@@ -68,20 +68,6 @@ export class TranslationService {
   // Helper method to ensure translation records exist for target languages
   async ensureTranslationRecordsExist(_projectId: string, _targetLanguage: string): Promise<void> { return; }
 
-  // Method to check if a project has translation records
-  async hasTranslationRecords(projectId: string): Promise<boolean> {
-    const count = await this.translationRepository.count({ where: { projectId: BigInt(projectId) } });
-    return count > 0;
-  }
-
-  // Method to check if a project has English base strings
-  async hasEnglishBaseStrings(projectId: string): Promise<boolean> {
-    const count = await this.translationRepository.count({
-      where: { projectId: BigInt(projectId), language: 'en' },
-    });
-    return count > 0;
-  }
-
   // Method to get project translation status
   async getProjectTranslationStatus(projectId: string): Promise<{
     hasRecords: boolean;
@@ -327,7 +313,7 @@ export class TranslationService {
         nextBuffer = replacedCount > 0 ? patched : nextBuffer;
       }
 
-     
+
       logger.log(`✅ Translation committed to GitHub: ${repoName}/${path}`);
     } catch (err) {
       logger.error(`❌ Error committing translation to GitHub: ${err}`);
@@ -353,26 +339,6 @@ export class TranslationService {
     }));
 
     return rebuildFileWithManifest(fileEntity.fileType, entries);
-  }
-
-  async revertTranslation(fileId: string): Promise<Buffer> {
-    const fileEntity = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-    });
-    if (!fileEntity) throw new Error('File not found');
-
-    const entries = await this.translationRepository.find({ where: { fileId: BigInt(fileId) } });
-    const map = new Map<string, { text: string; style: any; font: string }>();
-    for (const e of entries as any[]) {
-      map.set(e.manifestEntryId, {
-        text: e.originalText,
-        style: e.style || {},
-        font: (e as any).fontFamily || 'default',
-      });
-    }
-
-    const entriesArray = Array.from(map.values());
-    return rebuildFileWithManifest(fileEntity.fileType, entriesArray);
   }
 
   async previewTranslation(
@@ -413,33 +379,6 @@ export class TranslationService {
         };
       }
     }
-  }
-
-  async previewTranslationPart(
-    fileId: string,
-    language: string,
-    limit = 3,
-    skip = 0
-  ): Promise<{ fileType: string; previews: string[] }> {
-    const fileEntity = await this.fileRepository.findOne({
-      where: { id: BigInt(fileId) },
-    });
-    if (!fileEntity) throw new Error('File not found');
-
-    const entries = await this.translationRepository.find({
-      where: { fileId: BigInt(fileId), language },
-      skip,
-      take: limit,
-    });
-
-    const previews = (entries as any[]).map((e: any) =>
-      e.translatedText?.trim() ? e.translatedText : e.originalText
-    );
-
-    return {
-      fileType: fileEntity.fileType,
-      previews,
-    };
   }
 
   async exportTranslation(
@@ -585,36 +524,6 @@ export class TranslationService {
     }
 
     return results;
-  }
-
-  async addPreviewWatermark(
-    pdfBuffer: Buffer,
-    watermarkText: string
-  ): Promise<Buffer> {
-    try {
-      const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
-      const pdfDoc = await PDFDocument.load(pdfBuffer);
-      const pages = pdfDoc.getPages();
-      const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      const opacity = 0.15;
-      const fontSize = 48;
-      for (const page of pages) {
-        const { width, height } = page.getSize();
-        page.drawText(watermarkText, {
-          x: width * 0.1,
-          y: height * 0.5,
-          size: fontSize,
-          font,
-          color: rgb(0.9, 0.1, 0.1),
-          rotate: { type: 'degrees', angle: 30 },
-          opacity,
-        });
-      }
-      const out = await pdfDoc.save();
-      return Buffer.from(out);
-    } catch (_) {
-      return pdfBuffer; // In case of any error, return original buffer
-    }
   }
 
   async buildExportBuffer(
@@ -1065,7 +974,7 @@ export class TranslationService {
   ) {
     const baseQuery: any = { projectId };
     if (fileId) baseQuery.fileId = fileId;
-    if (page !== undefined) baseQuery.filePart = page; 
+    if (page !== undefined) baseQuery.filePart = page;
 
     const baseStrings = await this.translationRepository.createQueryBuilder('t')
       .innerJoin(FileEntity, 'f', 'f.id = t.fileId')

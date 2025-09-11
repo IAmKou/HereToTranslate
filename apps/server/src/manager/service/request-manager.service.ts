@@ -55,7 +55,6 @@ export class RequestManagerService {
     private readonly fileService: FileService,
     private readonly projectService: ProjectManagerService,
     private readonly notificationService: NotificationManagerService,
-    private readonly translationService: TranslationService,
   ) { }
 
   async createRequest(

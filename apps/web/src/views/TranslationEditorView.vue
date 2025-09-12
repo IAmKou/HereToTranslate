@@ -136,7 +136,7 @@ function getTotalParts(fileId: string | number) {
   if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     const pages = new Set<number>();
     uniqueStrings.forEach((str: any) => {
-      const page = str.filePart !== undefined ? str.filePart + 1 : (str.position?.page || 1);
+      const page = str.filePart !== undefined ? str.filePart : (str.position?.page || 1);
       pages.add(page);
     });
     console.log(`[DEBUG] DOCX file ${fileId}: ${uniqueStrings.length} strings, ${pages.size} pages`);
@@ -498,9 +498,9 @@ function getFilteredStringsOfPart(fileId: string | number, part: number) {
     return filtered.filter((str: any) => str.filePart === part);
   }
 
-  // Nếu là DOCX, lấy strings theo filePart (convert 0-indexed to 1-indexed)
+  // Nếu là DOCX, lấy strings theo filePart (UI part matches database filePart directly)
   if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const targetPart = part + 1; // Convert 0-indexed to 1-indexed
+    const targetPart = part; // UI part matches database filePart directly
     const result = filtered.filter((str: any) => str.filePart === targetPart);
     console.log(`DOCX filtering: UI part=${part}, target filePart=${targetPart}, found strings:`, result.length);
     return result;

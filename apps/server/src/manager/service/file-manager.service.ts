@@ -355,7 +355,7 @@ export class FileService {
           if (requestId) {
             this.logger.log(`[UPLOAD_PROCESS] DOCX processing via DocxEditorService for request: ${requestId}`);
             try {
-              this.logger.log(`[UPLOAD_PROCESS] Calling docxEditorService.processDocxFile`);
+              this.logger.log(`[UPLOAD_PROCESS] Calling docxEditorService.extractDocxContentFromBuffer`);
               const extraction = await this.docxEditorService.extractDocxContentFromBuffer(fileRecord.fileContent);
               await this.docxEditorService.storeTranslationSegments(
                 BigInt(saved.fileId),

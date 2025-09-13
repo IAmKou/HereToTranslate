@@ -38,16 +38,25 @@ interface SRXRule {
 export class DocxEditorService {
   private readonly logger = new Logger(DocxEditorService.name);
   private readonly srxRules: SRXRule[] = [
-    // Common sentence endings
-    { pattern: /[.!?]+\s+(?=[A-Z])/g, isBreak: true },
-    // Abbreviations that should NOT break
-    { pattern: /\b(?:Mr|Mrs|Ms|Dr|Prof|Inc|Ltd|Co|Corp|etc|vs|e\.g|i\.e)\.\s+/gi, isBreak: false },
-    // Numbers with decimals
+    // Abbreviations that should NOT break (more comprehensive list)
+    { pattern: /\b(?:Mr|Mrs|Ms|Dr|Prof|Inc|Ltd|Co|Corp|etc|vs|e\.g|i\.e|Ph\.D|M\.D|B\.A|M\.A|U\.S|U\.K|U\.N|St|Ave|Blvd|Rd|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|Wed|Thu|Fri|Sat|Sun|a\.m|p\.m|A\.M|P\.M|No|vol|pp|cf|ibid|op\.cit|et\.al|viz|ca|approx|max|min|est|govt|dept|assn|bros|corp|ltd|inc|mfg|mgr|acct|admin|asst|atty|bldg|co|dist|div|est|exec|gen|govt|info|intl|jr|sr|ltd|mfg|mgmt|natl|org|pkg|pres|prof|pub|pvt|qty|ref|rept|rev|sec|secy|supt|tech|tel|temp|univ|vol|vs|wk|yr)\.\s*/gi, isBreak: false },
+    // Numbers with decimals, percentages, currency
     { pattern: /\d+\.\d+/g, isBreak: false },
-    // Ellipsis
-    { pattern: /\.{3}/g, isBreak: false },
-    // URLs and emails
-    { pattern: /\b\w+\.\w+/g, isBreak: false },
+    { pattern: /\d+\.\d+%/g, isBreak: false },
+    { pattern: /\$\d+\.\d+/g, isBreak: false },
+    // Ellipsis and multiple dots
+    { pattern: /\.{2,}/g, isBreak: false },
+    // URLs, emails, and file extensions
+    { pattern: /\b\w+\.\w+@\w+/g, isBreak: false },
+    { pattern: /https?:\/\/[^\s]+/g, isBreak: false },
+    { pattern: /\b\w+\.(com|org|net|edu|gov|mil|int|co|uk|de|fr|jp|cn|ru|br|in|au|ca)\b/gi, isBreak: false },
+    { pattern: /\b\w+\.(pdf|doc|docx|txt|html|htm|xml|csv|xls|xlsx|ppt|pptx|jpg|jpeg|png|gif|mp3|mp4|avi|mov|zip|rar|tar|gz)\b/gi, isBreak: false },
+    // Version numbers and codes
+    { pattern: /v\d+\.\d+/gi, isBreak: false },
+    { pattern: /\b\d+\.\d+\.\d+/g, isBreak: false },
+    // Initials
+    { pattern: /\b[A-Z]\.[A-Z]\./g, isBreak: false },
+    { pattern: /\b[A-Z]\.\s+[A-Z]\./g, isBreak: false },
   ];
 
   constructor(
@@ -119,48 +128,142 @@ export class DocxEditorService {
   private segmentTextBySRX(text: string): string[] {
     if (!text || text.trim().length === 0) return [];
     
-    let segments: string[] = [];
     let currentText = text.trim();
     
-    // Apply SRX rules for sentence segmentation
+    // First, split by obvious paragraph breaks (double newlines, tabs, etc.)
+    const paragraphs = currentText.split(/\n\s*\n|\t+/).filter(p => p.trim());
+    
+    const allSentences: string[] = [];
+    
+    for (const paragraph of paragraphs) {
+      const sentences = this.segmentParagraph(paragraph.trim());
+      allSentences.push(...sentences);
+    }
+    
+    return allSentences.length > 0 ? allSentences : [currentText];
+  }
+
+  private segmentParagraph(text: string): string[] {
+    if (!text || text.trim().length === 0) return [];
+    
     const sentences: string[] = [];
-    let lastIndex = 0;
+    let currentText = text.trim();
     
-    // Find sentence boundaries
-    const sentencePattern = /[.!?]+\s+/g;
-    let match;
+    // Enhanced sentence boundary patterns
+    const boundaryPatterns = [
+      // Standard sentence endings with space and capital letter
+      /([.!?]+)\s+(?=[A-Z])/g,
+      // Sentence endings with quotes
+      /([.!?]+["'])\s+(?=[A-Z])/g,
+      // Sentence endings with parentheses
+      /([.!?]+\))\s+(?=[A-Z])/g,
+      // Colon followed by capital letter (for lists, explanations)
+      /(:\s*)(?=[A-Z][^:]*[.!?])/g,
+      // Semicolon in certain contexts
+      /(;\s*)(?=[A-Z])/g,
+      // Line breaks with capital letters
+      /(\n+)\s*(?=[A-Z])/g,
+    ];
     
-    while ((match = sentencePattern.exec(currentText)) !== null) {
-      const beforeMatch = currentText.substring(lastIndex, match.index + match[0].length);
-      
-      // Check if this should NOT be a break based on abbreviation rules
-      let shouldBreak = true;
-      for (const rule of this.srxRules) {
-        if (!rule.isBreak) {
-          rule.pattern.lastIndex = 0; // Reset regex
-          if (rule.pattern.test(beforeMatch)) {
-            shouldBreak = false;
-            break;
+    let breakPoints: Array<{index: number, length: number}> = [];
+    
+    // Find all potential break points
+    for (const pattern of boundaryPatterns) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(currentText)) !== null) {
+        const fullMatch = match[0];
+        const breakIndex = match.index + match[1].length;
+        
+        // Check if this break point should be ignored based on abbreviation rules
+        const contextBefore = currentText.substring(Math.max(0, match.index - 20), match.index + fullMatch.length);
+        let shouldIgnore = false;
+        
+        for (const rule of this.srxRules) {
+          if (!rule.isBreak) {
+            rule.pattern.lastIndex = 0;
+            if (rule.pattern.test(contextBefore)) {
+              shouldIgnore = true;
+              break;
+            }
           }
         }
-      }
-      
-      if (shouldBreak) {
-        const sentence = currentText.substring(lastIndex, match.index + match[0].length).trim();
-        if (sentence) {
-          sentences.push(sentence);
-          lastIndex = match.index + match[0].length;
+        
+        if (!shouldIgnore) {
+          breakPoints.push({
+            index: breakIndex,
+            length: fullMatch.length - match[1].length
+          });
         }
       }
     }
     
-    // Add remaining text as last sentence
+    // Sort break points by index
+    breakPoints.sort((a, b) => a.index - b.index);
+    
+    // Remove overlapping break points
+    const filteredBreakPoints: Array<{index: number, length: number}> = [];
+    for (let i = 0; i < breakPoints.length; i++) {
+      const current = breakPoints[i];
+      const next = breakPoints[i + 1];
+      
+      if (!next || current.index + current.length <= next.index) {
+        filteredBreakPoints.push(current);
+      }
+    }
+    
+    // Split text at break points
+    let lastIndex = 0;
+    for (const breakPoint of filteredBreakPoints) {
+      const sentence = currentText.substring(lastIndex, breakPoint.index).trim();
+      if (sentence && sentence.length > 1) {
+        sentences.push(sentence);
+      }
+      lastIndex = breakPoint.index + breakPoint.length;
+    }
+    
+    // Add remaining text
     const remaining = currentText.substring(lastIndex).trim();
-    if (remaining) {
+    if (remaining && remaining.length > 1) {
       sentences.push(remaining);
     }
     
-    return sentences.length > 0 ? sentences : [currentText];
+    // If no sentences were found, return the original text
+    if (sentences.length === 0) {
+      return [currentText];
+    }
+    
+    // Post-process: merge very short segments with adjacent ones
+    return this.postProcessSentences(sentences);
+  }
+
+  private postProcessSentences(sentences: string[]): string[] {
+    const processed: string[] = [];
+    
+    for (let i = 0; i < sentences.length; i++) {
+      const current = sentences[i].trim();
+      
+      // Skip empty sentences
+      if (!current) continue;
+      
+      // If sentence is very short (likely a fragment), try to merge with previous or next
+      if (current.length < 10 && !current.match(/[.!?]$/)) {
+        if (processed.length > 0) {
+          // Merge with previous sentence
+          processed[processed.length - 1] += ' ' + current;
+        } else if (i + 1 < sentences.length) {
+          // Merge with next sentence
+          sentences[i + 1] = current + ' ' + sentences[i + 1];
+        } else {
+          // Keep as is if it's the only sentence
+          processed.push(current);
+        }
+      } else {
+        processed.push(current);
+      }
+    }
+    
+    return processed.filter(s => s.trim().length > 0);
   }
 
   async extractTextFromBuffer(buffer: Buffer): Promise<string> {

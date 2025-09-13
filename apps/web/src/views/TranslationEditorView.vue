@@ -87,21 +87,7 @@ function isFileProcessing(file: any): boolean {
   return file.status === 'processing';
 }
 
-// Function để deduplicate strings
-function deduplicateStrings(strings: any[]): any[] {
-  const seen = new Set<string>();
-  const uniqueStrings: any[] = [];
 
-  for (const str of strings) {
-    const key = `${str.fileId}_${str.originalText}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueStrings.push(str);
-    }
-  }
-
-  return uniqueStrings;
-}
 
 // Expose method để component cha có thể gọi reload files
 function reloadFiles() {
@@ -114,8 +100,6 @@ defineExpose({
 
 function getTotalParts(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
-  // Sử dụng deduplication để đảm bảo tính nhất quán
-  const uniqueStrings = deduplicateStrings(arr);
 
   // Lấy thông tin file để xác định loại file
   const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
@@ -135,17 +119,17 @@ function getTotalParts(fileId: string | number) {
   // Nếu là DOCX, chia theo filePart (giống hệt như PDF)
   if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     const pages = new Set<number>();
-    uniqueStrings.forEach((str: any) => {
+    arr.forEach((str: any) => {
       const page = str.filePart !== undefined ? str.filePart : (str.position?.page || 1);
       pages.add(page);
     });
-    console.log(`[DEBUG] DOCX file ${fileId}: ${uniqueStrings.length} strings, ${pages.size} pages`);
+    console.log(`[DEBUG] DOCX file ${fileId}: ${arr.length} strings, ${pages.size} pages`);
     console.log(`[DEBUG] DOCX filePart values:`, Array.from(pages).sort((a, b) => a - b));
     return pages.size;
   }
 
   // Fallback: chia theo 15 strings/page
-  return Math.ceil(uniqueStrings.length / DOCX_STRINGS_PER_PAGE);
+  return Math.ceil(arr.length / DOCX_STRINGS_PER_PAGE);
 }
 
 function getStringsOfPart(fileId: string | number, part: number) {
@@ -179,27 +163,23 @@ function getStringsCountOfPart(fileId: string | number, part: number) {
 
   if (!file) {
     // Fallback: chia theo 100 strings/page
-    const uniqueStrings = deduplicateStrings(arr);
     const start = part * DOCX_STRINGS_PER_PAGE;
-    return Math.min(DOCX_STRINGS_PER_PAGE, uniqueStrings.length - start);
+    return Math.min(DOCX_STRINGS_PER_PAGE, arr.length - start);
   }
 
   // Nếu là PDF, đếm strings theo page
   if (file.fileType === 'application/pdf') {
-    const uniqueStrings = deduplicateStrings(arr);
-    return uniqueStrings.filter((str: any) => str.filePart === part).length;
+    return arr.filter((str: any) => str.filePart === part).length;
   }
 
   // Nếu là DOCX, đếm strings theo filePart (giống hệt như PDF)
   if (file.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const uniqueStrings = deduplicateStrings(arr);
-    return uniqueStrings.filter((str: any) => str.filePart === part).length;
+    return arr.filter((str: any) => str.filePart === part).length;
   }
 
   // Fallback: chia theo 15 strings/page
-  const uniqueStrings = deduplicateStrings(arr);
   const start = part * DOCX_STRINGS_PER_PAGE;
-  return Math.min(DOCX_STRINGS_PER_PAGE, uniqueStrings.length - start);
+  return Math.min(DOCX_STRINGS_PER_PAGE, arr.length - start);
 }
 
 // Methods cho page modal
@@ -376,13 +356,11 @@ const fileProgress = computed(() => {
     const fileId = file.fileId || file.id;
     const arr = stringsByFile.value[fileId] || [];
 
-    // Luôn deduplicate khi đếm progress để đảm bảo tính nhất quán với ProjectTranslationTab
-    const uniqueStrings = deduplicateStrings(arr);
-    const translatedStrings = uniqueStrings.filter(s => s.translatedText && s.translatedText.trim().length > 0);
+    const translatedStrings = arr.filter(s => s.translatedText && s.translatedText.trim().length > 0);
     const translatedCount = translatedStrings.length;
 
     progress[fileId] = {
-      total: uniqueStrings.length,
+      total: arr.length,
       translated: translatedCount,
     };
   }
@@ -459,14 +437,11 @@ function toggleFileAccordion(fileId: string|number) {
 function getFilteredStrings(fileId: string | number) {
   const arr = stringsByFile.value[fileId] || [];
   console.log(`getFilteredStrings for fileId ${fileId}:`, arr.length, 'strings');
-  // Sử dụng deduplication để đảm bảo tính nhất quán
-  const uniqueStrings = deduplicateStrings(arr);
-  console.log(`After deduplication:`, uniqueStrings.length, 'strings');
   const q = (searchQueryMap.value[fileId] || '').trim().toLowerCase();
   // Nếu bật focusUntranslated thì chỉ lấy untranslated
   const status = focusUntranslated.value ? 'untranslated' : (filterStatusMap.value[fileId] || 'all');
   console.log(`Filter status: ${status}, search query: "${q}"`);
-  return uniqueStrings.filter((str: any) => {
+  return arr.filter((str: any) => {
     let match = true;
     if (q) {
       match = ((str.originalText || '').toLowerCase().includes(q)) ||

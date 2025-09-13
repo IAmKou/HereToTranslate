@@ -102,44 +102,17 @@ export class TranslationService {
   }
 
   async addTranslation(id: string, translatedText: string, language: string) {
-    // Tìm bản ghi gốc để lấy thông tin
+    // Tìm bản ghi gốc để cập nhật trực tiếp
     const originalEntry = await this.translationRepository.findOne({ where: { id: BigInt(id) } });
     if (!originalEntry) throw new Error('Manifest entry not found');
 
-    const existingTranslation = await this.translationRepository.findOne({
-      where: {
-        projectId: originalEntry.projectId!,
-        fileId: originalEntry.fileId!,
-        originalText: originalEntry.originalText,
-        language: language,
-      },
-    });
-
-    let entry;
-    let isNewTranslation = false;
-
-    if (existingTranslation) {
-      // Update bản dịch hiện có
-      existingTranslation.translatedText = translatedText;
-      await this.translationRepository.save(existingTranslation);
-      entry = existingTranslation;
-    } else {
-      // Tạo bản ghi mới cho ngôn ngữ này
-      entry = await this.translationRepository.save(
-        this.translationRepository.create({
-          projectId: originalEntry.projectId,
-          fileId: originalEntry.fileId,
-          originalText: originalEntry.originalText,
-          translatedText: translatedText,
-          language: language,
-          filePart: (originalEntry as any).filePart,
-          fontFamily: (originalEntry as any).fontFamily,
-          style: originalEntry.style,
-          position: originalEntry.position,
-        })
-      );
-      isNewTranslation = true;
-    }
+    // Cập nhật trực tiếp bản ghi gốc thay vì tạo mới
+    originalEntry.translatedText = translatedText;
+    originalEntry.language = language;
+    
+    // Lưu bản ghi đã cập nhật
+    const entry = await this.translationRepository.save(originalEntry);
+    const isNewTranslation = !originalEntry.translatedText || originalEntry.translatedText.trim().length === 0;
 
     const fileId = entry.fileId;
     const fileEntity = await this.fileRepository.findOne({
@@ -972,11 +945,9 @@ export class TranslationService {
     page?: number,
     fileType?: string
   ) {
-    const baseQuery: any = { projectId };
-    if (fileId) baseQuery.fileId = fileId;
-    if (page !== undefined) baseQuery.filePart = page;
-
-    const baseStrings = await this.translationRepository.createQueryBuilder('t')
+    // Since we now update records directly instead of creating duplicates,
+    // we can fetch all strings in a single query
+    const strings = await this.translationRepository.createQueryBuilder('t')
       .innerJoin(FileEntity, 'f', 'f.id = t.fileId')
       .where('f.projectId = :projectId', { projectId: BigInt(projectId) })
       .andWhere(fileId ? 't.fileId = :fileId' : '1=1', { fileId: fileId ? BigInt(fileId) : undefined })
@@ -984,42 +955,10 @@ export class TranslationService {
       .orderBy('t.pageNumber', 'ASC')
       .addOrderBy('t.orderIndex', 'ASC')
       .getMany();
-
-    // Lấy bản dịch của ngôn ngữ được chọn
-    const translationQuery: any = { projectId, language };
-    if (fileId) translationQuery.fileId = fileId;
-    if (page !== undefined) translationQuery.filePart = page; // filePart trong DB vẫn là page number
-
-    const translatedStrings = await this.translationRepository.createQueryBuilder('t')
-      .innerJoin(FileEntity, 'f', 'f.id = t.fileId')
-      .where('f.projectId = :projectId', { projectId: BigInt(projectId) })
-      .andWhere('t.targetLanguage = :lang', { lang: language })
-      .andWhere(fileId ? 't.fileId = :fileId' : '1=1', { fileId: fileId ? BigInt(fileId) : undefined })
-      .andWhere(page !== undefined ? 't.pageNumber = :page' : '1=1', { page })
-      .orderBy('t.pageNumber', 'ASC')
-      .addOrderBy('t.orderIndex', 'ASC')
-      .getMany();
-
-    // Tạo map để merge nhanh theo fileId + originalText để tránh trộn giữa các file
-    const translationMap = new Map<string, string>();
-    translatedStrings.forEach((str: any) => {
-      const key = `${String(str.fileId)}||${String(str.originalText)}`;
-      translationMap.set(key, str.translatedText as string);
-    });
-
-    // Merge base strings với bản dịch của ngôn ngữ được chọn
-    const mergedStrings = baseStrings.map((str: any) => {
-      const key = `${String(str.fileId)}||${String(str.originalText)}`;
-      const translatedText = translationMap.get(key) || '';
-      return {
-        ...str,
-        translatedText,
-      };
-    });
 
     // Lấy tên file và thông tin file type
     const fileIdSet = new Set<string>();
-    mergedStrings.forEach((str: any) => {
+    strings.forEach((str: any) => {
       fileIdSet.add(String(str.fileId));
     });
     const fileIds: string[] = Array.from(fileIdSet);
@@ -1043,7 +982,7 @@ export class TranslationService {
       });
     }
 
-    return mergedStrings.map((str: any) => ({
+    return strings.map((str: any) => ({
       id: String((str as any).id || ''),
       originalText: str.originalText,
       translatedText: str.translatedText || '',

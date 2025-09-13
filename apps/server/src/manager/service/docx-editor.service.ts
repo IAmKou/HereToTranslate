@@ -278,10 +278,60 @@ export class DocxEditorService {
     try {
       this.logger.log(`Storing ${extraction.segments.length} translation segments for file ${fileId}`);
       
-      // Delete existing segments for this file
-      await this.translationRepo.delete({ fileId } as any);
+      // Check for existing segments first
+      const existingSegments = await this.translationRepo.find({ 
+        where: { fileId } as any 
+      });
       
-      // Create new translation entities
+      if (existingSegments.length > 0) {
+        this.logger.log(`Found ${existingSegments.length} existing segments, updating instead of creating duplicates`);
+        
+        // Update existing segments instead of deleting and recreating
+        for (let i = 0; i < extraction.segments.length && i < existingSegments.length; i++) {
+          const segment = extraction.segments[i];
+          const existing = existingSegments[i];
+          
+          existing.originalText = segment.text;
+          existing.fontFamily = segment.fontFamily || 'Calibri';
+          existing.fontSize = segment.fontSize as any;
+          existing.style = segment.style || {};
+          existing.orderIndex = i;
+          // Keep existing translatedText if it exists
+        }
+        
+        // Save updated entities
+        await this.translationRepo.save(existingSegments.slice(0, extraction.segments.length));
+        
+        // If there are more new segments than existing ones, create the additional ones
+        if (extraction.segments.length > existingSegments.length) {
+          const newEntities: TranslationEntity[] = [];
+          for (let i = existingSegments.length; i < extraction.segments.length; i++) {
+            const segment = extraction.segments[i];
+            
+            const entity = new TranslationEntity();
+            entity.projectId = projectId;
+            entity.requestId = requestId || null;
+            entity.fileId = fileId;
+            entity.originalText = segment.text;
+            entity.language = targetLanguage;
+            entity.fontFamily = segment.fontFamily || 'Calibri';
+            entity.fontSize = segment.fontSize as any;
+            entity.style = segment.style || {};
+            entity.orderIndex = i;
+            entity.status = 'pending';
+            
+            newEntities.push(entity);
+          }
+          await this.translationRepo.save(newEntities);
+        }
+        
+        // If there are fewer new segments than existing ones, remove the extra ones
+        if (extraction.segments.length < existingSegments.length) {
+          const toRemove = existingSegments.slice(extraction.segments.length);
+          await this.translationRepo.remove(toRemove);
+        }
+      } else {
+        // No existing segments, create new ones
       const entities: TranslationEntity[] = [];
       
       for (let i = 0; i < extraction.segments.length; i++) {
@@ -292,8 +342,7 @@ export class DocxEditorService {
         entity.requestId = requestId || null;
         entity.fileId = fileId;
         entity.originalText = segment.text;
-        entity.language = 'AUTO';
-        entity.targetLanguage = targetLanguage;
+          entity.language = targetLanguage;
         entity.fontFamily = segment.fontFamily || 'Calibri';
         entity.fontSize = segment.fontSize as any;
         entity.style = segment.style || {};
@@ -305,8 +354,9 @@ export class DocxEditorService {
       
       // Save all entities
       await this.translationRepo.save(entities);
+      }
       
-      this.logger.log(`Successfully stored ${entities.length} translation segments`);
+      this.logger.log(`Successfully processed ${extraction.segments.length} translation segments`);
     } catch (error) {
       this.logger.error(`Failed to store translation segments: ${error instanceof Error ? error.message : String(error)}`);
       throw error;

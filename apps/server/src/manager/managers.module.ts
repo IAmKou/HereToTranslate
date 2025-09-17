@@ -235,6 +235,7 @@ import { DocxEditorService } from './service/docx-editor.service';
     PaypalConfigChecker,
     AsposeService,
     DocxEditorService,
+  
   ],
   controllers: [
     CategoryController,

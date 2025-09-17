@@ -185,13 +185,13 @@ const router = createRouter({
     {
       path: '/paypal-final-success',
       name: 'paypal-final-success',
-      component: () => import('../views/PayPalFinalSuccessView.vue'),
+      component: () => import('../views/PaypalFinalSuccessView.vue'),
       meta: { requiresAuth: false }
     },
     {
       path: '/paypal-final-cancel',
       name: 'paypal-final-cancel',
-      component: () => import('../views/PayPalFinalCancelView.vue'),
+      component: () => import('../views/PaypalFinalCancelView.vue'),
       meta: { requiresAuth: false }
     },
     {
@@ -266,7 +266,6 @@ const router = createRouter({
       component: () => import('../components/AdminSetting.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
     }
-
   ],
 });
 

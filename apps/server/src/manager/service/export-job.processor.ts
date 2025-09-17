@@ -44,7 +44,6 @@ export class ExportJobProcessor {
   @Process('export-files')
   async handleExportFiles(job: Job<ExportJobData>): Promise<ExportJobResult> {
     const { type, fileIds, language, format, userId, projectId, branchId } = job.data;
-
     try {
       // Create export directory
       const exportDir = join(process.cwd(), 'uploads', 'exports', job.id.toString());

@@ -942,17 +942,12 @@ export class TranslationService {
     projectId: string,
     language: string,
     fileId?: string,
-    page?: number,
     fileType?: string
   ) {
-    // Since we now update records directly instead of creating duplicates,
-    // we can fetch all strings in a single query
     const strings = await this.translationRepository.createQueryBuilder('t')
       .innerJoin(FileEntity, 'f', 'f.id = t.fileId')
       .where('f.projectId = :projectId', { projectId: BigInt(projectId) })
       .andWhere(fileId ? 't.fileId = :fileId' : '1=1', { fileId: fileId ? BigInt(fileId) : undefined })
-      .andWhere(page !== undefined ? 't.pageNumber = :page' : '1=1', { page })
-      .orderBy('t.pageNumber', 'ASC')
       .addOrderBy('t.orderIndex', 'ASC')
       .getMany();
 
@@ -987,7 +982,7 @@ export class TranslationService {
       originalText: str.originalText,
       translatedText: str.translatedText || '',
       fileId: String(str.fileId),
-      filePart: (str as any).pageNumber ?? 0,
+      filePart: (str as any).filePart ?? 0,
       fileName: fileNamesMap[str.fileId] || '',
       fileType: fileTypesMap[str.fileId] || '',
     }));
@@ -999,14 +994,13 @@ export class TranslationService {
       .innerJoin(FileEntity, 'f', 'f.id = t.fileId')
       .where('t.fileId = :fileId', { fileId: BigInt(fileId) })
       .andWhere('f.projectId = :projectId', { projectId: BigInt(projectId) })
-      .orderBy('t.pageNumber', 'ASC')
       .addOrderBy('t.orderIndex', 'ASC')
       .getMany();
 
     // Nhóm strings theo filePart (trang)
     const pages = new Map<number, any[]>();
     for (const str of strings) {
-      const page = (str as any).pageNumber || 0;
+      const page = (str as any).filePart || 0;
       if (!pages.has(page)) {
         pages.set(page, []);
       }

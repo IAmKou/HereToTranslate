@@ -1,7 +1,9 @@
 <template>
-  <div class="file-preview-panel" :class="{ 'collapsed': collapsed, 'resizing': isResizing }" :style="{ width: panelWidth + 'px' }">
+  <div class="file-preview-panel" :class="{ 'collapsed': collapsed, 'resizing': isResizing }"
+    :style="{ width: panelWidth + 'px' }">
     <!-- Header - Hidden for PDF, DOCX, and Text files -->
-    <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="preview-header" @click="toggleCollapse">
+    <div v-if="!isPdfType() && previewType !== 'docx-preview' && previewType !== 'text'" class="preview-header"
+      @click="toggleCollapse">
       <div class="header-content">
         <div class="header-left">
           <i class="pi pi-eye" :class="{ 'active': !collapsed }"></i>
@@ -9,11 +11,8 @@
           <span v-if="fileName" class="file-name">{{ fileName }}</span>
         </div>
         <div class="header-actions">
-          <button
-            class="action-btn"
-            @click.stop="toggleCollapse"
-            :title="collapsed ? 'Expand preview' : 'Collapse preview'"
-          >
+          <button class="action-btn" @click.stop="toggleCollapse"
+            :title="collapsed ? 'Expand preview' : 'Collapse preview'">
             <i class="pi" :class="collapsed ? 'pi-chevron-right' : 'pi-chevron-left'"></i>
           </button>
         </div>
@@ -21,13 +20,8 @@
     </div>
 
     <!-- Resize Handle -->
-    <div
-      v-if="!collapsed"
-      class="resize-handle"
-      @mousedown="startResize"
-      @touchstart="startResize"
-      :title="'Drag to resize preview panel'"
-    >
+    <div v-if="!collapsed" class="resize-handle" @mousedown="startResize" @touchstart="startResize"
+      :title="'Drag to resize preview panel'">
       <div class="resize-indicator">
         <i class="pi pi-grip-vertical"></i>
       </div>
@@ -71,7 +65,8 @@
         <div class="preview-container document-viewer-wrapper">
           <!-- Office Online Viewer Preview -->
           <div v-if="previewType === 'office-viewer'" class="office-viewer-preview">
-            <iframe v-if="previewUrl" :src="previewUrl" class="office-viewer" frameborder="0" width="100%" height="600px"></iframe>
+            <iframe v-if="previewUrl" :src="previewUrl" class="office-viewer" frameborder="0" width="100%"
+              height="600px"></iframe>
             <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
               <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>Office Online Viewer not available</p>
@@ -85,18 +80,24 @@
                  (canvas was previously gated by pdfJsLoaded which itself required the canvas). -->
             <div v-if="previewUrl && !pdfFailed" class="pdf-js-viewer">
               <canvas ref="pdfCanvas" class="pdf-canvas" style="width: 100%; height: 100%;"></canvas>
-              <div ref="highlightContainer" class="highlight-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;"></div>
+              <div ref="highlightContainer" class="highlight-container"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;">
+              </div>
             </div>
 
             <!-- Fallback to iframe if PDF.js failed to load/render -->
-            <iframe v-else-if="previewUrl && pdfFailed" :src="previewUrl" class="pdf-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <iframe v-else-if="previewUrl && pdfFailed" :src="previewUrl" class="pdf-viewer" frameborder="0"
+              style="width: 100%; height: 100%;"></iframe>
 
             <!-- Controls -->
-            <div v-if="pdfJsLoaded" class="pdf-controls" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px; z-index: 30;">
+            <div v-if="pdfJsLoaded" class="pdf-controls"
+              style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px; z-index: 30;">
               <span style="color: white; margin: 0 10px;">{{ currentPage }} / {{ totalPages }}</span>
-              <button @click="pdfZoomOut" style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">-</button>
+              <button @click="pdfZoomOut"
+                style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">-</button>
               <span style="color: white; margin: 0 10px;">{{ Math.round(pdfZoom * 100) }}%</span>
-              <button @click="pdfZoomIn" style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">+</button>
+              <button @click="pdfZoomIn"
+                style="background: #6366f1; color: white; border: none; padding: 5px 10px; margin: 0 5px; border-radius: 3px;">+</button>
             </div>
 
             <div v-else-if="!previewUrl" style="text-align: center; color: #a5b4fc; padding: 2rem;">
@@ -108,7 +109,8 @@
           <!-- DOCX Preview with docx-preview library -->
           <div v-else-if="previewType === 'docx-preview'" class="docx-preview-container">
             <div class="docx-container">
-              <div ref="docxContainer" class="docx-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"></div>
+              <div ref="docxContainer" class="docx-content"
+                :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }"></div>
             </div>
             <div v-if="!docxRendered" class="docx-loading">
               <i class="pi pi-spin pi-spinner"></i>
@@ -126,7 +128,8 @@
 
           <!-- DOCX Preview -->
           <div v-else-if="previewType === 'docx'" class="docx-preview">
-            <iframe v-if="previewUrl" :src="previewUrl" class="docx-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <iframe v-if="previewUrl" :src="previewUrl" class="docx-viewer" frameborder="0"
+              style="width: 100%; height: 100%;"></iframe>
             <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
               <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>DOCX preview not available</p>
@@ -135,7 +138,8 @@
 
           <!-- Google Docs Viewer for DOCX -->
           <div v-else-if="previewType === 'google-docs-viewer'" class="google-docs-preview">
-            <iframe v-if="previewUrl" :src="previewUrl" class="google-docs-viewer" frameborder="0" style="width: 100%; height: 100%;"></iframe>
+            <iframe v-if="previewUrl" :src="previewUrl" class="google-docs-viewer" frameborder="0"
+              style="width: 100%; height: 100%;"></iframe>
             <div v-else style="text-align: center; color: #a5b4fc; padding: 2rem;">
               <i class="pi pi-file-word" style="font-size: 3rem; margin-bottom: 1rem;"></i>
               <p>Google Docs Viewer not available</p>
@@ -179,7 +183,8 @@
           <!-- Text Preview -->
           <div v-else-if="isTextType()" class="text-preview">
             <div class="text-container">
-              <pre class="text-content" :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }">{{ previewContent || 'No text content available' }}</pre>
+              <pre class="text-content"
+                :style="{ transform: `scale(${zoom})`, transformOrigin: 'top left' }">{{ previewContent || 'No text content available' }}</pre>
             </div>
 
             <!-- Zoom controls for Text -->
@@ -240,6 +245,7 @@ interface Props {
     id: string;
     originalText: string;
     translatedText: string;
+    orderIndex?: number;
   } | null;
 }
 
@@ -285,13 +291,6 @@ const collapsed = computed({
   set: (value) => emit('update:collapsed', value)
 });
 
-// Highlight functionality
-const highlightedText = computed(() => {
-  if (!props.focusedString?.originalText) return '';
-  return props.focusedString.originalText;
-});
-
-// PDF.js Viewer Functions (Crowdin-style)
 async function loadPdfWithPdfJs() {
   if (!previewUrl.value) {
     console.log('Cannot load PDF: missing previewUrl');
@@ -366,7 +365,7 @@ async function loadPdfWithPdfJs() {
 
   } catch (error) {
     console.error('Error loading PDF with PDF.js:', error);
-    console.error('Error details:', error.message);
+    console.error('Error details:', error);
     // Fallback to iframe - PDF.js failed
     pdfJsLoaded.value = false;
     pdfFailed.value = true;
@@ -441,27 +440,29 @@ async function loadPage(pageNum: number) {
   }
 }
 
-function previousPage() {
-  if (currentPage.value > 1) {
-    loadPage(currentPage.value - 1);
-  }
-}
-
-function nextPage() {
-  if (currentPage.value < totalPages.value) {
-    loadPage(currentPage.value + 1);
-  }
-}
-
-// Method to highlight text directly in PDF content using PDF.js - 100% ACCURATE
 async function highlightTextInPdf() {
-  if (!props.focusedString?.originalText || !isPdfType()) {
-    console.log('Cannot highlight: missing focusedString or not PDF type');
+  if (!props.focusedString?.originalText) {
+    if (highlightContainer.value) {
+      highlightContainer.value.innerHTML = '';
+    }
+    console.log('Cleared highlights - no focused string');
+    return;
+  }
+
+  if (!isPdfType()) {
+    console.log('Cannot highlight: not PDF type');
     return;
   }
 
   const textToHighlight = props.focusedString.originalText;
-  console.log('Highlighting text directly in PDF content:', textToHighlight);
+  const orderIndex = props.focusedString.orderIndex || 0;
+
+  if (!textToHighlight) {
+    console.log('Cannot highlight: textToHighlight is undefined');
+    return;
+  }
+
+  console.log('Highlighting text directly in PDF content:', textToHighlight, 'with order index:', orderIndex);
 
   // Ensure PDF.js is loaded
   if (!pdfJsLoaded.value) {
@@ -478,11 +479,9 @@ async function highlightTextInPdf() {
     }
   }
 
-  // Use PDF.js for direct text highlighting - 100% ACCURATE
   if (pdfPage.value && highlightContainer.value) {
     console.log('Using PDF.js direct text highlighting - 100% ACCURATE');
     try {
-      // Get text content with positions from SAME PDF.js instance
       const textContent = await pdfPage.value.getTextContent();
       const viewport = pdfPage.value.getViewport({ scale: pdfZoom.value });
 
@@ -501,11 +500,24 @@ async function highlightTextInPdf() {
         // Clear existing highlights
         highlightContainer.value.innerHTML = '';
 
+        // Get color scheme based on order index
+        const colors = {
+          primary: { bg: 'rgba(255, 230, 0, 0.6)', border: '#ffd700' },
+          secondary: { bg: 'rgba(0, 255, 127, 0.4)', border: '#00ff7f' },
+          tertiary: { bg: 'rgba(255, 105, 180, 0.4)', border: '#ff69b4' },
+          quaternary: { bg: 'rgba(135, 206, 250, 0.4)', border: '#87ceeb' },
+          quinary: { bg: 'rgba(255, 165, 0, 0.4)', border: '#ffa500' }
+        };
+
+        const colorKeys = ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary'] as const;
+        const colorKey = colorKeys[orderIndex % colorKeys.length];
+        const colorScheme = colors[colorKey];
+
         matchingItems.forEach((item: any, index: number) => {
           const highlightDiv = document.createElement('div');
-          highlightDiv.className = 'pdf-text-highlight';
+          highlightDiv.className = `pdf-text-highlight ${colorKey}`;
+          highlightDiv.setAttribute('data-order-index', orderIndex.toString());
 
-          // Use EXACT coordinates from SAME PDF.js instance - 100% ACCURATE
           const x = item.transform[4];
           const y = viewport.height - item.transform[5]; // Flip Y coordinate
           const width = item.width;
@@ -517,20 +529,19 @@ async function highlightTextInPdf() {
             top: ${y}px;
             width: ${width}px;
             height: ${height}px;
-            background: rgba(255, 193, 7, 0.6);
-            border: 2px solid #ffc107;
+            background: ${colorScheme.bg};
             border-radius: 2px;
             z-index: 9999;
             pointer-events: none;
             animation: highlightPulse 1.5s ease-in-out infinite;
-            box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
+            box-shadow: 0 0 8px ${colorScheme.border}40;
+            mix-blend-mode: multiply;
           `;
 
           highlightContainer.value!.appendChild(highlightDiv);
-          console.log(`Created 100% ACCURATE highlight ${index + 1} at position:`, { x, y, width, height });
+          console.log(`Created order-based highlight ${index + 1} (order: ${orderIndex}) at position:`, { x, y, width, height });
         });
 
-        // Add CSS animation if not already added
         if (!document.querySelector('#pdf-highlight-styles')) {
           const style = document.createElement('style');
           style.id = 'pdf-highlight-styles';
@@ -556,7 +567,6 @@ async function highlightTextInPdf() {
           document.head.appendChild(style);
         }
 
-        // Auto-remove highlights after 4 seconds
         setTimeout(() => {
           if (highlightContainer.value) {
             const highlights = highlightContainer.value.querySelectorAll('.pdf-text-highlight');
@@ -581,23 +591,32 @@ async function highlightTextInPdf() {
   } else {
     console.log('PDF.js not available for direct highlighting');
   }
-}
 
-// Function to highlight text on iframe using overlay
-function highlightTextOnIframe(textToHighlight: string) {
-  console.log('Creating iframe overlay highlight for:', textToHighlight);
-
-  // Find the iframe
-  const iframe = document.querySelector('.pdf-viewer') as HTMLIFrameElement;
-  if (!iframe) {
-    console.log('Iframe not found for highlighting');
-    return;
+  function clearDocxHighlights() {
+    if (!docxContainer.value) return;
+    const highlights = docxContainer.value.querySelectorAll('.docx-text-highlight');
+    highlights.forEach((highlight: Element) => {
+      const parent = highlight.parentNode;
+      if (parent) {
+        const textContent = highlight.textContent || '';
+        const textNode = document.createTextNode(textContent);
+        parent.replaceChild(textNode, highlight);
+      }
+    });
+    console.log('DOCX highlights cleared');
   }
 
-  // Create overlay highlight
-  const highlightDiv = document.createElement('div');
-  highlightDiv.className = 'iframe-text-highlight';
-  highlightDiv.style.cssText = `
+    console.log('Creating iframe overlay highlight for:', textToHighlight);
+
+    const iframe = document.querySelector('.pdf-viewer') as HTMLIFrameElement;
+    if (!iframe) {
+      console.log('Iframe not found for highlighting');
+      return;
+    }
+
+    const highlightDiv = document.createElement('div');
+    highlightDiv.className = 'iframe-text-highlight';
+    highlightDiv.style.cssText = `
     position: absolute;
     top: 50%;
     left: 50%;
@@ -618,287 +637,468 @@ function highlightTextOnIframe(textToHighlight: string) {
     font-weight: bold;
     font-size: 14px;
   `;
-  highlightDiv.textContent = textToHighlight.substring(0, 30) + '...';
+    highlightDiv.textContent = textToHighlight.substring(0, 30) + '...';
 
-  // Add to iframe container
-  const iframeContainer = iframe.parentElement;
-  if (iframeContainer) {
-    iframeContainer.style.position = 'relative';
-    iframeContainer.appendChild(highlightDiv);
+    const iframeContainer = iframe.parentElement;
+    if (iframeContainer) {
+      iframeContainer.style.position = 'relative';
+      iframeContainer.appendChild(highlightDiv);
 
-    // Auto-remove after 4 seconds
-    setTimeout(() => {
-      if (highlightDiv.parentNode) {
-        highlightDiv.style.opacity = '0';
-        highlightDiv.style.transform = 'translate(-50%, -50%) scale(0.95)';
-        setTimeout(() => highlightDiv.remove(), 300);
-      }
-    }, 4000);
+      setTimeout(() => {
+        if (highlightDiv.parentNode) {
+          highlightDiv.style.opacity = '0';
+          highlightDiv.style.transform = 'translate(-50%, -50%) scale(0.95)';
+          setTimeout(() => highlightDiv.remove(), 300);
+        }
+      }, 4000);
 
-    console.log('Iframe overlay highlight created');
-  } else {
-    console.log('Iframe container not found');
+      console.log('Iframe overlay highlight created');
+    } else {
+      console.log('Iframe container not found');
+    }
   }
-}
 
-
-
-// Methods
-function toggleCollapse() {
-  collapsed.value = !collapsed.value;
-}
-
-function getFileType(): string {
-  if (!props.fileName) return 'Unknown';
-  const ext = props.fileName.split('.').pop()?.toLowerCase();
-  if (!ext) return 'Unknown';
-
-  const typeMap: Record<string, string> = {
-    'doc': 'Word Document',
-    'docx': 'Word Document',
-    'pdf': 'PDF Document',
-    'txt': 'Text File',
-    'csv': 'CSV File',
-    'xls': 'Excel Spreadsheet',
-    'xlsx': 'Excel Spreadsheet',
-    'ppt': 'PowerPoint Presentation',
-    'pptx': 'PowerPoint Presentation',
-    'jpg': 'JPEG Image',
-    'jpeg': 'JPEG Image',
-    'png': 'PNG Image',
-    'gif': 'GIF Image',
-    'svg': 'SVG Image',
-    'html': 'HTML File',
-    'xml': 'XML File',
-    'json': 'JSON File'
-  };
-
-  return typeMap[ext] || `${ext.toUpperCase()} File`;
-}
-
-function isDocumentType(): boolean {
-  if (!props.fileName) return false;
-  const ext = props.fileName.split('.').pop()?.toLowerCase();
-  return ['doc', 'docx', 'rtf'].includes(ext || '');
-}
-
-function isOfficeViewerType(): boolean {
-  return previewType.value === 'office-viewer';
-}
-
-function isImageType(): boolean {
-  if (!props.fileName) return false;
-  const ext = props.fileName.split('.').pop()?.toLowerCase();
-  return ['jpg', 'jpeg', 'png', 'gif', 'svg'].includes(ext || '');
-}
-
-function isTextType(): boolean {
-  if (!props.fileName) return false;
-  const ext = props.fileName.split('.').pop()?.toLowerCase();
-  return ['txt', 'csv', 'json', 'md'].includes(ext || '');
-}
-
-function isPdfType(): boolean {
-  if (!props.fileName) return false;
-  const ext = props.fileName.split('.').pop()?.toLowerCase();
-  return ['pdf'].includes(ext || '');
-}
-
-function isHtmlType(): boolean {
-  if (!props.fileName) return false;
-  const ext = props.fileName.split('.').pop()?.toLowerCase();
-  return ['html'].includes(ext || '');
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function zoomIn() {
-  if (zoom.value < 2) {
-    zoom.value = Math.min(2, zoom.value + 0.25);
-  }
-}
-
-function zoomOut() {
-  if (zoom.value > 0.5) {
-    zoom.value = Math.max(0.5, zoom.value - 0.25);
-  }
-}
-
-function resetZoom() {
-  zoom.value = 1;
-}
-
-// PDF.js specific zoom functions
-function pdfZoomIn() {
-  pdfZoom.value = Math.min(3, pdfZoom.value + 0.25);
-  if (pdfPage.value) {
-    loadPage(currentPage.value);
-  }
-}
-
-function pdfZoomOut() {
-  pdfZoom.value = Math.max(0.5, pdfZoom.value - 0.25);
-  if (pdfPage.value) {
-    loadPage(currentPage.value);
-  }
-}
-
-async function loadPreview() {
-  if (!props.fileId) {
+  async function highlightTextInDocx() {
+  if (!props.focusedString?.originalText || previewType.value !== 'docx-preview') {
+    console.log('Cannot highlight DOCX: missing focusedString or not DOCX preview type');
     return;
   }
 
-  loading.value = true;
-  error.value = '';
-  previewContent.value = '';
-  previewUrl.value = '';
-  previewData.value = null;
+  const textToHighlight = props.focusedString.originalText;
+  const orderIndex = props.focusedString.orderIndex || 0;
+
+  if (!docxContainer.value) {
+    await nextTick();
+    if (!docxContainer.value) {
+      console.log('DOCX container still not available');
+      return;
+    }
+  }
 
   try {
-    // Try to get preview content from API
-    const response = await axiosInstance.get(`/files/${props.fileId}/preview`);
+    clearDocxHighlights();
 
-    // Store full response data including textSegments
-    previewData.value = response.data;
-    console.log('Preview data loaded:', response.data);
-    console.log('File type:', response.data.fileType);
-    console.log('Preview type:', response.data.previewType);
-    console.log('Has content:', !!response.data.content);
-    console.log('Has URL:', !!response.data.url);
-
-    if (response.data.content) {
-      previewContent.value = response.data.content;
-
-      // Handle PDF content by creating a data URL
-      if (response.data.fileType === 'application/pdf') {
-        previewUrl.value = `data:application/pdf;base64,${response.data.content}`;
-        console.log('PDF URL created:', previewUrl.value.substring(0, 50) + '...');
-        // Load PDF with PDF.js for accurate highlighting
-        nextTick(() => {
-          loadPdfWithPdfJs();
-        });
-      }
-
-      // Handle DOCX content by creating a data URL
-      if (response.data.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        previewUrl.value = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${response.data.content}`;
-        console.log('DOCX URL created:', previewUrl.value.substring(0, 50) + '...');
-      }
-    } else if (response.data.url) {
-      previewUrl.value = response.data.url;
-    }
-
-    // Set preview type from response
-    if (response.data.previewType) {
-      previewType.value = response.data.previewType;
-
-      // For Google Docs Viewer, construct URL with current domain
-      if (response.data.previewType === 'google-docs-viewer') {
-        const currentOrigin = window.location.origin;
-        const downloadUrl = `${currentOrigin}/api/files/${props.fileId}/download`;
-        const googleDocsUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(downloadUrl)}&embedded=true`;
-        previewUrl.value = googleDocsUrl;
-      } else if (response.data.previewType === 'office-viewer') {
-        const currentOrigin = window.location.origin;
-        const downloadUrl = `${currentOrigin}/api/files/${props.fileId}/download`;
-        // Use the direct file URL instead of Office Online Viewer for now
-        previewUrl.value = downloadUrl;
-        // TODO: Re-enable Office Online Viewer when CORS is properly configured
-        // const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(downloadUrl)}`;
-        // previewUrl.value = officeViewerUrl;
-      } else if (response.data.url) {
-        previewUrl.value = response.data.url;
+    // Collect all text nodes
+    const walker = document.createTreeWalker(docxContainer.value, NodeFilter.SHOW_TEXT);
+    const textNodes: Text[] = [];
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      if (node.textContent && node.textContent.trim().length > 0) {
+        textNodes.push(node as Text);
       }
     }
 
-    // Log textSegments if available
-    if (response.data.textSegments) {
-      console.log('Text segments loaded:', response.data.textSegments.length);
-      response.data.textSegments.forEach((segment: any, index: number) => {
-        console.log(`Segment ${index + 1}: "${segment.text.substring(0, 50)}..."`);
-      });
+    // Build concatenated string
+    let fullText = '';
+    const nodeStartIndexes: number[] = [];
+    textNodes.forEach((tn) => {
+      nodeStartIndexes.push(fullText.length);
+      fullText += tn.textContent || '';
+    });
+
+    // Find the match
+    const matchIndex = fullText.toLowerCase().indexOf(textToHighlight.toLowerCase());
+    if (matchIndex === -1) {
+      console.log('No matching text found in DOCX content');
+      return;
     }
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load file preview';
-  } finally {
-    loading.value = false;
+    const matchEnd = matchIndex + textToHighlight.length;
+
+    // Locate start & end nodes
+    let startNode: Text | null = null;
+    let startOffset = 0;
+    let endNode: Text | null = null;
+    let endOffset = 0;
+
+    for (let i = 0; i < textNodes.length; i++) {
+      const tn = textNodes[i];
+      const start = nodeStartIndexes[i];
+      const end = start + (tn.textContent?.length || 0);
+
+      if (!startNode && matchIndex >= start && matchIndex < end) {
+        startNode = tn;
+        startOffset = matchIndex - start;
+      }
+
+      if (!endNode && matchEnd > start && matchEnd <= end) {
+        endNode = tn;
+        endOffset = matchEnd - start;
+        break;
+      }
+    }
+
+    if (!startNode || !endNode) {
+      console.warn('Could not resolve matching range inside text nodes');
+      return;
+    }
+
+    // Create Range
+    const range = document.createRange();
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+
+    // Get range bounds for overlay positioning
+    const rects = range.getClientRects();
+    
+    // Build highlight wrapper
+    const colors = {
+      primary: { bg: 'rgba(255, 230, 0, 0.6)', border: '#ffd700' },
+      secondary: { bg: 'rgba(0, 255, 127, 0.4)', border: '#00ff7f' },
+      tertiary: { bg: 'rgba(255, 105, 180, 0.4)', border: '#ff69b4' },
+      quaternary: { bg: 'rgba(135, 206, 250, 0.4)', border: '#87ceeb' },
+      quinary: { bg: 'rgba(255, 165, 0, 0.4)', border: '#ffa500' }
+    };
+    const colorKeys = ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary'] as const;
+    const colorKey = colorKeys[orderIndex % colorKeys.length];
+    const colorScheme = colors[colorKey];
+
+    // Create overlay highlights for each rect (handles multi-line text)
+    Array.from(rects).forEach((rect, rectIndex) => {
+      const highlightOverlay = document.createElement('div');
+      highlightOverlay.className = `docx-text-highlight-overlay ${colorKey}`;
+      highlightOverlay.setAttribute('data-order-index', orderIndex.toString());
+      
+      // Get container position for relative positioning
+      const containerRect = docxContainer.value!.getBoundingClientRect();
+      
+      highlightOverlay.style.cssText = `
+        position: absolute;
+        left: ${rect.left - containerRect.left + docxContainer.value!.scrollLeft}px;
+        top: ${rect.top - containerRect.top + docxContainer.value!.scrollTop}px;
+        width: ${rect.width}px;
+        height: ${rect.height}px;
+        background: ${colorScheme.bg};
+        border-radius: 2px;
+        z-index: 10;
+        pointer-events: none;
+        animation: highlightPulse 1.5s ease-in-out infinite;
+        box-shadow: 0 0 8px ${colorScheme.border}40;
+        mix-blend-mode: multiply;
+      `;
+
+      docxContainer.value!.appendChild(highlightOverlay);
+    });
+
+    // Add CSS animation once
+    if (!document.querySelector('#docx-highlight-styles')) {
+      const style = document.createElement('style');
+      style.id = 'docx-highlight-styles';
+      style.textContent = `
+        @keyframes highlightPulse {
+          0% { opacity: 0.6; transform: scale(1); box-shadow: 0 0 8px rgba(255,193,7,0.4); }
+          50% { opacity: 0.9; transform: scale(1.02); box-shadow: 0 0 12px rgba(255,193,7,0.6); }
+          100% { opacity: 0.6; transform: scale(1); box-shadow: 0 0 8px rgba(255,193,7,0.4); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    console.log('DOCX highlighting completed!');
+  } catch (error) {
+    console.error('Error highlighting DOCX text:', error);
   }
 }
 
-// DOCX Preview Functions
-async function renderDocxWithPreview() {
-  if (!previewContent.value || !docxContainer.value) {
-    console.log('Cannot render DOCX: missing content or container');
-    return;
-  }
+  // Function to clear DOCX highlights
+  function clearDocxHighlights() {
+    if (!docxContainer.value) return;
 
-  try {
-    console.log('Rendering DOCX with docx-preview...');
+    // Remove overlay highlights (new approach)
+    const overlayHighlights = docxContainer.value.querySelectorAll('.docx-text-highlight-overlay');
+    overlayHighlights.forEach((highlight: Element) => {
+      highlight.remove();
+    });
 
-    // Import docx-preview dynamically
-    const { renderAsync } = await import('docx-preview');
-
-    // Convert base64 to ArrayBuffer
-    const base64Data = previewContent.value;
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    const arrayBuffer = bytes.buffer;
-
-    // Render DOCX with enhanced page break support
-    await renderAsync(arrayBuffer, docxContainer.value, docxContainer.value, {
-      className: 'docx-renderer',
-      inWrapper: true,
-      ignoreWidth: false,
-      ignoreHeight: false,
-      ignoreFonts: false,
-      breakPages: true,
-      ignoreLastRenderedPageBreak: false, // Changed to false to respect page breaks
-      experimental: true,
-      trimXmlDeclaration: true,
-      useBase64URL: true,
-      useMathMLPolyfill: true,
-      renderEndnotes: true,
-      renderFooters: true,
-      renderFootnotes: true,
-      renderHeaders: true,
-      // Add custom styling for page breaks
-      customStyleMap: {
-        'page-break-before': 'always',
-        'page-break-after': 'always',
-        'break-before': 'page',
-        'break-after': 'page'
+    // Remove old span-based highlights (legacy support)
+    const spanHighlights = docxContainer.value.querySelectorAll('.docx-text-highlight');
+    spanHighlights.forEach((highlight: Element) => {
+      const parent = highlight.parentNode;
+      if (parent) {
+        // Replace highlighted span with original text content
+        const textContent = highlight.textContent || '';
+        const textNode = document.createTextNode(textContent);
+        parent.replaceChild(textNode, highlight);
       }
     });
 
-    // Add custom CSS for page breaks after rendering
-    addPageBreakStyles();
-
-    docxRendered.value = true;
-    console.log('DOCX rendered successfully with docx-preview');
-
-  } catch (error) {
-    console.error('Error rendering DOCX with docx-preview:', error);
-    docxRendered.value = false;
+    console.log('DOCX highlights cleared');
   }
-}
 
-// Function to add custom page break styles
-function addPageBreakStyles() {
-  if (!docxContainer.value) return;
+  // Methods
+  function toggleCollapse() {
+    collapsed.value = !collapsed.value;
+  }
 
-  // Add CSS for page breaks
-  const style = document.createElement('style');
-  style.id = 'docx-page-break-styles';
-  style.textContent = `
+  function getFileType(): string {
+    if (!props.fileName) return 'Unknown';
+    const ext = props.fileName.split('.').pop()?.toLowerCase();
+    if (!ext) return 'Unknown';
+
+    const typeMap: Record<string, string> = {
+      'doc': 'Word Document',
+      'docx': 'Word Document',
+      'pdf': 'PDF Document',
+      'txt': 'Text File',
+      'csv': 'CSV File',
+      'xls': 'Excel Spreadsheet',
+      'xlsx': 'Excel Spreadsheet',
+      'ppt': 'PowerPoint Presentation',
+      'pptx': 'PowerPoint Presentation',
+      'jpg': 'JPEG Image',
+      'jpeg': 'JPEG Image',
+      'png': 'PNG Image',
+      'gif': 'GIF Image',
+      'svg': 'SVG Image',
+      'html': 'HTML File',
+      'xml': 'XML File',
+      'json': 'JSON File'
+    };
+
+    return typeMap[ext] || `${ext.toUpperCase()} File`;
+  }
+
+  function isDocumentType(): boolean {
+    if (!props.fileName) return false;
+    const ext = props.fileName.split('.').pop()?.toLowerCase();
+    return ['doc', 'docx', 'rtf'].includes(ext || '');
+  }
+
+  function isImageType(): boolean {
+    if (!props.fileName) return false;
+    const ext = props.fileName.split('.').pop()?.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'gif', 'svg'].includes(ext || '');
+  }
+
+  function isTextType(): boolean {
+    if (!props.fileName) return false;
+    const ext = props.fileName.split('.').pop()?.toLowerCase();
+    return ['txt', 'csv', 'json', 'md'].includes(ext || '');
+  }
+
+  function isPdfType(): boolean {
+    if (!props.fileName) return false;
+    const ext = props.fileName.split('.').pop()?.toLowerCase();
+    return ['pdf'].includes(ext || '');
+  }
+
+  function isHtmlType(): boolean {
+    if (!props.fileName) return false;
+    const ext = props.fileName.split('.').pop()?.toLowerCase();
+    return ['html'].includes(ext || '');
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function zoomIn() {
+    if (zoom.value < 2) {
+      zoom.value = Math.min(2, zoom.value + 0.25);
+    }
+  }
+
+  function zoomOut() {
+    if (zoom.value > 0.5) {
+      zoom.value = Math.max(0.5, zoom.value - 0.25);
+    }
+  }
+
+  function resetZoom() {
+    zoom.value = 1;
+  }
+
+  // PDF.js specific zoom functions
+  function pdfZoomIn() {
+    pdfZoom.value = Math.min(3, pdfZoom.value + 0.25);
+    if (pdfPage.value) {
+      loadPage(currentPage.value);
+    }
+  }
+
+  function pdfZoomOut() {
+    pdfZoom.value = Math.max(0.5, pdfZoom.value - 0.25);
+    if (pdfPage.value) {
+      loadPage(currentPage.value);
+    }
+  }
+
+  async function loadPreview() {
+    if (!props.fileId) {
+      return;
+    }
+
+    loading.value = true;
+    error.value = '';
+    previewContent.value = '';
+    previewUrl.value = '';
+    previewData.value = null;
+
+    try {
+      // Try to get preview content from API
+      const response = await axiosInstance.get(`/files/${props.fileId}/preview`);
+
+      // Store full response data including textSegments
+      previewData.value = response.data;
+      console.log('Preview data loaded:', response.data);
+      console.log('File type:', response.data.fileType);
+      console.log('Preview type:', response.data.previewType);
+      console.log('Has content:', !!response.data.content);
+      console.log('Has URL:', !!response.data.url);
+
+      if (response.data.content) {
+        previewContent.value = response.data.content;
+
+        // Handle PDF content by creating a data URL
+        if (response.data.fileType === 'application/pdf') {
+          previewUrl.value = `data:application/pdf;base64,${response.data.content}`;
+          console.log('PDF URL created:', previewUrl.value.substring(0, 50) + '...');
+          // Load PDF with PDF.js for accurate highlighting
+          nextTick(() => {
+            loadPdfWithPdfJs();
+          });
+        }
+
+        // Handle DOCX content by creating a data URL
+        if (response.data.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          previewUrl.value = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${response.data.content}`;
+          console.log('DOCX URL created:', previewUrl.value.substring(0, 50) + '...');
+        }
+      } else if (response.data.url) {
+        previewUrl.value = response.data.url;
+      }
+
+      // Set preview type from response
+      if (response.data.previewType) {
+        previewType.value = response.data.previewType;
+
+        // For Google Docs Viewer, construct URL with current domain
+        if (response.data.previewType === 'google-docs-viewer') {
+          const currentOrigin = window.location.origin;
+          const downloadUrl = `${currentOrigin}/api/files/${props.fileId}/download`;
+          const googleDocsUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(downloadUrl)}&embedded=true`;
+          previewUrl.value = googleDocsUrl;
+        } else if (response.data.previewType === 'office-viewer') {
+          const currentOrigin = window.location.origin;
+          const downloadUrl = `${currentOrigin}/api/files/${props.fileId}/download`;
+          // Use the direct file URL instead of Office Online Viewer for now
+          previewUrl.value = downloadUrl;
+          // TODO: Re-enable Office Online Viewer when CORS is properly configured
+          // const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(downloadUrl)}`;
+          // previewUrl.value = officeViewerUrl;
+        } else if (response.data.url) {
+          previewUrl.value = response.data.url;
+        }
+      }
+
+      // Log textSegments if available
+      if (response.data.textSegments) {
+        console.log('Text segments loaded:', response.data.textSegments.length);
+        response.data.textSegments.forEach((segment: any, index: number) => {
+          const text = typeof segment?.text === 'string' ? segment.text : '';
+          console.log(`Segment ${index + 1}: "${text.substring(0, 50)}..."`);
+        });
+      }
+    } catch (err: any) {
+      error.value = err.message || 'Failed to load file preview';
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // DOCX Preview Functions
+  async function renderDocxWithPreview() {
+    if (!previewContent.value) {
+      console.log('Cannot render DOCX: missing content');
+      return;
+    }
+
+    // Wait for the container to be available with a timeout
+    let attempts = 0;
+    const maxAttempts = 20;
+    let containerElement = null;
+
+    while (!containerElement && attempts < maxAttempts) {
+      await nextTick();
+      attempts++;
+
+      // Try to get the container via ref first, then fallback to DOM query
+      containerElement = docxContainer.value || document.querySelector('.docx-content') as HTMLDivElement;
+
+      if (!containerElement) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms between attempts
+      }
+    }
+
+    if (!containerElement) {
+      console.log('Cannot render DOCX: container not available after waiting');
+      console.log('PreviewType:', previewType.value);
+      console.log('DOM element with class docx-content:', document.querySelectorAll('.docx-content'));
+      return;
+    }
+
+    // Update the ref if we found it via DOM query
+    if (!docxContainer.value && containerElement) {
+      docxContainer.value = containerElement;
+    }
+
+    try {
+      console.log('Rendering DOCX with docx-preview...');
+
+      // Import docx-preview dynamically
+      const { renderAsync } = await import('docx-preview');
+
+      // Convert base64 to ArrayBuffer
+      const base64Data = previewContent.value;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const arrayBuffer = bytes.buffer;
+
+      // Render DOCX with enhanced page break support
+      await renderAsync(arrayBuffer, containerElement, containerElement, {
+        className: 'docx-renderer',
+        inWrapper: true,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        ignoreFonts: false,
+        breakPages: true,
+        ignoreLastRenderedPageBreak: false, // Changed to false to respect page breaks
+        experimental: true,
+        trimXmlDeclaration: true,
+        useBase64URL: true,
+        renderEndnotes: true,
+        renderFooters: true,
+        renderFootnotes: true,
+        renderHeaders: true,
+
+      });
+
+      // Add custom CSS for page breaks after rendering
+      addPageBreakStyles();
+
+      docxRendered.value = true;
+      console.log('DOCX rendered successfully with docx-preview');
+
+    } catch (error) {
+      console.error('Error rendering DOCX with docx-preview:', error);
+      docxRendered.value = false;
+    }
+  }
+
+  // Function to add custom page break styles
+  function addPageBreakStyles() {
+    if (!docxContainer.value) return;
+
+    // Add CSS for page breaks
+    const style = document.createElement('style');
+    style.id = 'docx-page-break-styles';
+    style.textContent = `
     .docx-renderer {
       background: white;
       color: #000;
@@ -951,126 +1151,140 @@ function addPageBreakStyles() {
     }
   `;
 
-  // Remove existing styles if any
-  const existingStyle = document.getElementById('docx-page-break-styles');
-  if (existingStyle) {
-    existingStyle.remove();
+    // Remove existing styles if any
+    const existingStyle = document.getElementById('docx-page-break-styles');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+
+    document.head.appendChild(style);
   }
 
-  document.head.appendChild(style);
-}
+  // Watchers
+  watch(() => props.fileId, (newFileId) => {
+    if (!collapsed.value) {
+      loadPreview();
+    }
+  });
 
-// Watchers
-watch(() => props.fileId, (newFileId) => {
-  if (!collapsed.value) {
-    loadPreview();
-  }
-});
+  // Watch collapsed state to load preview when expanded
+  watch(() => collapsed.value, (isCollapsed) => {
+    if (!isCollapsed) {
+      loadPreview();
+    }
+  });
 
-// Watch collapsed state to load preview when expanded
-watch(() => collapsed.value, (isCollapsed) => {
-  if (!isCollapsed) {
-    loadPreview();
-  }
-});
+  // Watch focused string changes to auto search and highlight text in PDF and DOCX
+  watch(() => props.focusedString, (newFocusedString) => {
+    console.log('focusedString changed:', newFocusedString);
 
-// Watch focused string changes to auto search and highlight text in PDF
-watch(() => props.focusedString, (newFocusedString) => {
-  console.log('focusedString changed:', newFocusedString);
-  if (newFocusedString?.originalText && isPdfType()) {
-    console.log('Auto searching and highlighting text:', newFocusedString.originalText);
-    nextTick(() => {
-      // Load PDF.js first, then highlight
-      if (previewUrl.value && !pdfJsLoaded.value) {
-        loadPdfWithPdfJs().then(() => {
-          setTimeout(() => {
-            highlightTextInPdf();
-          }, 500);
+    // Handle PDF highlighting
+    if (isPdfType()) {
+      if (newFocusedString?.originalText) {
+        console.log('Auto searching and highlighting text in PDF:', newFocusedString.originalText);
+        nextTick(() => {
+          // Load PDF.js first, then highlight
+          if (previewUrl.value && !pdfJsLoaded.value) {
+            loadPdfWithPdfJs().then(() => {
+              setTimeout(() => {
+                highlightTextInPdf();
+              }, 500);
+            });
+          } else {
+            setTimeout(() => {
+              highlightTextInPdf();
+            }, 500);
+          }
         });
       } else {
-        setTimeout(() => {
-          highlightTextInPdf();
-        }, 500);
+        // Clear PDF highlights when focusedString is null
+        highlightTextInPdf();
       }
-    });
-  }
-}, { deep: true });
+    }
 
-// Watch preview content changes to render DOCX
-watch(() => previewContent.value, (newContent) => {
-  if (newContent && previewType.value === 'docx-preview') {
-    nextTick(() => {
-      renderDocxWithPreview();
-    });
-  }
-});
+    // Handle DOCX highlighting
+    if (previewType.value === 'docx-preview') {
+      if (newFocusedString?.originalText) {
+        console.log('Auto searching and highlighting text in DOCX:', newFocusedString.originalText);
+        nextTick(() => {
+          setTimeout(() => {
+            highlightTextInDocx();
+          }, 300);
+        });
+      } else {
+        // Clear DOCX highlights when focusedString is null
+        clearDocxHighlights();
+      }
+    }
+  }, { deep: true });
 
-// Watch preview type changes
-watch(() => previewType.value, (newType) => {
-  if (newType === 'docx-preview' && previewContent.value) {
-    nextTick(() => {
-      renderDocxWithPreview();
-    });
-  }
-});
+  // Watch for both previewType and previewContent changes
+  watch([() => previewType.value, () => previewContent.value], ([newType, newContent]) => {
+    if (newType === 'docx-preview' && newContent) {
+      // Use a longer delay and ensure the element is available
+      setTimeout(async () => {
+        await renderDocxWithPreview();
+      }, 200);
+    }
+  });
 
-// Lifecycle
-onMounted(() => {
-  if (!collapsed.value) {
-    loadPreview();
-  }
-});
+  // Lifecycle
+  onMounted(() => {
+    if (!collapsed.value) {
+      loadPreview();
+    }
+  });
 
-onBeforeUnmount(() => {
-  // Cleanup resize event listeners
-  if (isResizing.value) {
-    stopResize();
-  }
-});
+  onBeforeUnmount(() => {
+    // Cleanup resize event listeners
+    if (isResizing.value) {
+      stopResize();
+    }
+  });
 
-// Resize logic
-function startResize(event: MouseEvent | TouchEvent) {
-  if (isResizing.value) return;
-  isResizing.value = true;
+  // Resize logic
+  function startResize(event: MouseEvent | TouchEvent) {
+    if (isResizing.value) return;
+    isResizing.value = true;
 
-  if ('clientX' in event) {
-    startX.value = event.clientX;
-  } else if (event.touches && event.touches[0]) {
-    startX.value = event.touches[0].clientX;
-  }
+    if ('clientX' in event) {
+      startX.value = event.clientX;
+    } else if (event.touches && event.touches[0]) {
+      startX.value = event.touches[0].clientX;
+    }
 
-  startWidth.value = panelWidth.value;
+    startWidth.value = panelWidth.value;
 
-  document.addEventListener('mousemove', handleResize);
-  document.addEventListener('touchmove', handleResize);
-  document.addEventListener('mouseup', stopResize);
-  document.addEventListener('touchend', stopResize);
-}
-
-function handleResize(event: MouseEvent | TouchEvent) {
-  if (!isResizing.value) return;
-
-  let currentX = 0;
-  if ('clientX' in event) {
-    currentX = event.clientX;
-  } else if (event.touches && event.touches[0]) {
-    currentX = event.touches[0].clientX;
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('touchmove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+    document.addEventListener('touchend', stopResize);
   }
 
-  const delta = currentX - startX.value;
-  const newWidth = startWidth.value - delta; // Subtract because we're dragging left
+  function handleResize(event: MouseEvent | TouchEvent) {
+    if (!isResizing.value) return;
 
-  // Min 300px, Max 800px
-  panelWidth.value = Math.max(300, Math.min(800, newWidth));
-}
+    let currentX = 0;
+    if ('clientX' in event) {
+      currentX = event.clientX;
+    } else if (event.touches && event.touches[0]) {
+      currentX = event.touches[0].clientX;
+    }
 
-function stopResize() {
-  isResizing.value = false;
-  document.removeEventListener('mousemove', handleResize);
-  document.removeEventListener('touchmove', handleResize);
-  document.removeEventListener('mouseup', stopResize);
-  document.removeEventListener('touchend', stopResize);
-}
+    const delta = currentX - startX.value;
+    const newWidth = startWidth.value - delta; // Subtract because we're dragging left
+
+    // Min 300px, Max 800px
+    panelWidth.value = Math.max(300, Math.min(800, newWidth));
+  }
+
+  function stopResize() {
+    isResizing.value = false;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('touchmove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+    document.removeEventListener('touchend', stopResize);
+  }
 </script>
 
 <style scoped>
@@ -1470,10 +1684,21 @@ function stopResize() {
   line-height: 1.3;
 }
 
-.document-content h1 { font-size: 1.75rem; }
-.document-content h2 { font-size: 1.5rem; }
-.document-content h3 { font-size: 1.25rem; }
-.document-content h4 { font-size: 1.1rem; }
+.document-content h1 {
+  font-size: 1.75rem;
+}
+
+.document-content h2 {
+  font-size: 1.5rem;
+}
+
+.document-content h3 {
+  font-size: 1.25rem;
+}
+
+.document-content h4 {
+  font-size: 1.1rem;
+}
 
 .document-content p {
   margin: 0.75rem 0;
@@ -2042,10 +2267,21 @@ function stopResize() {
   line-height: 1.3;
 }
 
-.document-content-original h1 { font-size: 1.75rem; }
-.document-content-original h2 { font-size: 1.5rem; }
-.document-content-original h3 { font-size: 1.25rem; }
-.document-content-original h4 { font-size: 1.1rem; }
+.document-content-original h1 {
+  font-size: 1.75rem;
+}
+
+.document-content-original h2 {
+  font-size: 1.5rem;
+}
+
+.document-content-original h3 {
+  font-size: 1.25rem;
+}
+
+.document-content-original h4 {
+  font-size: 1.1rem;
+}
 
 .document-content-original p {
   margin: 0.75rem 0;
@@ -2234,6 +2470,17 @@ function stopResize() {
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  position: relative;
+}
+
+.docx-content {
+  background: white;
+  min-height: 100%;
+  transition: transform 0.3s ease;
+  transform-origin: top left;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .docx-loading {
@@ -2279,7 +2526,7 @@ function stopResize() {
 }
 
 /* Document page styling */
-.docx-renderer > div {
+.docx-renderer>div {
   background: white;
   min-height: 100vh;
   padding: 2rem;
@@ -2490,4 +2737,4 @@ function stopResize() {
   border-radius: 4px;
 }
 </style>
-p
+

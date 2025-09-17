@@ -55,9 +55,6 @@ export class TranslationEntity {
   @Column({ type: 'varchar', length: 10, nullable: true })
   targetLanguage: string;
 
-  @Column({ type: 'int', default: 0 })
-  pageNumber: number;
-
   @Column({ type: 'varchar', length: 100, nullable: true })
   fontFamily: string;
 
@@ -73,7 +70,6 @@ export class TranslationEntity {
     y: number;
     width?: number;
     height?: number;
-    page?: number;
   } | null;
 
   @Column({ type: 'int', default: 0 })
@@ -87,9 +83,6 @@ export class TranslationEntity {
 
   @Column({ type: 'json', nullable: true })
   metadata: Record<string, any>;
-
-  @Column({ type: 'boolean', default: false })
-  hasPageBreak: boolean;
 
   @Column({ type: 'int', nullable: true })
   paragraphIndex: number;

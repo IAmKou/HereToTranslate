@@ -22,10 +22,9 @@ export class TranslationController {
     @Query('projectId') projectId: string,
     @Query('language') language: string ,
     @Query('fileId') fileId?: string,
-    @Query('page') page?: number,
     @Query('fileType') fileType?: string
   ) {
-    return this.translationService.getAllString(projectId, language, fileId, page, fileType);
+    return this.translationService.getAllString(projectId, language, fileId, fileType);
   }
   @Get('progress')
   async getProgress(

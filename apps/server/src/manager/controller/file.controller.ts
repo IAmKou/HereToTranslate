@@ -26,12 +26,6 @@ export class FileController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('storage/status')
-  async getStorageStatus() {
-    return this.fileService.getAsposeStorageStatus();
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadFile(@UploadedFile() file: Express.Multer.File, @Body() body: {

@@ -1,11 +1,8 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
-import { FileEntity, ProjectEntity, RequestEntity, UserEntity } from '#LocalProject/Entities';
+import { FileEntity, ProjectEntity, RequestEntity, TranslationEntity, UserEntity } from '#LocalProject/Entities';
 import { DeepPartial, Repository } from 'typeorm';
 import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
-import { InjectModel } from '@nestjs/mongoose';
-import { TranslationString, TranslationStringDocument } from '../../db/mongo/schema/translation.schema';
-import { Model } from 'mongoose';
 import { DocxEditorService } from './docx-editor.service';
 import { ActivityManagerService } from './activity-manager.service';
 
@@ -14,14 +11,14 @@ export class FileService {
   constructor(
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
-    @InjectModel(TranslationString.name)
-    private translationModel: Model<TranslationStringDocument>,
     @InjectRepository(RequestEntity)
     private readonly requestRepository: Repository<RequestEntity>,
     private readonly manifestService: ManifestService,
     @Inject(forwardRef(() => ActivityManagerService))
     private readonly activityManagerService: ActivityManagerService,
     private readonly docxEditorService: DocxEditorService,
+    @InjectRepository(TranslationEntity)
+    private readonly translationRepository: Repository<TranslationEntity>,
   ) {
     this.logger = new Logger(FileService.name);
     this.logger.log('FileService initialized');
@@ -907,14 +904,24 @@ export class FileService {
           return {
             fileType: fileEntity.fileType,
             content: fileEntity.fileContent.toString('base64'),
-            previewType: 'docx-preview'
+            previewType: 'docx-preview',
+            textSegments: await this.translationRepository.find({
+              where: { fileId: fileEntity.id },
+              order: { orderIndex: 'ASC' },
+              select: ['id', 'originalText', 'orderIndex', 'position'],
+            })
           };
         } catch (error) {
           this.logger.error(`Error processing DOCX with docx-preview: ${error instanceof Error ? error.message : String(error)}`);
           return {
             fileType: fileEntity.fileType,
             content: fileEntity.fileContent.toString('base64'),
-            previewType: 'docx-preview'
+            previewType: 'docx-preview',
+            textSegments: await this.translationRepository.find({
+              where: { fileId: fileEntity.id },
+              order: { orderIndex: 'ASC' },
+              select: ['id', 'originalText', 'orderIndex', 'position'],
+            })
           };
         }
       }
@@ -1055,7 +1062,11 @@ export class FileService {
 
   private async getTargetLanguagesForProject(projectId?: bigint): Promise<string[]> {
     try {
-      const langsFromTranslations: string[] = await this.translationModel.distinct('language', { projectId: String(projectId) });
+      const langsFromTranslations: string[] = await this.translationRepository.createQueryBuilder('t')
+        .select('t.language')
+        .where('t.projectId = :projectId', { projectId: projectId })
+        .distinct(true)
+        .getRawMany();
       const normalizedFromTranslations = (langsFromTranslations || [])
         .map(l => (typeof l === 'string' ? l.trim() : ''))
         .filter(Boolean)

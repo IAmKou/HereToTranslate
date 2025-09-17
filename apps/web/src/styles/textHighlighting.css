@@ -1,0 +1,437 @@
+/**
+ * Comprehensive CSS styles for text highlighting across all preview types
+ */
+
+/* Base highlight styles */
+.text-highlight {
+  background-color: rgba(255, 230, 0, 0.6);
+  padding: 2px 4px;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.2s ease;
+}
+
+.text-highlight:hover {
+  background-color: rgba(255, 215, 0, 0.8);
+}
+
+/* HTML/Text preview highlighting */
+.document-content-original .text-highlight {
+  background-color: rgba(255, 230, 0, 0.6);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Plain text preview highlighting */
+.plain-text-preview .text-highlight {
+  background-color: rgba(255, 230, 0, 0.5);
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+
+/* PDF highlight overlays */
+.pdf-highlight {
+  background-color: rgba(255, 230, 0, 0.5);
+  pointer-events: none;
+  border-radius: 2px;
+  z-index: 10;
+  transition: opacity 0.2s ease;
+}
+
+.pdf-highlight.active {
+  background-color: rgba(255, 165, 0, 0.7);
+  box-shadow: 0 0 4px rgba(255, 165, 0, 0.8);
+}
+
+/* PDF text layer styles */
+.pdf-text-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1.0;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.pdf-text-layer > div {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdf-text-layer .endOfContent {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  cursor: default;
+  user-select: none;
+}
+
+.pdf-text-layer .endOfContent.active {
+  top: 0;
+}
+
+/* DOCX preview highlighting with order-based colors */
+.docx-wrapper .text-highlight.primary {
+  background-color: rgba(255, 230, 0, 0.6);
+  border-left: 2px solid #ffd700;
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.docx-wrapper .text-highlight.secondary {
+  background-color: rgba(0, 255, 127, 0.4);
+  border-left: 2px solid #00ff7f;
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.docx-wrapper .text-highlight.tertiary {
+  background-color: rgba(255, 105, 180, 0.4);
+  border-left: 2px solid #ff69b4;
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.docx-wrapper .text-highlight.quaternary {
+  background-color: rgba(135, 206, 250, 0.4);
+  border-left: 2px solid #87ceeb;
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.docx-wrapper .text-highlight.quinary {
+  background-color: rgba(255, 165, 0, 0.4);
+  border-left: 2px solid #ffa500;
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.docx-wrapper p .text-highlight {
+  line-height: inherit;
+}
+
+.docx-wrapper table .text-highlight {
+  opacity: 0.8;
+}
+
+/* Order-based highlight colors for different translation strings */
+.text-highlight.primary {
+  background-color: rgba(255, 230, 0, 0.6);
+  border-left: 3px solid #ffd700;
+}
+
+.text-highlight.secondary {
+  background-color: rgba(0, 255, 127, 0.4);
+  border-left: 3px solid #00ff7f;
+}
+
+.text-highlight.tertiary {
+  background-color: rgba(255, 105, 180, 0.4);
+  border-left: 3px solid #ff69b4;
+}
+
+.text-highlight.quaternary {
+  background-color: rgba(135, 206, 250, 0.4);
+  border-left: 3px solid #87ceeb;
+}
+
+.text-highlight.quinary {
+  background-color: rgba(255, 165, 0, 0.4);
+  border-left: 3px solid #ffa500;
+}
+
+/* PDF highlight colors matching text highlights */
+.pdf-highlight.primary {
+  background-color: rgba(255, 230, 0, 0.5);
+  border: 2px solid #ffd700;
+}
+
+.pdf-highlight.secondary {
+  background-color: rgba(0, 255, 127, 0.3);
+  border: 2px solid #00ff7f;
+}
+
+.pdf-highlight.tertiary {
+  background-color: rgba(255, 105, 180, 0.3);
+  border: 2px solid #ff69b4;
+}
+
+.pdf-highlight.quaternary {
+  background-color: rgba(135, 206, 250, 0.3);
+  border: 2px solid #87ceeb;
+}
+
+.pdf-highlight.quinary {
+  background-color: rgba(255, 165, 0, 0.3);
+  border: 2px solid #ffa500;
+}
+
+/* Highlight animations */
+@keyframes highlightFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.text-highlight.animate-in {
+  animation: highlightFadeIn 0.3s ease-out;
+}
+
+.pdf-highlight.animate-in {
+  animation: highlightFadeIn 0.3s ease-out;
+}
+
+/* Focus and selection states */
+.text-highlight:focus {
+  outline: 2px solid rgba(0, 123, 255, 0.5);
+  outline-offset: 1px;
+}
+
+.text-highlight.selected {
+  background-color: rgba(0, 123, 255, 0.3);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .text-highlight {
+    background-color: yellow;
+    color: black;
+    font-weight: bold;
+  }
+  
+  .pdf-highlight {
+    background-color: yellow;
+    opacity: 0.8;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .text-highlight {
+    background-color: rgba(255, 193, 7, 0.4);
+    color: inherit;
+  }
+  
+  .pdf-highlight {
+    background-color: rgba(255, 193, 7, 0.3);
+  }
+  
+  .docx-wrapper .text-highlight {
+    background-color: rgba(255, 193, 7, 0.4);
+  }
+}
+
+/* Print styles */
+@media print {
+  .text-highlight {
+    background-color: yellow !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+  }
+  
+  .pdf-highlight {
+    display: none;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .text-highlight {
+    padding: 1px 2px;
+    font-size: inherit;
+  }
+  
+  .pdf-highlight {
+    border-radius: 1px;
+  }
+}
+
+/* Accessibility improvements */
+.text-highlight[aria-selected="true"] {
+  background-color: rgba(0, 123, 255, 0.4);
+}
+
+.text-highlight:focus-visible {
+  outline: 2px solid #0066cc;
+  outline-offset: 2px;
+}
+
+/* Performance optimizations */
+.pdf-highlight-container {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+.text-highlight {
+  contain: layout style;
+}
+
+/* Custom scrollbar for highlighted content */
+.document-content-original::-webkit-scrollbar-track {
+  background: rgba(255, 230, 0, 0.1);
+}
+
+/* Order index indicator */
+.highlight-indicator {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #dc3545;
+  color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  z-index: 20;
+}
+
+/* Order index indicators with different colors */
+.highlight-indicator.primary {
+  background: #ffd700;
+  color: #333;
+}
+
+.highlight-indicator.secondary {
+  background: #00ff7f;
+  color: #333;
+}
+
+.highlight-indicator.tertiary {
+  background: #ff69b4;
+  color: white;
+}
+
+.highlight-indicator.quaternary {
+  background: #87ceeb;
+  color: #333;
+}
+
+.highlight-indicator.quinary {
+  background: #ffa500;
+  color: white;
+}
+
+/* Order index tooltip */
+.text-highlight[data-order-index]::after {
+  content: attr(data-order-index);
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 1000;
+}
+
+.text-highlight[data-order-index]:hover::after {
+  opacity: 1;
+}
+
+/* Loading states */
+.highlight-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.highlight-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 230, 0, 0.3),
+    transparent
+  );
+  animation: highlightScan 1.5s infinite;
+}
+
+@keyframes highlightScan {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Error states */
+.highlight-error {
+  background-color: rgba(220, 53, 69, 0.2);
+  border: 1px dashed #dc3545;
+}
+
+/* Selection tools */
+.highlight-tools {
+  position: absolute;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  z-index: 1000;
+  display: flex;
+  gap: 4px;
+}
+
+.highlight-tools button {
+  padding: 4px 8px;
+  border: none;
+  background: #f8f9fa;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.highlight-tools button:hover {
+  background: #e9ecef;
+}
+
+.highlight-tools button.active {
+  background: #007bff;
+  color: white;
+}

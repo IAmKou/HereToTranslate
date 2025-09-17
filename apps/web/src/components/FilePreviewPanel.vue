@@ -551,6 +551,16 @@ async function highlightTextInPdf() {
           highlightContainer.value!.appendChild(highlightDiv);
         });
 
+        // Auto-scroll to the first highlight (centered)
+        if (currentSeq === pdfHighlightSeq.value && highlightContainer.value) {
+          const first = highlightContainer.value.querySelector('.pdf-text-highlight') as HTMLElement | null;
+          if (first) {
+            requestAnimationFrame(() => {
+              first.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            });
+          }
+        }
+
         console.log('100% ACCURATE highlighting completed!');
         return;
       } else {
@@ -746,6 +756,16 @@ async function highlightTextInPdf() {
 
       docxContainer.value!.appendChild(highlightOverlay);
     });
+
+    // Auto-scroll to the first DOCX highlight (centered)
+    if (currentSeq === docxHighlightSeq.value && docxContainer.value) {
+      const first = docxContainer.value.querySelector('.docx-text-highlight-overlay') as HTMLElement | null;
+      if (first) {
+        requestAnimationFrame(() => {
+          first.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        });
+      }
+    }
 
     console.log('DOCX highlighting completed!');
   } catch (error) {
@@ -1135,6 +1155,10 @@ async function highlightTextInPdf() {
     // Handle PDF highlighting
     if (isPdfType()) {
       if (newFocusedString?.originalText) {
+        // Clear existing overlays synchronously to prevent race/flicker
+        if (highlightContainer.value) {
+          highlightContainer.value.innerHTML = '';
+        }
         console.log('Auto searching and highlighting text in PDF:', newFocusedString.originalText);
         if (previewUrl.value && !pdfJsLoaded.value) {
           loadPdfWithPdfJs().then(() => {
@@ -1144,18 +1168,22 @@ async function highlightTextInPdf() {
           highlightTextInPdf();
         }
       } else {
-        // Clear PDF highlights when focusedString is null
-        highlightTextInPdf();
+        // Synchronously clear without invoking async highlight function
+        if (highlightContainer.value) {
+          highlightContainer.value.innerHTML = '';
+        }
       }
     }
 
     // Handle DOCX highlighting
     if (previewType.value === 'docx-preview') {
       if (newFocusedString?.originalText) {
+        // Clear existing overlays synchronously
+        clearDocxHighlights();
         console.log('Auto searching and highlighting text in DOCX:', newFocusedString.originalText);
         highlightTextInDocx();
       } else {
-        // Clear DOCX highlights when focusedString is null
+        // Synchronously clear
         clearDocxHighlights();
       }
     }

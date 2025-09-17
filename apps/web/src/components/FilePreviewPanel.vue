@@ -291,6 +291,9 @@ const collapsed = computed({
   set: (value) => emit('update:collapsed', value)
 });
 
+const pdfHighlightSeq = ref(0);
+const docxHighlightSeq = ref(0);
+
 async function loadPdfWithPdfJs() {
   if (!previewUrl.value) {
     console.log('Cannot load PDF: missing previewUrl');
@@ -441,8 +444,10 @@ async function loadPage(pageNum: number) {
 }
 
 async function highlightTextInPdf() {
+  const currentSeq = ++pdfHighlightSeq.value;
   if (!props.focusedString?.originalText) {
-    if (highlightContainer.value) {
+    // Only clear if this is still the latest request
+    if (highlightContainer.value && currentSeq === pdfHighlightSeq.value) {
       highlightContainer.value.innerHTML = '';
     }
     console.log('Cleared highlights - no focused string');
@@ -483,6 +488,8 @@ async function highlightTextInPdf() {
     console.log('Using PDF.js direct text highlighting - 100% ACCURATE');
     try {
       const textContent = await pdfPage.value.getTextContent();
+      // If a newer request arrived, abort this run
+      if (currentSeq !== pdfHighlightSeq.value) return;
       const viewport = pdfPage.value.getViewport({ scale: pdfZoom.value });
 
       console.log(`Text content items: ${textContent.items.length}`);
@@ -497,16 +504,20 @@ async function highlightTextInPdf() {
       console.log('Matching text items found:', matchingItems.length);
 
       if (matchingItems.length > 0) {
-        // Clear existing highlights
-        highlightContainer.value.innerHTML = '';
+        // Clear existing highlights if still latest
+        if (currentSeq === pdfHighlightSeq.value) {
+          highlightContainer.value.innerHTML = '';
+        } else {
+          return;
+        }
 
         // Get color scheme based on order index
         const colors = {
-          primary: { bg: 'rgba(255, 230, 0, 0.6)', border: '#ffd700' },
-          secondary: { bg: 'rgba(0, 255, 127, 0.4)', border: '#00ff7f' },
-          tertiary: { bg: 'rgba(255, 105, 180, 0.4)', border: '#ff69b4' },
-          quaternary: { bg: 'rgba(135, 206, 250, 0.4)', border: '#87ceeb' },
-          quinary: { bg: 'rgba(255, 165, 0, 0.4)', border: '#ffa500' }
+          primary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#ffd700' },
+          secondary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#00ff7f' },
+          tertiary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#ff69b4' },
+          quaternary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#87ceeb' },
+          quinary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#ffa500' }
         };
 
         const colorKeys = ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary'] as const;
@@ -514,6 +525,8 @@ async function highlightTextInPdf() {
         const colorScheme = colors[colorKey];
 
         matchingItems.forEach((item: any, index: number) => {
+          // If a newer request arrived, skip appending
+          if (currentSeq !== pdfHighlightSeq.value) return;
           const highlightDiv = document.createElement('div');
           highlightDiv.className = `pdf-text-highlight ${colorKey}`;
           highlightDiv.setAttribute('data-order-index', orderIndex.toString());
@@ -529,56 +542,14 @@ async function highlightTextInPdf() {
             top: ${y}px;
             width: ${width}px;
             height: ${height}px;
-            background: ${colorScheme.bg};
+            background: ${colorScheme.bg} !important;
             border-radius: 2px;
             z-index: 9999;
             pointer-events: none;
-            animation: highlightPulse 1.5s ease-in-out infinite;
-            box-shadow: 0 0 8px ${colorScheme.border}40;
-            mix-blend-mode: multiply;
           `;
 
           highlightContainer.value!.appendChild(highlightDiv);
-          console.log(`Created order-based highlight ${index + 1} (order: ${orderIndex}) at position:`, { x, y, width, height });
         });
-
-        if (!document.querySelector('#pdf-highlight-styles')) {
-          const style = document.createElement('style');
-          style.id = 'pdf-highlight-styles';
-          style.textContent = `
-            @keyframes highlightPulse {
-              0% {
-                opacity: 0.6;
-                transform: scale(1);
-                box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
-              }
-              50% {
-                opacity: 0.9;
-                transform: scale(1.02);
-                box-shadow: 0 0 12px rgba(255, 193, 7, 0.6);
-              }
-              100% {
-                opacity: 0.6;
-                transform: scale(1);
-                box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
-              }
-            }
-          `;
-          document.head.appendChild(style);
-        }
-
-        setTimeout(() => {
-          if (highlightContainer.value) {
-            const highlights = highlightContainer.value.querySelectorAll('.pdf-text-highlight');
-            highlights.forEach((el: Element) => {
-              if (el.parentNode) {
-                (el as HTMLElement).style.opacity = '0';
-                (el as HTMLElement).style.transform = 'scale(0.95)';
-                setTimeout(() => el.remove(), 300);
-              }
-            });
-          }
-        }, 4000);
 
         console.log('100% ACCURATE highlighting completed!');
         return;
@@ -644,14 +615,6 @@ async function highlightTextInPdf() {
       iframeContainer.style.position = 'relative';
       iframeContainer.appendChild(highlightDiv);
 
-      setTimeout(() => {
-        if (highlightDiv.parentNode) {
-          highlightDiv.style.opacity = '0';
-          highlightDiv.style.transform = 'translate(-50%, -50%) scale(0.95)';
-          setTimeout(() => highlightDiv.remove(), 300);
-        }
-      }, 4000);
-
       console.log('Iframe overlay highlight created');
     } else {
       console.log('Iframe container not found');
@@ -659,6 +622,7 @@ async function highlightTextInPdf() {
   }
 
   async function highlightTextInDocx() {
+  const currentSeq = ++docxHighlightSeq.value;
   if (!props.focusedString?.originalText || previewType.value !== 'docx-preview') {
     console.log('Cannot highlight DOCX: missing focusedString or not DOCX preview type');
     return;
@@ -676,7 +640,10 @@ async function highlightTextInPdf() {
   }
 
   try {
-    clearDocxHighlights();
+    // Only clear if latest
+    if (currentSeq === docxHighlightSeq.value) {
+      clearDocxHighlights();
+    }
 
     // Collect all text nodes
     const walker = document.createTreeWalker(docxContainer.value, NodeFilter.SHOW_TEXT);
@@ -737,23 +704,27 @@ async function highlightTextInPdf() {
     range.setStart(startNode, startOffset);
     range.setEnd(endNode, endOffset);
 
+    // Abort if not latest
+    if (currentSeq !== docxHighlightSeq.value) return;
+
     // Get range bounds for overlay positioning
     const rects = range.getClientRects();
     
     // Build highlight wrapper
     const colors = {
-      primary: { bg: 'rgba(255, 230, 0, 0.6)', border: '#ffd700' },
-      secondary: { bg: 'rgba(0, 255, 127, 0.4)', border: '#00ff7f' },
-      tertiary: { bg: 'rgba(255, 105, 180, 0.4)', border: '#ff69b4' },
-      quaternary: { bg: 'rgba(135, 206, 250, 0.4)', border: '#87ceeb' },
-      quinary: { bg: 'rgba(255, 165, 0, 0.4)', border: '#ffa500' }
+      primary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#ffd700' },
+      secondary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#00ff7f' },
+      tertiary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#ff69b4' },
+      quaternary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#87ceeb' },
+      quinary: { bg: 'rgba(255, 235, 59, 0.45)', border: '#ffa500' }
     };
     const colorKeys = ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary'] as const;
     const colorKey = colorKeys[orderIndex % colorKeys.length];
     const colorScheme = colors[colorKey];
 
     // Create overlay highlights for each rect (handles multi-line text)
-    Array.from(rects).forEach((rect, rectIndex) => {
+    Array.from(rects).forEach((rect) => {
+      if (currentSeq !== docxHighlightSeq.value) return;
       const highlightOverlay = document.createElement('div');
       highlightOverlay.className = `docx-text-highlight-overlay ${colorKey}`;
       highlightOverlay.setAttribute('data-order-index', orderIndex.toString());
@@ -763,35 +734,18 @@ async function highlightTextInPdf() {
       
       highlightOverlay.style.cssText = `
         position: absolute;
-        left: ${rect.left - containerRect.left + docxContainer.value!.scrollLeft}px;
-        top: ${rect.top - containerRect.top + docxContainer.value!.scrollTop}px;
+        left: ${rect.left - containerRect.left}px;
+        top: ${rect.top - containerRect.top}px;
         width: ${rect.width}px;
         height: ${rect.height}px;
-        background: ${colorScheme.bg};
+        background: ${colorScheme.bg} !important;
         border-radius: 2px;
         z-index: 10;
         pointer-events: none;
-        animation: highlightPulse 1.5s ease-in-out infinite;
-        box-shadow: 0 0 8px ${colorScheme.border}40;
-        mix-blend-mode: multiply;
       `;
 
       docxContainer.value!.appendChild(highlightOverlay);
     });
-
-    // Add CSS animation once
-    if (!document.querySelector('#docx-highlight-styles')) {
-      const style = document.createElement('style');
-      style.id = 'docx-highlight-styles';
-      style.textContent = `
-        @keyframes highlightPulse {
-          0% { opacity: 0.6; transform: scale(1); box-shadow: 0 0 8px rgba(255,193,7,0.4); }
-          50% { opacity: 0.9; transform: scale(1.02); box-shadow: 0 0 12px rgba(255,193,7,0.6); }
-          100% { opacity: 0.6; transform: scale(1); box-shadow: 0 0 8px rgba(255,193,7,0.4); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
 
     console.log('DOCX highlighting completed!');
   } catch (error) {
@@ -1182,20 +1136,13 @@ async function highlightTextInPdf() {
     if (isPdfType()) {
       if (newFocusedString?.originalText) {
         console.log('Auto searching and highlighting text in PDF:', newFocusedString.originalText);
-        nextTick(() => {
-          // Load PDF.js first, then highlight
-          if (previewUrl.value && !pdfJsLoaded.value) {
-            loadPdfWithPdfJs().then(() => {
-              setTimeout(() => {
-                highlightTextInPdf();
-              }, 500);
-            });
-          } else {
-            setTimeout(() => {
-              highlightTextInPdf();
-            }, 500);
-          }
-        });
+        if (previewUrl.value && !pdfJsLoaded.value) {
+          loadPdfWithPdfJs().then(() => {
+            highlightTextInPdf();
+          });
+        } else {
+          highlightTextInPdf();
+        }
       } else {
         // Clear PDF highlights when focusedString is null
         highlightTextInPdf();
@@ -1206,11 +1153,7 @@ async function highlightTextInPdf() {
     if (previewType.value === 'docx-preview') {
       if (newFocusedString?.originalText) {
         console.log('Auto searching and highlighting text in DOCX:', newFocusedString.originalText);
-        nextTick(() => {
-          setTimeout(() => {
-            highlightTextInDocx();
-          }, 300);
-        });
+        highlightTextInDocx();
       } else {
         // Clear DOCX highlights when focusedString is null
         clearDocxHighlights();
@@ -2736,5 +2679,17 @@ async function highlightTextInPdf() {
   padding: 6px 10px;
   border-radius: 4px;
 }
+</style>
+
+<style scoped>
+/* Ensure highlight overlays remain visible against aggressive white overrides */
+.file-preview-panel .pdf-text-highlight,
+.file-preview-panel .docx-text-highlight-overlay {
+  background: rgba(255, 235, 59, 0.45) !important;
+}
+
+/* Keep overlays on top */
+.file-preview-panel .pdf-text-highlight { z-index: 9999; }
+.file-preview-panel .docx-text-highlight-overlay { z-index: 100; }
 </style>
 

@@ -288,6 +288,15 @@ export class TranslationController {
       return res.status(500).send('Failed to build preview');
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('file-strings/:fileId')
+  async getFileStrings(
+    @Param('fileId') fileId: string,
+    @Query('projectId') projectId: string,
+  ){
+    return this.translationService.getFileStrings(fileId, projectId);
+  }
 }
 
 

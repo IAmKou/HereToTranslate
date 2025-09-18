@@ -63,11 +63,11 @@
               <option value="">Select a file</option>
               <option
                 v-for="file in projectFilesComputed"
-                :key="file.fileId"
-                :value="file.fileId"
-                :disabled="file.status !== 'ready'"
+                :key="(file as any).fileId"
+                :value="(file as any).fileId"
+                :disabled="(file as any).status !== 'ready'"
               >
-                {{ file.fileName }} {{ file.status !== 'ready' ? `(${file.status})` : '' }}
+                {{ (file as any).fileName }} {{ (file as any).status !== 'ready' ? `(${(file as any).status})` : '' }}
               </option>
             </select>
             <div v-if="projectFilesComputed.length > 0" class="quick-file-actions">
@@ -95,18 +95,18 @@
             </div>
             <div class="file-parts-grid">
               <label
-                v-for="part in fileParts"
-                :key="part.part"
+                v-for="(part, index) in fileParts"
+                :key="part.filePart"
                 class="file-part-option"
               >
                 <input
                   type="checkbox"
-                  :value="part.part"
+                  :value="part.filePart"
                   v-model="selectedFileParts"
                   @change="onFilePartChange"
                 />
                 <span class="file-part-label">
-                  Page {{ part.pageNumber || (part.part + 1) }} ({{ part.stringCount }} strings)
+                  String {{ index + 1 }} ({{ fileParts.filter(p => p.filePart === part.filePart).length }} strings)
                 </span>
               </label>
             </div>
@@ -327,11 +327,11 @@
           <option value="">Select a file</option>
           <option
             v-for="file in projectFilesComputed"
-            :key="file.fileId"
-            :value="file.fileId"
-            :disabled="file.status !== 'ready'"
+            :key="(file as any).fileId"
+            :value="(file as any).fileId"
+            :disabled="(file as any).status !== 'ready'"
           >
-            {{ file.fileName }} {{ file.status !== 'ready' ? `(${file.status})` : '' }}
+            {{ (file as any).fileName }} {{ (file as any).status !== 'ready' ? `(${(file as any).status})` : '' }}
           </option>
         </select>
         <div v-if="fieldErrors.fileSelection" class="field-error">
@@ -340,7 +340,7 @@
         <div v-if="selectedFileId && fileParts.length > 0" class="file-parts-section">
           <label class="file-parts-label">File Pages:</label>
           <div class="file-parts-info" style="margin-bottom: 0.5rem; font-size: 0.875rem; color: #666;">
-            Select specific pages to create tasks for. Choose a single page or a range of pages.
+            Select specific strings to create tasks for. Choose a range of strings.
           </div>
 
           <!-- Page Selection Mode -->
@@ -348,81 +348,49 @@
             <label class="radio-option">
               <input
                 type="radio"
-                value="single"
-                v-model="pageRangeMode"
-                @change="onPageRangeModeChange"
-              />
-              <span>Single Page</span>
-            </label>
-            <label class="radio-option">
-              <input
-                type="radio"
                 value="range"
                 v-model="pageRangeMode"
                 @change="onPageRangeModeChange"
               />
-              <span>Page Range</span>
+              <span>String Range</span>
             </label>
           </div>
-
-          <!-- Single Page Selection -->
-          <div v-if="pageRangeMode === 'single'" class="single-page-selection">
-            <div class="form-group">
-              <label for="singlePage">Select Page:</label>
-              <select
-                id="singlePage"
-                v-model="pageRangeFrom"
-                class="form-control"
-                @change="onSinglePageChange"
-              >
-                <option value="">Choose a page</option>
-                <option
-                  v-for="part in fileParts"
-                  :key="part.part"
-                  :value="part.part"
-                >
-                  Page {{ part.pageNumber || (part.part + 1) }} ({{ part.stringCount }} strings)
-                </option>
-              </select>
-            </div>
-          </div>
-
           <!-- Page Range Selection -->
           <div v-if="pageRangeMode === 'range'" class="page-range-selection">
             <div class="form-row">
               <div class="form-group">
-                <label for="pageFrom">From Page:</label>
+                <label for="pageFrom">From String:</label>
                 <select
                   id="pageFrom"
                   v-model="pageRangeFrom"
                   class="form-control"
                   @change="onPageRangeChange"
                 >
-                  <option value="">Select start page</option>
+                  <option value="">Select start string</option>
                   <option
-                    v-for="part in fileParts"
-                    :key="part.part"
-                    :value="part.part"
+                    v-for="(part, index) in fileParts"
+                    :key="part.filePart"
+                    :value="part.filePart"
                   >
-                    Page {{ part.pageNumber || (part.part + 1) }}
+                   String {{ index + 1 }}
                   </option>
                 </select>
               </div>
               <div class="form-group">
-                <label for="pageTo">To Page:</label>
+                <label for="pageTo">To Strings:</label>
                 <select
                   id="pageTo"
                   v-model="pageRangeTo"
                   class="form-control"
                   @change="onPageRangeChange"
                 >
-                  <option value="">Select end page</option>
+                  <option value="">Select end string</option>
                   <option
-                    v-for="part in availableRangeEndPages"
-                    :key="part.part"
-                    :value="part.part"
+                    v-for="(part, index) in availableRangeEndPages"
+                    :key="part.filePart"
+                    :value="part.filePart"
                   >
-                    Page {{ part.pageNumber || (part.part + 1) }}
+                  String {{ index + 1 }}
                   </option>
                 </select>
               </div>
@@ -431,7 +399,8 @@
 
           <!-- Selection Summary -->
           <div v-if="selectedFileParts.length > 0" class="file-parts-summary" style="margin-top: 0.5rem; padding: 0.5rem; background: #f0f9ff; border-radius: 4px; font-size: 0.875rem; color: #1e40af;">
-            <strong>Selected:</strong> {{ selectedFileParts.length }} page(s)
+            <strong>Selected:</strong> {{ selectedFileParts.length }} string(s)
+            <span v-if="totalStringsInRange > 0"> - Total: {{ totalStringsInRange }} strings</span>
             <span v-if="selectedFileParts.length === 1">
               (Page {{ getSelectedPageNumber(selectedFileParts[0]) }})
             </span>
@@ -595,29 +564,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { taskService, CreateTaskDto, ProjectFile, FilePart, Task } from '../services/task.service';
+import { ref, computed, watch, onMounted, onUnmounted, type PropType } from 'vue';
+import { taskService, CreateTaskDto, FileString } from '../services/task.service';
 import { SUPPORTED_LANGUAGES, Language } from '../utils/languages';
-
-interface Props {
-  visible: boolean;
-  projectId: string;
-  projectMembers?: Array<{
-    id: string;
-    username: string;
-    fullName?: string;
-  }>;
-  projectFiles?: Array<{
-    fileId: string;
-    fileName: string;
-    status: string;
-  }>;
-  projectTargetLanguages?: string[];
-  branchId?: string;
-  fileId?: string;
-  filePart?: number;
-  editTask?: any;
-}
 
 const props = defineProps({
   visible: {
@@ -629,7 +578,7 @@ const props = defineProps({
     required: true
   },
   projectMembers: {
-    type: Array,
+    type: Array as PropType<Array<{ id: string; fullName?: string; username: string }>>,
     default: () => []
   },
 
@@ -640,10 +589,6 @@ const props = defineProps({
   projectTargetLanguages: {
     type: Array,
     default: () => []
-  },
-  branchId: {
-    type: String,
-    default: null
   },
   fileId: {
     type: String,
@@ -702,12 +647,9 @@ const formData = ref<CreateTaskDto>({
   assignedToId: '',
   reviewerId: '',
   dueDate: '',
-  dueTime: '',
   dueDateTime: '',
-  branchId: props.branchId,
   fileId: props.fileId,
-  page: props.page,
-  pages: props.pages,
+  pages: props.filePart !== undefined ? [props.filePart] : undefined,
   language: ''
 });
 
@@ -722,12 +664,9 @@ const initializeFormWithEditData = () => {
       assignedToId: props.editTask.assignedToId || '',
       reviewerId: props.editTask.reviewerId || '',
       dueDate: props.editTask.dueDate ? new Date(props.editTask.dueDate).toISOString().split('T')[0] : '',
-      dueTime: props.editTask.dueDate ? new Date(props.editTask.dueDate).toTimeString().slice(0, 5) : '',
       dueDateTime: props.editTask.dueDate || '',
-      branchId: props.branchId,
       fileId: props.editTask.fileId || props.fileId,
-      page: props.editTask.filePart !== undefined ? props.editTask.filePart : props.page,
-      pages: props.editTask.pages || props.pages,
+      pages: props.editTask.selectedPages || (props.filePart !== undefined ? [props.filePart] : []),
       language: props.editTask.language || ''
     };
 
@@ -760,7 +699,7 @@ const selectedLanguages = ref<string[]>([]);
 // File selection state
 const projectFilesComputed = computed(() => props.projectFiles || []);
 const selectedFileId = ref('');
-const fileParts = ref<FilePart[]>([]);
+const fileParts = ref<FileString[]>([]);
 const selectedFileParts = ref<number[]>([]);
 
 // New reactive variables for page range selection
@@ -785,12 +724,25 @@ const availableRangeEndPages = computed(() => {
     return fileParts.value;
   }
 
-  const fromIndex = fileParts.value.findIndex((part: FilePart) => part.part === pageRangeFrom.value);
+  const fromIndex = fileParts.value.findIndex((part: FileString) => part.filePart === pageRangeFrom.value);
   if (fromIndex === -1) {
     return fileParts.value;
   }
 
   return fileParts.value.slice(fromIndex);
+});
+
+// Computed property for total strings in selected range
+const totalStringsInRange = computed(() => {
+  if (selectedFileParts.value.length === 0) {
+    return 0;
+  }
+
+  // Calculate total strings based on selected file parts
+  return selectedFileParts.value.reduce((total, partIndex) => {
+    const part = fileParts.value.find((p: FileString) => p.filePart === partIndex - 1);
+    return total + (part?.stringCount || 1);
+  }, 0);
 });
 
 // Character count for description
@@ -811,12 +763,9 @@ watch(() => props.visible, (newVal: boolean) => {
       assignedToId: '',
       reviewerId: '',
       dueDate: '',
-      dueTime: '',
       dueDateTime: '',
-      branchId: props.branchId,
       fileId: props.fileId,
-      page: props.page,
-      pages: props.pages,
+      pages: props.filePart !== undefined ? [props.filePart] : undefined,
       language: ''
     };
 
@@ -874,8 +823,8 @@ watch(() => props.visible, (newVal: boolean) => {
           if (t.pages && Array.isArray(t.pages)) {
             pagesData = t.pages;
             pageData = undefined;
-          } else if (t.page !== undefined) {
-            pageData = t.page;
+          } else if (t.pages && t.pages.length > 0) {
+            pageData = t.pages;
             pagesData = undefined;
           } else if (t.filePart !== undefined) {
             pageData = t.filePart;
@@ -929,31 +878,6 @@ onMounted(() => {
   });
 });
 
-// Format datetime for submission
-function formatDateTimeForSubmission(dateString: string, timeString: string): string {
-  if (!dateString || !timeString) return '';
-
-  // Combine date and time
-  const dateTimeString = `${dateString}T${timeString}`;
-  const date = new Date(dateTimeString);
-  return date.toISOString();
-}
-
-// Format datetime for display
-function formatDateTimeForDisplay(dateTimeString: string): string {
-  if (!dateTimeString) return '';
-
-  const date = new Date(dateTimeString);
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
-}
-
 // Format datetime for API (preserve local time without timezone conversion)
 function formatDateTimeForAPI(dateTimeString: string): string {
   if (!dateTimeString) return '';
@@ -999,31 +923,15 @@ watch(() => props.visible, (val: boolean) => {
   }
 });
 
-// Đảm bảo khi component bị unmount thì xoá class
 onUnmounted(() => {
   document.body.classList.remove('modal-open');
 });
 
-// Load project files (only if not provided via props)
-async function loadProjectFiles() {
-  console.log('CreateTaskDialog: Loading project files for projectId:', props.projectId);
-  try {
-    // projectFiles.value = await taskService.getProjectFiles(props.projectId); // This line is removed
-    console.log('CreateTaskDialog: Project files loaded successfully:', projectFilesComputed.value.length, 'files');
-    console.log('CreateTaskDialog: Files:', projectFilesComputed.value);
-  } catch (err) {
-    console.error('CreateTaskDialog: Failed to load project files:', err);
-    // projectFiles.value = []; // This line is removed
-  }
-}
-
-// Handle file selection change
 async function onFileChange() {
   console.log('File changed:', selectedFileId.value);
-  console.log('Branch ID:', props.branchId);
 
-  if (!selectedFileId.value || !props.branchId) {
-    console.log('Missing fileId or branchId, clearing parts');
+  if (!selectedFileId.value ) {
+    console.log('Missing fileId clearing parts');
     fileParts.value = [];
     selectedFileParts.value = [];
     pageRangeFrom.value = null;
@@ -1035,13 +943,11 @@ async function onFileChange() {
   try {
     console.log('Loading file parts for:', {
       projectId: props.projectId,
-      branchId: props.branchId,
       fileId: selectedFileId.value
     });
 
-    fileParts.value = await taskService.getFileParts(
+    fileParts.value = await taskService.getFileStrings(
       props.projectId,
-      props.branchId,
       selectedFileId.value
     );
 
@@ -1056,22 +962,21 @@ async function onFileChange() {
   }
 }
 
-// Handle file page selection change
 function onFilePartChange() {
   // Update formData with selected file
   formData.value.fileId = selectedFileId.value;
 
   // Nếu chỉ chọn 1 page, set page
   if (selectedFileParts.value.length === 1) {
-    formData.value.page = selectedFileParts.value[0];
+    formData.value.pages = selectedFileParts.value;
     formData.value.pages = undefined;
   } else if (selectedFileParts.value.length > 1) {
     // Nếu chọn nhiều pages, set pages array
-    formData.value.page = undefined;
+    formData.value.pages = undefined;
     formData.value.pages = selectedFileParts.value;
   } else {
     // Không chọn page nào
-    formData.value.page = undefined;
+    formData.value.pages = undefined;
     formData.value.pages = undefined;
   }
 
@@ -1091,9 +996,9 @@ function onFilePartChange() {
 
 // Select all file parts
 function selectAllParts() {
-  selectedFileParts.value = fileParts.value.map((part: FilePart) => {
+  selectedFileParts.value = fileParts.value.map((part: FileString) => {
     // Use pageNumber if available, otherwise use part + 1
-    return part.pageNumber || (part.part + 1);
+    return part.pageNumber || (part.filePart + 1);
   });
   onFilePartChange();
 }
@@ -1106,8 +1011,14 @@ function clearAllParts() {
 
 // Get page number for selected part
 function getSelectedPageNumber(partIndex: number): number {
-  const part = fileParts.value.find((p: FilePart) => p.part === partIndex);
-  return part?.pageNumber || (partIndex + 1);
+  const index = fileParts.value.findIndex((p: FileString) => p.filePart === partIndex);
+  return index + 1;
+}
+
+// Get string number from filePart (sequential numbering)
+function getStringNumberFromFilePart(filePart: number): number {
+  const index = fileParts.value.findIndex((p: FileString) => p.filePart === filePart);
+  return index + 1;
 }
 
 // Handle page range mode change
@@ -1123,7 +1034,7 @@ function onPageRangeModeChange() {
 function onSinglePageChange() {
   if (pageRangeFrom.value !== null) {
     // Find the part and get its page number
-    const part = fileParts.value.find((p: FilePart) => p.part === pageRangeFrom.value);
+    const part = fileParts.value.find((p: FileString) => p.filePart === pageRangeFrom.value);
     const pageNumber = part?.pageNumber || (pageRangeFrom.value + 1);
     selectedFileParts.value = [pageNumber];
   } else {
@@ -1135,15 +1046,15 @@ function onSinglePageChange() {
 // Handle page range selection
 function onPageRangeChange() {
   if (pageRangeFrom.value !== null && pageRangeTo.value !== null) {
-    const fromIndex = fileParts.value.findIndex((part: FilePart) => part.part === pageRangeFrom.value);
-    const toIndex = fileParts.value.findIndex((part: FilePart) => part.part === pageRangeTo.value);
+    const fromIndex = fileParts.value.findIndex((part: FileString) => part.filePart === pageRangeFrom.value);
+    const toIndex = fileParts.value.findIndex((part: FileString) => part.filePart === pageRangeTo.value);
 
     if (fromIndex !== -1 && toIndex !== -1 && toIndex >= fromIndex) {
       // Generate array of page numbers from fromIndex to toIndex
       const selectedPages = [];
       for (let i = fromIndex; i <= toIndex; i++) {
         // Use pageNumber if available, otherwise use part + 1
-        const pageNumber = fileParts.value[i].pageNumber || (fileParts.value[i].part + 1);
+        const pageNumber = i + 1;
         selectedPages.push(pageNumber);
       }
       selectedFileParts.value = selectedPages;
@@ -1158,11 +1069,7 @@ function onPageRangeChange() {
 
 // Select first available file
 function selectFirstFile() {
-  const firstReadyFile = projectFilesComputed.value.find((file: {
-    fileId: string;
-    fileName: string;
-    status: string;
-  }) => file.status === 'ready');
+  const firstReadyFile = (projectFilesComputed.value as any[]).find((file: any) => file.status === 'ready');
   if (firstReadyFile) {
     selectedFileId.value = firstReadyFile.fileId;
     onFileChange();
@@ -1251,7 +1158,7 @@ function validateTitle() {
 }
 
 // Real-time title validation with debouncing
-let titleValidationTimeout: number | null = null;
+let titleValidationTimeout: ReturnType<typeof setTimeout> | null = null;
 function onTitleInput() {
   // Clear previous timeout
   if (titleValidationTimeout) {
@@ -1366,7 +1273,6 @@ function validateFilePages() {
   projectTaskPages.value.forEach((task: any, index: number) => {
     console.log(`  Task ${index}:`, {
       fileId: task.fileId,
-      page: task.page,
       pages: task.pages,
       language: task.language
     });
@@ -1404,9 +1310,9 @@ function validateFilePages() {
     }
 
     // Check single page conflict
-    if (task.page !== undefined && selectedFileParts.value.includes(task.page)) {
-      console.log('  -> CONFLICT FOUND: Single page', task.page, 'with task:', task);
-      console.log('  -> Selected pages include:', task.page, '?', selectedFileParts.value.includes(task.page));
+    if (task.pages && task.pages.some(page => selectedFileParts.value.includes(page))) {
+      console.log('  -> CONFLICT FOUND: Pages', task.pages, 'with task:', task);
+      console.log('  -> Selected pages overlap:', task.pages.filter(page => selectedFileParts.value.includes(page)));
       return true;
     }
 
@@ -1436,8 +1342,8 @@ function validateFilePages() {
       pages?: number[];
       language: string;
     }) => {
-      if (task.page !== undefined) {
-        return `Page ${task.page}`;
+      if (task.pages && task.pages.length > 0) {
+        return task.pages.length === 1 ? `Page ${task.pages[0]}` : `Pages ${task.pages.join(', ')}`;
       }
       if (task.pages && task.pages.length > 0) {
         return `Pages ${task.pages.join(', ')}`;
@@ -1525,8 +1431,8 @@ async function onSubmit() {
       if (t.pages && Array.isArray(t.pages)) {
         pagesData = t.pages;
         pageData = undefined;
-      } else if (t.page !== undefined) {
-        pageData = t.page;
+      } else if (t.pages && t.pages.length > 0) {
+        pageData = t.pages;
         pagesData = undefined;
       } else if (t.filePart !== undefined) {
         pageData = t.filePart;
@@ -1575,7 +1481,6 @@ async function onSubmit() {
         reviewerId: formData.value.reviewerId || undefined,
         dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
         fileId: formData.value.fileId || undefined,
-        page: formData.value.page,
         pages: formData.value.pages,
         language: formData.value.language
       };
@@ -1596,9 +1501,7 @@ async function onSubmit() {
           assignedToId: formData.value.assignedToId || undefined,
           reviewerId: formData.value.reviewerId || undefined,
           dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
-          branchId: props.branchId || undefined,
           fileId: formData.value.fileId || undefined,
-          page: formData.value.page,
           pages: formData.value.pages,
           language: language
         };

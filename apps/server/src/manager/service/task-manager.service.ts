@@ -62,7 +62,6 @@ export class TaskManagerService {
     dueDate?: Date;
     estimatedBusinessHours?: number;
     projectId?: string;
-    branchId?: string;
     fileId?: string;
     originalText?: string;
     translatedText?: string;
@@ -84,7 +83,6 @@ export class TaskManagerService {
       dueDate,
       estimatedBusinessHours,
       projectId,
-      branchId,
       fileId,
       originalText,
       translatedText,
@@ -216,7 +214,6 @@ export class TaskManagerService {
       group,
       dueDate,
       projectId,
-      branchId,
       fileId,
       originalText,
       translatedText,
@@ -483,11 +480,10 @@ export class TaskManagerService {
         title: true,
         description: true,
         projectId: true,
-        branchId: true,
         fileId: true,
         originalText: true,
         translatedText: true,
-        selectedPages: true,
+        selectedStrings: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -538,7 +534,6 @@ export class TaskManagerService {
         title: true,
         description: true,
         projectId: true,
-        branchId: true,
         fileId: true,
         originalText: true,
         translatedText: true,
@@ -599,7 +594,6 @@ export class TaskManagerService {
         title: true,
         description: true,
         projectId: true,
-        branchId: true,
         fileId: true,
         originalText: true,
         translatedText: true,
@@ -851,7 +845,6 @@ export class TaskManagerService {
         title: true,
         description: true,
         projectId: true,
-        branchId: true,
         fileId: true,
         originalText: true,
         translatedText: true,
@@ -953,7 +946,6 @@ export class TaskManagerService {
         description: true,
         status: true,
         projectId: true,
-        branchId: true,
         fileId: true,
         originalText: true,
         translatedText: true,

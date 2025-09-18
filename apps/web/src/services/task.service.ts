@@ -9,7 +9,6 @@ export interface Task {
   fileId?: string;
   originalText?: string;
   translatedText?: string;
-  page?: number;
   pages?: number[]; // Array of selected pages for multiple page selection
   language?: string;
   assignedTo?: {
@@ -69,7 +68,6 @@ export interface CreateTaskDto {
   dueDate?: string;
   dueDateTime?: string;
   fileId?: string;
-  page?: number;
   pages?: number[]; // Array of selected pages for multiple page selection
   originalText?: string;
   translatedText?: string;
@@ -171,12 +169,26 @@ export interface ProjectFile {
   };
 }
 
-export interface FilePart {
-  part: number;
-  stringCount: number;
-  totalParts: number;
-  pageNumber?: number; // Số trang (hiển thị từ 1)
-  hasTranslatedStrings?: boolean; // Có strings đã dịch chưa
+export interface FileString {
+  id: string;
+  originalText: string;
+  translatedText: string;
+  language: string;
+  targetLanguage?: string;
+  filePart: number;
+  pageNumber: number;
+  orderIndex: number;
+  position?: any;
+  style?: any;
+  fontFamily?: string;
+  fontSize?: number;
+  status: string;
+  notes?: string;
+  metadata?: any;
+  paragraphIndex?: number;
+  runIndex?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TaskProgress {
@@ -305,72 +317,17 @@ export const taskService = {
     return data;
   },
 
-  async getFileParts(projectId: string, fileId: string): Promise<FilePart[]> {
-    try {
-      // Sử dụng API mới để lấy thông tin trang
-      const { data } = await axiosInstance.get(`/translation/file-pages/${fileId}`, {
-        params: {
-          projectId,
-        },
-      });
+  async getFileStrings(projectId: string, fileId: string): Promise<FileString[]> {
+    const params: any = {
+      projectId,
+      fileId,
+    };
 
-      if (!data || !data.pages) {
-        return [];
-      }
+    const { data } = await axiosInstance.get(`/translation/file-strings/${fileId}`, {
+      params,
+    });
 
-      // Chuyển đổi thông tin trang thành FilePart
-      const parts: FilePart[] = data.pages.map((page: any) => ({
-        part: page.pageNumber || page.filePart, // Sử dụng pageNumber nếu có, fallback về filePart
-        stringCount: page.stringCount,
-        totalParts: data.totalPages,
-        pageNumber: page.pageNumber || page.filePart,
-        hasTranslatedStrings: page.hasTranslatedStrings,
-      }));
-
-      return parts;
-    } catch (error) {
-      console.error('Error getting file pages:', error);
-      // Fallback về logic cũ nếu API mới không hoạt động
-      const { data } = await axiosInstance.get('/translation/strings', {
-        params: {
-          projectId,
-          fileId,
-          language: 'en',
-        },
-      });
-
-      const fileStrings = data || [];
-      const filteredStrings = fileStrings.filter((str: any) => str.fileId === fileId);
-
-      if (filteredStrings.length === 0) {
-        return [];
-      }
-
-      const stringsByPart = new Map<number, any[]>();
-
-      for (const str of filteredStrings) {
-        const part = str.filePart || 0;
-        if (!stringsByPart.has(part)) {
-          stringsByPart.set(part, []);
-        }
-        stringsByPart.get(part)!.push(str);
-      }
-
-      const sortedParts = Array.from(stringsByPart.keys()).sort((a, b) => a - b);
-      const parts: FilePart[] = [];
-
-      for (const part of sortedParts) {
-        const strings = stringsByPart.get(part)!;
-        parts.push({
-          part,
-          stringCount: strings.length,
-          totalParts: sortedParts.length,
-          pageNumber: part + 1, // Giả định mỗi part là một trang
-        });
-      }
-
-      return parts;
-    }
+    return data || [];
   },
 
   async getTaskProgress(taskId: string): Promise<TaskProgress> {
@@ -404,8 +361,8 @@ export const taskService = {
         );
       }
       // Check for single page
-      else if (task.page !== undefined) {
-        filteredStrings = strings.filter((str: any) => str.filePart === task.page);
+      else if (task.pages && task.pages.length > 0) {
+        filteredStrings = strings.filter((str: any) => task.pages!.includes(str.filePart));
       }
 
       const total = filteredStrings.length;

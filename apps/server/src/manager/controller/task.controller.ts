@@ -16,7 +16,7 @@ import { JsonSerializerInterceptor } from '../../util/json-serializer.intercepto
 import { TaskManagerService } from '../service/task-manager.service';
 import { CreateTaskDto, UpdateTaskDto } from '../../dto/task.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
-import { AuthenticatedRequest } from '../../auth/types';
+import type { AuthenticatedRequest } from '../../auth/types';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -90,11 +90,11 @@ export class TaskController {
   @Get(':id/progress')
   async getTaskProgress(@Param('id') id: string) {
     try {
-      const progress = await this.taskService.getTaskProgress(id);
+      const progress = await this.taskService.getTaskProgress(BigInt(id));
       return progress;
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to get task progress',
+        error || 'Failed to get task progress',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -107,7 +107,7 @@ export class TaskController {
       return history;
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to get task history',
+        error || 'Failed to get task history',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

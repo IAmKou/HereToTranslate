@@ -88,7 +88,7 @@ export class TaskEntity {
   storyPoints?: number;
 
   @Column({ type: 'json', nullable: true })
-  selectedPages?: number[]; // Array of selected page numbers
+  selectedStrings?: number[]; 
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   totalScore: number;
@@ -97,7 +97,7 @@ export class TaskEntity {
   totalAmount: number;
 
   @Column({ type: 'int', default: 0 })
-  totalPages: number;
+  totalStrings: number;
 
   @OneToMany(() => TaskAssignmentEntity, assignment => assignment.task, { cascade: true })
   assignments: TaskAssignmentEntity[];
@@ -111,14 +111,6 @@ export class TaskEntity {
     { cascade: true }
   )
   subtasks: SubtaskEntity[];
-
-  // Comments will be loaded separately via API
-  // @OneToMany(
-  //   'TaskCommentEntity',
-  //   (comment: any) => comment.task,
-  //   { cascade: true }
-  // )
-  // comments: TaskCommentEntity[];
 
   get currentTranslator(): UserEntity | undefined {
     return this.assignments?.find(a => a.role === 'translator' && a.status === 'assigned')?.assignedTo;

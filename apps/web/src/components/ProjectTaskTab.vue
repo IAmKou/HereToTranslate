@@ -167,12 +167,12 @@ const orderedStatuses = computed(() => {
   const filtered = merged.filter((id) => valid.has(id));
   // Keep state in sync - move this outside computed
   nextTick(() => {
-    if (
-      filtered.length !== statusOrder.value.length ||
-      filtered.some((id, idx) => id !== statusOrder.value[idx])
-    ) {
-      statusOrder.value = filtered;
-    }
+  if (
+    filtered.length !== statusOrder.value.length ||
+    filtered.some((id, idx) => id !== statusOrder.value[idx])
+  ) {
+    statusOrder.value = filtered;
+  }
   });
 
   const indexOf = (id: string) => filtered.indexOf(id);
@@ -1176,10 +1176,10 @@ async function loadTranslationStringsForTask(task: Task) {
         task.pages!.includes(str.filePart)
       );
     }
-    // Check for single page
-    else if (task.page !== undefined) {
+    // Check for single page (legacy support)
+    else if (task.pages && task.pages.length > 0) {
       filteredStrings = strings.filter(
-        (str: any) => str.filePart === task.page
+        (str: any) => task.pages!.includes(str.filePart)
       );
     }
 
@@ -1823,16 +1823,16 @@ async function updatePageInfo() {
 
   // Check for single page
   if (
-    selectedTask.value?.page !== undefined &&
-    selectedTask.value?.page !== null
+    selectedTask.value?.pages && 
+    selectedTask.value?.pages.length > 0
   ) {
-    console.log('📖 Single page selected:', selectedTask.value.page);
+    console.log('📖 Pages selected:', selectedTask.value.pages);
 
     // Find the specific page
     // Some APIs return part as 1-based pageNumber while our stored page is 0-based.
     // Match both exact and off-by-one to be resilient after reload.
     const page = (() => {
-      const stored = Number(selectedTask.value!.page);
+      const stored = selectedTask.value!.pages && selectedTask.value!.pages.length > 0 ? selectedTask.value!.pages[0] : 0;
       return pages.find((p: any) => {
         const part = Number(p.part);
         const pageNumber = Number(p.pageNumber ?? part);
@@ -1849,7 +1849,7 @@ async function updatePageInfo() {
 
     if (page) {
       currentPageInfo.value = {
-        pageNumber: selectedTask.value.page + 1,
+        pageNumber: selectedTask.value.pages && selectedTask.value.pages.length > 0 ? selectedTask.value.pages[0] + 1 : 1,
         stringCount: page.stringCount || 0,
       };
       console.log(
@@ -3587,14 +3587,14 @@ function setupRealtimeCommentListeners() {
               </div>
               <div
                 v-if="
-                  selectedTask.page !== undefined && selectedTask.page !== null
+                  selectedTask.pages && selectedTask.pages.length === 1
                 "
               >
-                Page: <b>Page {{ selectedTask.page + 1 }}</b> ({{
-                  currentPageInfo?.stringCount || 'Loading...'
+                Page: <b>Page {{ selectedTask.pages[0] + 1 }}</b> ({{
+                  getPageInfo(selectedTask.pages[0])?.totalStrings || 'Loading...'
                 }}
                 strings)
-                <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.page = {{ selectedTask.page }} -->
+                <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.pages = {{ selectedTask.pages }} -->
               </div>
               <div
                 v-else-if="(selectedTask as any).selectedPages && (selectedTask as any).selectedPages.length > 0"

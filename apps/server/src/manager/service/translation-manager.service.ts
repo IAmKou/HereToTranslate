@@ -989,7 +989,6 @@ export class TranslationService {
   }
 
   async getFilePages(fileId: string, projectId: string) {
-    // Lấy tất cả strings của file để phân tích số trang
     const strings = await this.translationRepository.createQueryBuilder('t')
       .innerJoin(FileEntity, 'f', 'f.id = t.fileId')
       .where('t.fileId = :fileId', { fileId: BigInt(fileId) })
@@ -1025,6 +1024,39 @@ export class TranslationService {
       totalPages: sortedPages.length,
       pages: pageInfo,
     };
+  }
+
+  async getFileStrings(fileId: string, projectId: string) {
+    const queryBuilder = this.translationRepository.createQueryBuilder('t')
+      .innerJoin(FileEntity, 'f', 'f.id = t.fileId')
+      .where('t.fileId = :fileId', { fileId: BigInt(fileId) })
+      .andWhere('f.projectId = :projectId', { projectId: BigInt(projectId) });
+
+    const strings = await queryBuilder
+      .addOrderBy('t.filePart', 'ASC')
+      .addOrderBy('t.orderIndex', 'ASC')
+      .getMany();
+
+    return strings.map((str: any) => ({
+      id: String(str.id),
+      originalText: str.originalText,
+      translatedText: str.translatedText || '',
+      language: str.language,
+      targetLanguage: str.targetLanguage,
+      filePart: str.filePart || 0,
+      orderIndex: str.orderIndex || 0,
+      position: str.position,
+      style: str.style,
+      fontFamily: str.fontFamily,
+      fontSize: str.fontSize,
+      status: str.status || 'pending',
+      notes: str.notes,
+      metadata: str.metadata,
+      paragraphIndex: str.paragraphIndex,
+      runIndex: str.runIndex,
+      createdAt: str.createdAt,
+      updatedAt: str.updatedAt,
+    }));
   }
 
   async getProjectLanguages(

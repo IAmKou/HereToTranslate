@@ -363,6 +363,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
+import { Task } from '../services/task.service';
 
 interface Workflow {
   id: string;
@@ -380,22 +381,7 @@ interface TaskStatus {
   isActive: boolean;
 }
 
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  assignedTo?: {
-    id: string;
-    fullName?: string;
-    username: string;
-    avatarUrl?: string;
-  };
-  dueDate?: string;
-  progress?: number;
-  createdAt: string;
-}
+
 
 interface ProjectMember {
   id: string;

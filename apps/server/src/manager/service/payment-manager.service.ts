@@ -1567,7 +1567,7 @@ export class PaypalService {
         },
         order: { id: 'DESC' },
       });
-      sourceDepositTx = anyDepositTx ?? undefined;
+      sourceDepositTx = anyDepositTx ?? null;
       if (!sourceDepositTx) {
         logger.warn(`[PAYOUT_DEPOSIT] No deposit transaction found at all for request ${request.id}. Skipping payout.`);
         return;
@@ -1701,7 +1701,7 @@ export class PaypalService {
         },
         order: { id: 'DESC' },
       });
-      sourceDepositTx = anyDepositTx ?? undefined;
+      sourceDepositTx = anyDepositTx ?? null;
       if (!sourceDepositTx) {
         logger.warn(`[PAYOUT_DEPOSIT_APPROVED_CANCEL] No deposit transaction found for request ${request.id}. Skipping payout.`);
         return;
@@ -2162,7 +2162,7 @@ export class PaypalService {
         success: true,
         requestId: request.id,
         translatorId: translator.id,
-        paidToTranslator: amountToAdd,
+        paidToTranslator: netToTranslator,
         depositAmount: depositAmount,
         finalAmount: finalAmount
       };

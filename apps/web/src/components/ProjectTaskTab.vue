@@ -1,48 +1,57 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
-import { taskService, Task, ProjectFile, TaskHistory, Comment } from '../services/task.service';
+import {
+  ref,
+  computed,
+  onMounted,
+  watch,
+  onBeforeUnmount,
+  nextTick,
+} from 'vue';
+import {
+  taskService,
+  Task,
+  ProjectFile,
+  TaskHistory,
+  Comment,
+} from '../services/task.service';
 import CreateTaskDialog from './CreateTaskDialog.vue';
 import EditTaskDialog from './EditTaskDialog.vue';
 import WorkflowManager from './WorkflowManager.vue';
-
-
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '../api';
 import { getLanguageName } from '../utils/languages';
 import { useAuthStore } from '../store/auth';
-import { taskCommentRealtimeService, type TaskCommentEvent, type TaskCommentDeleteEvent } from '../services/task-comment-realtime';
-
-
+import {
+  taskCommentRealtimeService,
+  type TaskCommentEvent,
+  type TaskCommentDeleteEvent,
+} from '../services/task-comment-realtime';
 
 const props = defineProps({
   projectId: {
     type: String,
-    required: true
-  },
-  branchId: {
-    type: String,
-    default: null
+    required: true,
   },
   projectMembers: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   projectGroups: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   project: {
     type: Object,
-    default: () => null
+    default: () => null,
   },
   customTitle: {
     type: String,
-    default: ''
+    default: '',
   },
   canCreateTask: {
     type: Boolean,
-    default: true
-  }
+    default: true,
+  },
 });
 
 // Workflow management state
@@ -52,7 +61,6 @@ const showWorkflowManager = ref(false);
 // Default workflow state
 const defaultWorkflow = ref<any>(null);
 
-
 // Add new state for dynamic statuses
 const availableStatuses = ref<any[]>([]);
 const statusesLoading = ref(false);
@@ -61,7 +69,9 @@ const statusesLoading = ref(false);
 async function loadStatuses() {
   statusesLoading.value = true;
   try {
-    const { data } = await axiosInstance.get(`/task-statuses/project/${props.projectId}`);
+    const { data } = await axiosInstance.get(
+      `/task-statuses/project/${props.projectId}`
+    );
     availableStatuses.value = data;
     console.log('🚀 Loaded statuses from API:', availableStatuses.value);
   } catch (error) {
@@ -70,7 +80,7 @@ async function loadStatuses() {
     availableStatuses.value = [
       { id: '1', name: 'To Do', color: '#ef4444', order: 1 },
       { id: '2', name: 'In Progress', color: '#f59e0b', order: 2 },
-      { id: '3', name: 'Done', color: '#10b981', order: 3 }
+      { id: '3', name: 'Done', color: '#10b981', order: 3 },
     ];
   } finally {
     statusesLoading.value = false;
@@ -80,7 +90,9 @@ async function loadStatuses() {
 // Load default workflow
 async function loadDefaultWorkflow() {
   try {
-    const { data } = await axiosInstance.get(`/workflows/project/${props.projectId}/default`);
+    const { data } = await axiosInstance.get(
+      `/workflows/project/${props.projectId}/default`
+    );
     defaultWorkflow.value = data;
     console.log('🚀 Loaded default workflow:', defaultWorkflow.value);
   } catch (error) {
@@ -91,17 +103,25 @@ async function loadDefaultWorkflow() {
 
 // Auto-detect statuses from tasks and merge with API statuses
 const autoDetectStatuses = computed(() => {
-  const detectedStatuses = new Map<string, { id: string; name: string; color: string; order: number }>();
+  const detectedStatuses = new Map<
+    string,
+    { id: string; name: string; color: string; order: number }
+  >();
 
   // Start with API statuses
-  availableStatuses.value.forEach((status: any) => {
+  for (const status of availableStatuses.value) {
     detectedStatuses.set(status.id, { ...status });
-  });
+  }
 
   // Add new statuses from tasks that might not be in API
-  tasks.value.forEach((task: Task) => {
-    if (task.status && typeof task.status === 'object' && task.status !== null) {
-      const statusId = (task.status as any).id || (task.status as any).type || '';
+  for (const task of tasks.value) {
+    if (
+      task.status &&
+      typeof task.status === 'object' &&
+      task.status !== null
+    ) {
+      const statusId =
+        (task.status as any).id || (task.status as any).type || '';
       const statusName = (task.status as any).name || 'Unknown';
       const statusColor = (task.status as any).color || '#6b7280';
 
@@ -111,14 +131,16 @@ const autoDetectStatuses = computed(() => {
           id: statusId,
           name: statusName,
           color: statusColor,
-          order: detectedStatuses.size + 1
+          order: detectedStatuses.size + 1,
         });
         console.log(`🆕 Found new status: ${statusId} - ${statusName}`);
       }
     }
-  });
+  }
 
-  const result = Array.from(detectedStatuses.values()).sort((a, b) => a.order - b.order);
+  const result = Array.from(detectedStatuses.values()).sort(
+    (a, b) => a.order - b.order
+  );
   console.log('🔍 Combined statuses (API + detected):', result);
 
   return result;
@@ -135,21 +157,23 @@ const orderedStatuses = computed(() => {
   // Merge existing order with any new statuses
   const existing = new Set(statusOrder.value);
   const merged: string[] = [...statusOrder.value];
-  all.forEach((s: any) => {
+  for (const s of all) {
     if (!existing.has(s.id)) {
       merged.push(s.id);
     }
-  });
+  }
   // Remove ids that no longer exist
   const valid = new Set(all.map((s: any) => s.id));
   const filtered = merged.filter((id) => valid.has(id));
-  // Keep state in sync
-  if (
-    filtered.length !== statusOrder.value.length ||
-    filtered.some((id, idx) => id !== statusOrder.value[idx])
-  ) {
-    statusOrder.value = filtered;
-  }
+  // Keep state in sync - move this outside computed
+  nextTick(() => {
+    if (
+      filtered.length !== statusOrder.value.length ||
+      filtered.some((id, idx) => id !== statusOrder.value[idx])
+    ) {
+      statusOrder.value = filtered;
+    }
+  });
 
   const indexOf = (id: string) => filtered.indexOf(id);
   return all.slice().sort((a: any, b: any) => indexOf(a.id) - indexOf(b.id));
@@ -184,13 +208,21 @@ onMounted(() => {
 });
 
 // Watch for tab changes to refresh statuses when switching from workflows to board
-watch(activeTab, (newTab: 'board' | 'all' | 'workflows', oldTab: 'board' | 'all' | 'workflows') => {
-  if (oldTab === 'workflows' && newTab === 'board') {
-    console.log('🔄 Switching from workflows to board, refreshing statuses...');
-    loadStatuses();
-    loadDefaultWorkflow();
+watch(
+  activeTab,
+  (
+    newTab: 'board' | 'all' | 'workflows',
+    oldTab: 'board' | 'all' | 'workflows'
+  ) => {
+    if (oldTab === 'workflows' && newTab === 'board') {
+      console.log(
+        '🔄 Switching from workflows to board, refreshing statuses...'
+      );
+      loadStatuses();
+      loadDefaultWorkflow();
+    }
   }
-});
+);
 
 function onStatusDragStart(event: DragEvent, statusId: string) {
   draggedStatusId.value = statusId;
@@ -232,11 +264,6 @@ function onStatusDragEnd() {
   draggedStatusId.value = null;
 }
 
-// Removed debug board info computed
-
-// Removed debug-only computed helpers: allTaskStatuses, tasksWithoutStatus, tasksWithUnknownStatus
-
-// Local state như các tab khác
 const tasks = ref<Task[]>([]);
 const loading = ref(false);
 const error = ref('');
@@ -246,27 +273,33 @@ const selectedFilters = ref({
   assignee: 'All users',
   createdBy: 'All users',
   file: 'All files',
-  dueDate: 'All'
+  dueDate: 'All',
 });
 
 // Calendar picker state
 const showDatePicker = ref(false);
 const selectedDateRange = ref({
   startDate: null as Date | null,
-  endDate: null as Date | null
+  endDate: null as Date | null,
 });
 const currentMonth = ref(new Date());
-const nextMonth = ref(new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 1));
+const nextMonth = ref(
+  new Date(
+    currentMonth.value.getFullYear(),
+    currentMonth.value.getMonth() + 1,
+    1
+  )
+);
 
 // Computed properties để lấy danh sách user thực tế
 const assigneeOptions = computed(() => {
   const options = ['All users', 'Unassigned'];
   if (props.projectMembers && Array.isArray(props.projectMembers)) {
-    props.projectMembers.forEach((member: any) => {
-      if (member.fullName) {
-        options.push(member.fullName);
+    for (const member of props.projectMembers) {
+      if ((member as any).fullName) {
+        options.push((member as any).fullName);
       }
-    });
+    }
   }
   return options;
 });
@@ -274,11 +307,11 @@ const assigneeOptions = computed(() => {
 const createdByOptions = computed(() => {
   const options = ['All users'];
   if (props.projectMembers && Array.isArray(props.projectMembers)) {
-    props.projectMembers.forEach((member: any) => {
-      if (member.fullName) {
-        options.push(member.fullName);
+    for (const member of props.projectMembers) {
+      if ((member as any).fullName) {
+        options.push((member as any).fullName);
       }
-    });
+    }
   }
   return options;
 });
@@ -286,11 +319,11 @@ const createdByOptions = computed(() => {
 const fileOptions = computed(() => {
   const options = ['All files'];
   if (projectFiles.value && Array.isArray(projectFiles.value)) {
-    projectFiles.value.forEach((file: ProjectFile) => {
+    for (const file of projectFiles.value) {
       if (file.fileName) {
         options.push(file.fileName);
       }
-    });
+    }
   }
   return options;
 });
@@ -298,7 +331,7 @@ const fileOptions = computed(() => {
 const dueDateOptions = computed(() => [
   { value: 'All', label: 'All' },
   { value: 'Overdue now', label: 'Overdue now' },
-  { value: 'Custom Range', label: 'Custom Range' }
+  { value: 'Custom Range', label: 'Custom Range' },
 ]);
 
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -309,21 +342,21 @@ function formatMonth(date: Date): string {
 
 const activeSubDropdown = ref<string | null>(null);
 const activeCustomSelect = ref<string | null>(null);
-const selectedTask = ref<Task|null>(null);
+const selectedTask = ref<Task | null>(null);
 const projectFiles = ref<ProjectFile[]>([]);
 const showCreateForm = ref(false);
 const showDeleteModal = ref(false);
-const taskToDelete = ref<Task|null>(null);
+const taskToDelete = ref<Task | null>(null);
 const isDeleting = ref(false);
 
 // Close task confirmation modal state
 const showCloseTaskModal = ref(false);
-const taskToClose = ref<Task|null>(null);
+const taskToClose = ref<Task | null>(null);
 const isClosingTask = ref(false);
 
 // Reopen task confirmation modal state
 const showReopenTaskModal = ref(false);
-const taskToReopen = ref<Task|null>(null);
+const taskToReopen = ref<Task | null>(null);
 const isReopeningTask = ref(false);
 const reopenReason = ref('');
 // Reopen target status selection
@@ -333,10 +366,17 @@ const reopenStatusSearch = ref('');
 
 const reopenStatusOptions = computed(() => {
   const query = reopenStatusSearch.value.trim().toLowerCase();
-  const notClosed = (s: any) => String(s.type || '').toLowerCase() !== 'closed' && s.isClosed !== true;
+  const notClosed = (s: any) =>
+    String(s.type || '').toLowerCase() !== 'closed' && s.isClosed !== true;
   return orderedStatuses.value
     .filter((s: any) => notClosed(s))
-    .filter((s: any) => !query || String(s.name || '').toLowerCase().includes(query));
+    .filter(
+      (s: any) =>
+        !query ||
+        String(s.name || '')
+          .toLowerCase()
+          .includes(query)
+    );
 });
 
 function formatStatusTypeLabel(type: string | undefined) {
@@ -353,13 +393,12 @@ function formatStatusTypeLabel(type: string | undefined) {
   return map[t] || type;
 }
 
-
 const toast = useToast();
 
 // Task action menu state
 const showTaskActionMenu = ref(false);
 const taskActionMenuPosition = ref({ x: 0, y: 0 });
-const currentTaskForAction = ref<Task|null>(null);
+const currentTaskForAction = ref<Task | null>(null);
 
 // Task history state
 const taskHistory = ref<TaskHistory[]>([]);
@@ -381,7 +420,9 @@ const activeDropdown = ref<string | null>(null);
 
 // Get auth store
 const authStore = useAuthStore();
-const currentUserId = computed(() => authStore.user?.id ? String(authStore.user.id) : '');
+const currentUserId = computed(() =>
+  authStore.user?.id ? String(authStore.user.id) : ''
+);
 
 // Search and filter functions
 function toggleFilters() {
@@ -393,36 +434,60 @@ function clearFilters() {
     assignee: 'All users',
     createdBy: 'All users',
     file: 'All files',
-    dueDate: 'All'
+    dueDate: 'All',
   };
 }
 
 // Load tasks function như các tab khác
 async function loadTasks() {
   if (!props.projectId) return;
-  console.log('📥 [LOAD_TASKS] Starting to load tasks for project:', props.projectId);
+  console.log(
+    '📥 [LOAD_TASKS] Starting to load tasks for project:',
+    props.projectId
+  );
   loading.value = true;
   error.value = '';
   try {
-    console.log('📞 [LOAD_TASKS] Calling API via taskService.getProjectTasks for project ' + props.projectId);
+    console.log(
+      '📞 [LOAD_TASKS] Calling API via taskService.getProjectTasks for project ' +
+        props.projectId
+    );
     const data = await taskService.getProjectTasks(props.projectId);
-    console.log('📥 [LOAD_TASKS] API response received, data length:', Array.isArray(data) ? data.length : 'N/A');
+    console.log(
+      '📥 [LOAD_TASKS] API response received, data length:',
+      Array.isArray(data) ? data.length : 'N/A'
+    );
     // data đã được normalize trong service (filePart→page, selectedPages→pages)
     tasks.value = Array.isArray(data) ? [...data] : [];
-    console.log('✅ [LOAD_TASKS] Tasks loaded for project', props.projectId, ':', tasks.value.length, 'tasks');
+    console.log(
+      '✅ [LOAD_TASKS] Tasks loaded for project',
+      props.projectId,
+      ':',
+      tasks.value.length,
+      'tasks'
+    );
 
     // Debug: Check if tasks have language field
     console.log('🔍 [LOAD_TASKS] Language Debug - Tasks with languages:');
     tasks.value.forEach((task: Task) => {
-      console.log(`🔍 [LOAD_TASKS] Task ${task.id}: "${task.title}" -> language: "${task.language}"`);
+      console.log(
+        `🔍 [LOAD_TASKS] Task ${task.id}: "${task.title}" -> language: "${task.language}"`
+      );
     });
 
     // Debug: Check task statuses
     console.log('🔍 [LOAD_TASKS] Status Debug - Tasks with statuses:');
     tasks.value.forEach((task: Task) => {
-      console.log(`🔍 [LOAD_TASKS] Task ${task.id}: "${task.title}" -> status: "${task.status}" (type: ${typeof task.status})`);
+      console.log(
+        `🔍 [LOAD_TASKS] Task ${task.id}: "${task.title}" -> status: "${
+          task.status
+        }" (type: ${typeof task.status})`
+      );
       if (typeof task.status === 'object' && task.status !== null) {
-        console.log(`🔍 [LOAD_TASKS] Task ${task.id} status object:`, task.status);
+        console.log(
+          `🔍 [LOAD_TASKS] Task ${task.id} status object:`,
+          task.status
+        );
       }
     });
 
@@ -430,15 +495,18 @@ async function loadTasks() {
     tasks.value.forEach((task: Task) => {
       if (task.language) languagesFound.add(task.language);
     });
-    console.log('🌐 [LOAD_TASKS] Unique languages found:', Array.from(languagesFound));
+    console.log(
+      '🌐 [LOAD_TASKS] Unique languages found:',
+      Array.from(languagesFound)
+    );
 
     // Reload statuses after loading tasks to ensure we have the latest status data
     console.log('🔄 [LOAD_TASKS] Reloading statuses...');
     await loadStatuses();
     console.log('✅ [LOAD_TASKS] Statuses reloaded');
-
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Failed to load tasks';
+    const errorMessage =
+      err instanceof Error ? err.message : 'Failed to load tasks';
     error.value = errorMessage;
     console.error('❌ [LOAD_TASKS] Error loading tasks:', err);
   } finally {
@@ -492,11 +560,17 @@ async function loadTaskHistory(taskId: string) {
     // Map backend history (createdAt/comment/fromStatus/toStatus) to UI model
     const mapped = (history as any[]).map((h: any) => {
       const performedAt = h.performedAt || h.createdAt;
-      const action = h.action || (h.fromStatus || h.toStatus ? 'status_change' : 'created');
+      const action =
+        h.action || (h.fromStatus || h.toStatus ? 'status_change' : 'created');
       const description = h.description || h.comment || '';
       const metadata = h.metadata || {
-        fromStatus: h.fromStatus?.id || h.fromStatus?.type || h.fromStatus?.name || h.fromStatus,
-        toStatus: h.toStatus?.id || h.toStatus?.type || h.toStatus?.name || h.toStatus,
+        fromStatus:
+          h.fromStatus?.id ||
+          h.fromStatus?.type ||
+          h.fromStatus?.name ||
+          h.fromStatus,
+        toStatus:
+          h.toStatus?.id || h.toStatus?.type || h.toStatus?.name || h.toStatus,
       };
       return {
         id: String(h.id),
@@ -520,12 +594,12 @@ async function loadTaskHistory(taskId: string) {
 // Function để format history action
 function formatHistoryAction(action: string): string {
   const actionMap: Record<string, string> = {
-    'status_change': 'Status changed',
-    'assignment_change': 'Assignment changed',
-    'due_date_change': 'Due date changed',
-    'created': 'Task created',
-    'closed': 'Task closed',
-    'reopened': 'Task reopened'
+    status_change: 'Status changed',
+    assignment_change: 'Assignment changed',
+    due_date_change: 'Due date changed',
+    created: 'Task created',
+    closed: 'Task closed',
+    reopened: 'Task reopened',
   };
   return actionMap[action] || action;
 }
@@ -554,14 +628,20 @@ function getStatusDisplayName(status: any): string {
 // Function to get tasks by status
 function getTasksByStatus(statusId: string): Task[] {
   console.log(`🔍 [GET_TASKS_BY_STATUS] Getting tasks for status: ${statusId}`);
-  console.log(`🔍 [GET_TASKS_BY_STATUS] Available tasks:`, filteredTasks.value.length);
-  console.log(`🔍 [GET_TASKS_BY_STATUS] Task statuses:`, filteredTasks.value.map((t: Task) => ({
-    id: t.id,
-    title: t.title,
-    status: t.status,
-    statusType: typeof t.status,
-    statusId: (t.status as any)?.id || (t.status as any)?.type || t.status
-  })));
+  console.log(
+    `🔍 [GET_TASKS_BY_STATUS] Available tasks:`,
+    filteredTasks.value.length
+  );
+  console.log(
+    `🔍 [GET_TASKS_BY_STATUS] Task statuses:`,
+    filteredTasks.value.map((t: Task) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      statusType: typeof t.status,
+      statusId: (t.status as any)?.id || (t.status as any)?.type || t.status,
+    }))
+  );
 
   const tasks = filteredTasks.value.filter((task: Task) => {
     if (!task.status) {
@@ -574,27 +654,49 @@ function getTasksByStatus(statusId: string): Task[] {
     // Handle both string and object status
     if (typeof task.status === 'string') {
       taskStatusId = task.status;
-      console.log(`🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has string status: "${taskStatusId}"`);
+      console.log(
+        `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has string status: "${taskStatusId}"`
+      );
     } else if (typeof task.status === 'object' && task.status !== null) {
       // If status is an object, try to get the id or type
       taskStatusId = (task.status as any).id || (task.status as any).type || '';
-      console.log(`🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has object status:`, task.status, '-> extracted ID:', taskStatusId);
+      console.log(
+        `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has object status:`,
+        task.status,
+        '-> extracted ID:',
+        taskStatusId
+      );
     } else {
-      console.log(`❌ [GET_TASKS_BY_STATUS] Task ${task.id} has invalid status type:`, typeof task.status, task.status);
+      console.log(
+        `❌ [GET_TASKS_BY_STATUS] Task ${task.id} has invalid status type:`,
+        typeof task.status,
+        task.status
+      );
       return false;
     }
 
     if (!taskStatusId) {
-      console.log(`❌ [GET_TASKS_BY_STATUS] Task ${task.id} has empty status ID`);
+      console.log(
+        `❌ [GET_TASKS_BY_STATUS] Task ${task.id} has empty status ID`
+      );
       return false;
     }
 
     const matches = taskStatusId === statusId; // Remove toLowerCase() for exact match
-    console.log(`🔍 [GET_TASKS_BY_STATUS] Task ${task.id} (${task.title}): status="${taskStatusId}" vs target="${statusId}" -> ${matches ? '✅ MATCH' : '❌ NO MATCH'}`);
+    console.log(
+      `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} (${
+        task.title
+      }): status="${taskStatusId}" vs target="${statusId}" -> ${
+        matches ? '✅ MATCH' : '❌ NO MATCH'
+      }`
+    );
     return matches;
   });
 
-  console.log(`✅ [GET_TASKS_BY_STATUS] Found ${tasks.length} tasks for status ${statusId}:`, tasks.map(t => ({ id: t.id, title: t.title })));
+  console.log(
+    `✅ [GET_TASKS_BY_STATUS] Found ${tasks.length} tasks for status ${statusId}:`,
+    tasks.map((t) => ({ id: t.id, title: t.title }))
+  );
   return tasks;
 }
 
@@ -628,14 +730,17 @@ function isClosedTypeStatus(statusId: string): boolean {
 
 // Helper: check if a status (by id) is the last column
 function isLastColumn(statusId: string): boolean {
-  if (!orderedStatuses.value || orderedStatuses.value.length === 0) return false;
+  if (!orderedStatuses.value || orderedStatuses.value.length === 0)
+    return false;
   const lastStatus = orderedStatuses.value[orderedStatuses.value.length - 1];
   return lastStatus.id === statusId;
 }
 
 // Helper: check if any status has type "closed"
 function hasClosedTypeStatus(): boolean {
-  return availableStatuses.value.some((s: any) => s.type && String(s.type).toLowerCase() === 'closed');
+  return availableStatuses.value.some(
+    (s: any) => s.type && String(s.type).toLowerCase() === 'closed'
+  );
 }
 
 // Function để format time only
@@ -644,7 +749,11 @@ function formatTimeOnly(dateString: string): string {
 
   // Parse the date string and ensure it's treated as UTC if it doesn't have timezone info
   let date: Date;
-  if (dateString.includes('T') && !dateString.includes('Z') && !dateString.includes('+')) {
+  if (
+    dateString.includes('T') &&
+    !dateString.includes('Z') &&
+    !dateString.includes('+')
+  ) {
     // If date has time but no timezone, treat as UTC
     date = new Date(dateString + 'Z');
   } else {
@@ -663,7 +772,7 @@ function formatTimeOnly(dateString: string): string {
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: true
+    hour12: true,
   });
 }
 
@@ -673,7 +782,11 @@ function formatDateOnly(dateString: string): string {
 
   // Parse the date string and ensure it's treated as UTC if it doesn't have timezone info
   let date: Date;
-  if (dateString.includes('T') && !dateString.includes('Z') && !dateString.includes('+')) {
+  if (
+    dateString.includes('T') &&
+    !dateString.includes('Z') &&
+    !dateString.includes('+')
+  ) {
     // If date has time but no timezone, treat as UTC
     date = new Date(dateString + 'Z');
   } else {
@@ -692,7 +805,7 @@ function formatDateOnly(dateString: string): string {
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
   });
 }
 
@@ -700,7 +813,12 @@ async function loadProjectFiles() {
   console.log('loadProjectFiles called for project:', props.projectId);
   try {
     projectFiles.value = await taskService.getProjectFiles(props.projectId);
-    console.log('Loaded project files:', projectFiles.value.length, 'for project:', props.projectId);
+    console.log(
+      'Loaded project files:',
+      projectFiles.value.length,
+      'for project:',
+      props.projectId
+    );
   } catch (err: any) {
     console.error('Error loading project files:', err);
   }
@@ -717,7 +835,9 @@ function getFileName(fileId: string): string {
     return file.fileName;
   } else {
     // Nếu không tìm thấy file, thử tìm với string comparison
-    const fileStr = projectFiles.value.find((f: ProjectFile) => String(f.fileId) === String(fileId));
+    const fileStr = projectFiles.value.find(
+      (f: ProjectFile) => String(f.fileId) === String(fileId)
+    );
     console.log('Found file with string comparison:', fileStr);
     return fileStr ? fileStr.fileName : `File ${fileId}`;
   }
@@ -766,7 +886,10 @@ function handleTaskCreated(task: Task) {
 function showCreateTaskForm() {
   console.log('ProjectTaskTab: Opening CreateTaskDialog');
   console.log('ProjectTaskTab: projectFiles to pass:', projectFiles.value);
-  console.log('ProjectTaskTab: projectFiles length:', projectFiles.value.length);
+  console.log(
+    'ProjectTaskTab: projectFiles length:',
+    projectFiles.value.length
+  );
   showCreateForm.value = true;
   selectedTask.value = null; // Ẩn task detail nếu đang mở
 }
@@ -777,18 +900,28 @@ function cancelCreateTask() {
 }
 
 const filteredTasks = computed(() => {
-  console.log('filteredTasks computed - tasks.value.length:', tasks.value.length, 'search:', search.value);
+  console.log(
+    'filteredTasks computed - tasks.value.length:',
+    tasks.value.length,
+    'search:',
+    search.value
+  );
 
   let filtered = tasks.value;
 
   console.log('🔍 Before filtering - Total tasks:', filtered.length);
-  console.log('🔍 Task statuses before filtering:', filtered.map((t: Task) => ({ id: t.id, status: t.status })));
+  console.log(
+    '🔍 Task statuses before filtering:',
+    filtered.map((t: Task) => ({ id: t.id, status: t.status }))
+  );
 
   // Search filter
   if (search.value.trim()) {
-    filtered = filtered.filter((t: Task) =>
-      t.title.toLowerCase().includes(search.value.toLowerCase()) ||
-      (t.description && t.description.toLowerCase().includes(search.value.toLowerCase()))
+    filtered = filtered.filter(
+      (t: Task) =>
+        t.title.toLowerCase().includes(search.value.toLowerCase()) ||
+        (t.description &&
+          t.description.toLowerCase().includes(search.value.toLowerCase()))
     );
   }
 
@@ -798,13 +931,16 @@ const filteredTasks = computed(() => {
       if (selectedFilters.value.assignee === 'Unassigned') {
         return !t.assignedTo || !t.assignedTo.fullName;
       }
-      return t.assignedTo && t.assignedTo.fullName === selectedFilters.value.assignee;
+      return (
+        t.assignedTo && t.assignedTo.fullName === selectedFilters.value.assignee
+      );
     });
   }
 
   if (selectedFilters.value.createdBy !== 'All users') {
-    filtered = filtered.filter((t: Task) =>
-      t.createdBy && t.createdBy.fullName === selectedFilters.value.createdBy
+    filtered = filtered.filter(
+      (t: Task) =>
+        t.createdBy && t.createdBy.fullName === selectedFilters.value.createdBy
     );
   }
 
@@ -829,8 +965,14 @@ const filteredTasks = computed(() => {
         case 'Overdue now':
           return dueDate < today;
         case 'Custom Range':
-          if (selectedDateRange.value.startDate && selectedDateRange.value.endDate) {
-            return dueDate >= selectedDateRange.value.startDate && dueDate <= selectedDateRange.value.endDate;
+          if (
+            selectedDateRange.value.startDate &&
+            selectedDateRange.value.endDate
+          ) {
+            return (
+              dueDate >= selectedDateRange.value.startDate &&
+              dueDate <= selectedDateRange.value.endDate
+            );
           }
           return true; // Show all tasks if no range selected
         default:
@@ -840,37 +982,48 @@ const filteredTasks = computed(() => {
   }
 
   console.log('🔍 After filtering - Final filtered tasks:', filtered.length);
-  console.log('🔍 Final task statuses:', filtered.map((t: Task) => ({ id: t.id, status: t.status })));
+  console.log(
+    '🔍 Final task statuses:',
+    filtered.map((t: Task) => ({ id: t.id, status: t.status }))
+  );
 
   return filtered;
 });
 
 // These computed properties are now replaced by the dynamic getTasksByStatus function
 
-
-
 // Computed để lấy danh sách unique languages từ all tasks
 const availableLanguages = computed(() => {
   const languages = new Set<string>();
-  filteredTasks.value.forEach((task: Task) => {
+  for (const task of filteredTasks.value) {
     if (task.language) {
       languages.add(task.language);
     }
-  });
+  }
   const result = Array.from(languages).sort();
   console.log('Available languages:', result);
-  console.log('Tasks with languages:', filteredTasks.value.map((t: Task) => ({ id: t.id, title: t.title, language: t.language })));
+  console.log(
+    'Tasks with languages:',
+    filteredTasks.value.map((t: Task) => ({
+      id: t.id,
+      title: t.title,
+      language: t.language,
+    }))
+  );
   return result;
 });
 
 // Check if we need to show language grouping (more than 1 language)
 const shouldShowLanguageGrouping = computed(() => {
   const shouldShow = availableLanguages.value.length > 1;
-  console.log('Should show language grouping:', shouldShow, 'Languages count:', availableLanguages.value.length);
+  console.log(
+    'Should show language grouping:',
+    shouldShow,
+    'Languages count:',
+    availableLanguages.value.length
+  );
   return shouldShow;
 });
-
-
 
 // Function to clean task title (remove language suffix)
 function getCleanTaskTitle(title: string): string {
@@ -878,26 +1031,22 @@ function getCleanTaskTitle(title: string): string {
   return title.replace(/\s*\([A-Z]{2}\)$/, '');
 }
 
-// Group tasks by language for each status
-// These computed properties are now replaced by the dynamic tasksByLanguageAndStatus
-
-// --- Add new computed for language grouping within columns ---
 const tasksByLanguageAndStatus = computed(() => {
   // { [language]: { [statusId]: Task[] } }
   const result: Record<string, Record<string, Task[]>> = {};
-  availableLanguages.value.forEach((lang: string) => {
+  for (const lang of availableLanguages.value) {
     result[lang] = {};
-    autoDetectStatuses.value.forEach((status: any) => {
+    for (const status of autoDetectStatuses.value) {
       result[lang][status.id] = [];
-    });
-  });
-  filteredTasks.value.forEach((task: Task) => {
+    }
+  }
+  for (const task of filteredTasks.value) {
     const lang = task.language || 'Unknown';
     if (!result[lang]) {
       result[lang] = {};
-      autoDetectStatuses.value.forEach((status: any) => {
+      for (const status of autoDetectStatuses.value) {
         result[lang][status.id] = [];
-      });
+      }
     }
     if (task.status) {
       let statusId: string = '';
@@ -912,13 +1061,11 @@ const tasksByLanguageAndStatus = computed(() => {
         result[lang][statusId].push(task);
       }
     }
-  });
+  }
   return result;
 });
 
 // These computed properties are now replaced by the dynamic structure
-
-
 
 // State for collapsed language sections in swimlanes
 const collapsedLanguagesInSwimlanes = ref<Set<string>>(new Set());
@@ -954,21 +1101,18 @@ const selectedTaskStringCount = computed(() => {
   const pages = filePagesData.value.get(selectedTask.value.fileId);
   if (!pages || !Array.isArray(pages)) return '-';
 
-  const totalCount = pages.reduce((sum: number, p: { stringCount: number }) => sum + (p.stringCount || 0), 0);
+  const totalCount = pages.reduce(
+    (sum: number, p: { stringCount: number }) => sum + (p.stringCount || 0),
+    0
+  );
   return totalCount > 0 ? totalCount.toString() : '-';
-});
-
-// Computed property để lấy tên cột khi drag over
-const dragOverColumnName = computed(() => {
-  if (!dragOverColumn.value) return '';
-
-  const status = autoDetectStatuses.value.find((s: any) => s.id === dragOverColumn.value);
-  return status ? status.name : dragOverColumn.value;
 });
 
 // Thêm ref để lưu file pages data
 const filePagesData = ref<Map<string, any[]>>(new Map());
-const currentPageInfo = ref<{pageNumber: number, stringCount: number} | null>(null);
+const currentPageInfo = ref<{ pageNumber: number; stringCount: number } | null>(
+  null
+);
 
 // Function để load file pages data
 async function loadFilePagesData(fileId: string) {
@@ -977,7 +1121,7 @@ async function loadFilePagesData(fileId: string) {
   }
 
   try {
-    const pages = await taskService.getFileParts(props.projectId, props.branchId || '', fileId);
+    const pages = await taskService.getFileParts(props.projectId || '', fileId);
     filePagesData.value.set(fileId, pages);
     return pages;
   } catch (err) {
@@ -1004,7 +1148,7 @@ function calculateTaskProgress(task: Task): number {
 
 // Function để load translation strings cho task (giống như trong editor)
 async function loadTranslationStringsForTask(task: Task) {
-  if (!task.fileId || !task.projectId || !task.branchId) {
+  if (!task.fileId || !task.projectId) {
     return { total: 0, translated: 0, percentage: 0 };
   }
 
@@ -1016,7 +1160,6 @@ async function loadTranslationStringsForTask(task: Task) {
     const { data } = await axiosInstance.get('/translation/strings', {
       params: {
         projectId: task.projectId,
-        branchId: task.branchId,
         fileId: task.fileId,
         language: taskLanguage,
       },
@@ -1035,7 +1178,9 @@ async function loadTranslationStringsForTask(task: Task) {
     }
     // Check for single page
     else if (task.page !== undefined) {
-      filteredStrings = strings.filter((str: any) => str.filePart === task.page);
+      filteredStrings = strings.filter(
+        (str: any) => str.filePart === task.page
+      );
     }
 
     // Sử dụng deduplication giống như trong editor
@@ -1049,8 +1194,8 @@ async function loadTranslationStringsForTask(task: Task) {
         uniqueStrings.push(str);
       }
     }
-    const translatedStrings = uniqueStrings.filter((str: any) =>
-      str.translatedText && str.translatedText.trim().length > 0
+    const translatedStrings = uniqueStrings.filter(
+      (str: any) => str.translatedText && str.translatedText.trim().length > 0
     );
 
     const total = uniqueStrings.length;
@@ -1065,12 +1210,14 @@ async function loadTranslationStringsForTask(task: Task) {
 }
 
 // Reactive state để lưu progress thực tế
-const taskProgressData = ref<Map<string, { total: number; translated: number; percentage: number }>>(new Map());
+const taskProgressData = ref<
+  Map<string, { total: number; translated: number; percentage: number }>
+>(new Map());
 
 // Function để load progress cho task (sử dụng logic mới)
 async function loadTaskProgress(taskId: string) {
   if (taskProgressData.value.has(taskId)) {
-    return taskProgressData.value.get(taskId);
+    return taskProgressData.value.get(taskId)!;
   }
 
   try {
@@ -1160,18 +1307,6 @@ const isDragging = ref(false);
 const dragOverColumn = ref<string | null>(null);
 const didDrop = ref(false);
 
-// Helpers to display clearer reasons
-function getStatusNameById(id: string | undefined | null): string {
-  if (!id) return 'Unknown';
-  try {
-    const list: any[] = (availableStatuses as any)?.value || [];
-    const found = list.find((s: any) => String(s.id) === String(id));
-    return found?.name || String(id);
-  } catch {
-    return String(id);
-  }
-}
-
 function handleDragStart(event: DragEvent, task: Task, index: number) {
   draggedTask.value = task;
   draggedIndex.value = index;
@@ -1198,7 +1333,9 @@ function handleDragStart(event: DragEvent, task: Task, index: number) {
     try {
       allowedLoadedByTask.value[task.id] = false;
       allowedToStatusByTask.value[task.id] = new Set<string>();
-      const { data } = await axiosInstance.get(`/workflows/task/${task.id}/transitions`);
+      const { data } = await axiosInstance.get(
+        `/workflows/task/${task.id}/transitions`
+      );
       const set = new Set<string>();
       (Array.isArray(data) ? data : []).forEach((tr: any) => {
         const tid = tr?.toStatus?.id ?? tr?.toStatusId ?? tr?.to?.id ?? tr?.to;
@@ -1314,7 +1451,12 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
     return;
   }
 
-  console.log('🎯 Dropping task:', draggedTask.value.id, 'to status:', targetStatusId);
+  console.log(
+    '🎯 Dropping task:',
+    draggedTask.value.id,
+    'to status:',
+    targetStatusId
+  );
 
   // Block drop if transition not allowed
   const allowed = allowedToStatusByTask.value[draggedTask.value.id];
@@ -1328,7 +1470,7 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
       severity: 'warn',
       summary: 'Cannot move',
       detail: 'Cannot move because workflow transition is not allowed.',
-      life: 3500
+      life: 3500,
     });
     return;
   }
@@ -1340,10 +1482,16 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
   const taskToMove = draggedTask.value;
   await moveTaskToColumn(taskToMove, targetStatusId, dropIndex);
 
-  console.log(`✅ Task ${taskToMove.id} moved to ${targetStatusId} status at position ${dropIndex}`);
+  console.log(
+    `✅ Task ${taskToMove.id} moved to ${targetStatusId} status at position ${dropIndex}`
+  );
 }
 
-async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: number) {
+async function moveTaskToColumn(
+  task: Task,
+  targetStatusId: string,
+  dropIndex: number
+) {
   // Update task status based on target status
   const newStatus = targetStatusId;
 
@@ -1366,8 +1514,13 @@ async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: n
 
   // Update task status in database
   try {
-    console.log('📤 Sending API request:', { taskId: task.id, statusId: newStatus });
-    const updatedTask = await taskService.updateTask(task.id, { statusId: newStatus });
+    console.log('📤 Sending API request:', {
+      taskId: task.id,
+      statusId: newStatus,
+    });
+    const updatedTask = await taskService.updateTask(task.id, {
+      statusId: newStatus,
+    });
 
     // Update with fresh data from server
     const freshTaskData = await taskService.getTask(task.id);
@@ -1375,7 +1528,7 @@ async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: n
       id: freshTaskData.id,
       status: freshTaskData.status,
       startedAt: freshTaskData.startedAt,
-      completedAt: freshTaskData.completedAt
+      completedAt: freshTaskData.completedAt,
     });
 
     // Update the task in the local array with fresh data from server
@@ -1403,7 +1556,7 @@ async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: n
       taskTitle: task.title,
       targetStatus: targetStatusId,
       newStatus: newStatus,
-      dropIndex: dropIndex
+      dropIndex: dropIndex,
     });
   } catch (error) {
     console.error('❌ Failed to update task status:', error);
@@ -1424,20 +1577,14 @@ async function moveTaskToColumn(task: Task, targetStatusId: string, dropIndex: n
       severity: 'error',
       summary: 'Cannot move',
       detail: 'Cannot move because workflow transition is not allowed.',
-      life: 3000
+      life: 3000,
     });
   }
 }
 
 function getDropIndex(event: DragEvent, targetStatusId: string): number {
-  // Simple implementation - in real app you'd calculate exact position
-  // based on mouse position relative to other task cards
   return 0; // For now, just drop at the top
 }
-
-
-
-
 
 // Function để đóng modal xóa task
 function closeDeleteModal() {
@@ -1496,12 +1643,11 @@ function editTask() {
   // Prepare data for edit inline form
   const editData = {
     projectId: props.projectId,
-    branchId: props.branchId || '',
     projectMembers: props.projectMembers,
     projectGroups: props.projectGroups,
     projectFiles: projectFiles.value,
     projectTargetLanguages: props.project?.targetLanguages || [],
-    task: currentTaskForAction.value // Pass the entire task object
+    task: currentTaskForAction.value, // Pass the entire task object
   };
 
   console.log('📋 Edit data prepared:', editData);
@@ -1511,7 +1657,7 @@ function editTask() {
 
   console.log('✅ Edit form state set:', {
     showEditTaskInline: showEditTaskInline.value,
-    editTaskInlineData: editTaskInlineData.value
+    editTaskInlineData: editTaskInlineData.value,
   });
 
   closeTaskActionMenu();
@@ -1557,7 +1703,7 @@ async function deleteSelectedTask() {
       severity: 'success',
       summary: 'Task Deleted',
       detail: 'Task has been successfully deleted.',
-      life: 3000
+      life: 3000,
     });
 
     console.log('Task deletion process completed');
@@ -1566,7 +1712,7 @@ async function deleteSelectedTask() {
     console.error('Error details:', {
       message: error?.message,
       response: error?.response?.data,
-      status: error?.response?.status
+      status: error?.response?.status,
     });
 
     // Close modal
@@ -1588,7 +1734,7 @@ async function deleteSelectedTask() {
         severity: 'error',
         summary: 'Delete Failed',
         detail: 'Failed to delete task. Please try again.',
-        life: 4000
+        life: 4000,
       });
     } else {
       // Task was actually deleted, show success
@@ -1602,7 +1748,7 @@ async function deleteSelectedTask() {
         severity: 'success',
         summary: 'Task Deleted',
         detail: 'Task has been successfully deleted.',
-        life: 3000
+        life: 3000,
       });
     }
   } finally {
@@ -1612,7 +1758,10 @@ async function deleteSelectedTask() {
 
 // Function để update page info khi selectedTask thay đổi
 async function updatePageInfo() {
-  console.log('🔄 updatePageInfo called with selectedTask:', selectedTask.value);
+  console.log(
+    '🔄 updatePageInfo called with selectedTask:',
+    selectedTask.value
+  );
 
   if (!selectedTask.value?.fileId) {
     console.log('❌ No fileId, setting currentPageInfo to null');
@@ -1628,7 +1777,8 @@ async function updatePageInfo() {
 
   // Check if we have multiple pages selected
   // Prefer backend 'selectedPages' if present
-  const multiPages = (selectedTask.value as any).selectedPages || selectedTask.value?.pages;
+  const multiPages =
+    (selectedTask.value as any).selectedPages || selectedTask.value?.pages;
   if (multiPages && Array.isArray(multiPages) && multiPages.length > 0) {
     console.log('📚 Multiple pages selected:', multiPages);
 
@@ -1639,9 +1789,12 @@ async function updatePageInfo() {
         const part = Number(p.part);
         const pageNumber = Number(p.pageNumber ?? part);
         return (
-          part === t || pageNumber === t ||
-          part + 1 === t || pageNumber + 1 === t ||
-          part === t + 1 || pageNumber === t + 1
+          part === t ||
+          pageNumber === t ||
+          part + 1 === t ||
+          pageNumber + 1 === t ||
+          part === t + 1 ||
+          pageNumber === t + 1
         );
       });
     };
@@ -1658,15 +1811,21 @@ async function updatePageInfo() {
     if (matchedCount > 0) {
       currentPageInfo.value = {
         pageNumber: multiPages[0] + 1,
-        stringCount: totalStringCount
+        stringCount: totalStringCount,
       };
-      console.log('✅ Set currentPageInfo for multiple pages:', currentPageInfo.value);
+      console.log(
+        '✅ Set currentPageInfo for multiple pages:',
+        currentPageInfo.value
+      );
       return;
     }
   }
 
   // Check for single page
-  if (selectedTask.value?.page !== undefined && selectedTask.value?.page !== null) {
+  if (
+    selectedTask.value?.page !== undefined &&
+    selectedTask.value?.page !== null
+  ) {
     console.log('📖 Single page selected:', selectedTask.value.page);
 
     // Find the specific page
@@ -1678,9 +1837,12 @@ async function updatePageInfo() {
         const part = Number(p.part);
         const pageNumber = Number(p.pageNumber ?? part);
         return (
-          part === stored || pageNumber === stored ||
-          part - 1 === stored || pageNumber - 1 === stored ||
-          part === stored + 1 || pageNumber === stored + 1
+          part === stored ||
+          pageNumber === stored ||
+          part - 1 === stored ||
+          pageNumber - 1 === stored ||
+          part === stored + 1 ||
+          pageNumber === stored + 1
         );
       });
     })();
@@ -1688,9 +1850,12 @@ async function updatePageInfo() {
     if (page) {
       currentPageInfo.value = {
         pageNumber: selectedTask.value.page + 1,
-        stringCount: page.stringCount || 0
+        stringCount: page.stringCount || 0,
       };
-      console.log('✅ Set currentPageInfo for single page:', currentPageInfo.value);
+      console.log(
+        '✅ Set currentPageInfo for single page:',
+        currentPageInfo.value
+      );
       return;
     }
   }
@@ -1698,10 +1863,13 @@ async function updatePageInfo() {
   // If no specific pages found, calculate total for all pages
   if (pages.length > 0) {
     console.log('📋 No specific pages found, calculating total for all pages');
-    totalStringCount = pages.reduce((sum: number, p: any) => sum + (p.stringCount || 0), 0);
+    totalStringCount = pages.reduce(
+      (sum: number, p: any) => sum + (p.stringCount || 0),
+      0
+    );
     currentPageInfo.value = {
       pageNumber: 1,
-      stringCount: totalStringCount
+      stringCount: totalStringCount,
     };
     console.log('✅ Set currentPageInfo for all pages:', currentPageInfo.value);
     return;
@@ -1735,7 +1903,7 @@ function formatDate(date: string) {
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
-    day: 'numeric'
+    day: 'numeric',
   });
 }
 
@@ -1776,7 +1944,7 @@ function formatDateTime(date: string) {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false
+    hour12: false,
   });
 
   console.log('Formatted result:', result);
@@ -1788,7 +1956,11 @@ function isOverdue(dueDate: string): boolean {
 
   // Parse the due date and ensure it's treated as UTC if it doesn't have timezone info
   let due: Date;
-  if (dueDate.includes('T') && !dueDate.includes('Z') && !dueDate.includes('+')) {
+  if (
+    dueDate.includes('T') &&
+    !dueDate.includes('Z') &&
+    !dueDate.includes('+')
+  ) {
     // If date has time but no timezone, treat as UTC
     due = new Date(dueDate + 'Z');
   } else {
@@ -1813,7 +1985,11 @@ function getDaysRemaining(dueDate: string): string {
 
   // Parse the due date and ensure it's treated as UTC if it doesn't have timezone info
   let due: Date;
-  if (dueDate.includes('T') && !dueDate.includes('Z') && !dueDate.includes('+')) {
+  if (
+    dueDate.includes('T') &&
+    !dueDate.includes('Z') &&
+    !dueDate.includes('+')
+  ) {
     // If date has time but no timezone, treat as UTC
     due = new Date(dueDate + 'Z');
   } else {
@@ -1843,10 +2019,10 @@ function getAvatarUrl(avatarUrl?: string) {
     'data:image/svg+xml;utf8,' +
     encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">\n' +
-      '<circle cx="32" cy="32" r="32" fill="#e5e7eb"/>\n' +
-      '<circle cx="32" cy="24" r="12" fill="#cbd5e1"/>\n' +
-      '<path d="M16 54c4-10 28-10 32 0" fill="#cbd5e1"/>\n' +
-      '</svg>'
+        '<circle cx="32" cy="32" r="32" fill="#e5e7eb"/>\n' +
+        '<circle cx="32" cy="24" r="12" fill="#cbd5e1"/>\n' +
+        '<path d="M16 54c4-10 28-10 32 0" fill="#cbd5e1"/>\n' +
+        '</svg>'
     );
 
   if (!avatarUrl) return defaultAvatar;
@@ -1854,8 +2030,12 @@ function getAvatarUrl(avatarUrl?: string) {
   if (avatarUrl.startsWith('data:')) return avatarUrl;
 
   // 2) Build absolute API base: prefer env, else current origin + /api
-  const baseFromEnv = (import.meta.env.VITE_API_URL as string | undefined) || '';
-  const apiBase = (baseFromEnv || (window.location.origin + '/api')).replace(/\/$/, '');
+  const baseFromEnv =
+    (import.meta.env.VITE_API_URL as string | undefined) || '';
+  const apiBase = (baseFromEnv || window.location.origin + '/api').replace(
+    /\/$/,
+    ''
+  );
 
   // 3) Normalize known backend return formats
   if (avatarUrl.startsWith('/users/')) return apiBase + avatarUrl;
@@ -1878,7 +2058,8 @@ function closeFilterDropdown() {
 }
 
 function updateFilter(filterType: string, value: string) {
-  selectedFilters.value[filterType as keyof typeof selectedFilters.value] = value;
+  selectedFilters.value[filterType as keyof typeof selectedFilters.value] =
+    value;
 }
 
 function clearAllFilters() {
@@ -1886,7 +2067,7 @@ function clearAllFilters() {
     assignee: 'All users',
     createdBy: 'All users',
     file: 'All files',
-    dueDate: 'All'
+    dueDate: 'All',
   };
 }
 
@@ -1907,12 +2088,14 @@ function toggleCustomSelect(selectType: string) {
 }
 
 function selectCustomOption(filterType: string, value: string) {
-  selectedFilters.value[filterType as keyof typeof selectedFilters.value] = value;
+  selectedFilters.value[filterType as keyof typeof selectedFilters.value] =
+    value;
   activeCustomSelect.value = null;
 }
 
 function selectFilterOption(filterType: string, value: string) {
-  selectedFilters.value[filterType as keyof typeof selectedFilters.value] = value;
+  selectedFilters.value[filterType as keyof typeof selectedFilters.value] =
+    value;
 
   // Show date picker when Custom Range is selected, keep dropdown open
   if (filterType === 'dueDate' && value === 'Custom Range') {
@@ -1927,7 +2110,10 @@ function selectFilterOption(filterType: string, value: string) {
 
 // Calendar functions
 function selectDate(date: Date) {
-  if (!selectedDateRange.value.startDate || (selectedDateRange.value.startDate && selectedDateRange.value.endDate)) {
+  if (
+    !selectedDateRange.value.startDate ||
+    (selectedDateRange.value.startDate && selectedDateRange.value.endDate)
+  ) {
     // Start new range
     selectedDateRange.value.startDate = date;
     selectedDateRange.value.endDate = null;
@@ -1956,24 +2142,49 @@ function isDateInRange(date: Date): boolean {
   if (!selectedDateRange.value.endDate) {
     return date.getTime() === selectedDateRange.value.startDate.getTime();
   }
-  return date >= selectedDateRange.value.startDate && date <= selectedDateRange.value.endDate;
+  return (
+    date >= selectedDateRange.value.startDate &&
+    date <= selectedDateRange.value.endDate
+  );
 }
 
 function isDateStart(date: Date): boolean {
-  return selectedDateRange.value.startDate && date.getTime() === selectedDateRange.value.startDate.getTime();
+  return (
+    selectedDateRange.value.startDate &&
+    date.getTime() === selectedDateRange.value.startDate.getTime()
+  );
 }
 
 function isDateEnd(date: Date): boolean {
-  return selectedDateRange.value.endDate && date.getTime() === selectedDateRange.value.endDate.getTime();
+  return (
+    selectedDateRange.value.endDate &&
+    date.getTime() === selectedDateRange.value.endDate.getTime()
+  );
 }
 
 function navigateMonth(direction: 'prev' | 'next') {
   if (direction === 'prev') {
-    currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() - 1, 1);
-    nextMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 1);
+    currentMonth.value = new Date(
+      currentMonth.value.getFullYear(),
+      currentMonth.value.getMonth() - 1,
+      1
+    );
+    nextMonth.value = new Date(
+      currentMonth.value.getFullYear(),
+      currentMonth.value.getMonth() + 1,
+      1
+    );
   } else {
-    currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 1);
-    nextMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 2, 1);
+    currentMonth.value = new Date(
+      currentMonth.value.getFullYear(),
+      currentMonth.value.getMonth() + 1,
+      1
+    );
+    nextMonth.value = new Date(
+      currentMonth.value.getFullYear(),
+      currentMonth.value.getMonth() + 2,
+      1
+    );
   }
 }
 
@@ -2023,7 +2234,13 @@ onMounted(() => {
   // Add click outside listener for filter dropdown
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    if (!target.closest('.search-filter-container') && !target.closest('.filter-section') && !target.closest('.date-picker-calendar') && !target.closest('.filter-dropdown-menu') && !target.closest('.custom-select-wrapper')) {
+    if (
+      !target.closest('.search-filter-container') &&
+      !target.closest('.filter-section') &&
+      !target.closest('.date-picker-calendar') &&
+      !target.closest('.filter-dropdown-menu') &&
+      !target.closest('.custom-select-wrapper')
+    ) {
       activeSubDropdown.value = null;
       activeCustomSelect.value = null;
       showDatePicker.value = false;
@@ -2033,7 +2250,10 @@ onMounted(() => {
   // Add click outside listener for task action menu
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    if (!target.closest('.task-action-menu') && !target.closest('.task-action-menu-btn')) {
+    if (
+      !target.closest('.task-action-menu') &&
+      !target.closest('.task-action-menu-btn')
+    ) {
       closeTaskActionMenu();
     }
   });
@@ -2041,7 +2261,10 @@ onMounted(() => {
   // Close reopen dropdown on outside click
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    if (!target.closest('.status-select-wrapper') && showReopenStatusDropdown.value) {
+    if (
+      !target.closest('.status-select-wrapper') &&
+      showReopenStatusDropdown.value
+    ) {
       showReopenStatusDropdown.value = false;
     }
   });
@@ -2056,8 +2279,12 @@ onMounted(() => {
   // Add click outside listener for assignee and reviewer dropdowns
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    if (!target.closest('.assignee-dropdown') && !target.closest('.reviewer-dropdown') &&
-      !target.closest('.assignee-dropdown-trigger') && !target.closest('.reviewer-dropdown-trigger')) {
+    if (
+      !target.closest('.assignee-dropdown') &&
+      !target.closest('.reviewer-dropdown') &&
+      !target.closest('.assignee-dropdown-trigger') &&
+      !target.closest('.reviewer-dropdown-trigger')
+    ) {
       closeAllDropdowns();
     }
   });
@@ -2089,32 +2316,34 @@ onBeforeUnmount(() => {
   taskCommentRealtimeService.offCommentDeleted(() => {});
 });
 
-// Watch cho projectId và branchId thay đổi - giống như ProjectTranslationTab
-watch([() => props.projectId, () => props.branchId], () => {
-  console.log('Project ID or Branch ID changed, reloading tasks and files...');
+watch([() => props.projectId], () => {
+  console.log('Project ID changed, reloading tasks and files...');
   loadTasks();
   loadProjectFiles();
   loadStatuses();
 });
 
-watch(() => selectedTask.value, async (task: Task | null) => {
-  if (task && task.createdBy) {
-    console.log('createdBy:', task.createdBy);
+watch(
+  () => selectedTask.value,
+  async (task: Task | null) => {
+    if (task && task.createdBy) {
+      console.log('createdBy:', task.createdBy);
+    }
+    // Update page info khi task thay đổi
+    updatePageInfo();
+    // Update progress khi task thay đổi
+    await updateSelectedTaskProgress();
+    // Load task history khi task thay đổi
+    if (task) {
+      await loadTaskHistory(task.id);
+      // Load task comments khi task thay đổi
+      await loadTaskComments(task.id);
+    } else {
+      taskHistory.value = [];
+      taskComments.value = [];
+    }
   }
-  // Update page info khi task thay đổi
-  updatePageInfo();
-  // Update progress khi task thay đổi
-  await updateSelectedTaskProgress();
-  // Load task history khi task thay đổi
-  if (task) {
-    await loadTaskHistory(task.id);
-    // Load task comments khi task thay đổi
-    await loadTaskComments(task.id);
-  } else {
-    taskHistory.value = [];
-    taskComments.value = [];
-  }
-});
+);
 
 // Workflow management methods
 function showWorkflowManagement() {
@@ -2138,7 +2367,7 @@ function handleWorkflowUpdated() {
     severity: 'success',
     summary: 'Workflow Updated',
     detail: 'Workflow has been updated successfully.',
-    life: 3000
+    life: 3000,
   });
 }
 
@@ -2155,7 +2384,7 @@ function handleStatusCreated() {
     severity: 'success',
     summary: 'Status Created',
     detail: 'New status has been created successfully.',
-    life: 3000
+    life: 3000,
   });
 }
 
@@ -2166,11 +2395,9 @@ function handleStatusUpdated() {
     severity: 'success',
     summary: 'Status Updated',
     detail: 'Status has been updated successfully.',
-    life: 3000
+    life: 3000,
   });
 }
-
-
 
 // Expose methods for parent component
 defineExpose({
@@ -2179,7 +2406,7 @@ defineExpose({
   refreshAllTaskProgress,
   showWorkflowManagement,
   showStatusManagement,
-  showWorkflowBoardView
+  showWorkflowBoardView,
 });
 
 // Debug: Log component lifecycle
@@ -2216,7 +2443,9 @@ async function confirmCloseTask() {
     await taskService.closeTask(taskToClose.value.id);
 
     // Update task status in local array
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === taskToClose.value!.id);
+    const taskIndex = tasks.value.findIndex(
+      (t: Task) => t.id === taskToClose.value!.id
+    );
     if (taskIndex !== -1) {
       tasks.value[taskIndex] = { ...tasks.value[taskIndex], status: 'closed' };
     }
@@ -2226,7 +2455,7 @@ async function confirmCloseTask() {
       severity: 'success',
       summary: 'Task Closed',
       detail: `Task "${taskToClose.value.title}" has been closed successfully.`,
-      life: 3000
+      life: 3000,
     });
 
     // Close task action menu
@@ -2243,8 +2472,10 @@ async function confirmCloseTask() {
     toast.add({
       severity: 'error',
       summary: 'Close Failed',
-      detail: error.response?.data?.message || 'Failed to close task. Please try again.',
-      life: 4000
+      detail:
+        error.response?.data?.message ||
+        'Failed to close task. Please try again.',
+      life: 4000,
     });
   } finally {
     // Reset modal state
@@ -2265,7 +2496,9 @@ function showReopenTaskConfirmation(task: Task) {
   taskToReopen.value = task;
   reopenReason.value = '';
   // default selected status: first non-closed status or keep empty
-  const firstAvailable = orderedStatuses.value.find((s: any) => !isClosedTypeStatus(s.id));
+  const firstAvailable = orderedStatuses.value.find(
+    (s: any) => !isClosedTypeStatus(s.id)
+  );
   reopenTargetStatusId.value = firstAvailable?.id || '';
   showReopenTaskModal.value = true;
 }
@@ -2279,7 +2512,7 @@ async function confirmReopenTask() {
     title: taskToReopen.value.title,
     currentStatus: taskToReopen.value.status,
     targetStatusId: reopenTargetStatusId.value,
-    reason: reopenReason.value
+    reason: reopenReason.value,
   });
 
   isReopeningTask.value = true;
@@ -2291,16 +2524,35 @@ async function confirmReopenTask() {
     let updatedLocalTask: Task | null = null;
     if (reopenTargetStatusId.value) {
       try {
-        console.log('🎯 [REOPEN] Setting target status:', reopenTargetStatusId.value);
-        console.log('🎯 [REOPEN] Target status type:', typeof reopenTargetStatusId.value);
+        console.log(
+          '🎯 [REOPEN] Setting target status:',
+          reopenTargetStatusId.value
+        );
+        console.log(
+          '🎯 [REOPEN] Target status type:',
+          typeof reopenTargetStatusId.value
+        );
 
         // Check if statusId exists in available statuses
-        const targetStatus = availableStatuses.value.find((s: any) => s.id === reopenTargetStatusId.value);
-        console.log('🎯 [REOPEN] Target status found in available statuses:', targetStatus);
+        const targetStatus = availableStatuses.value.find(
+          (s: any) => s.id === reopenTargetStatusId.value
+        );
+        console.log(
+          '🎯 [REOPEN] Target status found in available statuses:',
+          targetStatus
+        );
 
         if (!targetStatus) {
-          console.warn('⚠️ [REOPEN] Target status not found in available statuses!');
-          console.log('🎯 [REOPEN] Available statuses:', availableStatuses.value.map((s: any) => ({ id: s.id, name: s.name })));
+          console.warn(
+            '⚠️ [REOPEN] Target status not found in available statuses!'
+          );
+          console.log(
+            '🎯 [REOPEN] Available statuses:',
+            availableStatuses.value.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+            }))
+          );
         }
 
         // Try to update task status directly (this might reopen the task automatically)
@@ -2309,65 +2561,98 @@ async function confirmReopenTask() {
 
         // Debug: Check if this statusId is valid for this task
         console.log('🔍 [REOPEN] Debugging statusId validation...');
-        console.log('🔍 [REOPEN] Current task status before update:', taskToReopen.value.status);
+        console.log(
+          '🔍 [REOPEN] Current task status before update:',
+          taskToReopen.value.status
+        );
         console.log('🔍 [REOPEN] Target statusId:', statusId);
-        console.log('🔍 [REOPEN] Available statuses for this project:', availableStatuses.value.map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          type: s.type,
-          isClosed: s.isClosed
-        })));
+        console.log(
+          '🔍 [REOPEN] Available statuses for this project:',
+          availableStatuses.value.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            type: s.type,
+            isClosed: s.isClosed,
+          }))
+        );
 
         // Check if statusId is a valid number
         const statusIdNum = parseInt(statusId);
-        console.log('🔍 [REOPEN] StatusId as number:', statusIdNum, 'isNaN:', isNaN(statusIdNum));
+        console.log(
+          '🔍 [REOPEN] StatusId as number:',
+          statusIdNum,
+          'isNaN:',
+          isNaN(statusIdNum)
+        );
 
         const updateData = {
-          statusId: statusId
+          statusId: statusId,
         };
         console.log('📤 [REOPEN] Sending update data to API:', updateData);
 
-        updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, { ...updateData, skipWorkflowValidation: true as any });
+        updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, {
+          ...updateData,
+          skipWorkflowValidation: true as any,
+        });
         console.log('✅ [REOPEN] Task status updated successfully:', {
           taskId: updatedLocalTask.id,
           newStatus: updatedLocalTask.status,
-          statusId: (updatedLocalTask.status as any)?.id || updatedLocalTask.status
+          statusId:
+            (updatedLocalTask.status as any)?.id || updatedLocalTask.status,
         });
 
         // If direct update succeeded, we don't need to call reopen API
-        console.log('✅ [REOPEN] Direct update succeeded, skipping reopen API call');
-
+        console.log(
+          '✅ [REOPEN] Direct update succeeded, skipping reopen API call'
+        );
       } catch (e: any) {
-        console.warn('⚠️ [REOPEN] Direct update failed, trying reopen + update approach...', e);
+        console.warn(
+          '⚠️ [REOPEN] Direct update failed, trying reopen + update approach...',
+          e
+        );
         console.error('❌ [REOPEN] Error details:', {
           message: e?.message,
           response: e?.response?.data,
           status: e?.response?.status,
-          statusText: e?.response?.statusText
+          statusText: e?.response?.statusText,
         });
 
         // Fallback: try reopen first, then update status
         try {
           console.log('📞 [REOPEN] Calling reopen API as fallback...');
-          await taskService.reopenTask(taskToReopen.value.id, reopenReason.value);
+          await taskService.reopenTask(
+            taskToReopen.value.id,
+            reopenReason.value
+          );
           console.log('✅ [REOPEN] Task reopened successfully via API');
 
           // Now try to update status again
           const statusId = String(reopenTargetStatusId.value);
           const updateData = {
             statusId: statusId,
-            skipWorkflowValidation: true as any
+            skipWorkflowValidation: true as any,
           };
-          console.log('📤 [REOPEN] Retrying status update after reopen:', updateData);
-          updatedLocalTask = await taskService.updateTask(taskToReopen.value.id, updateData);
+          console.log(
+            '📤 [REOPEN] Retrying status update after reopen:',
+            updateData
+          );
+          updatedLocalTask = await taskService.updateTask(
+            taskToReopen.value.id,
+            updateData
+          );
           console.log('✅ [REOPEN] Status update succeeded after reopen');
         } catch (fallbackError: any) {
-          console.error('❌ [REOPEN] Fallback approach also failed:', fallbackError);
+          console.error(
+            '❌ [REOPEN] Fallback approach also failed:',
+            fallbackError
+          );
         }
       }
     } else {
       // No target status selected, just reopen
-      console.log('📞 [REOPEN] No target status selected, calling reopen API only...');
+      console.log(
+        '📞 [REOPEN] No target status selected, calling reopen API only...'
+      );
       await taskService.reopenTask(taskToReopen.value.id, reopenReason.value);
       console.log('✅ [REOPEN] Task reopened successfully via API');
     }
@@ -2378,23 +2663,32 @@ async function confirmReopenTask() {
     console.log('✅ [REOPEN] Tasks reloaded from server');
 
     // Debug: Check if task appears in correct column after reload
-    const reloadedTask = tasks.value.find((t: Task) => t.id === taskToReopen.value!.id);
+    const reloadedTask = tasks.value.find(
+      (t: Task) => t.id === taskToReopen.value!.id
+    );
     if (reloadedTask) {
       console.log('🔍 [REOPEN] Task found after reload:', {
         id: reloadedTask.id,
         title: reloadedTask.title,
         status: reloadedTask.status,
-        statusId: (reloadedTask.status as any)?.id || reloadedTask.status
+        statusId: (reloadedTask.status as any)?.id || reloadedTask.status,
       });
 
       // Check which column the task should appear in
-      const targetStatus = availableStatuses.value.find((s: any) => s.id === reopenTargetStatusId.value);
+      const targetStatus = availableStatuses.value.find(
+        (s: any) => s.id === reopenTargetStatusId.value
+      );
       console.log('🎯 [REOPEN] Target status info:', targetStatus);
 
       // Check if task appears in the correct column
       const tasksInTargetColumn = getTasksByStatus(reopenTargetStatusId.value);
-      const taskInColumn = tasksInTargetColumn.find((t: Task) => t.id === taskToReopen.value!.id);
-      console.log('📊 [REOPEN] Tasks in target column:', tasksInTargetColumn.length);
+      const taskInColumn = tasksInTargetColumn.find(
+        (t: Task) => t.id === taskToReopen.value!.id
+      );
+      console.log(
+        '📊 [REOPEN] Tasks in target column:',
+        tasksInTargetColumn.length
+      );
       console.log('✅ [REOPEN] Task appears in target column:', !!taskInColumn);
     } else {
       console.warn('⚠️ [REOPEN] Task not found after reload!');
@@ -2418,7 +2712,7 @@ async function confirmReopenTask() {
       severity: 'success',
       summary: 'Task Reopened',
       detail: `Task "${taskToReopen.value.title}" has been reopened successfully.`,
-      life: 3000
+      life: 3000,
     });
 
     // Close task action menu
@@ -2428,21 +2722,26 @@ async function confirmReopenTask() {
     selectedTask.value = null;
     activeTab.value = 'board';
 
-    console.log('🎉 [REOPEN] Reopen process completed successfully for task:', taskToReopen.value.id);
+    console.log(
+      '🎉 [REOPEN] Reopen process completed successfully for task:',
+      taskToReopen.value.id
+    );
   } catch (error: any) {
     console.error('❌ [REOPEN] Failed to reopen task:', error);
     console.error('❌ [REOPEN] Error details:', {
       message: error?.message,
       response: error?.response?.data,
-      status: error?.response?.status
+      status: error?.response?.status,
     });
 
     // Show error message
     toast.add({
       severity: 'error',
       summary: 'Reopen Failed',
-      detail: error.response?.data?.message || 'Failed to reopen task. Please try again.',
-      life: 4000
+      detail:
+        error.response?.data?.message ||
+        'Failed to reopen task. Please try again.',
+      life: 4000,
     });
   } finally {
     // Reset modal state
@@ -2481,8 +2780,6 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-
-
 async function closeTask(task: Task) {
   showCloseTaskConfirmation(task);
 }
@@ -2511,8 +2808,6 @@ function getStatusText(status: string): string {
 // Edit task inline form state
 const showEditTaskInline = ref(false);
 const editTaskInlineData = ref(null);
-
-
 
 const handleTaskUpdatedInline = (updatedTask: Task) => {
   console.log('✅ Task updated inline, refreshing tasks:', updatedTask);
@@ -2547,7 +2842,7 @@ const handleTaskUpdatedInline = (updatedTask: Task) => {
     severity: 'success',
     summary: 'Task Updated',
     detail: 'Task has been successfully updated.',
-    life: 3000
+    life: 3000,
   });
 };
 
@@ -2557,7 +2852,7 @@ const closeEditTaskInline = () => {
 };
 
 // Function to format selected pages for display
-function formatSelectedPages(pages: number[]): string {
+function formatSelectedPages(pages: number[] | undefined): string {
   if (!pages || pages.length === 0) return '';
 
   if (pages.length === 1) {
@@ -2599,19 +2894,27 @@ const showReviewerDropdown = ref(false);
 const isUpdatingAssignee = ref(false);
 const isUpdatingReviewer = ref(false);
 // Swap confirmation state
-const swapPrompt = ref<{ context: 'assignee' | 'reviewer'; memberId: string } | null>(null);
+const swapPrompt = ref<{
+  context: 'assignee' | 'reviewer';
+  memberId: string;
+} | null>(null);
 
 // Function to update task assignee
 async function updateTaskAssignee(newAssigneeId: string) {
   if (!selectedTask.value || isUpdatingAssignee.value) return;
 
   // Check if new assignee is already the reviewer
-  if (newAssigneeId !== 'none' && selectedTask.value.reviewer && selectedTask.value.reviewer.id === newAssigneeId) {
+  if (
+    newAssigneeId !== 'none' &&
+    selectedTask.value.reviewer &&
+    selectedTask.value.reviewer.id === newAssigneeId
+  ) {
     toast.add({
       severity: 'error',
       summary: 'Invalid Assignment',
-      detail: 'A person cannot be both assignee and reviewer for the same task.',
-      life: 4000
+      detail:
+        'A person cannot be both assignee and reviewer for the same task.',
+      life: 4000,
     });
     return;
   }
@@ -2619,15 +2922,22 @@ async function updateTaskAssignee(newAssigneeId: string) {
   isUpdatingAssignee.value = true;
 
   try {
-    console.log('Updating task assignee:', selectedTask.value.id, 'to:', newAssigneeId);
+    console.log(
+      'Updating task assignee:',
+      selectedTask.value.id,
+      'to:',
+      newAssigneeId
+    );
 
     // Call API to update task assignee
     const updatedTask = await taskService.updateTask(selectedTask.value.id, {
-      assignedToId: newAssigneeId === 'none' ? undefined : newAssigneeId
+      assignedToId: newAssigneeId === 'none' ? undefined : newAssigneeId,
     });
 
     // Update local task data
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === selectedTask.value!.id);
+    const taskIndex = tasks.value.findIndex(
+      (t: Task) => t.id === selectedTask.value!.id
+    );
     if (taskIndex !== -1) {
       tasks.value[taskIndex] = updatedTask;
     }
@@ -2640,7 +2950,7 @@ async function updateTaskAssignee(newAssigneeId: string) {
       severity: 'success',
       summary: 'Assignee Updated',
       detail: 'Task assignee has been updated successfully.',
-      life: 3000
+      life: 3000,
     });
 
     // Close dropdown
@@ -2654,8 +2964,10 @@ async function updateTaskAssignee(newAssigneeId: string) {
     toast.add({
       severity: 'error',
       summary: 'Update Failed',
-      detail: error.response?.data?.message || 'Failed to update task assignee. Please try again.',
-      life: 4000
+      detail:
+        error.response?.data?.message ||
+        'Failed to update task assignee. Please try again.',
+      life: 4000,
     });
   } finally {
     isUpdatingAssignee.value = false;
@@ -2667,12 +2979,17 @@ async function updateTaskReviewer(newReviewerId: string) {
   if (!selectedTask.value || isUpdatingReviewer.value) return;
 
   // Check if new reviewer is already the assignee
-  if (newReviewerId !== 'none' && selectedTask.value.assignedTo && selectedTask.value.assignedTo.id === newReviewerId) {
+  if (
+    newReviewerId !== 'none' &&
+    selectedTask.value.assignedTo &&
+    selectedTask.value.assignedTo.id === newReviewerId
+  ) {
     toast.add({
       severity: 'error',
       summary: 'Invalid Assignment',
-      detail: 'A person cannot be both assignee and reviewer for the same task.',
-      life: 4000
+      detail:
+        'A person cannot be both assignee and reviewer for the same task.',
+      life: 4000,
     });
     return;
   }
@@ -2680,15 +2997,22 @@ async function updateTaskReviewer(newReviewerId: string) {
   isUpdatingReviewer.value = true;
 
   try {
-    console.log('Updating task reviewer:', selectedTask.value.id, 'to:', newReviewerId);
+    console.log(
+      'Updating task reviewer:',
+      selectedTask.value.id,
+      'to:',
+      newReviewerId
+    );
 
     // Call API to update task reviewer
     const updatedTask = await taskService.updateTask(selectedTask.value.id, {
-      reviewerId: newReviewerId === 'none' ? undefined : newReviewerId
+      reviewerId: newReviewerId === 'none' ? undefined : newReviewerId,
     });
 
     // Update local task data
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === selectedTask.value!.id);
+    const taskIndex = tasks.value.findIndex(
+      (t: Task) => t.id === selectedTask.value!.id
+    );
     if (taskIndex !== -1) {
       tasks.value[taskIndex] = updatedTask;
     }
@@ -2701,7 +3025,7 @@ async function updateTaskReviewer(newReviewerId: string) {
       severity: 'success',
       summary: 'Reviewer Updated',
       detail: 'Task reviewer has been updated successfully.',
-      life: 3000
+      life: 3000,
     });
 
     // Close dropdown
@@ -2715,8 +3039,10 @@ async function updateTaskReviewer(newReviewerId: string) {
     toast.add({
       severity: 'error',
       summary: 'Update Failed',
-      detail: error.response?.data?.message || 'Failed to update task reviewer. Please try again.',
-      life: 4000
+      detail:
+        error.response?.data?.message ||
+        'Failed to update task reviewer. Please try again.',
+      life: 4000,
     });
   } finally {
     isUpdatingReviewer.value = false;
@@ -2724,7 +3050,10 @@ async function updateTaskReviewer(newReviewerId: string) {
 }
 
 // Swap roles between current assignee and reviewer in a single update call
-async function swapAssigneeAndReviewer(newAssigneeId: string, newReviewerId: string) {
+async function swapAssigneeAndReviewer(
+  newAssigneeId: string,
+  newReviewerId: string
+) {
   if (!selectedTask.value) return;
   // Avoid redundant request if ids are the same
   if (newAssigneeId === newReviewerId) return;
@@ -2739,7 +3068,9 @@ async function swapAssigneeAndReviewer(newAssigneeId: string, newReviewerId: str
       reviewerId: newReviewerId,
     });
 
-    const taskIndex = tasks.value.findIndex((t: Task) => t.id === selectedTask.value!.id);
+    const taskIndex = tasks.value.findIndex(
+      (t: Task) => t.id === selectedTask.value!.id
+    );
     if (taskIndex !== -1) tasks.value[taskIndex] = updatedTask;
     selectedTask.value = updatedTask;
 
@@ -2757,7 +3088,9 @@ async function swapAssigneeAndReviewer(newAssigneeId: string, newReviewerId: str
     toast.add({
       severity: 'error',
       summary: 'Swap Failed',
-      detail: error?.response?.data?.message || 'Failed to swap assignee and reviewer.',
+      detail:
+        error?.response?.data?.message ||
+        'Failed to swap assignee and reviewer.',
       life: 4000,
     });
   } finally {
@@ -2771,7 +3104,11 @@ async function handleSelectAssignee(memberId: string) {
   if (!selectedTask.value) return;
   const currentReviewerId = selectedTask.value.reviewer?.id;
   const currentAssigneeId = selectedTask.value.assignedTo?.id;
-  if (currentReviewerId && memberId === currentReviewerId && currentAssigneeId) {
+  if (
+    currentReviewerId &&
+    memberId === currentReviewerId &&
+    currentAssigneeId
+  ) {
     swapPrompt.value = { context: 'assignee', memberId };
   } else {
     await updateTaskAssignee(memberId);
@@ -2783,7 +3120,11 @@ async function handleSelectReviewer(memberId: string) {
   if (!selectedTask.value) return;
   const currentReviewerId = selectedTask.value.reviewer?.id;
   const currentAssigneeId = selectedTask.value.assignedTo?.id;
-  if (currentAssigneeId && memberId === currentAssigneeId && currentReviewerId) {
+  if (
+    currentAssigneeId &&
+    memberId === currentAssigneeId &&
+    currentReviewerId
+  ) {
     swapPrompt.value = { context: 'reviewer', memberId };
   } else {
     await updateTaskReviewer(memberId);
@@ -2797,7 +3138,10 @@ async function confirmSwap() {
   if (swapPrompt.value.context === 'assignee' && currentAssigneeId) {
     await swapAssigneeAndReviewer(swapPrompt.value.memberId, currentAssigneeId);
   } else if (swapPrompt.value.context === 'reviewer' && currentReviewerId) {
-    await swapAssigneeAndReviewer(selectedTask.value.assignedTo?.id || '', swapPrompt.value.memberId);
+    await swapAssigneeAndReviewer(
+      selectedTask.value.assignedTo?.id || '',
+      swapPrompt.value.memberId
+    );
   }
   swapPrompt.value = null;
 }
@@ -2836,10 +3180,10 @@ async function loadTaskComments(taskId: string) {
   commentsLoading.value = true;
   try {
     const comments = await taskService.getTaskComments(taskId);
-    taskComments.value = comments.map(comment => ({
+    taskComments.value = comments.map((comment) => ({
       ...comment,
       isEditing: false,
-      editContent: comment.content
+      editContent: comment.content,
     }));
     console.log('Task comments loaded:', comments);
   } catch (error: unknown) {
@@ -2855,13 +3199,16 @@ async function addComment() {
 
   isAddingComment.value = true;
   try {
-    const newComment = await taskService.addTaskComment(selectedTask.value.id, newCommentContent.value.trim());
+    const newComment = await taskService.addTaskComment(
+      selectedTask.value.id,
+      newCommentContent.value.trim()
+    );
 
     // Add to local comments array
     taskComments.value.unshift({
       ...newComment,
       isEditing: false,
-      editContent: newComment.content
+      editContent: newComment.content,
     });
 
     // Update task comment count (we'll need to implement this separately)
@@ -2875,7 +3222,7 @@ async function addComment() {
       severity: 'success',
       summary: 'Comment Added',
       detail: 'Comment has been added successfully.',
-      life: 3000
+      life: 3000,
     });
 
     console.log('Comment added successfully:', newComment);
@@ -2884,30 +3231,46 @@ async function addComment() {
     toast.add({
       severity: 'error',
       summary: 'Add Failed',
-      detail: error.response?.data?.message || 'Failed to add comment. Please try again.',
-      life: 4000
+      detail:
+        error.response?.data?.message ||
+        'Failed to add comment. Please try again.',
+      life: 4000,
     });
   } finally {
     isAddingComment.value = false;
   }
 }
 
-function editComment(comment: Comment & { isEditing: boolean; editContent: string }) {
+function editComment(
+  comment: Comment & { isEditing: boolean; editContent: string }
+) {
   comment.isEditing = true;
   comment.editContent = comment.content;
 }
 
-function cancelCommentEdit(comment: Comment & { isEditing: boolean; editContent: string }) {
+function cancelCommentEdit(
+  comment: Comment & { isEditing: boolean; editContent: string }
+) {
   comment.isEditing = false;
   comment.editContent = comment.content;
 }
 
-async function saveCommentEdit(comment: Comment & { isEditing: boolean; editContent: string }) {
+async function saveCommentEdit(
+  comment: Comment & { isEditing: boolean; editContent: string }
+) {
   if (!comment.editContent.trim()) return;
 
   try {
-    console.log('Updating comment with ID:', comment.id, 'Content:', comment.editContent.trim());
-    const updatedComment = await taskService.updateTaskComment(comment.id, comment.editContent.trim());
+    console.log(
+      'Updating comment with ID:',
+      comment.id,
+      'Content:',
+      comment.editContent.trim()
+    );
+    const updatedComment = await taskService.updateTaskComment(
+      comment.id,
+      comment.editContent.trim()
+    );
 
     // Update local comment
     comment.content = updatedComment.content;
@@ -2918,7 +3281,7 @@ async function saveCommentEdit(comment: Comment & { isEditing: boolean; editCont
       severity: 'success',
       summary: 'Comment Updated',
       detail: 'Comment has been updated successfully.',
-      life: 3000
+      life: 3000,
     });
 
     console.log('Comment updated successfully:', updatedComment);
@@ -2927,8 +3290,10 @@ async function saveCommentEdit(comment: Comment & { isEditing: boolean; editCont
     toast.add({
       severity: 'error',
       summary: 'Update Failed',
-      detail: error.response?.data?.message || 'Failed to update comment. Please try again.',
-      life: 4000
+      detail:
+        error.response?.data?.message ||
+        'Failed to update comment. Please try again.',
+      life: 4000,
     });
   }
 }
@@ -2956,8 +3321,13 @@ function toggleCommentDropdown(commentId: string) {
 
 function getTaskCommentCount(taskId: string): number {
   // Count comments for the specific task
-  const count = taskComments.value.filter((comment: Comment) => comment.taskId === taskId).length;
-  console.log(`Task ${taskId} has ${count} comments:`, taskComments.value.filter((comment: Comment) => comment.taskId === taskId));
+  const count = taskComments.value.filter(
+    (comment: Comment) => comment.taskId === taskId
+  ).length;
+  console.log(
+    `Task ${taskId} has ${count} comments:`,
+    taskComments.value.filter((comment: Comment) => comment.taskId === taskId)
+  );
   return count;
 }
 
@@ -2971,13 +3341,15 @@ async function loadAllTaskCommentCounts() {
       try {
         const comments = await taskService.getTaskComments(task.id);
         // Add comments to taskComments array
-        comments.forEach(comment => {
-          const existingComment = taskComments.value.find(c => c.id === comment.id);
+        comments.forEach((comment) => {
+          const existingComment = taskComments.value.find(
+            (c) => c.id === comment.id
+          );
           if (!existingComment) {
             taskComments.value.push({
               ...comment,
               isEditing: false,
-              editContent: comment.content
+              editContent: comment.content,
             });
           }
         });
@@ -2992,8 +3364,6 @@ async function loadAllTaskCommentCounts() {
   }
 }
 
-
-
 async function deleteComment() {
   if (!commentToDelete.value) return;
 
@@ -3001,7 +3371,9 @@ async function deleteComment() {
     await taskService.deleteTaskComment(commentToDelete.value.id);
 
     // Remove from local comments array
-    const commentIndex = taskComments.value.findIndex((c: Comment) => c.id === commentToDelete.value!.id);
+    const commentIndex = taskComments.value.findIndex(
+      (c: Comment) => c.id === commentToDelete.value!.id
+    );
     if (commentIndex !== -1) {
       taskComments.value.splice(commentIndex, 1);
     }
@@ -3014,7 +3386,7 @@ async function deleteComment() {
       severity: 'success',
       summary: 'Comment Deleted',
       detail: 'Comment has been deleted successfully.',
-      life: 3000
+      life: 3000,
     });
 
     console.log('Comment deleted successfully:', commentToDelete.value.id);
@@ -3023,8 +3395,10 @@ async function deleteComment() {
     toast.add({
       severity: 'error',
       summary: 'Delete Failed',
-      detail: error.response?.data?.message || 'Failed to delete comment. Please try again.',
-      life: 4000
+      detail:
+        error.response?.data?.message ||
+        'Failed to delete comment. Please try again.',
+      life: 4000,
     });
   } finally {
     showDeleteConfirmModal.value = false;
@@ -3042,7 +3416,7 @@ function setupRealtimeCommentListeners() {
       taskComments.value.unshift({
         ...event.comment,
         isEditing: false,
-        editContent: event.comment.content
+        editContent: event.comment.content,
       });
 
       // Update task comment count (we'll need to implement this separately)
@@ -3053,8 +3427,10 @@ function setupRealtimeCommentListeners() {
         toast.add({
           severity: 'info',
           summary: 'New Comment',
-          detail: `${event.comment.author.fullName || event.comment.author.username} added a comment`,
-          life: 3000
+          detail: `${
+            event.comment.author.fullName || event.comment.author.username
+          } added a comment`,
+          life: 3000,
         });
       }
     }
@@ -3065,12 +3441,14 @@ function setupRealtimeCommentListeners() {
     // Only update if we're viewing the same task
     if (selectedTask.value && selectedTask.value.id === event.comment.taskId) {
       // Update in local comments array
-      const commentIndex = taskComments.value.findIndex((c: Comment) => c.id === event.comment.id);
+      const commentIndex = taskComments.value.findIndex(
+        (c: Comment) => c.id === event.comment.id
+      );
       if (commentIndex !== -1) {
         taskComments.value[commentIndex] = {
           ...event.comment,
           isEditing: false,
-          editContent: event.comment.content
+          editContent: event.comment.content,
         };
       }
 
@@ -3080,35 +3458,32 @@ function setupRealtimeCommentListeners() {
   });
 
   // Handle comment deleted event
-  taskCommentRealtimeService.onCommentDeleted((event: TaskCommentDeleteEvent) => {
-    // Only update if we're viewing the same task
-    if (selectedTask.value && selectedTask.value.id === event.taskId) {
-      // Remove from local comments array
-      const commentIndex = taskComments.value.findIndex((c: Comment) => c.id === event.commentId);
-      if (commentIndex !== -1) {
-        taskComments.value.splice(commentIndex, 1);
+  taskCommentRealtimeService.onCommentDeleted(
+    (event: TaskCommentDeleteEvent) => {
+      // Only update if we're viewing the same task
+      if (selectedTask.value && selectedTask.value.id === event.taskId) {
+        // Remove from local comments array
+        const commentIndex = taskComments.value.findIndex(
+          (c: Comment) => c.id === event.commentId
+        );
+        if (commentIndex !== -1) {
+          taskComments.value.splice(commentIndex, 1);
+        }
+
+        // Update task comment count (we'll need to implement this separately)
+        // For now, just update the local comments array
       }
-
-      // Update task comment count (we'll need to implement this separately)
-      // For now, just update the local comments array
     }
-  });
+  );
 }
-
 </script>
 
 <template>
   <div class="kanban-tab-wrapper">
     <!-- Task Detail View -->
-    <div
-      v-if="selectedTask"
-      class="task-detail-view"
-    >
+    <div v-if="selectedTask" class="task-detail-view">
       <div class="task-detail-header-row">
-        <button
-          class="back-btn"
-          @click="selectedTask = null"
-        >
+        <button class="back-btn" @click="selectedTask = null">
           <i class="pi pi-arrow-left" />
           Board
         </button>
@@ -3124,25 +3499,36 @@ function setupRealtimeCommentListeners() {
       </div>
       <div class="task-detail-header">
         <span class="task-detail-id">#{{ selectedTask.id }}</span>
-        <span class="task-detail-title">{{ getCleanTaskTitle(selectedTask.title) }}</span>
+        <span class="task-detail-title">{{
+          getCleanTaskTitle(selectedTask.title)
+        }}</span>
       </div>
 
       <!-- Task Detail Tabs -->
       <div class="task-detail-tabs">
         <button
-          :class="['task-detail-tab-btn', { active: activeTaskDetailTab === 'details' }]"
+          :class="[
+            'task-detail-tab-btn',
+            { active: activeTaskDetailTab === 'details' },
+          ]"
           @click="activeTaskDetailTab = 'details'"
         >
           Details
         </button>
         <button
-          :class="['task-detail-tab-btn', { active: activeTaskDetailTab === 'history' }]"
+          :class="[
+            'task-detail-tab-btn',
+            { active: activeTaskDetailTab === 'history' },
+          ]"
           @click="activeTaskDetailTab = 'history'"
         >
           History
         </button>
         <button
-          :class="['task-detail-tab-btn', { active: activeTaskDetailTab === 'comments' }]"
+          :class="[
+            'task-detail-tab-btn',
+            { active: activeTaskDetailTab === 'comments' },
+          ]"
           @click="activeTaskDetailTab = 'comments'"
         >
           Comments
@@ -3153,27 +3539,26 @@ function setupRealtimeCommentListeners() {
       </div>
 
       <!-- Details Tab Content -->
-      <div
-        v-if="activeTaskDetailTab === 'details'"
-        class="task-detail-content"
-      >
+      <div v-if="activeTaskDetailTab === 'details'" class="task-detail-content">
         <div class="task-detail-meta-box">
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              DETAILS
+            <div class="meta-label">DETAILS</div>
+            <div>
+              Language:
+              <b>{{
+                selectedTask.language
+                  ? getLanguageName(selectedTask.language)
+                  : 'Not specified'
+              }}</b>
             </div>
-            <div>Language: <b>{{ selectedTask.language ? getLanguageName(selectedTask.language) : 'Not specified' }}</b></div>
             <div class="progress-bar-bg">
-              <div
-                v-if="selectedTaskProgressLoading"
-                class="progress-loading"
-              >
+              <div v-if="selectedTaskProgressLoading" class="progress-loading">
                 <i class="pi pi-spin pi-spinner" /> Loading...
               </div>
               <div
                 v-else
                 class="progress-bar"
-                :style="{width: selectedTaskProgress + '%'}"
+                :style="{ width: selectedTaskProgress + '%' }"
               />
             </div>
             <div class="progress-text">
@@ -3181,272 +3566,347 @@ function setupRealtimeCommentListeners() {
             </div>
           </div>
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              DATES
-            </div>
+            <div class="meta-label">DATES</div>
             <div>Created: {{ formatDate(selectedTask.createdAt) }}</div>
             <div>Modified: {{ formatDate(selectedTask.createdAt) }}</div>
 
-
             <div v-if="selectedTask.dueDate">
               <span>Due date:</span>
-              <span :class="{ 'overdue': isOverdue(selectedTask.dueDate) }">
+              <span :class="{ overdue: isOverdue(selectedTask.dueDate) }">
                 <span v-if="isOverdue(selectedTask.dueDate)">⚠️</span>
                 {{ formatDateTime(selectedTask.dueDate) }}
               </span>
             </div>
-            <div v-else>
-              No due date
-            </div>
+            <div v-else>No due date</div>
           </div>
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              RESOURCES
-            </div>
+            <div class="meta-label">RESOURCES</div>
             <div v-if="selectedTask.fileId">
-              <div
-                class="file-name-container"
-                :title="selectedTaskFileName"
-              >
+              <div class="file-name-container" :title="selectedTaskFileName">
                 File: <b>{{ selectedTaskTruncatedFileName }}</b>
               </div>
-              <div v-if="selectedTask.page !== undefined && selectedTask.page !== null">
-                Page: <b>Page {{ selectedTask.page + 1 }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
+              <div
+                v-if="
+                  selectedTask.page !== undefined && selectedTask.page !== null
+                "
+              >
+                Page: <b>Page {{ selectedTask.page + 1 }}</b> ({{
+                  currentPageInfo?.stringCount || 'Loading...'
+                }}
+                strings)
                 <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.page = {{ selectedTask.page }} -->
               </div>
-              <div v-else-if="(selectedTask as any).selectedPages && (selectedTask as any).selectedPages.length > 0">
-                Pages: <b>{{ formatSelectedPages((selectedTask as any).selectedPages) }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
+              <div
+                v-else-if="(selectedTask as any).selectedPages && (selectedTask as any).selectedPages.length > 0"
+              >
+                Pages:
+                <b>{{
+                  formatSelectedPages((selectedTask as any).selectedPages)
+                }}</b>
+                ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
                 <!-- Debug: pages={{ JSON.stringify(selectedTask.pages) }} -->
               </div>
-              <div v-else-if="selectedTask.pages && selectedTask.pages.length > 0">
-                Pages: <b>{{ formatSelectedPages(selectedTask.pages) }}</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
+              <div
+                v-else-if="selectedTask.pages && selectedTask.pages.length > 0"
+              >
+                Pages: <b>{{ formatSelectedPages(selectedTask.pages) }}</b> ({{
+                  currentPageInfo?.stringCount || 'Loading...'
+                }}
+                strings)
               </div>
               <div v-else-if="selectedTask.fileId">
-                Pages: <b>All pages</b> ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
+                Pages: <b>All pages</b> ({{
+                  currentPageInfo?.stringCount || 'Loading...'
+                }}
+                strings)
                 <!-- Debug: fileId={{ selectedTask.fileId }}, currentPageInfo={{ JSON.stringify(currentPageInfo) }} -->
               </div>
-              <div v-else>
-                Pages: <b>No file assigned</b>
-              </div>
+              <div v-else>Pages: <b>No file assigned</b></div>
             </div>
             <div v-else>
               <div>Files: <b>0</b></div>
             </div>
           </div>
           <div class="task-detail-meta-col">
-            <div class="meta-label">
-              AUTHOR
-            </div>
+            <div class="meta-label">AUTHOR</div>
             <div class="author-avatar">
               <img
                 v-if="selectedTask.createdBy.avatarUrl"
                 :src="getAvatarUrl(selectedTask.createdBy.avatarUrl)"
                 alt="avatar"
-              >
-              <span v-else>{{ selectedTask.createdBy.fullName ? selectedTask.createdBy.fullName[0] : selectedTask.createdBy.username[0] }}</span>
+              />
+              <span v-else>{{
+                selectedTask.createdBy.fullName
+                  ? selectedTask.createdBy.fullName[0]
+                  : selectedTask.createdBy.username[0]
+              }}</span>
             </div>
-            <div><b>{{ selectedTask.createdBy.fullName }}</b> {{ selectedTask.createdBy.username }}</div>
+            <div>
+              <b>{{ selectedTask.createdBy.fullName }}</b>
+              {{ selectedTask.createdBy.username }}
+            </div>
           </div>
         </div>
         <div class="task-detail-members">
-          <div class="members-title">
-            Members
-          </div>
+          <div class="members-title">Members</div>
           <table class="members-table">
             <thead>
-            <tr>
-              <th>Assignee</th>
-              <th>Reviewer</th>
-              <th>Assigned strings</th>
-            </tr>
+              <tr>
+                <th>Assignee</th>
+                <th>Reviewer</th>
+                <th>Assigned strings</th>
+              </tr>
             </thead>
             <tbody>
-            <tr>
-              <td v-if="selectedTask.assignedTo">
-                <div class="assignee-dropdown-wrapper">
-                  <div
-                    class="assignee-dropdown-trigger assignee-info"
-                    @click="toggleAssigneeDropdown"
-                  >
-                    <img
-                      :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
-                      :alt="getUserDisplayName(selectedTask.assignedTo)"
-                      class="assignee-avatar"
+              <tr>
+                <td v-if="selectedTask.assignedTo">
+                  <div class="assignee-dropdown-wrapper">
+                    <div
+                      class="assignee-dropdown-trigger assignee-info"
+                      @click="toggleAssigneeDropdown"
                     >
-                    <span class="assignee-name">{{ getUserDisplayName(selectedTask.assignedTo) }}</span>
-                    <i class="pi pi-chevron-down dropdown-arrow" />
-                  </div>
+                      <img
+                        :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
+                        :alt="getUserDisplayName(selectedTask.assignedTo)"
+                        class="assignee-avatar"
+                      />
+                      <span class="assignee-name">{{
+                        getUserDisplayName(selectedTask.assignedTo)
+                      }}</span>
+                      <i class="pi pi-chevron-down dropdown-arrow" />
+                    </div>
 
-                  <!-- Assignee Dropdown -->
-                  <div v-if="showAssigneeDropdown" class="assignee-dropdown">
-
-                    <div class="dropdown-options">
-                      <div
-                        v-for="member in projectMembers"
-                        :key="member.id"
-                        class="dropdown-option"
-                        :class="{
-                          'current-assignee': member.id === selectedTask.assignedTo?.id,
-                          'disabled-option': member.id === selectedTask.reviewer?.id
-                        }"
-                        @click="member.id === selectedTask.reviewer?.id ? handleSelectAssignee(member.id) : updateTaskAssignee(member.id)"
-                      >
-                        <div class="member-option">
-                          <img
-                            :src="getAvatarUrl(member.avatarUrl)"
-                            :alt="getUserDisplayName(member)"
-                            class="member-avatar"
-                          >
-                          <span class="member-name">{{ getUserDisplayName(member) }}</span>
-                          <span v-if="member.id === selectedTask.assignedTo?.id" class="current-badge">Current</span>
-                          <span v-if="member.id === selectedTask.reviewer?.id" class="disabled-badge">Already Reviewer</span>
+                    <!-- Assignee Dropdown -->
+                    <div v-if="showAssigneeDropdown" class="assignee-dropdown">
+                      <div class="dropdown-options">
+                        <div
+                          v-for="member in projectMembers"
+                          :key="member.id"
+                          class="dropdown-option"
+                          :class="{
+                            'current-assignee':
+                              member.id === selectedTask.assignedTo?.id,
+                            'disabled-option':
+                              member.id === selectedTask.reviewer?.id,
+                          }"
+                          @click="
+                            member.id === selectedTask.reviewer?.id
+                              ? handleSelectAssignee(member.id)
+                              : updateTaskAssignee(member.id)
+                          "
+                        >
+                          <div class="member-option">
+                            <img
+                              :src="getAvatarUrl(member.avatarUrl)"
+                              :alt="getUserDisplayName(member)"
+                              class="member-avatar"
+                            />
+                            <span class="member-name">{{
+                              getUserDisplayName(member)
+                            }}</span>
+                            <span
+                              v-if="member.id === selectedTask.assignedTo?.id"
+                              class="current-badge"
+                              >Current</span
+                            >
+                            <span
+                              v-if="member.id === selectedTask.reviewer?.id"
+                              class="disabled-badge"
+                              >Already Reviewer</span
+                            >
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div v-if="isUpdatingAssignee" class="dropdown-loading">
-                      <i class="pi pi-spin pi-spinner" /> Updating...
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td v-else>
-                <div class="assignee-dropdown-wrapper">
-                  <div
-                    class="assignee-dropdown-trigger empty-assignee"
-                    @click="toggleAssigneeDropdown"
-                  >
-                    <span class="empty-text">Click to assign</span>
-                    <i class="pi pi-chevron-down dropdown-arrow" />
-                  </div>
-
-                  <!-- Assignee Dropdown for empty assignee -->
-                  <div v-if="showAssigneeDropdown" class="assignee-dropdown">
-
-                    <div class="dropdown-options">
-                      <div
-                        v-for="member in projectMembers"
-                        :key="member.id"
-                        class="dropdown-option"
-                        :class="{ 'disabled-option': member.id === selectedTask.reviewer?.id }"
-                        @click="member.id === selectedTask.reviewer?.id ? handleSelectAssignee(member.id) : updateTaskAssignee(member.id)"
-                      >
-                        <div class="member-option">
-                          <img
-                            :src="getAvatarUrl(member.avatarUrl)"
-                            :alt="getUserDisplayName(member)"
-                            class="member-avatar"
-                          >
-                          <span class="member-name">{{ getUserDisplayName(member) }}</span>
-                          <span v-if="member.id === selectedTask.reviewer?.id" class="disabled-badge">Already Reviewer</span>
-                        </div>
+                      <div v-if="isUpdatingAssignee" class="dropdown-loading">
+                        <i class="pi pi-spin pi-spinner" /> Updating...
                       </div>
                     </div>
-                    <div v-if="isUpdatingAssignee" class="dropdown-loading">
-                      <i class="pi pi-spin pi-spinner" /> Updating...
-                    </div>
                   </div>
-                </div>
-              </td>
-              <td v-if="selectedTask.reviewer">
-                <div class="reviewer-dropdown-wrapper">
-                  <div
-                    class="reviewer-dropdown-trigger assignee-info"
-                    @click="toggleReviewerDropdown"
-                  >
-                    <img
-                      :src="getAvatarUrl(selectedTask.reviewer.avatarUrl)"
-                      :alt="getUserDisplayName(selectedTask.reviewer)"
-                      class="assignee-avatar"
+                </td>
+                <td v-else>
+                  <div class="assignee-dropdown-wrapper">
+                    <div
+                      class="assignee-dropdown-trigger empty-assignee"
+                      @click="toggleAssigneeDropdown"
                     >
-                    <span class="assignee-name">{{ getUserDisplayName(selectedTask.reviewer) }}</span>
-                    <i class="pi pi-chevron-down dropdown-arrow" />
-                  </div>
+                      <span class="empty-text">Click to assign</span>
+                      <i class="pi pi-chevron-down dropdown-arrow" />
+                    </div>
 
-                  <!-- Reviewer Dropdown -->
-                  <div v-if="showReviewerDropdown" class="reviewer-dropdown">
-
-                    <div class="dropdown-options">
-                      <div
-                        v-for="member in projectMembers"
-                        :key="member.id"
-                        class="dropdown-option"
-                        :class="{
-                          'current-reviewer': member.id === selectedTask.reviewer?.id,
-                          'disabled-option': member.id === selectedTask.assignedTo?.id
-                        }"
-                        @click="member.id === selectedTask.assignedTo?.id ? handleSelectReviewer(member.id) : updateTaskReviewer(member.id)"
-                      >
-                        <div class="member-option">
-                          <img
-                            v-if="member.avatarUrl"
-                            :src="getAvatarUrl(member.avatarUrl)"
-                            :alt="member.fullName"
-                            class="member-avatar"
-                          >
-                          <span
-                            v-else
-                            class="member-avatar-placeholder"
-                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
-                          <span class="member-name">{{ member.fullName || member.username }}</span>
-                          <span v-if="member.id === selectedTask.reviewer?.id" class="current-badge">Current</span>
-                          <span v-if="member.id === selectedTask.assignedTo?.id" class="disabled-badge">Already Assignee</span>
+                    <!-- Assignee Dropdown for empty assignee -->
+                    <div v-if="showAssigneeDropdown" class="assignee-dropdown">
+                      <div class="dropdown-options">
+                        <div
+                          v-for="member in projectMembers"
+                          :key="member.id"
+                          class="dropdown-option"
+                          :class="{
+                            'disabled-option':
+                              member.id === selectedTask.reviewer?.id,
+                          }"
+                          @click="
+                            member.id === selectedTask.reviewer?.id
+                              ? handleSelectAssignee(member.id)
+                              : updateTaskAssignee(member.id)
+                          "
+                        >
+                          <div class="member-option">
+                            <img
+                              :src="getAvatarUrl(member.avatarUrl)"
+                              :alt="getUserDisplayName(member)"
+                              class="member-avatar"
+                            />
+                            <span class="member-name">{{
+                              getUserDisplayName(member)
+                            }}</span>
+                            <span
+                              v-if="member.id === selectedTask.reviewer?.id"
+                              class="disabled-badge"
+                              >Already Reviewer</span
+                            >
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div v-if="isUpdatingReviewer" class="dropdown-loading">
-                      <i class="pi pi-spin pi-spinner" /> Updating...
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td v-else>
-                <div class="reviewer-dropdown-wrapper">
-                  <div
-                    class="reviewer-dropdown-trigger empty-reviewer"
-                    @click="toggleReviewerDropdown"
-                  >
-                    <span class="empty-text">Click to assign reviewer</span>
-                    <i class="pi pi-chevron-down dropdown-arrow" />
-                  </div>
-
-                  <!-- Reviewer Dropdown for empty reviewer -->
-                  <div v-if="showReviewerDropdown" class="reviewer-dropdown">
-
-                    <div class="dropdown-options">
-                      <div
-                        v-for="member in projectMembers"
-                        :key="member.id"
-                        class="dropdown-option"
-                        :class="{ 'disabled-option': member.id === selectedTask.assignedTo?.id }"
-                        @click="member.id === selectedTask.assignedTo?.id ? handleSelectReviewer(member.id) : updateTaskReviewer(member.id)"
-                      >
-                        <div class="member-option">
-                          <img
-                            v-if="member.avatarUrl"
-                            :src="getAvatarUrl(member.avatarUrl)"
-                            :alt="member.fullName"
-                            class="member-avatar"
-                          >
-                          <span
-                            v-else
-                            class="member-avatar-placeholder"
-                          >{{ member.fullName ? member.fullName[0] : member.username[0] }}</span>
-                          <span class="member-name">{{ member.fullName || member.username }}</span>
-                          <span v-if="member.id === selectedTask.assignedTo?.id" class="disabled-badge">Already Assignee</span>
-                        </div>
+                      <div v-if="isUpdatingAssignee" class="dropdown-loading">
+                        <i class="pi pi-spin pi-spinner" /> Updating...
                       </div>
                     </div>
-                    <div v-if="isUpdatingReviewer" class="dropdown-loading">
-                      <i class="pi pi-spin pi-spinner" /> Updating...
+                  </div>
+                </td>
+                <td v-if="selectedTask.reviewer">
+                  <div class="reviewer-dropdown-wrapper">
+                    <div
+                      class="reviewer-dropdown-trigger assignee-info"
+                      @click="toggleReviewerDropdown"
+                    >
+                      <img
+                        :src="getAvatarUrl(selectedTask.reviewer.avatarUrl)"
+                        :alt="getUserDisplayName(selectedTask.reviewer)"
+                        class="assignee-avatar"
+                      />
+                      <span class="assignee-name">{{
+                        getUserDisplayName(selectedTask.reviewer)
+                      }}</span>
+                      <i class="pi pi-chevron-down dropdown-arrow" />
+                    </div>
+
+                    <!-- Reviewer Dropdown -->
+                    <div v-if="showReviewerDropdown" class="reviewer-dropdown">
+                      <div class="dropdown-options">
+                        <div
+                          v-for="member in projectMembers"
+                          :key="member.id"
+                          class="dropdown-option"
+                          :class="{
+                            'current-reviewer':
+                              member.id === selectedTask.reviewer?.id,
+                            'disabled-option':
+                              member.id === selectedTask.assignedTo?.id,
+                          }"
+                          @click="
+                            member.id === selectedTask.assignedTo?.id
+                              ? handleSelectReviewer(member.id)
+                              : updateTaskReviewer(member.id)
+                          "
+                        >
+                          <div class="member-option">
+                            <img
+                              v-if="member.avatarUrl"
+                              :src="getAvatarUrl(member.avatarUrl)"
+                              :alt="member.fullName"
+                              class="member-avatar"
+                            />
+                            <span v-else class="member-avatar-placeholder">{{
+                              member.fullName
+                                ? member.fullName[0]
+                                : member.username[0]
+                            }}</span>
+                            <span class="member-name">{{
+                              member.fullName || member.username
+                            }}</span>
+                            <span
+                              v-if="member.id === selectedTask.reviewer?.id"
+                              class="current-badge"
+                              >Current</span
+                            >
+                            <span
+                              v-if="member.id === selectedTask.assignedTo?.id"
+                              class="disabled-badge"
+                              >Already Assignee</span
+                            >
+                          </div>
+                        </div>
+                      </div>
+                      <div v-if="isUpdatingReviewer" class="dropdown-loading">
+                        <i class="pi pi-spin pi-spinner" /> Updating...
+                      </div>
                     </div>
                   </div>
-                </div>
-              </td>
-              <td>
-                {{ currentPageInfo?.stringCount !== undefined ? currentPageInfo.stringCount : selectedTaskStringCount }}
-              </td>
-            </tr>
+                </td>
+                <td v-else>
+                  <div class="reviewer-dropdown-wrapper">
+                    <div
+                      class="reviewer-dropdown-trigger empty-reviewer"
+                      @click="toggleReviewerDropdown"
+                    >
+                      <span class="empty-text">Click to assign reviewer</span>
+                      <i class="pi pi-chevron-down dropdown-arrow" />
+                    </div>
 
+                    <!-- Reviewer Dropdown for empty reviewer -->
+                    <div v-if="showReviewerDropdown" class="reviewer-dropdown">
+                      <div class="dropdown-options">
+                        <div
+                          v-for="member in projectMembers"
+                          :key="member.id"
+                          class="dropdown-option"
+                          :class="{
+                            'disabled-option':
+                              member.id === selectedTask.assignedTo?.id,
+                          }"
+                          @click="
+                            member.id === selectedTask.assignedTo?.id
+                              ? handleSelectReviewer(member.id)
+                              : updateTaskReviewer(member.id)
+                          "
+                        >
+                          <div class="member-option">
+                            <img
+                              v-if="member.avatarUrl"
+                              :src="getAvatarUrl(member.avatarUrl)"
+                              :alt="member.fullName"
+                              class="member-avatar"
+                            />
+                            <span v-else class="member-avatar-placeholder">{{
+                              member.fullName
+                                ? member.fullName[0]
+                                : member.username[0]
+                            }}</span>
+                            <span class="member-name">{{
+                              member.fullName || member.username
+                            }}</span>
+                            <span
+                              v-if="member.id === selectedTask.assignedTo?.id"
+                              class="disabled-badge"
+                              >Already Assignee</span
+                            >
+                          </div>
+                        </div>
+                      </div>
+                      <div v-if="isUpdatingReviewer" class="dropdown-loading">
+                        <i class="pi pi-spin pi-spinner" /> Updating...
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {{
+                    currentPageInfo?.stringCount !== undefined
+                      ? currentPageInfo.stringCount
+                      : selectedTaskStringCount
+                  }}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -3459,7 +3919,9 @@ function setupRealtimeCommentListeners() {
               This member holds the other role. Swap assignee and reviewer?
             </div>
             <div class="modal-actions">
-              <button class="btn btn-secondary" @click="cancelSwap">Cancel</button>
+              <button class="btn btn-secondary" @click="cancelSwap">
+                Cancel
+              </button>
               <button class="btn btn-primary" @click="confirmSwap">Swap</button>
             </div>
           </div>
@@ -3467,17 +3929,11 @@ function setupRealtimeCommentListeners() {
       </div>
 
       <!-- History Tab Content -->
-      <div
-        v-if="activeTaskDetailTab === 'history'"
-        class="task-detail-content"
-      >
+      <div v-if="activeTaskDetailTab === 'history'" class="task-detail-content">
         <div class="task-history-container">
           <div class="history-header">
             <h3>Task History</h3>
-            <div
-              v-if="taskHistoryLoading"
-              class="history-loading"
-            >
+            <div v-if="taskHistoryLoading" class="history-loading">
               <i class="pi pi-spin pi-spinner" /> Loading history...
             </div>
           </div>
@@ -3489,10 +3945,7 @@ function setupRealtimeCommentListeners() {
             <p>No history available for this task.</p>
           </div>
 
-          <div
-            v-else-if="!taskHistoryLoading"
-            class="history-timeline"
-          >
+          <div v-else-if="!taskHistoryLoading" class="history-timeline">
             <div
               v-for="item in taskHistory"
               :key="item.id"
@@ -3504,18 +3957,27 @@ function setupRealtimeCommentListeners() {
                   <div class="timeline-action">
                     <span class="action-icon">
                       <span v-if="item.action === 'created'">🆕</span>
-                      <span v-else-if="item.action === 'status_change'">🔁</span>
-                      <span v-else-if="item.action === 'assignment_change'">👤</span>
-                      <span v-else-if="item.action === 'due_date_change'">📅</span>
+                      <span v-else-if="item.action === 'status_change'"
+                        >🔁</span
+                      >
+                      <span v-else-if="item.action === 'assignment_change'"
+                        >👤</span
+                      >
+                      <span v-else-if="item.action === 'due_date_change'"
+                        >📅</span
+                      >
                       <span v-else-if="item.action === 'closed'">✅</span>
                       <span v-else-if="item.action === 'reopened'">🔄</span>
                       <span v-else>ℹ️</span>
                     </span>
-                    <span class="action-text">{{ formatHistoryAction(item.action) }}</span>
+                    <span class="action-text">{{
+                      formatHistoryAction(item.action)
+                    }}</span>
                   </div>
                   <div class="timeline-time">
                     <span class="time-icon">🕒</span>
-                    {{ formatDateOnly(item.performedAt) }} at {{ formatTimeOnly(item.performedAt) }}
+                    {{ formatDateOnly(item.performedAt) }} at
+                    {{ formatTimeOnly(item.performedAt) }}
                   </div>
                 </div>
 
@@ -3528,25 +3990,37 @@ function setupRealtimeCommentListeners() {
                   v-if="item.action === 'reopened' && item.reason"
                   class="timeline-reason"
                 >
-                  <div class="reason-label">
-                    📝 Reason:
-                  </div>
+                  <div class="reason-label">📝 Reason:</div>
                   <div class="reason-text">
                     {{ item.reason }}
                   </div>
                 </div>
 
                 <div
-                  v-if="item.metadata && item.metadata.fromStatus && item.metadata.toStatus"
+                  v-if="
+                    item.metadata &&
+                    item.metadata.fromStatus &&
+                    item.metadata.toStatus
+                  "
                   class="timeline-status-change"
                 >
                   <div class="status-badges">
                     <span class="status-badge old-status">
                       <span class="status-indicator">
-                        <span v-if="item.metadata.fromStatus === 'pending'">🔴</span>
-                        <span v-else-if="item.metadata.fromStatus === 'in_progress'">🟡</span>
-                        <span v-else-if="item.metadata.fromStatus === 'completed'">🟢</span>
-                        <span v-else-if="item.metadata.fromStatus === 'closed'">✅</span>
+                        <span v-if="item.metadata.fromStatus === 'pending'"
+                          >🔴</span
+                        >
+                        <span
+                          v-else-if="item.metadata.fromStatus === 'in_progress'"
+                          >🟡</span
+                        >
+                        <span
+                          v-else-if="item.metadata.fromStatus === 'completed'"
+                          >🟢</span
+                        >
+                        <span v-else-if="item.metadata.fromStatus === 'closed'"
+                          >✅</span
+                        >
                         <span v-else>⚪</span>
                       </span>
                       {{ getStatusDisplayName(item.metadata.fromStatus) }}
@@ -3554,10 +4028,19 @@ function setupRealtimeCommentListeners() {
                     <span class="status-arrow">→</span>
                     <span class="status-badge new-status">
                       <span class="status-indicator">
-                        <span v-if="item.metadata.toStatus === 'pending'">🔴</span>
-                        <span v-else-if="item.metadata.toStatus === 'in_progress'">🟡</span>
-                        <span v-else-if="item.metadata.toStatus === 'completed'">🟢</span>
-                        <span v-else-if="item.metadata.toStatus === 'closed'">✅</span>
+                        <span v-if="item.metadata.toStatus === 'pending'"
+                          >🔴</span
+                        >
+                        <span
+                          v-else-if="item.metadata.toStatus === 'in_progress'"
+                          >🟡</span
+                        >
+                        <span v-else-if="item.metadata.toStatus === 'completed'"
+                          >🟢</span
+                        >
+                        <span v-else-if="item.metadata.toStatus === 'closed'"
+                          >✅</span
+                        >
                         <span v-else>⚪</span>
                       </span>
                       {{ getStatusDisplayName(item.metadata.toStatus) }}
@@ -3578,10 +4061,7 @@ function setupRealtimeCommentListeners() {
         <div class="task-comments-container">
           <div class="comments-header">
             <h3>Task Comments</h3>
-            <div
-              v-if="commentsLoading"
-              class="comments-loading"
-            >
+            <div v-if="commentsLoading" class="comments-loading">
               <i class="pi pi-spin pi-spinner" /> Loading comments...
             </div>
           </div>
@@ -3616,10 +4096,7 @@ function setupRealtimeCommentListeners() {
             <p>No comments yet. Be the first to comment!</p>
           </div>
 
-          <div
-            v-else-if="!commentsLoading"
-            class="comments-list"
-          >
+          <div v-else-if="!commentsLoading" class="comments-list">
             <div
               v-for="comment in taskComments"
               :key="comment.id"
@@ -3632,12 +4109,13 @@ function setupRealtimeCommentListeners() {
                     :src="getAvatarUrl(comment.author.avatarUrl)"
                     :alt="getUserDisplayName(comment.author)"
                     class="comment-author-avatar"
-                  >
-                  <span
-                    v-else
-                    class="comment-author-avatar-placeholder"
-                  >{{ getUserDisplayName(comment.author)[0] }}</span>
-                  <span class="comment-author-name">{{ getUserDisplayName(comment.author) }}</span>
+                  />
+                  <span v-else class="comment-author-avatar-placeholder">{{
+                    getUserDisplayName(comment.author)[0]
+                  }}</span>
+                  <span class="comment-author-name">{{
+                    getUserDisplayName(comment.author)
+                  }}</span>
                 </div>
                 <div class="comment-header-right">
                   <div class="comment-time">
@@ -3710,8 +4188,6 @@ function setupRealtimeCommentListeners() {
                   </div>
                 </div>
               </div>
-
-
             </div>
           </div>
         </div>
@@ -3719,15 +4195,9 @@ function setupRealtimeCommentListeners() {
     </div>
 
     <!-- Create Task View -->
-    <div
-      v-else-if="showCreateForm"
-      class="create-task-view"
-    >
+    <div v-else-if="showCreateForm" class="create-task-view">
       <div class="create-task-header">
-        <button
-          class="back-btn"
-          @click="cancelCreateTask"
-        >
+        <button class="back-btn" @click="cancelCreateTask">
           <i class="pi pi-arrow-left" />
           Back to Board
         </button>
@@ -3737,7 +4207,6 @@ function setupRealtimeCommentListeners() {
         :project-id="projectId"
         :project-members="projectMembers"
         :project-groups="projectGroups"
-        :branch-id="branchId"
         :project-files="projectFiles"
         :project-target-languages="project?.targetLanguages || []"
         :inline="true"
@@ -3747,15 +4216,9 @@ function setupRealtimeCommentListeners() {
     </div>
 
     <!-- Edit Task View -->
-    <div
-      v-else-if="showEditTaskInline"
-      class="edit-task-view"
-    >
+    <div v-else-if="showEditTaskInline" class="edit-task-view">
       <div class="edit-task-header">
-        <button
-          class="back-btn"
-          @click="closeEditTaskInline"
-        >
+        <button class="back-btn" @click="closeEditTaskInline">
           <i class="pi pi-arrow-left" />
           Back to Task Detail
         </button>
@@ -3766,7 +4229,6 @@ function setupRealtimeCommentListeners() {
           :project-id="editTaskInlineData.projectId"
           :project-members="editTaskInlineData.projectMembers"
           :project-groups="editTaskInlineData.projectGroups"
-          :branch-id="editTaskInlineData.branchId"
           :project-files="editTaskInlineData.projectFiles"
           :project-target-languages="editTaskInlineData.projectTargetLanguages"
           :edit-task="editTaskInlineData.task"
@@ -3780,13 +4242,8 @@ function setupRealtimeCommentListeners() {
       </div>
     </div>
 
-
-
     <!-- Kanban Board View -->
-    <div
-      v-else
-      class="kanban-board-view"
-    >
+    <div v-else class="kanban-board-view">
       <!-- Tabs for Board, All Tasks, Workflows, and Statuses -->
       <div class="task-tabs">
         <div class="tabs-left">
@@ -3808,7 +4265,6 @@ function setupRealtimeCommentListeners() {
           >
             Workflows
           </button>
-
         </div>
         <div class="tabs-right">
           <button
@@ -3824,11 +4280,8 @@ function setupRealtimeCommentListeners() {
 
       <!-- Board View -->
       <div v-if="activeTab === 'board'">
-
-
         <!-- Dynamic Status Board -->
         <div>
-
           <!-- Search and Filter Bar -->
           <div class="search-filter-container">
             <!-- Search Section -->
@@ -3840,7 +4293,7 @@ function setupRealtimeCommentListeners() {
                   type="text"
                   placeholder="Search tasks..."
                   class="search-input"
-                >
+                />
               </div>
               <!-- Filter Button -->
               <button
@@ -3854,10 +4307,7 @@ function setupRealtimeCommentListeners() {
             </div>
 
             <!-- Filter Section -->
-            <div
-              v-if="showFilters"
-              class="filter-section"
-            >
+            <div v-if="showFilters" class="filter-section">
               <!-- Custom Assignee Select -->
               <div class="custom-select-wrapper">
                 <div
@@ -3952,14 +4402,19 @@ function setupRealtimeCommentListeners() {
                     v-for="option in dueDateOptions"
                     :key="option.value"
                     class="filter-dropdown-option"
-                    :class="{ selected: selectedFilters.dueDate === option.value }"
+                    :class="{
+                      selected: selectedFilters.dueDate === option.value,
+                    }"
                     @click="selectFilterOption('dueDate', option.value)"
                   >
                     {{ option.label }}
                   </div>
                   <!-- Clear Selection Option -->
                   <div
-                    v-if="selectedFilters.dueDate === 'Custom Range' && selectedDateRange.startDate"
+                    v-if="
+                      selectedFilters.dueDate === 'Custom Range' &&
+                      selectedDateRange.startDate
+                    "
                     class="filter-dropdown-option clear-option"
                     @click="clearDateRange"
                   >
@@ -3980,8 +4435,12 @@ function setupRealtimeCommentListeners() {
                           <i class="pi pi-chevron-left" />
                         </button>
                         <div class="calendar-months-title">
-                          <span class="month-title">{{ formatMonth(currentMonth) }}</span>
-                          <span class="month-title">{{ formatMonth(nextMonth) }}</span>
+                          <span class="month-title">{{
+                            formatMonth(currentMonth)
+                          }}</span>
+                          <span class="month-title">{{
+                            formatMonth(nextMonth)
+                          }}</span>
                         </div>
                         <button
                           class="calendar-nav-btn"
@@ -4004,16 +4463,23 @@ function setupRealtimeCommentListeners() {
                           </div>
                           <div class="calendar-days">
                             <div
-                              v-for="date in getDaysInMonth(currentMonth.getFullYear(), currentMonth.getMonth())"
+                              v-for="date in getDaysInMonth(
+                                currentMonth.getFullYear(),
+                                currentMonth.getMonth()
+                              )"
                               :key="date.getTime()"
                               class="calendar-day"
                               :class="{
-                              'other-month': date.getMonth() !== currentMonth.getMonth(),
-                              'selected': isDateInRange(date),
-                              'start-date': isDateStart(date),
-                              'end-date': isDateEnd(date),
-                              'in-range': isDateInRange(date) && !isDateStart(date) && !isDateEnd(date)
-                            }"
+                                'other-month':
+                                  date.getMonth() !== currentMonth.getMonth(),
+                                selected: isDateInRange(date),
+                                'start-date': isDateStart(date),
+                                'end-date': isDateEnd(date),
+                                'in-range':
+                                  isDateInRange(date) &&
+                                  !isDateStart(date) &&
+                                  !isDateEnd(date),
+                              }"
                               @click="selectDate(date)"
                             >
                               {{ date.getDate() }}
@@ -4033,16 +4499,23 @@ function setupRealtimeCommentListeners() {
                           </div>
                           <div class="calendar-days">
                             <div
-                              v-for="date in getDaysInMonth(nextMonth.getFullYear(), nextMonth.getMonth())"
+                              v-for="date in getDaysInMonth(
+                                nextMonth.getFullYear(),
+                                nextMonth.getMonth()
+                              )"
                               :key="date.getTime()"
                               class="calendar-day"
                               :class="{
-                              'other-month': date.getMonth() !== nextMonth.getMonth(),
-                              'selected': isDateInRange(date),
-                              'start-date': isDateStart(date),
-                              'end-date': isDateEnd(date),
-                              'in-range': isDateInRange(date) && !isDateStart(date) && !isDateEnd(date)
-                            }"
+                                'other-month':
+                                  date.getMonth() !== nextMonth.getMonth(),
+                                selected: isDateInRange(date),
+                                'start-date': isDateStart(date),
+                                'end-date': isDateEnd(date),
+                                'in-range':
+                                  isDateInRange(date) &&
+                                  !isDateStart(date) &&
+                                  !isDateEnd(date),
+                              }"
                               @click="selectDate(date)"
                             >
                               {{ date.getDate() }}
@@ -4054,10 +4527,7 @@ function setupRealtimeCommentListeners() {
                   </div>
                 </div>
               </div>
-              <button
-                class="clear-filter-btn"
-                @click="clearFilters"
-              >
+              <button class="clear-filter-btn" @click="clearFilters">
                 <span>✕</span>
                 Clear
               </button>
@@ -4065,28 +4535,17 @@ function setupRealtimeCommentListeners() {
           </div>
 
           <!-- Global Empty State -->
-          <div
-            v-if="loading"
-            class="global-loading-state"
-          >
-            <div class="loading-icon">
-              ⏳
-            </div>
-            <div class="loading-text">
-              Loading tasks...
-            </div>
+          <div v-if="loading" class="global-loading-state">
+            <div class="loading-icon">⏳</div>
+            <div class="loading-text">Loading tasks...</div>
           </div>
 
           <div
             v-else-if="filteredTasks.length === 0"
             class="global-empty-state"
           >
-            <div class="global-empty-icon">
-              ⏱️
-            </div>
-            <div class="global-empty-text">
-              No tasks yet
-            </div>
+            <div class="global-empty-icon">⏱️</div>
+            <div class="global-empty-text">No tasks yet</div>
             <div class="global-empty-subtext">
               Create your first task to get started with this project
             </div>
@@ -4117,31 +4576,45 @@ function setupRealtimeCommentListeners() {
                       :style="{ '--status-color': status.color }"
                       draggable="true"
                       @dragstart="onStatusDragStart($event, status.id)"
-                      @dragover="onStatusDragOver($event, status.id); $event.currentTarget && ($event.currentTarget as HTMLElement).classList.add('drag-over')"
+                      @dragover="
+                        onStatusDragOver($event, status.id);
+                        $event.currentTarget &&
+                          ($event.currentTarget as HTMLElement).classList.add(
+                            'drag-over'
+                          );
+                      "
                       @drop="onStatusDrop($event, status.id)"
-                      @dragend="onStatusDragEnd; $event.currentTarget && ($event.currentTarget as HTMLElement).classList.remove('drag-over')"
+                      @dragend="
+                        onStatusDragEnd;
+                        $event.currentTarget &&
+                          (
+                            $event.currentTarget as HTMLElement
+                          ).classList.remove('drag-over');
+                      "
                     >
-                      <div class="status-bar" :style="{ backgroundColor: status.color }" />
+                      <div
+                        class="status-bar"
+                        :style="{ backgroundColor: status.color }"
+                      />
                       <span class="status-title">{{ status.name }}</span>
                       <span
                         v-if="getTasksByStatus(status.id).length"
                         class="status-count"
-                      >{{ getTasksByStatus(status.id).length }}</span>
-
+                        >{{ getTasksByStatus(status.id).length }}</span
+                      >
                     </div>
                   </div>
 
                   <!-- Single Language: Dynamic Column Structure -->
-                  <div
-                    v-if="!shouldShowLanguageGrouping"
-                    class="kanban-board"
-                  >
+                  <div v-if="!shouldShowLanguageGrouping" class="kanban-board">
                     <!-- Dynamic columns based on available statuses (ordered) -->
                     <div
                       v-for="status in orderedStatuses"
                       :key="status.id"
                       class="kanban-column"
-                      :style="{ borderLeft: '4px solid ' + getStatusColor(status.id) }"
+                      :style="{
+                        borderLeft: '4px solid ' + getStatusColor(status.id),
+                      }"
                       @dragover="handleDragOver($event, status.id)"
                       @dragleave="handleDragLeave($event)"
                       @drop="handleDrop($event, status.id)"
@@ -4152,13 +4625,12 @@ function setupRealtimeCommentListeners() {
                       >
                         <div class="drag-over-title-content">
                           <span class="drag-over-icon">📋</span>
-                          <span class="drag-over-text">Move to {{ status.name }}</span>
+                          <span class="drag-over-text"
+                            >Move to {{ status.name }}</span
+                          >
                         </div>
                       </div>
-                      <div
-                        v-if="loading"
-                        class="kanban-loading"
-                      >
+                      <div v-if="loading" class="kanban-loading">
                         Loading...
                       </div>
                       <div v-else>
@@ -4166,10 +4638,22 @@ function setupRealtimeCommentListeners() {
                           v-for="(task, idx) in getTasksByStatus(status.id)"
                           :key="task.id"
                           class="task-card-link"
-                          @click="() => { console.log('Task card clicked:', task.id); selectTask(task); }"
+                          @click="
+                            () => {
+                              console.log('Task card clicked:', task.id);
+                              selectTask(task);
+                            }
+                          "
                         >
                           <div
-                            :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
+                            :class="[
+                              'task-card',
+                              'crowdin-style',
+                              {
+                                'overdue-card':
+                                  task.dueDate && isOverdue(task.dueDate),
+                              },
+                            ]"
                             tabindex="0"
                             draggable="true"
                             @dragstart="handleDragStart($event, task, idx)"
@@ -4179,10 +4663,21 @@ function setupRealtimeCommentListeners() {
                             <!-- Task card content -->
                             <div
                               class="task-status-badge"
-                              :class="[getStatusDisplayName(task.status) || 'unknown', { overdue: task.dueDate && isOverdue(task.dueDate) }]"
+                              :class="[
+                                getStatusDisplayName(task.status) || 'unknown',
+                                {
+                                  overdue:
+                                    task.dueDate && isOverdue(task.dueDate),
+                                },
+                              ]"
                             >
-                              <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
-                              <span v-else>{{ getStatusDisplayName(task.status) }}</span>
+                              <span
+                                v-if="task.dueDate && isOverdue(task.dueDate)"
+                                >Overdue</span
+                              >
+                              <span v-else>{{
+                                getStatusDisplayName(task.status)
+                              }}</span>
                             </div>
                             <div class="crowdin-row-1">
                               <div class="crowdin-col-left">
@@ -4190,37 +4685,45 @@ function setupRealtimeCommentListeners() {
                                 <span
                                   class="task-label crowdin-title"
                                   :class="{ clickable: true }"
-                                >{{ getCleanTaskTitle(task.title) }}</span>
+                                  >{{ getCleanTaskTitle(task.title) }}</span
+                                >
                               </div>
                             </div>
                             <div class="crowdin-row-2">
                               <div class="crowdin-col-left">
-                                <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                                <span class="date-text">{{
+                                  formatDate(task.createdAt)
+                                }}</span>
                               </div>
                             </div>
                             <div
-                              v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
+                              v-if="
+                                task.dueDate &&
+                                (isOverdue(task.dueDate) ||
+                                  formatDate(task.dueDate) !==
+                                    formatDate(task.createdAt))
+                              "
                               class="crowdin-row-3"
                             >
                               <div class="crowdin-col-left">
                                 <span class="arrow">→</span>
                                 <span class="due-date-label">
-                          <span
-                            v-if="isOverdue(task.dueDate)"
-                            class="due-icon"
-                          >⚠️</span>
-                          <span
-                            v-else
-                            class="due-icon"
-                          >⏰</span>
-                          Due date:
-                          <span
-                            class="due-date-value"
-                            :class="{ 'overdue': isOverdue(task.dueDate) }"
-                          >
-                            {{ formatDateTime(task.dueDate) }}
-                          </span>
-                        </span>
+                                  <span
+                                    v-if="isOverdue(task.dueDate)"
+                                    class="due-icon"
+                                    >⚠️</span
+                                  >
+                                  <span v-else class="due-icon">⏰</span>
+                                  Due date:
+                                  <span
+                                    class="due-date-value"
+                                    :class="{
+                                      overdue: isOverdue(task.dueDate),
+                                    }"
+                                  >
+                                    {{ formatDateTime(task.dueDate) }}
+                                  </span>
+                                </span>
                               </div>
                             </div>
                             <div class="crowdin-row-4">
@@ -4233,31 +4736,49 @@ function setupRealtimeCommentListeners() {
                                   >
                                     <img
                                       v-if="task.assignedTo.avatarUrl"
-                                      :src="getAvatarUrl(task.assignedTo.avatarUrl)"
+                                      :src="
+                                        getAvatarUrl(task.assignedTo.avatarUrl)
+                                      "
                                       :alt="task.assignedTo.fullName"
                                       class="assignee-avatar"
-                                      :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                                    >
+                                      :title="
+                                        'Assigned to: ' +
+                                        (task.assignedTo.fullName ||
+                                          task.assignedTo.username)
+                                      "
+                                    />
                                     <span
                                       v-else
                                       class="assignee-avatar-placeholder"
-                                      :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                                    >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
-                                    <span class="assignee-name">{{ getUserDisplayName(task.assignedTo) }}</span>
+                                      :title="
+                                        'Assigned to: ' +
+                                        (task.assignedTo.fullName ||
+                                          task.assignedTo.username)
+                                      "
+                                      >{{
+                                        task.assignedTo.fullName
+                                          ? task.assignedTo.fullName[0]
+                                          : task.assignedTo.username[0]
+                                      }}</span
+                                    >
+                                    <span class="assignee-name">{{
+                                      getUserDisplayName(task.assignedTo)
+                                    }}</span>
                                   </div>
                                   <!-- File info với icon động và tooltip -->
-                                  <div
-                                    v-if="task.fileId"
-                                    class="file-info"
-                                  >
-                            <span
-                              class="file-icon"
-                              :title="getFileName(task.fileId)"
-                            >{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                                  <div v-if="task.fileId" class="file-info">
+                                    <span
+                                      class="file-icon"
+                                      :title="getFileName(task.fileId)"
+                                      >{{
+                                        getFileIcon(getFileName(task.fileId))
+                                      }}</span
+                                    >
                                     <span
                                       class="file-name"
                                       :title="getFileName(task.fileId)"
-                                    >{{ getFileName(task.fileId) }}</span>
+                                      >{{ getFileName(task.fileId) }}</span
+                                    >
                                   </div>
                                 </div>
                               </div>
@@ -4267,21 +4788,23 @@ function setupRealtimeCommentListeners() {
                                 <div class="comment-info">
                                   <button
                                     class="comment-btn"
-                                    :title="`${getTaskCommentCount(task.id)} comments - Click to view task details`"
+                                    :title="`${getTaskCommentCount(
+                                      task.id
+                                    )} comments - Click to view task details`"
                                     @click.stop="selectTask(task)"
                                   >
                                     <i class="pi pi-comments comment-icon" />
-                                    <span v-if="getTaskCommentCount(task.id) > 0" class="comment-count">
+                                    <span
+                                      v-if="getTaskCommentCount(task.id) > 0"
+                                      class="comment-count"
+                                    >
                                       {{ getTaskCommentCount(task.id) }}
                                     </span>
                                   </button>
                                 </div>
                               </div>
                             </div>
-                            <div
-                              v-if="task.type"
-                              class="crowdin-row-5"
-                            >
+                            <div v-if="task.type" class="crowdin-row-5">
                               <div class="crowdin-col-left">
                                 <div class="task-type-tag crowdin-tag">
                                   {{ task.type }}
@@ -4290,14 +4813,23 @@ function setupRealtimeCommentListeners() {
                             </div>
                             <!-- Close button shown when column status type is closed, OR when it's the last column (if no closed type status exists) -->
                             <div
-                              v-if="(isClosedTypeStatus(status.id) || (!hasClosedTypeStatus() && isLastColumn(status.id))) && task.status !== 'closed'"
+                              v-if="
+                                (isClosedTypeStatus(status.id) ||
+                                  (!hasClosedTypeStatus() &&
+                                    isLastColumn(status.id))) &&
+                                task.status !== 'closed'
+                              "
                               class="crowdin-row-6"
                             >
                               <div class="crowdin-col-right">
                                 <button
                                   class="close-task-btn"
                                   :disabled="task.status === 'closed'"
-                                  :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                                  :title="
+                                    task.status === 'closed'
+                                      ? 'Task already closed'
+                                      : 'Close task'
+                                  "
                                   @click.stop="closeTask(task)"
                                 >
                                   Close
@@ -4308,17 +4840,10 @@ function setupRealtimeCommentListeners() {
                         </div>
                       </div>
                     </div>
-
-
-
-
                   </div>
 
                   <!-- Multiple Languages: Swimlanes Structure -->
-                  <div
-                    v-else
-                    class="kanban-swimlanes"
-                  >
+                  <div v-else class="kanban-swimlanes">
                     <div
                       v-for="language in availableLanguages"
                       :key="language"
@@ -4331,13 +4856,29 @@ function setupRealtimeCommentListeners() {
                       >
                         <i
                           class="language-toggle-icon pi"
-                          :class="isLanguageCollapsed(language) ? 'pi-chevron-right collapsed' : 'pi-chevron-up'"
+                          :class="
+                            isLanguageCollapsed(language)
+                              ? 'pi-chevron-right collapsed'
+                              : 'pi-chevron-up'
+                          "
                         />
                         <div class="language-flag">
                           {{ language.substring(0, 2).toUpperCase() }}
                         </div>
-                        <span class="language-name">{{ getLanguageName(language) }}</span>
-                        <span class="language-count">({{ autoDetectStatuses.reduce((total: number, status: any) => total + (tasksByLanguageAndStatus[language][status.id]?.length || 0), 0) }})</span>
+                        <span class="language-name">{{
+                          getLanguageName(language)
+                        }}</span>
+                        <span class="language-count"
+                          >({{
+                            autoDetectStatuses.reduce(
+                              (total: number, status: any) =>
+                                total +
+                                (tasksByLanguageAndStatus[language][status.id]
+                                  ?.length || 0),
+                              0
+                            )
+                          }})</span
+                        >
                       </div>
 
                       <!-- Language Tasks Row -->
@@ -4351,7 +4892,10 @@ function setupRealtimeCommentListeners() {
                           :key="status.id"
                           class="kanban-column"
                           :class="`${status.id}-column`"
-                          :style="{ borderLeft: '4px solid ' + getStatusColor(status.id) }"
+                          :style="{
+                            borderLeft:
+                              '4px solid ' + getStatusColor(status.id),
+                          }"
                           @dragover="handleDragOver($event, status.id)"
                           @dragleave="handleDragLeave($event)"
                           @drop="handleDrop($event, status.id)"
@@ -4363,7 +4907,14 @@ function setupRealtimeCommentListeners() {
                             @click="selectTask(task)"
                           >
                             <div
-                              :class="['task-card', 'crowdin-style', { 'overdue-card': task.dueDate && isOverdue(task.dueDate) }]"
+                              :class="[
+                                'task-card',
+                                'crowdin-style',
+                                {
+                                  'overdue-card':
+                                    task.dueDate && isOverdue(task.dueDate),
+                                },
+                              ]"
                               tabindex="0"
                               draggable="true"
                               @dragstart="handleDragStart($event, task, idx)"
@@ -4373,10 +4924,21 @@ function setupRealtimeCommentListeners() {
                               <!-- Task card content -->
                               <div
                                 class="task-status-badge"
-                                :class="[task.status, { overdue: task.dueDate && isOverdue(task.dueDate) }]"
+                                :class="[
+                                  task.status,
+                                  {
+                                    overdue:
+                                      task.dueDate && isOverdue(task.dueDate),
+                                  },
+                                ]"
                               >
-                                <span v-if="task.dueDate && isOverdue(task.dueDate)">Overdue</span>
-                                <span v-else>{{ getStatusDisplayName(task.status) }}</span>
+                                <span
+                                  v-if="task.dueDate && isOverdue(task.dueDate)"
+                                  >Overdue</span
+                                >
+                                <span v-else>{{
+                                  getStatusDisplayName(task.status)
+                                }}</span>
                               </div>
                               <div class="crowdin-row-1">
                                 <div class="crowdin-col-left">
@@ -4384,37 +4946,45 @@ function setupRealtimeCommentListeners() {
                                   <span
                                     class="task-label crowdin-title"
                                     :class="{ clickable: true }"
-                                  >{{ getCleanTaskTitle(task.title) }}</span>
+                                    >{{ getCleanTaskTitle(task.title) }}</span
+                                  >
                                 </div>
                               </div>
                               <div class="crowdin-row-2">
                                 <div class="crowdin-col-left">
-                                  <span class="date-text">{{ formatDate(task.createdAt) }}</span>
+                                  <span class="date-text">{{
+                                    formatDate(task.createdAt)
+                                  }}</span>
                                 </div>
                               </div>
                               <div
-                                v-if="task.dueDate && (isOverdue(task.dueDate) || formatDate(task.dueDate) !== formatDate(task.createdAt))"
+                                v-if="
+                                  task.dueDate &&
+                                  (isOverdue(task.dueDate) ||
+                                    formatDate(task.dueDate) !==
+                                      formatDate(task.createdAt))
+                                "
                                 class="crowdin-row-3"
                               >
                                 <div class="crowdin-col-left">
                                   <span class="arrow">→</span>
                                   <span class="due-date-label">
-                            <span
-                              v-if="isOverdue(task.dueDate)"
-                              class="due-icon"
-                            >⚠️</span>
-                            <span
-                              v-else
-                              class="due-icon"
-                            >⏰</span>
-                            Due date:
-                            <span
-                              class="due-date-value"
-                              :class="{ 'overdue': isOverdue(task.dueDate) }"
-                            >
-                              {{ formatDateTime(task.dueDate) }}
-                            </span>
-                          </span>
+                                    <span
+                                      v-if="isOverdue(task.dueDate)"
+                                      class="due-icon"
+                                      >⚠️</span
+                                    >
+                                    <span v-else class="due-icon">⏰</span>
+                                    Due date:
+                                    <span
+                                      class="due-date-value"
+                                      :class="{
+                                        overdue: isOverdue(task.dueDate),
+                                      }"
+                                    >
+                                      {{ formatDateTime(task.dueDate) }}
+                                    </span>
+                                  </span>
                                 </div>
                               </div>
                               <div class="crowdin-row-4">
@@ -4427,31 +4997,51 @@ function setupRealtimeCommentListeners() {
                                     >
                                       <img
                                         v-if="task.assignedTo.avatarUrl"
-                                        :src="getAvatarUrl(task.assignedTo.avatarUrl)"
+                                        :src="
+                                          getAvatarUrl(
+                                            task.assignedTo.avatarUrl
+                                          )
+                                        "
                                         :alt="task.assignedTo.fullName"
                                         class="assignee-avatar"
-                                        :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                                      >
+                                        :title="
+                                          'Assigned to: ' +
+                                          (task.assignedTo.fullName ||
+                                            task.assignedTo.username)
+                                        "
+                                      />
                                       <span
                                         v-else
                                         class="assignee-avatar-placeholder"
-                                        :title="'Assigned to: ' + (task.assignedTo.fullName || task.assignedTo.username)"
-                                      >{{ task.assignedTo.fullName ? task.assignedTo.fullName[0] : task.assignedTo.username[0] }}</span>
-                                      <span class="assignee-name">{{ getUserDisplayName(task.assignedTo) }}</span>
+                                        :title="
+                                          'Assigned to: ' +
+                                          (task.assignedTo.fullName ||
+                                            task.assignedTo.username)
+                                        "
+                                        >{{
+                                          task.assignedTo.fullName
+                                            ? task.assignedTo.fullName[0]
+                                            : task.assignedTo.username[0]
+                                        }}</span
+                                      >
+                                      <span class="assignee-name">{{
+                                        getUserDisplayName(task.assignedTo)
+                                      }}</span>
                                     </div>
                                     <!-- File info với icon động và tooltip -->
-                                    <div
-                                      v-if="task.fileId"
-                                      class="file-info"
-                                    >
-                              <span
-                                class="file-icon"
-                                :title="getFileName(task.fileId)"
-                              >{{ getFileIcon(getFileName(task.fileId)) }}</span>
+                                    <div v-if="task.fileId" class="file-info">
+                                      <span
+                                        class="file-icon"
+                                        :title="getFileName(task.fileId)"
+                                        >{{
+                                          getFileIcon(getFileName(task.fileId))
+                                        }}</span
+                                      >
                                       <span
                                         class="file-name"
                                         :title="getFileName(task.fileId)"
-                                      >{{ getFileName(task.fileId) }}</span>
+                                        >{{ getFileName(task.fileId) }}</span
+                                      >
                                     </div>
                                   </div>
                                 </div>
@@ -4461,21 +5051,23 @@ function setupRealtimeCommentListeners() {
                                   <div class="comment-info">
                                     <button
                                       class="comment-btn"
-                                      :title="`${getTaskCommentCount(task.id)} comments - Click to view task details`"
+                                      :title="`${getTaskCommentCount(
+                                        task.id
+                                      )} comments - Click to view task details`"
                                       @click.stop="selectTask(task)"
                                     >
                                       <i class="pi pi-comments comment-icon" />
-                                      <span v-if="getTaskCommentCount(task.id) > 0" class="comment-count">
+                                      <span
+                                        v-if="getTaskCommentCount(task.id) > 0"
+                                        class="comment-count"
+                                      >
                                         {{ getTaskCommentCount(task.id) }}
                                       </span>
                                     </button>
                                   </div>
                                 </div>
                               </div>
-                              <div
-                                v-if="task.type"
-                                class="crowdin-row-5"
-                              >
+                              <div v-if="task.type" class="crowdin-row-5">
                                 <div class="crowdin-col-left">
                                   <div class="task-type-tag crowdin-tag">
                                     {{ task.type }}
@@ -4484,14 +5076,23 @@ function setupRealtimeCommentListeners() {
                               </div>
                               <!-- Close button shown when column status type is closed, OR when it's the last column (if no closed type status exists) -->
                               <div
-                                v-if="(isClosedTypeStatus(status.id) || (!hasClosedTypeStatus() && isLastColumn(status.id))) && task.status !== 'closed'"
+                                v-if="
+                                  (isClosedTypeStatus(status.id) ||
+                                    (!hasClosedTypeStatus() &&
+                                      isLastColumn(status.id))) &&
+                                  task.status !== 'closed'
+                                "
                                 class="crowdin-row-6"
                               >
                                 <div class="crowdin-col-right">
                                   <button
                                     class="close-task-btn"
                                     :disabled="task.status === 'closed'"
-                                    :title="task.status === 'closed' ? 'Task already closed' : 'Close task'"
+                                    :title="
+                                      task.status === 'closed'
+                                        ? 'Task already closed'
+                                        : 'Close task'
+                                    "
                                     @click.stop="closeTask(task)"
                                   >
                                     Close
@@ -4512,10 +5113,7 @@ function setupRealtimeCommentListeners() {
       </div>
 
       <!-- Workflows View -->
-      <div
-        v-else-if="activeTab === 'workflows'"
-        class="workflows-view"
-      >
+      <div v-else-if="activeTab === 'workflows'" class="workflows-view">
         <WorkflowManager
           :project-id="projectId"
           :project-members="projectMembers"
@@ -4527,13 +5125,8 @@ function setupRealtimeCommentListeners() {
         />
       </div>
 
-
-
       <!-- All Tasks View -->
-      <div
-        v-else-if="activeTab === 'all'"
-        class="all-tasks-view"
-      >
+      <div v-else-if="activeTab === 'all'" class="all-tasks-view">
         <!-- Search and Filter Bar for All Tasks -->
         <div class="search-filter-container">
           <!-- Search Section -->
@@ -4545,7 +5138,7 @@ function setupRealtimeCommentListeners() {
                 type="text"
                 placeholder="Search tasks..."
                 class="search-input"
-              >
+              />
             </div>
             <!-- Filter Button -->
             <button
@@ -4559,10 +5152,7 @@ function setupRealtimeCommentListeners() {
           </div>
 
           <!-- Filter Section -->
-          <div
-            v-if="showFilters"
-            class="filter-section"
-          >
+          <div v-if="showFilters" class="filter-section">
             <!-- Custom Assignee Select -->
             <div class="custom-select-wrapper">
               <div
@@ -4657,14 +5247,19 @@ function setupRealtimeCommentListeners() {
                   v-for="option in dueDateOptions"
                   :key="option.value"
                   class="filter-dropdown-option"
-                  :class="{ selected: selectedFilters.dueDate === option.value }"
+                  :class="{
+                    selected: selectedFilters.dueDate === option.value,
+                  }"
                   @click="selectFilterOption('dueDate', option.value)"
                 >
                   {{ option.label }}
                 </div>
                 <!-- Clear Selection Option -->
                 <div
-                  v-if="selectedFilters.dueDate === 'Custom Range' && selectedDateRange.startDate"
+                  v-if="
+                    selectedFilters.dueDate === 'Custom Range' &&
+                    selectedDateRange.startDate
+                  "
                   class="filter-dropdown-option clear-option"
                   @click="clearDateRange"
                 >
@@ -4685,8 +5280,12 @@ function setupRealtimeCommentListeners() {
                         <i class="pi pi-chevron-left" />
                       </button>
                       <div class="calendar-months-title">
-                        <span class="month-title">{{ formatMonth(currentMonth) }}</span>
-                        <span class="month-title">{{ formatMonth(nextMonth) }}</span>
+                        <span class="month-title">{{
+                          formatMonth(currentMonth)
+                        }}</span>
+                        <span class="month-title">{{
+                          formatMonth(nextMonth)
+                        }}</span>
                       </div>
                       <button
                         class="calendar-nav-btn"
@@ -4709,15 +5308,22 @@ function setupRealtimeCommentListeners() {
                         </div>
                         <div class="calendar-days">
                           <div
-                            v-for="date in getDaysInMonth(currentMonth.getFullYear(), currentMonth.getMonth())"
+                            v-for="date in getDaysInMonth(
+                              currentMonth.getFullYear(),
+                              currentMonth.getMonth()
+                            )"
                             :key="date.getTime()"
                             class="calendar-day"
                             :class="{
-                              'other-month': date.getMonth() !== currentMonth.getMonth(),
-                              'selected': isDateInRange(date),
+                              'other-month':
+                                date.getMonth() !== currentMonth.getMonth(),
+                              selected: isDateInRange(date),
                               'start-date': isDateStart(date),
                               'end-date': isDateEnd(date),
-                              'in-range': isDateInRange(date) && !isDateStart(date) && !isDateEnd(date)
+                              'in-range':
+                                isDateInRange(date) &&
+                                !isDateStart(date) &&
+                                !isDateEnd(date),
                             }"
                             @click="selectDate(date)"
                           >
@@ -4738,15 +5344,22 @@ function setupRealtimeCommentListeners() {
                         </div>
                         <div class="calendar-days">
                           <div
-                            v-for="date in getDaysInMonth(nextMonth.getFullYear(), nextMonth.getMonth())"
+                            v-for="date in getDaysInMonth(
+                              nextMonth.getFullYear(),
+                              nextMonth.getMonth()
+                            )"
                             :key="date.getTime()"
                             class="calendar-day"
                             :class="{
-                              'other-month': date.getMonth() !== nextMonth.getMonth(),
-                              'selected': isDateInRange(date),
+                              'other-month':
+                                date.getMonth() !== nextMonth.getMonth(),
+                              selected: isDateInRange(date),
                               'start-date': isDateStart(date),
                               'end-date': isDateEnd(date),
-                              'in-range': isDateInRange(date) && !isDateStart(date) && !isDateEnd(date)
+                              'in-range':
+                                isDateInRange(date) &&
+                                !isDateStart(date) &&
+                                !isDateEnd(date),
                             }"
                             @click="selectDate(date)"
                           >
@@ -4759,10 +5372,7 @@ function setupRealtimeCommentListeners() {
                 </div>
               </div>
             </div>
-            <button
-              class="clear-filter-btn"
-              @click="clearFilters"
-            >
+            <button class="clear-filter-btn" @click="clearFilters">
               <span>✕</span>
               Clear
             </button>
@@ -4770,16 +5380,8 @@ function setupRealtimeCommentListeners() {
         </div>
 
         <div class="all-tasks-list">
-          <div
-            v-if="loading"
-            class="loading-message"
-          >
-            Loading tasks...
-          </div>
-          <div
-            v-else-if="filteredTasks.length === 0"
-            class="empty-message"
-          >
+          <div v-if="loading" class="loading-message">Loading tasks...</div>
+          <div v-else-if="filteredTasks.length === 0" class="empty-message">
             No tasks found
           </div>
           <div v-else>
@@ -4794,7 +5396,9 @@ function setupRealtimeCommentListeners() {
                   <div class="task-item-header">
                     <div class="task-item-title">
                       <span class="task-id">#{{ task.id }}</span>
-                      <span class="task-title">{{ getCleanTaskTitle(task.title) }}</span>
+                      <span class="task-title">{{
+                        getCleanTaskTitle(task.title)
+                      }}</span>
                       <span
                         v-if="task.status === 'closed'"
                         class="task-status-inline"
@@ -4808,12 +5412,11 @@ function setupRealtimeCommentListeners() {
                   <div class="task-item-details">
                     <div class="task-detail-row">
                       <i class="pi pi-calendar detail-icon" />
-                      <span class="task-date">{{ formatDate(task.createdAt) }}</span>
+                      <span class="task-date">{{
+                        formatDate(task.createdAt)
+                      }}</span>
                     </div>
-                    <div
-                      v-if="task.dueDate"
-                      class="task-detail-row"
-                    >
+                    <div v-if="task.dueDate" class="task-detail-row">
                       <i
                         class="pi pi-clock detail-icon"
                         :class="{ 'overdue-icon': isOverdue(task.dueDate) }"
@@ -4825,22 +5428,20 @@ function setupRealtimeCommentListeners() {
                         Due: {{ formatDateTime(task.dueDate) }}
                       </span>
                     </div>
-                    <div
-                      v-if="task.assignedTo"
-                      class="task-detail-row"
-                    >
+                    <div v-if="task.assignedTo" class="task-detail-row">
                       <i class="pi pi-user detail-icon" />
                       <span class="task-assignee">
-                        Assigned to: {{ task.assignedTo.fullName || task.assignedTo.username }}
+                        Assigned to:
+                        {{
+                          task.assignedTo.fullName || task.assignedTo.username
+                        }}
                       </span>
                     </div>
-                    <div
-                      v-if="task.reviewer"
-                      class="task-detail-row"
-                    >
+                    <div v-if="task.reviewer" class="task-detail-row">
                       <i class="pi pi-eye detail-icon" />
                       <span class="task-reviewer">
-                        Reviewer: {{ task.reviewer.fullName || task.reviewer.username }}
+                        Reviewer:
+                        {{ task.reviewer.fullName || task.reviewer.username }}
                       </span>
                     </div>
                   </div>
@@ -4864,8 +5465,6 @@ function setupRealtimeCommentListeners() {
     </div>
   </div>
 
-
-
   <!-- Task Action Menu -->
   <Teleport to="body">
     <div
@@ -4877,28 +5476,19 @@ function setupRealtimeCommentListeners() {
         class="task-action-menu"
         :style="{
           left: taskActionMenuPosition.x + 'px',
-          top: taskActionMenuPosition.y + 'px'
+          top: taskActionMenuPosition.y + 'px',
         }"
         @click.stop
       >
-        <button
-          class="task-action-item"
-          @click="editTask"
-        >
+        <button class="task-action-item" @click="editTask">
           <i class="pi pi-pencil" />
           Edit
         </button>
-        <button
-          class="task-action-item"
-          @click="closeTaskFromMenu"
-        >
+        <button class="task-action-item" @click="closeTaskFromMenu">
           <i class="pi pi-times" />
           Close
         </button>
-        <button
-          class="task-action-item delete"
-          @click="openDeleteModal"
-        >
+        <button class="task-action-item delete" @click="openDeleteModal">
           <i class="pi pi-trash" />
           Delete
         </button>
@@ -4908,33 +5498,18 @@ function setupRealtimeCommentListeners() {
 
   <!-- Delete Task Modal -->
   <Teleport to="body">
-    <div
-      v-if="showDeleteModal"
-      class="modal-overlay"
-      @click="closeDeleteModal"
-    >
-      <div
-        class="modal-content"
-        @click.stop
-      >
+    <div v-if="showDeleteModal" class="modal-overlay" @click="closeDeleteModal">
+      <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3 class="modal-title">
-            Delete Task
-          </h3>
-          <button
-            class="modal-close"
-            @click="closeDeleteModal"
-          >
-            ×
-          </button>
+          <h3 class="modal-title">Delete Task</h3>
+          <button class="modal-close" @click="closeDeleteModal">×</button>
         </div>
         <div class="modal-body">
           <div class="delete-warning">
-            <div class="warning-icon">
-              ⚠️
-            </div>
+            <div class="warning-icon">⚠️</div>
             <p class="warning-text">
-              Are you sure you want to delete task <strong>"{{ taskToDelete?.title }}"</strong>?
+              Are you sure you want to delete task
+              <strong>"{{ taskToDelete?.title }}"</strong>?
             </p>
             <p class="warning-subtext">
               If the task is completed you can close it or mark as Done.
@@ -4954,10 +5529,7 @@ function setupRealtimeCommentListeners() {
             :disabled="isDeleting"
             @click="deleteSelectedTask"
           >
-            <span
-              v-if="isDeleting"
-              class="loading-spinner"
-            />
+            <span v-if="isDeleting" class="loading-spinner" />
             {{ isDeleting ? 'Deleting...' : 'Delete Task' }}
           </button>
         </div>
@@ -4972,30 +5544,24 @@ function setupRealtimeCommentListeners() {
       class="modal-overlay"
       @click="cancelCloseTask"
     >
-      <div
-        class="modal-content"
-        @click.stop
-      >
+      <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>Confirm Close Task</h3>
-          <button
-            class="modal-close-btn"
-            @click="cancelCloseTask"
-          >
+          <button class="modal-close-btn" @click="cancelCloseTask">
             &times;
           </button>
         </div>
         <div class="modal-body">
-          <p>Are you sure you want to close task <strong>"{{ taskToClose?.title }}"</strong>?</p>
+          <p>
+            Are you sure you want to close task
+            <strong>"{{ taskToClose?.title }}"</strong>?
+          </p>
           <p class="modal-warning">
             You can reopen this task later from the "All tasks" tab.
           </p>
         </div>
         <div class="modal-footer">
-          <button
-            class="modal-btn modal-btn-cancel"
-            @click="cancelCloseTask"
-          >
+          <button class="modal-btn modal-btn-cancel" @click="cancelCloseTask">
             Cancel
           </button>
           <button
@@ -5003,10 +5569,7 @@ function setupRealtimeCommentListeners() {
             :disabled="isClosingTask"
             @click="confirmCloseTask"
           >
-            <span
-              v-if="isClosingTask"
-              class="loading-spinner"
-            />
+            <span v-if="isClosingTask" class="loading-spinner" />
             {{ isClosingTask ? 'Closing...' : 'Close Task' }}
           </button>
         </div>
@@ -5021,24 +5584,26 @@ function setupRealtimeCommentListeners() {
       class="modal-overlay"
       @click="cancelReopenTask"
     >
-      <div
-        class="modal-content reopen-modal"
-        @click.stop
-      >
+      <div class="modal-content reopen-modal" @click.stop>
         <div class="modal-header">
           <h3>Confirm Reopen Task</h3>
-          <button
-            class="modal-close-btn"
-            @click="cancelReopenTask"
-          >
+          <button class="modal-close-btn" @click="cancelReopenTask">
             &times;
           </button>
         </div>
         <div class="modal-body">
-          <p>Are you sure you want to reopen task <strong>"{{ taskToReopen?.title }}"</strong>?</p>
+          <p>
+            Are you sure you want to reopen task
+            <strong>"{{ taskToReopen?.title }}"</strong>?
+          </p>
           <div class="reopen-target-status-section">
-            <label class="reopen-reason-label">Target status after reopen:</label>
-            <div class="status-select-wrapper" @click.stop="showReopenStatusDropdown = !showReopenStatusDropdown">
+            <label class="reopen-reason-label"
+              >Target status after reopen:</label
+            >
+            <div
+              class="status-select-wrapper"
+              @click.stop="showReopenStatusDropdown = !showReopenStatusDropdown"
+            >
               <div class="status-select-display">
                 <span
                   v-if="reopenTargetStatusId"
@@ -5049,34 +5614,47 @@ function setupRealtimeCommentListeners() {
                     class="status-dot"
                     :style="{ background: (availableStatuses.find((s:any)=>s.id===reopenTargetStatusId)?.color) || '#e5e7eb' }"
                   />
-                  {{ availableStatuses.find((s:any)=>s.id===reopenTargetStatusId)?.name || 'Select status' }}
+                  {{
+                    availableStatuses.find(
+                      (s: any) => s.id === reopenTargetStatusId
+                    )?.name || 'Select status'
+                  }}
                 </span>
                 <span v-else class="status-placeholder">Select status</span>
                 <i class="pi pi-chevron-down select-caret" />
               </div>
 
-              <div v-if="showReopenStatusDropdown" class="status-dropdown" @click.stop>
+              <div
+                v-if="showReopenStatusDropdown"
+                class="status-dropdown"
+                @click.stop
+              >
                 <div class="status-options">
                   <div
                     v-for="s in orderedStatuses.filter((s:any)=>!isClosedTypeStatus(s.id))"
                     :key="s.id"
                     class="status-option"
-                    @click="reopenTargetStatusId = s.id; showReopenStatusDropdown = false"
+                    @click="
+                      reopenTargetStatusId = s.id;
+                      showReopenStatusDropdown = false;
+                    "
                   >
                     <span class="status-dot" :style="{ background: s.color }" />
                     <span class="status-name">{{ s.name }}</span>
-                    <span class="status-type">{{ formatStatusTypeLabel(s.type) }}</span>
-                    <i v-if="reopenTargetStatusId === s.id" class="pi pi-check selected-icon" />
+             
+                    <i
+                      v-if="reopenTargetStatusId === s.id"
+                      class="pi pi-check selected-icon"
+                    />
                   </div>
                 </div>
               </div>
             </div>
           </div>
           <div class="reopen-reason-section">
-            <label
-              for="reopen-reason"
-              class="reopen-reason-label"
-            >Reason for reopening (optional):</label>
+            <label for="reopen-reason" class="reopen-reason-label"
+              >Reason for reopening (optional):</label
+            >
             <textarea
               id="reopen-reason"
               v-model="reopenReason"
@@ -5085,13 +5663,9 @@ function setupRealtimeCommentListeners() {
               rows="5"
             />
           </div>
-
         </div>
         <div class="modal-footer">
-          <button
-            class="modal-btn modal-btn-cancel"
-            @click="cancelReopenTask"
-          >
+          <button class="modal-btn modal-btn-cancel" @click="cancelReopenTask">
             Cancel
           </button>
           <button
@@ -5099,10 +5673,7 @@ function setupRealtimeCommentListeners() {
             :disabled="isReopeningTask"
             @click="confirmReopenTask"
           >
-            <span
-              v-if="isReopeningTask"
-              class="loading-spinner"
-            />
+            <span v-if="isReopeningTask" class="loading-spinner" />
             {{ isReopeningTask ? 'Reopening...' : 'Reopen Task' }}
           </button>
         </div>
@@ -5112,18 +5683,22 @@ function setupRealtimeCommentListeners() {
 
   <!-- Delete Comment Confirmation Modal -->
   <Teleport to="body">
-    <div v-if="showDeleteConfirmModal" class="modal-overlay" @click="cancelDeleteComment">
+    <div
+      v-if="showDeleteConfirmModal"
+      class="modal-overlay"
+      @click="cancelDeleteComment"
+    >
       <div class="modal" @click.stop>
         <div class="modal-body">
-          <p class="confirm-text">Are you sure you want to delete this comment?</p>
+          <p class="confirm-text">
+            Are you sure you want to delete this comment?
+          </p>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="cancelDeleteComment">
             Cancel
           </button>
-          <button class="btn btn-danger" @click="deleteComment">
-            Delete
-          </button>
+          <button class="btn btn-danger" @click="deleteComment">Delete</button>
         </div>
       </div>
     </div>
@@ -5636,8 +6211,6 @@ function setupRealtimeCommentListeners() {
   color: #6366f1;
 }
 
-
-
 @media (max-width: 600px) {
   .search-filter-container {
     flex-direction: column;
@@ -6128,7 +6701,7 @@ function setupRealtimeCommentListeners() {
   flex-shrink: 0;
   flex-grow: 0;
   padding: 0.7em 1em 0.6em 1em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -6263,7 +6836,9 @@ function setupRealtimeCommentListeners() {
 }
 
 /* Fallback for other statuses */
-.kanban-column:not(.pending-column):not(.in_progress-column):not(.completed-column) {
+.kanban-column:not(.pending-column):not(.in_progress-column):not(
+    .completed-column
+  ) {
   border-left: none; /* remove fallback separator */
 }
 .kanban-column-title {
@@ -6374,7 +6949,8 @@ function setupRealtimeCommentListeners() {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -6383,7 +6959,8 @@ function setupRealtimeCommentListeners() {
 }
 
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0px);
   }
   50% {
@@ -6449,7 +7026,7 @@ function setupRealtimeCommentListeners() {
 .task-card {
   background: #fff;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(34,197,94,0.12);
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.12);
   padding: 0.5em 0.4em 0.4em 0.4em;
   margin-bottom: 1.2em;
   display: flex;
@@ -6468,7 +7045,7 @@ function setupRealtimeCommentListeners() {
   cursor: grabbing;
 }
 .task-card:hover {
-  box-shadow: 0 8px 32px rgba(34,197,94,0.18);
+  box-shadow: 0 8px 32px rgba(34, 197, 94, 0.18);
   border-color: #22c55e;
   background: #f0fdf4;
 }
@@ -6639,7 +7216,12 @@ function setupRealtimeCommentListeners() {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
   transition: left 0.5s;
 }
 
@@ -6824,15 +7406,15 @@ function setupRealtimeCommentListeners() {
   transition: width 0.3s ease, background-color 0.3s ease;
 }
 
-.progress-bar[style*="width: 0%"] {
+.progress-bar[style*='width: 0%'] {
   background: #e5e7eb;
 }
 
-.progress-bar[style*="width: 50%"] {
+.progress-bar[style*='width: 50%'] {
   background: #fbbf24;
 }
 
-.progress-bar[style*="width: 100%"] {
+.progress-bar[style*='width: 100%'] {
   background: #10b981;
 }
 
@@ -6909,7 +7491,8 @@ function setupRealtimeCommentListeners() {
   /* Remove overflow hidden to allow dropdowns to be visible */
   overflow: visible;
 }
-.members-table th, .members-table td {
+.members-table th,
+.members-table td {
   padding: 0.7em 1em;
   text-align: left;
   color: #374151;
@@ -6994,7 +7577,8 @@ function setupRealtimeCommentListeners() {
 .modal-content {
   background: white;
   border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
@@ -7431,10 +8015,11 @@ body.modal-open main {
   border: 2px solid #22c55e;
   border-radius: 12px;
   background: #fff;
-  box-shadow: 0 4px 16px rgba(34,197,94,0.10);
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.1);
   padding: 1.3em 1.5em 1em 1.5em;
   margin-bottom: 0.8em;
-  transition: box-shadow 0.2s, border 0.2s, background 0.2s, transform 0.18s cubic-bezier(.4,2,.6,1);
+  transition: box-shadow 0.2s, border 0.2s, background 0.2s,
+    transform 0.18s cubic-bezier(0.4, 2, 0.6, 1);
   cursor: pointer;
   min-width: 250px;
   font-size: 13px;
@@ -7443,7 +8028,7 @@ body.modal-open main {
 .crowdin-style:hover {
   border-color: #2563eb;
   background: #f0fdf4;
-  box-shadow: 0 12px 32px rgba(37,99,235,0.18);
+  box-shadow: 0 12px 32px rgba(37, 99, 235, 0.18);
   transform: scale(1.025);
   z-index: 2;
 }
@@ -7452,16 +8037,32 @@ body.modal-open main {
   animation: shake 0.25s linear;
 }
 @keyframes shake {
-  0% { transform: translateX(0); }
-  20% { transform: translateX(-3px); }
-  40% { transform: translateX(3px); }
-  60% { transform: translateX(-2px); }
-  80% { transform: translateX(2px); }
-  100% { transform: translateX(0); }
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 
 /* CSS bổ sung bố cục Crowdin */
-.crowdin-row-1, .crowdin-row-2, .crowdin-row-3, .crowdin-row-4, .crowdin-row-5 {
+.crowdin-row-1,
+.crowdin-row-2,
+.crowdin-row-3,
+.crowdin-row-4,
+.crowdin-row-5 {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
@@ -7722,15 +8323,31 @@ body.modal-open main {
   background: #e0e7ff;
   color: #2563eb;
   z-index: 3;
-  box-shadow: 0 2px 8px rgba(37,99,235,0.08);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
   letter-spacing: 0.01em;
 }
 
-.task-status-badge.pending { background: #f3f4f6; color: #2563eb; }
-.task-status-badge.in_progress { background: #fef3c7; color: #b45309; }
-.task-status-badge.completed { background: #d1fae5; color: #059669; }
-.task-status-badge.closed { background: #f3f4f6; color: #6b7280; }
-.task-status-badge.overdue { background: #fee2e2; color: #dc2626; border: 1.5px solid #dc2626; }
+.task-status-badge.pending {
+  background: #f3f4f6;
+  color: #2563eb;
+}
+.task-status-badge.in_progress {
+  background: #fef3c7;
+  color: #b45309;
+}
+.task-status-badge.completed {
+  background: #d1fae5;
+  color: #059669;
+}
+.task-status-badge.closed {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.task-status-badge.overdue {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1.5px solid #dc2626;
+}
 
 .task-progress-bar-bg {
   background: #e0e7ff;
@@ -7764,7 +8381,7 @@ body.modal-open main {
   padding: 0.3em 1.1em 0.3em 0.7em;
   font-weight: 700;
   font-size: 1.08em;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   gap: 0.5em;
   min-width: 110px;
   height: 48px;
@@ -8165,8 +8782,6 @@ body.modal-open main {
   overflow: visible;
 }
 
-
-
 .language-swimlane-content .kanban-column {
   background: white;
   border-radius: 6px;
@@ -8476,7 +9091,7 @@ body.modal-open main {
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   z-index: 10000;
 }
 
@@ -8634,7 +9249,9 @@ body.modal-open main {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Task Detail Tabs */
@@ -8877,7 +9494,8 @@ body.modal-open main {
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
   z-index: 99999;
   min-width: 120px;
   margin-top: 4px;
@@ -9369,7 +9987,8 @@ body.modal-open main {
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
   min-width: 320px;
   max-height: 320px;
   overflow-y: auto;
@@ -9397,8 +10016,6 @@ body.modal-open main {
   }
 }
 
-
-
 .dropdown-options {
   padding: 0.5rem 0;
 }
@@ -9424,8 +10041,6 @@ body.modal-open main {
   transform: translateX(1px);
   background: #e2e8f0;
 }
-
-
 
 .member-option {
   display: flex;
@@ -9541,7 +10156,7 @@ body.modal-open main {
 .swap-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.22);
+  background: rgba(0, 0, 0, 0.22);
   -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   z-index: 999;
@@ -9559,17 +10174,17 @@ body.modal-open main {
   transform: translateX(-50%);
   z-index: 1000;
 
-  border: 2px solid #4A90E2; /* xanh dương */
+  border: 2px solid #4a90e2; /* xanh dương */
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
-
 
 .swap-modal .modal {
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
   width: 380px;
   max-width: calc(100vw - 32px);
   padding: 16px;
@@ -9608,21 +10223,27 @@ body.modal-open main {
   border-color: #e5e7eb;
 }
 
-.btn-secondary:hover { background: #e5e7eb; }
+.btn-secondary:hover {
+  background: #e5e7eb;
+}
 
 .btn-primary {
   background: #6366f1;
   color: white;
 }
 
-.btn-primary:hover { background: #4f46e5; }
+.btn-primary:hover {
+  background: #4f46e5;
+}
 
 .btn-danger {
   background: #dc2626;
   color: white;
 }
 
-.btn-danger:hover { background: #b91c1c; }
+.btn-danger:hover {
+  background: #b91c1c;
+}
 
 /* Modal styles */
 .modal-overlay {
@@ -9645,7 +10266,8 @@ body.modal-open main {
   padding: 32px;
   max-width: 350px;
   width: 90%;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
   text-align: center;
 }
 
@@ -9721,5 +10343,4 @@ body.modal-open main {
 .default-workflow-notice strong {
   color: #1565c0;
 }
-
 </style>

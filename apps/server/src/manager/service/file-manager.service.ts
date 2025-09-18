@@ -969,7 +969,6 @@ export class FileService {
       // 2) Try pdfjs-dist (textContent)
       try {
         const pdfjsLib = await import('pdfjs-dist');
-        // @ts-ignore
         const getDocument = (pdfjsLib as any).getDocument || (pdfjsLib as any).default?.getDocument;
         if (getDocument) {
           const loadingTask = getDocument({ data: pdfBuffer });

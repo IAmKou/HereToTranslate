@@ -125,10 +125,87 @@ export class DocxEditorService {
     return fontInfo;
   }
 
+  private extractTextFromRun(run: any): string {
+    let text = '';
+    
+    // Skip image elements (w:drawing, w:pict)
+    if (run['w:drawing'] || run['w:pict']) {
+      return '';
+    }
+    
+    // Extract text from w:t elements
+    if (run['w:t']) {
+      text += typeof run['w:t'] === 'string' ? run['w:t'] : run['w:t']['_'] || '';
+    }
+    
+    // Handle tab characters
+    if (run['w:tab']) {
+      text += '\t';
+    }
+    
+    // Handle line breaks
+    if (run['w:br']) {
+      text += '\n';
+    }
+    
+    return text;
+  }
+
+  private extractTextFromParagraph(paragraph: any): { text: string; fontInfo: FontInfo } {
+    let paragraphText = '';
+    let paragraphFontInfo: FontInfo = {};
+    
+    if (paragraph['w:r']) {
+      const runs = Array.isArray(paragraph['w:r']) ? paragraph['w:r'] : [paragraph['w:r']];
+      
+      for (const run of runs) {
+        const runText = this.extractTextFromRun(run);
+        paragraphText += runText;
+        
+        // Get font info from first non-empty run
+        if (runText && Object.keys(paragraphFontInfo).length === 0) {
+          paragraphFontInfo = this.extractFontInfoFromRun(run);
+        }
+      }
+    }
+    
+    return { text: paragraphText, fontInfo: paragraphFontInfo };
+  }
+
+  private extractTextFromTable(table: any): Array<{ text: string; fontInfo: FontInfo }> {
+    const tableTexts: Array<{ text: string; fontInfo: FontInfo }> = [];
+    
+    if (table['w:tr']) {
+      const rows = Array.isArray(table['w:tr']) ? table['w:tr'] : [table['w:tr']];
+      
+      for (const row of rows) {
+        if (row['w:tc']) {
+          const cells = Array.isArray(row['w:tc']) ? row['w:tc'] : [row['w:tc']];
+          
+          for (const cell of cells) {
+            // Each cell can contain paragraphs
+            if (cell['w:p']) {
+              const paragraphs = Array.isArray(cell['w:p']) ? cell['w:p'] : [cell['w:p']];
+              
+              for (const paragraph of paragraphs) {
+                const { text, fontInfo } = this.extractTextFromParagraph(paragraph);
+                if (text.trim()) {
+                  tableTexts.push({ text: text.trim(), fontInfo });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    return tableTexts;
+  }
+
   private segmentTextBySRX(text: string): string[] {
     if (!text || text.trim().length === 0) return [];
     
-    let currentText = text.trim();
+    const currentText = text.trim();
     
     // First, split by obvious paragraph breaks (double newlines, tabs, etc.)
     const paragraphs = currentText.split(/\n\s*\n|\t+/).filter(p => p.trim());
@@ -147,7 +224,7 @@ export class DocxEditorService {
     if (!text || text.trim().length === 0) return [];
     
     const sentences: string[] = [];
-    let currentText = text.trim();
+    const currentText = text.trim();
     
     // Enhanced sentence boundary patterns
     const boundaryPatterns = [
@@ -165,7 +242,7 @@ export class DocxEditorService {
       /(\n+)\s*(?=[A-Z])/g,
     ];
     
-    let breakPoints: Array<{index: number, length: number}> = [];
+    const breakPoints: Array<{index: number, length: number}> = [];
     
     // Find all potential break points
     for (const pattern of boundaryPatterns) {
@@ -274,19 +351,29 @@ export class DocxEditorService {
       let text = '';
       const body = docObject['w:document']['w:body'];
       
-      if (body && body['w:p']) {
-        const paragraphs = Array.isArray(body['w:p']) ? body['w:p'] : [body['w:p']];
-        
-        for (const paragraph of paragraphs) {
-          if (paragraph['w:r']) {
-            const runs = Array.isArray(paragraph['w:r']) ? paragraph['w:r'] : [paragraph['w:r']];
-            for (const run of runs) {
-              if (run['w:t']) {
-                text += run['w:t'];
-              }
+      if (body) {
+        // Process paragraphs
+        if (body['w:p']) {
+          const paragraphs = Array.isArray(body['w:p']) ? body['w:p'] : [body['w:p']];
+          
+          for (const paragraph of paragraphs) {
+            const { text: paragraphText } = this.extractTextFromParagraph(paragraph);
+            if (paragraphText.trim()) {
+              text += paragraphText + '\n';
             }
           }
-          text += '\n';
+        }
+        
+        // Process tables
+        if (body['w:tbl']) {
+          const tables = Array.isArray(body['w:tbl']) ? body['w:tbl'] : [body['w:tbl']];
+          
+          for (const table of tables) {
+            const tableTexts = this.extractTextFromTable(table);
+            for (const { text: tableText } of tableTexts) {
+              text += tableText + '\n';
+            }
+          }
         }
       }
       
@@ -315,48 +402,68 @@ export class DocxEditorService {
       const segments: DocxSegment[] = [];
       const body = docObject['w:document']['w:body'];
       
-      if (body && body['w:p']) {
-        const paragraphs = Array.isArray(body['w:p']) ? body['w:p'] : [body['w:p']];
+      if (body) {
+        // Process all body elements in order (paragraphs, tables, etc.)
+        const bodyElements: Array<{ type: 'paragraph' | 'table'; element: any }> = [];
         
-        for (const paragraph of paragraphs) {
-          let paragraphText = '';
-          let paragraphFontInfo: FontInfo = {};
-          
-          // Extract text and font info from runs
-          if (paragraph['w:r']) {
-            const runs = Array.isArray(paragraph['w:r']) ? paragraph['w:r'] : [paragraph['w:r']];
+        // Collect paragraphs
+        if (body['w:p']) {
+          const paragraphs = Array.isArray(body['w:p']) ? body['w:p'] : [body['w:p']];
+          paragraphs.forEach(p => bodyElements.push({ type: 'paragraph', element: p }));
+        }
+        
+        // Collect tables
+        if (body['w:tbl']) {
+          const tables = Array.isArray(body['w:tbl']) ? body['w:tbl'] : [body['w:tbl']];
+          tables.forEach(t => bodyElements.push({ type: 'table', element: t }));
+        }
+        
+        // Process elements in document order
+        for (const { type, element } of bodyElements) {
+          if (type === 'paragraph') {
+            const { text: paragraphText, fontInfo: paragraphFontInfo } = this.extractTextFromParagraph(element);
             
-            for (const run of runs) {
-              if (run['w:t']) {
-                const runText = typeof run['w:t'] === 'string' ? run['w:t'] : run['w:t']['_'] || '';
-                paragraphText += runText;
-                
-                // Get font info from this run (use first run's font info for the paragraph)
-                if (Object.keys(paragraphFontInfo).length === 0) {
-                  paragraphFontInfo = this.extractFontInfoFromRun(run);
-                }
+            // Skip empty paragraphs
+            if (!paragraphText.trim()) continue;
+            
+            // === Step 4: Apply SRX sentence segmentation ===
+            const sentences = this.segmentTextBySRX(paragraphText);
+            
+            for (const sentence of sentences) {
+              if (sentence.trim()) {
+                segments.push({
+                  text: sentence.trim(),
+                  fontFamily: paragraphFontInfo.family || 'Calibri',
+                  fontSize: paragraphFontInfo.size || 11,
+                  style: {
+                    bold: paragraphFontInfo.bold || false,
+                    italic: paragraphFontInfo.italic || false,
+                    underline: paragraphFontInfo.underline || false,
+                  },
+                });
               }
             }
-          }
-          
-          // Skip empty paragraphs
-          if (!paragraphText.trim()) continue;
-          
-          // === Step 4: Apply SRX sentence segmentation ===
-          const sentences = this.segmentTextBySRX(paragraphText);
-          
-          for (const sentence of sentences) {
-            if (sentence.trim()) {
-              segments.push({
-                text: sentence.trim(),
-                fontFamily: paragraphFontInfo.family || 'Calibri',
-                fontSize: paragraphFontInfo.size || 11,
-                style: {
-                  bold: paragraphFontInfo.bold || false,
-                  italic: paragraphFontInfo.italic || false,
-                  underline: paragraphFontInfo.underline || false,
-                },
-              });
+          } else if (type === 'table') {
+            const tableTexts = this.extractTextFromTable(element);
+            
+            for (const { text: tableText, fontInfo: tableFontInfo } of tableTexts) {
+              // Apply SRX sentence segmentation to table cell text
+              const sentences = this.segmentTextBySRX(tableText);
+              
+              for (const sentence of sentences) {
+                if (sentence.trim()) {
+                  segments.push({
+                    text: sentence.trim(),
+                    fontFamily: tableFontInfo.family || 'Calibri',
+                    fontSize: tableFontInfo.size || 11,
+                    style: {
+                      bold: tableFontInfo.bold || false,
+                      italic: tableFontInfo.italic || false,
+                      underline: tableFontInfo.underline || false,
+                    },
+                  });
+                }
+              }
             }
           }
         }

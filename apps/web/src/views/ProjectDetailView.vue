@@ -270,12 +270,6 @@
                   Translations
                 </button>
                 <button
-                  :class="['tab', { active: activeTab === 'commits' }]"
-                  @click="activeTab = 'commits'"
-                >
-                  Commits
-                </button>
-                <button
                   :class="['tab', { active: activeTab === 'task' }]"
                   @click="activeTab = 'task'"
                 >
@@ -800,7 +794,7 @@ const members = ref<
 const membersLoading = ref(false);
 const membersError = ref('');
 
-type TabType = 'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation' | 'commits' | 'task' | 'roles' | 'activity';
+type TabType = 'details' | 'members' | 'groups' | 'discussions' | 'description' | 'files' | 'translation'| 'task' | 'roles' | 'activity';
 const activeTab = ref<TabType>('description');
 
 const isAllSelected = ref(false);
@@ -1181,7 +1175,7 @@ onMounted(async () => {
 
   // Handle tab query parameter
   const tabParam = route.query.tab as string;
-  if (tabParam && ['description', 'members', 'roles', 'groups', 'discussions', 'files', 'translation', 'commits', 'task', 'activity'].includes(tabParam)) {
+  if (tabParam && ['description', 'members', 'roles', 'groups', 'discussions', 'files', 'translation', 'task', 'activity'].includes(tabParam)) {
     activeTab.value = tabParam as TabType;
   }
 });
@@ -1519,7 +1513,7 @@ function parsePermissionFlags(bitmask: string | number | bigint | undefined | an
   const availablePermissions = [
     'ProjectAdmin', 'ManageRoles', 'ManageMembers', 'ManageGroups',
     'ManageProjectMetadata', 'ManageWorkspaces', 'ManageDiscussions', 'ViewAudit',
-    'ReviewCommit', 'PushCommit', 'ReviewRequests', 'ViewRequest', 'ManageWorkspaceMetadata',
+    'ReviewRequests', 'ViewRequest', 'ManageWorkspaceMetadata',
     'ViewWorkspace', 'ViewProject', 'ManageComments', 'PostComment', 'Vote', 'AttachFiles', 'ViewThread'
   ];
   // Trả về đúng key (không phải label, không có dấu cách)

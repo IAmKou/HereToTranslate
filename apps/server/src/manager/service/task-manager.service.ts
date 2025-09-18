@@ -64,7 +64,8 @@ export class TaskManagerService {
     projectId?: string;
     branchId?: string;
     fileId?: string;
-    filePart?: number;
+    originalText?: string;
+    translatedText?: string;
     pages?: number[];
     language?: string;
     workflowId?: string;
@@ -85,7 +86,8 @@ export class TaskManagerService {
       projectId,
       branchId,
       fileId,
-      filePart,
+      originalText,
+      translatedText,
       pages,
       language,
       workflowId,
@@ -216,7 +218,8 @@ export class TaskManagerService {
       projectId,
       branchId,
       fileId,
-      filePart,
+      originalText,
+      translatedText,
       selectedPages: Array.isArray(pages) && pages.length > 0 ? pages : undefined,
       language,
       workflow,
@@ -344,7 +347,7 @@ export class TaskManagerService {
     // Get the default workflow for the project
     const defaultWorkflow = await this.workflowRepository.findOne({
       where: {
-        project: { id: BigInt(task.projectId) },
+        project: { id: BigInt(task.projectId || '0') },
         isDefault: true,
         isActive: true,
       },
@@ -482,7 +485,8 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        filePart: true,
+        originalText: true,
+        translatedText: true,
         selectedPages: true,
         language: true,
         dueDate: true,
@@ -536,7 +540,8 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        filePart: true,
+        originalText: true,
+        translatedText: true,
         selectedPages: true,
         language: true,
         dueDate: true,
@@ -596,7 +601,8 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        filePart: true,
+        originalText: true,
+        translatedText: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -847,7 +853,8 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        filePart: true,
+        originalText: true,
+        translatedText: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -948,7 +955,8 @@ export class TaskManagerService {
         projectId: true,
         branchId: true,
         fileId: true,
-        filePart: true,
+        originalText: true,
+        translatedText: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -974,29 +982,14 @@ export class TaskManagerService {
     const task = await this.taskRepository.findOneOrFail({
       where: { id: taskId },
     });
-    if (
-      !task.projectId ||
-      task.filePart === null ||
-      !task.branchId ||
-      !task.fileId ||
-      !task.language
-    ) {
-      return null;
+
+    if (!task.originalText) {
+      return { total: 0, translated: 0, percent: 0 };
     }
 
-    const strings = await this.translationService.getAllString(
-      task.projectId,
-      task.branchId,
-      task.language,
-      task.fileId,
-      task.filePart ?? undefined
-    );
-    const total = strings.length;
-    const translated = strings.filter((s: Record<string, unknown>) => {
-      const translatedText = s.translatedText as string;
-      return translatedText && translatedText.trim() !== '';
-    }).length;
-    const percent = total === 0 ? 0 : Math.round((translated / total) * 100);
+    const total = 1;
+    const translated = (task.translatedText && task.translatedText.trim() !== '') ? 1 : 0;
+    const percent = translated * 100;
 
     return { total, translated, percent };
   }

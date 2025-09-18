@@ -33,8 +33,11 @@ export class TaskEntity {
   @Column({ type: 'varchar', nullable: true })
   fileId?: string;
 
-  @Column({ type: 'int', nullable: true })
-  filePart?: number;
+  @Column({ type: 'text', nullable: true })
+  originalText?: string;
+
+  @Column({ type: 'text', nullable: true })
+  translatedText?: string;
 
   @Column({ type: 'varchar', length: 10, nullable: true })
   language?: string;

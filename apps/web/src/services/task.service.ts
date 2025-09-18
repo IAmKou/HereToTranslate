@@ -4,11 +4,11 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'closed' | 'cancelled';
+  status: 'open' | 'todo' | 'in_progress' | 'done' | 'overdue' | 'closed' | 'cancelled';
   projectId?: string;
-  branchId?: string;
   fileId?: string;
-  filePart?: number; // backend field
+  originalText?: string;
+  translatedText?: string;
   page?: number;
   pages?: number[]; // Array of selected pages for multiple page selection
   language?: string;
@@ -68,11 +68,11 @@ export interface CreateTaskDto {
   groupId?: string;
   dueDate?: string;
   dueDateTime?: string;
-  branchId?: string;
   fileId?: string;
   page?: number;
   pages?: number[]; // Array of selected pages for multiple page selection
-  filePart?: number; // backend expects this
+  originalText?: string;
+  translatedText?: string;
   language?: string;
 }
 
@@ -207,27 +207,19 @@ export const taskService = {
   _normalizeTask(raw: any): Task {
     if (!raw || typeof raw !== 'object') return raw as Task;
     const task: any = { ...raw };
-    if (task.filePart !== undefined && task.page === undefined) {
-      task.page = task.filePart;
-    }
     // Map backend selectedPages -> pages for consistent UI
     if (Array.isArray(task.selectedPages) && (!Array.isArray(task.pages) || task.pages.length === 0)) {
       task.pages = task.selectedPages;
+    }
+    // Convert status object to string
+    if (task.status && typeof task.status === 'object' && task.status.type) {
+      task.status = task.status.type;
     }
     return task as Task;
   },
 
   async createTask(dto: CreateTaskDto): Promise<Task> {
-    // Backend expects filePart, not page
     const payload: any = { ...dto };
-    if (payload.page !== undefined && payload.filePart === undefined) {
-      payload.filePart = payload.page;
-    }
-    // If pages array exists, pass through for backend to persist in selectedPages
-    if (Array.isArray(payload.pages) && payload.pages.length === 1 && payload.filePart === undefined) {
-      // Single-element pages should also set filePart for compatibility
-      payload.filePart = payload.pages[0];
-    }
     const { data } = await axiosInstance.post('/tasks', payload);
     return this._normalizeTask(data);
   },
@@ -313,13 +305,12 @@ export const taskService = {
     return data;
   },
 
-  async getFileParts(projectId: string, branchId: string, fileId: string): Promise<FilePart[]> {
+  async getFileParts(projectId: string, fileId: string): Promise<FilePart[]> {
     try {
       // Sử dụng API mới để lấy thông tin trang
       const { data } = await axiosInstance.get(`/translation/file-pages/${fileId}`, {
         params: {
           projectId,
-          branchId,
         },
       });
 
@@ -343,7 +334,6 @@ export const taskService = {
       const { data } = await axiosInstance.get('/translation/strings', {
         params: {
           projectId,
-          branchId,
           fileId,
           language: 'en',
         },
@@ -386,7 +376,7 @@ export const taskService = {
   async getTaskProgress(taskId: string): Promise<TaskProgress> {
     try {
       const task = await this.getTask(taskId);
-      if (!task.fileId || !task.projectId || !task.branchId) {
+      if (!task.fileId || !task.projectId ) {
         return { total: 0, translated: 0, percentage: 0 };
       }
 
@@ -397,7 +387,6 @@ export const taskService = {
       const { data } = await axiosInstance.get('/translation/strings', {
         params: {
           projectId: task.projectId,
-          branchId: task.branchId,
           fileId: task.fileId,
           language: taskLanguage, // Sử dụng ngôn ngữ của task
         },

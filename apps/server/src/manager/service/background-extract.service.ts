@@ -44,8 +44,8 @@ export class BackgroundExtractService {
       try {
         const files = await this.fileRepository.find({
           where: { id: In(batch.map((b) => BigInt(b))) },
-          relations: ['project', 'branch'],
-          select: ['id', 'fileName', 'fileType', 'fileContent', 'project', 'branch'],
+          relations: ['project'],
+          select: ['id', 'fileName', 'fileType', 'fileContent'],
         });
         for (const file of files) {
           try {

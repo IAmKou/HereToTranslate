@@ -10,6 +10,7 @@ import { Buffer } from 'buffer';
 import { ActivityManagerService } from './activity-manager.service';
 import { AsposeService } from './aspose.service';
 import { PDFAssembler } from '@prometeia/pdfassembler';
+import { TranslationPreviewEntity } from '../../db/mysql/entity/translation-preview.entity';
 import * as xliff from 'xliff';
 
 @Injectable()
@@ -19,6 +20,8 @@ export class TranslationService {
     private readonly translationRepository: Repository<TranslationEntity>,
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
+    @InjectRepository(TranslationPreviewEntity)
+    private readonly previewRepository: Repository<TranslationPreviewEntity>,
     @Inject(forwardRef(() => ActivityManagerService))
     private readonly activityManagerService: ActivityManagerService,
     private readonly asposeService: AsposeService,
@@ -65,6 +68,29 @@ export class TranslationService {
     return { total, completed, percentage };
   }
 
+  // Preview pages persistence per user-request (not per file)
+  async savePreviewPages(params: { userId: bigint; requestId: string; pages: number[]; }): Promise<{ pages: number[] }>{
+    const { userId, requestId, pages } = params;
+    const trimmed = Array.from(new Set((pages || []).map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0))).slice(0, 5);
+    const existing = await this.previewRepository.findOne({ where: { user: { id: userId } as any, request: { id: BigInt(requestId) } as any } });
+    if (existing) {
+      existing.previewPages = trimmed;
+      existing.createdAt = new Date();
+      await this.previewRepository.save(existing);
+      return { pages: existing.previewPages };
+    }
+    const created = this.previewRepository.create({ user: { id: userId } as any, request: { id: BigInt(requestId) } as any, previewPages: trimmed, isApproved: false });
+    const saved = await this.previewRepository.save(created);
+    return { pages: saved.previewPages };
+  }
+
+  async getPreviewPages(params: { userId: bigint; requestId: string; }): Promise<{ pages: number[] } | null>{
+    const { userId, requestId } = params;
+    const existing = await this.previewRepository.findOne({ where: { user: { id: userId } as any, request: { id: BigInt(requestId) } as any } });
+    if (!existing) return null;
+    return { pages: existing.previewPages || [] };
+  }
+
   // Helper method to ensure translation records exist for target languages
   async ensureTranslationRecordsExist(_projectId: string, _targetLanguage: string): Promise<void> { return; }
 
@@ -109,7 +135,7 @@ export class TranslationService {
     // Cập nhật trực tiếp bản ghi gốc thay vì tạo mới
     originalEntry.translatedText = translatedText;
     originalEntry.language = language;
-    
+
     // Lưu bản ghi đã cập nhật
     const entry = await this.translationRepository.save(originalEntry);
     const isNewTranslation = !originalEntry.translatedText || originalEntry.translatedText.trim().length === 0;
@@ -775,6 +801,146 @@ export class TranslationService {
     const fileName = `${base}${langUpper ? `(${langUpper})` : ''}${ext || ''}`;
 
     return { buffer, fileName, fileType: fileEntity.fileType };
+  }
+
+  /**
+   * Convert a translated DOCX buffer to a real multipage PDF using LibreOffice (soffice).
+   * Falls back to a simple pdf-lib render if soffice is unavailable.
+   */
+  private async convertDocxBufferToPdf(buffer: Buffer, watermark?: string): Promise<Buffer> {
+    const fs = await import('fs');
+    const os = await import('os');
+    const path = await import('path');
+    const { promisify } = await import('util');
+    const { execFile } = await import('child_process');
+    const execFileAsync = promisify(execFile as any);
+
+    const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'htt-docx-'));
+    const docxPath = path.join(tmpDir, 'input.docx');
+    const outDir = path.join(tmpDir, 'out');
+    await fs.promises.mkdir(outDir, { recursive: true });
+    await fs.promises.writeFile(docxPath, buffer);
+
+    try {
+      // Try soffice conversion (must be installed in the environment)
+      // --headless for server usage, --norestore to avoid lock prompts
+      await execFileAsync('soffice', [
+        '--headless',
+        '--norestore',
+        '--convert-to', 'pdf',
+        '--outdir', outDir,
+        docxPath,
+      ], { timeout: 60_000 });
+
+      const pdfPath = path.join(outDir, 'input.pdf');
+      const pdf = await fs.promises.readFile(pdfPath);
+
+      // Optional lightweight watermark with pdf-lib if provided
+      if (watermark && watermark.trim()) {
+        try {
+          const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+          const pdfDoc = await PDFDocument.load(pdf);
+          const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+          const wm = watermark.trim();
+          const pages = pdfDoc.getPages();
+          for (const p of pages) {
+            const { width, height } = p.getSize();
+            p.drawText(wm, {
+              x: width / 2 - font.widthOfTextAtSize(wm, 36) / 2,
+              y: height / 2,
+              size: 36,
+              rotate: { type: 'degrees', angle: -24 },
+              opacity: 0.12,
+              color: rgb(1, 0, 0),
+              font,
+            });
+          }
+          const stamped = await pdfDoc.save();
+          return Buffer.from(stamped);
+        } catch {
+          // ignore stamping failure, return original pdf
+          return pdf;
+        }
+      }
+      return pdf;
+    } catch (err) {
+      // Fallback: basic render via pdf-lib so preview still works
+      try {
+        const mammoth = await import('mammoth');
+        const { value } = await mammoth.extractRawText({ buffer });
+        const text = String(value || '').trim();
+        const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+        const pdfDoc = await PDFDocument.create();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const margin = 50;
+        const pageWidth = 595.28;
+        const pageHeight = 841.89;
+        const fontSize = 12;
+        const lineHeight = fontSize * 1.25;
+        const maxWidth = pageWidth - margin * 2;
+
+        function wrap(t: string): string[] {
+          const parts = t.split(/\s+/);
+          const lines: string[] = [];
+          let cur = '';
+          for (const w of parts) {
+            const cand = cur ? cur + ' ' + w : w;
+            if (font.widthOfTextAtSize(cand, fontSize) > maxWidth && cur) {
+              lines.push(cur);
+              cur = w;
+            } else cur = cand;
+          }
+          if (cur) lines.push(cur);
+          return lines;
+        }
+
+        const paras = text.split(/\r?\n\s*\r?\n/);
+        const lines: string[] = [];
+        for (const p of paras) { const w = wrap(p.trim()); if (w.length) lines.push(...w); lines.push(''); }
+        let page = pdfDoc.addPage([pageWidth, pageHeight]);
+        let y = pageHeight - margin;
+        const wm = (watermark || '').trim();
+        const drawWm = () => {
+          if (!wm) return;
+          page.drawText(wm, { x: pageWidth/2 - font.widthOfTextAtSize(wm,36)/2, y: pageHeight/2, size: 36, rotate: {type:'degrees', angle:-24}, opacity: 0.12, color: rgb(1,0,0), font });
+        };
+        drawWm();
+        for (const line of lines) {
+          if (y - lineHeight < margin) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - margin; drawWm(); }
+          if (line) page.drawText(line, { x: margin, y: y - lineHeight, size: fontSize, font, color: rgb(0,0,0) });
+          y -= lineHeight;
+        }
+        const bytes = await pdfDoc.save();
+        return Buffer.from(bytes);
+      } catch {
+        throw err;
+      }
+    } finally {
+      try { await fs.promises.rm(tmpDir, { recursive: true, force: true }); } catch {}
+    }
+  }
+
+  /**
+   * Build a true-layout PDF for preview (so FE can count pages correctly)
+   */
+  async buildPdfExport(
+    fileId: string,
+    language: string,
+    watermark?: string,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(fileId) }, relations: ['project'] });
+    if (!fileEntity) throw new Error('File not found');
+
+    if (fileEntity.fileType === 'application/pdf') {
+      const { buffer, fileName } = await this.buildExportBuffer(fileId, language, 'original');
+      return { buffer, fileName: fileName.replace(/\.pdf$/i, '') + '.pdf' };
+    }
+
+    // Build translated DOCX buffer first
+    const { buffer: translatedDocx, fileName } = await this.buildExportBuffer(fileId, language, 'original');
+    const pdfBuffer = await this.convertDocxBufferToPdf(translatedDocx, watermark);
+    const outName = fileName.replace(/\.(docx|doc)$/i, '') + '.pdf';
+    return { buffer: pdfBuffer, fileName: outName };
   }
 
   async buildXliffExport(

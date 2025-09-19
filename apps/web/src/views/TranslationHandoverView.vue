@@ -727,13 +727,11 @@ const windowPages = computed<Array<{ pageNumber: number; filePart: number; strin
 
 const requiredPreviewCount = computed(() => Math.min(5, previewPages.value.length || 0));
 const canStartPreview = computed(() => {
-  // Allow preview if file and language are selected, and at least one page is selected
-  // For files with 5 or fewer pages, auto-selection should work
-  // For files with more than 5 pages, user must manually select pages
+  // Require user to select exactly requiredPreviewCount pages before starting preview
   return !!selectedPreviewFileId.value &&
     !!selectedPreviewLanguage.value &&
-    selectedPages.value.length > 0 &&
-    previewPages.value.length > 0;
+    previewPages.value.length > 0 &&
+    selectedPages.value.length === requiredPreviewCount.value;
 });
 
 // Persist preview selection in localStorage (scoped by requestId or projectId)
@@ -1267,42 +1265,83 @@ async function fetchPreviewPages() {
   if (!selectedPreviewFileId.value) return;
   try {
     previewPagesLoading.value = true;
-    const pid = isRequestBased.value ? (projectInfo.value?.project?.id || originalRequestData.value?.project?.id) : projectId.value;
-    const bid = isRequestBased.value ? (projectInfo.value?.project?.defaultBranch?.id || '1') : branchId.value;
-
-    if (!pid || !bid) {
-      console.log('No project ID or branch ID available for fetching pages');
-      previewPages.value = [];
+    // If user already locked a selection previously, reuse it without loading full PDF
+    if (previewSelectionLocked.value && selectedPages.value.length > 0) {
+      const unique = Array.from(new Set(selectedPages.value)).slice(0, 5);
+      previewPages.value = unique.map((n: number) => ({
+        pageNumber: n,
+        filePart: n,
+        stringCount: 0,
+        hasTranslatedStrings: true,
+      }));
+      // Do not modify selectedPages; they are already set and locked
       return;
     }
-
-    const { data } = await axiosInstance.get(`/translation/file-pages/${selectedPreviewFileId.value}`, {
-      params: { projectId: pid, branchId: bid }
-    });
-    previewPages.value = Array.isArray(data?.pages) ? data.pages : [];
-
-    // If no pages from API, create a default page for preview
-    if (previewPages.value.length === 0) {
-      console.log('No pages from API, creating default page');
-      previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: false }];
-    }
-
-    // Auto-select all pages if file has 5 or fewer pages
-    if (previewPages.value.length <= 5) {
-      selectedPages.value = previewPages.value.map((p: { pageNumber: number }) => p.pageNumber);
-      console.log(`Auto-selected all ${previewPages.value.length} pages`);
-    }
-    // Reset input helpers
+    // Always derive page list from the exported, translated file
+    await derivePagesFromExportedFile();
+    // Reset helpers (no auto-select; user picks up to 5 pages)
     pageInput.value = '';
     pageWindowStart.value = 1;
   } catch (e) {
-    console.error('Error fetching preview pages:', e);
-    // Create a default page if API fails
+    console.error('Error building page list from export:', e);
+    // Final fallback: single page
     previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: false }];
-    // Auto-select the default page
-    selectedPages.value = [1];
+    selectedPages.value = [];
   } finally {
     previewPagesLoading.value = false;
+  }
+}
+
+// Derive page list by downloading the translated export and counting pages via PDF.js
+async function derivePagesFromExportedFile() {
+  const lang = selectedPreviewLanguage.value;
+  if (!lang) return;
+  try {
+    const resp = await axiosInstance.get(`/translation/export/download/${selectedPreviewFileId.value}`, {
+      params: { language: lang, format: 'original' },
+      responseType: 'blob'
+    });
+    const contentType = String((resp.headers as any)?.['content-type'] || 'application/octet-stream');
+
+    let blob = new Blob([resp.data], { type: contentType });
+    // If not PDF (e.g., DOCX), request PDF export for page counting
+    if (!contentType.includes('application/pdf')) {
+      try {
+        const pdfResp = await axiosInstance.get(`/translation/export/pdf/${selectedPreviewFileId.value}`, {
+          params: { language: lang, watermark: 'PREVIEW - DO NOT COPY' },
+          responseType: 'blob'
+        });
+        blob = new Blob([pdfResp.data], { type: 'application/pdf' });
+      } catch (err) {
+        console.warn('PDF export not available, defaulting to single page');
+        previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: false }];
+        selectedPages.value = [1];
+        return;
+      }
+    }
+
+    const url = window.URL.createObjectURL(blob);
+    try {
+      await ensurePdfJs(document);
+      // @ts-ignore
+      const pdfjsLib = (window as any).pdfjsLib;
+      const loadingTask = pdfjsLib.getDocument(url);
+      const pdf = await loadingTask.promise;
+      const total = pdf.numPages || 1;
+      previewPages.value = Array.from({ length: total }, (_, i) => ({
+        pageNumber: i + 1,
+        filePart: i + 1,
+        stringCount: 0,
+        hasTranslatedStrings: true
+      }));
+      // Do not auto-select; let user pick any 5
+      selectedPages.value = [];
+    } finally {
+      window.URL.revokeObjectURL(url);
+    }
+  } catch (err) {
+    console.error('Failed to derive pages from exported file:', err);
+    throw err;
   }
 }
 
@@ -1358,7 +1397,7 @@ async function buildPreview() {
     isBuildingPreview.value = true;
     // Download exported single-language file
     const response = await axiosInstance.get(`/translation/export/download/${selectedPreviewFileId.value}`, {
-      params: { language: selectedPreviewLanguage.value },
+      params: { language: selectedPreviewLanguage.value, format: 'original' },
       responseType: 'blob'
     });
     if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
@@ -1546,7 +1585,10 @@ function openPdfAsImagesInNewTab(pdfUrl: string, pages: number[]): boolean {
       const pdfjsLib = (tab as any).pdfjsLib || (tab.window as any).pdfjsLib || (tab.document.defaultView as any).pdfjsLib;
       const loadingTask = pdfjsLib.getDocument(pdfUrl);
       const pdf = await loadingTask.promise;
-      const targetPages = pages.slice(0, 5);
+      // If caller didn't pass any pages (no original page split), render first up to 5 pages
+      const targetPages = (Array.isArray(pages) && pages.length > 0)
+        ? pages.slice(0, 5)
+        : Array.from({ length: Math.min(5, pdf.numPages) }, (_, i) => i + 1);
       for (const p of targetPages) {
         const pageIndex = Math.min(Math.max(1, p), pdf.numPages);
         const page = await pdf.getPage(pageIndex);

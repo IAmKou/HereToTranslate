@@ -29,13 +29,13 @@ export class FileService {
     try {
       const mime = upload.mimetype || '';
       const buf = upload.buffer;
-      
+
       // Quick buffer size check - files under 100 bytes are likely empty
       if (buf.length < 100) {
         this.logger.warn(`[FILE_VALIDATION] File too small (${buf.length} bytes), likely empty`);
         return false;
       }
-      
+
       // Quick text-like check
       const textLike = (
         mime.startsWith('text/') ||
@@ -53,7 +53,7 @@ export class FileService {
         this.logger.log(`[TEXT_VALIDATION] Text file validation result: ${hasText}, content length: ${text.length}`);
         return hasText;
       }
-      
+
       // PDF check via text extraction
       if (mime === 'application/pdf') {
         try {
@@ -67,12 +67,12 @@ export class FileService {
           return false;
         }
       }
-      
+
       // DOCX text extraction using docx-editor service
       if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         try {
           this.logger.log(`[DOCX_VALIDATION] Starting DOCX content validation for file with buffer size: ${buf.length}`);
-          
+
           // First try plain text extraction as it's more reliable
           let hasContent = false;
           try {
@@ -86,17 +86,17 @@ export class FileService {
           } catch (plainTextError) {
             this.logger.warn(`[DOCX_VALIDATION] Plain text extraction failed: ${plainTextError instanceof Error ? plainTextError.message : String(plainTextError)}`);
           }
-          
+
           // If plain text extraction failed or returned empty, try detailed extraction
           try {
             const { segments } = await this.docxEditorService.extractDocxContentFromBuffer(buf);
             this.logger.log(`[DOCX_VALIDATION] Extracted ${segments.length} segments from DOCX`);
-            
+
             if (segments.length === 0) {
               this.logger.warn('[DOCX_VALIDATION] No segments extracted from DOCX file');
               return false;
             }
-            
+
             // Check if any segments have meaningful text
             hasContent = segments.some(segment => {
               const hasText = segment.text && segment.text.trim().length > 0;
@@ -105,7 +105,7 @@ export class FileService {
               }
               return hasText;
             });
-            
+
             this.logger.log(`[DOCX_VALIDATION] Segments validation result: ${hasContent}`);
             return hasContent;
           } catch (segmentError) {
@@ -119,13 +119,13 @@ export class FileService {
           return false;
         }
       }
-      
+
       // For other formats (images, etc.), assume they have content if they have reasonable size
       if (buf.length > 1000) {
         this.logger.log(`[FILE_VALIDATION] Non-text file with size ${buf.length} bytes, assuming valid`);
         return true;
       }
-      
+
       this.logger.warn(`[FILE_VALIDATION] File validation failed - unknown format or too small: ${mime}, ${buf.length} bytes`);
       return false;
     } catch (error) {
@@ -333,7 +333,7 @@ export class FileService {
     try {
       const request = requestId ? await this.requestRepository.findOne({ where: { id: requestId } }) : undefined;
       this.logger.log(`[UPLOAD_PROCESS] Request found: ${!!request}, requestId: ${requestId}`);
-      
+
       const fileRecord = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) }, relations: ['project'] });
       if (!fileRecord) {
         this.logger.error(`[UPLOAD_PROCESS] Saved file not found for fileId: ${saved.fileId}`);
@@ -345,7 +345,7 @@ export class FileService {
       switch (mime) {
         case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
           this.logger.log(`[UPLOAD_PROCESS] Processing DOCX file: ${fileName}`);
-          
+
           // DOCX files are processed directly by DocxEditorService without external storage
           this.logger.log(`[UPLOAD_PROCESS] Processing DOCX file directly: ${fileName}`);
 
@@ -402,7 +402,7 @@ export class FileService {
     } catch (err) {
       this.logger.error(`[UPLOAD_PROCESS] Error processing file ${fileName}:`, err);
       this.logger.error(`[UPLOAD_PROCESS] Error stack: ${err instanceof Error ? err.stack : 'No stack available'}`);
-      
+
       const fileEntity = await this.fileRepository.findOne({ where: { id: BigInt(saved.fileId) } });
       if (fileEntity) {
         fileEntity.status = 'error';
@@ -621,10 +621,10 @@ export class FileService {
 
   async extractStringsFromFile(fileId: string, userId: string | bigint) {
     this.logger.log(`[EXTRACT_STRINGS] Starting extractStringsFromFile for fileId: ${fileId}, userId: ${userId}`);
-    
+
     const file = await this.fileRepository.findOne({
       where: { id: BigInt(fileId) },
-      relations: ['uploader', 'project']
+      relations: ['uploader', 'project', 'request']
     });
 
     if (!file) {
@@ -634,16 +634,35 @@ export class FileService {
 
     this.logger.log(`[EXTRACT_STRINGS] File found: ${file.fileName}, type: ${file.fileType}, uploader: ${file.uploader.id}, project: ${file.project?.id || 'none'}`);
 
-    // Check if file belongs to a project - this is required for translation entities
+    // Ensure file is associated with a project (required for translation entities)
     if (!file.project || !file.project.id) {
-      this.logger.error(`[EXTRACT_STRINGS] File does not belong to any project. ProjectId is required for string extraction.`);
-      throw new Error('File must belong to a project to extract strings. Please upload the file to a project first.');
+      this.logger.warn(`[EXTRACT_STRINGS] File has no project. Attempting to derive project from linked request...`);
+      try {
+        const reqId = (file as any).request?.id;
+        if (reqId) {
+          const req = await this.requestRepository.findOne({ where: { id: BigInt(reqId) }, relations: ['project'] });
+          if (req?.project?.id) {
+            (file as any).project = { id: req.project.id } as any;
+            this.logger.log(`[EXTRACT_STRINGS] Derived project ${req.project.id} from request ${reqId}`);
+          }
+        }
+      } catch (linkErr) {
+        this.logger.warn(`[EXTRACT_STRINGS] Failed to derive project from request: ${linkErr instanceof Error ? linkErr.message : String(linkErr)}`);
+      }
+
+      if (!file.project || !file.project.id) {
+        this.logger.error(`[EXTRACT_STRINGS] File does not belong to any project. ProjectId is required for string extraction.`);
+        throw new Error('File must belong to a project to extract strings. Please upload the file to a project first.');
+      }
     }
 
-    // Check permission - chỉ uploader mới có thể extract strings
+    // Permission: allow uploader OR users with project AttachFiles permission
     if (file.uploader.id.toString() !== userId.toString()) {
-      this.logger.error(`[EXTRACT_STRINGS] Permission denied. File uploader: ${file.uploader.id}, requesting user: ${userId}`);
-      throw new Error('You do not have permission to extract strings from this file');
+      const hasAttach = await this.checkUserAttachFilesPermission(userId, file.project?.id);
+      if (!hasAttach) {
+        this.logger.error(`[EXTRACT_STRINGS] Permission denied. File uploader: ${file.uploader.id}, requesting user: ${userId}`);
+        throw new Error('You do not have permission to extract strings from this file');
+      }
     }
 
     let log = '';
@@ -653,35 +672,35 @@ export class FileService {
         file.extractLog = log;
       }
     }
-    
+
     this.logger.log(`[EXTRACT_STRINGS] Starting extraction process for file: ${file.fileName}`);
-    
+
     try {
       appendLog('Start extracting strings...');
       this.logger.log(`[EXTRACT_STRINGS] File content buffer size: ${file.fileContent?.length || 0} bytes`);
-      
+
       // ĐÁNH DẤU OBSOLETE CHO STRING CŨ THAY VÌ XÓA CỨNG
       // Obsolete handling is no longer needed with SQL-only storage
       appendLog('Preparing SQL manifest extraction...');
       this.logger.log(`[EXTRACT_STRINGS] Calling manifestService.generateManifest for file: ${file.fileName}`);
-      
+
       appendLog('Generating manifest...');
       await this.manifestService.generateManifest(file); // Đảm bảo hàm này set obsolete: false cho string mới
-      
+
       appendLog('Manifest generated.');
       this.logger.log(`[EXTRACT_STRINGS] Manifest generation completed successfully for file: ${file.fileName}`);
-      
+
       if (file.project) {
         this.logger.log(`[EXTRACT_STRINGS] File belongs to project: ${file.project.id}`);
       } else {
         this.logger.log(`[EXTRACT_STRINGS] File does not belong to any project`);
       }
-      
+
       appendLog('Successfully generated manifest for file.');
       await this.fileRepository.save(file);
-      
+
       this.logger.log(`[EXTRACT_STRINGS] Extract strings completed successfully for file: ${file.fileName}`);
-      
+
       return {
         success: true,
         message: 'Manifest generated successfully',
@@ -693,7 +712,7 @@ export class FileService {
       appendLog('Error generating manifest: ' + errorMsg);
       this.logger.error(`[EXTRACT_STRINGS] Error generating manifest for file ${file.fileName}:`, error);
       this.logger.error(`[EXTRACT_STRINGS] Error stack: ${error?.stack || 'No stack available'}`);
-      
+
       await this.fileRepository.save(file);
       throw new Error(`Failed to generate manifest: ${errorMsg}`);
     }
@@ -1080,7 +1099,7 @@ export class FileService {
       const fallback = backendFallbackByProject[String(projectId)] || [];
       const merged = Array.from(new Set([...
         normalizedFromTranslations,
-      ...fallback
+        ...fallback
       ]));
 
       return merged;

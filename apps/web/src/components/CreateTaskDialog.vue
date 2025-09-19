@@ -740,8 +740,8 @@ const totalStringsInRange = computed(() => {
 
   // Calculate total strings based on selected file parts
   return selectedFileParts.value.reduce((total, partIndex) => {
-    const part = fileParts.value.find((p: FileString) => p.filePart === partIndex - 1);
-    return total + (part?.stringCount || 1);
+    const partsInSection = fileParts.value.filter((p: FileString) => p.filePart === partIndex - 1);
+    return total + partsInSection.length;
   }, 0);
 });
 
@@ -1503,15 +1503,22 @@ async function onSubmit() {
           dueDate: formData.value.dueDateTime ? formatDateTimeForAPI(formData.value.dueDateTime) : undefined,
           fileId: formData.value.fileId || undefined,
           pages: formData.value.pages,
-          language: language
+          language: language,
+          totalStrings: totalStringsInRange.value
         };
 
+        console.log('Creating task with DTO:', dto);
         const task = await taskService.createTask(dto);
+        console.log('Task created successfully:', task);
         createdTasks.push(task);
       }
 
       // Emit all created tasks
-      createdTasks.forEach(task => emit('success', task));
+      console.log('Emitting success events for created tasks:', createdTasks);
+      createdTasks.forEach(task => {
+        console.log('Emitting success for task:', task);
+        emit('success', task);
+      });
       emit('close');
     }
   } catch (err: any) {

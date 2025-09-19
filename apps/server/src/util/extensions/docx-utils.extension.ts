@@ -75,28 +75,29 @@ export async function replaceDocxTextWithCount(
       logger.warn(`[DOCX] Debug analysis failed: ${debugError instanceof Error ? debugError.message : String(debugError)}`);
     }
 
-    // Strategy 1: Aggressive complete replacement - ensures ALL text is replaced
+    // Strategy 1: Aggressive complete replacement (ensures ALL text is replaced)
     try {
       const result = await aggressiveCompleteReplacement(originalBuffer, translations);
-      logger.log(`[DOCX] Aggressive complete replacement: ${result.replacedCount} replacements`);
-      return result;
-    } catch (error) {
-      logger.error(`[DOCX] Aggressive replacement failed: ${error instanceof Error ? error.message : String(error)}`);
-      // Continue to fallback strategies
-    }
-
-    // Strategy 2: Try XML-based replacement (preserves all formatting)
-    try {
-      const result = await replaceDocxTextXmlBased(originalBuffer, translations);
       if (result.replacedCount > 0) {
-        logger.log(`[DOCX] XML-based replacement successful: ${result.replacedCount} replacements`);
+        logger.log(`[DOCX] Aggressive complete replacement successful: ${result.replacedCount} replacements`);
         return result;
       }
     } catch (error) {
-      logger.warn(`[DOCX] XML-based replacement failed: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warn(`[DOCX] Aggressive complete replacement failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // Strategy 3: Try ZIP-based replacement (preserves most formatting)
+    // Strategy 2: Style-preserving XML-based replacement (preserves all formatting)
+    try {
+      const result = await replaceDocxTextXmlBased(originalBuffer, translations);
+      if (result.replacedCount > 0) {
+        logger.log(`[DOCX] Style-preserving XML replacement successful: ${result.replacedCount} replacements`);
+        return result;
+      }
+    } catch (error) {
+      logger.warn(`[DOCX] Style-preserving XML replacement failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Strategy 3: ZIP-based replacement (preserves most formatting)
     try {
       const result = await replaceDocxTextZipBased(originalBuffer, translations);
       if (result.replacedCount > 0) {
@@ -162,51 +163,241 @@ async function aggressiveCompleteReplacement(
 
       logger.log(`[DOCX] Processing ${fileName} (${content.length} chars)`);
 
-      // Pass 1: Direct text replacement in XML content with Unicode normalization
-      for (const [originalText, translatedText] of translations) {
-        const beforeLength = content.length;
-        
-        // Normalize Unicode for Vietnamese text handling
-        const normalizedOriginal = originalText.normalize('NFC');
-        const normalizedTranslated = translatedText.normalize('NFC');
-        
-        // Replace all occurrences with multiple strategies
-        const strategies = [
-          // Direct replacement
-          () => content.replace(new RegExp(escapeRegex(originalText), 'g'), translatedText),
-          // Direct replacement with normalized text
-          () => content.replace(new RegExp(escapeRegex(normalizedOriginal), 'g'), normalizedTranslated),
-          // Case insensitive
-          () => content.replace(new RegExp(escapeRegex(originalText), 'gi'), translatedText),
-          // Case insensitive with normalized text
-          () => content.replace(new RegExp(escapeRegex(normalizedOriginal), 'gi'), normalizedTranslated),
-          // Normalized whitespace
-          () => content.replace(new RegExp(escapeRegex(originalText).replace(/\s+/g, '\\s+'), 'gi'), translatedText),
-          // Normalized whitespace with normalized Unicode
-          () => content.replace(new RegExp(escapeRegex(normalizedOriginal).replace(/\s+/g, '\\s+'), 'gi'), normalizedTranslated),
-          // XML-encoded version
-          () => content.replace(new RegExp(escapeRegex(escapeXmlText(originalText)), 'gi'), escapeXmlText(translatedText)),
-          // XML-encoded with normalized Unicode
-          () => content.replace(new RegExp(escapeRegex(escapeXmlText(normalizedOriginal)), 'gi'), escapeXmlText(normalizedTranslated)),
-          // NFD normalization (decomposed form)
-          () => content.replace(new RegExp(escapeRegex(originalText.normalize('NFD')), 'gi'), translatedText.normalize('NFD')),
-          // NFKC normalization (compatibility)
-          () => content.replace(new RegExp(escapeRegex(originalText.normalize('NFKC')), 'gi'), translatedText.normalize('NFKC')),
-          // NFKD normalization (compatibility decomposed)
-          () => content.replace(new RegExp(escapeRegex(originalText.normalize('NFKD')), 'gi'), translatedText.normalize('NFKD'))
-        ];
+      // Skip direct XML replacement to preserve formatting structure
 
-        for (const strategy of strategies) {
-          const newContent = strategy();
-          if (newContent !== content) {
-            content = newContent;
-            fileReplacements++;
-            logger.log(`[DOCX] Replaced "${originalText.substring(0, 50)}..." in ${fileName}`);
-          }
+      const runPattern = /<w:r[^>]*>(.*?)<\/w:r>/gs;
+      const runs: Array<{match: string, content: string, textElements: Array<{fullMatch: string, text: string}>}> = [];
+      
+      let runMatch;
+      while ((runMatch = runPattern.exec(content)) !== null) {
+        const runContent = runMatch[1];
+        const textElements: Array<{fullMatch: string, text: string}> = [];
+        
+        // Extract all w:t elements within this run
+        const textPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+        let textMatch;
+        while ((textMatch = textPattern.exec(runContent)) !== null) {
+          textElements.push({
+            fullMatch: textMatch[0],
+            text: textMatch[1]
+          });
+        }
+        
+        if (textElements.length > 0) {
+          runs.push({
+            match: runMatch[0],
+            content: runContent,
+            textElements
+          });
         }
       }
 
-      // Pass 2: Extract and replace text within w:t tags with Unicode normalization
+      // Now process translations while preserving run boundaries
+      for (const [originalText, translatedText] of translations) {
+        // Build the complete text from all runs to find translation boundaries
+        const completeText = runs.map(run => 
+          run.textElements.map(te => te.text).join('')
+        ).join('');
+        
+        // Try multiple search strategies to find the original text
+        let originalIndex = -1;
+        let searchText = originalText;
+        
+        // Strategy 1: Direct search
+        originalIndex = completeText.indexOf(searchText);
+        
+        // Strategy 2: Normalized search
+        if (originalIndex === -1) {
+          searchText = originalText.normalize('NFC');
+          originalIndex = completeText.normalize('NFC').indexOf(searchText);
+        }
+        
+        // Strategy 3: Case insensitive search
+        if (originalIndex === -1) {
+          const lowerCompleteText = completeText.toLowerCase();
+          const lowerOriginal = originalText.toLowerCase();
+          originalIndex = lowerCompleteText.indexOf(lowerOriginal);
+          if (originalIndex !== -1) {
+            searchText = completeText.substring(originalIndex, originalIndex + originalText.length);
+          }
+        }
+        
+        // Strategy 4: Search with whitespace normalization
+        if (originalIndex === -1) {
+          const normalizedComplete = completeText.replace(/\s+/g, ' ');
+          const normalizedOriginal = originalText.replace(/\s+/g, ' ');
+          const normalizedIndex = normalizedComplete.indexOf(normalizedOriginal);
+          if (normalizedIndex !== -1) {
+            // Map back to original positions
+            let charCount = 0;
+            let normalizedCount = 0;
+            for (let i = 0; i < completeText.length; i++) {
+              if (normalizedCount === normalizedIndex) {
+                originalIndex = charCount;
+                break;
+              }
+              if (completeText[i] !== ' ' || (i > 0 && completeText[i-1] !== ' ')) {
+                normalizedCount++;
+              }
+              charCount++;
+            }
+            searchText = originalText;
+          }
+        }
+        
+        if (originalIndex === -1) {
+          logger.warn(`[DOCX] Could not find original text: "${originalText.substring(0, 50)}..."`);
+          continue;
+        }
+        
+        const originalEnd = originalIndex + searchText.length;
+        
+        // Build a more accurate character position map
+        const runPositions: Array<{runIndex: number, startPos: number, endPos: number, text: string}> = [];
+        let charPos = 0;
+        
+        for (let runIndex = 0; runIndex < runs.length; runIndex++) {
+          const runText = runs[runIndex].textElements.map(te => te.text).join('');
+          runPositions.push({
+            runIndex,
+            startPos: charPos,
+            endPos: charPos + runText.length,
+            text: runText
+          });
+          charPos += runText.length;
+        }
+        
+        // Find affected runs with precise boundaries
+        const affectedRuns: Array<{runIndex: number, startChar: number, endChar: number, originalText: string}> = [];
+        
+        for (const runPos of runPositions) {
+          // Check if this run intersects with the original text
+          if (runPos.startPos < originalEnd && runPos.endPos > originalIndex) {
+            const startChar = Math.max(0, originalIndex - runPos.startPos);
+            const endChar = Math.min(runPos.text.length, originalEnd - runPos.startPos);
+            const originalTextInRun = runPos.text.substring(startChar, endChar);
+            
+            affectedRuns.push({
+              runIndex: runPos.runIndex,
+              startChar,
+              endChar,
+              originalText: originalTextInRun
+            });
+          }
+        }
+        
+        if (affectedRuns.length === 0) {
+          logger.warn(`[DOCX] No affected runs found for: "${originalText.substring(0, 50)}..."`);
+          continue;
+        }
+        
+        logger.log(`[DOCX] Found ${affectedRuns.length} affected runs for "${originalText.substring(0, 30)}..."`);
+        for (const ar of affectedRuns) {
+          logger.log(`[DOCX]   Run ${ar.runIndex}: chars ${ar.startChar}-${ar.endChar} = "${ar.originalText}"`);
+        }
+        
+        // Enhanced style-preserving replacement strategy
+        logger.log(`[DOCX] Using enhanced style-preserving replacement for "${originalText.substring(0, 30)}..."`);
+        logger.log(`[DOCX] Original: "${originalText}"`);
+        logger.log(`[DOCX] Translated: "${translatedText}"`);
+        
+        // Strategy: Replace text while preserving exact run boundaries and styles
+        // Only replace the text content, keep all formatting intact
+        
+        if (affectedRuns.length === 1) {
+          // Simple case: text is within a single run
+          const affectedRun = affectedRuns[0];
+          const run = runs[affectedRun.runIndex];
+          const runText = run.textElements.map(te => te.text).join('');
+          
+          // Build the new run text by replacing only the matched portion
+          const newRunText = runText.substring(0, affectedRun.startChar) + 
+                            translatedText + 
+                            runText.substring(affectedRun.endChar);
+          
+          logger.log(`[DOCX] Single run replacement: "${affectedRun.originalText}" -> "${translatedText}"`);
+          
+          // Update the run's content while preserving all formatting
+          if (run.textElements.length === 1) {
+            const oldElement = run.textElements[0];
+            const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
+            const oldRunMatch = run.match;
+            const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
+            content = content.replace(oldRunMatch, newRunMatch);
+          } else {
+            // Multiple text elements - combine into first, remove others
+            const firstElement = run.textElements[0];
+            const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
+            let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
+            
+            // Remove other text elements
+            for (let j = 1; j < run.textElements.length; j++) {
+              newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
+            }
+            
+            const oldRunMatch = run.match;
+            const newRunMatch = run.match.replace(run.content, newRunContent);
+            content = content.replace(oldRunMatch, newRunMatch);
+          }
+          
+          fileReplacements++;
+        } else {
+          // Complex case: text spans multiple runs with different styles
+          // Strategy: Place entire translation in the first run, clear matched text from others
+          
+          for (let i = 0; i < affectedRuns.length; i++) {
+            const affectedRun = affectedRuns[i];
+          const run = runs[affectedRun.runIndex];
+          const runText = run.textElements.map(te => te.text).join('');
+            
+            let newRunText: string;
+            
+            if (i === 0) {
+              // First run: keep text before match + full translation + text after match (if any)
+              const beforeText = runText.substring(0, affectedRun.startChar);
+              const afterText = affectedRun.endChar < runText.length ? runText.substring(affectedRun.endChar) : '';
+              newRunText = beforeText + translatedText + afterText;
+              
+              logger.log(`[DOCX] First run (${affectedRun.runIndex}): "${affectedRun.originalText}" -> "${translatedText}"`);
+            } else {
+              // Subsequent runs: remove only the matched portion, keep unmatched text
+              const beforeText = runText.substring(0, affectedRun.startChar);
+              const afterText = runText.substring(affectedRun.endChar);
+              newRunText = beforeText + afterText;
+              
+              logger.log(`[DOCX] Subsequent run (${affectedRun.runIndex}): removed "${affectedRun.originalText}"`);
+            }
+            
+            // Update the run's content while preserving all formatting
+          if (run.textElements.length === 1) {
+            const oldElement = run.textElements[0];
+            const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
+            const oldRunMatch = run.match;
+            const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
+            content = content.replace(oldRunMatch, newRunMatch);
+          } else {
+            // Multiple text elements - combine into first, remove others
+            const firstElement = run.textElements[0];
+            const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
+            let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
+            
+            // Remove other text elements
+            for (let j = 1; j < run.textElements.length; j++) {
+              newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
+            }
+            
+            const oldRunMatch = run.match;
+            const newRunMatch = run.match.replace(run.content, newRunContent);
+            content = content.replace(oldRunMatch, newRunMatch);
+          }
+          
+          fileReplacements++;
+          }
+        }
+
+      }
+
+      // Fallback: Simple text replacement within w:t tags for any remaining translations
       content = content.replace(/<w:t[^>]*>([^<]*)<\/w:t>/g, (match, textContent) => {
         let modifiedText = textContent;
         let hasChanges = false;
@@ -379,6 +570,20 @@ async function replaceDocxTextXmlBased(
           replacementCount++;
           directMatch = true;
           return `${openTag}${newContent}${closeTag}`;
+        }
+        
+        // Try word boundary matching for phrases like "every week"
+        if (originalText.includes(' ')) {
+          const words = originalText.split(/\s+/);
+          const wordPattern = words.map(word => escapeRegex(word)).join('\\s+');
+          const wordRegex = new RegExp(`\\b${wordPattern}\\b`, 'gi');
+          if (wordRegex.test(content)) {
+            logger.log(`[DOCX] Found word boundary match for phrase: "${originalText}" in content: "${content.substring(0, 100)}..."`);
+            const newContent = content.replace(wordRegex, translatedText);
+            replacementCount++;
+            directMatch = true;
+            return `${openTag}${newContent}${closeTag}`;
+          }
         }
         
         return match;
@@ -570,80 +775,94 @@ function searchAndReplaceSplitText(
   // Strategy 2: Look for text split across multiple w:t tags
   // This handles cases where text is broken up by formatting changes
   const wttags = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
-  if (wttags) {
-    // Try to find text that might be split across consecutive w:t tags
-    for (let i = 0; i < wttags.length - 1; i++) {
-      const currentTag = wttags[i];
-      const nextTag = wttags[i + 1];
+  if (wttags && wttags.length > 1) {
+    // Extract all text contents and their positions
+    const textElements = wttags.map((tag, index) => ({
+      tag,
+      content: tag.replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1'),
+      index
+    }));
 
-      const currentContent = currentTag.replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1');
-      const nextContent = nextTag.replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1');
+    // Try sliding window approach to find the original text
+    for (let windowSize = 2; windowSize <= Math.min(10, textElements.length); windowSize++) {
+      for (let startIndex = 0; startIndex <= textElements.length - windowSize; startIndex++) {
+        // Combine text from consecutive elements
+        let combinedText = '';
+        const windowElements = [];
+        
+        for (let i = 0; i < windowSize; i++) {
+          const element = textElements[startIndex + i];
+          combinedText += element.content;
+          windowElements.push(element);
+        }
 
-      // Check if combining current and next tag content contains our text
-      const combinedContent = currentContent + nextContent;
-      if (combinedContent.includes(originalText)) {
-        logger.log(`[DOCX] Found split text: "${originalText}" across consecutive w:t tags`);
+        // Check if this window contains our original text
+        if (combinedText.includes(originalText)) {
+          logger.log(`[DOCX] Found split text: "${originalText}" across ${windowSize} w:t tags: "${combinedText}"`);
 
-        // Replace the text in the first tag if it contains the beginning
-        if (currentContent.includes(originalText.substring(0, Math.min(originalText.length, currentContent.length)))) {
-          const newCurrentContent = currentContent.replace(
-            originalText.substring(0, Math.min(originalText.length, currentContent.length)),
-            translatedText.substring(0, Math.min(translatedText.length, currentContent.length))
-          );
-
-          // Update the XML content
-          modifiedXml = modifiedXml.replace(currentTag, currentTag.replace(currentContent, newCurrentContent));
-          replacements++;
-
-          // If the text spans both tags, also update the second tag
-          if (originalText.length > currentContent.length) {
-            const remainingOriginal = originalText.substring(currentContent.length);
-            const remainingTranslated = translatedText.substring(Math.min(translatedText.length, currentContent.length));
-
-            if (nextContent.includes(remainingOriginal)) {
-              const newNextContent = nextContent.replace(remainingOriginal, remainingTranslated);
-              modifiedXml = modifiedXml.replace(nextTag, nextTag.replace(nextContent, newNextContent));
+          // Find the exact position of the original text within the combined text
+          const originalIndex = combinedText.indexOf(originalText);
+          if (originalIndex !== -1) {
+            // Calculate how to distribute the translated text across the elements
+            let currentPos = 0;
+            let translatedPos = 0;
+            
+            for (const element of windowElements) {
+              const elementStart = currentPos;
+              const elementEnd = currentPos + element.content.length;
+              
+              // Check if this element overlaps with the original text
+              if (elementEnd > originalIndex && elementStart < originalIndex + originalText.length) {
+                // Calculate the overlap
+                const overlapStart = Math.max(0, originalIndex - elementStart);
+                const overlapEnd = Math.min(element.content.length, originalIndex + originalText.length - elementStart);
+                
+                // Create new content for this element
+                let newContent = element.content;
+                
+                if (overlapStart === 0 && overlapEnd === element.content.length) {
+                  // This element is completely within the original text
+                  const translatedLength = Math.min(translatedText.length - translatedPos, element.content.length);
+                  newContent = translatedText.substring(translatedPos, translatedPos + translatedLength);
+                  translatedPos += translatedLength;
+                } else if (overlapStart === 0) {
+                  // Original text starts at the beginning of this element
+                  const translatedLength = Math.min(translatedText.length - translatedPos, overlapEnd);
+                  newContent = translatedText.substring(translatedPos, translatedPos + translatedLength) + 
+                              element.content.substring(overlapEnd);
+                  translatedPos += translatedLength;
+                } else if (overlapEnd === element.content.length) {
+                  // Original text ends at the end of this element
+                  const translatedLength = Math.min(translatedText.length - translatedPos, overlapEnd - overlapStart);
+                  newContent = element.content.substring(0, overlapStart) + 
+                              translatedText.substring(translatedPos, translatedPos + translatedLength);
+                  translatedPos += translatedLength;
+                } else {
+                  // Original text is in the middle of this element
+                  const translatedLength = Math.min(translatedText.length - translatedPos, overlapEnd - overlapStart);
+                  newContent = element.content.substring(0, overlapStart) + 
+                              translatedText.substring(translatedPos, translatedPos + translatedLength) +
+                              element.content.substring(overlapEnd);
+                  translatedPos += translatedLength;
+                }
+                
+                // Replace the element in the XML, preserving formatting and position
+                const newTag = element.tag.replace(element.content, newContent);
+                modifiedXml = modifiedXml.replace(element.tag, newTag);
               replacements++;
+                logger.log(`[DOCX] Split-text replacement: "${element.content}" -> "${newContent}"`);
             }
+              
+              currentPos = elementEnd;
           }
 
           return { modifiedXml, replacements };
-        }
-      }
-    }
-
-    // Strategy 3: Look for text that might be split across more than 2 tags
-    // This is more complex and requires a sliding window approach
-    for (let windowSize = 3; windowSize <= Math.min(5, wttags.length); windowSize++) {
-      for (let i = 0; i <= wttags.length - windowSize; i++) {
-        let combinedContent = '';
-        for (let j = 0; j < windowSize; j++) {
-          const tagContent = wttags[i + j].replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1');
-          combinedContent += tagContent;
-        }
-
-        if (combinedContent.includes(originalText)) {
-          logger.log(`[DOCX] Found split text: "${originalText}" across ${windowSize} w:t tags`);
-
-          // This is a simplified replacement - in production you'd want more sophisticated logic
-          // For now, we'll try to replace the text in the first tag that contains part of it
-          for (let j = 0; j < windowSize; j++) {
-            const tagContent = wttags[i + j].replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1');
-            if (tagContent.length > 0 && originalText.includes(tagContent)) {
-              const newTagContent = tagContent.replace(tagContent, translatedText);
-              modifiedXml = modifiedXml.replace(wttags[i + j], wttags[i + j].replace(tagContent, newTagContent));
-              replacements++;
-              break;
-            }
           }
-
-          return { modifiedXml, replacements };
         }
       }
     }
   }
-
-  // Strategy 4: Try to find text without HTML tags
+  
   const strippedOriginal = stripHtmlTags(originalText);
   if (strippedOriginal !== originalText) {
     logger.log(`[DOCX] Trying stripped text search for split text: "${strippedOriginal}"`);
@@ -849,8 +1068,14 @@ async function replaceDocxTextWithDocxLib(
       }
 
       // Create new paragraph with preserved formatting
-      const newParagraph = new Paragraph({
-        children: [
+      // If we have runs with different styles and a replacement occurred, preserve individual run styling
+      let children: TextRun[];
+      if (paragraph.runs && paragraph.runs.length > 1 && hasReplacement) {
+        // Redistribute translated text across original runs to preserve styling
+        children = redistributeTranslationAcrossRuns(paragraph.runs, paragraphText);
+      } else {
+        // Single run or no replacement - use simple approach
+        children = [
           new TextRun({
             text: paragraphText,
             bold: paragraph.bold,
@@ -859,7 +1084,11 @@ async function replaceDocxTextWithDocxLib(
             font: paragraph.font,
             color: paragraph.color,
           }),
-        ],
+        ];
+      }
+
+      const newParagraph = new Paragraph({
+        children,
         alignment: paragraph.alignment,
         spacing: paragraph.spacing,
       });
@@ -903,45 +1132,180 @@ function extractParagraphsWithFormatting(xmlContent: string): Array<{
   color: string;
   alignment: typeof AlignmentType[keyof typeof AlignmentType];
   spacing: any;
+  runs?: Array<{ text: string; bold: boolean; italics: boolean; size: number; font: string; color: string; }>;
 }> {
   const paragraphs: any[] = [];
 
   // Parse XML to extract paragraph information
-  // This is a simplified parser - in production you'd want a more robust XML parser
+  // Group runs by paragraph to preserve individual run styling
+  const paragraphRegex = /<w:p[^>]*>(.*?)<\/w:p>/gs;
+  const paragraphMatches = xmlContent.match(paragraphRegex);
 
-  // Extract text runs with their properties
+  if (paragraphMatches) {
+    for (const paragraphMatch of paragraphMatches) {
+      const runs: any[] = [];
+      let paragraphText = '';
+      
+      // Extract text runs with their properties within this paragraph
   const textRunRegex = /<w:r[^>]*>.*?<w:t[^>]*>(.*?)<\/w:t>.*?<\/w:r>/gs;
-  const matches = xmlContent.match(textRunRegex);
+      const runMatches = paragraphMatch.match(textRunRegex);
 
-  if (matches) {
-    for (const match of matches) {
+      if (runMatches) {
+        for (const runMatch of runMatches) {
       // Extract text content
-      const textMatch = match.match(/<w:t[^>]*>(.*?)<\/w:t>/);
+          const textMatch = runMatch.match(/<w:t[^>]*>(.*?)<\/w:t>/);
       if (textMatch) {
         const text = textMatch[1];
+            paragraphText += text;
 
-        // Extract formatting properties
-        const bold = match.includes('<w:b/>') || match.includes('<w:b val="true"/>');
-        const italics = match.includes('<w:i/>') || match.includes('<w:i val="true"/>');
-        const size = extractFontSize(match);
-        const font = extractFontFamily(match);
-        const color = extractColor(match);
+            // Extract formatting properties for this run
+            const bold = runMatch.includes('<w:b/>') || runMatch.includes('<w:b val="true"/>');
+            const italics = runMatch.includes('<w:i/>') || runMatch.includes('<w:i val="true"/>');
+            const size = extractFontSize(runMatch);
+            const font = extractFontFamily(runMatch);
+            const color = extractColor(runMatch);
 
-        paragraphs.push({
+            runs.push({
           text,
           bold,
           italics,
           size: size || 24, // Default 12pt * 2
           font: font || 'Calibri',
           color: color || '#000000',
+            });
+          }
+        }
+      }
+
+      if (paragraphText.trim()) {
+        // Calculate dominant formatting for the paragraph
+        const dominantFormatting = calculateDominantFormatting(runs);
+        
+        paragraphs.push({
+          text: paragraphText,
+          bold: dominantFormatting.bold,
+          italics: dominantFormatting.italics,
+          size: dominantFormatting.size,
+          font: dominantFormatting.font,
+          color: dominantFormatting.color,
           alignment: AlignmentType.LEFT,
           spacing: {},
+          runs: runs.length > 1 ? runs : undefined, // Only store runs if multiple exist
         });
       }
     }
   }
 
   return paragraphs;
+}
+
+/**
+ * Calculate dominant formatting from multiple runs using improved threshold logic
+ */
+function calculateDominantFormatting(runs: any[]): {
+  bold: boolean;
+  italics: boolean;
+  size: number;
+  font: string;
+  color: string;
+} {
+  if (runs.length === 0) {
+    return {
+      bold: false,
+      italics: false,
+      size: 24,
+      font: 'Calibri',
+      color: '#000000'
+    };
+  }
+
+  // Count occurrences weighted by text length
+  const fontFamilies: { [key: string]: number } = {};
+  const fontSizes: { [key: number]: number } = {};
+  const colors: { [key: string]: number } = {};
+  let boldCount = 0;
+  let italicsCount = 0;
+  let totalLength = 0;
+
+  for (const run of runs) {
+    const length = run.text.length;
+    totalLength += length;
+
+    fontFamilies[run.font] = (fontFamilies[run.font] || 0) + length;
+    fontSizes[run.size] = (fontSizes[run.size] || 0) + length;
+    colors[run.color] = (colors[run.color] || 0) + length;
+
+    if (run.bold) boldCount += length;
+    if (run.italics) italicsCount += length;
+  }
+
+  // Find most common values
+  const dominantFont = Object.keys(fontFamilies).reduce((a, b) => 
+    fontFamilies[a] > fontFamilies[b] ? a : b
+  );
+  const dominantSize = Number(Object.keys(fontSizes).reduce((a, b) => 
+    fontSizes[Number(a)] > fontSizes[Number(b)] ? a : b
+  ));
+  const dominantColor = Object.keys(colors).reduce((a, b) => 
+    colors[a] > colors[b] ? a : b
+  );
+
+  // Use 70% threshold to prevent small styled words from dominating
+  const styleThreshold = 0.7;
+
+  return {
+    bold: boldCount > totalLength * styleThreshold,
+    italics: italicsCount > totalLength * styleThreshold,
+    size: dominantSize,
+    font: dominantFont,
+    color: dominantColor
+  };
+}
+
+/**
+ * Redistribute translated text across original runs while preserving their individual styling
+ */
+function redistributeTranslationAcrossRuns(runs: any[], translatedText: string): TextRun[] {
+  if (runs.length === 0) return [];
+
+  const originalTotalLength = runs.reduce((sum: number, r: any) => sum + r.text.length, 0);
+  if (originalTotalLength === 0) {
+    return [new TextRun({
+      text: translatedText,
+      bold: runs[0].bold,
+      italics: runs[0].italics,
+      size: runs[0].size,
+      font: runs[0].font,
+      color: runs[0].color,
+    })];
+  }
+
+  const textRuns: TextRun[] = [];
+  let cursor = 0;
+
+  runs.forEach((run: any, i: number) => {
+    // Calculate proportion of this run compared to total
+    const proportion = run.text.length / originalTotalLength;
+    const sliceLength = i === runs.length - 1
+      ? translatedText.length - cursor // Last run gets all remaining text
+      : Math.round(proportion * translatedText.length);
+
+    const chunk = translatedText.slice(cursor, cursor + sliceLength);
+    cursor += sliceLength;
+
+    if (chunk.length > 0) {
+      textRuns.push(new TextRun({
+        text: chunk,
+        bold: run.bold,
+        italics: run.italics,
+        size: run.size,
+        font: run.font,
+        color: run.color,
+      }));
+    }
+  });
+
+  return textRuns;
 }
 
 /**
@@ -1041,7 +1405,7 @@ function replaceTextAcrossMultipleElements(
   // Try to find the original text by combining consecutive w:t elements
   for (let i = 0; i < wtElements.length; i++) {
     let combinedText = '';
-    let elementsToReplace: Array<{ match: string; content: string; start: number; end: number }> = [];
+    const elementsToReplace: Array<{ match: string; content: string; start: number; end: number }> = [];
     
     // Look ahead to combine text from multiple elements
     for (let j = i; j < Math.min(i + 10, wtElements.length); j++) {

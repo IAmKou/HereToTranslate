@@ -625,6 +625,33 @@ function getStatusDisplayName(status: any): string {
   return statusObj ? statusObj.name : statusId;
 }
 
+// Function to map string status to status ID
+function getStatusIdFromName(statusName: string): string | null {
+  // Create a mapping from common status names to their likely IDs
+  const statusMapping: { [key: string]: string } = {
+    'open': '1',
+    'todo': '1', 
+    'in_progress': '2',
+    'done': '3',
+    'overdue': '4',
+    'closed': '5',
+    'cancelled': '6'
+  };
+
+  // First try direct mapping
+  if (statusMapping[statusName]) {
+    return statusMapping[statusName];
+  }
+
+  // Then try to find by name in availableStatuses
+  const statusObj = availableStatuses.value.find((s: any) => 
+    s.name?.toLowerCase().replace(/\s+/g, '_') === statusName.toLowerCase() ||
+    s.name?.toLowerCase() === statusName.toLowerCase()
+  );
+  
+  return statusObj?.id || null;
+}
+
 // Function to get tasks by status
 function getTasksByStatus(statusId: string): Task[] {
   console.log(`🔍 [GET_TASKS_BY_STATUS] Getting tasks for status: ${statusId}`);
@@ -633,14 +660,8 @@ function getTasksByStatus(statusId: string): Task[] {
     filteredTasks.value.length
   );
   console.log(
-    `🔍 [GET_TASKS_BY_STATUS] Task statuses:`,
-    filteredTasks.value.map((t: Task) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      statusType: typeof t.status,
-      statusId: (t.status as any)?.id || (t.status as any)?.type || t.status,
-    }))
+    `🔍 [GET_TASKS_BY_STATUS] Available statuses:`,
+    availableStatuses.value
   );
 
   const tasks = filteredTasks.value.filter((task: Task) => {
@@ -653,9 +674,11 @@ function getTasksByStatus(statusId: string): Task[] {
 
     // Handle both string and object status
     if (typeof task.status === 'string') {
-      taskStatusId = task.status;
+      // Map string status to status ID
+      const mappedId = getStatusIdFromName(task.status);
+      taskStatusId = mappedId || task.status;
       console.log(
-        `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has string status: "${taskStatusId}"`
+        `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has string status: "${task.status}" -> mapped to ID: "${taskStatusId}"`
       );
     } else if (typeof task.status === 'object' && task.status !== null) {
       // If status is an object, try to get the id or type
@@ -682,7 +705,7 @@ function getTasksByStatus(statusId: string): Task[] {
       return false;
     }
 
-    const matches = taskStatusId === statusId; // Remove toLowerCase() for exact match
+    const matches = taskStatusId === statusId;
     console.log(
       `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} (${
         task.title
@@ -858,7 +881,7 @@ function truncateFileName(fileName: string, maxLength: number = 30): string {
   const name = fileName.substring(0, lastDotIndex);
   const extension = fileName.substring(lastDotIndex);
 
-  const maxNameLength = maxLength - extension.length - 3; // 3 cho "..."
+  const maxNameLength = maxLength - extension.length - 3; 
 
   if (name.length <= maxNameLength) {
     return fileName;
@@ -869,9 +892,14 @@ function truncateFileName(fileName: string, maxLength: number = 30): string {
 
 function handleTaskCreated(task: Task) {
   console.log('ProjectTaskTab: Task created:', task);
+  console.log('ProjectTaskTab: Current tasks array length before adding:', tasks.value.length);
+  console.log('ProjectTaskTab: Current tasks array:', tasks.value);
+  
   // Add new task to local array
   tasks.value.unshift(task);
-  console.log('Task created:', task);
+  
+  console.log('ProjectTaskTab: Tasks array length after adding:', tasks.value.length);
+  console.log('ProjectTaskTab: Updated tasks array:', tasks.value);
 
   // Only close form after the last task is added
   // The CreateTaskDialog will emit multiple success events for multiple languages
@@ -990,8 +1018,6 @@ const filteredTasks = computed(() => {
   return filtered;
 });
 
-// These computed properties are now replaced by the dynamic getTasksByStatus function
-
 // Computed để lấy danh sách unique languages từ all tasks
 const availableLanguages = computed(() => {
   const languages = new Set<string>();
@@ -1065,9 +1091,6 @@ const tasksByLanguageAndStatus = computed(() => {
   return result;
 });
 
-// These computed properties are now replaced by the dynamic structure
-
-// State for collapsed language sections in swimlanes
 const collapsedLanguagesInSwimlanes = ref<Set<string>>(new Set());
 
 // Function to toggle language section collapse in swimlanes
@@ -1121,28 +1144,13 @@ async function loadFilePagesData(fileId: string) {
   }
 
   try {
-    const pages = await taskService.getFileParts(props.projectId || '', fileId);
+    const strings = await taskService.getFileStrings(props.projectId || '', fileId);
+    const pages = [...new Set(strings.map(s => s.filePart))].sort((a, b) => a - b);
     filePagesData.value.set(fileId, pages);
     return pages;
   } catch (err) {
     console.error('Failed to load file pages:', err);
     return [];
-  }
-}
-
-// Function để tính toán progress percentage dựa trên status (fallback)
-function calculateTaskProgress(task: Task): number {
-  switch (task.status?.toLowerCase()) {
-    case 'pending':
-      return 0;
-    case 'in_progress':
-      return 50; // Fallback value
-    case 'completed':
-      return 100;
-    case 'cancelled':
-      return 0;
-    default:
-      return 0;
   }
 }
 
@@ -1178,8 +1186,8 @@ async function loadTranslationStringsForTask(task: Task) {
     }
     // Check for single page (legacy support)
     else if (task.pages && task.pages.length > 0) {
-      filteredStrings = strings.filter(
-        (str: any) => task.pages!.includes(str.filePart)
+      filteredStrings = strings.filter((str: any) =>
+        task.pages!.includes(str.filePart)
       );
     }
 
@@ -1822,17 +1830,17 @@ async function updatePageInfo() {
   }
 
   // Check for single page
-  if (
-    selectedTask.value?.pages && 
-    selectedTask.value?.pages.length > 0
-  ) {
+  if (selectedTask.value?.pages && selectedTask.value?.pages.length > 0) {
     console.log('📖 Pages selected:', selectedTask.value.pages);
 
     // Find the specific page
     // Some APIs return part as 1-based pageNumber while our stored page is 0-based.
     // Match both exact and off-by-one to be resilient after reload.
     const page = (() => {
-      const stored = selectedTask.value!.pages && selectedTask.value!.pages.length > 0 ? selectedTask.value!.pages[0] : 0;
+      const stored =
+        selectedTask.value!.pages && selectedTask.value!.pages.length > 0
+          ? selectedTask.value!.pages[0]
+          : 0;
       return pages.find((p: any) => {
         const part = Number(p.part);
         const pageNumber = Number(p.pageNumber ?? part);
@@ -1849,7 +1857,10 @@ async function updatePageInfo() {
 
     if (page) {
       currentPageInfo.value = {
-        pageNumber: selectedTask.value.pages && selectedTask.value.pages.length > 0 ? selectedTask.value.pages[0] + 1 : 1,
+        pageNumber:
+          selectedTask.value.pages && selectedTask.value.pages.length > 0
+            ? selectedTask.value.pages[0] + 1
+            : 1,
         stringCount: page.stringCount || 0,
       };
       console.log(
@@ -2053,24 +2064,6 @@ function getUserDisplayName(user: any): string {
   return user.username || '';
 }
 
-function closeFilterDropdown() {
-  // Filter dropdown logic removed
-}
-
-function updateFilter(filterType: string, value: string) {
-  selectedFilters.value[filterType as keyof typeof selectedFilters.value] =
-    value;
-}
-
-function clearAllFilters() {
-  selectedFilters.value = {
-    assignee: 'All users',
-    createdBy: 'All users',
-    file: 'All files',
-    dueDate: 'All',
-  };
-}
-
 function toggleFilterSelect(filterType: string) {
   if (activeSubDropdown.value === filterType) {
     activeSubDropdown.value = null;
@@ -2185,13 +2178,6 @@ function navigateMonth(direction: 'prev' | 'next') {
       currentMonth.value.getMonth() + 2,
       1
     );
-  }
-}
-
-function applyDateRange() {
-  if (selectedDateRange.value.startDate && selectedDateRange.value.endDate) {
-    showDatePicker.value = false;
-    activeSubDropdown.value = null;
   }
 }
 
@@ -3585,13 +3571,10 @@ function setupRealtimeCommentListeners() {
               <div class="file-name-container" :title="selectedTaskFileName">
                 File: <b>{{ selectedTaskTruncatedFileName }}</b>
               </div>
-              <div
-                v-if="
-                  selectedTask.pages && selectedTask.pages.length === 1
-                "
-              >
+              <div v-if="selectedTask.pages && selectedTask.pages.length === 1">
                 Page: <b>Page {{ selectedTask.pages[0] + 1 }}</b> ({{
-                  getPageInfo(selectedTask.pages[0])?.totalStrings || 'Loading...'
+                  getPageInfo(selectedTask.pages[0])?.totalStrings ||
+                  'Loading...'
                 }}
                 strings)
                 <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.pages = {{ selectedTask.pages }} -->

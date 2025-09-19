@@ -28,9 +28,6 @@ export class TaskEntity {
   projectId?: string;
 
   @Column({ type: 'varchar', nullable: true })
-  branchId?: string;
-
-  @Column({ type: 'varchar', nullable: true })
   fileId?: string;
 
   @Column({ type: 'text', nullable: true })

@@ -72,6 +72,7 @@ export interface CreateTaskDto {
   originalText?: string;
   translatedText?: string;
   language?: string;
+  totalStrings?: number;
 }
 
 export interface UpdateTaskDto {
@@ -232,8 +233,12 @@ export const taskService = {
 
   async createTask(dto: CreateTaskDto): Promise<Task> {
     const payload: any = { ...dto };
+    console.log('TaskService: Creating task with payload:', payload);
     const { data } = await axiosInstance.post('/tasks', payload);
-    return this._normalizeTask(data);
+    console.log('TaskService: Received response data:', data);
+    const normalizedTask = this._normalizeTask(data);
+    console.log('TaskService: Normalized task:', normalizedTask);
+    return normalizedTask;
   },
 
   async getProjectTasks(projectId: string): Promise<Task[]> {

@@ -24,7 +24,6 @@ import { UpdateTaskDto, TransitionTaskDto } from '#LocalProject/Dtos';
 import { TransitionConditionType, StatusType } from '#LocalProject/Entities';
 import { StatusManagerService } from './task-status-manager.service';
 import { TaskAssignmentManagerService } from './task-assignment-manager.service';
-import { AssignTaskDto, ReassignTaskDto } from '#LocalProject/Dtos';
 
 @Injectable()
 export class TaskManagerService {
@@ -46,7 +45,6 @@ export class TaskManagerService {
     @InjectRepository(TaskHistoryEntity)
     private readonly taskHistoryRepository: Repository<TaskHistoryEntity>,
     private readonly projectService: ProjectManagerService,
-    private readonly translationService: TranslationService,
     private readonly taskGateway: TaskGateway,
     private readonly statusManagerService: StatusManagerService,
     private readonly taskAssignmentService: TaskAssignmentManagerService
@@ -65,13 +63,14 @@ export class TaskManagerService {
     fileId?: string;
     originalText?: string;
     translatedText?: string;
-    pages?: number[];
+    selectedStrings?: number[];
     language?: string;
     workflowId?: string;
     statusId?: string;
     priority?: string;
     storyPoints?: number;
     customFields?: Record<string, unknown>;
+    totalStrings?: number;
   }) {
     const {
       title,
@@ -86,13 +85,14 @@ export class TaskManagerService {
       fileId,
       originalText,
       translatedText,
-      pages,
+      selectedStrings,
       language,
       workflowId,
       statusId,
       priority = 'medium',
       storyPoints,
       customFields,
+      totalStrings,
     } = params;
 
     if (!createdById) {
@@ -217,7 +217,7 @@ export class TaskManagerService {
       fileId,
       originalText,
       translatedText,
-      selectedPages: Array.isArray(pages) && pages.length > 0 ? pages : undefined,
+      selectedStrings: Array.isArray(selectedStrings) && selectedStrings.length > 0 ? selectedStrings : undefined,
       language,
       workflow,
       status,
@@ -225,6 +225,7 @@ export class TaskManagerService {
       storyPoints,
       customFields,
       estimatedBusinessHours,
+      totalStrings: totalStrings || 0,
     } as DeepPartial<TaskEntity>);
 
     // If no assignee, force OPEN status and clear start/due
@@ -537,7 +538,7 @@ export class TaskManagerService {
         fileId: true,
         originalText: true,
         translatedText: true,
-        selectedPages: true,
+        selectedStrings: true,
         language: true,
         dueDate: true,
         createdAt: true,

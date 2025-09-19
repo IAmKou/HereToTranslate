@@ -62,7 +62,7 @@ export class TranslationEntity {
   fontSize: number;
 
   @Column({ type: 'json', nullable: true })
-  style: Record<string, any>;
+  style: Record<string, unknown>;
 
   @Column({ type: 'json', nullable: true })
   position: {
@@ -82,13 +82,26 @@ export class TranslationEntity {
   notes: string;
 
   @Column({ type: 'json', nullable: true })
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 
   @Column({ type: 'int', nullable: true })
   paragraphIndex: number;
 
   @Column({ type: 'int', nullable: true })
   runIndex: number;
+
+  @Column({ type: 'json', nullable: true })
+  runs: Array<{
+    text: string;
+    fontInfo: {
+      family?: string;
+      size?: number;
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+      color?: string;
+    };
+  }> | null;
 
   @CreateDateColumn()
   createdAt: Date;

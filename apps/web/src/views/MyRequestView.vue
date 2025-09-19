@@ -543,7 +543,7 @@
                           <button
                             class="action-btn accept-btn"
                             :disabled="!!assignedActionLoading[req.id]"
-                            @click="acceptAssignedRequest(req.id)"
+                            @click="openAssignedConfirm('accept', req)"
                             :title="`Accept request: ${req.title}`"
                             data-tooltip="Accept this request"
                           >
@@ -554,7 +554,7 @@
                           <button
                             class="action-btn decline-btn"
                             :disabled="!!assignedActionLoading[req.id]"
-                            @click="declineAssignedRequest(req.id)"
+                            @click="openAssignedConfirm('decline', req)"
                             :title="`Decline request: ${req.title}`"
                             data-tooltip="Decline this request"
                           >
@@ -971,6 +971,40 @@
         </div>
       </div>
     </div>
+    <!-- Assigned Requests Accept/Decline Confirmation Modal -->
+    <div v-if="showAssignedConfirm" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Confirm {{ assignedConfirmAction === 'accept' ? 'Accept' : 'Decline' }}</h3>
+          <button class="modal-close" @click="showAssignedConfirm = false">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-message">
+            <i class="pi" :class="assignedConfirmAction === 'accept' ? 'pi-check-circle' : 'pi-times-circle'" />
+            <p>
+              Are you sure you want to
+              <strong>{{ assignedConfirmAction === 'accept' ? 'ACCEPT' : 'DECLINE' }}</strong>
+              this request
+              <strong>"{{ assignedConfirmTarget ? assignedConfirmTarget.title : '' }}"</strong>?
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showAssignedConfirm = false" :disabled="actionLoading">Cancel</button>
+          <button
+            :class="assignedConfirmAction === 'accept' ? 'btn-success' : 'btn-danger'"
+            @click="confirmAssignedAction"
+            :disabled="actionLoading"
+          >
+            <i v-if="!actionLoading" :class="assignedConfirmAction === 'accept' ? 'pi pi-check' : 'pi pi-times'" />
+            <i v-else class="pi pi-spinner pi-spin" />
+            <span>{{ actionLoading ? 'Processing...' : (assignedConfirmAction === 'accept' ? 'Confirm Accept' : 'Confirm Decline') }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1003,6 +1037,9 @@ const showExtension = ref(false)
 const showExtensions = ref(false)
 const showOngoingCancel = ref(false)
 const ongoingCancelTarget = ref(null)
+const showAssignedConfirm = ref(false)
+const assignedConfirmAction = ref(null) // 'accept' | 'decline'
+const assignedConfirmTarget = ref(null)
 const pendingCancellationId = ref(null)
 const selectedRequest = ref(null)
 const sidebarCollapsed = ref(false)
@@ -1196,6 +1233,33 @@ async function confirmOngoingCancel() {
   }
 }
 
+function openAssignedConfirm(action, req) {
+  try { console.log('[ASSIGNED_CONFIRM] Open', action, 'for', req?.id); } catch (_) {}
+  assignedConfirmAction.value = action
+  assignedConfirmTarget.value = req
+  showAssignedConfirm.value = true
+}
+
+async function confirmAssignedAction() {
+  const req = assignedConfirmTarget.value
+  if (!req?.id || !assignedConfirmAction.value) return
+  actionLoading.value = true
+  try {
+    if (assignedConfirmAction.value === 'accept') {
+      await acceptRequest(req.id)
+    } else {
+      await rejectRequest(req.id)
+    }
+    showAssignedConfirm.value = false
+    assignedConfirmTarget.value = null
+    assignedConfirmAction.value = null
+  } catch (err) {
+    try { console.log('[ASSIGNED_CONFIRM][ERR]', err?.response?.status, err?.response?.data); } catch (_) {}
+  } finally {
+    actionLoading.value = false
+  }
+}
+
 function getDeadlineStatus(req) {
   if (!req.deadline) return { class: '' }
 
@@ -1311,6 +1375,11 @@ const filteredMyRequests = computed(() => {
           return { ...req, status: 'COMPLETED' };
         }
         // If still within 3 days, keep WAITING_APPROVAL status regardless of deadline
+        return req;
+      }
+
+      // Strong guard: never override final statuses due to deadline
+      if (['COMPLETED', 'INCOMPLETED'].includes(req.status)) {
         return req;
       }
 

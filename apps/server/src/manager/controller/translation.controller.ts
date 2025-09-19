@@ -186,6 +186,34 @@ export class TranslationController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('export/pdf/:fileId')
+  async downloadAsPdf(
+    @Param('fileId') fileId: string,
+    @Res() res: Response,
+    @Query('language') language?: string,
+    @Query('watermark') watermark?: string
+  ) {
+    try {
+      const lang = (language || '').trim();
+      if (!lang) {
+        return res.status(400).json({ message: 'language is required' });
+      }
+
+      const { buffer, fileName } = await this.translationService.buildPdfExport(fileId, lang, watermark);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Pragma', 'no-cache');
+      res.end(buffer);
+      return;
+    } catch (e: any) {
+      return res.status(500).json({ message: e?.message || 'Failed to export PDF' });
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('export/download-project/:projectId')
   async downloadProjectExport(
     @Param('projectId') projectId: string,
@@ -296,6 +324,34 @@ export class TranslationController {
     @Query('projectId') projectId: string,
   ){
     return this.translationService.getFileStrings(fileId, projectId);
+  }
+
+  // Persist preview pages per user per request
+  @UseGuards(JwtAuthGuard)
+  @Post('preview-pages')
+  async savePreviewPages(
+    @Body('requestId') requestId: string,
+    @Body('pages') pages: number[],
+    @Req() req: Request,
+  ) {
+    if (!requestId || !Array.isArray(pages)) {
+      throw new BadRequestException('requestId and pages are required');
+    }
+    const userId = (req as any).user?.id as string | number | bigint;
+    const result = await this.translationService.savePreviewPages({ userId: BigInt(userId), requestId, pages });
+    return result;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('preview-pages')
+  async getPreviewPages(
+    @Query('requestId') requestId: string,
+    @Req() req: Request,
+  ) {
+    if (!requestId) throw new BadRequestException('requestId is required');
+    const userId = (req as any).user?.id as string | number | bigint;
+    const result = await this.translationService.getPreviewPages({ userId: BigInt(userId), requestId });
+    return result || { pages: [] };
   }
 }
 

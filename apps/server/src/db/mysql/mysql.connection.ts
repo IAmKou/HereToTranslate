@@ -39,6 +39,7 @@ import {
   TaskCommentEntity,
   TranslationEntity
 } from '#LocalProject/Entities';
+import { RequestReviewEntity } from './entity/request-review.entity';
 
 
 @Injectable()
@@ -60,7 +61,7 @@ export class MySqlConnection {
       ssl: {
         rejectUnauthorized: false,
       },
-      synchronize: true, 
+      synchronize: true,
       logging: false,
       supportBigNumbers: true,
       extra: {
@@ -84,6 +85,7 @@ export class MySqlConnection {
         DiscussionAccessPolicyEntity,
         ReportEntity,
         RequestEntity,
+        RequestReviewEntity,
         TaskEntity,
         TaskHistoryEntity,
         TaskStatusEntity,

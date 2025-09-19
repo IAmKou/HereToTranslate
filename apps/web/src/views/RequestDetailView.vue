@@ -217,12 +217,20 @@
                       <span class="file-name">{{ file.fileName }}</span>
                     </div>
                   </div>
-                  <Button
-                    icon="pi pi-download"
-                    label="Download"
-                    @click="downloadFile(file)"
-                    class="p-button-text download-btn"
-                  />
+                  <template v-if="canDownloadAttachments">
+                    <Button
+                      icon="pi pi-download"
+                      label="Download"
+                      @click="downloadFile(file)"
+                      class="p-button-text download-btn"
+                    />
+                  </template>
+                  <template v-else>
+                    <div class="protected-note" title="Only the requester or the assigned translator can download attachments.">
+                      <i class="pi pi-lock"></i>
+                      Protected
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
@@ -679,6 +687,15 @@ const isTranslator = computed(() => {
   return request.value?.assignee?.id && userId.value !== null && request.value.assignee.id === userId.value;
 });
 
+const isRequester = computed(() => {
+  return request.value?.requester?.id && userId.value !== null && request.value.requester.id === userId.value;
+});
+
+// Only requester or assigned translator can download attachments
+const canDownloadAttachments = computed(() => {
+  return Boolean(isRequester.value || isTranslator.value);
+});
+
 const elapsedPercent = computed(() => {
   if (!request.value?.createdAt || !request.value?.deadline) return 0;
   const created = new Date(request.value.createdAt).getTime();
@@ -840,6 +857,10 @@ function getLanguageName(code: string): string {
   return language ? language.name : code;
 }
 async function downloadFile(file: FileInfo) {
+  if (!canDownloadAttachments.value) {
+    toast.add({ severity: 'warn', summary: 'Protected', detail: 'Only the requester or assigned translator can download files.', life: 3500 });
+    return;
+  }
   // Logic tải file
   console.log('Downloading file:', file);
   if (!file?.id) {

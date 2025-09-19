@@ -31,7 +31,8 @@ import { CategoryEntity,
   SubtaskEntity,
   TranslationPreviewEntity,
   TaskHistoryEntity,
- } from '#LocalProject/Entities';
+  RequestReviewEntity,
+} from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
@@ -148,6 +149,7 @@ import { DocxEditorService } from './service/docx-editor.service';
       DeadlineExtensionEntity,
       ProjectCancellationEntity,
       TranslationPreviewEntity,
+      RequestReviewEntity,
       SubtaskEntity,
       SubtaskStatusHistoryEntity,
       TaskCommentEntity,
@@ -235,7 +237,7 @@ import { DocxEditorService } from './service/docx-editor.service';
     PaypalConfigChecker,
     AsposeService,
     DocxEditorService,
-  
+
   ],
   controllers: [
     CategoryController,

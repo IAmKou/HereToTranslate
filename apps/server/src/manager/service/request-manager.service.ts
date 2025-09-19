@@ -10,6 +10,7 @@ import {
   UserEntity,
   WalletEntity
 } from '#LocalProject/Entities';
+import { RequestReviewEntity, ReviewStatus } from '../../db/mysql/entity/request-review.entity';
 import { In, Repository } from 'typeorm';
 import { CreateRequestDto, UpdateRequestDto } from '#LocalProject/Dtos';
 import {
@@ -48,6 +49,8 @@ export class RequestManagerService {
     private readonly fileRepository: Repository<FileEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
+    @InjectRepository(RequestReviewEntity)
+    private readonly requestReviewRepository: Repository<RequestReviewEntity>,
     private readonly walletService: WalletManagerService,
     private readonly mailService: MailService,
     private readonly chatService: ChatService,
@@ -56,6 +59,110 @@ export class RequestManagerService {
     private readonly projectService: ProjectManagerService,
     private readonly notificationService: NotificationManagerService,
   ) { }
+
+  async submitReview(
+    requestId: bigint,
+    requesterId: bigint,
+    decision: string,
+    rating: number,
+    comment: string | null,
+    translatorId?: string | null,
+    isFullyCompleted: boolean = false
+  ) {
+    const request = await this.requestRepository.findOne({ where: { id: requestId }, relations: ['requester', 'assignee'] });
+    if (!request) throw new NotFoundException('Request not found');
+    if (request.requester?.id?.toString?.() !== requesterId.toString()) {
+      throw new BadRequestException('You are not the requester of this request');
+    }
+
+    // Persist review record + denormalized fields in a transaction
+    return await this.requestRepository.manager.transaction(async (manager) => {
+      // Create review row (one per requester per request due to @Unique)
+      const review = manager.create(RequestReviewEntity, {
+        request: { id: request.id } as any,
+        reviewer: { id: requesterId } as any,
+        starRating: Math.max(1, Math.min(5, Number(rating) || 0)),
+        comment: comment || '',
+        status: decision === 'APPROVED' ? ReviewStatus.Success : ReviewStatus.Failed,
+      });
+      await manager.save(review);
+
+      // Update request fields for UI compatibility
+      request.reviewedAt = new Date();
+      request.reviewDecision = decision as any;
+      request.reviewRating = Math.max(1, Math.min(5, Number(rating) || 0));
+      request.reviewComment = comment || '';
+
+      // Status transition
+      if (decision === 'APPROVED') {
+        request.status = RequestStatus.Completed;
+      } else if (decision === 'REJECTED') {
+        request.status = RequestStatus.Incompleted;
+      }
+
+      await manager.save(request);
+
+      return {
+        success: true,
+        requestId: request.id,
+        decision,
+        rating: request.reviewRating,
+      };
+    });
+  }
+
+  async submitReviewWithEvidence(
+    requestId: bigint,
+    requesterId: bigint,
+    decision: string,
+    rating: number,
+    comment: string | null,
+    rejectionReason: string | null,
+    translatorId?: string | null,
+    isFullyCompleted: boolean = false,
+    evidenceFiles: Express.Multer.File[] = []
+  ) {
+    const request = await this.requestRepository.findOne({ where: { id: requestId }, relations: ['requester'] });
+    if (!request) throw new NotFoundException('Request not found');
+    if (request.requester?.id?.toString?.() !== requesterId.toString()) {
+      throw new BadRequestException('You are not the requester of this request');
+    }
+
+    return await this.requestRepository.manager.transaction(async (manager) => {
+      const review = manager.create(RequestReviewEntity, {
+        request: { id: request.id } as any,
+        reviewer: { id: requesterId } as any,
+        starRating: Math.max(1, Math.min(5, Number(rating) || 0)),
+        comment: [comment || '', rejectionReason ? `\nReason: ${rejectionReason}` : ''].filter(Boolean).join(''),
+        status: decision === 'APPROVED' ? ReviewStatus.Success : ReviewStatus.Failed,
+      });
+      await manager.save(review);
+
+      // Update denormalized fields
+      request.reviewedAt = new Date();
+      request.reviewDecision = decision as any;
+      request.reviewRating = Math.max(1, Math.min(5, Number(rating) || 0));
+      request.reviewComment = comment || '';
+      request.rejectionReason = rejectionReason || null as any;
+
+      if (decision === 'APPROVED') {
+        request.status = RequestStatus.Completed;
+      } else if (decision === 'REJECTED') {
+        request.status = RequestStatus.Incompleted;
+      }
+
+      await manager.save(request);
+
+      // TODO: store evidence files if needed (e.g., S3/local); currently ignored
+      return {
+        success: true,
+        requestId: request.id,
+        decision,
+        rating: request.reviewRating,
+        evidenceCount: evidenceFiles?.length || 0,
+      };
+    });
+  }
 
   async createRequest(
     dto: CreateRequestDto,

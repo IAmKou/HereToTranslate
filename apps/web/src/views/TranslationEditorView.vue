@@ -276,7 +276,7 @@ async function loadTranslationStrings() {
     const res = await axiosInstance.get('/translation/strings', {
       params: {
         projectId: projectId.value,
-        language: selectedLanguage.value, 
+        language: selectedLanguage.value,
       },
     });
     translationStrings.value = Array.isArray(res.data)
@@ -290,7 +290,7 @@ async function loadTranslationStrings() {
         return { ...str, id };
       })
       : [];
-    
+
     console.log('Translation strings loaded:', translationStrings.value.length);
     console.log('Translation strings data:', translationStrings.value);
 
@@ -1508,7 +1508,7 @@ const focusedString = computed(() => {
                 <div class="translation-scroll-area">
                   <div v-if="getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0).length === 0" class="no-strings">No matching strings.</div>
                   <div
-                    v-for="str in getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0)"
+                    v-for="(str, idx) in getFilteredStringsOfPart(file.fileId || file.id, selectedPartMap[file.fileId || file.id] ?? 0)"
                     :key="str.id"
                     class="string-card"
                     :class="{
@@ -1520,6 +1520,7 @@ const focusedString = computed(() => {
                     :style="isFileProcessing(file) ? 'pointer-events:none;opacity:0.5;' : ''"
                     :title="isFileProcessing(file) ? 'Extracting, please wait...' : ''"
                   >
+                    <span class="sequence-badge" :title="`Segment #${idx + 1}`">{{ idx + 1 }}</span>
                     <div v-if="viewMode === 'side'" class="side-by-side-row">
                       <div class="side-original">
                         <div class="original-label">Original Text:</div>

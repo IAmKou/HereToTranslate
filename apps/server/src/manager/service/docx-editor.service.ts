@@ -216,6 +216,123 @@ export class DocxEditorService {
     return { text: paragraphText, fontInfo: paragraphFontInfo, runs };
   }
 
+  /**
+   * Wraps runs with placeholder tags for translation while preserving run boundaries
+   * Example: "Hello world" with 2 runs becomes "Hello <r0>world</r0>"
+   */
+  private wrapRunsWithPlaceholders(runs: Run[]): { wrappedText: string; runMap: Map<number, Run> } {
+    if (runs.length === 0) {
+      return { wrappedText: '', runMap: new Map() };
+    }
+
+    if (runs.length === 1) {
+      // Single run - no need for placeholders
+      return { wrappedText: runs[0].text, runMap: new Map([[0, runs[0]]]) };
+    }
+
+    let wrappedText = '';
+    const runMap = new Map<number, Run>();
+    
+    for (let i = 0; i < runs.length; i++) {
+      const run = runs[i];
+      runMap.set(i, run);
+      
+      if (i === 0) {
+        // First run - no opening tag
+        wrappedText += run.text;
+      } else {
+        // Subsequent runs - wrap with placeholder tags
+        wrappedText += `<r${i}>${run.text}</r${i}>`;
+      }
+    }
+    
+    return { wrappedText, runMap };
+  }
+
+  /**
+   * Maps translated text back to runs using placeholder tags
+   * Example: "Xin chào <r1>thế giới</r1>" becomes runs with preserved styling
+   */
+  private mapTranslationBackToRuns(translatedText: string, originalRunMap: Map<number, Run>): Run[] {
+    if (originalRunMap.size === 0) {
+      return [];
+    }
+
+    if (originalRunMap.size === 1) {
+      // Single run - use original styling
+      const originalRun = originalRunMap.get(0)!;
+      return [{
+        text: translatedText,
+        fontInfo: originalRun.fontInfo
+      }];
+    }
+
+    const resultRuns: Run[] = [];
+    let remainingText = translatedText;
+    
+    // Process runs in order
+    for (let i = 0; i < originalRunMap.size; i++) {
+      const originalRun = originalRunMap.get(i)!;
+      
+      if (i === 0) {
+        // First run - extract text before first placeholder
+        const nextPlaceholderMatch = remainingText.match(/<r(\d+)>/);
+        if (nextPlaceholderMatch) {
+          const textBeforePlaceholder = remainingText.substring(0, nextPlaceholderMatch.index);
+          resultRuns.push({
+            text: textBeforePlaceholder,
+            fontInfo: originalRun.fontInfo
+          });
+          remainingText = remainingText.substring(nextPlaceholderMatch.index);
+        } else {
+          // No placeholders found - all text goes to first run
+          resultRuns.push({
+            text: remainingText,
+            fontInfo: originalRun.fontInfo
+          });
+          remainingText = '';
+        }
+      } else {
+        // Extract text from placeholder tags
+        const placeholderPattern = new RegExp(`<r${i}>(.*?)</r${i}>`, 's');
+        const match = remainingText.match(placeholderPattern);
+        
+        if (match) {
+          const placeholderText = match[1];
+          resultRuns.push({
+            text: placeholderText,
+            fontInfo: originalRun.fontInfo
+          });
+          // Remove the processed placeholder from remaining text
+          remainingText = remainingText.replace(match[0], '');
+        } else {
+          // Placeholder not found - create empty run to maintain structure
+          resultRuns.push({
+            text: '',
+            fontInfo: originalRun.fontInfo
+          });
+        }
+      }
+    }
+
+    // Handle any remaining text after all placeholders
+    if (remainingText.trim()) {
+      // Add remaining text to the last run
+      if (resultRuns.length > 0) {
+        resultRuns[resultRuns.length - 1].text += remainingText;
+      } else {
+        // Fallback - create a new run with default styling
+        const defaultRun = originalRunMap.get(0) || { text: '', fontInfo: {} };
+        resultRuns.push({
+          text: remainingText,
+          fontInfo: defaultRun.fontInfo
+        });
+      }
+    }
+
+    return resultRuns.filter(run => run.text.length > 0);
+  }
+
   private extractTextFromTable(table: any): Array<{ text: string; fontInfo: FontInfo; runs: Run[] }> {
     const tableTexts: Array<{ text: string; fontInfo: FontInfo; runs: Run[] }> = [];
     
@@ -412,6 +529,12 @@ export class DocxEditorService {
   private redistributeTranslation(runs: Run[], translatedText: string): Run[] {
     if (runs.length === 0) return [];
 
+    // Check if the translated text contains placeholder tags
+    if (this.hasPlaceholderTags(translatedText)) {
+      return this.mapTranslationBackToRuns(translatedText, this.createRunMapFromArray(runs));
+    }
+
+    // Fallback to proportional distribution for backward compatibility
     const originalTotalLength = runs.reduce((sum, r) => sum + r.text.length, 0);
     if (originalTotalLength === 0) {
       // fallback: just put all in first run
@@ -439,6 +562,24 @@ export class DocxEditorService {
     });
 
     return translatedRuns;
+  }
+
+  /**
+   * Checks if the text contains placeholder tags like <r1>, <r2>, etc.
+   */
+  private hasPlaceholderTags(text: string): boolean {
+    return /<r\d+>.*?<\/r\d+>/.test(text);
+  }
+
+  /**
+   * Creates a run map from an array of runs for compatibility with placeholder system
+   */
+  private createRunMapFromArray(runs: Run[]): Map<number, Run> {
+    const runMap = new Map<number, Run>();
+    runs.forEach((run, index) => {
+      runMap.set(index, run);
+    });
+    return runMap;
   }
 
   private postProcessSentences(sentences: string[]): string[] {
@@ -560,10 +701,17 @@ export class DocxEditorService {
             for (const sentence of sentences) {
               if (sentence.trim()) {
                 let sentenceRuns: Run[] = [];
+                let segmentText = sentence.trim();
                 
                 if (sentences.length === 1) {
-                  // Single sentence gets all runs
+                  // Single sentence gets all runs - use placeholder system
                   sentenceRuns = runs;
+                  if (runs.length > 1) {
+                    const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(runs);
+                    segmentText = wrappedText;
+                    // Store the run mapping for later reconstruction
+                    sentenceRuns = Array.from(runMap.values());
+                  }
                 } else {
                   // Multiple sentences: find exact character boundaries
                   const sentenceText = sentence.trim();
@@ -593,6 +741,14 @@ export class DocxEditorService {
                       }
                       currentPos += run.text.length;
                     }
+                    
+                    // Apply placeholder system if multiple runs in sentence
+                    if (sentenceRuns.length > 1) {
+                      const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(sentenceRuns);
+                      segmentText = wrappedText;
+                      // Store the run mapping for later reconstruction
+                      sentenceRuns = Array.from(runMap.values());
+                    }
                   }
                   
                   // Fallback: if no runs mapped, use dominant style from paragraph
@@ -607,7 +763,7 @@ export class DocxEditorService {
                 }
 
                 segments.push({
-                  text: sentence.trim(),
+                  text: segmentText, // This now contains placeholder tags if multiple runs
                   fontFamily: paragraphFontInfo.family || 'Calibri',
                   fontSize: paragraphFontInfo.size || 11,
                   style: {
@@ -629,9 +785,17 @@ export class DocxEditorService {
               for (const sentence of sentences) {
                 if (sentence.trim()) {
                   let sentenceRuns: Run[] = [];
+                  let segmentText = sentence.trim();
                   
                   if (sentences.length === 1) {
+                    // Single sentence gets all runs - use placeholder system
                     sentenceRuns = runs;
+                    if (runs.length > 1) {
+                      const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(runs);
+                      segmentText = wrappedText;
+                      // Store the run mapping for later reconstruction
+                      sentenceRuns = Array.from(runMap.values());
+                    }
                   } else {
                     // Apply same logic as paragraphs for table cells
                     const sentenceText = sentence.trim();
@@ -659,6 +823,14 @@ export class DocxEditorService {
                         }
                         currentPos += run.text.length;
                       }
+                      
+                      // Apply placeholder system if multiple runs in sentence
+                      if (sentenceRuns.length > 1) {
+                        const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(sentenceRuns);
+                        segmentText = wrappedText;
+                        // Store the run mapping for later reconstruction
+                        sentenceRuns = Array.from(runMap.values());
+                      }
                     }
                     
                     // Fallback for table cells
@@ -672,7 +844,7 @@ export class DocxEditorService {
                   }
 
                   segments.push({
-                    text: sentence.trim(),
+                    text: segmentText, // This now contains placeholder tags if multiple runs
                     fontFamily: tableFontInfo.family || 'Calibri',
                     fontSize: tableFontInfo.size || 11,
                     style: {

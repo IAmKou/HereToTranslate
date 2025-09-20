@@ -86,7 +86,6 @@ export async function replaceDocxTextWithCount(
       logger.warn(`[DOCX] Aggressive complete replacement failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // Strategy 2: Style-preserving XML-based replacement (preserves all formatting)
     try {
       const result = await replaceDocxTextXmlBased(originalBuffer, translations);
       if (result.replacedCount > 0) {
@@ -97,7 +96,6 @@ export async function replaceDocxTextWithCount(
       logger.warn(`[DOCX] Style-preserving XML replacement failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // Strategy 3: ZIP-based replacement (preserves most formatting)
     try {
       const result = await replaceDocxTextZipBased(originalBuffer, translations);
       if (result.replacedCount > 0) {
@@ -296,102 +294,220 @@ async function aggressiveCompleteReplacement(
           logger.log(`[DOCX]   Run ${ar.runIndex}: chars ${ar.startChar}-${ar.endChar} = "${ar.originalText}"`);
         }
         
-        // Enhanced style-preserving replacement strategy
+        // Enhanced style-preserving replacement strategy with placeholder support
         logger.log(`[DOCX] Using enhanced style-preserving replacement for "${originalText.substring(0, 30)}..."`);
         logger.log(`[DOCX] Original: "${originalText}"`);
         logger.log(`[DOCX] Translated: "${translatedText}"`);
         
-        // Strategy: Replace text while preserving exact run boundaries and styles
-        // Only replace the text content, keep all formatting intact
+        // Check if the translated text contains placeholder tags
+        const hasPlaceholders = /<r\d+>.*?<\/r\d+>/.test(translatedText);
         
-        if (affectedRuns.length === 1) {
-          // Simple case: text is within a single run
-          const affectedRun = affectedRuns[0];
-          const run = runs[affectedRun.runIndex];
-          const runText = run.textElements.map(te => te.text).join('');
+        if (hasPlaceholders) {
+          logger.log(`[DOCX] Translated text contains placeholder tags, using precise run mapping`);
           
-          // Build the new run text by replacing only the matched portion
-          const newRunText = runText.substring(0, affectedRun.startChar) + 
-                            translatedText + 
-                            runText.substring(affectedRun.endChar);
-          
-          logger.log(`[DOCX] Single run replacement: "${affectedRun.originalText}" -> "${translatedText}"`);
-          
-          // Update the run's content while preserving all formatting
-          if (run.textElements.length === 1) {
-            const oldElement = run.textElements[0];
-            const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
-            const oldRunMatch = run.match;
-            const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
-            content = content.replace(oldRunMatch, newRunMatch);
-          } else {
-            // Multiple text elements - combine into first, remove others
-            const firstElement = run.textElements[0];
-            const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
-            let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
+          // Use placeholder-aware replacement
+          if (affectedRuns.length === 1) {
+            // Single affected run - process placeholders within this run
+            const affectedRun = affectedRuns[0];
+            const run = runs[affectedRun.runIndex];
+            const runText = run.textElements.map(te => te.text).join('');
             
-            // Remove other text elements
-            for (let j = 1; j < run.textElements.length; j++) {
-              newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
-            }
+            // Replace the matched portion with translated text (including placeholders)
+            const newRunText = runText.substring(0, affectedRun.startChar) + 
+                              translatedText + 
+                              runText.substring(affectedRun.endChar);
             
-            const oldRunMatch = run.match;
-            const newRunMatch = run.match.replace(run.content, newRunContent);
-            content = content.replace(oldRunMatch, newRunMatch);
-          }
-          
-          fileReplacements++;
-        } else {
-          // Complex case: text spans multiple runs with different styles
-          // Strategy: Place entire translation in the first run, clear matched text from others
-          
-          for (let i = 0; i < affectedRuns.length; i++) {
-            const affectedRun = affectedRuns[i];
-          const run = runs[affectedRun.runIndex];
-          const runText = run.textElements.map(te => te.text).join('');
-            
-            let newRunText: string;
-            
-            if (i === 0) {
-              // First run: keep text before match + full translation + text after match (if any)
-              const beforeText = runText.substring(0, affectedRun.startChar);
-              const afterText = affectedRun.endChar < runText.length ? runText.substring(affectedRun.endChar) : '';
-              newRunText = beforeText + translatedText + afterText;
-              
-              logger.log(`[DOCX] First run (${affectedRun.runIndex}): "${affectedRun.originalText}" -> "${translatedText}"`);
-            } else {
-              // Subsequent runs: remove only the matched portion, keep unmatched text
-              const beforeText = runText.substring(0, affectedRun.startChar);
-              const afterText = runText.substring(affectedRun.endChar);
-              newRunText = beforeText + afterText;
-              
-              logger.log(`[DOCX] Subsequent run (${affectedRun.runIndex}): removed "${affectedRun.originalText}"`);
-            }
+            logger.log(`[DOCX] Single run with placeholders: "${affectedRun.originalText}" -> "${translatedText}"`);
             
             // Update the run's content while preserving all formatting
-          if (run.textElements.length === 1) {
-            const oldElement = run.textElements[0];
-            const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
-            const oldRunMatch = run.match;
-            const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
-            content = content.replace(oldRunMatch, newRunMatch);
-          } else {
-            // Multiple text elements - combine into first, remove others
-            const firstElement = run.textElements[0];
-            const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
-            let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
-            
-            // Remove other text elements
-            for (let j = 1; j < run.textElements.length; j++) {
-              newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
+            if (run.textElements.length === 1) {
+              const oldElement = run.textElements[0];
+              const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
+              const oldRunMatch = run.match;
+              const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
+              content = content.replace(oldRunMatch, newRunMatch);
+            } else {
+              // Multiple text elements - combine into first, remove others
+              const firstElement = run.textElements[0];
+              const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
+              let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
+              
+              // Remove other text elements
+              for (let j = 1; j < run.textElements.length; j++) {
+                newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
+              }
+              
+              const oldRunMatch = run.match;
+              const newRunMatch = run.match.replace(run.content, newRunContent);
+              content = content.replace(oldRunMatch, newRunMatch);
             }
             
-            const oldRunMatch = run.match;
-            const newRunMatch = run.match.replace(run.content, newRunContent);
-            content = content.replace(oldRunMatch, newRunMatch);
+            fileReplacements++;
+          } else {
+            // Multiple affected runs - distribute placeholders across runs
+            logger.log(`[DOCX] Multiple runs with placeholders, distributing across ${affectedRuns.length} runs`);
+            
+            // Parse placeholders from translated text
+            const placeholderMatches = Array.from(translatedText.matchAll(/<r(\d+)>(.*?)<\/r\1>/g));
+            const textBeforeFirstPlaceholder = translatedText.substring(0, placeholderMatches.length > 0 ? translatedText.indexOf(placeholderMatches[0][0]) : translatedText.length);
+            
+            for (let i = 0; i < affectedRuns.length; i++) {
+              const affectedRun = affectedRuns[i];
+              const run = runs[affectedRun.runIndex];
+              const runText = run.textElements.map(te => te.text).join('');
+              
+              let newRunText: string;
+              
+              if (i === 0) {
+                // First run: text before match + text before first placeholder + text after match
+                const beforeText = runText.substring(0, affectedRun.startChar);
+                const afterText = affectedRun.endChar < runText.length ? runText.substring(affectedRun.endChar) : '';
+                newRunText = beforeText + textBeforeFirstPlaceholder + afterText;
+                
+                logger.log(`[DOCX] First run (${affectedRun.runIndex}): "${affectedRun.originalText}" -> "${textBeforeFirstPlaceholder}"`);
+              } else {
+                // Subsequent runs: look for corresponding placeholder
+                const placeholderIndex = i;
+                const correspondingPlaceholder = placeholderMatches.find(match => parseInt(match[1]) === placeholderIndex);
+                
+                if (correspondingPlaceholder) {
+                  const beforeText = runText.substring(0, affectedRun.startChar);
+                  const afterText = runText.substring(affectedRun.endChar);
+                  newRunText = beforeText + correspondingPlaceholder[2] + afterText;
+                  
+                  logger.log(`[DOCX] Run ${affectedRun.runIndex}: "${affectedRun.originalText}" -> "${correspondingPlaceholder[2]}"`);
+                } else {
+                  // No corresponding placeholder - remove matched text
+                  const beforeText = runText.substring(0, affectedRun.startChar);
+                  const afterText = runText.substring(affectedRun.endChar);
+                  newRunText = beforeText + afterText;
+                  
+                  logger.log(`[DOCX] Run ${affectedRun.runIndex}: removed "${affectedRun.originalText}" (no placeholder)`);
+                }
+              }
+              
+              // Update the run's content while preserving all formatting
+              if (run.textElements.length === 1) {
+                const oldElement = run.textElements[0];
+                const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
+                const oldRunMatch = run.match;
+                const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
+                content = content.replace(oldRunMatch, newRunMatch);
+              } else {
+                // Multiple text elements - combine into first, remove others
+                const firstElement = run.textElements[0];
+                const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
+                let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
+                
+                // Remove other text elements
+                for (let j = 1; j < run.textElements.length; j++) {
+                  newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
+                }
+                
+                const oldRunMatch = run.match;
+                const newRunMatch = run.match.replace(run.content, newRunContent);
+                content = content.replace(oldRunMatch, newRunMatch);
+              }
+              
+              fileReplacements++;
+            }
           }
+        } else {
+          // Fallback to original replacement strategy for non-placeholder text
+          logger.log(`[DOCX] No placeholders detected, using original replacement strategy`);
           
-          fileReplacements++;
+          // Strategy: Replace text while preserving exact run boundaries and styles
+          // Only replace the text content, keep all formatting intact
+          
+          if (affectedRuns.length === 1) {
+            // Simple case: text is within a single run
+            const affectedRun = affectedRuns[0];
+            const run = runs[affectedRun.runIndex];
+            const runText = run.textElements.map(te => te.text).join('');
+            
+            // Build the new run text by replacing only the matched portion
+            const newRunText = runText.substring(0, affectedRun.startChar) + 
+                              translatedText + 
+                              runText.substring(affectedRun.endChar);
+            
+            logger.log(`[DOCX] Single run replacement: "${affectedRun.originalText}" -> "${translatedText}"`);
+            
+            // Update the run's content while preserving all formatting
+            if (run.textElements.length === 1) {
+              const oldElement = run.textElements[0];
+              const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
+              const oldRunMatch = run.match;
+              const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
+              content = content.replace(oldRunMatch, newRunMatch);
+            } else {
+              // Multiple text elements - combine into first, remove others
+              const firstElement = run.textElements[0];
+              const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
+              let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
+              
+              // Remove other text elements
+              for (let j = 1; j < run.textElements.length; j++) {
+                newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
+              }
+              
+              const oldRunMatch = run.match;
+              const newRunMatch = run.match.replace(run.content, newRunContent);
+              content = content.replace(oldRunMatch, newRunMatch);
+            }
+            
+            fileReplacements++;
+          } else {
+            // Complex case: text spans multiple runs with different styles
+            // Strategy: Place entire translation in the first run, clear matched text from others
+            
+            for (let i = 0; i < affectedRuns.length; i++) {
+              const affectedRun = affectedRuns[i];
+              const run = runs[affectedRun.runIndex];
+              const runText = run.textElements.map(te => te.text).join('');
+              
+              let newRunText: string;
+              
+              if (i === 0) {
+                // First run: keep text before match + full translation + text after match (if any)
+                const beforeText = runText.substring(0, affectedRun.startChar);
+                const afterText = affectedRun.endChar < runText.length ? runText.substring(affectedRun.endChar) : '';
+                newRunText = beforeText + translatedText + afterText;
+                
+                logger.log(`[DOCX] First run (${affectedRun.runIndex}): "${affectedRun.originalText}" -> "${translatedText}"`);
+              } else {
+                // Subsequent runs: remove only the matched portion, keep unmatched text
+                const beforeText = runText.substring(0, affectedRun.startChar);
+                const afterText = runText.substring(affectedRun.endChar);
+                newRunText = beforeText + afterText;
+                
+                logger.log(`[DOCX] Subsequent run (${affectedRun.runIndex}): removed "${affectedRun.originalText}"`);
+              }
+              
+              // Update the run's content while preserving all formatting
+              if (run.textElements.length === 1) {
+                const oldElement = run.textElements[0];
+                const newElement = oldElement.fullMatch.replace(oldElement.text, newRunText);
+                const oldRunMatch = run.match;
+                const newRunMatch = run.match.replace(oldElement.fullMatch, newElement);
+                content = content.replace(oldRunMatch, newRunMatch);
+              } else {
+                // Multiple text elements - combine into first, remove others
+                const firstElement = run.textElements[0];
+                const newFirstElement = firstElement.fullMatch.replace(firstElement.text, newRunText);
+                let newRunContent = run.content.replace(firstElement.fullMatch, newFirstElement);
+                
+                // Remove other text elements
+                for (let j = 1; j < run.textElements.length; j++) {
+                  newRunContent = newRunContent.replace(run.textElements[j].fullMatch, '');
+                }
+                
+                const oldRunMatch = run.match;
+                const newRunMatch = run.match.replace(run.content, newRunContent);
+                content = content.replace(oldRunMatch, newRunMatch);
+              }
+              
+              fileReplacements++;
+            }
           }
         }
 
@@ -1264,10 +1380,17 @@ function calculateDominantFormatting(runs: any[]): {
 
 /**
  * Redistribute translated text across original runs while preserving their individual styling
+ * Now supports placeholder tags for precise run boundary preservation
  */
 function redistributeTranslationAcrossRuns(runs: any[], translatedText: string): TextRun[] {
   if (runs.length === 0) return [];
 
+  // Check if the translated text contains placeholder tags
+  if (hasPlaceholderTags(translatedText)) {
+    return reconstructRunsFromPlaceholders(translatedText, runs);
+  }
+
+  // Fallback to proportional distribution for backward compatibility
   const originalTotalLength = runs.reduce((sum: number, r: any) => sum + r.text.length, 0);
   if (originalTotalLength === 0) {
     return [new TextRun({
@@ -1306,6 +1429,136 @@ function redistributeTranslationAcrossRuns(runs: any[], translatedText: string):
   });
 
   return textRuns;
+}
+
+/**
+ * Checks if the text contains placeholder tags like <r1>, <r2>, etc.
+ */
+function hasPlaceholderTags(text: string): boolean {
+  return /<r\d+>.*?<\/r\d+>/.test(text);
+}
+
+/**
+ * Reconstructs TextRuns from translated text with placeholder tags
+ * Example: "Xin chào <r1>thế giới</r1>" → TextRuns with preserved styling
+ */
+function reconstructRunsFromPlaceholders(translatedText: string, originalRuns: any[]): TextRun[] {
+  if (originalRuns.length === 0) {
+    return [];
+  }
+
+  if (originalRuns.length === 1) {
+    // Single run - remove any placeholder tags and use original styling
+    const cleanText = translatedText.replace(/<r\d+>|<\/r\d+>/g, '');
+    return [new TextRun({
+      text: cleanText,
+      bold: originalRuns[0].bold,
+      italics: originalRuns[0].italics,
+      size: originalRuns[0].size,
+      font: originalRuns[0].font,
+      color: originalRuns[0].color,
+    })];
+  }
+
+  const resultRuns: TextRun[] = [];
+  let remainingText = translatedText;
+  
+  // Process runs in order
+  for (let i = 0; i < originalRuns.length; i++) {
+    const originalRun = originalRuns[i];
+    
+    if (i === 0) {
+      // First run - extract text before first placeholder
+      const nextPlaceholderMatch = remainingText.match(/<r(\d+)>/);
+      if (nextPlaceholderMatch) {
+        const textBeforePlaceholder = remainingText.substring(0, nextPlaceholderMatch.index);
+        if (textBeforePlaceholder) {
+          resultRuns.push(new TextRun({
+            text: textBeforePlaceholder,
+            bold: originalRun.bold,
+            italics: originalRun.italics,
+            size: originalRun.size,
+            font: originalRun.font,
+            color: originalRun.color,
+          }));
+        }
+        remainingText = remainingText.substring(nextPlaceholderMatch.index || 0);
+      } else {
+        // No placeholders found - all text goes to first run
+        const cleanText = remainingText.replace(/<r\d+>|<\/r\d+>/g, '');
+        resultRuns.push(new TextRun({
+          text: cleanText,
+          bold: originalRun.bold,
+          italics: originalRun.italics,
+          size: originalRun.size,
+          font: originalRun.font,
+          color: originalRun.color,
+        }));
+        remainingText = '';
+      }
+    } else {
+      // Extract text from placeholder tags
+      const placeholderPattern = new RegExp(`<r${i}>(.*?)</r${i}>`, 's');
+      const match = remainingText.match(placeholderPattern);
+      
+      if (match) {
+        const placeholderText = match[1];
+        if (placeholderText) {
+          resultRuns.push(new TextRun({
+            text: placeholderText,
+            bold: originalRun.bold,
+            italics: originalRun.italics,
+            size: originalRun.size,
+            font: originalRun.font,
+            color: originalRun.color,
+          }));
+        }
+        // Remove the processed placeholder from remaining text
+        remainingText = remainingText.replace(match[0], '');
+      } else {
+        // Placeholder not found - create empty run to maintain structure
+        // This can happen if the translator removed or modified placeholder tags
+        logger.warn(`[DOCX] Placeholder <r${i}> not found in translated text, creating empty run`);
+      }
+    }
+  }
+
+  // Handle any remaining text after all placeholders
+  if (remainingText.trim()) {
+    // Clean any remaining placeholder tags
+    const cleanRemainingText = remainingText.replace(/<r\d+>|<\/r\d+>/g, '').trim();
+    if (cleanRemainingText) {
+      // Add remaining text to the last run
+      if (resultRuns.length > 0) {
+
+        // Create a new TextRun with combined text
+        const lastRunIndex = resultRuns.length - 1;
+        const lastOriginalRun = originalRuns[Math.min(lastRunIndex, originalRuns.length - 1)];
+        // Since TextRun doesn't expose text property, recreate with combined content
+        resultRuns[resultRuns.length - 1] = new TextRun({
+          text: cleanRemainingText, // Just add the remaining text as new content
+          bold: lastOriginalRun.bold,
+          italics: lastOriginalRun.italics,
+          size: lastOriginalRun.size,
+          font: lastOriginalRun.font,
+          color: lastOriginalRun.color,
+        });
+      } else {
+        // Fallback - create a new run with default styling
+        const defaultRun = originalRuns[0] || {};
+        resultRuns.push(new TextRun({
+          text: cleanRemainingText,
+          bold: defaultRun.bold,
+          italics: defaultRun.italics,
+          size: defaultRun.size,
+          font: defaultRun.font,
+          color: defaultRun.color,
+        }));
+      }
+    }
+  }
+
+  return resultRuns;
 }
 
 /**

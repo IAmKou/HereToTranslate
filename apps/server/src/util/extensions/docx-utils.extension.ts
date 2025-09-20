@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
+import { Document, Packer, Paragraph, TextRun, AlignmentType } from 'docx';
 import { logger } from 'nx/src/utils/logger';
 
 /**
@@ -649,8 +649,6 @@ async function replaceDocxTextXmlBased(
       logger.log(`[DOCX] Processing translation: "${originalText.substring(0, 50)}..." -> "${translatedText.substring(0, 50)}..."`);
 
       // Escape special characters for XML
-      const escapedOriginal = escapeXmlText(originalText);
-      const escapedTranslated = escapeXmlText(translatedText);
 
       // Strategy 1: Direct text replacement within w:t tags
       const directRegex = new RegExp(`(<w:t[^>]*>)([^<]*)(</w:t>)`, 'g');
@@ -711,7 +709,7 @@ async function replaceDocxTextXmlBased(
 
       // Strategy 1.5: Normalize whitespace and try exact matching
       const normalizedOriginal = originalText.replace(/\s+/g, ' ').trim();
-      const normalizedTranslated = translatedText.replace(/\s+/g, ' ').trim();
+
       
       const normalizedRegex = new RegExp(`(<w:t[^>]*>)([^<]*)(</w:t>)`, 'g');
       let normalizedMatch = false;
@@ -1580,8 +1578,22 @@ function extractFontSize(xml: string): number | null {
  * @returns string | null - Font family name or null if not found
  */
 function extractFontFamily(xml: string): string | null {
-  const fontMatch = xml.match(/<w:rFonts[^>]*w:ascii="([^"]*)"[^>]*>/);
-  return fontMatch ? fontMatch[1] : null;
+  // Priority order: eastAsia (for Asian fonts), ascii, hAnsi, cs
+  const fontPatterns = [
+    /<w:rFonts[^>]*w:eastAsia="([^"]*)"[^>]*>/,
+    /<w:rFonts[^>]*w:ascii="([^"]*)"[^>]*>/,
+    /<w:rFonts[^>]*w:hAnsi="([^"]*)"[^>]*>/,
+    /<w:rFonts[^>]*w:cs="([^"]*)"[^>]*>/
+  ];
+  
+  for (const pattern of fontPatterns) {
+    const match = xml.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  
+  return null;
 }
 
 /**

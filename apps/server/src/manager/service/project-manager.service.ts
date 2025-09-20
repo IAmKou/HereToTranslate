@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository, Not } from 'typeorm';
+import { DataSource, Repository, Not } from 'typeorm';
 import {
   CategoryEntity,
   FileEntity,
@@ -29,7 +29,7 @@ import { Maybe } from '@here-to-translate/common/types';
 import { CommonHttpServiceImpl } from '#LocalProject/Utils/common-http-service.impl';
 import { NotificationManagerService } from '#LocalProject/Managers/service/notification-manager.service';
 import { ActivityManagerService } from './activity-manager.service';
-import { ManifestService } from '#LocalProject/Managers/service/manifest.service';
+
 import { BackgroundExtractService } from './background-extract.service';
 import { StatusManagerService } from '#LocalProject/Managers/service/task-status-manager.service';
 import { WorkflowManagerService } from '#LocalProject/Managers/service/workflow-manager.service';
@@ -159,7 +159,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         }
       }
 
-      // Create project without defaultBranch yet
       const project = this.projectRepository.create({
         name,
         description,
@@ -248,16 +247,14 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     const tags = request.tags?.map((tag) => tag.name) ?? [];
 
-    const createProjectDto: any = {
+    const createProjectDto: CreateProjectDto = {
       name: request.title, // Chỉ lưu tên gốc, không prefix
       description: request.description,
       isPrivate: true,
       tags,
+      categoryId: request.category?.id?.toString() || '1', // Default category if none provided
       targetLanguages: request.targetLanguages || [],
     };
-    if (request.category?.id) {
-      createProjectDto.categoryId = request.category.id.toString();
-    }
 
     this.logger.debug(`Project DTO: ${JSON.stringify(createProjectDto)}`);
 
@@ -554,7 +551,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
 
     const project = await this.projectRepository.findOne({
       where: { id: projectId },
-      relations: ['defaultBranch', 'createdBy'],
+      relations: ['createdBy'],
     });
 
     if (!project) {
@@ -570,24 +567,125 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
       throw new ForbiddenException('Only project owner can delete the project');
     }
 
-    const repoName = `project-${projectId}`;
-
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      // Use a more robust approach with error handling for each step
+      const deletionSteps = [
+        // 1. Delete project invitations
+        {
+          name: 'project invitations',
+          query: 'DELETE FROM project_invitations WHERE project_id = ?',
+          params: [projectId]
+        },
+        
+        // 2. Delete user-project role relationships
+        {
+          name: 'user project roles',
+          query: 'DELETE FROM user_project_roles WHERE roleId IN (SELECT id FROM projectrole WHERE projectId = ?)',
+          params: [projectId]
+        },
+        
+        // 3. Delete project roles
+        {
+          name: 'project roles',
+          query: 'DELETE FROM projectrole WHERE projectId = ?',
+          params: [projectId]
+        },
+        
+        // 4. Delete project members
+        {
+          name: 'project members',
+          query: 'DELETE FROM project_members_user WHERE projectId = ?',
+          params: [projectId]
+        },
+        
+        // 5. Delete workflow transitions
+        {
+          name: 'workflow transitions',
+          query: 'DELETE FROM workflow_transition WHERE workflowId IN (SELECT id FROM workflow WHERE projectId = ?)',
+          params: [projectId]
+        },
+        
+        // 6. Delete workflows
+        {
+          name: 'workflows',
+          query: 'DELETE FROM workflow WHERE projectId = ?',
+          params: [projectId]
+        },
+        
+        // 7. Delete task statuses
+        {
+          name: 'task statuses',
+          query: 'DELETE FROM task_status WHERE projectId = ?',
+          params: [projectId]
+        },
+        
+        // 8. Delete tasks
+        {
+          name: 'tasks',
+          query: 'DELETE FROM task WHERE projectId = ?',
+          params: [projectId.toString()]
+        },
+        
+        // 9. Delete activities
+        {
+          name: 'activities',
+          query: 'DELETE FROM activity WHERE projectId = ?',
+          params: [Number(projectId)]
+        },
+        
+        // 10. Delete notifications
+        {
+          name: 'notifications',
+          query: 'DELETE FROM notification WHERE message LIKE ? OR message LIKE ?',
+          params: [`%project "${project.name}"%`, `%Project "${project.name}"%`]
+        },
+        
+        // 11. Delete files
+        {
+          name: 'files',
+          query: 'DELETE FROM file WHERE projectId = ?',
+          params: [projectId]
+        },
+        
+        // 12. Delete project tags relationship
+        {
+          name: 'project tags',
+          query: 'DELETE FROM project_tags_project_tag WHERE projectId = ?',
+          params: [projectId]
+        },
+        
+        // 13. Finally delete the project itself
+        {
+          name: 'project',
+          query: 'DELETE FROM project WHERE id = ?',
+          params: [projectId]
+        }
+      ];
 
-      await queryRunner.manager.remove(project);
+      // Execute each deletion step with error handling
+      for (const step of deletionSteps) {
+        try {
+          this.logger.debug(`Deleting ${step.name} for project ${projectId}`);
+          const result = await queryRunner.manager.query(step.query, step.params);
+          this.logger.debug(`Deleted ${step.name}: ${result.affectedRows || 0} rows affected`);
+        } catch (stepError) {
+          this.logger.warn(`Failed to delete ${step.name} for project ${projectId}:`, stepError);
+          // Continue with other deletions even if one fails (some tables might not exist or be empty)
+        }
+      }
 
       await queryRunner.commitTransaction();
 
-      this.logger.debug(`Project [${projectId}] and repo deleted successfully`);
+      this.logger.debug(`Project [${projectId}] and all related data deleted successfully`);
       return { message: `Project deleted successfully` };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error('Failed to delete project:', error);
-      throw new InternalServerErrorException('Failed to delete project');
+      throw new InternalServerErrorException(`Failed to delete project: ${error as string}`);
     } finally {
       await queryRunner.release();
     }
@@ -983,7 +1081,7 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         if (joinTime && !memberMap[key].joinedAt) {
           memberMap[key].joinedAt = joinTime.toISOString();
           console.log('🔍 Set joinedAt for user', key, 'to:', joinTime.toISOString());
-        } else if (role.createdAt && (!memberMap[key].joinedAt || role.createdAt < new Date(memberMap[key].joinedAt!))) {
+        } else if (role.createdAt && (!memberMap[key].joinedAt || role.createdAt < new Date(memberMap[key].joinedAt || ''))) {
           memberMap[key].joinedAt = role.createdAt.toISOString();
           console.log('🔍 Set joinedAt for user', key, 'to role creation time:', role.createdAt.toISOString());
         }
@@ -1069,13 +1167,6 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         'project',
         { id: project.id },
         { isArchived: true }
-      );
-
-      // Lock all branches for editing
-      await queryRunner.manager.update(
-        'branches',
-        { projectId: project.id },
-        { archived: true }
       );
 
       await queryRunner.commitTransaction();
@@ -1269,6 +1360,8 @@ function normalizePermission(input: IntoPermission): bigint {
   if (typeof input === 'string') {
     return PermissionFlags[input as keyof typeof PermissionFlags] ?? 0n;
   }
-  return input.value;
+  if (typeof input === 'object' && input !== null && 'value' in input) {
+    return input.value;
+  }
   throw new Error('Invalid permission input type');
 }

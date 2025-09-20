@@ -77,64 +77,89 @@ export class DocxEditorService {
     private readonly translationRepo: Repository<TranslationEntity>,
   ) {}
 
-  private async parseDocxWithJSZip(buffer: Buffer): Promise<{ documentXml: string; stylesXml?: string }> {
-    try {
-      const zip = await JSZip.loadAsync(buffer);
-      
-      // Extract main document content
-      const documentFile = zip.file('word/document.xml');
-      if (!documentFile) {
-        throw new Error('word/document.xml not found in DOCX file');
-      }
-      const documentXml = await documentFile.async('text');
-      
-      // Extract styles (optional)
-      let stylesXml: string | undefined;
-      const stylesFile = zip.file('word/styles.xml');
-      if (stylesFile) {
-        stylesXml = await stylesFile.async('text');
-      }
-      
-      return { documentXml, stylesXml };
-    } catch (error) {
-      this.logger.error(`Failed to parse DOCX with JSZip: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
-    }
+  private async parseDocxWithJSZip(buffer: Buffer): Promise<{ documentXml: string; stylesXml?: string; themeXml?: string }> {
+    const zip = await JSZip.loadAsync(buffer);
+  
+    const documentXml = await zip.file('word/document.xml')?.async('text');
+    if (!documentXml) throw new Error('word/document.xml not found');
+  
+    const stylesXml = await zip.file('word/styles.xml')?.async('text');
+    const themeXml = await zip.file('word/theme/theme1.xml')?.async('text');
+  
+    return { documentXml, stylesXml, themeXml };
   }
-
+  
   private async parseXmlToObject(xmlString: string): Promise<any> {
-    try {
-      const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
-      return await parser.parseStringPromise(xmlString);
-    } catch (error) {
-      this.logger.error(`Failed to parse XML: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
+    const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
+    return parser.parseStringPromise(xmlString);
+  }
+  
+  private resolveThemeFont(themeKey: string, theme: any): string | undefined {
+    if (!theme) return undefined;
+  
+    const scheme = theme['a:theme']?.['a:themeElements']?.['a:fontScheme'];
+    if (!scheme) return undefined;
+  
+    const major = scheme['a:majorFont'];
+    const minor = scheme['a:minorFont'];
+  
+    switch (themeKey) {
+      case '+mj-lt': return major?.['a:latin']?.['typeface'];
+      case '+mj-ea': return major?.['a:ea']?.['typeface'];
+      case '+mj-cs': return major?.['a:cs']?.['typeface'];
+      case '+mn-lt': return minor?.['a:latin']?.['typeface'];
+      case '+mn-ea': return minor?.['a:ea']?.['typeface'];
+      case '+mn-cs': return minor?.['a:cs']?.['typeface'];
     }
+    return undefined;
+  }
+  
+  private resolveFontFamily(rFonts: any, theme: any): string | undefined {
+    if (!rFonts) return undefined;
+  
+    const candidate =
+      rFonts['w:eastAsia'] ||
+      rFonts['w:ascii'] ||
+      rFonts['w:hAnsi'] ||
+      rFonts['w:cs'];
+  
+    if (!candidate) return undefined;
+  
+    // Theme placeholder?
+    if (candidate.startsWith('+')) {
+      return this.resolveThemeFont(candidate, theme);
+    }
+  
+    return candidate;
   }
 
-  private extractFontInfoFromRun(run: any): FontInfo {
+
+  
+  private extractFontInfoFromRun(run: any, styles: any, theme: any): FontInfo {
     const fontInfo: FontInfo = {};
-    
-    if (run['w:rPr']) {
-      const runProps = run['w:rPr'];
-      
-      // Extract font family (w:rFonts)
-      if (runProps['w:rFonts']) {
-        fontInfo.family = runProps['w:rFonts']['w:ascii'] || runProps['w:rFonts']['w:hAnsi'];
-      }
-      
-      // Extract font size (w:sz) - size is in half-points
+  
+    // 1. Direct run properties
+    const runProps = run['w:rPr'];
+    if (runProps) {
+      fontInfo.family = this.resolveFontFamily(runProps['w:rFonts'], theme);
+  
       if (runProps['w:sz']) {
         const sizeValue = runProps['w:sz']['w:val'] || runProps['w:sz'];
-        fontInfo.size = parseInt(sizeValue) / 2; // Convert half-points to points
+        const parsedSize = parseInt(sizeValue);
+        fontInfo.size = !isNaN(parsedSize) ? parsedSize / 2 : 11;
       }
-      
-      // Extract formatting
+  
       fontInfo.bold = !!runProps['w:b'];
       fontInfo.italic = !!runProps['w:i'];
       fontInfo.underline = !!runProps['w:u'];
     }
-    
+  
+    // 2. If missing, check style inheritance
+    if (!fontInfo.family && styles) {
+      // TODO: resolve from paragraph style or character style
+      // (requires knowing run’s styleId from w:pPr/w:pStyle or w:rStyle)
+    }
+  
     return fontInfo;
   }
 
@@ -184,7 +209,7 @@ export class DocxEditorService {
     return text;
   }
 
-  private extractTextFromParagraph(paragraph: any): { text: string; fontInfo: FontInfo; runs: Run[] } {
+  private extractTextFromParagraph(paragraph: any, styles: any, theme: any): { text: string; fontInfo: FontInfo; runs: Run[] } {
     let paragraphText = '';
     let paragraphFontInfo: FontInfo = {};
     const runs: Run[] = [];
@@ -194,7 +219,7 @@ export class DocxEditorService {
       
       for (const run of docxRuns) {
         const runText = this.extractTextFromRun(run);
-        const runFontInfo = this.extractFontInfoFromRun(run);
+        const runFontInfo = this.extractFontInfoFromRun(run, styles, theme);
         
         paragraphText += runText;
         
@@ -216,10 +241,6 @@ export class DocxEditorService {
     return { text: paragraphText, fontInfo: paragraphFontInfo, runs };
   }
 
-  /**
-   * Wraps runs with placeholder tags for translation while preserving run boundaries
-   * Example: "Hello world" with 2 runs becomes "Hello <r0>world</r0>"
-   */
   private wrapRunsWithPlaceholders(runs: Run[]): { wrappedText: string; runMap: Map<number, Run> } {
     if (runs.length === 0) {
       return { wrappedText: '', runMap: new Map() };
@@ -249,10 +270,6 @@ export class DocxEditorService {
     return { wrappedText, runMap };
   }
 
-  /**
-   * Maps translated text back to runs using placeholder tags
-   * Example: "Xin chào <r1>thế giới</r1>" becomes runs with preserved styling
-   */
   private mapTranslationBackToRuns(translatedText: string, originalRunMap: Map<number, Run>): Run[] {
     if (originalRunMap.size === 0) {
       return [];
@@ -283,7 +300,7 @@ export class DocxEditorService {
             text: textBeforePlaceholder,
             fontInfo: originalRun.fontInfo
           });
-          remainingText = remainingText.substring(nextPlaceholderMatch.index);
+          remainingText = remainingText.substring(nextPlaceholderMatch.index!);
         } else {
           // No placeholders found - all text goes to first run
           resultRuns.push({
@@ -349,7 +366,7 @@ export class DocxEditorService {
               const paragraphs = Array.isArray(cell['w:p']) ? cell['w:p'] : [cell['w:p']];
               
               for (const paragraph of paragraphs) {
-                const { text, fontInfo, runs } = this.extractTextFromParagraph(paragraph);
+                const { text, fontInfo, runs } = this.extractTextFromParagraph(paragraph, null, null);
                 if (text.trim()) {
                   tableTexts.push({ text: text.trim(), fontInfo, runs });
                 }
@@ -522,10 +539,6 @@ export class DocxEditorService {
     };
   }
 
-  /**
-   * Redistributes translated text across original runs while preserving styling
-   * This prevents small styled words from dominating entire sentences
-   */
   private redistributeTranslation(runs: Run[], translatedText: string): Run[] {
     if (runs.length === 0) return [];
 
@@ -571,9 +584,6 @@ export class DocxEditorService {
     return /<r\d+>.*?<\/r\d+>/.test(text);
   }
 
-  /**
-   * Creates a run map from an array of runs for compatibility with placeholder system
-   */
   private createRunMapFromArray(runs: Run[]): Map<number, Run> {
     const runMap = new Map<number, Run>();
     runs.forEach((run, index) => {
@@ -625,7 +635,7 @@ export class DocxEditorService {
           const paragraphs = Array.isArray(body['w:p']) ? body['w:p'] : [body['w:p']];
           
           for (const paragraph of paragraphs) {
-            const { text: paragraphText } = this.extractTextFromParagraph(paragraph);
+            const { text: paragraphText } = this.extractTextFromParagraph(paragraph, null, null);
             if (paragraphText.trim()) {
               text += paragraphText + '\n';
             }
@@ -689,7 +699,7 @@ export class DocxEditorService {
         // Process elements in document order
         for (const { type, element } of bodyElements) {
           if (type === 'paragraph') {
-            const { text: paragraphText, fontInfo: paragraphFontInfo, runs } = this.extractTextFromParagraph(element);
+            const { text: paragraphText, fontInfo: paragraphFontInfo, runs } = this.extractTextFromParagraph(element, stylesObject, null);
             
             // Skip empty paragraphs
             if (!paragraphText.trim()) continue;

@@ -3,12 +3,16 @@ import Sidebar from '../components/Sidebar.vue';
 import TopNavbar from '../components/Navbar.vue';
 import Footer from '../components/AppFooter.vue';
 import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { UserProfile } from '../services/user.service';
 import axiosInstance from '../api';
 import axios from 'axios'; // Thêm import axios trực tiếp
 
 // Sidebar state
 const sidebarCollapsed = ref(false);
+
+// Router
+const router = useRouter();
 
 // Interfaces
 interface Project {
@@ -194,12 +198,11 @@ const totalProjects = computed(() => {
   return projects.value.length;
 });
 
-// Filter projects to only show "Incompleted" and "Completed" statuses
-const filteredProjects = computed(() => {
-  return projects.value.filter((project: Project) => {
-    const status = project.status?.toLowerCase();
-    return status === 'incompleted' || status === 'completed';
-  });
+// Get recent projects (most recent 3 projects regardless of status)
+const recentProjects = computed(() => {
+  return projects.value
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 3);
 });
 
 const pendingRequests = computed(() => {
@@ -445,13 +448,13 @@ onMounted(async () => {
                   </div>
 
                   <!-- Empty State -->
-                  <div v-else-if="filteredProjects.length === 0" class="empty-container">
+                  <div v-else-if="recentProjects.length === 0" class="empty-container">
                     <div class="empty-content">
                       <div class="empty-icon">
                         <i class="pi pi-folder-open"></i>
                       </div>
-                      <h4>No projects with Incompleted or Completed status</h4>
-                      <p>Only projects with Incompleted or Completed status are shown here</p>
+                      <h4>No recent projects</h4>
+                      <p>Your recent projects will appear here</p>
                       <router-link to="/projects/create" class="btn btn-primary">
                         <i class="pi pi-plus"></i>
                         Create Project
@@ -462,10 +465,10 @@ onMounted(async () => {
                   <!-- Projects List -->
                   <div v-else class="projects-list">
                     <div
-                      v-for="project in filteredProjects.slice(0, 5)"
+                      v-for="project in recentProjects"
                       :key="project.id"
                       class="project-item"
-                      @click="() => window.location.href = `/projects/${project.id}`"
+                      @click="() => router.push(`/projects/${project.id}`)"
                     >
                       <div class="project-info">
                         <div class="project-name">
@@ -477,11 +480,6 @@ onMounted(async () => {
                           <span class="project-date">{{ formatDate(project.createdAt) }}</span>
                           <span class="project-author">by {{ project.createdBy.fullName || project.createdBy.username }}</span>
                         </div>
-                      </div>
-                      <div class="project-status">
-                         <span class="status-badge" :class="getProjectStatusClass(project.status)">
-                           {{ formatProjectStatus(project.status) }}
-                         </span>
                       </div>
                     </div>
                   </div>

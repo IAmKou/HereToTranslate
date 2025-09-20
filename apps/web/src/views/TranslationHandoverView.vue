@@ -1234,7 +1234,8 @@ function openPreviewModal() {
   if (!selectedPreviewLanguage.value && (projectInfo.value?.targetLanguages || []).length > 0) {
     selectedPreviewLanguage.value = projectInfo.value.targetLanguages[0];
   }
-  fetchPreviewPages();
+  // Try load server-saved pages first (per user/request)
+  fetchSavedPreviewPages().finally(() => fetchPreviewPages());
 }
 
 function closePreviewModal() {
@@ -1289,6 +1290,24 @@ async function fetchPreviewPages() {
     selectedPages.value = [];
   } finally {
     previewPagesLoading.value = false;
+  }
+}
+
+// Load server-saved preview pages for this request (locks selection if available)
+async function fetchSavedPreviewPages(): Promise<void> {
+  try {
+    if (!isRequestBased.value || !requestId.value) return;
+    const { data } = await axiosInstance.get('/translation/preview-pages', {
+      params: { requestId: requestId.value },
+    });
+    const pages = Array.isArray(data?.pages) ? data.pages.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0) : [];
+    if (pages.length > 0) {
+      selectedPages.value = Array.from(new Set(pages)).slice(0, 5);
+      previewSelectionLocked.value = true;
+      savePreviewState();
+    }
+  } catch {
+    // ignore
   }
 }
 
@@ -1673,6 +1692,13 @@ function confirmSelectedPages() {
   showPreviewConfirm.value = false;
   savePreviewState();
   // proceed to preview
+  // Persist selection on server for this request (if applicable)
+  if (isRequestBased.value && requestId.value && selectedPages.value.length > 0) {
+    axiosInstance.post('/translation/preview-pages', {
+      requestId: requestId.value,
+      pages: selectedPages.value.slice(0, 5),
+    }).catch(() => {/* ignore */});
+  }
   buildPreview();
 }
 

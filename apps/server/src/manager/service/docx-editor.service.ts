@@ -79,30 +79,30 @@ export class DocxEditorService {
 
   private async parseDocxWithJSZip(buffer: Buffer): Promise<{ documentXml: string; stylesXml?: string; themeXml?: string }> {
     const zip = await JSZip.loadAsync(buffer);
-  
+
     const documentXml = await zip.file('word/document.xml')?.async('text');
     if (!documentXml) throw new Error('word/document.xml not found');
-  
+
     const stylesXml = await zip.file('word/styles.xml')?.async('text');
     const themeXml = await zip.file('word/theme/theme1.xml')?.async('text');
-  
+
     return { documentXml, stylesXml, themeXml };
   }
-  
+
   private async parseXmlToObject(xmlString: string): Promise<any> {
     const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
     return parser.parseStringPromise(xmlString);
   }
-  
+
   private resolveThemeFont(themeKey: string, theme: any): string | undefined {
     if (!theme) return undefined;
-  
+
     const scheme = theme['a:theme']?.['a:themeElements']?.['a:fontScheme'];
     if (!scheme) return undefined;
-  
+
     const major = scheme['a:majorFont'];
     const minor = scheme['a:minorFont'];
-  
+
     switch (themeKey) {
       case '+mj-lt': return major?.['a:latin']?.['typeface'];
       case '+mj-ea': return major?.['a:ea']?.['typeface'];
@@ -113,64 +113,64 @@ export class DocxEditorService {
     }
     return undefined;
   }
-  
+
   private resolveFontFamily(rFonts: any, theme: any): string | undefined {
     if (!rFonts) return undefined;
-  
+
     const candidate =
       rFonts['w:eastAsia'] ||
       rFonts['w:ascii'] ||
       rFonts['w:hAnsi'] ||
       rFonts['w:cs'];
-  
+
     if (!candidate) return undefined;
-  
+
     // Theme placeholder?
     if (candidate.startsWith('+')) {
       return this.resolveThemeFont(candidate, theme);
     }
-  
+
     return candidate;
   }
 
 
-  
+
   private extractFontInfoFromRun(run: any, styles: any, theme: any): FontInfo {
     const fontInfo: FontInfo = {};
-  
+
     // 1. Direct run properties
     const runProps = run['w:rPr'];
     if (runProps) {
       fontInfo.family = this.resolveFontFamily(runProps['w:rFonts'], theme);
-  
+
       if (runProps['w:sz']) {
         const sizeValue = runProps['w:sz']['w:val'] || runProps['w:sz'];
         const parsedSize = parseInt(sizeValue);
         fontInfo.size = !isNaN(parsedSize) ? parsedSize / 2 : 11;
       }
-  
+
       fontInfo.bold = !!runProps['w:b'];
       fontInfo.italic = !!runProps['w:i'];
       fontInfo.underline = !!runProps['w:u'];
     }
-  
+
     // 2. If missing, check style inheritance
     if (!fontInfo.family && styles) {
       // TODO: resolve from paragraph style or character style
       // (requires knowing run’s styleId from w:pPr/w:pStyle or w:rStyle)
     }
-  
+
     return fontInfo;
   }
 
   private extractTextFromRun(run: any): string {
     let text = '';
-    
+
     // Skip image elements (w:drawing, w:pict)
     if (run['w:drawing'] || run['w:pict']) {
       return '';
     }
-    
+
     // Extract text from w:t elements - handle both single and multiple elements
     if (run['w:t']) {
       if (Array.isArray(run['w:t'])) {
@@ -195,17 +195,17 @@ export class DocxEditorService {
         }
       }
     }
-    
+
     // Handle tab characters
     if (run['w:tab']) {
       text += '\t';
     }
-    
+
     // Handle line breaks
     if (run['w:br']) {
       text += '\n';
     }
-    
+
     return text;
   }
 
@@ -213,16 +213,16 @@ export class DocxEditorService {
     let paragraphText = '';
     let paragraphFontInfo: FontInfo = {};
     const runs: Run[] = [];
-    
+
     if (paragraph['w:r']) {
       const docxRuns = Array.isArray(paragraph['w:r']) ? paragraph['w:r'] : [paragraph['w:r']];
-      
+
       for (const run of docxRuns) {
         const runText = this.extractTextFromRun(run);
         const runFontInfo = this.extractFontInfoFromRun(run, styles, theme);
-        
+
         paragraphText += runText;
-        
+
         // Store each run with its styling
         if (runText) {
           runs.push({
@@ -230,141 +230,32 @@ export class DocxEditorService {
             fontInfo: runFontInfo
           });
         }
-        
+
         // Get font info from first non-empty run for backward compatibility
         if (runText && Object.keys(paragraphFontInfo).length === 0) {
           paragraphFontInfo = runFontInfo;
         }
       }
     }
-    
+
     return { text: paragraphText, fontInfo: paragraphFontInfo, runs };
-  }
-
-  private wrapRunsWithPlaceholders(runs: Run[]): { wrappedText: string; runMap: Map<number, Run> } {
-    if (runs.length === 0) {
-      return { wrappedText: '', runMap: new Map() };
-    }
-
-    if (runs.length === 1) {
-      // Single run - no need for placeholders
-      return { wrappedText: runs[0].text, runMap: new Map([[0, runs[0]]]) };
-    }
-
-    let wrappedText = '';
-    const runMap = new Map<number, Run>();
-    
-    for (let i = 0; i < runs.length; i++) {
-      const run = runs[i];
-      runMap.set(i, run);
-      
-      if (i === 0) {
-        // First run - no opening tag
-        wrappedText += run.text;
-      } else {
-        // Subsequent runs - wrap with placeholder tags
-        wrappedText += `<r${i}>${run.text}</r${i}>`;
-      }
-    }
-    
-    return { wrappedText, runMap };
-  }
-
-  private mapTranslationBackToRuns(translatedText: string, originalRunMap: Map<number, Run>): Run[] {
-    if (originalRunMap.size === 0) {
-      return [];
-    }
-
-    if (originalRunMap.size === 1) {
-      // Single run - use original styling
-      const originalRun = originalRunMap.get(0)!;
-      return [{
-        text: translatedText,
-        fontInfo: originalRun.fontInfo
-      }];
-    }
-
-    const resultRuns: Run[] = [];
-    let remainingText = translatedText;
-    
-    // Process runs in order
-    for (let i = 0; i < originalRunMap.size; i++) {
-      const originalRun = originalRunMap.get(i)!;
-      
-      if (i === 0) {
-        // First run - extract text before first placeholder
-        const nextPlaceholderMatch = remainingText.match(/<r(\d+)>/);
-        if (nextPlaceholderMatch) {
-          const textBeforePlaceholder = remainingText.substring(0, nextPlaceholderMatch.index);
-          resultRuns.push({
-            text: textBeforePlaceholder,
-            fontInfo: originalRun.fontInfo
-          });
-          remainingText = remainingText.substring(nextPlaceholderMatch.index!);
-        } else {
-          // No placeholders found - all text goes to first run
-          resultRuns.push({
-            text: remainingText,
-            fontInfo: originalRun.fontInfo
-          });
-          remainingText = '';
-        }
-      } else {
-        // Extract text from placeholder tags
-        const placeholderPattern = new RegExp(`<r${i}>(.*?)</r${i}>`, 's');
-        const match = remainingText.match(placeholderPattern);
-        
-        if (match) {
-          const placeholderText = match[1];
-          resultRuns.push({
-            text: placeholderText,
-            fontInfo: originalRun.fontInfo
-          });
-          // Remove the processed placeholder from remaining text
-          remainingText = remainingText.replace(match[0], '');
-        } else {
-          // Placeholder not found - create empty run to maintain structure
-          resultRuns.push({
-            text: '',
-            fontInfo: originalRun.fontInfo
-          });
-        }
-      }
-    }
-
-    // Handle any remaining text after all placeholders
-    if (remainingText.trim()) {
-      // Add remaining text to the last run
-      if (resultRuns.length > 0) {
-        resultRuns[resultRuns.length - 1].text += remainingText;
-      } else {
-        // Fallback - create a new run with default styling
-        const defaultRun = originalRunMap.get(0) || { text: '', fontInfo: {} };
-        resultRuns.push({
-          text: remainingText,
-          fontInfo: defaultRun.fontInfo
-        });
-      }
-    }
-
-    return resultRuns.filter(run => run.text.length > 0);
   }
 
   private extractTextFromTable(table: any): Array<{ text: string; fontInfo: FontInfo; runs: Run[] }> {
     const tableTexts: Array<{ text: string; fontInfo: FontInfo; runs: Run[] }> = [];
-    
+
     if (table['w:tr']) {
       const rows = Array.isArray(table['w:tr']) ? table['w:tr'] : [table['w:tr']];
-      
+
       for (const row of rows) {
         if (row['w:tc']) {
           const cells = Array.isArray(row['w:tc']) ? row['w:tc'] : [row['w:tc']];
-          
+
           for (const cell of cells) {
             // Each cell can contain paragraphs
             if (cell['w:p']) {
               const paragraphs = Array.isArray(cell['w:p']) ? cell['w:p'] : [cell['w:p']];
-              
+
               for (const paragraph of paragraphs) {
                 const { text, fontInfo, runs } = this.extractTextFromParagraph(paragraph, null, null);
                 if (text.trim()) {
@@ -376,34 +267,34 @@ export class DocxEditorService {
         }
       }
     }
-    
+
     return tableTexts;
   }
 
   private segmentTextBySRX(text: string): string[] {
     if (!text || text.trim().length === 0) return [];
-    
+
     const currentText = text.trim();
-    
+
     // First, split by obvious paragraph breaks (double newlines, tabs, etc.)
     const paragraphs = currentText.split(/\n\s*\n|\t+/).filter(p => p.trim());
-    
+
     const allSentences: string[] = [];
-    
+
     for (const paragraph of paragraphs) {
       const sentences = this.segmentParagraph(paragraph.trim());
       allSentences.push(...sentences);
     }
-    
+
     return allSentences.length > 0 ? allSentences : [currentText];
   }
 
   private segmentParagraph(text: string): string[] {
     if (!text || text.trim().length === 0) return [];
-    
+
     const sentences: string[] = [];
     const currentText = text.trim();
-    
+
     // Enhanced sentence boundary patterns
     const boundaryPatterns = [
       // Standard sentence endings with space and capital letter
@@ -419,9 +310,9 @@ export class DocxEditorService {
       // Line breaks with capital letters
       /(\n+)\s*(?=[A-Z])/g,
     ];
-    
+
     const breakPoints: Array<{index: number, length: number}> = [];
-    
+
     // Find all potential break points
     for (const pattern of boundaryPatterns) {
       pattern.lastIndex = 0;
@@ -429,11 +320,11 @@ export class DocxEditorService {
       while ((match = pattern.exec(currentText)) !== null) {
         const fullMatch = match[0];
         const breakIndex = match.index + match[1].length;
-        
+
         // Check if this break point should be ignored based on abbreviation rules
         const contextBefore = currentText.substring(Math.max(0, match.index - 20), match.index + fullMatch.length);
         let shouldIgnore = false;
-        
+
         for (const rule of this.srxRules) {
           if (!rule.isBreak) {
             rule.pattern.lastIndex = 0;
@@ -443,7 +334,7 @@ export class DocxEditorService {
             }
           }
         }
-        
+
         if (!shouldIgnore) {
           breakPoints.push({
             index: breakIndex,
@@ -452,21 +343,21 @@ export class DocxEditorService {
         }
       }
     }
-    
+
     // Sort break points by index
     breakPoints.sort((a, b) => a.index - b.index);
-    
+
     // Remove overlapping break points
     const filteredBreakPoints: Array<{index: number, length: number}> = [];
     for (let i = 0; i < breakPoints.length; i++) {
       const current = breakPoints[i];
       const next = breakPoints[i + 1];
-      
+
       if (!next || current.index + current.length <= next.index) {
         filteredBreakPoints.push(current);
       }
     }
-    
+
     // Split text at break points
     let lastIndex = 0;
     for (const breakPoint of filteredBreakPoints) {
@@ -476,18 +367,18 @@ export class DocxEditorService {
       }
       lastIndex = breakPoint.index + breakPoint.length;
     }
-    
+
     // Add remaining text
     const remaining = currentText.substring(lastIndex).trim();
     if (remaining && remaining.length > 1) {
       sentences.push(remaining);
     }
-    
+
     // If no sentences were found, return the original text
     if (sentences.length === 0) {
       return [currentText];
     }
-    
+
     // Post-process: merge very short segments with adjacent ones
     return this.postProcessSentences(sentences);
   }
@@ -496,40 +387,40 @@ export class DocxEditorService {
     if (runs.length === 0) {
       return { family: 'Calibri', size: 11, bold: false, italic: false, underline: false };
     }
-    
+
     // Count occurrences of each font property weighted by text length
     const fontFamilies: { [key: string]: number } = {};
     const fontSizes: { [key: number]: number } = {};
     let boldCount = 0;
     let italicCount = 0;
     let underlineCount = 0;
-    
+
     for (const run of runs) {
       const family = run.fontInfo.family || 'Calibri';
       const size = run.fontInfo.size || 11;
-      
+
       fontFamilies[family] = (fontFamilies[family] || 0) + run.text.length;
       fontSizes[size] = (fontSizes[size] || 0) + run.text.length;
-      
+
       if (run.fontInfo.bold) boldCount += run.text.length;
       if (run.fontInfo.italic) italicCount += run.text.length;
       if (run.fontInfo.underline) underlineCount += run.text.length;
     }
-    
+
     const totalLength = runs.reduce((sum, run) => sum + run.text.length, 0);
-    
+
     // Find most common font family and size
-    const dominantFamily = Object.keys(fontFamilies).reduce((a, b) => 
+    const dominantFamily = Object.keys(fontFamilies).reduce((a, b) =>
       fontFamilies[a] > fontFamilies[b] ? a : b
     );
-    const dominantSize = Number(Object.keys(fontSizes).reduce((a, b) => 
+    const dominantSize = Number(Object.keys(fontSizes).reduce((a, b) =>
       fontSizes[Number(a)] > fontSizes[Number(b)] ? a : b
     ));
-    
+
     // Use a higher threshold for styling to prevent small styled words from dominating
     // Only apply bold/italic/underline if it covers at least 70% of the text
     const styleThreshold = 0.7;
-    
+
     return {
       family: dominantFamily,
       size: dominantSize,
@@ -542,12 +433,6 @@ export class DocxEditorService {
   private redistributeTranslation(runs: Run[], translatedText: string): Run[] {
     if (runs.length === 0) return [];
 
-    // Check if the translated text contains placeholder tags
-    if (this.hasPlaceholderTags(translatedText)) {
-      return this.mapTranslationBackToRuns(translatedText, this.createRunMapFromArray(runs));
-    }
-
-    // Fallback to proportional distribution for backward compatibility
     const originalTotalLength = runs.reduce((sum, r) => sum + r.text.length, 0);
     if (originalTotalLength === 0) {
       // fallback: just put all in first run
@@ -577,30 +462,15 @@ export class DocxEditorService {
     return translatedRuns;
   }
 
-  /**
-   * Checks if the text contains placeholder tags like <r1>, <r2>, etc.
-   */
-  private hasPlaceholderTags(text: string): boolean {
-    return /<r\d+>.*?<\/r\d+>/.test(text);
-  }
-
-  private createRunMapFromArray(runs: Run[]): Map<number, Run> {
-    const runMap = new Map<number, Run>();
-    runs.forEach((run, index) => {
-      runMap.set(index, run);
-    });
-    return runMap;
-  }
-
   private postProcessSentences(sentences: string[]): string[] {
     const processed: string[] = [];
-    
+
     for (let i = 0; i < sentences.length; i++) {
       const current = sentences[i].trim();
-      
+
       // Skip empty sentences
       if (!current) continue;
-      
+
       // If sentence is very short (likely a fragment), try to merge with previous or next
       if (current.length < 10 && !current.match(/[.!?]$/)) {
         if (processed.length > 0) {
@@ -617,7 +487,7 @@ export class DocxEditorService {
         processed.push(current);
       }
     }
-    
+
     return processed.filter(s => s.trim().length > 0);
   }
 
@@ -625,15 +495,15 @@ export class DocxEditorService {
     try {
       const { documentXml } = await this.parseDocxWithJSZip(buffer);
       const docObject = await this.parseXmlToObject(documentXml);
-      
+
       let text = '';
       const body = docObject['w:document']['w:body'];
-      
+
       if (body) {
         // Process paragraphs
         if (body['w:p']) {
           const paragraphs = Array.isArray(body['w:p']) ? body['w:p'] : [body['w:p']];
-          
+
           for (const paragraph of paragraphs) {
             const { text: paragraphText } = this.extractTextFromParagraph(paragraph, null, null);
             if (paragraphText.trim()) {
@@ -641,11 +511,11 @@ export class DocxEditorService {
             }
           }
         }
-        
+
         // Process tables
         if (body['w:tbl']) {
           const tables = Array.isArray(body['w:tbl']) ? body['w:tbl'] : [body['w:tbl']];
-          
+
           for (const table of tables) {
             const tableTexts = this.extractTextFromTable(table);
             for (const { text: tableText } of tableTexts) {
@@ -654,7 +524,7 @@ export class DocxEditorService {
           }
         }
       }
-      
+
       return text.trim();
     } catch (error) {
       this.logger.error(`Failed to extract text from buffer: ${error instanceof Error ? error.message : String(error)}`);
@@ -668,7 +538,7 @@ export class DocxEditorService {
 
       // === Step 1: Parse DOCX with JSZip ===
       const { documentXml, stylesXml } = await this.parseDocxWithJSZip(buffer);
-      
+
       // === Step 2: Parse XML to objects ===
       const docObject = await this.parseXmlToObject(documentXml);
       let stylesObject: any = null;
@@ -679,69 +549,62 @@ export class DocxEditorService {
       // === Step 3: Extract segments with font information ===
       const segments: DocxSegment[] = [];
       const body = docObject['w:document']['w:body'];
-      
+
       if (body) {
         // Process all body elements in order (paragraphs, tables, etc.)
         const bodyElements: Array<{ type: 'paragraph' | 'table'; element: any }> = [];
-        
+
         // Collect paragraphs
         if (body['w:p']) {
           const paragraphs = Array.isArray(body['w:p']) ? body['w:p'] : [body['w:p']];
           paragraphs.forEach(p => bodyElements.push({ type: 'paragraph', element: p }));
         }
-        
+
         // Collect tables
         if (body['w:tbl']) {
           const tables = Array.isArray(body['w:tbl']) ? body['w:tbl'] : [body['w:tbl']];
           tables.forEach(t => bodyElements.push({ type: 'table', element: t }));
         }
-        
+
         // Process elements in document order
         for (const { type, element } of bodyElements) {
           if (type === 'paragraph') {
             const { text: paragraphText, fontInfo: paragraphFontInfo, runs } = this.extractTextFromParagraph(element, stylesObject, null);
-            
+
             // Skip empty paragraphs
             if (!paragraphText.trim()) continue;
-            
+
             // === Step 4: Apply SRX sentence segmentation ===
             const sentences = this.segmentTextBySRX(paragraphText);
-            
+
             // For hybrid approach: map runs to sentences based on actual text boundaries
             for (const sentence of sentences) {
               if (sentence.trim()) {
                 let sentenceRuns: Run[] = [];
-                let segmentText = sentence.trim();
-                
+
                 if (sentences.length === 1) {
-                  // Single sentence gets all runs - use placeholder system
+                  // Single sentence gets all runs
                   sentenceRuns = runs;
-                  if (runs.length > 1) {
-                    const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(runs);
-                    segmentText = wrappedText;
-                    // Store the run mapping for later reconstruction
-                    sentenceRuns = Array.from(runMap.values());
-                  }
                 } else {
                   // Multiple sentences: find exact character boundaries
                   const sentenceText = sentence.trim();
                   const sentenceStart = paragraphText.indexOf(sentenceText);
-                  
+
                   if (sentenceStart !== -1) {
                     const sentenceEnd = sentenceStart + sentenceText.length;
                     let currentPos = 0;
-                    
+
                     for (const run of runs) {
                       const runStart = currentPos;
                       const runEnd = currentPos + run.text.length;
-                      
+
                       // Check if this run intersects with the sentence boundaries
                       if (runStart < sentenceEnd && runEnd > sentenceStart) {
                         // Calculate the exact overlapping text
                         const overlapStart = Math.max(runStart, sentenceStart) - runStart;
                         const overlapEnd = Math.min(runEnd, sentenceEnd) - runStart;
                         const overlapText = run.text.substring(overlapStart, overlapEnd);
-                        
+
                         if (overlapText.length > 0) {
                           sentenceRuns.push({
                             text: overlapText,
@@ -751,16 +614,8 @@ export class DocxEditorService {
                       }
                       currentPos += run.text.length;
                     }
-                    
-                    // Apply placeholder system if multiple runs in sentence
-                    if (sentenceRuns.length > 1) {
-                      const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(sentenceRuns);
-                      segmentText = wrappedText;
-                      // Store the run mapping for later reconstruction
-                      sentenceRuns = Array.from(runMap.values());
-                    }
                   }
-                  
+
                   // Fallback: if no runs mapped, use dominant style from paragraph
                   if (sentenceRuns.length === 0 && runs.length > 0) {
                     // Find the most common font info from runs
@@ -773,7 +628,7 @@ export class DocxEditorService {
                 }
 
                 segments.push({
-                  text: segmentText, // This now contains placeholder tags if multiple runs
+                  text: sentence.trim(),
                   fontFamily: paragraphFontInfo.family || 'Calibri',
                   fontSize: paragraphFontInfo.size || 11,
                   style: {
@@ -787,43 +642,35 @@ export class DocxEditorService {
             }
           } else if (type === 'table') {
             const tableTexts = this.extractTextFromTable(element);
-            
+
             for (const { text: tableText, fontInfo: tableFontInfo, runs } of tableTexts) {
               // Apply SRX sentence segmentation to table cell text
               const sentences = this.segmentTextBySRX(tableText);
-              
+
               for (const sentence of sentences) {
                 if (sentence.trim()) {
                   let sentenceRuns: Run[] = [];
-                  let segmentText = sentence.trim();
-                  
+
                   if (sentences.length === 1) {
-                    // Single sentence gets all runs - use placeholder system
                     sentenceRuns = runs;
-                    if (runs.length > 1) {
-                      const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(runs);
-                      segmentText = wrappedText;
-                      // Store the run mapping for later reconstruction
-                      sentenceRuns = Array.from(runMap.values());
-                    }
                   } else {
                     // Apply same logic as paragraphs for table cells
                     const sentenceText = sentence.trim();
                     const sentenceStart = tableText.indexOf(sentenceText);
-                    
+
                     if (sentenceStart !== -1) {
                       const sentenceEnd = sentenceStart + sentenceText.length;
                       let currentPos = 0;
-                      
+
                       for (const run of runs) {
                         const runStart = currentPos;
                         const runEnd = currentPos + run.text.length;
-                        
+
                         if (runStart < sentenceEnd && runEnd > sentenceStart) {
                           const overlapStart = Math.max(runStart, sentenceStart) - runStart;
                           const overlapEnd = Math.min(runEnd, sentenceEnd) - runStart;
                           const overlapText = run.text.substring(overlapStart, overlapEnd);
-                          
+
                           if (overlapText.length > 0) {
                             sentenceRuns.push({
                               text: overlapText,
@@ -833,16 +680,8 @@ export class DocxEditorService {
                         }
                         currentPos += run.text.length;
                       }
-                      
-                      // Apply placeholder system if multiple runs in sentence
-                      if (sentenceRuns.length > 1) {
-                        const { wrappedText, runMap } = this.wrapRunsWithPlaceholders(sentenceRuns);
-                        segmentText = wrappedText;
-                        // Store the run mapping for later reconstruction
-                        sentenceRuns = Array.from(runMap.values());
-                      }
                     }
-                    
+
                     // Fallback for table cells
                     if (sentenceRuns.length === 0 && runs.length > 0) {
                       const dominantFontInfo = this.findDominantFontInfo(runs);
@@ -854,7 +693,7 @@ export class DocxEditorService {
                   }
 
                   segments.push({
-                    text: segmentText, // This now contains placeholder tags if multiple runs
+                    text: sentence.trim(),
                     fontFamily: tableFontInfo.family || 'Calibri',
                     fontSize: tableFontInfo.size || 11,
                     style: {
@@ -889,20 +728,20 @@ export class DocxEditorService {
   ): Promise<void> {
     try {
       this.logger.log(`Storing ${extraction.segments.length} translation segments for file ${fileId}`);
-      
+
       // Check for existing segments first
-      const existingSegments = await this.translationRepo.find({ 
-        where: { fileId } as any 
+      const existingSegments = await this.translationRepo.find({
+        where: { fileId } as any
       });
-      
+
       if (existingSegments.length > 0) {
         this.logger.log(`Found ${existingSegments.length} existing segments, updating instead of creating duplicates`);
-        
+
         // Update existing segments instead of deleting and recreating
         for (let i = 0; i < extraction.segments.length && i < existingSegments.length; i++) {
           const segment = extraction.segments[i];
           const existing = existingSegments[i];
-          
+
           existing.originalText = segment.text;
           existing.fontFamily = segment.fontFamily || 'Calibri';
           existing.fontSize = segment.fontSize as any;
@@ -912,16 +751,16 @@ export class DocxEditorService {
           existing.runs = segment.runs || [];
           // Keep existing translatedText if it exists
         }
-        
+
         // Save updated entities
         await this.translationRepo.save(existingSegments.slice(0, extraction.segments.length));
-        
+
         // If there are more new segments than existing ones, create the additional ones
         if (extraction.segments.length > existingSegments.length) {
           const newEntities: TranslationEntity[] = [];
           for (let i = existingSegments.length; i < extraction.segments.length; i++) {
             const segment = extraction.segments[i];
-            
+
             const entity = new TranslationEntity();
             entity.projectId = projectId;
             entity.requestId = requestId || null;
@@ -935,12 +774,12 @@ export class DocxEditorService {
             entity.status = 'pending';
             // Store runs data for hybrid approach
             entity.runs = segment.runs || [];
-            
+
             newEntities.push(entity);
           }
           await this.translationRepo.save(newEntities);
         }
-        
+
         // If there are fewer new segments than existing ones, remove the extra ones
         if (extraction.segments.length < existingSegments.length) {
           const toRemove = existingSegments.slice(extraction.segments.length);
@@ -949,10 +788,10 @@ export class DocxEditorService {
       } else {
         // No existing segments, create new ones
       const entities: TranslationEntity[] = [];
-      
+
       for (let i = 0; i < extraction.segments.length; i++) {
         const segment = extraction.segments[i];
-        
+
         const entity = new TranslationEntity();
         entity.projectId = projectId;
         entity.requestId = requestId || null;
@@ -966,14 +805,14 @@ export class DocxEditorService {
         entity.status = 'pending';
         // Store runs data for hybrid approach
         entity.runs = segment.runs || [];
-        
+
         entities.push(entity);
       }
-      
+
       // Save all entities
       await this.translationRepo.save(entities);
       }
-      
+
       this.logger.log(`Successfully processed ${extraction.segments.length} translation segments`);
     } catch (error) {
       this.logger.error(`Failed to store translation segments: ${error instanceof Error ? error.message : String(error)}`);
@@ -995,10 +834,10 @@ export class DocxEditorService {
 
       const buffer = fs.readFileSync(filePath);
       const extraction = await this.extractDocxContentFromBuffer(buffer);
-      
+
       // Store segments in database
       await this.storeTranslationSegments(fileId, BigInt(1), language, extraction);
-      
+
       this.logger.log(`✅ Extracted ${extraction.segments.length} segments with page mapping.`);
     } catch (error) {
       this.logger.error(`Failed to extract and segment: ${error instanceof Error ? error.message : String(error)}`);

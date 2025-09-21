@@ -234,70 +234,61 @@ export class DeadlineCheckerService {
            // Calculate progress for the specific target languages of this request
            let totalProgress = 0;
            let languageCount = 0;
-           
+
            // Get target languages for this request
            const targetLanguages = Array.isArray(req.targetLanguages) && req.targetLanguages.length > 0
              ? req.targetLanguages
              : ['en']; // Default to English if no target languages specified
-           
-           this.logger.log(`Request ${req.id} target languages: ${JSON.stringify(targetLanguages)}`);
-           
-          // Resolve correct branch to use for this project
-          const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
-            req.project.id.toString(),
-          );
-          this.logger.log(`Request ${req.id} using branch ${resolvedBranchId} for progress checks`);
+
+           this.logger.log(`Request ${req.id} target languages: ${JSON.stringify(targetLanguages)}`)
 
           // First, check if the project has any translation records
           const projectStatus = await this.translationService.getProjectTranslationStatus(
             req.project.id.toString(),
-            resolvedBranchId
           );
-           
+
            this.logger.log(`Request ${req.id} project status:`, projectStatus);
-           
+
            if (!projectStatus.hasRecords) {
              this.logger.warn(`Request ${req.id} has no translation records. Project may not have files processed yet.`);
              // Don't mark as failed - just log and continue
              continue;
            }
-           
+
            if (!projectStatus.hasEnglishStrings) {
              this.logger.warn(`Request ${req.id} has no English base strings. Cannot calculate progress.`);
              // Don't mark as failed - just log and continue
              continue;
            }
-           
+
            // Calculate progress for each target language
            for (const language of targetLanguages) {
              try {
                // Ensure translation records exist for this target language
                await this.translationService.ensureTranslationRecordsExist(
                  req.project.id.toString(),
-                 resolvedBranchId,
                  language
                );
-               
+
                const progress = await this.translationService.getTranslationProgress(
                  req.project.id.toString(),
-                 resolvedBranchId,
                  language
                );
-               
+
                this.logger.log(`Request ${req.id} progress for language ${language}: ${progress.percentage}% (${progress.completed}/${progress.total})`);
-               
+
                totalProgress += progress.percentage;
                languageCount++;
              } catch (error) {
                this.logger.error(`Error calculating progress for language ${language} in request ${req.id}:`, error);
              }
            }
-           
+
            // Calculate average progress across all target languages
            const averageProgress = languageCount > 0 ? totalProgress / languageCount : 0;
-           
+
            this.logger.log(`Request ${req.id} average translation progress: ${averageProgress.toFixed(2)}%`);
-           
+
            if (averageProgress >= 100) {
              // Translation is complete - move to waiting approval
              this.logger.log(`Request ${req.id} is 100% complete, moving to waiting approval`);
@@ -582,19 +573,13 @@ export class DeadlineCheckerService {
       // Calculate progress for the specific target languages of this request
       let totalProgress = 0;
       let languageCount = 0;
-      
+
       // Get target languages for this request
       const targetLanguages = Array.isArray(req.targetLanguages) && req.targetLanguages.length > 0
         ? req.targetLanguages
         : ['en']; // Default to English if no target languages specified
-      
+
       this.logger.log(`Request ${req.id} target languages: ${JSON.stringify(targetLanguages)}`);
-      
-      // Resolve correct branch to use for this project
-      const resolvedBranchId2 = await this.translationService.resolveBranchIdForProgress(
-        req.project.id.toString(),
-      );
-      this.logger.log(`Request ${req.id} using branch ${resolvedBranchId2} for progress checks`);
 
       // Calculate progress for each target language
       for (const language of targetLanguages) {
@@ -602,28 +587,26 @@ export class DeadlineCheckerService {
           // Ensure translation records exist for this target language
           await this.translationService.ensureTranslationRecordsExist(
             req.project.id.toString(),
-            resolvedBranchId2,
             language
           );
-          
+
           const progress = await this.translationService.getTranslationProgress(
             req.project.id.toString(),
-            resolvedBranchId2,
             language
           );
-          
+
           this.logger.log(`Request ${req.id} progress for language ${language}: ${progress.percentage}% (${progress.completed}/${progress.total})`);
-          
+
           totalProgress += progress.percentage;
           languageCount++;
         } catch (error) {
           this.logger.error(`Error calculating progress for language ${language} in request ${req.id}:`, error);
         }
       }
-      
+
       // Calculate average progress across all target languages
       const averageProgress = languageCount > 0 ? totalProgress / languageCount : 0;
-      
+
       this.logger.log(`Request ${req.id} average progress across ${languageCount} languages: ${averageProgress.toFixed(2)}%`);
 
       if (averageProgress >= 100) {
@@ -919,10 +902,10 @@ export class DeadlineCheckerService {
         request.status === RequestStatus.Cancelled ||
         request.status === RequestStatus.Incompleted
       ) {
-        return { 
-          success: true, 
-          message: `Request is already in final state: ${request.status}`, 
-          currentStatus: request.status 
+        return {
+          success: true,
+          message: `Request is already in final state: ${request.status}`,
+          currentStatus: request.status
         };
       }
 
@@ -932,117 +915,110 @@ export class DeadlineCheckerService {
            // Calculate progress for the specific target languages of this request
            let totalProgress = 0;
            let languageCount = 0;
-           
+
            // Get target languages for this request
            const targetLanguages = Array.isArray(request.targetLanguages) && request.targetLanguages.length > 0
              ? request.targetLanguages
              : ['en']; // Default to English if no target languages specified
-           
+
            this.logger.log(`Request ${requestId} target languages: ${JSON.stringify(targetLanguages)}`);
-           
-           // Resolve correct branch to use for this project
-           const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
-             request.project.id.toString(),
-           );
-           this.logger.log(`Request ${requestId} using branch ${resolvedBranchId} for progress checks`);
+
+
 
            // First, check if the project has any translation records
            const projectStatus = await this.translationService.getProjectTranslationStatus(
              request.project.id.toString(),
-             resolvedBranchId
            );
-           
+
            this.logger.log(`Request ${requestId} project status:`, projectStatus);
-           
+
            if (!projectStatus.hasRecords) {
              this.logger.warn(`Request ${requestId} has no translation records. Project may not have files processed yet.`);
-             return { 
-               success: false, 
-               message: `Request has no translation records. Project may not have files processed yet.`, 
-               currentStatus: request.status 
+             return {
+               success: false,
+               message: `Request has no translation records. Project may not have files processed yet.`,
+               currentStatus: request.status
              };
            }
-           
+
            if (!projectStatus.hasEnglishStrings) {
              this.logger.warn(`Request ${requestId} has no English base strings. Cannot calculate progress.`);
-             return { 
-               success: false, 
-               message: `Request has no English base strings. Cannot calculate progress.`, 
-               currentStatus: request.status 
+             return {
+               success: false,
+               message: `Request has no English base strings. Cannot calculate progress.`,
+               currentStatus: request.status
              };
            }
-           
+
            // Calculate progress for each target language
            for (const language of targetLanguages) {
              try {
                // Ensure translation records exist for this target language
                await this.translationService.ensureTranslationRecordsExist(
                  request.project.id.toString(),
-                 resolvedBranchId,
                  language
                );
-               
+
                const progress = await this.translationService.getTranslationProgress(
                  request.project.id.toString(),
-                 resolvedBranchId,
                  language
                );
-               
+
                this.logger.log(`Request ${requestId} progress for language ${language}: ${progress.percentage}% (${progress.completed}/${progress.total})`);
-               
+
                totalProgress += progress.percentage;
                languageCount++;
              } catch (error) {
                this.logger.error(`Error calculating progress for language ${language} in request ${requestId}:`, error);
              }
            }
-           
+
            // Calculate average progress across all target languages
            const averageProgress = languageCount > 0 ? totalProgress / languageCount : 0;
-           
+
            this.logger.log(`Request ${requestId} average translation progress: ${averageProgress.toFixed(2)}%`);
 
            if (averageProgress >= 100) {
              // Translation is complete, move to waiting approval
              request.status = RequestStatus.WaitingApproval;
              await this.requestRepo.save(request);
-             
+
              this.logger.log(`Fixed request ${requestId}: moved from FAILED to WAITING_APPROVAL`);
-             
-             return { 
-               success: true, 
-               message: `Request moved from FAILED to WAITING_APPROVAL (progress: ${averageProgress.toFixed(2)}%)`, 
-               currentStatus: RequestStatus.WaitingApproval 
+
+             return {
+               success: true,
+               message: `Request moved from FAILED to WAITING_APPROVAL (progress: ${averageProgress.toFixed(2)}%)`,
+               currentStatus: RequestStatus.WaitingApproval
              };
            } else {
-             return { 
-               success: false, 
-               message: `Request is correctly FAILED (progress: ${averageProgress.toFixed(2)}%)`, 
-               currentStatus: request.status 
+             return {
+               success: false,
+               message: `Request is correctly FAILED (progress: ${averageProgress.toFixed(2)}%)`,
+               currentStatus: request.status
              };
            }
         } catch (error) {
           this.logger.error(`Error checking translation progress for request ${requestId}:`, error);
-          return { 
-            success: false, 
-            message: `Error checking translation progress: ${error instanceof Error ? error.message : 'Unknown error'}`, 
-            currentStatus: request.status 
+          return {
+            success: false,
+            message: `Error checking translation progress: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            currentStatus: request.status
           };
         }
       }
 
-      return { 
-        success: true, 
-        message: `Request status is appropriate: ${request.status}`, 
-        currentStatus: request.status 
+      return {
+        success: true,
+        message: `Request status is appropriate: ${request.status}`,
+        currentStatus: request.status
       };
 
     } catch (error) {
       this.logger.error(`Error checking request ${requestId}:`, error);
-      return { 
-        success: false, 
-        message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 
-        currentStatus: 'ERROR' 
+      return {
+        success: false,
+        message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        currentStatus: 'ERROR'
       };
     }
   }
@@ -1194,12 +1170,12 @@ export class DeadlineCheckerService {
   }
 
   // Method to check progress for a specific request (for debugging)
-  async checkRequestProgress(requestId: bigint): Promise<{ 
-    requestId: string; 
-    targetLanguages: string[]; 
-    languageProgress: Array<{ language: string; progress: number; completed: number; total: number }>; 
-    averageProgress: number; 
-    status: string; 
+  async checkRequestProgress(requestId: bigint): Promise<{
+    requestId: string;
+    targetLanguages: string[];
+    languageProgress: Array<{ language: string; progress: number; completed: number; total: number }>;
+    averageProgress: number;
+    status: string;
     error?: string;
   }> {
     try {
@@ -1221,20 +1197,13 @@ export class DeadlineCheckerService {
       let totalProgress = 0;
       let languageCount = 0;
 
-      // Resolve correct branch to use for this project
-      const resolvedBranchId = await this.translationService.resolveBranchIdForProgress(
-        request.project.id.toString(),
-      );
-      this.logger.log(`Request ${requestId} using branch ${resolvedBranchId} for progress checks`);
-
       // First, check if the project has any translation records
       const projectStatus = await this.translationService.getProjectTranslationStatus(
         request.project.id.toString(),
-        resolvedBranchId
       );
-      
+
       this.logger.log(`Request ${requestId} project status:`, projectStatus);
-      
+
       if (!projectStatus.hasRecords) {
         this.logger.warn(`Request ${requestId} has no translation records. Project may not have files processed yet.`);
         return {
@@ -1251,7 +1220,7 @@ export class DeadlineCheckerService {
           error: 'No translation records found. Project may not have files processed yet.'
         };
       }
-      
+
       if (!projectStatus.hasEnglishStrings) {
         this.logger.warn(`Request ${requestId} has no English base strings. Cannot calculate progress.`);
         return {
@@ -1275,13 +1244,11 @@ export class DeadlineCheckerService {
           // Ensure translation records exist for this target language
           await this.translationService.ensureTranslationRecordsExist(
             request.project.id.toString(),
-            resolvedBranchId,
             language
           );
-          
+
           const progress = await this.translationService.getTranslationProgress(
             request.project.id.toString(),
-            resolvedBranchId,
             language
           );
 

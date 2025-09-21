@@ -430,38 +430,6 @@ export class DocxEditorService {
     };
   }
 
-  private redistributeTranslation(runs: Run[], translatedText: string): Run[] {
-    if (runs.length === 0) return [];
-
-    const originalTotalLength = runs.reduce((sum, r) => sum + r.text.length, 0);
-    if (originalTotalLength === 0) {
-      // fallback: just put all in first run
-      return [{ text: translatedText, fontInfo: runs[0].fontInfo }];
-    }
-
-    const translatedRuns: Run[] = [];
-    let cursor = 0;
-
-    runs.forEach((run, i) => {
-      // proportion of this run compared to total
-      const proportion = run.text.length / originalTotalLength;
-      const sliceLength =
-        i === runs.length - 1
-          ? translatedText.length - cursor // last run → take all remaining
-          : Math.round(proportion * translatedText.length);
-
-      const chunk = translatedText.slice(cursor, cursor + sliceLength);
-      cursor += sliceLength;
-
-      translatedRuns.push({
-        text: chunk,
-        fontInfo: run.fontInfo, // keep original style
-      });
-    });
-
-    return translatedRuns;
-  }
-
   private postProcessSentences(sentences: string[]): string[] {
     const processed: string[] = [];
 

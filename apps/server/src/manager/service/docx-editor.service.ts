@@ -37,9 +37,10 @@ interface DocxExtractionResult {
 interface FontInfo {
   family?: string;
   size?: number;
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
+  // Removed style properties - only preserve font family and size
+  // bold?: boolean;
+  // italic?: boolean;
+  // underline?: boolean;
 }
 
 interface SRXRule {
@@ -149,9 +150,10 @@ export class DocxEditorService {
         fontInfo.size = !isNaN(parsedSize) ? parsedSize / 2 : 11;
       }
 
-      fontInfo.bold = !!runProps['w:b'];
-      fontInfo.italic = !!runProps['w:i'];
-      fontInfo.underline = !!runProps['w:u'];
+      // Remove style preservation - no longer extract bold, italic, underline
+      // fontInfo.bold = !!runProps['w:b'];
+      // fontInfo.italic = !!runProps['w:i'];
+      // fontInfo.underline = !!runProps['w:u'];
     }
 
     // 2. If missing, check style inheritance
@@ -178,20 +180,28 @@ export class DocxEditorService {
         for (const textElement of run['w:t']) {
           if (typeof textElement === 'string') {
             text += textElement;
-          } else if (textElement['_']) {
+          } else if (textElement && textElement['_']) {
             text += textElement['_'];
-          } else if (typeof textElement === 'object' && textElement.toString) {
-            text += textElement.toString();
+          } else if (textElement && typeof textElement === 'object') {
+            // Avoid [object Object] by properly extracting text content
+            const textContent = this.extractTextContent(textElement);
+            if (textContent && textContent !== '[object Object]') {
+              text += textContent;
+            }
           }
         }
       } else {
         // Single w:t element
         if (typeof run['w:t'] === 'string') {
           text += run['w:t'];
-        } else if (run['w:t']['_']) {
+        } else if (run['w:t'] && run['w:t']['_']) {
           text += run['w:t']['_'];
-        } else if (typeof run['w:t'] === 'object' && run['w:t'].toString) {
-          text += run['w:t'].toString();
+        } else if (run['w:t'] && typeof run['w:t'] === 'object') {
+          // Avoid [object Object] by properly extracting text content
+          const textContent = this.extractTextContent(run['w:t']);
+          if (textContent && textContent !== '[object Object]') {
+            text += textContent;
+          }
         }
       }
     }
@@ -207,6 +217,32 @@ export class DocxEditorService {
     }
 
     return text;
+  }
+
+  private extractTextContent(obj: any): string {
+    if (!obj) return '';
+    
+    // If it's already a string, return it
+    if (typeof obj === 'string') return obj;
+    
+    // Check for common text properties
+    if (obj['_']) return obj['_'];
+    if (obj['$t']) return obj['$t'];
+    if (obj['text']) return obj['text'];
+    if (obj['value']) return obj['value'];
+    
+    // If it has a direct text content property
+    if (Object.prototype.hasOwnProperty.call(obj, '_text')) return obj['_text'];
+    
+    // Try to find any string values in the object
+    const values = Object.values(obj);
+    for (const value of values) {
+      if (typeof value === 'string' && value.trim()) {
+        return value;
+      }
+    }
+    
+    return '';
   }
 
   private extractTextFromParagraph(paragraph: any, styles: any, theme: any): { text: string; fontInfo: FontInfo; runs: Run[] } {
@@ -238,7 +274,34 @@ export class DocxEditorService {
       }
     }
 
+    // Clean up the extracted text
+    paragraphText = this.cleanExtractedText(paragraphText);
+
     return { text: paragraphText, fontInfo: paragraphFontInfo, runs };
+  }
+
+  private cleanExtractedText(text: string): string {
+    if (!text) return '';
+    
+    // Remove [object Object] placeholders
+    text = text.replace(/\[object Object\]/g, '');
+    
+    // Remove run tags like <r1>, <r2>, etc.
+    text = text.replace(/<r\d+>/g, '');
+    text = text.replace(/<\/r\d+>/g, '');
+    
+    // Remove any other XML-like tags that might have been introduced
+    text = text.replace(/<[^>]*>/g, '');
+    
+    // Remove common DOCX artifacts
+    text = text.replace(/preserve/g, '');
+    text = text.replace(/\bxml:space\b/g, '');
+    text = text.replace(/\b_\b/g, '');
+    
+    // Clean up multiple spaces and normalize whitespace
+    text = text.replace(/\s+/g, ' ').trim();
+    
+    return text;
   }
 
   private extractTextFromTable(table: any): Array<{ text: string; fontInfo: FontInfo; runs: Run[] }> {
@@ -259,7 +322,11 @@ export class DocxEditorService {
               for (const paragraph of paragraphs) {
                 const { text, fontInfo, runs } = this.extractTextFromParagraph(paragraph, null, null);
                 if (text.trim()) {
-                  tableTexts.push({ text: text.trim(), fontInfo, runs });
+                  // Apply additional cleaning for table text
+                  const cleanedText = this.cleanExtractedText(text.trim());
+                  if (cleanedText) {
+                    tableTexts.push({ text: cleanedText, fontInfo, runs });
+                  }
                 }
               }
             }
@@ -385,15 +452,12 @@ export class DocxEditorService {
 
   private findDominantFontInfo(runs: Run[]): FontInfo {
     if (runs.length === 0) {
-      return { family: 'Calibri', size: 11, bold: false, italic: false, underline: false };
+      return { family: 'Calibri', size: 11 };
     }
 
     // Count occurrences of each font property weighted by text length
     const fontFamilies: { [key: string]: number } = {};
     const fontSizes: { [key: number]: number } = {};
-    let boldCount = 0;
-    let italicCount = 0;
-    let underlineCount = 0;
 
     for (const run of runs) {
       const family = run.fontInfo.family || 'Calibri';
@@ -402,12 +466,11 @@ export class DocxEditorService {
       fontFamilies[family] = (fontFamilies[family] || 0) + run.text.length;
       fontSizes[size] = (fontSizes[size] || 0) + run.text.length;
 
-      if (run.fontInfo.bold) boldCount += run.text.length;
-      if (run.fontInfo.italic) italicCount += run.text.length;
-      if (run.fontInfo.underline) underlineCount += run.text.length;
+      // Remove style counting - no longer track bold, italic, underline
+      // if (run.fontInfo.bold) boldCount += run.text.length;
+      // if (run.fontInfo.italic) italicCount += run.text.length;
+      // if (run.fontInfo.underline) underlineCount += run.text.length;
     }
-
-    const totalLength = runs.reduce((sum, run) => sum + run.text.length, 0);
 
     // Find most common font family and size
     const dominantFamily = Object.keys(fontFamilies).reduce((a, b) =>
@@ -417,16 +480,13 @@ export class DocxEditorService {
       fontSizes[Number(a)] > fontSizes[Number(b)] ? a : b
     ));
 
-    // Use a higher threshold for styling to prevent small styled words from dominating
-    // Only apply bold/italic/underline if it covers at least 70% of the text
-    const styleThreshold = 0.7;
-
     return {
       family: dominantFamily,
       size: dominantSize,
-      bold: boldCount > totalLength * styleThreshold,
-      italic: italicCount > totalLength * styleThreshold,
-      underline: underlineCount > totalLength * styleThreshold,
+      // Remove style properties - only preserve font family and size
+      // bold: boldCount > totalLength * styleThreshold,
+      // italic: italicCount > totalLength * styleThreshold,
+      // underline: underlineCount > totalLength * styleThreshold,
     };
   }
 
@@ -474,8 +534,9 @@ export class DocxEditorService {
 
           for (const paragraph of paragraphs) {
             const { text: paragraphText } = this.extractTextFromParagraph(paragraph, null, null);
-            if (paragraphText.trim()) {
-              text += paragraphText + '\n';
+            const cleanedText = this.cleanExtractedText(paragraphText.trim());
+            if (cleanedText) {
+              text += cleanedText + '\n';
             }
           }
         }
@@ -487,7 +548,10 @@ export class DocxEditorService {
           for (const table of tables) {
             const tableTexts = this.extractTextFromTable(table);
             for (const { text: tableText } of tableTexts) {
-              text += tableText + '\n';
+              const cleanedText = this.cleanExtractedText(tableText);
+              if (cleanedText) {
+                text += cleanedText + '\n';
+              }
             }
           }
         }
@@ -547,7 +611,8 @@ export class DocxEditorService {
 
             // For hybrid approach: map runs to sentences based on actual text boundaries
             for (const sentence of sentences) {
-              if (sentence.trim()) {
+              const cleanedSentence = this.cleanExtractedText(sentence.trim());
+              if (cleanedSentence) {
                 let sentenceRuns: Run[] = [];
 
                 if (sentences.length === 1) {
@@ -596,13 +661,14 @@ export class DocxEditorService {
                 }
 
                 segments.push({
-                  text: sentence.trim(),
+                  text: cleanedSentence,
                   fontFamily: paragraphFontInfo.family || 'Calibri',
                   fontSize: paragraphFontInfo.size || 11,
                   style: {
-                    bold: paragraphFontInfo.bold || false,
-                    italic: paragraphFontInfo.italic || false,
-                    underline: paragraphFontInfo.underline || false,
+                    // Remove style preservation - only preserve font family and size
+                    // bold: paragraphFontInfo.bold || false,
+                    // italic: paragraphFontInfo.italic || false,
+                    // underline: paragraphFontInfo.underline || false,
                   },
                   runs: sentenceRuns, // Store runs for hybrid approach
                 });
@@ -616,14 +682,15 @@ export class DocxEditorService {
               const sentences = this.segmentTextBySRX(tableText);
 
               for (const sentence of sentences) {
-                if (sentence.trim()) {
+                const cleanedSentence = this.cleanExtractedText(sentence.trim());
+                if (cleanedSentence) {
                   let sentenceRuns: Run[] = [];
 
                   if (sentences.length === 1) {
                     sentenceRuns = runs;
                   } else {
                     // Apply same logic as paragraphs for table cells
-                    const sentenceText = sentence.trim();
+                    const sentenceText = cleanedSentence;
                     const sentenceStart = tableText.indexOf(sentenceText);
 
                     if (sentenceStart !== -1) {
@@ -661,13 +728,14 @@ export class DocxEditorService {
                   }
 
                   segments.push({
-                    text: sentence.trim(),
+                    text: cleanedSentence,
                     fontFamily: tableFontInfo.family || 'Calibri',
                     fontSize: tableFontInfo.size || 11,
                     style: {
-                      bold: tableFontInfo.bold || false,
-                      italic: tableFontInfo.italic || false,
-                      underline: tableFontInfo.underline || false,
+                      // Remove style preservation - only preserve font family and size
+                      // bold: tableFontInfo.bold || false,
+                      // italic: tableFontInfo.italic || false,
+                      // underline: tableFontInfo.underline || false,
                     },
                     runs: sentenceRuns, // Store runs for hybrid approach
                   });

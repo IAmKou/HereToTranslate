@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import type { ProjectEntity } from './project.entity';
 import type { UserEntity } from './user.entity';
 import type { RequestEntity } from './request.entity';
+import { TranslationEntity } from './translation.entity';
 
 @Entity('file')
 export class FileEntity {
@@ -47,5 +48,8 @@ export class FileEntity {
 
   @ManyToOne(() => require('./request.entity').RequestEntity, {nullable: true})
   request: RequestEntity;
+
+    @OneToMany(() => require('./translation.entity').TranslationEntity, (translation: TranslationEntity) => translation.file, { onDelete: 'CASCADE' })
+    translations: TranslationEntity[];
 
 }

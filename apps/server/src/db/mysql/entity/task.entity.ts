@@ -30,12 +30,6 @@ export class TaskEntity {
   @Column({ type: 'varchar', nullable: true })
   fileId?: string;
 
-  @Column({ type: 'text', nullable: true })
-  originalText?: string;
-
-  @Column({ type: 'text', nullable: true })
-  translatedText?: string;
-
   @Column({ type: 'varchar', length: 10, nullable: true })
   language?: string;
 
@@ -71,12 +65,6 @@ export class TaskEntity {
 
   @Column({ type: 'datetime', nullable: true })
   completedAt?: Date;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  estimatedBusinessHours?: number;
-
-  @Column({ type: 'json', nullable: true })
-  customFields?: Record<string, unknown>;
 
   @Column({ type: 'enum', enum: ['low', 'medium', 'high'], default: 'medium' })
   priority: string;

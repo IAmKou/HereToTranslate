@@ -47,7 +47,8 @@ export class TaskManagerService {
     private readonly projectService: ProjectManagerService,
     private readonly taskGateway: TaskGateway,
     private readonly statusManagerService: StatusManagerService,
-    private readonly taskAssignmentService: TaskAssignmentManagerService
+    private readonly taskAssignmentService: TaskAssignmentManagerService,
+    private readonly translationService: TranslationService
   ) {}
 
   async createTask(params: {
@@ -58,18 +59,13 @@ export class TaskManagerService {
     reviewerId?: string;
     groupId?: string;
     dueDate?: Date;
-    estimatedBusinessHours?: number;
     projectId?: string;
     fileId?: string;
-    originalText?: string;
-    translatedText?: string;
     selectedStrings?: number[];
     language?: string;
     workflowId?: string;
     statusId?: string;
     priority?: string;
-    storyPoints?: number;
-    customFields?: Record<string, unknown>;
     totalStrings?: number;
   }) {
     const {
@@ -80,18 +76,13 @@ export class TaskManagerService {
       reviewerId,
       groupId,
       dueDate,
-      estimatedBusinessHours,
       projectId,
       fileId,
-      originalText,
-      translatedText,
       selectedStrings,
       language,
       workflowId,
       statusId,
       priority = 'medium',
-      storyPoints,
-      customFields,
       totalStrings,
     } = params;
 
@@ -215,16 +206,11 @@ export class TaskManagerService {
       dueDate,
       projectId,
       fileId,
-      originalText,
-      translatedText,
       selectedStrings: Array.isArray(selectedStrings) && selectedStrings.length > 0 ? selectedStrings : undefined,
       language,
       workflow,
       status,
       priority,
-      storyPoints,
-      customFields,
-      estimatedBusinessHours,
       totalStrings: totalStrings || 0,
     } as DeepPartial<TaskEntity>);
 
@@ -247,10 +233,6 @@ export class TaskManagerService {
     // If creator assigns to self at creation, set start/due
     if (assignedTo && createdBy && assignedTo.id?.toString() === createdBy.id?.toString()) {
       if (!task.startedAt) task.startedAt = new Date();
-      if (!task.dueDate && estimatedBusinessHours && estimatedBusinessHours > 0) {
-        const { addBusinessHours } = await import('../../utils/business-time.js');
-        task.dueDate = addBusinessHours(task.startedAt, Number(estimatedBusinessHours));
-      }
     }
 
     await this.taskRepository.save(task);
@@ -482,8 +464,6 @@ export class TaskManagerService {
         description: true,
         projectId: true,
         fileId: true,
-        originalText: true,
-        translatedText: true,
         selectedStrings: true,
         language: true,
         dueDate: true,
@@ -491,7 +471,6 @@ export class TaskManagerService {
         startedAt: true,
         completedAt: true,
         priority: true,
-        storyPoints: true,
         createdBy: {
           id: true,
           username: true,
@@ -536,8 +515,6 @@ export class TaskManagerService {
         description: true,
         projectId: true,
         fileId: true,
-        originalText: true,
-        translatedText: true,
         selectedStrings: true,
         language: true,
         dueDate: true,
@@ -547,7 +524,6 @@ export class TaskManagerService {
         completedAt: true,
         priority: true,
         storyPoints: true,
-        customFields: true,
         createdBy: {
           id: true,
           username: true,
@@ -596,17 +572,13 @@ export class TaskManagerService {
         description: true,
         projectId: true,
         fileId: true,
-        originalText: true,
-        translatedText: true,
         language: true,
         dueDate: true,
         createdAt: true,
         startedAt: true,
-        completedAt: true, // Important: Load completedAt field
+        completedAt: true, 
         priority: true,
         storyPoints: true,
-        estimatedBusinessHours: true,
-        customFields: true,
         createdBy: {
           id: true,
           username: true,
@@ -640,8 +612,6 @@ export class TaskManagerService {
     if (dto.dueDate !== undefined) task.dueDate = new Date(dto.dueDate);
     if (dto.priority !== undefined) task.priority = dto.priority;
     if (dto.storyPoints !== undefined) task.storyPoints = dto.storyPoints;
-    if (dto.customFields !== undefined) task.customFields = dto.customFields;
-    if (dto.estimatedBusinessHours !== undefined) task.estimatedBusinessHours = dto.estimatedBusinessHours;
 
     if (dto.assignedToId !== undefined) {
       task.assignedTo = dto.assignedToId
@@ -663,11 +633,6 @@ export class TaskManagerService {
       } else {
         // If assignee equals current user -> self-assign
         if (dto.assignedToId === userId.toString()) {
-          if (!task.startedAt) task.startedAt = new Date();
-          if (!task.dueDate && task.estimatedBusinessHours && Number(task.estimatedBusinessHours) > 0) {
-            const { addBusinessHours } = await import('../../utils/business-time.js');
-            task.dueDate = addBusinessHours(task.startedAt, Number(task.estimatedBusinessHours));
-          }
           // Move to IN_PROGRESS if status exists
           const inProgress = await this.statusRepository.findOne({
             where: { project: { id: BigInt(task.projectId || '0') }, type: StatusType.IN_PROGRESS, isActive: true },
@@ -847,17 +812,12 @@ export class TaskManagerService {
         description: true,
         projectId: true,
         fileId: true,
-        originalText: true,
-        translatedText: true,
         language: true,
         dueDate: true,
         createdAt: true,
         startedAt: true,
-        completedAt: true, // Important: Load completedAt field
+        completedAt: true, 
         priority: true,
-        storyPoints: true,
-        estimatedBusinessHours: true,
-        customFields: true,
         createdBy: {
           id: true,
           username: true,
@@ -948,8 +908,6 @@ export class TaskManagerService {
         status: true,
         projectId: true,
         fileId: true,
-        originalText: true,
-        translatedText: true,
         language: true,
         dueDate: true,
         createdAt: true,
@@ -975,14 +933,25 @@ export class TaskManagerService {
     const task = await this.taskRepository.findOneOrFail({
       where: { id: taskId },
     });
-
-    if (!task.originalText) {
-      return { total: 0, translated: 0, percent: 0 };
+    if (
+      !task.projectId ||
+      !task.fileId ||
+      !task.language
+    ) {
+      return null;
     }
 
-    const total = 1;
-    const translated = (task.translatedText && task.translatedText.trim() !== '') ? 1 : 0;
-    const percent = translated * 100;
+    const strings = await this.translationService.getAllString(
+      task.projectId,
+      task.language,
+      task.fileId,
+    );
+    const total = strings.length;
+    const translated = strings.filter((s: Record<string, unknown>) => {
+      const translatedText = s.translatedText as string;
+      return translatedText && translatedText.trim() !== '';
+    }).length;
+    const percent = total === 0 ? 0 : Math.round((translated / total) * 100);
 
     return { total, translated, percent };
   }

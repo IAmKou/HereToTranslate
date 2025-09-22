@@ -28,6 +28,7 @@ import { logger } from 'nx/src/utils/logger';
 import { ProjectManagerService } from './project-manager.service';
 import { NotificationManagerService } from './notification-manager.service';
 import { TranslationService } from './translation-manager.service';
+import { calculateTotalWordCount } from '../../utils/word-count.util';
 
 @Injectable()
 export class RequestManagerService {
@@ -67,7 +68,7 @@ export class RequestManagerService {
     rating: number,
     comment: string | null,
     translatorId?: string | null,
-    isFullyCompleted: boolean = false
+    isFullyCompleted = false
   ) {
     const request = await this.requestRepository.findOne({ where: { id: requestId }, relations: ['requester', 'assignee'] });
     if (!request) throw new NotFoundException('Request not found');
@@ -87,11 +88,10 @@ export class RequestManagerService {
       });
       await manager.save(review);
 
-      // Update request fields for UI compatibility
-      request.reviewedAt = new Date();
-      request.reviewDecision = decision as any;
-      request.reviewRating = Math.max(1, Math.min(5, Number(rating) || 0));
-      request.reviewComment = comment || '';
+      // Update request fields for UI compatibility (if these fields exist)
+      if ('reviewedAt' in request) request.reviewedAt = new Date();
+      if ('reviewRating' in request) request.reviewRating = Math.max(1, Math.min(5, Number(rating) || 0));
+      if ('reviewComment' in request) request.reviewComment = comment || '';
 
       // Status transition
       if (decision === 'APPROVED') {
@@ -106,7 +106,7 @@ export class RequestManagerService {
         success: true,
         requestId: request.id,
         decision,
-        rating: request.reviewRating,
+        rating: Math.max(1, Math.min(5, Number(rating) || 0)),
       };
     });
   }
@@ -119,7 +119,7 @@ export class RequestManagerService {
     comment: string | null,
     rejectionReason: string | null,
     translatorId?: string | null,
-    isFullyCompleted: boolean = false,
+    isFullyCompleted = false,
     evidenceFiles: Express.Multer.File[] = []
   ) {
     const request = await this.requestRepository.findOne({ where: { id: requestId }, relations: ['requester'] });
@@ -138,12 +138,11 @@ export class RequestManagerService {
       });
       await manager.save(review);
 
-      // Update denormalized fields
-      request.reviewedAt = new Date();
-      request.reviewDecision = decision as any;
-      request.reviewRating = Math.max(1, Math.min(5, Number(rating) || 0));
-      request.reviewComment = comment || '';
-      request.rejectionReason = rejectionReason || null as any;
+      // Update denormalized fields (if these fields exist)
+      if ('reviewedAt' in request) request.reviewedAt = new Date();
+      if ('reviewRating' in request) request.reviewRating = Math.max(1, Math.min(5, Number(rating) || 0));
+      if ('reviewComment' in request) request.reviewComment = comment || '';
+      if ('rejectionReason' in request) request.rejectionReason = rejectionReason || null as any;
 
       if (decision === 'APPROVED') {
         request.status = RequestStatus.Completed;
@@ -158,7 +157,7 @@ export class RequestManagerService {
         success: true,
         requestId: request.id,
         decision,
-        rating: request.reviewRating,
+        rating: Math.max(1, Math.min(5, Number(rating) || 0)),
         evidenceCount: evidenceFiles?.length || 0,
       };
     });
@@ -170,11 +169,20 @@ export class RequestManagerService {
     uploadedFiles: Express.Multer.File[] = [],
   ): Promise<RequestEntity> {
     const DAY = 24 * 60 * 60 * 1000;
-    const { title, description, dealAmount, deadline: deadlineRaw } = dto;
+    const { title, description, dealAmount, deadline: deadlineRaw, sourceLanguage } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
       throw new BadRequestException('Deadline must be at least 7 days from now');
+    }
+
+    // Calculate total word count from uploaded files
+    let totalWordCount = 0;
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      for (const file of uploadedFiles) {
+        const { wordCount } = await this.fileService.extractTextAndWordCount(file);
+        totalWordCount += wordCount;
+      }
     }
 
     const fileEntities: FileEntity[] = [];
@@ -187,7 +195,7 @@ export class RequestManagerService {
     }
 
     const request = this.requestRepository.create({
-      requester: { id: uid } as any,
+      requester: { id: uid } as UserEntity,
       project: dto.projectId ? ({ id: BigInt(dto.projectId) } as any) : undefined,
       registrants: dto.assigneeId ? ([{ id: BigInt(dto.assigneeId) }] as any) : [],
       assignee: dto.assigneeId ? ({ id: BigInt(dto.assigneeId) } as any) : undefined,
@@ -200,6 +208,8 @@ export class RequestManagerService {
       isPublic: true,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
       targetLanguages: dto.targetLanguages || [],
+      sourceLanguage: sourceLanguage || undefined,
+      totalWordCount,
       files: fileEntities,
       tags: [],
     });
@@ -237,11 +247,20 @@ export class RequestManagerService {
     uploadedFiles: Express.Multer.File[] = [],
   ): Promise<{ request: RequestEntity; approvalUrl?: string }> {
     const DAY = 24 * 60 * 60 * 1000;
-    const { title, description, dealAmount, deadline: deadlineRaw, isPublic } = dto;
+    const { title, description, dealAmount, deadline: deadlineRaw, isPublic, sourceLanguage } = dto;
     const deadline = new Date(deadlineRaw);
 
     if (deadline.getTime() - Date.now() < 7 * DAY) {
       throw new BadRequestException('Deadline must be at least 7 days from now');
+    }
+
+    // Calculate total word count from uploaded files
+    let totalWordCount = 0;
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      for (const file of uploadedFiles) {
+        const { wordCount } = await this.fileService.extractTextAndWordCount(file);
+        totalWordCount += wordCount;
+      }
     }
 
     const fileEntities: FileEntity[] = [];
@@ -254,7 +273,7 @@ export class RequestManagerService {
     }
 
     const request = this.requestRepository.create({
-      requester: { id: uid } as any,
+      requester: { id: uid } as UserEntity,
       project: dto.projectId ? ({ id: BigInt(dto.projectId) } as any) : undefined,
       registrants: dto.assigneeId ? ([{ id: BigInt(dto.assigneeId) }] as any) : undefined,
       assignee: dto.assigneeId ? ({ id: BigInt(dto.assigneeId) } as any) : undefined,
@@ -267,6 +286,8 @@ export class RequestManagerService {
       isPublic,
       category: dto.categoryId ? ({ id: BigInt(dto.categoryId) } as any) : undefined,
       targetLanguages: dto.targetLanguages || [],
+      sourceLanguage: sourceLanguage || undefined,
+      totalWordCount,
       files: fileEntities,
     });
 
@@ -359,6 +380,8 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requests.targetLanguages',
+        'requests.sourceLanguage',
+        'requests.totalWordCount',
         'requester.id',
         'requester.username',
         'project.id',
@@ -417,6 +440,8 @@ export class RequestManagerService {
         'requests.status',
         'requests.createdAt',
         'requests.targetLanguages',
+        'requests.sourceLanguage',
+        'requests.totalWordCount',
         'requester.id',
         'requester.username',
         'requester.fullName',
@@ -461,6 +486,8 @@ export class RequestManagerService {
         'requests.status',
         'requests.createdAt',
         'requests.targetLanguages',
+        'requests.sourceLanguage',
+        'requests.totalWordCount',
         'requester.id',
         'requester.username',
         'requester.fullName',
@@ -507,6 +534,8 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requests.targetLanguages',
+        'requests.sourceLanguage',
+        'requests.totalWordCount',
         'requester.id',
         'requester.fullName',
         'requester.email',
@@ -538,6 +567,8 @@ export class RequestManagerService {
         'requests.createdAt',
         'requests.isPublic',
         'requests.targetLanguages',
+        'requests.sourceLanguage',
+        'requests.totalWordCount',
 
         'requester.id',
         'requester.username',
@@ -603,6 +634,7 @@ export class RequestManagerService {
       categoryId,
       tags,
       targetLanguages,
+      sourceLanguage,
       files,
       status,
     } = data;
@@ -616,6 +648,7 @@ export class RequestManagerService {
       !categoryId &&
       !tags &&
       targetLanguages === undefined &&
+      sourceLanguage === undefined &&
       status === undefined &&
       (!files || files.length === 0)
     ) {
@@ -647,6 +680,7 @@ export class RequestManagerService {
     if (description) request.description = description;
     if (dealAmount) request.dealAmount = dealAmount;
     if (targetLanguages !== undefined) request.targetLanguages = targetLanguages;
+    if (sourceLanguage !== undefined) request.sourceLanguage = sourceLanguage;
 
     if (categoryId) {
       const category = await this.categoryRepository.findOne({
@@ -1058,8 +1092,8 @@ export class RequestManagerService {
         req.status === RequestStatus.Incompleted
       );
 
-      // Get ratings from completed requests (use reviewRating if available, fallback to rating)
-      const ratings = completedRequests
+      // Get ratings from completed requests via RequestReviewEntity
+      const ratings: number[] = []
 
       // Debug logging
       console.log(`🔍 [DEBUG] User ${user.username} rating calculation:`, {
@@ -1384,6 +1418,8 @@ export class RequestManagerService {
         'requests.isPublic',
         'requests.createdAt',
         'requests.targetLanguages',
+        'requests.sourceLanguage',
+        'requests.totalWordCount',
         'requester.id',
         'requester.username',
         'requester.fullName',

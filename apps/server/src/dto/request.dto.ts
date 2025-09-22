@@ -57,6 +57,11 @@ export class CreateRequestDto {
   targetLanguages?: string[];
 
   @IsOptional()
+  @IsString()
+  @MinLength(1)
+  sourceLanguage?: string;
+
+  @IsOptional()
   @IsArray()
   files?: FileEntity[];
 }
@@ -97,6 +102,11 @@ export class UpdateRequestDto {
   targetLanguages?: string[];
 
   @IsOptional()
+  @IsString()
+  @MinLength(1)
+  sourceLanguage?: string;
+
+  @IsOptional()
   @IsEnum(RequestStatus)
   status?: RequestStatus;
 }
@@ -107,5 +117,38 @@ export class ReviewRequestDto {
     message: 'Invalid status. Must be APPROVED or REJECTED.',
   })
   status: RequestStatus;
+}
+
+export class SubmitReviewDto {
+  @IsNotEmpty()
+  @IsNumberString()
+  requestId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  decision: string; // 'APPROVED' or 'REJECTED'
+
+  @IsNumber()
+  @Min(1)
+  @Type(() => Number)
+  rating: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  comment?: string;
+
+  @IsOptional()
+  @IsString()
+  translatorId?: string;
+
+  @IsOptional()
+  @IsString()
+  isFullyCompleted?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  rejectionReason?: string;
 }
 

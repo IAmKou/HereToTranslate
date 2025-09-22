@@ -100,4 +100,10 @@ export class RequestEntity {
   @Column({ type: 'json', nullable: true })
   targetLanguages: string[];
 
+  @Column({ nullable: true })
+  sourceLanguage: string;
+
+  @Column({ type: 'int', nullable: true, default: 0 })
+  totalWordCount: number;
+
 }

@@ -284,7 +284,7 @@ export class RequestController {
         req.user.id,
         body.decision,
         body.rating,
-        body.comment,
+        body.comment || '',
         body.translatorId,
         body.isFullyCompleted === 'true' || false
       );

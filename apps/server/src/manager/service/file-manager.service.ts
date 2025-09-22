@@ -25,6 +25,47 @@ export class FileService {
   }
   private readonly logger = new Logger(FileService.name);
 
+  async extractTextAndWordCount(upload: Express.Multer.File): Promise<{ text: string; wordCount: number }> {
+    try {
+      const mime = upload.mimetype || '';
+      const buf = upload.buffer;
+      let extractedText = '';
+
+      if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        // DOCX file
+        extractedText = await this.docxEditorService.extractTextFromBuffer(buf);
+      } else if (mime === 'text/plain') {
+        // Plain text file
+        extractedText = buf.toString('utf-8');
+      } else if (mime === 'application/pdf') {
+        // For PDF, we'll need to add PDF text extraction later
+        // For now, return empty text
+        extractedText = '';
+      } else {
+        // Try to extract as text for other formats
+        extractedText = buf.toString('utf-8');
+      }
+
+      // Calculate word count
+      const wordCount = this.calculateWordCount(extractedText);
+      
+      return { text: extractedText, wordCount };
+    } catch (error) {
+      this.logger.error(`Error extracting text from file: ${error}`);
+      return { text: '', wordCount: 0 };
+    }
+  }
+
+  private calculateWordCount(text: string): number {
+    if (!text || text.trim().length === 0) {
+      return 0;
+    }
+    
+    // Remove extra whitespace and split by whitespace
+    const words = text.trim().split(/\s+/).filter(word => word.length > 0);
+    return words.length;
+  }
+
   private async hasMeaningfulContentForUpload(upload: Express.Multer.File): Promise<boolean> {
     try {
       const mime = upload.mimetype || '';

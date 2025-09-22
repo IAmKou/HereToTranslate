@@ -146,11 +146,23 @@
                   </span>
                   <span v-if="req.targetLanguages && req.targetLanguages.length" class="meta-item languages-compact">
                     <i class="pi pi-globe"></i>
-                    <span v-for="(lang, index) in req.targetLanguages.slice(0, 2)" :key="lang" class="language-tag-compact">
+                    <span v-for="(lang) in req.targetLanguages.slice(0, 2)" :key="lang" class="language-tag-compact">
                       {{ getLanguageName(lang) }}
                     </span>
                     <span v-if="req.targetLanguages.length > 2" class="more-languages">
                       +{{ req.targetLanguages.length - 2 }}
+                    </span>
+                  </span>
+                </div>
+                <div v-if="req.sourceLanguage" class="meta-row">
+                  <span class="meta-item">
+                    <i class="pi pi-arrow-right"></i>
+                    From: {{ getLanguageName(req.sourceLanguage) }}
+                  </span>
+                  <span class="meta-item source-language-display">
+                    <i class="pi pi-language"></i>
+                    <span class="source-language-tag">
+                      {{ getLanguageName(req.sourceLanguage) }}
                     </span>
                   </span>
                 </div>
@@ -791,6 +803,23 @@ function getLanguageName(code) {
   font-size: 0.75rem;
   font-weight: 500;
   border: 1px solid #e5e7eb;
+}
+
+.source-language-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.source-language-tag {
+  background: #fef3c7;
+  color: #d97706;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #fde68a;
+  white-space: nowrap;
 }
 @keyframes spin {
   to {

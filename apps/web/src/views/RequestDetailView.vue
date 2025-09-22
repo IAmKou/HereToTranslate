@@ -111,6 +111,45 @@
                 </div>
                 <div class="overview-row">
                   <span class="overview-label">
+                    <i class="pi pi-language"></i>
+                    Source Language
+                  </span>
+                  <span class="overview-value">
+                    <template v-if="request?.sourceLanguage">
+                      <span class="source-language-badge">
+                        {{ getLanguageName(request.sourceLanguage) }}
+                      </span>
+                    </template>
+                    <template v-else>
+                      <span class="no-languages">
+                        <i class="pi pi-language" style="margin-right: 4px; color: #999;"></i>
+                        No source language
+                      </span>
+                    </template>
+                  </span>
+                </div>
+
+                <div class="overview-row">
+                  <span class="overview-label">
+                    <i class="pi pi-file-word"></i>
+                    Source Word Count
+                  </span>
+                  <span class="overview-value">
+                    <template v-if="request?.sourceWordCount">
+                      <span class="word-count-badge">
+                        {{ formatWordCount(request.sourceWordCount) }} words
+                      </span>
+                    </template>
+                    <template v-else>
+                      <span class="no-word-count">
+                        <i class="pi pi-file-word" style="margin-right: 4px; color: #999;"></i>
+                        Not calculated
+                      </span>
+                    </template>
+                  </span>
+                </div>
+                <div class="overview-row">
+                  <span class="overview-label">
                     <i class="pi pi-globe"></i>
                     Target Languages
                   </span>
@@ -669,6 +708,8 @@ interface RequestDetail {
   approvedAt?: string;
   targetLanguages?: string[];
   targetLanguage?: string[];
+  sourceLanguage?: string;
+  totalWordCount?: number;
 }
 
 const route = useRoute();
@@ -855,6 +896,11 @@ function getRandomColor(username: string | number) {
 function getLanguageName(code: string): string {
   const language = SUPPORTED_LANGUAGES.find(lang => lang.code === code);
   return language ? language.name : code;
+}
+
+function formatWordCount(count: number): string {
+  if (count == null) return '0';
+  return count.toLocaleString();
 }
 async function downloadFile(file: FileInfo) {
   if (!canDownloadAttachments.value) {
@@ -2010,6 +2056,39 @@ body, .request-detail-wrapper {
   font-size: 13px;
   font-weight: 500;
   border: 1px solid #c7d2fe;
+}
+
+.source-language-badge {
+  display: inline-block;
+  background: linear-gradient(90deg, #fef3c7 60%, #fde68a 100%);
+  color: #d97706;
+  border-radius: 10px;
+  padding: 3px 12px;
+  margin-right: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #fde68a;
+}
+
+.word-count-badge {
+  display: inline-block;
+  background: linear-gradient(90deg, #f0f9ff 60%, #e0f2fe 100%);
+  color: #0369a1;
+  border-radius: 10px;
+  padding: 3px 12px;
+  margin-right: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #bae6fd;
+}
+
+.no-word-count {
+  color: #999;
+  font-style: italic;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .no-languages {

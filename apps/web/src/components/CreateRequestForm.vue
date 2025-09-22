@@ -474,6 +474,42 @@
                 >Select one or more languages you want your content to be translated to</span>
               </div>
             </div>
+<!-- Source Language -->
+            <div class="form-group">
+              <label for="sourceLanguage" class="form-label">
+                Source Language <span class="required-mark">*</span>
+              </label>
+              <Multiselect
+                v-model="selectedSourceLanguage"
+                :options="SUPPORTED_LANGUAGES"
+                :multiple="false"
+                :close-on-select="true"
+                :clear-on-select="false"
+                :preserve-search="true"
+                placeholder="Select source language..."
+                :taggable="false"
+                class="multiselect-custom"
+                label="name"
+                track-by="code"
+                @select="validateSourceLanguage"
+                @remove="validateSourceLanguage"
+              >
+                <template #option="props">
+                  <div class="language-option">
+                    <span class="language-name">{{ props.option.name }}</span>
+                    <span class="language-native">({{ props.option.nativeName }})</span>
+                  </div>
+                </template>
+              </Multiselect>
+              <div class="input-info">
+                <span
+                  v-if="sourceLanguageTouched && sourceLanguageError"
+                  class="error-message"
+                >{{ sourceLanguageError }}</span>
+                <span v-else class="help-text"
+                >Select the language of your source content</span>
+              </div>
+            </div>
 
             <!-- Tags -->
             <div class="form-group full-width">
@@ -773,6 +809,10 @@ const tagError = ref('');
 const selectedTargetLanguages = ref([]);
 const targetLanguagesTouched = ref(false);
 
+// Source Language handling
+const selectedSourceLanguage = ref(null);
+const sourceLanguageTouched = ref(false);
+
 // File upload variables
 const uploadedFiles = ref([]);
 const fileInput = ref(null);
@@ -803,21 +843,30 @@ const descriptionError = computed(() => {
 });
 const dealAmountError = computed(() => {
   if (!amountTouched.value) return '';
-  if (
-    dealAmount.value === null ||
-    dealAmount.value === '' ||
-    isNaN(dealAmount.value)
-  )
+
+  const value = Number(dealAmount.value);
+
+  if (dealAmount.value === null || dealAmount.value === '' || isNaN(value)) {
     return 'Deal amount is required';
-  if (dealAmount.value <= 0) return 'Deal amount must be greater than 0';
+  }
+
+  if (value <= 0) {
+    return 'Deal amount must be greater than 0';
+  }
+
+  if (value < 0.1) {
+    return 'Deal amount must be at least 0.1';
+  }
+
   return '';
 });
+
 const deadlineError = computed(() => {
   if (!deadlineTouched.value) return '';
   if (!deadline.value) return 'Please select a deadline';
   const deadlineDate = new Date(deadline.value);
   const sevenDaysFromNow = new Date();
-  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 6);
   if (deadlineDate < sevenDaysFromNow)
     return 'Deadline must be at least 7 days from now';
   return '';
@@ -854,6 +903,20 @@ const targetLanguagesError = computed(() => {
   return '';
 });
 
+const sourceLanguageError = computed(() => {
+  if (!sourceLanguageTouched.value) return '';
+  if (!selectedSourceLanguage.value) {
+    return 'Please select a source language';
+  }
+  const isValidLanguage = SUPPORTED_LANGUAGES.some(supportedLang => 
+    supportedLang.code === selectedSourceLanguage.value.code
+  );
+  if (!isValidLanguage) {
+    return 'Please select a valid source language';
+  }
+  return '';
+});
+
 const isFormValid = computed(() => {
   if (requestType.value === 'private') {
     return (
@@ -864,6 +927,7 @@ const isFormValid = computed(() => {
       !categoryError.value &&
       !assigneeError.value &&
       !targetLanguagesError.value &&
+      !sourceLanguageError.value &&
       uploadedFiles.value.length > 0 // Bắt buộc phải có file
     );
   } else {
@@ -874,6 +938,7 @@ const isFormValid = computed(() => {
       !deadlineError.value &&
       !categoryError.value &&
       !targetLanguagesError.value &&
+      !sourceLanguageError.value &&
       uploadedFiles.value.length > 0 // Bắt buộc phải có file
     );
   }
@@ -922,6 +987,7 @@ async function handleSubmit() {
   assigneeTouched.value = true;
   categoryTouched.value = true;
   targetLanguagesTouched.value = true;
+  sourceLanguageTouched.value = true;
 
   if (uploadedFiles.value.length === 0) {
     fileError.value = 'Please upload at least one file.';
@@ -1046,6 +1112,10 @@ async function handleSubmit() {
       formData.append('targetLanguages[]', lang.code);
     });
 
+    if (selectedSourceLanguage.value) {
+      formData.append('sourceLanguage', selectedSourceLanguage.value.code);
+    }
+
     // Debug: Log form data
     console.log('Selected target languages:', selectedTargetLanguages.value);
     console.log('Target languages codes:', selectedTargetLanguages.value.map(lang => lang.code));
@@ -1144,6 +1214,11 @@ function handleTagCreate(newTagName) {
 function validateTargetLanguages() {
   targetLanguagesTouched.value = true;
   return !targetLanguagesError.value;
+}
+
+function validateSourceLanguage() {
+  sourceLanguageTouched.value = true;
+  return !sourceLanguageError.value;
 }
 
 // File upload functions

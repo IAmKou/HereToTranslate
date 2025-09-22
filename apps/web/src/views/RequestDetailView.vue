@@ -135,9 +135,9 @@
                     Source Word Count
                   </span>
                   <span class="overview-value">
-                    <template v-if="request?.sourceWordCount">
+                    <template v-if="request?.totalWordCount">
                       <span class="word-count-badge">
-                        {{ formatWordCount(request.sourceWordCount) }} words
+                        {{ formatWordCount(request.totalWordCount) }} words
                       </span>
                     </template>
                     <template v-else>

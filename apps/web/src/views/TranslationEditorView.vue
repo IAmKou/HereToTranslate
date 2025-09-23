@@ -9,8 +9,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { getLanguageName } from '../utils/languages';
 import TranslationValidationDialog from '../components/TranslationValidationDialog.vue';
 import FilePreviewPanel from '../components/FilePreviewPanel.vue';
-import { QuillEditor } from '@vueup/vue-quill';
-import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
 interface TranslationString {
   id: string;
@@ -582,21 +580,14 @@ function handleKeydown(e: KeyboardEvent) {
   // Ctrl+S hoặc Cmd+S để save
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
-    const activeElement = document.activeElement as HTMLElement | null;
-    if (!activeElement) return;
-    let container: HTMLElement | null = null;
-    if (activeElement.classList.contains('translation-input')) {
-      container = activeElement;
-    } else if (activeElement.classList.contains('ql-editor')) {
-      container = activeElement.closest('[data-str-id]') as HTMLElement | null;
-    } else {
-      container = activeElement.closest('[data-str-id]') as HTMLElement | null;
-    }
-    const strId = container?.getAttribute('data-str-id');
-    if (strId) {
-      const str = translationStrings.value.find(s => s.id === strId);
-      if (str && str._dirty) {
-        saveTranslation(str);
+    const activeElement = document.activeElement;
+    if (activeElement && activeElement.classList.contains('translation-input')) {
+      const strId = activeElement.getAttribute('data-str-id');
+      if (strId) {
+        const str = translationStrings.value.find(s => s.id === strId);
+        if (str && str._dirty) {
+          saveTranslation(str);
+        }
       }
     }
   }
@@ -1539,31 +1530,19 @@ const focusedString = computed(() => {
                         <div class="translation-label">Translation:</div>
                         <div class="translation-input-container">
                           <div class="translation-input-wrapper">
-                            <div
-                              class="translation-input quill-wrapper"
-                              :class="{ 'input-focused': focusedInputId === str.id }"
-                              :data-str-id="str.id"
-                            >
-                              <QuillEditor
-                                v-model:content="str.translatedText"
-                                contentType="html"
-                                theme="snow"
-                                :readOnly="!canEditTranslation || isFileProcessing(file)"
-                                :placeholder="'Enter translation...'"
-                                :formats="['bold','italic','underline','strike','color','background','header','list','align','link']"
-                                :toolbar="[
-                                ['bold','italic','underline','strike'],
-                                [{ 'color': [] }, { 'background': [] }],
-                                [{ 'header': [1,2,3,4,5,6,false] }],
-                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                [{ 'align': [] }],
-                                ['link','clean']
-                              ]"
-                                @focus="() => handleInputFocus(str.id)"
-                                @blur="handleInputBlur"
-                                @update:content="() => onInput(str)"
-                              />
-                            </div>
+                          <textarea
+                            class="translation-input"
+                            :class="{ 'input-focused': focusedInputId === str.id }"
+                            v-model="str.translatedText"
+                            placeholder="Enter translation..."
+                            @input="e => { autoResize(e); onInput(str); }"
+                            rows="1"
+                            :ref="el => setTextareaRef(str.id, el as HTMLTextAreaElement | null)"
+                            :disabled="!canEditTranslation || isFileProcessing(file)"
+                            :data-str-id="str.id"
+                            @focus="handleInputFocus(str.id)"
+                            @blur="handleInputBlur"
+                          ></textarea>
                             <!-- Status indicator -->
                             <div class="status-indicator" v-if="str.translatedText && str.translatedText.trim()">
                               <div
@@ -1608,31 +1587,19 @@ const focusedString = computed(() => {
                       <div class="translation-label">Translation:</div>
                       <div class="translation-input-container">
                         <div class="translation-input-wrapper">
-                          <div
-                            class="translation-input quill-wrapper"
-                            :class="{ 'input-focused': focusedInputId === str.id }"
-                            :data-str-id="str.id"
-                          >
-                            <QuillEditor
-                              v-model:content="str.translatedText"
-                              contentType="html"
-                              theme="snow"
-                              :readOnly="!canEditTranslation || isFileProcessing(file)"
-                              :placeholder="'Enter translation...'"
-                              :formats="['bold','italic','underline','strike','color','background','header','list','align','link']"
-                              :toolbar="[
-                                ['bold','italic','underline','strike'],
-                                [{ 'color': [] }, { 'background': [] }],
-                                [{ 'header': [1,2,3,4,5,6,false] }],
-                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                [{ 'align': [] }],
-                                ['link','clean']
-                              ]"
-                              @focus="() => handleInputFocus(str.id)"
-                              @blur="handleInputBlur"
-                              @update:content="() => onInput(str)"
-                            />
-                          </div>
+                        <textarea
+                          class="translation-input"
+                          :class="{ 'input-focused': focusedInputId === str.id }"
+                          v-model="str.translatedText"
+                          placeholder="Enter translation..."
+                          @input="e => { autoResize(e); onInput(str); }"
+                          rows="1"
+                          :ref="el => setTextareaRef(str.id, el as HTMLTextAreaElement | null)"
+                          :disabled="!canEditTranslation || isFileProcessing(file)"
+                          :data-str-id="str.id"
+                          @focus="handleInputFocus(str.id)"
+                          @blur="handleInputBlur"
+                        ></textarea>
                           <!-- Status indicator -->
                           <div class="status-indicator" v-if="str.translatedText && str.translatedText.trim()">
                             <div
@@ -1927,7 +1894,7 @@ const focusedString = computed(() => {
   background: #1e293b;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
-  overflow: visible;
+  overflow: hidden;
   width: 100%;
 }
 
@@ -3781,62 +3748,5 @@ const focusedString = computed(() => {
 .page-item:hover .selection-hint {
   background: #f3f4f6 !important;
   border-color: #d1d5db !important;
-}
-/* Quill Editor - Dark theme override */
-.quill-wrapper {
-  background: #334155 !important;
-  color: #e2e8f0 !important;
-  border-radius: 6px;
-  border: 1px solid rgba(99, 102, 241, 0.3) !important;
-}
-
-.quill-wrapper .ql-toolbar.ql-snow {
-  background: #334155 !important;
-  border-color: rgba(99, 102, 241, 0.3) !important;
-  position: relative;
-  z-index: 20;
-}
-
-.quill-wrapper .ql-toolbar .ql-picker,
-.quill-wrapper .ql-toolbar button {
-  color: #e2e8f0 !important;
-}
-
-.quill-wrapper .ql-picker-options {
-  background: #1f2937 !important;
-  color: #e2e8f0 !important;
-  border: 1px solid rgba(99, 102, 241, 0.4) !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
-  z-index: 9999;
-}
-
-.quill-wrapper .ql-toolbar .ql-stroke {
-  stroke: #e2e8f0 !important;
-}
-
-.quill-wrapper .ql-toolbar .ql-fill {
-  fill: #e2e8f0 !important;
-}
-
-.quill-wrapper .ql-container.ql-snow {
-  background: #334155 !important;
-  color: #e2e8f0 !important;
-  border-color: rgba(99, 102, 241, 0.3) !important;
-  min-height: 80px;
-  position: relative;
-  z-index: 10;
-}
-
-.quill-wrapper .ql-editor {
-  color: #e2e8f0 !important;
-}
-
-/* Bảo đảm bold/italic/underline hiển thị rõ trong dark mode */
-.quill-wrapper .ql-editor strong { color: #f1f5f9 !important; font-weight: 700 !important; }
-.quill-wrapper .ql-editor em { color: #f1f5f9 !important; }
-.quill-wrapper .ql-editor u { text-decoration-color: #f1f5f9 !important; }
-
-.quill-wrapper .ql-editor::placeholder {
-  color: #94a3b8 !important;
 }
 </style>

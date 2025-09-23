@@ -566,26 +566,10 @@ export class TranslationService {
         );
 
         const translations = new Map<string, string>();
-        const sanitizeInlineHtml = (html: string): string => {
-          if (!html) return '';
-          let s = String(html);
-          s = s.replace(/<(\/?)\s*(b|strong|i|em|u)\b[^>]*>/gi, '<$1$2>');
-          s = s.replace(/<br\s*\/?\s*>/gi, '\n');
-          s = s.replace(/<\s*p\s*>/gi, '').replace(/<\s*\/p\s*>/gi, '\n');
-          s = s.replace(/<((?!b|strong|i|em|u)\/?)[^>]*>/gi, '');
-          s = s.replace(/\n{3,}/g, '\n\n');
-          return s;
-        };
         for (const e of entries) {
           if (e.translatedText && e.translatedText.trim().length > 0) {
-            // Add sanitized inline HTML (only b/i/u)
-            const sanitized = sanitizeInlineHtml(e.translatedText);
-            const plain = sanitized.replace(/<[^>]+>/g, '').trim();
-            if (plain.length === 0) {
-              // Skip empty after sanitize -> keep original text in file
-            } else {
-              translations.set(e.originalText, sanitized);
-            }
+            // Add the original text as-is
+            translations.set(e.originalText, e.translatedText);
 
             // Also try to find the text in the original DOCX by looking for partial matches
             // This helps when the backend has split text but the DOCX still has the original format

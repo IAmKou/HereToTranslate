@@ -91,27 +91,24 @@ const selectedRoleIds = ref<string[]>([]);
 
 const availablePermissions = [
   { value: 'ProjectAdmin', label: 'Project Admin', bit: 63n },
-  { value: 'ManageRoles', label: 'Manage Roles', bit: 60n },
   { value: 'ManageMembers', label: 'Manage Members', bit: 62n },
-  { value: 'ManageBranches', label: 'Manage Branches', bit: 61n },
-  { value: 'ManageGroups', label: 'Manage Groups', bit: 58n },
-  { value: 'ManageProjectMetadata', label: 'Manage Project Metadata', bit: 57n },
+  { value: 'ManageRoles', label: 'Manage Roles', bit: 60n },
   { value: 'ManageWorkspaces', label: 'Manage Workspaces', bit: 59n },
+  { value: 'ManageTasks', label: 'Manage Tasks', bit: 58n },
+  { value: 'ManageProjectMetadata', label: 'Manage Project Metadata', bit: 57n },
   { value: 'ManageDiscussions', label: 'Manage Discussions', bit: 56n },
   { value: 'ViewAudit', label: 'View Audit', bit: 55n },
-  { value: 'ReviewCommit', label: 'Review Commit', bit: 53n },
-  { value: 'PushCommit', label: 'Push Commit', bit: 52n },
-  { value: 'ReviewRequests', label: 'Review Requests', bit: 40n },
-  { value: 'ViewRequest', label: 'View Request', bit: 39n },
+  { value: 'ManageFiles' , label: 'Manage Files', bit: 54n },
+  { value: 'ViewFiles', label: 'View Files', bit: 41n },
   { value: 'ManageWorkspaceMetadata', label: 'Manage Workspace Metadata', bit: 27n },
   { value: 'ViewWorkspace', label: 'View Workspace', bit: 26n },
-  { value: 'ViewProject', label: 'View Project', bit: 25n },
+  { value: 'ManageTranslation', label: 'ManageTranslation', bit: 23n },
   { value: 'ManageComments', label: 'Manage Comments', bit: 15n },
   { value: 'PostComment', label: 'Post Comment', bit: 14n },
   { value: 'Vote', label: 'Vote', bit: 10n },
   { value: 'AttachFiles', label: 'Attach Files', bit: 9n },
   { value: 'ViewThread', label: 'View Thread', bit: 8n },
-  { value: 'ManageTranslation', label: 'ManageTranslation', bit: 23n },
+  { value: 'ViewProject', label: 'View Project', bit: 0n },
 ];
 
 function parsePermissionFlags(bitmask: string | number | bigint | undefined | any): string[] {
@@ -182,7 +179,7 @@ const fetchRoles = async () => {
     const projectRoles = Array.isArray(data) ? data.filter(role => {
       // Chỉ lấy role có isProjectRole = true hoặc role gốc có permissions
       // Và loại bỏ role Everyone
-      return role.name !== 'Everyone' && (
+      return role.name && (
         role.isProjectRole === true ||
         (role.permissionFlags && role.permissionFlags !== '0') ||
         (role.permissions && role.permissions.length > 0)
@@ -1132,11 +1129,12 @@ watch([currentMember, currentUserId, canManageRoles], () => {
         </tr>
         </thead>
         <tbody>
-        <tr v-for="role in roles.filter(r => r.name !== 'Everyone')" :key="role.id">
+        <tr v-for="role in roles" :key="role.id">
           <td>{{ role.name }}</td>
           <td>
             <div class="permissions-display">
-              <span v-if="!role.permissionFlags || parsePermissionFlags(role.permissionFlags).length === 0" class="no-permissions">
+              <span v-if="console.log('role.permissionFlags:', role.permissionFlags) || !role.permissionFlags || parsePermissionFlags(role.permissionFlags).length === 0" class="no-permissions">
+                
                 No permissions
               </span>
               <template v-else>

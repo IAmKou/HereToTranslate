@@ -24,7 +24,8 @@ export const PermissionFlags = {
   ViewProject: 1n,
   None: 0n,
   ManageTranslation: 1n << 23n,
-};
+  
+} as const; 
 
 export function parsePermissionFlags(bitmask: string | number | bigint | undefined | any): string[] {
   console.log('parsePermissionFlags input:', bitmask, typeof bitmask);
@@ -89,6 +90,16 @@ export function calculatePermissionFlags(permissions: string[]): bigint {
     }
     return acc;
   }, PermissionFlags.None);
+}
+
+export function resolveNames(value: bigint): string[] {
+  return (Object.keys(PermissionFlags))
+    .filter(key => {
+      const flag = PermissionFlags[key as keyof typeof PermissionFlags];
+      return (typeof flag === 'bigint')
+      && (value & flag) === flag
+    }
+    );
 }
 
 export function normalizePermission(p: string) {

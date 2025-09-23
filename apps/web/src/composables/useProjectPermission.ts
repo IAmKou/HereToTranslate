@@ -1,6 +1,7 @@
 import { computed, isRef } from 'vue';
 import { useAuthStore } from '../store/auth';
 import { PermissionFlags } from '../utils/permissions';
+import { resolveNames } from '../utils/permissions';
 
 /**
  * Helper composable để kiểm tra quyền của user hiện tại trong 1 project.
@@ -29,8 +30,9 @@ export function useProjectPermission(
   // Lấy tất cả quyền của user hiện tại (dạng Set)
   const allPerms = computed(() => {
     const set = new Set<string>();
-    (currentMember.value?.roles || []).forEach((r: { permissions?: string[] }) => {
-      (r.permissions || []).forEach((p: string) => set.add(p));
+    (currentMember.value?.roles || []).forEach((r: { permissionFlags?: string }) => {
+      const perms = resolveNames(BigInt(r.permissionFlags || '0'));
+      perms.forEach(p => set.add(p));
     });
     return set;
   });

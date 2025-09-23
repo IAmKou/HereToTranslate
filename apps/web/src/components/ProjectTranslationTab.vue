@@ -196,7 +196,7 @@ const { hasPermission } = useProjectPermission(
 );
 
 // Thêm computed để kiểm tra quyền mở editor
-const canOpenEditor = computed(() => hasPermission('EditTranslation') || hasPermission('ManageTranslation'));
+const canOpenEditor = computed(() => hasPermission('ManageTranslation'));
 
 watch([() => props.projectId], () => {
   loadFiles();

@@ -103,13 +103,13 @@ function getTotalParts(fileId: string | number) {
 
   // Lấy thông tin file để xác định loại file
   const file = files.value.find((f: any) => String(f.fileId || f.id) === String(fileId));
-  if (!file) return Math.ceil(uniqueStrings.length / DOCX_STRINGS_PER_PAGE);
+  if (!file) return Math.ceil(arr.length / DOCX_STRINGS_PER_PAGE);
 
   // Nếu là PDF, chia theo page gốc
   if (file.fileType === 'application/pdf') {
     // Đếm số page khác nhau trong strings dựa trên filePart
     const pages = new Set<number>();
-    uniqueStrings.forEach((str: any) => {
+    arr.forEach((str: any) => {
       const page = str.filePart !== undefined ? str.filePart + 1 : (str.position?.page || 1);
       pages.add(page);
     });
@@ -1299,7 +1299,7 @@ function parseEditorPages(content: string): string[] {
 // Computed để lấy thông tin string đang được focus
 const focusedString = computed(() => {
   if (!focusedInputId.value) return null;
-
+// debugger;
   // Tìm string trong tất cả files
   for (const fileId in stringsByFile.value) {
     const strings = stringsByFile.value[fileId];

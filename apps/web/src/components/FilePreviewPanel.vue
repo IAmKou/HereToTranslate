@@ -573,20 +573,6 @@ async function highlightTextInPdf() {
     console.log('PDF.js not available for direct highlighting');
   }
 
-  function clearDocxHighlights() {
-    if (!docxContainer.value) return;
-    const highlights = docxContainer.value.querySelectorAll('.docx-text-highlight');
-    highlights.forEach((highlight: Element) => {
-      const parent = highlight.parentNode;
-      if (parent) {
-        const textContent = highlight.textContent || '';
-        const textNode = document.createTextNode(textContent);
-        parent.replaceChild(textNode, highlight);
-      }
-    });
-    console.log('DOCX highlights cleared');
-  }
-
     console.log('Creating iframe overlay highlight for:', textToHighlight);
 
     const iframe = document.querySelector('.pdf-viewer') as HTMLIFrameElement;
@@ -641,12 +627,21 @@ async function highlightTextInPdf() {
   const textToHighlight = props.focusedString.originalText;
   const orderIndex = props.focusedString.orderIndex || 0;
 
+  // Ensure DOCX container exists and content is rendered before searching
   if (!docxContainer.value) {
     await nextTick();
-    if (!docxContainer.value) {
-      console.log('DOCX container still not available');
-      return;
-    }
+  }
+  if (!docxContainer.value) {
+    console.log('DOCX container still not available');
+    return;
+  }
+
+  // Wait until docx content has been rendered (avoid race conditions)
+  let renderAttempts = 0;
+  while (!docxRendered.value && renderAttempts < 20) {
+    renderAttempts++;
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (currentSeq !== docxHighlightSeq.value) return; // abort if outdated
   }
 
   try {
@@ -665,6 +660,11 @@ async function highlightTextInPdf() {
       }
     }
 
+    if (textNodes.length === 0) {
+      console.log('DOCX text nodes not ready yet');
+      return;
+    }
+
     // Build concatenated string
     let fullText = '';
     const nodeStartIndexes: number[] = [];
@@ -673,13 +673,127 @@ async function highlightTextInPdf() {
       fullText += tn.textContent || '';
     });
 
-    // Find the match
-    const matchIndex = fullText.toLowerCase().indexOf(textToHighlight.toLowerCase());
-    if (matchIndex === -1) {
-      console.log('No matching text found in DOCX content');
-      return;
+    // Normalization helpers (without losing original index mapping)
+    const isZeroWidth = (ch: string) => /[\u200B-\u200D\uFEFF]/.test(ch);
+    const isSoftHyphen = (ch: string) => ch === '\u00AD';
+    const isWhitespace = (ch: string) => /[\s\u00A0]/.test(ch);
+    const mapChar = (ch: string): string => {
+      if (ch === '\u00A0') return ' ';
+      if (isZeroWidth(ch) || isSoftHyphen(ch)) return '';
+      if (ch === '\u2018' || ch === '\u2019') return "'";
+      if (ch === '\u201C' || ch === '\u201D') return '"';
+      if (ch === '\u2013' || ch === '\u2014') return '-';
+      return ch;
+    };
+    const normalizeNeedle = (s: string) => s
+      .replace(/\u00A0/g, ' ')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/\u00AD/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\u2026/g, '...')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    const needleNorm = normalizeNeedle(textToHighlight);
+
+    function findNormalizedIndex(hay: string, needle: string): { start: number; end: number } | null {
+      let i = 0; // index in hay (original)
+      let j = 0; // index in needle (normalized)
+      let start = -1;
+      while (i < hay.length) {
+        // Skip and map hay char
+        let ch = hay[i];
+        if (isZeroWidth(ch) || isSoftHyphen(ch)) {
+          i++;
+          continue;
+        }
+
+        // Collapse whitespace in hay to single space token
+        if (isWhitespace(ch)) {
+          while (i < hay.length && isWhitespace(hay[i])) i++;
+          const expected = ' ';
+          if (j === 0) {
+            // leading whitespace shouldn't start a match
+            continue;
+          }
+          if (needle[j] === expected) {
+            if (start === -1) start = i; // approximate start after spaces
+            j++;
+            if (j === needle.length) {
+              return { start: start === -1 ? i : start, end: i };
+            }
+            continue;
+          } else if (needle[j] !== expected) {
+            // If needle expects non-space, reset match
+            j = 0;
+            start = -1;
+            continue;
+          }
+        }
+
+        // Handle ellipsis in hay as '...'
+        if (ch === '\u2026') {
+          if (needle.slice(j, j + 3) === '...') {
+            if (start === -1) start = i;
+            j += 3;
+            i += 1;
+            if (j === needle.length) return { start, end: i };
+            continue;
+          } else {
+            // mismatch, reset
+            j = 0;
+            start = -1;
+            i++;
+            continue;
+          }
+        }
+
+        const mapped = mapChar(ch).toLowerCase();
+        const expected = needle[j];
+
+        if (mapped === expected) {
+          if (start === -1) start = i;
+          i++;
+          j++;
+          if (j === needle.length) return { start, end: i };
+        } else {
+          // mismatch -> restart matching from next position
+          if (start !== -1) {
+            // rewind to start+1
+            i = start + 1;
+          } else {
+            i++;
+          }
+          j = 0;
+          start = -1;
+        }
+      }
+      return null;
     }
-    const matchEnd = matchIndex + textToHighlight.length;
+
+    let result = findNormalizedIndex(fullText, needleNorm);
+    if (!result) {
+      // Fallback: try longest contiguous word slice from the needle
+      const words = needleNorm.split(' ').filter(Boolean);
+      let best: { start: number; end: number } | null = null;
+      for (let len = Math.min(6, words.length); len >= 3 && !best; len--) {
+        for (let startIdx = 0; startIdx + len <= words.length; startIdx++) {
+          const sub = words.slice(startIdx, startIdx + len).join(' ');
+          const r = findNormalizedIndex(fullText, sub);
+          if (r) { best = r; break; }
+        }
+      }
+      if (!best) {
+        console.log('No matching text found in DOCX content');
+        return;
+      }
+      result = best;
+    }
+    const matchIndex = result.start;
+    const matchEnd = result.end;
 
     // Locate start & end nodes
     let startNode: Text | null = null;

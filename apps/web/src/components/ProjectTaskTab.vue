@@ -167,12 +167,12 @@ const orderedStatuses = computed(() => {
   const filtered = merged.filter((id) => valid.has(id));
   // Keep state in sync - move this outside computed
   nextTick(() => {
-  if (
-    filtered.length !== statusOrder.value.length ||
-    filtered.some((id, idx) => id !== statusOrder.value[idx])
-  ) {
-    statusOrder.value = filtered;
-  }
+    if (
+      filtered.length !== statusOrder.value.length ||
+      filtered.some((id, idx) => id !== statusOrder.value[idx])
+    ) {
+      statusOrder.value = filtered;
+    }
   });
 
   const indexOf = (id: string) => filtered.indexOf(id);
@@ -629,13 +629,13 @@ function getStatusDisplayName(status: any): string {
 function getStatusIdFromName(statusName: string): string | null {
   // Create a mapping from common status names to their likely IDs
   const statusMapping: { [key: string]: string } = {
-    'open': '1',
-    'todo': '1', 
-    'in_progress': '2',
-    'done': '3',
-    'overdue': '4',
-    'closed': '5',
-    'cancelled': '6'
+    open: '1',
+    todo: '1',
+    in_progress: '2',
+    done: '3',
+    overdue: '4',
+    closed: '5',
+    cancelled: '6',
   };
 
   // First try direct mapping
@@ -644,11 +644,12 @@ function getStatusIdFromName(statusName: string): string | null {
   }
 
   // Then try to find by name in availableStatuses
-  const statusObj = availableStatuses.value.find((s: any) => 
-    s.name?.toLowerCase().replace(/\s+/g, '_') === statusName.toLowerCase() ||
-    s.name?.toLowerCase() === statusName.toLowerCase()
+  const statusObj = availableStatuses.value.find(
+    (s: any) =>
+      s.name?.toLowerCase().replace(/\s+/g, '_') === statusName.toLowerCase() ||
+      s.name?.toLowerCase() === statusName.toLowerCase()
   );
-  
+
   return statusObj?.id || null;
 }
 
@@ -881,7 +882,7 @@ function truncateFileName(fileName: string, maxLength: number = 30): string {
   const name = fileName.substring(0, lastDotIndex);
   const extension = fileName.substring(lastDotIndex);
 
-  const maxNameLength = maxLength - extension.length - 3; 
+  const maxNameLength = maxLength - extension.length - 3;
 
   if (name.length <= maxNameLength) {
     return fileName;
@@ -892,13 +893,19 @@ function truncateFileName(fileName: string, maxLength: number = 30): string {
 
 function handleTaskCreated(task: Task) {
   console.log('ProjectTaskTab: Task created:', task);
-  console.log('ProjectTaskTab: Current tasks array length before adding:', tasks.value.length);
+  console.log(
+    'ProjectTaskTab: Current tasks array length before adding:',
+    tasks.value.length
+  );
   console.log('ProjectTaskTab: Current tasks array:', tasks.value);
-  
+
   // Add new task to local array
   tasks.value.unshift(task);
-  
-  console.log('ProjectTaskTab: Tasks array length after adding:', tasks.value.length);
+
+  console.log(
+    'ProjectTaskTab: Tasks array length after adding:',
+    tasks.value.length
+  );
   console.log('ProjectTaskTab: Updated tasks array:', tasks.value);
 
   // Only close form after the last task is added
@@ -1117,6 +1124,22 @@ const selectedTaskTruncatedFileName = computed(() => {
   return truncateFileName(getFileName(selectedTask.value.fileId));
 });
 
+function getStringNumberFromFilePartForFile(filePart: number, fileId: string): number {
+  const parts = filePagesData.value.get(fileId);
+  if (!parts || !Array.isArray(parts)) return 0;
+  const index = parts.findIndex((p: any) => (typeof p === 'number' ? p : p?.filePart) === filePart);
+  return index >= 0 ? index + 1 : 0;
+}
+
+function formatSelectedStringsRange(pages: number[], fileId: string): string {
+  if (!pages || pages.length === 0) return '';
+  const minPart = Math.min(...pages);
+  const maxPart = Math.max(...pages);
+  const startNum = getStringNumberFromFilePartForFile(minPart, fileId);
+  const endNum = getStringNumberFromFilePartForFile(maxPart, fileId);
+  return `Strings ${startNum} - ${endNum}`;
+}
+
 // Computed property để lấy string count an toàn
 const selectedTaskStringCount = computed(() => {
   if (!selectedTask.value?.fileId || !filePagesData.value) return '-';
@@ -1144,8 +1167,13 @@ async function loadFilePagesData(fileId: string) {
   }
 
   try {
-    const strings = await taskService.getFileStrings(props.projectId || '', fileId);
-    const pages = [...new Set(strings.map(s => s.filePart))].sort((a, b) => a - b);
+    const strings = await taskService.getFileStrings(
+      props.projectId || '',
+      fileId
+    );
+    const pages = [...new Set(strings.map((s) => s.filePart))].sort(
+      (a, b) => a - b
+    );
     filePagesData.value.set(fileId, pages);
     return pages;
   } catch (err) {
@@ -1370,6 +1398,7 @@ function handleDragEnd(event: DragEvent) {
       void moveTaskToColumn(draggedTask.value, targetId, 0);
     }
   }
+  const task = draggedTask.value;
 
   isDragging.value = false;
   draggedTask.value = null;
@@ -1384,11 +1413,9 @@ function handleDragEnd(event: DragEvent) {
   }
 
   console.log('🏁 Drag ended');
-
-  // Cleanup caches for current task
-  if (draggedTask.value) {
-    delete allowedToStatusByTask.value[draggedTask.value.id];
-    delete allowedLoadedByTask.value[draggedTask.value.id];
+  if (task) {
+    delete allowedToStatusByTask.value[task.id];
+    delete allowedLoadedByTask.value[task.id];
   }
 }
 
@@ -1510,13 +1537,13 @@ async function moveTaskToColumn(
   // Update the task in the local array immediately
   const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
   if (taskIndex !== -1) {
-    tasks.value[taskIndex] = optimisticTask;
+    tasks.value[taskIndex] = optimisticTask as Task;
     console.log('✅ Task updated optimistically in local array');
   }
 
   // Update selectedTask if it's the same task
   if (selectedTask.value?.id === task.id) {
-    selectedTask.value = optimisticTask;
+    selectedTask.value = optimisticTask as Task;
     console.log('✅ Selected task updated optimistically');
   }
 
@@ -1596,20 +1623,22 @@ function getDropIndex(event: DragEvent, targetStatusId: string): number {
 
 // Function để đóng modal xóa task
 function closeDeleteModal() {
+  const task = taskToDelete.value; 
+
   showDeleteModal.value = false;
   taskToDelete.value = null;
   isDeleting.value = false;
-  // Remove body class when modal closes
   document.body.classList.remove('modal-open');
 
   // Close task detail view if it's the same task
-  if (taskToDelete.value && selectedTask.value?.id === taskToDelete.value.id) {
+  const delId = task?.id;
+  if (delId && selectedTask.value?.id === delId) {
     selectedTask.value = null;
   }
 
-  // Close task action menu
   closeTaskActionMenu();
 }
+
 
 // Function để mở task action menu
 function openTaskActionMenu(event: MouseEvent, task: Task) {
@@ -1660,7 +1689,7 @@ function editTask() {
 
   console.log('📋 Edit data prepared:', editData);
 
-  editTaskInlineData.value = editData;
+  editTaskInlineData.value = editData as any;
   showEditTaskInline.value = true;
 
   console.log('✅ Edit form state set:', {
@@ -2142,18 +2171,17 @@ function isDateInRange(date: Date): boolean {
 }
 
 function isDateStart(date: Date): boolean {
-  return (
-    selectedDateRange.value.startDate &&
-    date.getTime() === selectedDateRange.value.startDate.getTime()
-  );
+  const start = selectedDateRange.value.startDate;
+  return !!start && date.getTime() === start.getTime();
 }
 
+
 function isDateEnd(date: Date): boolean {
-  return (
-    selectedDateRange.value.endDate &&
-    date.getTime() === selectedDateRange.value.endDate.getTime()
-  );
+  const end = selectedDateRange.value.endDate;
+  return !!end && date.getTime() === end.getTime();
 }
+
+
 
 function navigateMonth(direction: 'prev' | 'next') {
   if (direction === 'prev') {
@@ -2277,6 +2305,7 @@ onMounted(() => {
 
   // Add keyboard event listener for close task modal
   document.addEventListener('keydown', handleKeydown);
+  let progressIntervalId: ReturnType<typeof setInterval>;
 
   // Auto-refresh progress every 30 seconds when a task is selected
   progressIntervalId = setInterval(() => {
@@ -3194,7 +3223,7 @@ async function addComment() {
     taskComments.value.unshift({
       ...newComment,
       isEditing: false,
-      editContent: newComment.content,
+      content: newComment.content,
     });
 
     // Update task comment count (we'll need to implement this separately)
@@ -3335,7 +3364,7 @@ async function loadAllTaskCommentCounts() {
             taskComments.value.push({
               ...comment,
               isEditing: false,
-              editContent: comment.content,
+              content: comment.content,
             });
           }
         });
@@ -3402,7 +3431,7 @@ function setupRealtimeCommentListeners() {
       taskComments.value.unshift({
         ...event.comment,
         isEditing: false,
-        editContent: event.comment.content,
+        content: event.comment.content,
       });
 
       // Update task comment count (we'll need to implement this separately)
@@ -3434,7 +3463,7 @@ function setupRealtimeCommentListeners() {
         taskComments.value[commentIndex] = {
           ...event.comment,
           isEditing: false,
-          editContent: event.comment.content,
+          content: event.comment.content,
         };
       }
 
@@ -3571,40 +3600,30 @@ function setupRealtimeCommentListeners() {
               <div class="file-name-container" :title="selectedTaskFileName">
                 File: <b>{{ selectedTaskTruncatedFileName }}</b>
               </div>
-              <div v-if="selectedTask.pages && selectedTask.pages.length === 1">
-                Page: <b>Page {{ selectedTask.pages[0] + 1 }}</b> ({{
-                  getPageInfo(selectedTask.pages[0])?.totalStrings ||
-                  'Loading...'
-                }}
-                strings)
-                <!-- Debug info: currentPageInfo = {{ JSON.stringify(currentPageInfo) }}, selectedTask.pages = {{ selectedTask.pages }} -->
+              <div v-if="selectedTask.selectedStrings && selectedTask.selectedStrings.length === 1">
+                Strings:
+                <b>{{ formatSelectedStringsRange(selectedTask.selectedStrings, selectedTask.fileId!) }}</b>
+                ({{ getPageInfo(selectedTask.selectedStrings[0])?.totalStrings || 'Loading...' }} strings)
               </div>
               <div
-                v-else-if="(selectedTask as any).selectedPages && (selectedTask as any).selectedPages.length > 0"
+                v-else-if="(selectedTask as any).selectedStrings && (selectedTask as any).selectedStrings.length > 0"
               >
-                Pages:
-                <b>{{
-                  formatSelectedPages((selectedTask as any).selectedPages)
-                }}</b>
+                Strings:
+                <b>{{ formatSelectedStringsRange((selectedTask as any).selectedStrings, selectedTask.fileId!) }}</b>
                 ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
-                <!-- Debug: pages={{ JSON.stringify(selectedTask.pages) }} -->
               </div>
               <div
-                v-else-if="selectedTask.pages && selectedTask.pages.length > 0"
+                v-else-if="selectedTask.selectedStrings && selectedTask.selectedStrings.length > 0"
               >
-                Pages: <b>{{ formatSelectedPages(selectedTask.pages) }}</b> ({{
-                  currentPageInfo?.stringCount || 'Loading...'
-                }}
-                strings)
+                Strings:
+                <b>{{ formatSelectedStringsRange(selectedTask.selectedStrings, selectedTask.fileId!) }}</b>
+                ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
               </div>
               <div v-else-if="selectedTask.fileId">
-                Pages: <b>All pages</b> ({{
-                  currentPageInfo?.stringCount || 'Loading...'
-                }}
-                strings)
-                <!-- Debug: fileId={{ selectedTask.fileId }}, currentPageInfo={{ JSON.stringify(currentPageInfo) }} -->
+                Strings: <b>All</b>
+                ({{ currentPageInfo?.stringCount || 'Loading...' }} strings)
               </div>
-              <div v-else>Pages: <b>No file assigned</b></div>
+              <div v-else>Strings: <b>No file assigned</b></div>
             </div>
             <div v-else>
               <div>Files: <b>0</b></div>
@@ -5624,7 +5643,7 @@ function setupRealtimeCommentListeners() {
                   >
                     <span class="status-dot" :style="{ background: s.color }" />
                     <span class="status-name">{{ s.name }}</span>
-             
+
                     <i
                       v-if="reopenTargetStatusId === s.id"
                       class="pi pi-check selected-icon"

@@ -9,7 +9,8 @@ export interface Task {
   fileId?: string;
   originalText?: string;
   translatedText?: string;
-  pages?: number[]; // Array of selected pages for multiple page selection
+  selectedStrings?: number[]; // Backend expects selectedStrings (filePart ids)
+  totalStrings?: number;
   language?: string;
   assignedTo?: {
     id: string;
@@ -47,6 +48,7 @@ export interface Comment {
   id: string;
   content: string;
   taskId: string;
+  isEditing: boolean;
   author: {
     id: string;
     username: string;
@@ -68,7 +70,7 @@ export interface CreateTaskDto {
   dueDate?: string;
   dueDateTime?: string;
   fileId?: string;
-  pages?: number[]; // Array of selected pages for multiple page selection
+  selectedStrings?: number[]; // Backend expects selectedStrings (filePart ids)
   originalText?: string;
   translatedText?: string;
   language?: string;
@@ -356,18 +358,12 @@ export const taskService = {
 
       const strings = Array.isArray(data) ? data : [];
 
-      // Lọc strings theo page nếu có
+      // Filter strings by selected fileParts (selectedStrings) if present
       let filteredStrings = strings;
-
-      // Check for multiple pages first
-      if (task.pages && Array.isArray(task.pages) && task.pages.length > 0) {
+      if (Array.isArray(task.selectedStrings) && task.selectedStrings.length > 0) {
         filteredStrings = strings.filter((str: any) =>
-          task.pages!.includes(str.filePart)
+          task.selectedStrings!.includes(str.filePart)
         );
-      }
-      // Check for single page
-      else if (task.pages && task.pages.length > 0) {
-        filteredStrings = strings.filter((str: any) => task.pages!.includes(str.filePart));
       }
 
       const total = filteredStrings.length;

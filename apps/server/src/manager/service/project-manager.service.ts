@@ -572,6 +572,17 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     await queryRunner.startTransaction();
 
     try {
+      // Prevent deletion if there are files linked to a request
+      const rows = await queryRunner.manager.query(
+        'SELECT COUNT(1) AS cnt FROM `file` WHERE `projectId` = ? AND `requestId` IS NOT NULL',
+        [projectId]
+      );
+      const cnt = Number(rows?.[0]?.cnt || 0);
+      if (cnt > 0) {
+        this.logger.debug(`Project [${projectId}] cannot be deleted: ${cnt} file(s) are linked to request(s).`);
+        throw new BadRequestException('Cannot delete project because some files are linked to a request');
+      }
+
       // Use a more robust approach with error handling for each step
       const deletionSteps = [
         // 1. Delete project invitations
@@ -1249,12 +1260,9 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
         this.logger.log(`Added user ${newOwner.email} as project member before ownership transfer`);
       }
 
-      // Transfer ownership
-      await queryRunner.manager.update(
-        ProjectEntity,
-        { id: projectId },
-        { createdBy: newOwner }
-      );
+      // Transfer ownership (assign relation and save to satisfy typings)
+      project.createdBy = newOwner;
+      await queryRunner.manager.save(ProjectEntity, project);
 
       // Find all project roles
       const projectRoles = await queryRunner.manager.find(ProjectRoleEntity, {

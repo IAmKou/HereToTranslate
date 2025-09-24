@@ -324,23 +324,34 @@ export class TaskManagerService {
     toStatus: TaskStatusEntity,
     user: UserEntity
   ) {
-    // Get the default workflow for the project
-    const defaultWorkflow = await this.workflowRepository.findOne({
-      where: {
-        project: { id: BigInt(task.projectId || '0') },
-        isDefault: true,
-        isActive: true,
-      },
-    });
+    // Resolve workflow to validate against: prefer task-specific, fallback to the project's default
+    const workflowIdToUse = task.workflow?.id
+      ? task.workflow.id
+      : (await this.workflowRepository.findOne({
+          where: {
+            project: { id: BigInt(task.projectId || '0') },
+            isDefault: true,
+            isActive: true,
+          },
+        }))?.id;
 
-    if (!defaultWorkflow) {
+    if (!workflowIdToUse) {
       throw new BadRequestException('No default workflow found for this project');
     }
 
-    // Find valid transition from the default workflow only
+    console.log('[TRANSITION_VALIDATE]', {
+      taskId: task.id?.toString?.(),
+      projectId: task.projectId,
+      currentStatusId: task.status?.id?.toString?.(),
+      toStatusId: toStatus?.id?.toString?.(),
+      taskWorkflowId: task.workflow?.id?.toString?.(),
+      workflowIdToUse: workflowIdToUse?.toString?.(),
+    });
+
+    // Find valid transition from the selected workflow only
     const transition = await this.transitionRepository.findOne({
       where: {
-        workflow: { id: defaultWorkflow.id },
+        workflow: { id: workflowIdToUse },
         fromStatus: { id: task.status.id },
         toStatus: { id: toStatus.id },
         isActive: true,
@@ -349,6 +360,11 @@ export class TaskManagerService {
     });
 
     if (!transition) {
+      console.warn('[TRANSITION_VALIDATE] No matching transition found', {
+        fromStatusId: task.status?.id?.toString?.(),
+        toStatusId: toStatus?.id?.toString?.(),
+        workflowIdToUse: workflowIdToUse?.toString?.(),
+      });
       throw new BadRequestException(
         `Transition from "${task.status.name}" to "${toStatus.name}" is not allowed in the default workflow`
       );

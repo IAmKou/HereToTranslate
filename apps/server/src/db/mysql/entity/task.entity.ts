@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ProjectGroupEntity } from './project-group.entity';
 import { TaskStatusEntity } from './task-status.entity';
@@ -6,6 +6,7 @@ import { WorkflowEntity } from './workflow.entity';
 import { TaskAssignmentEntity } from './task-assignment.entity';
 import { TaskStatusHistoryEntity } from './task-status-history.entity';
 import { SubtaskEntity } from './subtask.entity';
+import type { FileEntity } from './file.entity';
 
 @Entity('task')
 export class TaskEntity {
@@ -27,8 +28,14 @@ export class TaskEntity {
   @Column({ type: 'varchar', nullable: true })
   projectId?: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  // Foreign key column referencing FileEntity.id
+  @Column({ name: 'fileId', type: 'bigint', unsigned: true, nullable: true })
   fileId?: string;
+
+  // Relation to FileEntity; delete task when file is deleted
+  @ManyToOne(() => require('./file.entity').FileEntity, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'fileId' })
+  file?: FileEntity;
 
   @Column({ type: 'varchar', length: 10, nullable: true })
   language?: string;

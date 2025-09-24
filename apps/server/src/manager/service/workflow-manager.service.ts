@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { WorkflowEntity,TransitionConditionType, WorkflowTransitionEntity, TaskStatusEntity, ProjectEntity} from '#LocalProject/Entities';
+import { WorkflowEntity,TransitionConditionType, WorkflowTransitionEntity, TaskStatusEntity, ProjectEntity, TaskEntity} from '#LocalProject/Entities';
 import { CreateWorkflowDto, UpdateWorkflowDto, CreateTransitionDto , UpdateTransitionDto} from '#LocalProject/Dtos';
 
 @Injectable()
@@ -104,42 +104,45 @@ export class WorkflowManagerService {
   }
 
   async getAvailableTransitionsForTask(taskId: string) {
-    // First, get the task with its status and project
-    const task = await this.workflowRepository.manager
-      .createQueryBuilder()
-      .select(['task.id', 'task.statusId', 'task.projectId'])
-      .from('task', 'task')
-      .where('task.id = :taskId', { taskId })
-      .getOne();
+    // Load the task via the repository to leverage proper column mappings
+    const task = await this.workflowRepository.manager.getRepository(TaskEntity).findOne({
+      where: { id: BigInt(taskId) as any },
+      relations: ['status', 'workflow'],
+      select: {
+        id: true,
+        // projectId is a simple column on TaskEntity
+        // status and workflow are relations from which we only need ids
+        projectId: true,
+        status: { id: true } as any,
+        workflow: { id: true } as any,
+      } as any,
+    } as any);
 
     if (!task) {
       throw new NotFoundException('Task not found');
     }
 
-    // Normalize raw fields that may vary depending on driver/aliases
-    const projectIdRaw: unknown = (task as any).projectId ?? (task as any)['task_projectId'];
-    const statusIdRaw: unknown = (task as any).statusId ?? (task as any)['task_statusId'];
+    const projectId = (task as any).projectId as string | undefined;
+    const statusId = (task as any).status?.id as bigint | undefined;
+    const taskWorkflowId = (task as any).workflow?.id as bigint | undefined;
 
-    // Validate IDs before converting to BigInt to avoid undefined → BigInt errors
-    if (projectIdRaw === undefined || projectIdRaw === null || projectIdRaw === '') {
+    if (!projectId) {
       throw new BadRequestException('Task is missing projectId');
     }
-    if (statusIdRaw === undefined || statusIdRaw === null || statusIdRaw === '') {
+    if (!statusId) {
       throw new BadRequestException('Task is missing statusId');
     }
 
-    const projectIdBig = BigInt(String(projectIdRaw));
-    const statusIdBig = BigInt(String(statusIdRaw));
+    // Prefer the task-specific workflow if set, otherwise fall back to the project's default workflow
+    const workflowIdToUse = taskWorkflowId
+      ? taskWorkflowId
+      : (await this.getDefaultWorkflow(projectId)).id;
 
-    // Get the default workflow for the project
-    const defaultWorkflow = await this.getDefaultWorkflow(projectIdBig.toString());
-
-    // Get transitions from the default workflow only
     return await this.transitionRepository.find({
       where: {
-        workflow: { id: defaultWorkflow.id },
-        fromStatus: { id: statusIdBig },
-        isActive: true
+        workflow: { id: workflowIdToUse },
+        fromStatus: { id: statusId },
+        isActive: true,
       },
       relations: ['toStatus'],
       order: { createdAt: 'ASC' },

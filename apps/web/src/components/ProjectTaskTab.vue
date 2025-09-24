@@ -627,8 +627,25 @@ function getStatusDisplayName(status: any): string {
 
 // Function to map string status to status ID
 function getStatusIdFromName(statusName: string): string | null {
-  // Create a mapping from common status names to their likely IDs
-  const statusMapping: { [key: string]: string } = {
+  if (!statusName) return null;
+
+  const normalize = (v: unknown) => String(v || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '_');
+
+  const target = normalize(statusName);
+
+  // Prefer dynamic statuses: match by name or type
+  const statusObj = availableStatuses.value.find((s: any) => {
+    const nameNorm = normalize(s?.name);
+    const typeNorm = normalize(s?.type);
+    return nameNorm === target || typeNorm === target;
+  });
+  if (statusObj) return statusObj.id;
+
+  // Fallback legacy mapping only if not found dynamically
+  const legacyMap: Record<string, string> = {
     open: '1',
     todo: '1',
     in_progress: '2',
@@ -637,20 +654,7 @@ function getStatusIdFromName(statusName: string): string | null {
     closed: '5',
     cancelled: '6',
   };
-
-  // First try direct mapping
-  if (statusMapping[statusName]) {
-    return statusMapping[statusName];
-  }
-
-  // Then try to find by name in availableStatuses
-  const statusObj = availableStatuses.value.find(
-    (s: any) =>
-      s.name?.toLowerCase().replace(/\s+/g, '_') === statusName.toLowerCase() ||
-      s.name?.toLowerCase() === statusName.toLowerCase()
-  );
-
-  return statusObj?.id || null;
+  return legacyMap[target] || null;
 }
 
 // Function to get tasks by status
@@ -671,32 +675,35 @@ function getTasksByStatus(statusId: string): Task[] {
       return false;
     }
 
-    let taskStatusId: string;
+    // Prefer normalized statusId when available
+    let taskStatusId: string = (task as any).statusId || '';
 
-    // Handle both string and object status
-    if (typeof task.status === 'string') {
-      // Map string status to status ID
-      const mappedId = getStatusIdFromName(task.status);
-      taskStatusId = mappedId || task.status;
-      console.log(
-        `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has string status: "${task.status}" -> mapped to ID: "${taskStatusId}"`
-      );
-    } else if (typeof task.status === 'object' && task.status !== null) {
-      // If status is an object, try to get the id or type
-      taskStatusId = (task.status as any).id || (task.status as any).type || '';
-      console.log(
-        `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has object status:`,
-        task.status,
-        '-> extracted ID:',
-        taskStatusId
-      );
-    } else {
-      console.log(
-        `❌ [GET_TASKS_BY_STATUS] Task ${task.id} has invalid status type:`,
-        typeof task.status,
-        task.status
-      );
-      return false;
+    if (!taskStatusId) {
+      // Handle both string and object status
+      if (typeof task.status === 'string') {
+        // Map string status to status ID
+        const mappedId = getStatusIdFromName(task.status);
+        taskStatusId = mappedId || task.status;
+        console.log(
+          `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has string status: "${task.status}" -> mapped to ID: "${taskStatusId}"`
+        );
+      } else if (typeof task.status === 'object' && task.status !== null) {
+        // If status is an object, try to get the id or type
+        taskStatusId = (task.status as any).id || (task.status as any).type || '';
+        console.log(
+          `🔍 [GET_TASKS_BY_STATUS] Task ${task.id} has object status:`,
+          task.status,
+          '-> extracted ID:',
+          taskStatusId
+        );
+      } else {
+        console.log(
+          `❌ [GET_TASKS_BY_STATUS] Task ${task.id} has invalid status type:`,
+          typeof task.status,
+          task.status
+        );
+        return false;
+      }
     }
 
     if (!taskStatusId) {
@@ -766,7 +773,6 @@ function hasClosedTypeStatus(): boolean {
     (s: any) => s.type && String(s.type).toLowerCase() === 'closed'
   );
 }
-
 // Function để format time only
 function formatTimeOnly(dateString: string): string {
   if (!dateString) return '';
@@ -1081,18 +1087,20 @@ const tasksByLanguageAndStatus = computed(() => {
         result[lang][status.id] = [];
       }
     }
-    if (task.status) {
-      let statusId: string = '';
+    // Prefer normalized statusId when available
+    const statusIdFromTask = (task as any).statusId as string | undefined;
+    let statusId: string = statusIdFromTask || '';
 
+    if (!statusId && task.status) {
       if (typeof task.status === 'string') {
-        statusId = task.status;
+        statusId = getStatusIdFromName(task.status) || task.status;
       } else if (typeof task.status === 'object' && task.status !== null) {
         statusId = (task.status as any).id || (task.status as any).type || '';
       }
+    }
 
-      if (statusId && result[lang][statusId]) {
-        result[lang][statusId].push(task);
-      }
+    if (statusId && result[lang][statusId]) {
+      result[lang][statusId].push(task);
     }
   }
   return result;
@@ -1127,12 +1135,49 @@ const selectedTaskTruncatedFileName = computed(() => {
 function getStringNumberFromFilePartForFile(filePart: number, fileId: string): number {
   const parts = filePagesData.value.get(fileId);
   if (!parts || !Array.isArray(parts)) return 0;
-  const index = parts.findIndex((p: any) => (typeof p === 'number' ? p : p?.filePart) === filePart);
-  return index >= 0 ? index + 1 : 0;
+  const t = Number(filePart);
+  const index = parts.findIndex((p: any) => {
+    const part = Number(p?.part ?? p?.filePart ?? p);
+    const pageNumber = Number(p?.pageNumber ?? part);
+    return (
+      part === t || pageNumber === t || part + 1 === t || pageNumber + 1 === t || part === t + 1 || pageNumber === t + 1
+    );
+  });
+  if (index >= 0) {
+    const info = parts[index] as any;
+    const minOrderIndex = Number(info?.minOrderIndex);
+    if (!Number.isNaN(minOrderIndex)) return minOrderIndex + 1;
+    return index + 1;
+  }
+  // If not found, fall back to 1-based index from provided part
+  return t + 1;
 }
 
 function formatSelectedStringsRange(pages: number[], fileId: string): string {
   if (!pages || pages.length === 0) return '';
+  const partInfos = filePagesData.value.get(fileId) || [];
+  let startOrder = Infinity;
+  let endOrder = -Infinity;
+  for (const partVal of pages) {
+    const t = Number(partVal);
+    const info = (partInfos as any[]).find((p: any) => {
+      const part = Number(p?.part ?? p?.filePart ?? p);
+      const pageNumber = Number(p?.pageNumber ?? part);
+      return (
+        part === t || pageNumber === t || part + 1 === t || pageNumber + 1 === t || part === t + 1 || pageNumber === t + 1
+      );
+    });
+    if (info) {
+      const minIdx = Number((info as any).minOrderIndex);
+      const maxIdx = Number((info as any).maxOrderIndex);
+      if (!Number.isNaN(minIdx)) startOrder = Math.min(startOrder, minIdx);
+      if (!Number.isNaN(maxIdx)) endOrder = Math.max(endOrder, maxIdx);
+    }
+  }
+  if (startOrder !== Infinity && endOrder !== -Infinity) {
+    return `Strings ${startOrder + 1} - ${endOrder + 1}`;
+  }
+  // Fallback to previous behavior
   const minPart = Math.min(...pages);
   const maxPart = Math.max(...pages);
   const startNum = getStringNumberFromFilePartForFile(minPart, fileId);
@@ -1171,15 +1216,52 @@ async function loadFilePagesData(fileId: string) {
       props.projectId || '',
       fileId
     );
-    const pages = [...new Set(strings.map((s) => s.filePart))].sort(
-      (a, b) => a - b
-    );
+    // Group strings by filePart and compute per-part counts and order ranges
+    const byPart: Map<number, { part: number; pageNumber: number; stringCount: number; minOrderIndex: number; maxOrderIndex: number }> = new Map();
+    for (const s of strings) {
+      const part = Number((s as any).filePart);
+      const pageNumber = Number((s as any).pageNumber ?? part);
+      const orderIndex = Number((s as any).orderIndex ?? 0);
+      const existing = byPart.get(part);
+      if (existing) {
+        existing.stringCount += 1;
+        if (!Number.isNaN(orderIndex)) {
+          existing.minOrderIndex = Math.min(existing.minOrderIndex, orderIndex);
+          existing.maxOrderIndex = Math.max(existing.maxOrderIndex, orderIndex);
+        }
+      } else {
+        byPart.set(part, {
+          part,
+          pageNumber,
+          stringCount: 1,
+          minOrderIndex: Number.isNaN(orderIndex) ? 0 : orderIndex,
+          maxOrderIndex: Number.isNaN(orderIndex) ? 0 : orderIndex,
+        });
+      }
+    }
+    const pages = Array.from(byPart.values()).sort((a, b) => a.part - b.part);
     filePagesData.value.set(fileId, pages);
     return pages;
   } catch (err) {
     console.error('Failed to load file pages:', err);
     return [];
   }
+}
+
+// Lightweight helper to retrieve page info for a given fileId + filePart
+function getSelectedPartInfo(fileId: string, targetPart: number) {
+  const pages = filePagesData.value.get(fileId);
+  if (!pages || !Array.isArray(pages)) return null;
+  const t = Number(targetPart);
+  const page = pages.find((p: any) => {
+    const part = Number(p?.part ?? p?.filePart ?? p);
+    const pageNumber = Number(p?.pageNumber ?? part);
+    return (
+      part === t || pageNumber === t || part + 1 === t || pageNumber + 1 === t || part === t + 1 || pageNumber === t + 1
+    );
+  });
+  if (!page) return null;
+  return { totalStrings: Number(page.stringCount ?? 0) };
 }
 
 // Function để load translation strings cho task (giống như trong editor)
@@ -1497,15 +1579,22 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
   const allowed = allowedToStatusByTask.value[draggedTask.value.id];
   const loaded = allowedLoadedByTask.value[draggedTask.value.id];
   if (!loaded) {
-    // If transitions not loaded yet, block silently
+    toast.add({
+      severity: 'info',
+      summary: 'Transitions loading',
+      detail: 'Please wait a moment and try again.',
+      life: 2500,
+    });
     return;
   }
   if (allowed && !allowed.has(String(targetStatusId))) {
+    const allowedList = Array.from(allowed).join(', ');
+    console.warn('🚫 Transition blocked by UI. Allowed targets:', allowedList, 'Attempted:', targetStatusId);
     toast.add({
       severity: 'warn',
-      summary: 'Cannot move',
-      detail: 'Cannot move because workflow transition is not allowed.',
-      life: 3500,
+      summary: 'Cannot move (blocked)',
+      detail: `Allowed: [${allowedList || 'none'}]. Attempted: ${targetStatusId}.`,
+      life: 5000,
     });
     return;
   }
@@ -1521,18 +1610,18 @@ async function handleDrop(event: DragEvent, targetStatusId: string) {
     `✅ Task ${taskToMove.id} moved to ${targetStatusId} status at position ${dropIndex}`
   );
 }
-
 async function moveTaskToColumn(
   task: Task,
   targetStatusId: string,
   dropIndex: number
 ) {
   // Update task status based on target status
-  const newStatus = targetStatusId;
+  const newStatusId = targetStatusId;
 
   // Optimistically update local state first for smooth UX
   const originalTask = { ...task };
-  const optimisticTask = { ...task, status: newStatus };
+  // Keep human-readable status string untouched; only update statusId optimistically
+  const optimisticTask = { ...task, statusId: newStatusId };
 
   // Update the task in the local array immediately
   const taskIndex = tasks.value.findIndex((t: Task) => t.id === task.id);
@@ -1551,10 +1640,10 @@ async function moveTaskToColumn(
   try {
     console.log('📤 Sending API request:', {
       taskId: task.id,
-      statusId: newStatus,
+      statusId: newStatusId,
     });
     const updatedTask = await taskService.updateTask(task.id, {
-      statusId: newStatus,
+      statusId: newStatusId,
     });
 
     // Update with fresh data from server
@@ -1590,11 +1679,38 @@ async function moveTaskToColumn(
       taskId: task.id,
       taskTitle: task.title,
       targetStatus: targetStatusId,
-      newStatus: newStatus,
+      newStatusId: newStatusId,
       dropIndex: dropIndex,
     });
   } catch (error) {
-    console.error('❌ Failed to update task status:', error);
+    let errString = 'Unknown error';
+    let statusCode: number | undefined;
+    try {
+      const anyErr = error as any;
+      statusCode = anyErr?.response?.status;
+      if (anyErr && typeof anyErr.message === 'string') {
+        errString = anyErr.message;
+      }
+      if (anyErr?.response?.data) {
+        // Prefer server-provided message payload when available
+        if (typeof anyErr.response.data === 'string') {
+          errString = anyErr.response.data;
+        } else if (anyErr.response.data?.message) {
+          errString = Array.isArray(anyErr.response.data.message)
+            ? anyErr.response.data.message.join('; ')
+            : String(anyErr.response.data.message);
+        } else {
+          errString = JSON.stringify(anyErr.response.data);
+        }
+      } else if (anyErr?.message) {
+        errString = anyErr.message;
+      } else {
+        errString = JSON.stringify(anyErr);
+      }
+    } catch {
+      errString = String(error);
+    }
+    console.error('❌ Failed to update task status:', { statusCode, error: errString, raw: error });
 
     // Revert optimistic update on error
     if (taskIndex !== -1) {
@@ -1607,12 +1723,12 @@ async function moveTaskToColumn(
       console.log('🔄 Reverted selected task due to API error');
     }
 
-    // Show error toast
+    // Show error toast with server details for easier debugging
     toast.add({
-      severity: 'error',
-      summary: 'Cannot move',
-      detail: 'Cannot move because workflow transition is not allowed.',
-      life: 3000,
+      severity: statusCode && statusCode >= 500 ? 'error' : 'warn',
+      summary: `Move failed${statusCode ? ` (${statusCode})` : ''}`,
+      detail: errString || 'Cannot move because workflow transition is not allowed.',
+      life: 5000,
     });
   }
 }
@@ -2230,7 +2346,6 @@ function getDaysInMonth(year: number, month: number): Date[] {
   }
   return days;
 }
-
 onMounted(() => {
   console.log('ProjectTaskTab mounted, loading tasks and files...');
   loadTasks();
@@ -2866,43 +2981,6 @@ const closeEditTaskInline = () => {
   editTaskInlineData.value = null;
 };
 
-// Function to format selected pages for display
-function formatSelectedPages(pages: number[] | undefined): string {
-  if (!pages || pages.length === 0) return '';
-
-  if (pages.length === 1) {
-    return `Page ${pages[0] + 1}`;
-  }
-
-  // Sort pages and find consecutive ranges
-  const sortedPages = [...pages].sort((a, b) => a - b);
-  const ranges: string[] = [];
-  let start = sortedPages[0];
-  let end = sortedPages[0];
-
-  for (let i = 1; i < sortedPages.length; i++) {
-    if (sortedPages[i] === end + 1) {
-      end = sortedPages[i];
-    } else {
-      if (start === end) {
-        ranges.push(`Page ${start + 1}`);
-      } else {
-        ranges.push(`Pages ${start + 1}-${end + 1}`);
-      }
-      start = end = sortedPages[i];
-    }
-  }
-
-  // Add the last range
-  if (start === end) {
-    ranges.push(`Page ${start + 1}`);
-  } else {
-    ranges.push(`Pages ${start + 1}-${end + 1}`);
-  }
-
-  return ranges.join(', ');
-}
-
 // State for assignee and reviewer dropdowns
 const showAssigneeDropdown = ref(false);
 const showReviewerDropdown = ref(false);
@@ -3063,7 +3141,6 @@ async function updateTaskReviewer(newReviewerId: string) {
     isUpdatingReviewer.value = false;
   }
 }
-
 // Swap roles between current assignee and reviewer in a single update call
 async function swapAssigneeAndReviewer(
   newAssigneeId: string,
@@ -3492,7 +3569,6 @@ function setupRealtimeCommentListeners() {
   );
 }
 </script>
-
 <template>
   <div class="kanban-tab-wrapper">
     <!-- Task Detail View -->
@@ -3603,7 +3679,7 @@ function setupRealtimeCommentListeners() {
               <div v-if="selectedTask.selectedStrings && selectedTask.selectedStrings.length === 1">
                 Strings:
                 <b>{{ formatSelectedStringsRange(selectedTask.selectedStrings, selectedTask.fileId!) }}</b>
-                ({{ getPageInfo(selectedTask.selectedStrings[0])?.totalStrings || 'Loading...' }} strings)
+                ({{ getSelectedPartInfo(selectedTask.fileId!, selectedTask.selectedStrings[0])?.totalStrings || 'Loading...' }} strings)
               </div>
               <div
                 v-else-if="(selectedTask as any).selectedStrings && (selectedTask as any).selectedStrings.length > 0"
@@ -4243,7 +4319,6 @@ function setupRealtimeCommentListeners() {
         <p>Loading edit form...</p>
       </div>
     </div>
-
     <!-- Kanban Board View -->
     <div v-else class="kanban-board-view">
       <!-- Tabs for Board, All Tasks, Workflows, and Statuses -->
@@ -4560,7 +4635,6 @@ function setupRealtimeCommentListeners() {
               Create Task
             </button>
           </div>
-
           <!-- Kanban Board with Language Grouping (Crowdin style) -->
           <div v-else class="kanban-container">
             <!-- Wrapper to contain scroll completely -->
@@ -5126,7 +5200,6 @@ function setupRealtimeCommentListeners() {
           @status-updated="handleStatusUpdated"
         />
       </div>
-
       <!-- All Tasks View -->
       <div v-else-if="activeTab === 'all'" class="all-tasks-view">
         <!-- Search and Filter Bar for All Tasks -->
@@ -5927,7 +6000,6 @@ function setupRealtimeCommentListeners() {
 .filter-dropdown-wrapper {
   position: relative;
 }
-
 .filter-dropdown-btn {
   display: flex;
   align-items: center;
@@ -8328,7 +8400,6 @@ body.modal-open main {
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
   letter-spacing: 0.01em;
 }
-
 .task-status-badge.pending {
   background: #f3f4f6;
   color: #2563eb;
@@ -9129,7 +9200,6 @@ body.modal-open main {
 .status-option:hover {
   background: #f9fafb;
 }
-
 .status-name {
   font-weight: 600;
   color: #374151;
@@ -9930,7 +10000,6 @@ body.modal-open main {
 .status-indicator {
   font-size: 0.7rem;
 }
-
 .status-arrow {
   color: #6b7280;
   font-weight: bold;

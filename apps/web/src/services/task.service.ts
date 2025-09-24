@@ -4,7 +4,10 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
+  // Human-readable type from backend status.type
   status: 'open' | 'todo' | 'in_progress' | 'done' | 'overdue' | 'closed' | 'cancelled';
+  // Numeric status id from backend status.id
+  statusId?: string;
   projectId?: string;
   fileId?: string;
   originalText?: string;
@@ -172,26 +175,24 @@ export interface ProjectFile {
   };
 }
 
+// Updated to align with new "string" entity shape from backend
 export interface FileString {
   id: string;
+  fileId?: string;
   originalText: string;
   translatedText: string;
   language: string;
   targetLanguage?: string;
-  filePart: number;
-  pageNumber: number;
-  orderIndex: number;
-  position?: any;
-  style?: any;
-  fontFamily?: string;
-  fontSize?: number;
-  status: string;
+  // New model may still include filePart for grouping/selection
+  filePart?: number;
+  // Generic optional fields retained for compatibility
+  status?: string;
   notes?: string;
   metadata?: any;
-  paragraphIndex?: number;
-  runIndex?: number;
   createdAt: string;
   updatedAt: string;
+  // Allow forward-compat fields without breaking types
+  [key: string]: any;
 }
 
 export interface TaskProgress {
@@ -226,9 +227,14 @@ export const taskService = {
     if (Array.isArray(task.selectedPages) && (!Array.isArray(task.pages) || task.pages.length === 0)) {
       task.pages = task.selectedPages;
     }
-    // Convert status object to string
-    if (task.status && typeof task.status === 'object' && task.status.type) {
-      task.status = task.status.type;
+    // Extract statusId and convert status object to its type string
+    if (task.status && typeof task.status === 'object') {
+      if (task.status.id !== undefined) {
+        task.statusId = String(task.status.id);
+      }
+      if (task.status.type) {
+        task.status = task.status.type;
+      }
     }
     return task as Task;
   },
@@ -255,7 +261,7 @@ export const taskService = {
 
   async updateTask(id: string, dto: UpdateTaskDto): Promise<Task> {
     const { data } = await axiosInstance.patch(`/tasks/${id}`, dto);
-    return data;
+    return this._normalizeTask(data);
   },
 
   async deleteTask(id: string): Promise<{ success: boolean }> {

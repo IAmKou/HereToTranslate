@@ -363,7 +363,7 @@
                   v-for="(s, idx) in fileStrings"
                   :key="s.id"
                   :value="idx"
-                  :disabled="usedStringIds.has(Number(s.id))"
+                  :disabled="usedStringIds.has(((s as any).orderIndex ?? 0) + 1)"
                 >
                   {{ renderStringOption(s, idx) }}
                 </option>
@@ -381,7 +381,7 @@
                   v-for="(s, idx) in fileStrings"
                   :key="s.id"
                   :value="idx"
-                  :disabled="idx < startIndex || usedStringIds.has(Number(s.id))"
+                  :disabled="idx < startIndex || usedStringIds.has(((s as any).orderIndex ?? 0) + 1)"
                 >
                   {{ renderStringOption(s, idx) }}
                 </option>
@@ -660,7 +660,8 @@ function formatDateTimeForAPI(dateTimeString: string): string {
 function renderStringOption(s: FileString, idx: number): string {
   const text = (s.originalText || '').replace(/\s+/g, ' ').trim();
   const preview = text.length > 40 ? text.slice(0, 37) + '…' : text;
-  return `#${idx + 1} • ${preview}`;
+  const displayNum = typeof (s as any).orderIndex === 'number' ? (s as any).orderIndex + 1 : idx + 1;
+  return `#${displayNum} • ${preview}`;
 }
 
 async function onFileChange() {
@@ -730,7 +731,8 @@ function onRangeChange() {
     return;
   }
   const slice = fileStrings.value.slice(startIndex.value, endIndex.value + 1);
-  formData.value.selectedStrings = slice.map(s => Number(s.id));
+  // Store orderIndex+1 (display order) instead of db id
+  formData.value.selectedStrings = slice.map((s: any) => (typeof s.orderIndex === 'number' ? s.orderIndex + 1 : 0));
   formData.value.totalStrings = slice.length;
   checkOverlap();
 }
@@ -813,16 +815,18 @@ function onCancel() {
 
 function findNextAvailableIndex(from: number): number {
   for (let i = Math.max(0, from); i < fileStrings.value.length; i++) {
-    const s = fileStrings.value[i];
-    if (!usedStringIds.value.has(Number(s.id))) return i;
+    const s: any = fileStrings.value[i];
+    const displayNum = typeof s.orderIndex === 'number' ? s.orderIndex + 1 : 0;
+    if (!usedStringIds.value.has(displayNum)) return i;
   }
   return from;
 }
 
 function findPrevAvailableIndex(from: number): number {
   for (let i = Math.min(from, fileStrings.value.length - 1); i >= 0; i--) {
-    const s = fileStrings.value[i];
-    if (!usedStringIds.value.has(Number(s.id))) return i;
+    const s: any = fileStrings.value[i];
+    const displayNum = typeof s.orderIndex === 'number' ? s.orderIndex + 1 : 0;
+    if (!usedStringIds.value.has(displayNum)) return i;
   }
   return from;
 }

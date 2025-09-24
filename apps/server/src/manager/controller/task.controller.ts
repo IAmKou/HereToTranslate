@@ -31,7 +31,6 @@ export class TaskController {
       ...dto,
       createdById: userId.toString(),
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-      estimatedBusinessHours: dto.estimatedBusinessHours,
     });
   }
 

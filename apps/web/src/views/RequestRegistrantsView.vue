@@ -254,9 +254,29 @@
               </div>
               <div class="rating-info">
                 <div class="rating-score">{{ selectedUser.averageRating || 0.0 }}</div>
-
+                <div class="rating-count" v-if="(selectedUser.reviewCount || selectedUser.totalRatings) && (selectedUser.reviewCount || selectedUser.totalRatings) > 0">
+                  {{ selectedUser.reviewCount || selectedUser.totalRatings }} reviews
+                </div>
               </div>
             </div>
+
+            <!-- Recent reviews (up to 3) -->
+            <div v-if="selectedUser?.recentReviews && selectedUser.recentReviews.length > 0" style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+              <div v-for="rv in selectedUser.recentReviews" :key="rv.id" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <div style="display:flex;gap:2px;">
+                    <i v-for="i in 5" :key="i" class="pi" :class="i <= rv.starRating ? 'pi-star-fill' : 'pi-star'" :style="{ color: i <= rv.starRating ? '#fbbf24' : '#d1d5db', fontSize:'12px' }"></i>
+                  </div>
+                  <span style="color:#64748b;font-size:12px;">{{ new Date(rv.createdAt).toLocaleDateString('en-US') }}</span>
+                  <span v-if="rv.reviewer" style="color:#374151;font-size:12px;font-weight:600;">• {{ rv.reviewer.fullName || ('@'+rv.reviewer.username) }}</span>
+                </div>
+                <div style="color:#374151;font-size:14px;white-space:pre-wrap;">{{ rv.comment }}</div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;">
+                <button class="details-btn" @click="openReviewsModal(selectedUser.id)">View all</button>
+              </div>
+            </div>
+            <div v-else-if="selectedUser && (selectedUser.reviewCount || selectedUser.totalRatings) === 0" style="margin-top:8px;color:#64748b;font-size:14px;">No reviews yet.</div>
           </div>
 
           <!-- Request Statistics Section -->
@@ -326,6 +346,52 @@
       <i v-if="toastType === 'success'" class="pi pi-check-circle"></i>
       <i v-else class="pi pi-times-circle"></i>
       <span>{{ toastMessage }}</span>
+    </div>
+
+    <!-- Reviews Modal -->
+    <div v-if="showReviewsModal" class="beautiful-profile-modal">
+      <div class="modal-backdrop" @click="showReviewsModal = false"></div>
+      <div class="modal-container" style="max-width:720px;">
+        <div class="modal-header-section">
+          <div class="modal-header-content">
+            <div class="modal-title-section">
+              <h2 class="modal-title">All Reviews</h2>
+              <p class="modal-subtitle">Feedback from requesters</p>
+            </div>
+            <button class="modal-close-btn" @click="showReviewsModal = false">
+              <span style="font-weight: bold; font-size: 20px; line-height: 1;">✕</span>
+            </button>
+          </div>
+        </div>
+        <div class="modal-body-section">
+          <div v-if="reviewsLoading" class="loading"><span class="spinner"></span> Loading reviews...</div>
+          <div v-else>
+            <div v-if="allReviews.length === 0" class="empty-state">
+              <div class="empty-title">No reviews yet.</div>
+              <div class="empty-desc">This translator has not received any reviews.</div>
+            </div>
+            <div v-else style="display:flex;flex-direction:column;gap:12px;">
+              <div v-for="rv in allReviews" :key="rv.id" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <div style="display:flex;gap:2px;">
+                    <i v-for="i in 5" :key="i" class="pi" :class="i <= rv.starRating ? 'pi-star-fill' : 'pi-star'" :style="{ color: i <= rv.starRating ? '#fbbf24' : '#d1d5db', fontSize:'14px' }"></i>
+                  </div>
+                  <span style="color:#64748b;font-size:12px;">{{ new Date(rv.createdAt).toLocaleDateString('en-US') }}</span>
+                  <span v-if="rv.reviewer" style="color:#374151;font-size:12px;font-weight:600;">• {{ rv.reviewer.fullName || ('@'+rv.reviewer.username) }}</span>
+                </div>
+                <div style="color:#374151;font-size:14px;white-space:pre-wrap;">{{ rv.comment }}</div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:8px;">
+                <div class="pagination-info">Total {{ reviewTotal }} reviews</div>
+                <div class="pagination-controls">
+                  <button class="pagination-btn" :disabled="reviewPage===1" @click="reviewPage--; loadReviews(Number(selectedUser?.id))"><i class="pi pi-chevron-left"></i> Prev</button>
+                  <button class="pagination-btn" :disabled="(reviewPage*reviewPageSize)>=reviewTotal" @click="reviewPage++; loadReviews(Number(selectedUser?.id))">Next <i class="pi pi-chevron-right"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -431,6 +497,35 @@ const showCopyToast = ref(false);
 const toastMessage = ref('');
 const toastType = ref<'success' | 'error'>('success');
 const showToast = ref(false);
+
+// Reviews modal state
+const showReviewsModal = ref(false);
+const reviewsLoading = ref(false);
+const allReviews = ref<any[]>([]);
+const reviewPage = ref(1);
+const reviewPageSize = ref(10);
+const reviewTotal = ref(0);
+
+async function openReviewsModal(assigneeId?: number) {
+  if (!assigneeId && selectedUser.value) assigneeId = Number(selectedUser.value.id);
+  if (!assigneeId) return;
+  showReviewsModal.value = true;
+  reviewPage.value = 1;
+  await loadReviews(assigneeId);
+}
+
+async function loadReviews(assigneeId: number) {
+  try {
+    reviewsLoading.value = true;
+    const { data } = await axiosInstance.get(`/requests/translator/${assigneeId}/reviews`, {
+      params: { page: reviewPage.value, pageSize: reviewPageSize.value }
+    });
+    allReviews.value = Array.isArray(data?.data) ? data.data : [];
+    reviewTotal.value = Number(data?.total || 0);
+  } finally {
+    reviewsLoading.value = false;
+  }
+}
 
 function getInitial(name: string | undefined) {
   return name ? name.charAt(0).toUpperCase() : '?';

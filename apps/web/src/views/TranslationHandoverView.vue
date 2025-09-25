@@ -90,23 +90,6 @@
           <div class="info-card">
             <h3><i class="pi pi-info-circle"></i> Handover Information</h3>
             <div class="handover-info">
-              <div class="info-section">
-                <h4>Handover status</h4>
-                <div class="status-info">
-                  <span class="status-badge completed">
-                    <i class="pi pi-check"></i>
-                    {{ isRequestBased ? 'Request completed' : 'Successfully delivered' }}
-                  </span>
-                  <p class="handover-date">{{ isRequestBased ? 'Completion date:' : 'Handover date:' }} {{ formatDate(handoverInfo?.handoverDate) }}</p>
-                </div>
-              </div>
-
-              <div v-if="handoverInfo?.message" class="info-section">
-                <h4>{{ isRequestBased ? 'Completion notes' : 'Notes from translator' }}</h4>
-                <div class="message-box">
-                  {{ handoverInfo.message }}
-                </div>
-              </div>
 
               <div v-if="!isRequestBased" class="info-section">
                 <h4>Quality checks</h4>
@@ -518,65 +501,13 @@
             </div>
 
             <div class="summary-item">
-              <strong>Select pages (up to 5)</strong>
+              <strong>Preview mode</strong>
               <div>
-                <div v-if="previewPagesLoading" style="color:#4a5568;">Loading pages...</div>
-                <div v-else-if="previewPages.length === 0" style="color:#4a5568;">No page data</div>
-                <div v-else>
-                  <div v-if="previewPages.length <= 5" style="color:#059669; font-size:0.875rem; margin-bottom:0.5rem;">
-                    <i class="pi pi-check-circle"></i> All {{ previewPages.length }} pages auto-selected
-                  </div>
-
-                  <!-- Condensed selector when page count is large -->
-                  <div v-if="previewPages.length > 10" class="condensed-page-select" style="display:flex; flex-direction:column; gap:.5rem;">
-                    <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
-                      <input
-                        v-model="pageInput"
-                        :disabled="previewSelectionLocked"
-                        type="text"
-                        placeholder="e.g. 1, 5, 12"
-                        style="padding:.5rem .75rem; border:1px solid #e2e8f0; border-radius:6px; width:220px;"
-                      />
-                      <button class="btn btn-secondary" :disabled="previewSelectionLocked" @click="applyPageInput">
-                        Apply
-                      </button>
-                      <span style="color:#6b7280; font-size:.85rem;">Enter up to 5 page numbers</span>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:.5rem;">
-                      <button class="btn btn-secondary" :disabled="previewSelectionLocked || pageWindowStart<=1" @click="shiftPageWindow(-20)">Prev 20</button>
-                      <button class="btn btn-secondary" :disabled="previewSelectionLocked || pageWindowStart+19>=maxPageNumber" @click="shiftPageWindow(20)">Next 20</button>
-                      <span style="color:#6b7280; font-size:.85rem;">Viewing pages {{ pageWindowStart }}–{{ Math.min(pageWindowStart+19, maxPageNumber) }}</span>
-                    </div>
-                    <div class="download-stats" style="flex-wrap:wrap; gap:.5rem;">
-                      <button
-                        v-for="p in windowPages"
-                        :key="p.filePart + ':' + p.pageNumber"
-                        class="btn"
-                        :class="selectedPages.includes(p.pageNumber) ? 'btn-primary' : 'btn-secondary'"
-                        @click="toggleSelectPage(p.pageNumber)"
-                        :disabled="previewSelectionLocked"
-                      >
-                        Page {{ p.pageNumber }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Original simple list when page count is small -->
-                  <div v-else class="download-stats">
-                    <button
-                      v-for="p in previewPages"
-                      :key="p.filePart"
-                      class="btn"
-                      :class="selectedPages.includes(p.pageNumber) ? 'btn-primary' : 'btn-secondary'"
-                      @click="toggleSelectPage(p.pageNumber)"
-                      :disabled="previewSelectionLocked"
-                    >
-                      Page {{ p.pageNumber }}
-                    </button>
-                  </div>
+                <div style="color:#059669; font-size:0.875rem; margin-bottom:0.5rem;">
+                  <i class="pi pi-check-circle"></i> Full document preview (all pages)
                 </div>
-                <div style="margin-top:0.5rem; color:#6b7280; font-size:0.85rem;">
-                  Selected {{ selectedPages.length }}/{{ Math.min(5, previewPages.length) }} pages
+                <div style="color:#6b7280; font-size:0.85rem;">
+                  The entire document will be displayed for preview
                 </div>
               </div>
             </div>
@@ -602,38 +533,13 @@
           >
             <i v-if="isBuildingPreview" class="pi pi-spin pi-spinner"></i>
             <i v-else class="pi pi-eye"></i>
-            View preview
+            View full preview
           </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- One-time confirm modal for selected preview pages -->
-  <div v-if="showPreviewConfirm" class="modal-overlay" @click="cancelSelectedPages">
-    <div class="modal-content" @click.stop>
-      <div class="modal-header">
-        <h3><i class="pi pi-question-circle"></i> Confirm selected pages</h3>
-        <button @click="cancelSelectedPages" class="modal-close">
-          <i class="pi pi-times"></i>
-        </button>
-      </div>
-      <div class="modal-body">
-        <p>Please confirm these pages will be used for future previews:</p>
-        <div class="download-stats" style="flex-wrap:wrap; gap:.5rem;">
-          <span v-for="(pg, idx) in selectedPages" :key="idx" class="status-badge">Page {{ pg }}</span>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button @click="cancelSelectedPages" class="btn btn-secondary">
-          <i class="pi pi-times"></i> Cancel
-        </button>
-        <button @click="confirmSelectedPages" class="btn btn-primary">
-          <i class="pi pi-check"></i> Confirm & Continue
-        </button>
-      </div>
-    </div>
-  </div>
 </template>
 
 
@@ -710,28 +616,12 @@ const previewMode = ref<'pdf' | 'html' | 'text' | 'external' | 'none'>('none');
 const textPreview = ref<string>('');
 const htmlPreview = ref<string>('');
 const previewExternalUrl = ref<string>('');
-// Preview confirmation and lock state
-const showPreviewConfirm = ref(false);
+// Preview state (simplified for full document preview)
 const previewSelectionLocked = ref(false);
-// Condensed page selection helpers
-const pageInput = ref<string>('');
-const pageWindowStart = ref<number>(1);
-const maxPageNumber = computed<number>(() => (previewPages.value.length > 0 ? Math.max(...previewPages.value.map((p: { pageNumber: number }) => p.pageNumber)) : 0));
-const windowPages = computed<Array<{ pageNumber: number; filePart: number; stringCount: number; hasTranslatedStrings: boolean }>>(() => {
-  const start = pageWindowStart.value;
-  const end = Math.min(start + 19, maxPageNumber.value);
-  const set = new Set<number>();
-  for (let n = start; n <= end; n++) set.add(n);
-  return previewPages.value.filter((p: { pageNumber: number }) => set.has(p.pageNumber));
-});
 
-const requiredPreviewCount = computed(() => Math.min(5, previewPages.value.length || 0));
 const canStartPreview = computed(() => {
-  // Require user to select exactly requiredPreviewCount pages before starting preview
-  return !!selectedPreviewFileId.value &&
-    !!selectedPreviewLanguage.value &&
-    previewPages.value.length > 0 &&
-    selectedPages.value.length === requiredPreviewCount.value;
+  // Only require file and language selection for preview
+  return !!selectedPreviewFileId.value && !!selectedPreviewLanguage.value;
 });
 
 // Persist preview selection in localStorage (scoped by requestId or projectId)
@@ -1222,8 +1112,6 @@ function getDeliveryMethodText(method: string): string {
 // Preview helpers
 function openPreviewModal() {
   showPreviewModal.value = true;
-  // Reset lock state when opening modal
-  previewSelectionLocked.value = false;
   // Load saved state first
   loadPreviewState();
   // Default select first file and first language if available
@@ -1234,8 +1122,8 @@ function openPreviewModal() {
   if (!selectedPreviewLanguage.value && (projectInfo.value?.targetLanguages || []).length > 0) {
     selectedPreviewLanguage.value = projectInfo.value.targetLanguages[0];
   }
-  // Try load server-saved pages first (per user/request)
-  fetchSavedPreviewPages().finally(() => fetchPreviewPages());
+  // Load preview pages (simplified for full document)
+  fetchPreviewPages();
 }
 
 function closePreviewModal() {
@@ -1245,18 +1133,14 @@ function closePreviewModal() {
     previewUrl.value = '';
   }
   selectedPages.value = [];
-  // Reset the lock so user can select pages again
-  previewSelectionLocked.value = false;
 }
 
 function selectPreviewFile(file: any) {
-  if (previewSelectionLocked.value) return;
   const id = String(file.id || file.fileId || '');
   if (selectedPreviewFileId.value !== id) {
     selectedPreviewFileId.value = id;
     // Reset pages when file changes
     selectedPages.value = [];
-    pageWindowStart.value = 1;
     fetchPreviewPages();
     savePreviewState();
   }
@@ -1266,152 +1150,25 @@ async function fetchPreviewPages() {
   if (!selectedPreviewFileId.value) return;
   try {
     previewPagesLoading.value = true;
-    // If user already locked a selection previously, reuse it without loading full PDF
-    if (previewSelectionLocked.value && selectedPages.value.length > 0) {
-      const unique = Array.from(new Set(selectedPages.value)).slice(0, 5);
-      previewPages.value = unique.map((n: number) => ({
-        pageNumber: n,
-        filePart: n,
-        stringCount: 0,
-        hasTranslatedStrings: true,
-      }));
-      // Do not modify selectedPages; they are already set and locked
-      return;
-    }
-    // Always derive page list from the exported, translated file
-    await derivePagesFromExportedFile();
-    // Reset helpers (no auto-select; user picks up to 5 pages)
-    pageInput.value = '';
-    pageWindowStart.value = 1;
+    // For full document preview, we don't need to load specific pages
+    // Just set a single page entry to indicate the document is ready
+    previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: true }];
+    selectedPages.value = [1]; // Auto-select first page for full preview
   } catch (e) {
-    console.error('Error building page list from export:', e);
-    // Final fallback: single page
+    console.error('Error preparing preview:', e);
     previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: false }];
-    selectedPages.value = [];
+    selectedPages.value = [1];
   } finally {
     previewPagesLoading.value = false;
   }
 }
 
-// Load server-saved preview pages for this request (locks selection if available)
-async function fetchSavedPreviewPages(): Promise<void> {
-  try {
-    if (!isRequestBased.value || !requestId.value) return;
-    const { data } = await axiosInstance.get('/translation/preview-pages', {
-      params: { requestId: requestId.value },
-    });
-    const pages = Array.isArray(data?.pages) ? data.pages.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0) : [];
-    if (pages.length > 0) {
-      selectedPages.value = Array.from(new Set(pages)).slice(0, 5);
-      previewSelectionLocked.value = true;
-      savePreviewState();
-    }
-  } catch {
-    // ignore
-  }
-}
 
-// Derive page list by downloading the translated export and counting pages via PDF.js
-async function derivePagesFromExportedFile() {
-  const lang = selectedPreviewLanguage.value;
-  if (!lang) return;
-  try {
-    const resp = await axiosInstance.get(`/translation/export/download/${selectedPreviewFileId.value}`, {
-      params: { language: lang, format: 'original' },
-      responseType: 'blob'
-    });
-    const contentType = String((resp.headers as any)?.['content-type'] || 'application/octet-stream');
 
-    let blob = new Blob([resp.data], { type: contentType });
-    // If not PDF (e.g., DOCX), request PDF export for page counting
-    if (!contentType.includes('application/pdf')) {
-      try {
-        const pdfResp = await axiosInstance.get(`/translation/export/pdf/${selectedPreviewFileId.value}`, {
-          params: { language: lang, watermark: 'PREVIEW - DO NOT COPY' },
-          responseType: 'blob'
-        });
-        blob = new Blob([pdfResp.data], { type: 'application/pdf' });
-      } catch (err) {
-        console.warn('PDF export not available, defaulting to single page');
-        previewPages.value = [{ pageNumber: 1, filePart: 1, stringCount: 0, hasTranslatedStrings: false }];
-        selectedPages.value = [1];
-        return;
-      }
-    }
-
-    const url = window.URL.createObjectURL(blob);
-    try {
-      await ensurePdfJs(document);
-      // @ts-ignore
-      const pdfjsLib = (window as any).pdfjsLib;
-      const loadingTask = pdfjsLib.getDocument(url);
-      const pdf = await loadingTask.promise;
-      const total = pdf.numPages || 1;
-      previewPages.value = Array.from({ length: total }, (_, i) => ({
-        pageNumber: i + 1,
-        filePart: i + 1,
-        stringCount: 0,
-        hasTranslatedStrings: true
-      }));
-      // Do not auto-select; let user pick any 5
-      selectedPages.value = [];
-    } finally {
-      window.URL.revokeObjectURL(url);
-    }
-  } catch (err) {
-    console.error('Failed to derive pages from exported file:', err);
-    throw err;
-  }
-}
-
-function toggleSelectPage(pageNumber: number) {
-  if (previewSelectionLocked.value) return;
-  const idx = selectedPages.value.indexOf(pageNumber);
-  if (idx >= 0) {
-    selectedPages.value.splice(idx, 1);
-  } else {
-    if (selectedPages.value.length >= 5) return;
-    // Keep user-chosen order; do not auto-sort
-    selectedPages.value.push(pageNumber);
-  }
-  // Keep current page aligned
-  if (!currentPreviewPage.value && selectedPages.value.length > 0) {
-    currentPreviewPage.value = selectedPages.value[0];
-  }
-  savePreviewState();
-}
-
-function shiftPageWindow(delta: number) {
-  const next = Math.max(1, Math.min((pageWindowStart.value || 1) + delta, Math.max(1, maxPageNumber.value - 19)));
-  pageWindowStart.value = next;
-}
-
-function applyPageInput() {
-  if (previewSelectionLocked.value) return;
-  const text = pageInput.value || '';
-  const nums: number[] = text
-    .split(/[\s,]+/)
-    .map((s: string) => Number(s))
-    .filter((n: number) => Number.isFinite(n) && n >= 1 && n <= maxPageNumber.value);
-  const unique: number[] = [];
-  for (const n of nums) {
-    if (!unique.includes(n)) unique.push(n);
-    if (unique.length >= 5) break;
-  }
-  if (unique.length > 0) {
-    selectedPages.value = unique;
-    currentPreviewPage.value = unique[0];
-    savePreviewState();
-  }
-}
 
 async function buildPreview() {
   if (!canStartPreview.value) return;
-  // If not locked yet, ask for confirmation once
-  if (!previewSelectionLocked.value) {
-    showPreviewConfirm.value = true;
-    return;
-  }
+
   try {
     isBuildingPreview.value = true;
     // Download exported single-language file
@@ -1424,11 +1181,10 @@ async function buildPreview() {
     const contentType = String((response.headers as any)?.['content-type'] || 'application/octet-stream');
     const blob = new Blob([response.data], { type: contentType });
 
-    // PDF -> always open in new tab (render ONLY selected pages as images)
+    // PDF -> always open in new tab (render ALL pages as images)
     if (contentType.includes('application/pdf')) {
       const url = window.URL.createObjectURL(blob);
-      const pages = selectedPages.value.slice(0, 5);
-      const opened = openPdfAsImagesInNewTab(url, pages);
+      const opened = openPdfAsImagesInNewTab(url, []); // Empty array means all pages
       if (opened) showPreviewModal.value = false; else toast.add({ severity: 'info', summary: 'Popup blocked', detail: 'Please allow popups to view preview.', life: 3000 });
       savePreviewState();
     } else if (contentType.includes('text/plain')) {
@@ -1464,7 +1220,7 @@ async function buildPreview() {
           responseType: 'blob'
         });
         const url = window.URL.createObjectURL(new Blob([pdfResp.data], { type: 'application/pdf' }));
-        const opened = openPdfAsImagesInNewTab(url, selectedPages.value.slice(0, 5));
+        const opened = openPdfAsImagesInNewTab(url, []); // Empty array means all pages
         if (opened) showPreviewModal.value = false; else toast.add({ severity: 'info', summary: 'Popup blocked', detail: 'Please allow popups to view preview.', life: 3000 });
         savePreviewState();
       } catch (e) {
@@ -1604,10 +1360,10 @@ function openPdfAsImagesInNewTab(pdfUrl: string, pages: number[]): boolean {
       const pdfjsLib = (tab as any).pdfjsLib || (tab.window as any).pdfjsLib || (tab.document.defaultView as any).pdfjsLib;
       const loadingTask = pdfjsLib.getDocument(pdfUrl);
       const pdf = await loadingTask.promise;
-      // If caller didn't pass any pages (no original page split), render first up to 5 pages
+      // If pages array is empty, render ALL pages
       const targetPages = (Array.isArray(pages) && pages.length > 0)
         ? pages.slice(0, 5)
-        : Array.from({ length: Math.min(5, pdf.numPages) }, (_, i) => i + 1);
+        : Array.from({ length: pdf.numPages }, (_, i) => i + 1);
       for (const p of targetPages) {
         const pageIndex = Math.min(Math.max(1, p), pdf.numPages);
         const page = await pdf.getPage(pageIndex);
@@ -1686,25 +1442,6 @@ function openPreviewInNewTab() {
   }
 }
 
-// Confirm selection once and lock it
-function confirmSelectedPages() {
-  previewSelectionLocked.value = true;
-  showPreviewConfirm.value = false;
-  savePreviewState();
-  // proceed to preview
-  // Persist selection on server for this request (if applicable)
-  if (isRequestBased.value && requestId.value && selectedPages.value.length > 0) {
-    axiosInstance.post('/translation/preview-pages', {
-      requestId: requestId.value,
-      pages: selectedPages.value.slice(0, 5),
-    }).catch(() => {/* ignore */});
-  }
-  buildPreview();
-}
-
-function cancelSelectedPages() {
-  showPreviewConfirm.value = false;
-}
 
 // File upload methods
 function triggerFileUpload() {
@@ -2018,10 +1755,10 @@ async function confirmSubmitReview() {
         }
       });
     } else {
-      // Add isFullyCompleted parameter to the review data
+      // Add isFullyCompleted parameter to the review data (as string for backend DTO)
       const reviewData = {
         ...confirmReviewData.value,
-        isFullyCompleted: isFullyCompleted.value
+        isFullyCompleted: isFullyCompleted.value ? 'true' : 'false'
       };
       await axiosInstance.post('/requests/review', reviewData);
     }

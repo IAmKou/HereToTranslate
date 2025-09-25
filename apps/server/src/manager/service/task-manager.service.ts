@@ -592,7 +592,7 @@ export class TaskManagerService {
         dueDate: true,
         createdAt: true,
         startedAt: true,
-        completedAt: true, 
+        completedAt: true,
         priority: true,
         storyPoints: true,
         createdBy: {
@@ -832,7 +832,7 @@ export class TaskManagerService {
         dueDate: true,
         createdAt: true,
         startedAt: true,
-        completedAt: true, 
+        completedAt: true,
         priority: true,
         createdBy: {
           id: true,

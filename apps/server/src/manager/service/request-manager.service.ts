@@ -1066,6 +1066,7 @@ export class RequestManagerService {
           case RequestStatus.Failed:
           case RequestStatus.Cancelled:
           case RequestStatus.Rejected:
+          case RequestStatus.Incompleted:
             stats.failed++;
             break;
           case RequestStatus.Pending:
@@ -1082,7 +1083,7 @@ export class RequestManagerService {
     });
 
     // Return users with real stats and average rating
-    return users.map((user) => {
+    return Promise.all(users.map(async (user) => {
       const userRequests = allRequests.filter(req => req.assignee?.id === user.id);
 
       // Get ALL completed/failed requests for rating calculation (not just reviewed ones)
@@ -1093,27 +1094,81 @@ export class RequestManagerService {
       );
 
       // Get ratings from completed requests via RequestReviewEntity
-      const ratings: number[] = []
+      const ratings: number[] = [];
 
-      // Debug logging
+      // Lấy tất cả review mà translator chính là user hiện tại (assignee của request)
+      const userReviews = await this.requestReviewRepository
+        .createQueryBuilder('rev')
+        .leftJoin('rev.request', 'req')
+        .leftJoin('req.assignee', 'assg')
+        .where('assg.id = :uid', { uid: user.id })
+        .select(['rev.starRating'])
+        .getMany();
+
+      // Calculate average rating from reviews
+      if (userReviews.length > 0) {
+        const totalRating = userReviews.reduce((sum, review: any) => sum + Number(review.starRating || 0), 0);
+        const averageRating = totalRating / userReviews.length;
+
+        ratings.push(...userReviews.map((review: any) => Number(review.starRating || 0)));
+        // Lấy comment mới nhất (nếu có) theo thời gian tạo
+        const [recentReviews, totalReviews] = await this.requestReviewRepository
+          .createQueryBuilder('rev')
+          .leftJoin('rev.request', 'req')
+          .leftJoin('req.assignee', 'assg')
+          .leftJoin('rev.reviewer', 'reviewer')
+          .where('assg.id = :uid', { uid: user.id })
+          .orderBy('rev.createdAt', 'DESC')
+          .select(['rev.id', 'rev.starRating', 'rev.comment', 'rev.createdAt', 'reviewer.id', 'reviewer.username', 'reviewer.fullName'])
+          .take(3)
+          .getManyAndCount();
+
+        console.log(`🔍 [DEBUG] User ${user.username} rating calculation:`, {
+          totalRequests: userRequests.length,
+          completedRequests: completedRequests.length,
+          reviewsCount: userReviews.length,
+          averageRating: averageRating,
+          ratings: ratings,
+        });
+
+        return {
+          ...user,
+          averageRating: averageRating,
+          reviewCount: totalReviews,
+          lastReviewComment: (recentReviews && recentReviews[0]?.comment) || '',
+          recentReviews: recentReviews.map((r: any) => ({
+            id: r.id,
+            starRating: Number(r.starRating || 0),
+            comment: r.comment || '',
+            createdAt: r.createdAt,
+            reviewer: r['reviewer'] ? { id: r['reviewer'].id, username: r['reviewer'].username, fullName: r['reviewer'].fullName } : null,
+          })),
+          requestStats: userStatsMap.get(user.id) || {
+            total: 0,
+            completed: 0,
+            failed: 0,
+            pending: 0,
+          },
+          joined: user.createdAt,
+          lastSeen: 'Online',
+          totalRatings: ratings.length,
+        };
+      }
+
+      // Debug logging for users with no reviews
       console.log(`🔍 [DEBUG] User ${user.username} rating calculation:`, {
         totalRequests: userRequests.length,
         completedRequests: completedRequests.length,
-        allRequestsDetails: userRequests.map(req => ({
-          id: req.id,
-          status: req.status,
-        })),
-        completedRequestsDetails: completedRequests.map(req => ({
-          id: req.id,
-          status: req.status,
-        })),
+        reviewsCount: 0,
         ratings: ratings,
       });
 
-
-
       return {
         ...user,
+        averageRating: 0,
+        reviewCount: 0,
+        lastReviewComment: '',
+        recentReviews: [],
         requestStats: userStatsMap.get(user.id) || {
           total: 0,
           completed: 0,
@@ -1124,7 +1179,38 @@ export class RequestManagerService {
         lastSeen: 'Online',
         totalRatings: ratings.length,
       };
-    });
+    }));
+  }
+
+  // Lấy danh sách review cho một translator (assignee) với phân trang
+  async getTranslatorReviews(assigneeId: number, page = 1, pageSize = 10) {
+    const take = Math.max(1, Math.min(50, Number(pageSize) || 10));
+    const skip = Math.max(0, (Number(page) || 1) - 1) * take;
+
+    const qb = this.requestReviewRepository
+      .createQueryBuilder('rev')
+      .leftJoin('rev.request', 'req')
+      .leftJoin('req.assignee', 'assg')
+      .leftJoin('rev.reviewer', 'reviewer')
+      .where('assg.id = :uid', { uid: assigneeId })
+      .orderBy('rev.createdAt', 'DESC')
+      .select(['rev.id', 'rev.starRating', 'rev.comment', 'rev.createdAt', 'reviewer.id', 'reviewer.username', 'reviewer.fullName'])
+      .skip(skip)
+      .take(take);
+
+    const [rows, total] = await qb.getManyAndCount();
+    return {
+      data: rows.map((r: any) => ({
+        id: r.id,
+        starRating: Number(r.starRating || 0),
+        comment: r.comment || '',
+        createdAt: r.createdAt,
+        reviewer: r['reviewer'] ? { id: r['reviewer'].id, username: r['reviewer'].username, fullName: r['reviewer'].fullName } : null,
+      })),
+      total,
+      page: Number(page) || 1,
+      pageSize: take,
+    };
   }
 
   async approveRegistrant(

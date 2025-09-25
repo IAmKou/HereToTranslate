@@ -450,7 +450,7 @@ async function loadTasks() {
   try {
     console.log(
       '📞 [LOAD_TASKS] Calling API via taskService.getProjectTasks for project ' +
-        props.projectId
+      props.projectId
     );
     const data = await taskService.getProjectTasks(props.projectId);
     console.log(
@@ -1739,7 +1739,7 @@ function getDropIndex(event: DragEvent, targetStatusId: string): number {
 
 // Function để đóng modal xóa task
 function closeDeleteModal() {
-  const task = taskToDelete.value; 
+  const task = taskToDelete.value;
 
   showDeleteModal.value = false;
   taskToDelete.value = null;
@@ -2175,10 +2175,10 @@ function getAvatarUrl(avatarUrl?: string) {
     'data:image/svg+xml;utf8,' +
     encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">\n' +
-        '<circle cx="32" cy="32" r="32" fill="#e5e7eb"/>\n' +
-        '<circle cx="32" cy="24" r="12" fill="#cbd5e1"/>\n' +
-        '<path d="M16 54c4-10 28-10 32 0" fill="#cbd5e1"/>\n' +
-        '</svg>'
+      '<circle cx="32" cy="32" r="32" fill="#e5e7eb"/>\n' +
+      '<circle cx="32" cy="24" r="12" fill="#cbd5e1"/>\n' +
+      '<path d="M16 54c4-10 28-10 32 0" fill="#cbd5e1"/>\n' +
+      '</svg>'
     );
 
   if (!avatarUrl) return defaultAvatar;
@@ -3591,8 +3591,8 @@ function setupRealtimeCommentListeners() {
       <div class="task-detail-header">
         <span class="task-detail-id">#{{ selectedTask.id }}</span>
         <span class="task-detail-title">{{
-          getCleanTaskTitle(selectedTask.title)
-        }}</span>
+            getCleanTaskTitle(selectedTask.title)
+          }}</span>
       </div>
 
       <!-- Task Detail Tabs -->
@@ -3637,10 +3637,10 @@ function setupRealtimeCommentListeners() {
             <div>
               Language:
               <b>{{
-                selectedTask.language
-                  ? getLanguageName(selectedTask.language)
-                  : 'Not specified'
-              }}</b>
+                  selectedTask.language
+                    ? getLanguageName(selectedTask.language)
+                    : 'Not specified'
+                }}</b>
             </div>
             <div class="progress-bar-bg">
               <div v-if="selectedTaskProgressLoading" class="progress-loading">
@@ -3714,10 +3714,10 @@ function setupRealtimeCommentListeners() {
                 alt="avatar"
               />
               <span v-else>{{
-                selectedTask.createdBy.fullName
-                  ? selectedTask.createdBy.fullName[0]
-                  : selectedTask.createdBy.username[0]
-              }}</span>
+                  selectedTask.createdBy.fullName
+                    ? selectedTask.createdBy.fullName[0]
+                    : selectedTask.createdBy.username[0]
+                }}</span>
             </div>
             <div>
               <b>{{ selectedTask.createdBy.fullName }}</b>
@@ -3729,262 +3729,262 @@ function setupRealtimeCommentListeners() {
           <div class="members-title">Members</div>
           <table class="members-table">
             <thead>
-              <tr>
-                <th>Assignee</th>
-                <th>Reviewer</th>
-                <th>Assigned strings</th>
-              </tr>
+            <tr>
+              <th>Assignee</th>
+              <th>Reviewer</th>
+              <th>Assigned strings</th>
+            </tr>
             </thead>
             <tbody>
-              <tr>
-                <td v-if="selectedTask.assignedTo">
-                  <div class="assignee-dropdown-wrapper">
-                    <div
-                      class="assignee-dropdown-trigger assignee-info"
-                      @click="toggleAssigneeDropdown"
-                    >
-                      <img
-                        :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
-                        :alt="getUserDisplayName(selectedTask.assignedTo)"
-                        class="assignee-avatar"
-                      />
-                      <span class="assignee-name">{{
+            <tr>
+              <td v-if="selectedTask.assignedTo">
+                <div class="assignee-dropdown-wrapper">
+                  <div
+                    class="assignee-dropdown-trigger assignee-info"
+                    @click="toggleAssigneeDropdown"
+                  >
+                    <img
+                      :src="getAvatarUrl(selectedTask.assignedTo.avatarUrl)"
+                      :alt="getUserDisplayName(selectedTask.assignedTo)"
+                      class="assignee-avatar"
+                    />
+                    <span class="assignee-name">{{
                         getUserDisplayName(selectedTask.assignedTo)
                       }}</span>
-                      <i class="pi pi-chevron-down dropdown-arrow" />
-                    </div>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
 
-                    <!-- Assignee Dropdown -->
-                    <div v-if="showAssigneeDropdown" class="assignee-dropdown">
-                      <div class="dropdown-options">
-                        <div
-                          v-for="member in projectMembers"
-                          :key="member.id"
-                          class="dropdown-option"
-                          :class="{
+                  <!-- Assignee Dropdown -->
+                  <div v-if="showAssigneeDropdown" class="assignee-dropdown">
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{
                             'current-assignee':
                               member.id === selectedTask.assignedTo?.id,
                             'disabled-option':
                               member.id === selectedTask.reviewer?.id,
                           }"
-                          @click="
+                        @click="
                             member.id === selectedTask.reviewer?.id
                               ? handleSelectAssignee(member.id)
                               : updateTaskAssignee(member.id)
                           "
-                        >
-                          <div class="member-option">
-                            <img
-                              :src="getAvatarUrl(member.avatarUrl)"
-                              :alt="getUserDisplayName(member)"
-                              class="member-avatar"
-                            />
-                            <span class="member-name">{{
+                      >
+                        <div class="member-option">
+                          <img
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="getUserDisplayName(member)"
+                            class="member-avatar"
+                          />
+                          <span class="member-name">{{
                               getUserDisplayName(member)
                             }}</span>
-                            <span
-                              v-if="member.id === selectedTask.assignedTo?.id"
-                              class="current-badge"
-                              >Current</span
-                            >
-                            <span
-                              v-if="member.id === selectedTask.reviewer?.id"
-                              class="disabled-badge"
-                              >Already Reviewer</span
-                            >
-                          </div>
+                          <span
+                            v-if="member.id === selectedTask.assignedTo?.id"
+                            class="current-badge"
+                          >Current</span
+                          >
+                          <span
+                            v-if="member.id === selectedTask.reviewer?.id"
+                            class="disabled-badge"
+                          >Already Reviewer</span
+                          >
                         </div>
                       </div>
-                      <div v-if="isUpdatingAssignee" class="dropdown-loading">
-                        <i class="pi pi-spin pi-spinner" /> Updating...
-                      </div>
+                    </div>
+                    <div v-if="isUpdatingAssignee" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
                     </div>
                   </div>
-                </td>
-                <td v-else>
-                  <div class="assignee-dropdown-wrapper">
-                    <div
-                      class="assignee-dropdown-trigger empty-assignee"
-                      @click="toggleAssigneeDropdown"
-                    >
-                      <span class="empty-text">Click to assign</span>
-                      <i class="pi pi-chevron-down dropdown-arrow" />
-                    </div>
+                </div>
+              </td>
+              <td v-else>
+                <div class="assignee-dropdown-wrapper">
+                  <div
+                    class="assignee-dropdown-trigger empty-assignee"
+                    @click="toggleAssigneeDropdown"
+                  >
+                    <span class="empty-text">Click to assign</span>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
 
-                    <!-- Assignee Dropdown for empty assignee -->
-                    <div v-if="showAssigneeDropdown" class="assignee-dropdown">
-                      <div class="dropdown-options">
-                        <div
-                          v-for="member in projectMembers"
-                          :key="member.id"
-                          class="dropdown-option"
-                          :class="{
+                  <!-- Assignee Dropdown for empty assignee -->
+                  <div v-if="showAssigneeDropdown" class="assignee-dropdown">
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{
                             'disabled-option':
                               member.id === selectedTask.reviewer?.id,
                           }"
-                          @click="
+                        @click="
                             member.id === selectedTask.reviewer?.id
                               ? handleSelectAssignee(member.id)
                               : updateTaskAssignee(member.id)
                           "
-                        >
-                          <div class="member-option">
-                            <img
-                              :src="getAvatarUrl(member.avatarUrl)"
-                              :alt="getUserDisplayName(member)"
-                              class="member-avatar"
-                            />
-                            <span class="member-name">{{
+                      >
+                        <div class="member-option">
+                          <img
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="getUserDisplayName(member)"
+                            class="member-avatar"
+                          />
+                          <span class="member-name">{{
                               getUserDisplayName(member)
                             }}</span>
-                            <span
-                              v-if="member.id === selectedTask.reviewer?.id"
-                              class="disabled-badge"
-                              >Already Reviewer</span
-                            >
-                          </div>
+                          <span
+                            v-if="member.id === selectedTask.reviewer?.id"
+                            class="disabled-badge"
+                          >Already Reviewer</span
+                          >
                         </div>
                       </div>
-                      <div v-if="isUpdatingAssignee" class="dropdown-loading">
-                        <i class="pi pi-spin pi-spinner" /> Updating...
-                      </div>
+                    </div>
+                    <div v-if="isUpdatingAssignee" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
                     </div>
                   </div>
-                </td>
-                <td v-if="selectedTask.reviewer">
-                  <div class="reviewer-dropdown-wrapper">
-                    <div
-                      class="reviewer-dropdown-trigger assignee-info"
-                      @click="toggleReviewerDropdown"
-                    >
-                      <img
-                        :src="getAvatarUrl(selectedTask.reviewer.avatarUrl)"
-                        :alt="getUserDisplayName(selectedTask.reviewer)"
-                        class="assignee-avatar"
-                      />
-                      <span class="assignee-name">{{
+                </div>
+              </td>
+              <td v-if="selectedTask.reviewer">
+                <div class="reviewer-dropdown-wrapper">
+                  <div
+                    class="reviewer-dropdown-trigger assignee-info"
+                    @click="toggleReviewerDropdown"
+                  >
+                    <img
+                      :src="getAvatarUrl(selectedTask.reviewer.avatarUrl)"
+                      :alt="getUserDisplayName(selectedTask.reviewer)"
+                      class="assignee-avatar"
+                    />
+                    <span class="assignee-name">{{
                         getUserDisplayName(selectedTask.reviewer)
                       }}</span>
-                      <i class="pi pi-chevron-down dropdown-arrow" />
-                    </div>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
 
-                    <!-- Reviewer Dropdown -->
-                    <div v-if="showReviewerDropdown" class="reviewer-dropdown">
-                      <div class="dropdown-options">
-                        <div
-                          v-for="member in projectMembers"
-                          :key="member.id"
-                          class="dropdown-option"
-                          :class="{
+                  <!-- Reviewer Dropdown -->
+                  <div v-if="showReviewerDropdown" class="reviewer-dropdown">
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{
                             'current-reviewer':
                               member.id === selectedTask.reviewer?.id,
                             'disabled-option':
                               member.id === selectedTask.assignedTo?.id,
                           }"
-                          @click="
+                        @click="
                             member.id === selectedTask.assignedTo?.id
                               ? handleSelectReviewer(member.id)
                               : updateTaskReviewer(member.id)
                           "
-                        >
-                          <div class="member-option">
-                            <img
-                              v-if="member.avatarUrl"
-                              :src="getAvatarUrl(member.avatarUrl)"
-                              :alt="member.fullName"
-                              class="member-avatar"
-                            />
-                            <span v-else class="member-avatar-placeholder">{{
+                      >
+                        <div class="member-option">
+                          <img
+                            v-if="member.avatarUrl"
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="member.fullName"
+                            class="member-avatar"
+                          />
+                          <span v-else class="member-avatar-placeholder">{{
                               member.fullName
                                 ? member.fullName[0]
                                 : member.username[0]
                             }}</span>
-                            <span class="member-name">{{
+                          <span class="member-name">{{
                               member.fullName || member.username
                             }}</span>
-                            <span
-                              v-if="member.id === selectedTask.reviewer?.id"
-                              class="current-badge"
-                              >Current</span
-                            >
-                            <span
-                              v-if="member.id === selectedTask.assignedTo?.id"
-                              class="disabled-badge"
-                              >Already Assignee</span
-                            >
-                          </div>
+                          <span
+                            v-if="member.id === selectedTask.reviewer?.id"
+                            class="current-badge"
+                          >Current</span
+                          >
+                          <span
+                            v-if="member.id === selectedTask.assignedTo?.id"
+                            class="disabled-badge"
+                          >Already Assignee</span
+                          >
                         </div>
                       </div>
-                      <div v-if="isUpdatingReviewer" class="dropdown-loading">
-                        <i class="pi pi-spin pi-spinner" /> Updating...
-                      </div>
+                    </div>
+                    <div v-if="isUpdatingReviewer" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
                     </div>
                   </div>
-                </td>
-                <td v-else>
-                  <div class="reviewer-dropdown-wrapper">
-                    <div
-                      class="reviewer-dropdown-trigger empty-reviewer"
-                      @click="toggleReviewerDropdown"
-                    >
-                      <span class="empty-text">Click to assign reviewer</span>
-                      <i class="pi pi-chevron-down dropdown-arrow" />
-                    </div>
+                </div>
+              </td>
+              <td v-else>
+                <div class="reviewer-dropdown-wrapper">
+                  <div
+                    class="reviewer-dropdown-trigger empty-reviewer"
+                    @click="toggleReviewerDropdown"
+                  >
+                    <span class="empty-text">Click to assign reviewer</span>
+                    <i class="pi pi-chevron-down dropdown-arrow" />
+                  </div>
 
-                    <!-- Reviewer Dropdown for empty reviewer -->
-                    <div v-if="showReviewerDropdown" class="reviewer-dropdown">
-                      <div class="dropdown-options">
-                        <div
-                          v-for="member in projectMembers"
-                          :key="member.id"
-                          class="dropdown-option"
-                          :class="{
+                  <!-- Reviewer Dropdown for empty reviewer -->
+                  <div v-if="showReviewerDropdown" class="reviewer-dropdown">
+                    <div class="dropdown-options">
+                      <div
+                        v-for="member in projectMembers"
+                        :key="member.id"
+                        class="dropdown-option"
+                        :class="{
                             'disabled-option':
                               member.id === selectedTask.assignedTo?.id,
                           }"
-                          @click="
+                        @click="
                             member.id === selectedTask.assignedTo?.id
                               ? handleSelectReviewer(member.id)
                               : updateTaskReviewer(member.id)
                           "
-                        >
-                          <div class="member-option">
-                            <img
-                              v-if="member.avatarUrl"
-                              :src="getAvatarUrl(member.avatarUrl)"
-                              :alt="member.fullName"
-                              class="member-avatar"
-                            />
-                            <span v-else class="member-avatar-placeholder">{{
+                      >
+                        <div class="member-option">
+                          <img
+                            v-if="member.avatarUrl"
+                            :src="getAvatarUrl(member.avatarUrl)"
+                            :alt="member.fullName"
+                            class="member-avatar"
+                          />
+                          <span v-else class="member-avatar-placeholder">{{
                               member.fullName
                                 ? member.fullName[0]
                                 : member.username[0]
                             }}</span>
-                            <span class="member-name">{{
+                          <span class="member-name">{{
                               member.fullName || member.username
                             }}</span>
-                            <span
-                              v-if="member.id === selectedTask.assignedTo?.id"
-                              class="disabled-badge"
-                              >Already Assignee</span
-                            >
-                          </div>
+                          <span
+                            v-if="member.id === selectedTask.assignedTo?.id"
+                            class="disabled-badge"
+                          >Already Assignee</span
+                          >
                         </div>
                       </div>
-                      <div v-if="isUpdatingReviewer" class="dropdown-loading">
-                        <i class="pi pi-spin pi-spinner" /> Updating...
-                      </div>
+                    </div>
+                    <div v-if="isUpdatingReviewer" class="dropdown-loading">
+                      <i class="pi pi-spin pi-spinner" /> Updating...
                     </div>
                   </div>
-                </td>
-                <td>
-                  {{
-                    currentPageInfo?.stringCount !== undefined
-                      ? currentPageInfo.stringCount
-                      : selectedTaskStringCount
-                  }}
-                </td>
-              </tr>
+                </div>
+              </td>
+              <td>
+                {{
+                  currentPageInfo?.stringCount !== undefined
+                    ? currentPageInfo.stringCount
+                    : selectedTaskStringCount
+                }}
+              </td>
+            </tr>
             </tbody>
           </table>
         </div>
@@ -4036,21 +4036,21 @@ function setupRealtimeCommentListeners() {
                     <span class="action-icon">
                       <span v-if="item.action === 'created'">🆕</span>
                       <span v-else-if="item.action === 'status_change'"
-                        >🔁</span
+                      >🔁</span
                       >
                       <span v-else-if="item.action === 'assignment_change'"
-                        >👤</span
+                      >👤</span
                       >
                       <span v-else-if="item.action === 'due_date_change'"
-                        >📅</span
+                      >📅</span
                       >
                       <span v-else-if="item.action === 'closed'">✅</span>
                       <span v-else-if="item.action === 'reopened'">🔄</span>
                       <span v-else>ℹ️</span>
                     </span>
                     <span class="action-text">{{
-                      formatHistoryAction(item.action)
-                    }}</span>
+                        formatHistoryAction(item.action)
+                      }}</span>
                   </div>
                   <div class="timeline-time">
                     <span class="time-icon">🕒</span>
@@ -4086,18 +4086,18 @@ function setupRealtimeCommentListeners() {
                     <span class="status-badge old-status">
                       <span class="status-indicator">
                         <span v-if="item.metadata.fromStatus === 'pending'"
-                          >🔴</span
+                        >🔴</span
                         >
                         <span
                           v-else-if="item.metadata.fromStatus === 'in_progress'"
-                          >🟡</span
+                        >🟡</span
                         >
                         <span
                           v-else-if="item.metadata.fromStatus === 'completed'"
-                          >🟢</span
+                        >🟢</span
                         >
                         <span v-else-if="item.metadata.fromStatus === 'closed'"
-                          >✅</span
+                        >✅</span
                         >
                         <span v-else>⚪</span>
                       </span>
@@ -4107,17 +4107,17 @@ function setupRealtimeCommentListeners() {
                     <span class="status-badge new-status">
                       <span class="status-indicator">
                         <span v-if="item.metadata.toStatus === 'pending'"
-                          >🔴</span
+                        >🔴</span
                         >
                         <span
                           v-else-if="item.metadata.toStatus === 'in_progress'"
-                          >🟡</span
+                        >🟡</span
                         >
                         <span v-else-if="item.metadata.toStatus === 'completed'"
-                          >🟢</span
+                        >🟢</span
                         >
                         <span v-else-if="item.metadata.toStatus === 'closed'"
-                          >✅</span
+                        >✅</span
                         >
                         <span v-else>⚪</span>
                       </span>
@@ -4189,11 +4189,11 @@ function setupRealtimeCommentListeners() {
                     class="comment-author-avatar"
                   />
                   <span v-else class="comment-author-avatar-placeholder">{{
-                    getUserDisplayName(comment.author)[0]
-                  }}</span>
+                      getUserDisplayName(comment.author)[0]
+                    }}</span>
                   <span class="comment-author-name">{{
-                    getUserDisplayName(comment.author)
-                  }}</span>
+                      getUserDisplayName(comment.author)
+                    }}</span>
                 </div>
                 <div class="comment-header-right">
                   <div class="comment-time">
@@ -4513,11 +4513,11 @@ function setupRealtimeCommentListeners() {
                         </button>
                         <div class="calendar-months-title">
                           <span class="month-title">{{
-                            formatMonth(currentMonth)
-                          }}</span>
+                              formatMonth(currentMonth)
+                            }}</span>
                           <span class="month-title">{{
-                            formatMonth(nextMonth)
-                          }}</span>
+                              formatMonth(nextMonth)
+                            }}</span>
                         </div>
                         <button
                           class="calendar-nav-btn"
@@ -4676,7 +4676,7 @@ function setupRealtimeCommentListeners() {
                       <span
                         v-if="getTasksByStatus(status.id).length"
                         class="status-count"
-                        >{{ getTasksByStatus(status.id).length }}</span
+                      >{{ getTasksByStatus(status.id).length }}</span
                       >
                     </div>
                   </div>
@@ -4702,7 +4702,7 @@ function setupRealtimeCommentListeners() {
                         <div class="drag-over-title-content">
                           <span class="drag-over-icon">📋</span>
                           <span class="drag-over-text"
-                            >Move to {{ status.name }}</span
+                          >Move to {{ status.name }}</span
                           >
                         </div>
                       </div>
@@ -4749,11 +4749,11 @@ function setupRealtimeCommentListeners() {
                             >
                               <span
                                 v-if="task.dueDate && isOverdue(task.dueDate)"
-                                >Overdue</span
+                              >Overdue</span
                               >
                               <span v-else>{{
-                                getStatusDisplayName(task.status)
-                              }}</span>
+                                  getStatusDisplayName(task.status)
+                                }}</span>
                             </div>
                             <div class="crowdin-row-1">
                               <div class="crowdin-col-left">
@@ -4761,15 +4761,15 @@ function setupRealtimeCommentListeners() {
                                 <span
                                   class="task-label crowdin-title"
                                   :class="{ clickable: true }"
-                                  >{{ getCleanTaskTitle(task.title) }}</span
+                                >{{ getCleanTaskTitle(task.title) }}</span
                                 >
                               </div>
                             </div>
                             <div class="crowdin-row-2">
                               <div class="crowdin-col-left">
                                 <span class="date-text">{{
-                                  formatDate(task.createdAt)
-                                }}</span>
+                                    formatDate(task.createdAt)
+                                  }}</span>
                               </div>
                             </div>
                             <div
@@ -4787,7 +4787,7 @@ function setupRealtimeCommentListeners() {
                                   <span
                                     v-if="isOverdue(task.dueDate)"
                                     class="due-icon"
-                                    >⚠️</span
+                                  >⚠️</span
                                   >
                                   <span v-else class="due-icon">⏰</span>
                                   Due date:
@@ -4831,29 +4831,29 @@ function setupRealtimeCommentListeners() {
                                         (task.assignedTo.fullName ||
                                           task.assignedTo.username)
                                       "
-                                      >{{
+                                    >{{
                                         task.assignedTo.fullName
                                           ? task.assignedTo.fullName[0]
                                           : task.assignedTo.username[0]
                                       }}</span
                                     >
                                     <span class="assignee-name">{{
-                                      getUserDisplayName(task.assignedTo)
-                                    }}</span>
+                                        getUserDisplayName(task.assignedTo)
+                                      }}</span>
                                   </div>
                                   <!-- File info với icon động và tooltip -->
                                   <div v-if="task.fileId" class="file-info">
                                     <span
                                       class="file-icon"
                                       :title="getFileName(task.fileId)"
-                                      >{{
+                                    >{{
                                         getFileIcon(getFileName(task.fileId))
                                       }}</span
                                     >
                                     <span
                                       class="file-name"
                                       :title="getFileName(task.fileId)"
-                                      >{{ getFileName(task.fileId) }}</span
+                                    >{{ getFileName(task.fileId) }}</span
                                     >
                                   </div>
                                 </div>
@@ -4942,10 +4942,10 @@ function setupRealtimeCommentListeners() {
                           {{ language.substring(0, 2).toUpperCase() }}
                         </div>
                         <span class="language-name">{{
-                          getLanguageName(language)
-                        }}</span>
+                            getLanguageName(language)
+                          }}</span>
                         <span class="language-count"
-                          >({{
+                        >({{
                             autoDetectStatuses.reduce(
                               (total: number, status: any) =>
                                 total +
@@ -5010,11 +5010,11 @@ function setupRealtimeCommentListeners() {
                               >
                                 <span
                                   v-if="task.dueDate && isOverdue(task.dueDate)"
-                                  >Overdue</span
+                                >Overdue</span
                                 >
                                 <span v-else>{{
-                                  getStatusDisplayName(task.status)
-                                }}</span>
+                                    getStatusDisplayName(task.status)
+                                  }}</span>
                               </div>
                               <div class="crowdin-row-1">
                                 <div class="crowdin-col-left">
@@ -5022,15 +5022,15 @@ function setupRealtimeCommentListeners() {
                                   <span
                                     class="task-label crowdin-title"
                                     :class="{ clickable: true }"
-                                    >{{ getCleanTaskTitle(task.title) }}</span
+                                  >{{ getCleanTaskTitle(task.title) }}</span
                                   >
                                 </div>
                               </div>
                               <div class="crowdin-row-2">
                                 <div class="crowdin-col-left">
                                   <span class="date-text">{{
-                                    formatDate(task.createdAt)
-                                  }}</span>
+                                      formatDate(task.createdAt)
+                                    }}</span>
                                 </div>
                               </div>
                               <div
@@ -5048,7 +5048,7 @@ function setupRealtimeCommentListeners() {
                                     <span
                                       v-if="isOverdue(task.dueDate)"
                                       class="due-icon"
-                                      >⚠️</span
+                                    >⚠️</span
                                     >
                                     <span v-else class="due-icon">⏰</span>
                                     Due date:
@@ -5094,29 +5094,29 @@ function setupRealtimeCommentListeners() {
                                           (task.assignedTo.fullName ||
                                             task.assignedTo.username)
                                         "
-                                        >{{
+                                      >{{
                                           task.assignedTo.fullName
                                             ? task.assignedTo.fullName[0]
                                             : task.assignedTo.username[0]
                                         }}</span
                                       >
                                       <span class="assignee-name">{{
-                                        getUserDisplayName(task.assignedTo)
-                                      }}</span>
+                                          getUserDisplayName(task.assignedTo)
+                                        }}</span>
                                     </div>
                                     <!-- File info với icon động và tooltip -->
                                     <div v-if="task.fileId" class="file-info">
                                       <span
                                         class="file-icon"
                                         :title="getFileName(task.fileId)"
-                                        >{{
+                                      >{{
                                           getFileIcon(getFileName(task.fileId))
                                         }}</span
                                       >
                                       <span
                                         class="file-name"
                                         :title="getFileName(task.fileId)"
-                                        >{{ getFileName(task.fileId) }}</span
+                                      >{{ getFileName(task.fileId) }}</span
                                       >
                                     </div>
                                   </div>
@@ -5356,11 +5356,11 @@ function setupRealtimeCommentListeners() {
                       </button>
                       <div class="calendar-months-title">
                         <span class="month-title">{{
-                          formatMonth(currentMonth)
-                        }}</span>
+                            formatMonth(currentMonth)
+                          }}</span>
                         <span class="month-title">{{
-                          formatMonth(nextMonth)
-                        }}</span>
+                            formatMonth(nextMonth)
+                          }}</span>
                       </div>
                       <button
                         class="calendar-nav-btn"
@@ -5472,8 +5472,8 @@ function setupRealtimeCommentListeners() {
                     <div class="task-item-title">
                       <span class="task-id">#{{ task.id }}</span>
                       <span class="task-title">{{
-                        getCleanTaskTitle(task.title)
-                      }}</span>
+                          getCleanTaskTitle(task.title)
+                        }}</span>
                       <span
                         v-if="task.status === 'closed'"
                         class="task-status-inline"
@@ -5488,8 +5488,8 @@ function setupRealtimeCommentListeners() {
                     <div class="task-detail-row">
                       <i class="pi pi-calendar detail-icon" />
                       <span class="task-date">{{
-                        formatDate(task.createdAt)
-                      }}</span>
+                          formatDate(task.createdAt)
+                        }}</span>
                     </div>
                     <div v-if="task.dueDate" class="task-detail-row">
                       <i
@@ -5673,7 +5673,7 @@ function setupRealtimeCommentListeners() {
           </p>
           <div class="reopen-target-status-section">
             <label class="reopen-reason-label"
-              >Target status after reopen:</label
+            >Target status after reopen:</label
             >
             <div
               class="status-select-wrapper"
@@ -5728,7 +5728,7 @@ function setupRealtimeCommentListeners() {
           </div>
           <div class="reopen-reason-section">
             <label for="reopen-reason" class="reopen-reason-label"
-              >Reason for reopening (optional):</label
+            >Reason for reopening (optional):</label
             >
             <textarea
               id="reopen-reason"
@@ -7652,7 +7652,7 @@ function setupRealtimeCommentListeners() {
   background: white;
   border-radius: 8px;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  0 4px 6px -2px rgba(0, 0, 0, 0.05);
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
@@ -8093,7 +8093,7 @@ body.modal-open main {
   padding: 1.3em 1.5em 1em 1.5em;
   margin-bottom: 0.8em;
   transition: box-shadow 0.2s, border 0.2s, background 0.2s,
-    transform 0.18s cubic-bezier(0.4, 2, 0.6, 1);
+  transform 0.18s cubic-bezier(0.4, 2, 0.6, 1);
   cursor: pointer;
   min-width: 250px;
   font-size: 13px;
@@ -9567,7 +9567,7 @@ body.modal-open main {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  0 4px 6px -2px rgba(0, 0, 0, 0.05);
   z-index: 99999;
   min-width: 120px;
   margin-top: 4px;
@@ -10059,7 +10059,7 @@ body.modal-open main {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  0 10px 10px -5px rgba(0, 0, 0, 0.04);
   min-width: 320px;
   max-height: 320px;
   overflow-y: auto;
@@ -10255,7 +10255,7 @@ body.modal-open main {
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  0 10px 10px -5px rgba(0, 0, 0, 0.04);
   width: 380px;
   max-width: calc(100vw - 32px);
   padding: 16px;
@@ -10338,7 +10338,7 @@ body.modal-open main {
   max-width: 350px;
   width: 90%;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  0 10px 10px -5px rgba(0, 0, 0, 0.04);
   text-align: center;
 }
 

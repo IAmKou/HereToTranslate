@@ -296,6 +296,17 @@ export class RequestController {
     }
   }
 
+  // Lấy tất cả review về một translator (assignee)
+  @UseGuards(JwtAuthGuard)
+  @Get('translator/:assigneeId/reviews')
+  async getTranslatorReviews(
+    @Param('assigneeId') assigneeId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.requests.getTranslatorReviews(Number(assigneeId), Number(page) || 1, Number(pageSize) || 10);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('review-with-evidence')
   @UseInterceptors(FilesInterceptor('evidence'))

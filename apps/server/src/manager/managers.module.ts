@@ -110,6 +110,8 @@ import { PaypalConfigChecker } from '#LocalProject/Managers/service/paypal-confi
 import { FeeController } from './controller/fee.controller';
 import { TranslationEntity } from '../db/mysql/entity/translation.entity';
 import { DocxEditorService } from './service/docx-editor.service';
+import { AdminReviewService } from './service/admin-review.service';
+import { AdminReviewController } from './controller/admin-review.controller';
 
 @Global()
 @Module({
@@ -198,6 +200,7 @@ import { DocxEditorService } from './service/docx-editor.service';
     PaypalConfigChecker,
     AsposeService,
     DocxEditorService,
+    AdminReviewService,
   ],
   exports: [
     CategoryManagerService,
@@ -237,6 +240,7 @@ import { DocxEditorService } from './service/docx-editor.service';
     PaypalConfigChecker,
     AsposeService,
     DocxEditorService,
+    AdminReviewService,
 
   ],
   controllers: [
@@ -272,7 +276,8 @@ import { DocxEditorService } from './service/docx-editor.service';
     ExportController,
     WorkflowController,
     StatusController,
-    FeeController
+    FeeController,
+    AdminReviewController
   ],
 
 })

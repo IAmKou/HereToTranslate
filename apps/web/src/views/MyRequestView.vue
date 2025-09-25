@@ -207,6 +207,10 @@
                          <span class="status-icon">⏳</span>
                          <span class="status-text">Pending</span>
                        </span>
+                      <span v-else-if="req.status === 'PENDING_ADMIN_REVIEW'" class="status-badge status-pending" title="Waiting for admin to review your rejection evidence">
+                         <span class="status-icon">🛡️</span>
+                         <span class="status-text">Pending Admin Review</span>
+                       </span>
                       <span v-else-if="req.status === 'EXTENSION_REQUESTED'" class="status-badge status-extension-requested">
                          <span class="status-icon">⏰</span>
                          <span class="status-text">Extension Requested</span>
@@ -231,7 +235,7 @@
                          <span class="status-icon">⚠️</span>
                          <span class="status-text">Incompleted</span>
                        </span>
-                      <span v-else :class="['status-badge', req.status === 'EXPIRED' ? 'status-expired' : `status-${req.status.toLowerCase()}`]">
+                      <span v-else :class="['status-badge', getStatusClass(req.status)]">
                          {{ req.status === 'EXPIRED' ? 'Expired' : formatStatus(req.status) }}
                        </span>
                     </td>

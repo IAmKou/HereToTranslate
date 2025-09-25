@@ -144,21 +144,48 @@ export class RequestManagerService {
       if ('reviewComment' in request) request.reviewComment = comment || '';
       if ('rejectionReason' in request) request.rejectionReason = rejectionReason || null as any;
 
+      // Store evidence files if provided
+      const storedEvidenceFiles = [];
+      if (evidenceFiles && evidenceFiles.length > 0) {
+        for (const file of evidenceFiles) {
+          try {
+            // Use existing file service to handle upload
+            const { fileId } = await this.fileService.handleLocalUpload(
+              file,
+              requesterId,
+              undefined, // no projectId
+              requestId // associate with request
+            );
+            storedEvidenceFiles.push(fileId);
+          } catch (error) {
+            console.error('Error storing evidence file:', error);
+            // Continue with other files even if one fails
+          }
+        }
+      }
+
+      // Set request status based on decision and completion status
       if (decision === 'APPROVED') {
         request.status = RequestStatus.Completed;
       } else if (decision === 'REJECTED') {
-        request.status = RequestStatus.Incompleted;
+        // 100% completed rejections must go to admin review (không phụ thuộc số file)
+        if (isFullyCompleted) {
+          request.status = RequestStatus.PendingAdminReview;
+        } else {
+          request.status = RequestStatus.Incompleted;
+        }
       }
 
       await manager.save(request);
 
-      // TODO: store evidence files if needed (e.g., S3/local); currently ignored
       return {
         success: true,
         requestId: request.id,
         decision,
         rating: Math.max(1, Math.min(5, Number(rating) || 0)),
         evidenceCount: evidenceFiles?.length || 0,
+        storedEvidenceFiles,
+        requiresAdminReview: isFullyCompleted && decision === 'REJECTED' && evidenceFiles.length > 0,
       };
     });
   }

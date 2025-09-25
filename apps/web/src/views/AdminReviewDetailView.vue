@@ -83,10 +83,10 @@
                 <span class="label">Rating:</span>
                 <span class="value">
                   <i v-for="star in 5" :key="star"
-                     :class="['pi', star <= reviewDetails.translator.rating ? 'pi-star-fill' : 'pi-star']"
-                     :style="{ color: star <= reviewDetails.translator.rating ? '#fbbf24' : '#d1d5db' }">
+                     :class="['pi', star <= ((reviewDetails.translator && reviewDetails.translator.rating) || 0) ? 'pi-star-fill' : 'pi-star']"
+                     :style="{ color: star <= ((reviewDetails.translator && reviewDetails.translator.rating) || 0) ? '#fbbf24' : '#d1d5db' }">
                   </i>
-                  {{ reviewDetails.translator.rating }}/5 ({{ reviewDetails.translator.reviewCount }} reviews)
+                  {{ (reviewDetails.translator && reviewDetails.translator.rating) || 0 }}/5 ({{ reviewDetails.translator.reviewCount || 0 }} reviews)
                 </span>
               </div>
             </div>
@@ -97,30 +97,22 @@
             <h3><i class="pi pi-comment"></i> Review Data</h3>
             <div class="detail-grid">
               <div class="detail-item">
-                <span class="label">Decision:</span>
-                <span class="value status-rejected">Rejected</span>
-              </div>
-              <div class="detail-item">
                 <span class="label">Rating:</span>
                 <span class="value">
                   <i v-for="star in 5" :key="star"
-                     :class="['pi', star <= reviewDetails.reviewData.rating ? 'pi-star-fill' : 'pi-star']"
-                     :style="{ color: star <= reviewDetails.reviewData.rating ? '#fbbf24' : '#d1d5db' }">
+                     :class="['pi', star <= (((reviewDetails.reviewData && reviewDetails.reviewData.rating) || 0)) ? 'pi-star-fill' : 'pi-star']"
+                     :style="{ color: star <= (((reviewDetails.reviewData && reviewDetails.reviewData.rating) || 0)) ? '#fbbf24' : '#d1d5db' }">
                   </i>
-                  {{ reviewDetails.reviewData.rating }}/5
+                  {{ ((reviewDetails.reviewData && reviewDetails.reviewData.rating) || 0) }}/5
                 </span>
               </div>
               <div class="detail-item">
                 <span class="label">Reason for rejection:</span>
-                <span class="value">{{ reviewDetails.reviewData.rejectionReason || 'No reason provided' }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="label">Additional comment:</span>
-                <span class="value">{{ reviewDetails.reviewData.comment || 'No comment' }}</span>
+                <span class="value">{{ (reviewDetails.reviewData && reviewDetails.reviewData.rejectionReason) || 'No reason provided' }}</span>
               </div>
               <div class="detail-item">
                 <span class="label">Reviewed At:</span>
-                <span class="value">{{ formatDate(reviewDetails.reviewData.reviewedAt) }}</span>
+                <span class="value">{{ formatDate((reviewDetails.reviewData && reviewDetails.reviewData.reviewedAt) || '') }}</span>
               </div>
             </div>
           </div>
@@ -230,7 +222,32 @@ async function loadReviewDetails() {
 
   try {
     const response = await axiosInstance.get(`/admin/review/${requestId.value}`);
-    reviewDetails.value = response.data;
+    const d = response.data || {};
+    reviewDetails.value = {
+      id: d.id || d.request?.id || '',
+      title: d.title || d.request?.title || '',
+      description: d.description || d.request?.description || '',
+      dealAmount: d.dealAmount ?? d.request?.dealAmount ?? 0,
+      deadline: d.deadline || d.request?.deadline || '',
+      requester: {
+        name: d.requester?.name || d.requester?.fullName || d.requester?.username || '',
+        email: d.requester?.email || ''
+      },
+      translator: d.translator ? {
+        name: d.translator?.name || d.translator?.fullName || d.translator?.username || '',
+        email: d.translator?.email || '',
+        rating: Number(d.translator?.rating || 0),
+        reviewCount: Number(d.translator?.reviewCount || 0)
+      } : null,
+      reviewData: d.reviewData ? {
+        decision: d.reviewData?.decision || null,
+        rating: Number(d.reviewData?.rating || 0),
+        comment: d.reviewData?.comment || '',
+        rejectionReason: d.reviewData?.rejectionReason || '',
+        reviewedAt: d.reviewData?.reviewedAt || ''
+      } : { decision: null, rating: 0, comment: '', rejectionReason: '', reviewedAt: '' },
+      evidenceFiles: Array.isArray(d.evidenceFiles) ? d.evidenceFiles : []
+    };
   } catch (err: any) {
     error.value = err.response?.data?.message || 'Could not load review details';
   } finally {

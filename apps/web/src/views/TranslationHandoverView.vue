@@ -120,11 +120,6 @@
               <div v-if="isRequestBased" class="info-section">
                 <h4>Request Status</h4>
                 <div class="request-status-info">
-                  <p><strong>Current status:</strong>
-                    <span :class="['status-badge', getStatusClass(projectInfo?.status || 'WAITING_APPROVAL')]">
-                      {{ formatStatus(projectInfo?.status || 'WAITING_APPROVAL') }}
-                    </span>
-                  </p>
                   <p><strong>Next step:</strong> {{ getNextStepText(projectInfo?.status || 'WAITING_APPROVAL') }}</p>
                 </div>
 

@@ -893,7 +893,13 @@ const confirmDeleteProject = async () => {
     showDeleteModal.value = false;
     showSuccessModal.value = true;
   } catch (err: any) {
-    alert('Failed to delete project: ' + err.message);
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to delete project';
+    toast.add({
+      severity: 'error',
+      summary: 'Delete Failed',
+      detail: errorMessage,
+      life: 5000
+    });
     showDeleteModal.value = false;
   }
 };
@@ -5927,7 +5933,4 @@ const downloadFileProp = (file: any) => downloadFile(file as ProjectFile);
   gap: 0.4em;
   min-width: 180px;
 }
-
-
-
 </style>

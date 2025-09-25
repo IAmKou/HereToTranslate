@@ -572,6 +572,12 @@ export class ProjectManagerService extends CommonHttpServiceImpl {
     await queryRunner.startTransaction();
 
     try {
+      // Prevent deletion if the project was created from a request
+      if (project.isSyncedFromRequest) {
+        this.logger.debug(`Project [${projectId}] cannot be deleted: project was created from a request.`);
+        throw new BadRequestException('Cannot delete project because it was created from a request');
+      }
+
       // Prevent deletion if there are files linked to a request
       const rows = await queryRunner.manager.query(
         'SELECT COUNT(1) AS cnt FROM `file` WHERE `projectId` = ? AND `requestId` IS NOT NULL',

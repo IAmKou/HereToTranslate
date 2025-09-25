@@ -10,8 +10,6 @@ export enum StatusType {
   CLOSED = 'closed',
 }
 
-
-
 @Entity('task_status')
 export class TaskStatusEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })

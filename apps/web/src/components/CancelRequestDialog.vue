@@ -66,6 +66,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import axiosInstance from '../api'
 
 const props = defineProps({
@@ -78,6 +79,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'cancelled'])
 
 const loading = ref(false)
+const toast = useToast()
 
 function formatDate(dateString) {
   if (!dateString) return '-'
@@ -94,11 +96,25 @@ async function handleCancel() {
   try {
     await axiosInstance.post(`/requests/${Number(props.request.id)}/cancel`)
 
+    toast.add({
+      severity: 'success',
+      summary: 'Request Cancelled',
+      detail: 'The request has been successfully cancelled.',
+      life: 3000
+    })
+
     emit('cancelled')
     emit('close')
   } catch (error) {
     console.error('Error cancelling request:', error)
-    // Handle error
+    
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to cancel request'
+    toast.add({
+      severity: 'error',
+      summary: 'Cancellation Failed',
+      detail: errorMessage,
+      life: 5000
+    })
   } finally {
     loading.value = false
   }

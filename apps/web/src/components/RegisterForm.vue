@@ -16,11 +16,11 @@
           <p class="subtitle">Join our community today</p>
         </div>
         <div
-          v-if="message && messageType === 'success'"
+          v-if="message"
           :class="['message', messageType]"
           style="margin-bottom: 1.5rem"
         >
-          <i class="pi pi-check-circle"></i>
+          <i :class="messageType === 'success' ? 'pi pi-check-circle' : 'pi pi-exclamation-triangle'"></i>
           {{ message }}
         </div>
         <form @submit.prevent="submitForm" class="form-content">
@@ -133,7 +133,7 @@
               v-model="form.phone"
               @input="validateField('phone')"
               @blur="validateField('phone')"
-              placeholder="Enter your phone number (e.g. +84123456789)"
+              placeholder="Enter your phone number (e.g. +84365778751 or 0365778751)"
               :class="{ 'input-error': errors.phone }"
             />
             <div v-if="errors.phone" class="error-message">
@@ -247,10 +247,11 @@ const validateForm = () => {
     errors.phone = 'Phone number is required';
     valid = false;
   } else {
-    const phoneRegex = /^\+[1-9]\d{1,14}$/;
+    // Accept both +84 format and 0 format for Vietnamese numbers
+    const phoneRegex = /^(\+84|0)[0-9]{9,10}$/;
     if (!phoneRegex.test(form.phone)) {
       errors.phone =
-        'Phone number must be a valid international format, e.g. +84123456789';
+        'Phone number must be in format +84xxxxxxxxx or 0xxxxxxxxx';
       valid = false;
     }
   }
@@ -266,10 +267,8 @@ const validateForm = () => {
 
 // Add real-time validation
 const validateField = (field) => {
-  // Clear any server error when user starts typing
-  if (errors[field] && !errors[field].includes('required') && !errors[field].includes('must be') && !errors[field].includes('Please enter') && !errors[field].includes('Passwords do not match')) {
-    errors[field] = '';
-  }
+  // Clear previous validation errors for this field
+  errors[field] = '';
 
   switch (field) {
     case 'username':
@@ -317,10 +316,11 @@ const validateField = (field) => {
       if (!form.phone.trim()) {
         errors.phone = 'Phone number is required';
       } else {
-        const phoneRegex = /^\+[1-9]\d{1,14}$/;
+        // Accept both +84 format and 0 format for Vietnamese numbers
+        const phoneRegex = /^(\+84|0)[0-9]{9,10}$/;
         if (!phoneRegex.test(form.phone)) {
           errors.phone =
-            'Phone number must be a valid international format, e.g. +84123456789';
+            'Phone number must be in format +84xxxxxxxxx or 0xxxxxxxxx';
         } else {
           errors.phone = '';
         }

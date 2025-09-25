@@ -21,13 +21,6 @@
 
       <button type="submit" class="submit-button">Sign up</button>
     </form>
-    <div>
-      <h1> Pingas </h1>
-    </div>
-    <div>
-      <h2>conflict maybe</h2>
-    </div>
-
     <footer class="footer">© 2025 HereToTranslate</footer>
   </div>
 </template>

@@ -86,9 +86,6 @@ const pageSearchQuery = ref('');
 function isFileProcessing(file: any): boolean {
   return file.status === 'processing';
 }
-
-
-
 // Expose method để component cha có thể gọi reload files
 function reloadFiles() {
   loadFiles();
@@ -499,7 +496,6 @@ function getFileIconClass(fileName: string) {
   if (["ppt", "pptx"].includes(ext)) return "pi pi-file-ppt";
   return "pi pi-file";
 }
-
 
 const filterOptions = [
   { value: 'all', label: 'All', icon: 'pi pi-list', tooltip: 'Show all segments' },

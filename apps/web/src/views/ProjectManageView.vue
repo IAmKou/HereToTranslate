@@ -352,7 +352,8 @@ const confirmDelete = async () => {
     toast.success('Project deleted successfully');
     router.push('/projects')
   } catch (err: any) {
-    toast.error('Failed to delete project: ' + err.message)
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to delete project';
+    toast.error(errorMessage);
   } finally {
     showDeleteConfirm.value = false;
   }

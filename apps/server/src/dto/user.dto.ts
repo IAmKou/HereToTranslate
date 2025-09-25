@@ -22,8 +22,8 @@ export class RegisterDto implements IRegisterDto {
   password: string;
 
   @IsNotEmpty()
-  @IsPhoneNumber(undefined, {
-    message: 'Phone number must be a valid international format, e.g. +1234567890'
+  @IsPhoneNumber('VN', {
+    message: 'Phone number must be in format +84xxxxxxxxx or 0xxxxxxxxx'
   })
   phone: string;
 
@@ -43,8 +43,8 @@ export class UpdateUserProfileDto {
   email?: string;
 
   @IsOptional()
-  @IsPhoneNumber(undefined, {
-    message: 'Phone number must be a valid international format, e.g. +1234567890'
+  @IsPhoneNumber('VN', {
+    message: 'Phone number must be in format +84xxxxxxxxx or 0xxxxxxxxx'
   })
   phone?: string | null;
 

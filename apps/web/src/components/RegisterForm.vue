@@ -368,21 +368,24 @@ const submitForm = async () => {
     }, 3000);
   } catch (err) {
     const errorMessage = err.response?.data?.message || 'Register failed. Please try again.';
+    
+    // Ensure errorMessage is a string before calling toLowerCase
+    const errorString = typeof errorMessage === 'string' ? errorMessage : String(errorMessage);
 
     // Map server errors to specific fields
-    if (errorMessage.toLowerCase().includes('phone') || errorMessage.toLowerCase().includes('số điện thoại')) {
-      errors.phone = errorMessage;
-    } else if (errorMessage.toLowerCase().includes('email')) {
-      errors.email = errorMessage;
-    } else if (errorMessage.toLowerCase().includes('username')) {
-      errors.username = errorMessage;
-    } else if (errorMessage.toLowerCase().includes('password')) {
-      errors.password = errorMessage;
-    } else if (errorMessage.toLowerCase().includes('name')) {
-      errors.fullName = errorMessage;
+    if (errorString.toLowerCase().includes('phone') || errorString.toLowerCase().includes('số điện thoại')) {
+      errors.phone = errorString;
+    } else if (errorString.toLowerCase().includes('email')) {
+      errors.email = errorString;
+    } else if (errorString.toLowerCase().includes('username')) {
+      errors.username = errorString;
+    } else if (errorString.toLowerCase().includes('password')) {
+      errors.password = errorString;
+    } else if (errorString.toLowerCase().includes('name')) {
+      errors.fullName = errorString;
     } else {
       // If error doesn't match any specific field, show as general message
-      message.value = errorMessage;
+      message.value = errorString;
       messageType.value = 'error';
     }
   } finally {

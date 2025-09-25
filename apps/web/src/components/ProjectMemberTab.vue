@@ -1514,7 +1514,7 @@ watch(() => props.members, (val) => {
                 </div>
               </td>
               <td>
-                <template v-if="!member.roles.some(r => r.name === 'Project Owner')">
+                <template v-if="String(member.id) !== String(props.currentUser?.id) && !member.roles.some(r => r.name === 'Project Owner')">
                   <span :title="!canManageMembers ? 'You do not have permission to remove members' : ''">
                     <button
                       class="btn btn-outline btn-sm btn-danger"

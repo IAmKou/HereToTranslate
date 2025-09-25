@@ -78,6 +78,39 @@ export class DocxEditorService {
     private readonly translationRepo: Repository<TranslationEntity>,
   ) {}
 
+  // Insert a space between two chunks when both sides are alphanumeric and not punctuation/whitespace
+  private shouldInsertBoundarySpace(prevChunk: string, nextChunk: string): boolean {
+    if (!prevChunk || !nextChunk) return false;
+    const prev = prevChunk[prevChunk.length - 1];
+    const next = nextChunk[0];
+    const isAlphaNum = (c: string) => /[A-Za-z0-9]/.test(c);
+    const isPunctOrWs = (c: string) =>
+      /\s/.test(c) ||
+      '.,;:!?(){}\'"-'.includes(c) ||
+      c === '[' || c === ']';
+    if (!prev || !next) return false;
+    if (isPunctOrWs(prev) || isPunctOrWs(next)) return false;
+    const prevIsDigit = /\d/.test(prev);
+    const prevIsLower = /[a-z]/.test(prev);
+    const nextIsUpper = /[A-Z]/.test(next);
+
+    // If previous is a digit and next chunk is a month name, insert space (e.g., "04September" -> "04 September")
+    const monthRegex = /^(January|February|March|April|May|June|July|August|September|October|November|December)\b/;
+    if (prevIsDigit && monthRegex.test(nextChunk)) return true;
+
+    // Avoid inserting space for numeric + short all-caps suffixes (e.g., "20XX", "5G")
+    if (prevIsDigit && /^([A-Z]{1,3})\b/.test(nextChunk)) return false;
+
+    // Insert space at camelCase boundaries (e.g., "SubjectName" -> "Subject Name")
+    if (prevIsLower && nextIsUpper) return true;
+
+    // Insert space between two letters split across runs
+    if (/[A-Za-z]/.test(prev) && /[A-Za-z]/.test(next)) return true;
+
+    // Default: no space
+    return false;
+  }
+
   private async parseDocxWithJSZip(buffer: Buffer): Promise<{ documentXml: string; stylesXml?: string; themeXml?: string }> {
     const zip = await JSZip.loadAsync(buffer);
 
@@ -179,28 +212,40 @@ export class DocxEditorService {
         // Multiple w:t elements in the same run
         for (const textElement of run['w:t']) {
           if (typeof textElement === 'string') {
-            text += textElement;
+            const chunk = textElement;
+            if (this.shouldInsertBoundarySpace(text, chunk)) text += ' ';
+            text += chunk;
           } else if (textElement && textElement['_']) {
-            text += textElement['_'];
+            const chunk = textElement['_'];
+            if (this.shouldInsertBoundarySpace(text, chunk)) text += ' ';
+            text += chunk;
           } else if (textElement && typeof textElement === 'object') {
             // Avoid [object Object] by properly extracting text content
             const textContent = this.extractTextContent(textElement);
             if (textContent && textContent !== '[object Object]') {
-              text += textContent;
+              const chunk = textContent;
+              if (this.shouldInsertBoundarySpace(text, chunk)) text += ' ';
+              text += chunk;
             }
           }
         }
       } else {
         // Single w:t element
         if (typeof run['w:t'] === 'string') {
-          text += run['w:t'];
+          const chunk = run['w:t'];
+          if (this.shouldInsertBoundarySpace(text, chunk)) text += ' ';
+          text += chunk;
         } else if (run['w:t'] && run['w:t']['_']) {
-          text += run['w:t']['_'];
+          const chunk = run['w:t']['_'];
+          if (this.shouldInsertBoundarySpace(text, chunk)) text += ' ';
+          text += chunk;
         } else if (run['w:t'] && typeof run['w:t'] === 'object') {
           // Avoid [object Object] by properly extracting text content
           const textContent = this.extractTextContent(run['w:t']);
           if (textContent && textContent !== '[object Object]') {
-            text += textContent;
+            const chunk = textContent;
+            if (this.shouldInsertBoundarySpace(text, chunk)) text += ' ';
+            text += chunk;
           }
         }
       }
@@ -257,6 +302,7 @@ export class DocxEditorService {
         const runText = this.extractTextFromRun(run);
         const runFontInfo = this.extractFontInfoFromRun(run, styles, theme);
 
+        if (this.shouldInsertBoundarySpace(paragraphText, runText)) paragraphText += ' ';
         paragraphText += runText;
 
         // Store each run with its styling

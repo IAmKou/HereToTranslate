@@ -343,7 +343,9 @@ const loadProject = async () => {
       };
     }
   } catch (err: any) {
-    error.value = err.message || 'Failed to load project';
+    const msg = err?.response?.data?.message || err?.message || 'Failed to load project';
+    error.value = msg;
+    showToast(msg, 'error');
     console.error('Error loading project:', err);
   } finally {
     loading.value = false;

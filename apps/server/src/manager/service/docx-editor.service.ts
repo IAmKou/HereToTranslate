@@ -104,10 +104,7 @@ export class DocxEditorService {
     // Insert space at camelCase boundaries (e.g., "SubjectName" -> "Subject Name")
     if (prevIsLower && nextIsUpper) return true;
 
-    // Insert space between two letters split across runs
-    if (/[A-Za-z]/.test(prev) && /[A-Za-z]/.test(next)) return true;
-
-    // Default: no space
+    // Default: no space - don't insert spaces between letters that should stay together
     return false;
   }
 
@@ -410,18 +407,17 @@ export class DocxEditorService {
 
     // Enhanced sentence boundary patterns
     const boundaryPatterns = [
-      // Standard sentence endings with space and capital letter
-      /([.!?]+)\s+(?=[A-Z])/g,
-      // Sentence endings with quotes
-      /([.!?]+["'])\s+(?=[A-Z])/g,
-      // Sentence endings with parentheses
-      /([.!?]+\))\s+(?=[A-Z])/g,
-      // Colon followed by capital letter (for lists, explanations)
-      /(:\s*)(?=[A-Z][^:]*[.!?])/g,
-      // Semicolon in certain contexts
-      /(;\s*)(?=[A-Z])/g,
-      // Line breaks with capital letters
-      /(\n+)\s*(?=[A-Z])/g,
+      // Strong sentence-ending punctuation followed by uppercase (Vietnamese + English)
+      /([.!?]+)\s+(?=[A-ZÀÁẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÈÉẺẼẸÊẾỀỂỄỆÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴĐ])/g,
+    
+      // With quotes
+      /([.!?]+["'])\s+(?=[A-ZÀÁẢÃẠÂĂÊÔƠƯỲÝĐ])/g,
+    
+      // With parentheses
+      /([.!?]+\))\s+(?=[A-ZÀÁẢÃẠÂĂÊÔƠƯỲÝĐ])/g,
+    
+      // Newline + capital
+      /(\n+)\s*(?=[A-ZÀÁẢÃẠÂĂÊÔƠƯỲÝĐ])/g,
     ];
 
     const breakPoints: Array<{index: number, length: number}> = [];

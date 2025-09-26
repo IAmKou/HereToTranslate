@@ -1674,40 +1674,7 @@ async function confirmSubmitReview() {
     // Set loading state
     isSubmitting.value = true;
 
-    // If approved, start PayPal final 50% flow instead of submitting review immediately
-    if (confirmReviewData.value?.decision === 'APPROVED' && requestId.value) {
-      // Close modal immediately for faster perceived response
-      showConfirmModal.value = false;
-
-      // Pre-open a tab to avoid popup blockers and make navigation instant when URL is ready
-      const newTab = window.open('', '_blank');
-
-      const { data } = await axiosInstance.post(`/payment/finalize-translation/${requestId.value}`);
-      if (data?.approvalUrl) {
-        // Add payment details to PayPal URL for success view
-        const paymentDetails = new URLSearchParams({
-          requestId: requestId.value,
-          amount: originalRequestData.value?.dealAmount?.toString() || '0',
-          currency: 'USD',
-          depositAmount: originalRequestData.value?.dealAmount?.toString() || '0', // Initial 50% deposit
-          totalAmount: originalRequestData.value?.dealAmount?.toString() || '0'  // Total 100% for translator
-        });
-
-        const finalUrl = `${data.approvalUrl}&${paymentDetails.toString()}`;
-        console.log('Redirecting to PayPal with payment details:', finalUrl);
-
-        if (newTab && !newTab.closed) {
-          newTab.location.href = finalUrl;
-        } else {
-          // Fallback to same-tab redirect if popup was blocked
-          window.location.href = finalUrl;
-        }
-        return; // Stop further local state updates; flow continues after PayPal redirect
-      }
-
-      // If we did not get approvalUrl, close any pre-opened tab and continue error handling
-      if (newTab && !newTab.closed) newTab.close();
-    }
+    // Always submit the review first
 
     // Otherwise (e.g., REJECTED), submit review to backend
     if (confirmReviewData.value.isFullyCompleted && confirmReviewData.value.decision === 'REJECTED') {
@@ -1766,11 +1733,51 @@ async function confirmSubmitReview() {
     // Close modal
     showConfirmModal.value = false;
 
+    let paymentOpened = false;
+    // If approved, initiate PayPal final 50% flow AFTER successful review submission
+    if (confirmReviewData.value?.decision === 'APPROVED' && requestId.value) {
+      // Pre-open a tab to avoid popup blockers and make navigation instant when URL is ready
+      const newTab = window.open('', '_blank');
+
+      try {
+        const { data } = await axiosInstance.post(`/payment/finalize-translation/${requestId.value}`);
+        if (data?.approvalUrl) {
+          const paymentDetails = new URLSearchParams({
+            requestId: requestId.value,
+            amount: originalRequestData.value?.dealAmount?.toString() || '0',
+            currency: 'USD',
+            depositAmount: originalRequestData.value?.dealAmount?.toString() || '0',
+            totalAmount: originalRequestData.value?.dealAmount?.toString() || '0'
+          });
+
+          const finalUrl = `${data.approvalUrl}&${paymentDetails.toString()}`;
+          console.log('Redirecting to PayPal with payment details:', finalUrl);
+
+          if (newTab && !newTab.closed) {
+            newTab.location.href = finalUrl;
+          } else {
+            window.location.href = finalUrl;
+          }
+          paymentOpened = true;
+        } else if (newTab && !newTab.closed) {
+          newTab.close();
+        }
+      } catch (e) {
+        if (newTab && !newTab.closed) newTab.close();
+        toast.add({
+          severity: 'error',
+          summary: 'Payment Error',
+          detail: 'Unable to start PayPal checkout. You can retry from My Requests.',
+          life: 4000
+        });
+      }
+    }
+
     // Show success message
     toast.add({
       severity: 'success',
       summary: 'Success',
-      detail: `Review submitted successfully! Request ${confirmReviewData.value.decision.toLowerCase()}. Redirecting to My Requests in 2 seconds...`,
+      detail: `Review submitted successfully! Request ${confirmReviewData.value.decision.toLowerCase()}. ${paymentOpened ? 'Opening PayPal...' : 'Redirecting to My Requests in 2 seconds...'}`,
       life: 3000
     });
 
@@ -1784,9 +1791,11 @@ async function confirmSubmitReview() {
     }
 
     // Navigate back to My Requests page after successful submission
-    setTimeout(() => {
-      router.push('/my-requests');
-    }, 2000); // Wait 2 seconds to show success message before redirecting
+    if (!paymentOpened) {
+      setTimeout(() => {
+        router.push('/my-requests');
+      }, 2000); // Wait 2 seconds to show success message before redirecting
+    }
 
   } catch (err: any) {
     toast.add({

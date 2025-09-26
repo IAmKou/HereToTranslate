@@ -433,7 +433,7 @@
               </label>
               <Multiselect
                 v-model="selectedTargetLanguages"
-                :options="SUPPORTED_LANGUAGES"
+                :options="targetLanguageOptions"
                 :multiple="true"
                 :max="5"
                 :close-on-select="false"
@@ -756,7 +756,7 @@
 </template>
 
 <script setup>
-import { computed, defineEmits, onMounted, ref } from 'vue';
+import { computed, defineEmits, onMounted, ref, watch } from 'vue';
 import axiosInstance from '../api';
 import { useToast } from 'primevue/usetoast';
 import Multiselect from 'vue-multiselect';
@@ -778,7 +778,7 @@ const deadline = ref('');
 const categoryId = ref('');
 const loading = ref(false);
 const minDate = ref(new Date());
-minDate.value.setDate(minDate.value.getDate() + 7);
+minDate.value.setDate(minDate.value.getDate() + 8);
 const toast = useToast();
 
 const categories = ref([]);
@@ -812,6 +812,14 @@ const targetLanguagesTouched = ref(false);
 // Source Language handling
 const selectedSourceLanguage = ref(null);
 const sourceLanguageTouched = ref(false);
+
+// Filtered options to prevent selecting source as a target language
+const targetLanguageOptions = computed(() => {
+  if (!selectedSourceLanguage.value) return SUPPORTED_LANGUAGES;
+  return SUPPORTED_LANGUAGES.filter(
+    (lang) => lang.code !== selectedSourceLanguage.value.code
+  );
+});
 
 // File upload variables
 const uploadedFiles = ref([]);
@@ -866,7 +874,7 @@ const deadlineError = computed(() => {
   if (!deadline.value) return 'Please select a deadline';
   const deadlineDate = new Date(deadline.value);
   const sevenDaysFromNow = new Date();
-  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 6);
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
   if (deadlineDate < sevenDaysFromNow)
     return 'Deadline must be at least 7 days from now';
   return '';
@@ -899,6 +907,14 @@ const targetLanguagesError = computed(() => {
   );
   if (invalidLanguages.length > 0) {
     return 'Please select valid languages only';
+  }
+  if (
+    selectedSourceLanguage.value &&
+    selectedTargetLanguages.value.some(
+      (lang) => lang.code === selectedSourceLanguage.value.code
+    )
+  ) {
+    return 'Target languages cannot include the selected source language';
   }
   return '';
 });
@@ -976,6 +992,24 @@ onMounted(async () => {
   const storedEmail = localStorage.getItem('email');
   if (storedEmail) {
     userEmail.value = storedEmail;
+  }
+});
+
+// Ensure that after changing source language, conflicting target is removed
+watch(selectedSourceLanguage, (newSource) => {
+  if (!newSource) return;
+  const before = selectedTargetLanguages.value.length;
+  selectedTargetLanguages.value = selectedTargetLanguages.value.filter(
+    (lang) => lang.code !== newSource.code
+  );
+  if (before !== selectedTargetLanguages.value.length) {
+    toast.add({
+      severity: 'info',
+      summary: 'Languages adjusted',
+      detail: 'Removed target language that matches the source language.',
+      life: 2500,
+    });
+    targetLanguagesTouched.value = true;
   }
 });
 

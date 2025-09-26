@@ -27,8 +27,7 @@ import { FileService } from './file-manager.service';
 import { logger } from 'nx/src/utils/logger';
 import { ProjectManagerService } from './project-manager.service';
 import { NotificationManagerService } from './notification-manager.service';
-import { TranslationService } from './translation-manager.service';
-import { calculateTotalWordCount } from '../../utils/word-count.util';
+import { AdminReviewEntity } from '../../db/mysql/entity/admin-review.entity';
 
 @Injectable()
 export class RequestManagerService {
@@ -76,17 +75,41 @@ export class RequestManagerService {
       throw new BadRequestException('You are not the requester of this request');
     }
 
+    // Prevent re-review: if a review by this requester already exists, block
+    const existingReview = await this.requestReviewRepository.findOne({
+      where: { request: { id: requestId } as any, reviewer: { id: requesterId } as any },
+      order: { createdAt: 'DESC' }
+    } as any);
+    if (existingReview) {
+      // Also guard against attempts after adding more files
+      const newFilesCount = await this.fileRepository.count({
+        where: { request: { id: requestId } as any } as any
+      });
+      throw new BadRequestException('You have already submitted a review for this request and cannot review again.');
+    }
+
     // Persist review record + denormalized fields in a transaction
     return await this.requestRepository.manager.transaction(async (manager) => {
-      // Create review row (one per requester per request due to @Unique)
-      const review = manager.create(RequestReviewEntity, {
-        request: { id: request.id } as any,
-        reviewer: { id: requesterId } as any,
-        starRating: Math.max(1, Math.min(5, Number(rating) || 0)),
-        comment: comment || '',
-        status: decision === 'APPROVED' ? ReviewStatus.Success : ReviewStatus.Failed,
-      });
-      await manager.save(review);
+      // Create review row unless this is a 100% completed rejection (escalate to admin review path)
+      let review: RequestReviewEntity | null = null;
+      if (!(decision === 'REJECTED' && isFullyCompleted)) {
+        review = manager.create(RequestReviewEntity, {
+          request: { id: request.id } as any,
+          reviewer: { id: requesterId } as any,
+          starRating: Math.max(1, Math.min(5, Number(rating) || 0)),
+          comment: comment || '',
+          status: decision === 'APPROVED' ? ReviewStatus.Success : ReviewStatus.Failed,
+        });
+        try {
+          await manager.save(review);
+        } catch (e: any) {
+          // Handle unique constraint gracefully
+          if (e?.code === 'ER_DUP_ENTRY' || /unique/i.test(String(e?.message))) {
+            throw new BadRequestException('A review already exists for this request.');
+          }
+          throw e;
+        }
+      }
 
       // Update request fields for UI compatibility (if these fields exist)
       if ('reviewedAt' in request) request.reviewedAt = new Date();
@@ -97,7 +120,19 @@ export class RequestManagerService {
       if (decision === 'APPROVED') {
         request.status = RequestStatus.Completed;
       } else if (decision === 'REJECTED') {
-        request.status = RequestStatus.Incompleted;
+        if (isFullyCompleted) {
+          const pending = new AdminReviewEntity();
+          (pending as any).request = request;
+          (pending as any).admin = null;
+          pending.decision = null;
+          pending.reason =  undefined;
+          pending.rating = Math.max(1, Math.min(5, Number(rating) || 0));
+          pending.comment = comment || null;
+          await manager.getRepository(AdminReviewEntity).save(pending);
+          request.status = RequestStatus.PendingAdminReview;
+        } else {
+          request.status = RequestStatus.Incompleted;
+        }
       }
 
       await manager.save(request);
@@ -107,6 +142,7 @@ export class RequestManagerService {
         requestId: request.id,
         decision,
         rating: Math.max(1, Math.min(5, Number(rating) || 0)),
+        requiresAdminReview: decision === 'REJECTED' && isFullyCompleted,
       };
     });
   }
@@ -128,15 +164,35 @@ export class RequestManagerService {
       throw new BadRequestException('You are not the requester of this request');
     }
 
+    // Prevent re-review: if a review by this requester already exists, block
+    const existingReview = await this.requestReviewRepository.findOne({
+      where: { request: { id: requestId } as any, reviewer: { id: requesterId } as any },
+      order: { createdAt: 'DESC' }
+    } as any);
+    if (existingReview) {
+      throw new BadRequestException('You have already submitted a review for this request and cannot review again.');
+    }
+
     return await this.requestRepository.manager.transaction(async (manager) => {
-      const review = manager.create(RequestReviewEntity, {
-        request: { id: request.id } as any,
-        reviewer: { id: requesterId } as any,
-        starRating: Math.max(1, Math.min(5, Number(rating) || 0)),
-        comment: [comment || '', rejectionReason ? `\nReason: ${rejectionReason}` : ''].filter(Boolean).join(''),
-        status: decision === 'APPROVED' ? ReviewStatus.Success : ReviewStatus.Failed,
-      });
-      await manager.save(review);
+      // Create review row unless this is a 100% completed rejection (escalate to admin review path)
+      let review: RequestReviewEntity | null = null;
+      if (!(decision === 'REJECTED' && isFullyCompleted)) {
+        review = manager.create(RequestReviewEntity, {
+          request: { id: request.id } as any,
+          reviewer: { id: requesterId } as any,
+          starRating: Math.max(1, Math.min(5, Number(rating) || 0)),
+          comment: [comment || '', rejectionReason ? `\nReason: ${rejectionReason}` : ''].filter(Boolean).join(''),
+          status: decision === 'APPROVED' ? ReviewStatus.Success : ReviewStatus.Failed,
+        });
+        try {
+          await manager.save(review);
+        } catch (e: any) {
+          if (e?.code === 'ER_DUP_ENTRY' || /unique/i.test(String(e?.message))) {
+            throw new BadRequestException('A review already exists for this request.');
+          }
+          throw e;
+        }
+      }
 
       // Update denormalized fields (if these fields exist)
       if ('reviewedAt' in request) request.reviewedAt = new Date();
@@ -168,8 +224,16 @@ export class RequestManagerService {
       if (decision === 'APPROVED') {
         request.status = RequestStatus.Completed;
       } else if (decision === 'REJECTED') {
-        // 100% completed rejections must go to admin review (không phụ thuộc số file)
         if (isFullyCompleted) {
+          const pending = new AdminReviewEntity();
+          (pending as any).request = request;
+          (pending as any).admin = null;
+          pending.decision = null;
+          pending.reason =  undefined;
+          pending.rating = Math.max(1, Math.min(5, Number(rating) || 0));
+          pending.comment = comment || null;
+          pending.rejectionReason = rejectionReason || null;
+          await manager.getRepository(AdminReviewEntity).save(pending);
           request.status = RequestStatus.PendingAdminReview;
         } else {
           request.status = RequestStatus.Incompleted;
@@ -185,7 +249,7 @@ export class RequestManagerService {
         rating: Math.max(1, Math.min(5, Number(rating) || 0)),
         evidenceCount: evidenceFiles?.length || 0,
         storedEvidenceFiles,
-        requiresAdminReview: isFullyCompleted && decision === 'REJECTED' && evidenceFiles.length > 0,
+        requiresAdminReview: isFullyCompleted && decision === 'REJECTED',
       };
     });
   }

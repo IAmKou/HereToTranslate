@@ -1563,19 +1563,6 @@ const focusedString = computed(() => {
 
                         </div>
                       </div>
-
-                      <!-- Validation Warnings for Side-by-Side - HIDDEN -->
-                      <!-- <div v-if="validationWarnings[str.id] && validationWarnings[str.id].length > 0" class="validation-warnings">
-                        <div
-                          v-for="(warning, index) in validationWarnings[str.id]"
-                          :key="index"
-                          class="validation-warning-item"
-                          :class="warning.severity"
-                        >
-                          <i :class="warning.severity === 'error' ? 'pi pi-exclamation-triangle' : 'pi pi-exclamation-circle'"></i>
-                          <span>{{ warning.message }}</span>
-                        </div>
-                      </div> -->
                     </div>
                     <template v-else>
                       <div class="original-label">Original Text:</div>

@@ -37,7 +37,8 @@ import {
   TaskHistoryEntity,
   ProjectActivity,
   TaskCommentEntity,
-  TranslationEntity
+  TranslationEntity,
+  AdminReviewEntity
 } from '#LocalProject/Entities';
 import { RequestReviewEntity } from './entity/request-review.entity';
 
@@ -108,7 +109,8 @@ export class MySqlConnection {
         SubtaskAssignmentEntity,
         SubtaskStatusHistoryEntity,
         SubtaskAssignmentHistoryEntity,
-        AssignmentHistoryEntity
+        AssignmentHistoryEntity,
+        AdminReviewEntity
       ],
     });
   }

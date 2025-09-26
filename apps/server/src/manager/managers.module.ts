@@ -32,6 +32,7 @@ import { CategoryEntity,
   TranslationPreviewEntity,
   TaskHistoryEntity,
   RequestReviewEntity,
+  AdminReviewEntity
 } from '#LocalProject/Entities';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -156,6 +157,7 @@ import { AdminReviewController } from './controller/admin-review.controller';
       SubtaskStatusHistoryEntity,
       TaskCommentEntity,
       TranslationEntity,
+      AdminReviewEntity
     ]),
     // Restore Bull queue for export jobs (required by ExportManagerService)
     BullModule.registerQueue({ name: 'export', redis: { host: 'localhost', port: 6379 } }),

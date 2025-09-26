@@ -921,22 +921,28 @@ export class PaypalService {
     const userWallet = await this.walletManagerService.getOrCreateWallet(userId);
     const walletDetails = await this.walletManagerService.getWalletDetails(userId);
 
-    // Debug: log balance values and types
+    // Compute available balance excluding hold and pending amounts
+    const availableBalance = Number(walletDetails.balance) - Number(walletDetails.holdAmount || 0) - Number(walletDetails.pendingWithdrawals || 0);
+
+    // Debug: log balance values and types including available balance
     console.log('Withdraw - Balance check:', {
       userId,
       requestedAmount: amount,
       requestedAmountType: typeof amount,
       staticWalletBalance: userWallet.balance,
       dynamicBalance: walletDetails.balance,
+      availableBalance,
       totalDeposits: walletDetails.totalDeposits,
       totalWithdrawn: walletDetails.totalWithdrawn,
       pendingWithdrawals: walletDetails.pendingWithdrawals,
       holdAmount: walletDetails.holdAmount,
-      comparison: walletDetails.balance < amount
+      comparisonAvailable: availableBalance < amount
     });
 
-    if (walletDetails.balance < amount) {
-      throw new BadRequestException(`Insufficient balance for withdrawal. You have $${walletDetails.balance} but requested $${amount}`);
+    if (availableBalance < amount) {
+      throw new BadRequestException(
+        `Insufficient available balance. Available: $${availableBalance} (Total: $${walletDetails.balance}, On hold: $${walletDetails.holdAmount || 0}, Pending: $${walletDetails.pendingWithdrawals || 0}). Requested: $${amount}`
+      );
     }
 
     let request: RequestEntity | undefined = undefined;

@@ -1899,10 +1899,10 @@ export class PaypalService {
 
     console.log('🔍 [DEBUG] Approval URL:', approvalUrl);
 
-    // Create a pending PAYMENT transaction for requester to track this orderId
-    console.log('🔍 [DEBUG] Creating pending PAYMENT transaction for requester...');
+    // Create a pending PAYMENT transaction for translator to track this orderId
+    console.log('🔍 [DEBUG] Creating pending PAYMENT transaction for translator...');
     const pendingTransaction = {
-      user: { id: request.requester.id } as UserEntity,
+      user: { id: request.assignee.id } as UserEntity,
       request: { id: request.id } as RequestEntity,
       amount: finalAmount,
       status: TransactionStatus.Pending,
@@ -1966,7 +1966,7 @@ export class PaypalService {
 
       console.log('🔍 [PAYMENT SERVICE] Looking for transaction with orderId:', orderId);
 
-      // Find the pending PAYMENT transaction created earlier for the requester
+      // Find the pending PAYMENT transaction created earlier for the translator
       console.log('🔍 [DEBUG] STEP 1: Finding pending PAYMENT transaction...');
       const finalPaymentTx = await this.transactionRepo.findOneOrFail({
         where: { paypalOrderId: orderId },
@@ -2120,34 +2120,21 @@ export class PaypalService {
         added: netToTranslator
       });
 
-      // 5) Create translator PAYMENT transaction with net amount and record platform fee for admin
-      console.log('🔍 [DEBUG] STEP 7: Creating translator PAYMENT transaction and platform fee transaction...');
-      const translatorTransactionData = {
-        user: { id: translator.id } as UserEntity,
-        request: { id: request.id } as RequestEntity,
-        amount: netToTranslator,
-        status: TransactionStatus.Completed,
-        type: TransactionType.PAYMENT,
-      };
+      // 5) Update the final payment transaction amount to reflect the net amount paid to translator
+      console.log('🔍 [DEBUG] STEP 7: Updating final payment transaction amount to net amount...');
+      finalPaymentTx.amount = netToTranslator;
+      await this.transactionRepo.save(finalPaymentTx);
 
-      console.log('🔍 [DEBUG] Translator transaction data to create:', {
-        userId: translatorTransactionData.user.id,
-        requestId: translatorTransactionData.request.id,
-        amount: translatorTransactionData.amount,
-        status: translatorTransactionData.status,
-        type: translatorTransactionData.type
+      console.log('🔍 [DEBUG] Final payment transaction updated:', {
+        id: finalPaymentTx.id,
+        userId: finalPaymentTx.user?.id,
+        requestId: finalPaymentTx.request?.id,
+        amount: finalPaymentTx.amount,
+        status: finalPaymentTx.status,
+        type: finalPaymentTx.type
       });
 
-      const translatorTransaction = await this.transactionRepo.save(translatorTransactionData);
-
-      console.log('🔍 [PAYMENT SERVICE] Created translator transaction:', {
-        id: translatorTransaction.id,
-        amount: translatorTransaction.amount,
-        status: translatorTransaction.status,
-        type: translatorTransaction.type,
-        userId: translatorTransaction.user?.id,
-        requestId: translatorTransaction.request?.id
-      });
+      console.log('🔍 [PAYMENT SERVICE] Updated final payment transaction for translator');
 
       // Record platform fee: credit fee to admin wallet and create a transaction entry
       const adminWalletAfter = await this.walletManagerService.getOrCreateWallet(this.ADMIN_USER_ID);

@@ -253,7 +253,7 @@
                 ></i>
               </div>
               <div class="rating-info">
-                <div class="rating-score">{{ selectedUser.averageRating || 0.0 }}</div>
+                <div class="rating-score">{{ (selectedUser.averageRating || 0).toFixed(1) }}</div>
                 <div class="rating-count" v-if="(selectedUser.reviewCount || selectedUser.totalRatings) && (selectedUser.reviewCount || selectedUser.totalRatings) > 0">
                   {{ selectedUser.reviewCount || selectedUser.totalRatings }} reviews
                 </div>

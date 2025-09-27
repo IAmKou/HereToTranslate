@@ -1305,8 +1305,27 @@ export class PaypalService {
   async payFinal50Percent(requestId: bigint) {
     const request = await this.requestRepository.findOneOrFail({
       where: { id: requestId },
-      relations: ['requester'],
+      relations: ['requester', 'assignee'],
     });
+
+    if (!request.assignee) {
+      throw new BadRequestException('Request must have an assignee.');
+    }
+
+    // Check if final payment has already been processed
+    const existingFinalPayment = await this.transactionRepo.findOne({
+      where: {
+        request: { id: requestId },
+        user: { id: request.assignee.id },
+        type: TransactionType.PAYMENT,
+        status: TransactionStatus.Completed,
+      },
+    });
+
+    if (existingFinalPayment) {
+      console.log(`Final payment already processed for request ${requestId}, skipping payFinal50Percent`);
+      return;
+    }
 
     const approvals = await this.translationApprovalRepository.find({
       where: { request: { id: requestId } },
@@ -1326,20 +1345,18 @@ export class PaypalService {
 
     const remainingAmount = originalTx.amount;
 
-    const wallet = await this.walletManagerService.getOrCreateWallet(request.requester.id);
+    // Credit the translator's wallet with the final 50% payment
+    const translatorWallet = await this.walletManagerService.getOrCreateWallet(request.assignee.id);
+    translatorWallet.balance = Number(translatorWallet.balance) + remainingAmount;
+    await this.walletRepository.save(translatorWallet);
 
-    if (wallet.balance < remainingAmount) {
-      throw new BadRequestException('Not enough balance to pay final 50%.');
-    }
-
-    wallet.balance -= remainingAmount;
-    await this.walletRepository.save(wallet);
-
+    // Create transaction record for the translator
     const tx = this.transactionRepo.create({
-      user: { id: request.requester.id },
+      user: { id: request.assignee.id },
       request: { id: request.id },
       amount: remainingAmount,
       status: TransactionStatus.Completed,
+      type: TransactionType.PAYMENT,
     });
 
     await this.transactionRepo.save(tx);

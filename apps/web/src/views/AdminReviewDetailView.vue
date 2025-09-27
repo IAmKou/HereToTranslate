@@ -93,7 +93,7 @@
           </div>
 
           <!-- Review Data -->
-          <div class="detail-card">
+          <!-- <div class="detail-card">
             <h3><i class="pi pi-comment"></i> Review Data</h3>
             <div class="detail-grid">
               <div class="detail-item">
@@ -115,7 +115,7 @@
                 <span class="value">{{ formatDate((reviewDetails.reviewData && reviewDetails.reviewData.reviewedAt) || '') }}</span>
               </div>
             </div>
-          </div>
+          </div> -->
 
           <!-- Evidence Files -->
           <div v-if="reviewDetails.evidenceFiles.length > 0" class="detail-card">
@@ -239,13 +239,13 @@ async function loadReviewDetails() {
         rating: Number(d.translator?.rating || 0),
         reviewCount: Number(d.translator?.reviewCount || 0)
       } : null,
-      reviewData: d.reviewData ? {
-        decision: d.reviewData?.decision || null,
-        rating: Number(d.reviewData?.rating || 0),
-        comment: d.reviewData?.comment || '',
-        rejectionReason: d.reviewData?.rejectionReason || '',
-        reviewedAt: d.reviewData?.reviewedAt || ''
-      } : { decision: null, rating: 0, comment: '', rejectionReason: '', reviewedAt: '' },
+      // reviewData: d.reviewData ? {
+      //   decision: d.reviewData?.decision || null,
+      //   rating: Number(d.reviewData?.rating || 0),
+      //   comment: d.reviewData?.comment || '',
+      //   rejectionReason: d.reviewData?.rejectionReason || '',
+      //   reviewedAt: d.reviewData?.reviewedAt || ''
+      // } : { decision: null, rating: 0, comment: '', rejectionReason: '', reviewedAt: '' },
       evidenceFiles: Array.isArray(d.evidenceFiles) ? d.evidenceFiles : []
     };
   } catch (err: any) {

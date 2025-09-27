@@ -59,9 +59,9 @@
                 <th>Requester</th>
                 <th>Translator</th>
                 <th>Amount</th>
-                <th>Rating</th>
+                <!-- <th>Rating</th> -->
                 <th>Evidence</th>
-                <th>Date</th>
+                <!-- <th>Date</th> -->
                 <th>Actions</th>
               </tr>
               </thead>
@@ -73,17 +73,17 @@
                 <td>{{ review.requesterName }}</td>
                 <td>{{ review.translatorName }}</td>
                 <td class="amount-cell">${{ review.dealAmount }}</td>
-                <td class="rating-cell">
+                <!-- <td class="rating-cell">
                   <i v-for="star in 5" :key="star"
                      :class="['pi', star <= review.reviewRating ? 'pi-star-fill' : 'pi-star']"
                      :style="{ color: star <= review.reviewRating ? '#fbbf24' : '#d1d5db' }">
                   </i>
                   <span class="rating-text">{{ review.reviewRating }}/5</span>
-                </td>
+                </td> -->
                 <td class="evidence-cell">
                   <span class="evidence-badge">{{ review.evidenceFilesCount }} files</span>
                 </td>
-                <td class="date-cell">{{ formatDate(review.reviewedAt) }}</td>
+                <!-- <td class="date-cell">{{ formatDate(review.reviewedAt) }}</td> -->
                 <td class="actions-cell">
                   <button @click="viewReviewDetails(review.id)" class="btn btn-primary btn-sm">
                     <i class="pi pi-eye"></i> Review

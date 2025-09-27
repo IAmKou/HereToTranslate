@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In, Not } from 'typeorm';
 import { RequestEntity, RequestStatus } from '#LocalProject/Entities';
 import { RequestReviewEntity, ReviewStatus } from '../../db/mysql/entity/request-review.entity';
 import { AdminReviewEntity, AdminReviewDecision } from '../../db/mysql/entity/admin-review.entity';
@@ -99,11 +99,43 @@ export class AdminReviewService {
       throw new NotFoundException('Request not found');
     }
 
-    // Get the review record
+    // Get the review record (should be from the requester)
     const review = await this.requestReviewRepository.findOne({
       where: { request: { id: requestId } },
-      relations: ['reviewer']
+      relations: ['reviewer'],
+      order: { createdAt: 'DESC' }
     });
+
+    // Calculate translator rating and review count if assignee exists
+    let translatorRating: number | null = null;
+    let translatorReviewCount = 0;
+    
+    if (request.assignee) {
+      // Get all reviews about this translator (assignee) - reviews where they were the assignee
+      // We need to find requests where this user was the assignee and get their reviews
+      const requestsWithTranslator = await this.requestRepository.find({
+        where: { assignee: { id: request.assignee.id } },
+        relations: ['assignee']
+      });
+      
+      const requestIds = requestsWithTranslator.map(r => r.id);
+      
+      const translatorReviews = await this.requestReviewRepository.find({
+        where: { 
+          request: { id: In(requestIds) },
+          reviewer: { id: Not(request.assignee.id) } // Exclude reviews by the translator themselves
+        },
+        relations: ['reviewer', 'request']
+      });
+
+      translatorReviewCount = translatorReviews.length;
+      
+      if (translatorReviewCount > 0) {
+        // Calculate average rating
+        const totalRating = translatorReviews.reduce((sum, r) => sum + r.starRating, 0);
+        translatorRating = Math.round((totalRating / translatorReviewCount) * 10) / 10; // Round to 1 decimal place
+      }
+    }
 
     // Extract comment and rejectionReason (fallback parse from comment if request field missing)
     let plainComment: string = review?.comment || '';
@@ -149,8 +181,8 @@ export class AdminReviewService {
         id: request.assignee?.id?.toString(),
         name: request.assignee?.fullName || request.assignee?.username || '',
         email: request.assignee?.email || '',
-        rating: (request.assignee as any)?.rating ?? null,
-        reviewCount: (request.assignee as any)?.reviewCount ?? null,
+        rating: translatorRating,
+        reviewCount: translatorReviewCount,
       } : null,
       reviewData: review ? {
         id: review.id.toString(),
